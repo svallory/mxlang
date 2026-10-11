@@ -135,7 +135,7 @@ All four are optional. Without them a dialect's files discover tags exactly as b
 
 | Field | Meaning |
 |---|---|
-| `tagDirs` | Directory names (not paths) the dialect's files discover tags in. Replaces `tags/` for them. |
+| `tagDirs` | Directory names (not paths) the dialect's files discover tags in. Replaces `tags/` for them. Absent means `["tags"]`; `[]` means none, which closes `tags/` to the dialect's files so a call to a tag defined there is an unknown tag. `mx.tags` and `mx.contracts` are a separate setting (`mxConfigTags`). |
 | `tagExtensions` | Extra extensions its tag files may use, written like `extensions` and routed like them: `concepts/money.kind.forma.mx` belongs to Forma, and the longest claimed suffix names the tag, so this file defines `<money>`, not `<money.kind>`. |
 | `sidecars` | Whether `.tag.ts` sidecars in those directories are read. On by default; `false` ignores them with a warning. |
 | `reservedTags` | Tag names only this dialect may define. See [Reserved names](#writing-a-dialect-tag-files-a-directory-of-definitions-reserved-names). |

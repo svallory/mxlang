@@ -2213,7 +2213,12 @@ sidecars on, and the reserved names. A file routed to a dialect that declares
 to the package root, nearest first, and indexes the files ending in an
 extension the dialect claims (`extensions` and `tagExtensions`) under their
 basename minus the longest claimed suffix, plus `.tag.ts` sidecars unless the
-dialect sets `sidecars: false`. `mx.tags` and `mx.contracts` serve it as they
+dialect sets `sidecars: false`. An absent `tagDirs` means `["tags"]`, which is
+MX's own discovery; `tagDirs: []` means no directory at all, so the dialect's
+files discover no tag file and `tags/` is closed to them: a call of a name
+defined there is an unknown tag (`mx.tags` and `mx.contracts` are a separate setting,
+`mxConfigTags`, and a dialect's `tagExtensions` and `tagFile` hook are
+unaffected). `mx.tags` and `mx.contracts` serve it as they
 serve an MX file, unless the dialect's manifest sets `mxConfigTags: false`: then
 the dialect's files take no definitions from either, silently (the same config
 still serves `.mx` files, and a call of such a name is an unknown tag), while
@@ -2293,7 +2298,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 |---|---|---|
 | `MX_TAG_FILE_ERROR` | error, at the call | A call names a dialect tag file the dialect cannot read: `` `<money>` is defined by concepts/money.mesh.mx, but dialect `mesh` has no tagFile hook to read it. ``, or whose definition has errors: `` `<money>`'s definition has errors (concepts/money.mesh.mx:3:2) ``. The tag file's own errors (a refused contract key, a throwing hook, a returned value that is not `{ contract, diagnostics }`) carry it too, unless the hook gave a code. |
 | `MX_TAG_FILE_CYCLE` | error, at the call | Tag files whose lowering calls each other: `` tag files call each other in a cycle: concepts/a.mesh.mx → concepts/b.mesh.mx → concepts/a.mesh.mx ``, at the re-entering call. |
-| `MX_MISPLACED_TAG_FILE` | warning, at the file | A file a dialect with `tagDirs` claims sits in a tag directory outside them: `` `tags/money.mesh.mx` is a Mesh file in `tags/`; Mesh discovers tags in `concepts/`. `` |
+| `MX_MISPLACED_TAG_FILE` | warning, at the file | A file a dialect with `tagDirs` claims sits in a tag directory outside them: `` `tags/money.mesh.mx` is a Mesh file in `tags/`; Mesh discovers tags in `concepts/`. `` (`Mesh discovers no tag directories.` for a dialect that declares `tagDirs: []`) |
 | `MX_INVALID_DIALECT_CONTRACT` | error, at the contract | An entry of a dialect's `contracts` (§13.9.3) cannot register: `` `contracts.if`: `<if>` cannot name a data tag: it is reserved … ``. At the entry's key in the dialect's module when the module writes `contracts` as a literal, else the module's `1:0`; for an explicit `dialect` option, the calling file's `1:0`. The whole dialect fails, so every file of it reports it. A failure the dialect's `checkContract` gave a code keeps that code. |
 | `MX_SIDECAR_IGNORED` | warning, at the file | A `.tag.ts` sidecar that a dialect file's scan meets while that dialect sets `sidecars: false`, in its own tag directories or, for a dialect without `tagDirs`, in `tags/`. The sidecar is not read. |
 | `MX_INVALID_TAG_FILE_NAME` | error, at the file | A tag file's name is not a usable tag name, in a dialect's tag directory, in MX's own `tags/` or in an `mx.tags` directory. The file is skipped and the rest of the scan goes on. |
@@ -4012,7 +4017,9 @@ the field path and, for a trigger, its `id`:
   Node user. A dialect linked into `node_modules` from a workspace may point at
   its TypeScript source.
 - `tagDirs`, `tagExtensions`, `sidecars` and `reservedTags` are optional and
-  unstable: where the dialect's tags live (§9.2, Dialect tag files), the extra
+  unstable: where the dialect's tags live (§9.2, Dialect tag files; `tagDirs`
+  is an array of directory names, absent means `["tags"]` and `[]` means none,
+  and anything that is not an array is an error at the key), the extra
   extensions its tag files use (routed like `extensions`), whether its tag
   directories read `.tag.ts` sidecars (on by default), and its reserved tag
   names. Each field's errors sit at its key, except a `reservedTags` entry that names a core name, which sits at the entry.
