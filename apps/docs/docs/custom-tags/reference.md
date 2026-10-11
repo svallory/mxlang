@@ -290,6 +290,7 @@ template's imports never enter the caller's module.
 | An L1 caller supplies a body but the template has no content placeholder. | `` `<name>`: body content was dropped; FILE has no `<${input.content}/>` placeholder `` |
 | An L1 caller supplies `<@x>` but the template has no matching placeholder. | `` `<name>`: `<@x>` was dropped; FILE has no `<${input.x.content}/>` placeholder `` |
 | `mx.tags` names a missing directory. | `` `mx.tags` names a directory that does not exist: PATH `` |
-| A tag file is named after a reserved name (`if`, `for`, `try`, ...). | `` `<name>` cannot name a data tag: it is reserved ... `` (`MX_RESERVED_TAG`, an error at the file) |
 
-The last two are scanner diagnostics: the bad entry is skipped and discovery continues. The language server surfaces them as warnings, and build integrations warn once per distinct problem. The reserved-name one is an error: `vite build` fails on it with the diagnostic's file, position and code (every scan error does, on every file it compiles), and `vite serve` keeps it a positioned warning.
+The last one is a scanner diagnostic: the bad entry is skipped and discovery continues. The language server surfaces it as a warning, and build integrations warn once per distinct problem.
+
+A scan diagnostic with error severity is not a warning. A reserved tag name in a tag file, an `mx.tags` entry or an `mx.contracts` key is one (`MX_RESERVED_TAG`: `` `<name>` cannot name a data tag: it is reserved ... ``), and so is an unusable tag-file name in a dialect's tag directory (`MX_INVALID_TAG_FILE_NAME`). Under `vite build` such a diagnostic fails the build at its `file:line:column`, with the other scan errors listed in the message; under `vite serve` it is a positioned warning.

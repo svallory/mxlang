@@ -1115,6 +1115,59 @@ export default () => <div />;
         }
       });
 
+      it("reports every scan error and warning of a build, not only the first", async () => {
+        const project = tagDiscoveryProject({
+          "tags/if.mx": "<p>x</p>\n",
+          "tags/try.mx": "<p>x</p>\n",
+          "tags/stray.thing.probe": "<x/>\n",
+          "caller.mx": "<p>x</p>\n",
+        });
+        try {
+          const warnings: string[] = [];
+          const transform = pluginFor("build");
+          const id = `${project.path("caller.mx")}${MX_SUFFIX}`;
+          const run = () =>
+            transform.call(
+              { warn: (message: string) => warnings.push(message) },
+              "<p>x</p>\n",
+              id,
+            );
+          const reserved = (name: string) =>
+            `MX_RESERVED_TAG: \`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+          const expected = `${project.path("tags/if.mx")}:1:1: ${reserved("if")}\n\n1 more error:\n  ${project.path("tags/try.mx")}:1:1: ${reserved("try")}`;
+          await expect(run()).rejects.toMatchObject({
+            message: expected,
+            loc: { file: project.path("tags/if.mx"), line: 1, column: 0 },
+          });
+          // The warning is printed, once, even though the build fails.
+          const stray = `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`;
+          expect(warnings).toEqual([stray]);
+          await expect(run()).rejects.toMatchObject({ message: expected });
+          expect(warnings).toEqual([stray]);
+        } finally {
+          cleanupProbeProjects();
+        }
+      });
+
+      it("fails a build when configResolved never ran", async () => {
+        const project = tagDiscoveryProject({
+          "tags/try.mx": "<p>x</p>\n",
+          "caller.mx": "<p>x</p>\n",
+        });
+        try {
+          const transform = mx().transform as unknown as Transform;
+          await expect(
+            transform.call(
+              {},
+              "<p>x</p>\n",
+              `${project.path("caller.mx")}${MX_SUFFIX}`,
+            ),
+          ).rejects.toMatchObject({ message: expectedText(project) });
+        } finally {
+          cleanupProbeProjects();
+        }
+      });
+
       it("stays a positioned warning under vite serve", async () => {
         const project = tagDiscoveryProject({
           "tags/try.mx": "<p>x</p>\n",

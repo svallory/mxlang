@@ -910,29 +910,40 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       );
     }
 
-    // A scan error is a tag file the scan skipped. A build fails on it, before
-    // the dedupe below, so every transform of a broken project fails rather
-    // than only the first; `vite serve` keeps the warning.
-    if (scanErrorsFail) {
-      for (const diagnostic of scan.diagnostics) {
-        if (diagnostic.severity !== "error") continue;
-        error({
-          ...diagnostic,
-          message: `${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`,
-        });
-      }
-    }
+    const scanLine = (diagnostic: (typeof scan.diagnostics)[number]): string =>
+      `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`;
+    // A scan error is a tag file the scan skipped. A build fails on it;
+    // `vite serve` keeps it a positioned warning like the rest.
+    const failing = scanErrorsFail
+      ? scan.diagnostics.filter((diagnostic) => diagnostic.severity === "error")
+      : [];
 
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still work — but it is silent without this, which is worse: an author
-    // sees a tag simply not resolve, with nothing saying why.
+    // sees a tag simply not resolve, with nothing saying why. The warnings go
+    // out before the build fails, so the failure does not hide them.
     for (const diagnostic of scan.diagnostics) {
+      if (failing.includes(diagnostic)) continue;
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
       reported.add(key);
-      warn(
-        `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`,
-      );
+      warn(scanLine(diagnostic));
+    }
+
+    // One error is thrown, positioned at the first scan error, and the others
+    // ride in its message (decision 162, the plugin's rule for compile
+    // errors). It is raised past the dedupe: repeating a transform cannot make
+    // a broken project pass.
+    const [first, ...others] = failing;
+    if (first !== undefined) {
+      const rest =
+        others.length === 0
+          ? ""
+          : `\n\n${others.length} more error${others.length === 1 ? "" : "s"}:\n${others.map((diagnostic) => `  ${scanLine(diagnostic)}`).join("\n")}`;
+      error({
+        ...first,
+        message: `${first.code === undefined ? "" : `${first.code}: `}${first.message}${rest}`,
+      });
     }
     const locations = new Set<string>([
       ...scan.directories,
