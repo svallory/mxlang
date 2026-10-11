@@ -210,6 +210,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | --- | --- |
 | A registration uses a core-owned name such as `try`. | `` `<name>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` |
 | An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern` and `ref`, unless the file's syntax module claims the key through `contractFields` |
+| A `customTags` entry, sidecar, `mx.contracts` entry or dialect contract has an unknown tag-level key (e.g. `atributes`). | `Unknown key "KEY" in the declaration of tag "TAG"; allowed: parseOptions, attributes, …`, at the key in a sidecar or `mx.contracts` module; a `customTags` entry has no position. Keys the file's syntax module claims through `contractFields` are allowed and listed. |
 | A tag declares `declares` and no syntax module claims it. | `` `<name>`: `declares` is not allowed: no syntax module claims it (`contractFields`) ``; `customTags`, a sidecar and `mx.contracts` all give this message |
 | A definition declares only `finalize`. | `` `<name>`: a custom tag that defines only `finalize` has no call site and nothing to collect… `` |
 | A called tag has neither a transform nor a template. | `` `<name>`: custom tag has neither a `transform` nor a template file… `` |
@@ -279,7 +280,7 @@ template's imports never enter the caller's module.
 | A sidecar cannot be parsed. | `FILE: could not be parsed: message` |
 | A sidecar throws while loading. | `FILE: sidecar failed to load: message`, with a top-level-await or explicit-extension hint when recognized. |
 | A sidecar's default export is not an object. | ``FILE: sidecar must `export default` a CustomTag object`` |
-| A non-dot tag filename has an unusable basename. | `FILE: NAME is not a usable tag name…` |
+| A tag filename has an unusable basename. | `MX_INVALID_TAG_FILE_NAME` error at the file's `1:0`: `` `tags/FILE` is skipped: `NAME` is not a usable tag name; … ``. The file is skipped; the rest of the scan is unaffected. |
 | A scanned `.solid.mx` is mistaken for a tag template. | `FILE: tag templates are .mx; .solid.mx is not supported as a tag` |
 
 ## Warnings and non-fatal diagnostics

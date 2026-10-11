@@ -2306,7 +2306,8 @@ an array of either. The module must default-export a plain
 `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`); each key
 is a tag name matching the discovery name pattern. Entries may declare
 `parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, and
-`analyze`; `transform`, `finalize`, templates, and unknown keys are rejected.
+`analyze`; `transform`, `finalize` and templates are rejected, and so is any key a
+custom tag does not have (`Unknown key "atributes" in the declaration of tag "x"`, at the key).
 There is no `prefix`. Relative and absolute paths resolve against the directory
 the config belongs to; bare specifiers resolve through that package's
 `node_modules`, using the `require`/`default` package export conditions. A
@@ -2458,7 +2459,7 @@ target, so the core holds no reserved-segment list.
 | `tag templates are \`.mx\`; \`.solid.mx\` is not supported as a tag` | A `.solid.mx` in a tags directory. |
 | `` `${entry}` is a host module file, not a tag template; tag templates are `.mx` `` | A `<base>.<word>.mx` whose `<word>` is a registered file-kind segment. |
 | `` `${entry}` cannot be called as a tag: `<${bare}>` parses as tag `${tag}` with class `${classes}`. If it is another host's module file it does not belong under this host; otherwise rename it without the dot. `` | Any other `<base>.<word>.mx`.
-| `` `${bare}` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots `` | Name fails the pattern. |
+| `` `tags/${entry}` is skipped: `${bare}` is not a usable tag name; a tag file's name must start with a letter, digit or underscore and may then contain letters, digits, underscores, hyphens and dots `` | Name fails the pattern. A diagnostic, not a throw: `MX_INVALID_TAG_FILE_NAME`, an error at the file's `1:0`, the file skipped and every other file of the scan still discovered. It is the diagnostic a dialect's tag directory gives for the same name. |
 | *(error, `MX_RESERVED_TAG`, recorded not thrown)* `` `<${name}>` cannot name a data tag: it is reserved … `` (core's name), or `` `<${name}>` cannot be defined by a tag file: ${Dialect} reserves it `` | A tag file resolves to a reserved name: any of core's structural names, or a name the routed dialect's `reservedTags` lists. The file's `1:0`; for an `mx.tags` directory, that entry in the config file (the `tags` key when `mx.tags` is one string) with the tag file named in the message. Recorded rather than thrown so one misnamed file does not break every file in the package. |
 | *(diagnostic, recorded)* `` `mx.tags` names a directory that does not exist: ${entry.dir} `` | A missing `mx.tags` directory. |
 
@@ -2689,7 +2690,8 @@ their existing registration behavior.
 
 | Message | When |
 |---|---|
-| `` `<${name}>`: `${key}` is not allowed in `mx.contracts`; use a tag sidecar for hooks other than `analyze` and for templates `` | `transform`, `finalize`, `template`, or any unknown top-level definition key. |
+| `` `<${name}>`: `${key}` is not allowed in `mx.contracts`; use a tag sidecar for hooks other than `analyze` and for templates `` | `transform`, `finalize` or `template`. |
+| `` Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template `` | A tag-level key no custom tag has: a misspelt `attributes`, say. The same check runs on a `customTags` entry, a sidecar, an `mx.contracts` entry and a dialect's `contracts` entry, and lists the keys the file's syntax module claims (`contractFields`) too. The first unknown key, in the order the entry writes them, is the one reported. Positioned at the key in the sidecar or the `mx.contracts` module when it writes the entry as a literal, else the file's `1:0`; a `customTags` entry has no file, so the error has no position (a `lowerSource` diagnostic puts it at the source's `1:0`). A dialect's `contracts` entry keeps its `MX_INVALID_DIALECT_CONTRACT` form (§13.9.3). |
 | `` `<${name}>`.analyze must be a function `` | Non-function `analyze`. |
 
 | Message | When |
