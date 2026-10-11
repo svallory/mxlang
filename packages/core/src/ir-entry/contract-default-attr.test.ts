@@ -45,7 +45,9 @@ function tagOf(
 /** Every attribute as the fields a consumer reads, spans included. */
 function attrsOf(tag: Spanned<DelegatedTag>) {
   return tag.attrs.map((attr) => {
-    if (attr.kind === "spread") return { kind: "spread", span: attr.span };
+    if (attr.kind === "spread") {
+      return { kind: "spread", name: "...", span: attr.span };
+    }
     return {
       kind: attr.kind,
       name: attr.name,
