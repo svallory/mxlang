@@ -11,7 +11,10 @@ import {
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
-import { createDialectLanguagePlugin } from "./dialect-language.ts";
+import {
+  createDialectLanguagePlugin,
+  dialectFileExtensions,
+} from "./dialect-language.ts";
 import pluginFactory from "./index.ts";
 
 /**
@@ -315,6 +318,28 @@ describe("the dialect language plugin", () => {
       expect(some.getLanguageId(project.path(name)), name).toBeUndefined();
     }
     expect(none.getLanguageId(project.path("a.probe"))).toBeUndefined();
+  });
+
+  it("claims a tag file whose extension only `tagExtensions` names, through the project's extensions", () => {
+    const project = probeProject(
+      {},
+      { manifest: { tagDirs: ["concepts"], tagExtensions: [".concept"] } },
+    );
+    expect(dialectFileExtensions(project.dir)).toEqual([
+      ".probe",
+      ".probe.mx",
+      ".concept",
+    ]);
+    const plugin = createDialectLanguagePlugin(
+      ts,
+      dialectFileExtensions(project.dir),
+    );
+    expect(plugin.getLanguageId(project.path("concepts/money.concept"))).toBe(
+      "mx-dialect",
+    );
+    expect(plugin.getLanguageId(project.path("concepts/money.ts"))).toBe(
+      undefined,
+    );
   });
 
   it("a file of a package that uses no dialect gets an empty answer, and an .mx one is left to MX", () => {

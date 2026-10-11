@@ -17,6 +17,7 @@ import {
   findMxConfig,
   isTranslateError,
   lowerSource,
+  reservedExtensionReason,
   routeDialect,
   type ScanResult,
 } from "@mxlang/core";
@@ -74,11 +75,12 @@ function nearestPackageJson(dir: string): string | undefined {
 
 /**
  * What the project around `dir` hands to dialects. `dialects` is empty when
- * its manifests cannot be read. A manifest that is invalid in one field (a
+ * its manifests cannot be read. A manifest that is invalid in another field (a
  * bad `tagDirs`) still says which extensions it claims: `rawClaims` lists the
- * `mx.dialect.extensions` strings of the `package.json` that holds it, so the
- * files it claims are still recognised as dialect files and the manifest's
- * error is shown on them, instead of the file being taken for nothing.
+ * `mx.dialect.extensions` and `tagExtensions` of the `package.json` that holds
+ * it, so the files it claims are still recognised as dialect files and the
+ * manifest's error is shown on them, instead of the file being taken for
+ * nothing. A list core would itself refuse claims nothing.
  */
 interface DialectsAround {
   dialects: readonly DialectManifest[];
@@ -105,43 +107,73 @@ function dialectsAround(dir: string): DialectsAround {
   }
 }
 
+/** Is `value` written as a file extension (`.mesh.mx`)? Core's own check. */
+const EXTENSION_SHAPE = /^(?:\.[^./\\\s]+)+$/;
+
 /**
- * The extensions `file` (a `package.json`) lists under `mx.dialect.extensions`,
- * read without validating the rest of the manifest. Nothing for a file that is
- * no JSON, declares no dialect, or lists something other than dotted strings.
+ * The extensions `file` (a `package.json`) lists under `mx.dialect.extensions`
+ * and `mx.dialect.tagExtensions`, read without validating the rest of the
+ * manifest. A list is used only when core would accept it: an array of dotted
+ * extensions, none reserved (`.ts`, `.mx`), none twice; a `tagExtensions`
+ * entry may not repeat an `extensions` one either. Anything else claims
+ * nothing, so an invalid claim never takes the files of another tool. Nothing
+ * for a file that is no JSON or declares no dialect.
  */
 function rawDialectExtensions(file: string): string[] {
+  let dialect: { extensions?: unknown; tagExtensions?: unknown } | undefined;
   try {
-    const extensions = (
+    dialect = (
       JSON.parse(readFileSync(file, "utf8")) as {
-        mx?: { dialect?: { extensions?: unknown } };
+        mx?: { dialect?: { extensions?: unknown; tagExtensions?: unknown } };
       }
-    ).mx?.dialect?.extensions;
-    return Array.isArray(extensions)
-      ? extensions.filter(
-          (extension): extension is string =>
-            typeof extension === "string" &&
-            extension.length > 1 &&
-            extension.startsWith("."),
-        )
-      : [];
+    ).mx?.dialect;
   } catch {
     return [];
   }
+  const accepted = (list: unknown): string[] | undefined => {
+    if (!Array.isArray(list) || list.length === 0) return undefined;
+    const hostSegments = moduleSegments();
+    for (const entry of list) {
+      if (
+        typeof entry !== "string" ||
+        !EXTENSION_SHAPE.test(entry) ||
+        reservedExtensionReason(entry, hostSegments) !== undefined
+      ) {
+        return undefined;
+      }
+    }
+    return new Set(list).size === list.length ? (list as string[]) : undefined;
+  };
+  const extensions = accepted(dialect?.extensions);
+  if (extensions === undefined) return [];
+  const tagExtensions = accepted(dialect?.tagExtensions) ?? [];
+  return tagExtensions.some((entry) => extensions.includes(entry))
+    ? extensions
+    : [...extensions, ...tagExtensions];
 }
 
 /**
- * The extensions of the project around `dir`: what its dialects claim
- * (`extensions`, and `tagExtensions` when `withTagFiles`), what its
- * `mx.extensions` routes, and the raw claims of a manifest that is invalid.
+ * The file extensions the project around `dir` hands to dialects, each with
+ * its leading dot: the ones its dialect packages claim (`extensions`, then
+ * `tagExtensions`), then the ones its `mx.extensions` routes. A tool that must
+ * know which files to open before it has seen one (a TypeScript program's file
+ * list, an editor's file watcher) asks this. Empty when the project uses no
+ * dialect. A tag file is a dialect file like any other, so a `tagExtensions`
+ * entry that no claimed extension ends (`.concept`) is listed: the program
+ * checks that file as it checks one named `.thing.probe`, and the editor
+ * watches it.
+ *
+ * A dialect whose manifest is invalid in another field still lists the
+ * extensions it names, so its files are recognised and show the manifest's
+ * error.
  */
-function extensionsAround(dir: string, withTagFiles: boolean): string[] {
+export function dialectExtensions(dir: string): string[] {
   const { dialects, rawClaims } = dialectsAround(dir);
   if (dialects.length === 0) return [...rawClaims];
   const found = new Set(
     dialects.flatMap((dialect) => [
       ...dialect.extensions,
-      ...(withTagFiles ? (dialect.tagExtensions ?? []) : []),
+      ...(dialect.tagExtensions ?? []),
     ]),
   );
   try {
@@ -153,33 +185,6 @@ function extensionsAround(dir: string, withTagFiles: boolean): string[] {
     // A malformed config is reported when a file is checked.
   }
   return [...found];
-}
-
-/**
- * The file extensions the project around `dir` hands to dialects, each with
- * its leading dot: the ones its dialect packages claim, then the ones its
- * `mx.extensions` routes. A tool that must know which files to open before it
- * has seen one (a TypeScript program's file list) asks this. Empty when the
- * project uses no dialect. A tag file whose extension is only a dialect's
- * `tagExtensions` entry is not among them: it is no source file for a program
- * to host, and the file that calls it carries its diagnostics; see
- * {@link dialectWatchExtensions} for the files a tool must watch.
- *
- * A dialect whose manifest is invalid still lists the extensions it names, so
- * its files are recognised and show the manifest's error.
- */
-export function dialectExtensions(dir: string): string[] {
-  return extensionsAround(dir, false);
-}
-
-/**
- * {@link dialectExtensions} plus the dialects' `tagExtensions`: every file
- * extension whose change may change a dialect file's diagnostics. A tool that
- * re-checks files when another changes (an editor's file watcher) asks this;
- * a tool that decides which files are sources must not.
- */
-export function dialectWatchExtensions(dir: string): string[] {
-  return extensionsAround(dir, true);
 }
 
 /**
@@ -196,19 +201,7 @@ export function dialectWatchExtensions(dir: string): string[] {
  * alone.
  */
 export function dialectExtensionsUnder(root: string): string[] {
-  return extensionsUnder(root, dialectExtensions);
-}
-
-/** {@link dialectWatchExtensions} over a whole project tree, as {@link dialectExtensionsUnder}. */
-export function dialectWatchExtensionsUnder(root: string): string[] {
-  return extensionsUnder(root, dialectWatchExtensions);
-}
-
-function extensionsUnder(
-  root: string,
-  at: (dir: string) => string[],
-): string[] {
-  const found = new Set(at(root));
+  const found = new Set(dialectExtensions(root));
   const visit = (dir: string): void => {
     let entries: import("node:fs").Dirent[];
     try {
@@ -221,7 +214,7 @@ function extensionsUnder(
       if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
       const child = join(dir, entry.name);
       if (existsSync(join(child, "package.json"))) {
-        for (const extension of at(child)) found.add(extension);
+        for (const extension of dialectExtensions(child)) found.add(extension);
       }
       visit(child);
     }
@@ -293,9 +286,9 @@ export function emitOf(filePath: string): BuildEmit {
 /**
  * Whether the tools treat `filePath` as a dialect file: it routes to a
  * dialect, or it is not an `.mx` file and the project hands its extension to
- * dialects without the routing settling which (two dialects claim it). The
- * second kind has no dialect to name, but it is no TypeScript or MX file
- * either, and {@link checkDialectFile} reports why.
+ * dialects without the routing settling which (two dialects claim it, or a
+ * manifest is invalid). The second kind has no dialect to name, but it is no
+ * TypeScript or MX file either, and {@link checkDialectFile} reports why.
  */
 export function isDialectFile(filePath: string): boolean {
   return (
@@ -314,8 +307,9 @@ export function isDialectFile(filePath: string): boolean {
  * as the tools report a tag template's: the editor and `tsc` print per file.
  *
  * A file the project hands to a dialect but whose routing fails (two
- * dialects claim its extension) has no dialect to name: the routing error is
- * reported under the fallback source. An `.mx` file whose routing fails is
+ * dialects claim its extension, or a dialect manifest is invalid in a field)
+ * has no dialect to name: the routing error is reported under the fallback
+ * source. An `.mx` file whose routing fails is
  * left to the ordinary compile, which reports the same error.
  */
 export function checkDialectFile(

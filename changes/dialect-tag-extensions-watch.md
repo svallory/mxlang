@@ -1,6 +1,6 @@
 ---
-packages: [targets, language-server]
+packages: [targets, language-server, typescript-plugin, tsc]
 kind: Fixed
 ---
 
-The language server watches a dialect's `tagExtensions` even when no claimed extension ends them (`.concept` beside a dialect that claims `.probe`), so a change to such a tag file re-checks the dialect files that call it. `@mxlang/targets/dialect-check` gains `dialectWatchExtensions` and `dialectWatchExtensionsUnder`, which add `tagExtensions` to the claimed extensions; `dialectExtensions` and `dialectExtensionsUnder` keep listing only what a dialect claims, since they decide which files a TypeScript program or the Vite plugin treats as sources.
+A dialect's `tagExtensions` entry that no claimed extension ends (`.concept` beside a dialect that claims `.probe`) is now a dialect file the tools list: `dialectExtensions` and `dialectExtensionsUnder` include `tagExtensions`. The language server watches such a tag file, so a change to it re-checks the dialect files that call it; the TypeScript plugin hosts it; and `mx-tsc` checks it and prints its errors, as it already did for a tag file named `.thing.probe`.

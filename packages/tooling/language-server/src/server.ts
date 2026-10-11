@@ -21,7 +21,7 @@ import {
 } from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import {
-  dialectWatchExtensionsUnder,
+  dialectExtensionsUnder,
   isDialectFile,
 } from "@mxlang/targets/dialect-check";
 import {
@@ -336,7 +336,7 @@ export function startServer(
     const dialectGlobs = new Set<string>();
     for (const root of new Set(workspaceRoots)) {
       try {
-        for (const extension of dialectWatchExtensionsUnder(root)) {
+        for (const extension of dialectExtensionsUnder(root)) {
           dialectGlobs.add(`**/*${extension}`);
         }
       } catch {

@@ -17,8 +17,6 @@ import {
   dialectExtensions,
   dialectExtensionsUnder,
   dialectOf,
-  dialectWatchExtensions,
-  dialectWatchExtensionsUnder,
   emitOf,
   isDialectFile,
 } from "./dialect-check.ts";
@@ -385,14 +383,20 @@ describe("checkDialectFile", () => {
         JSON.stringify({ name: "app", dependencies: { kit: "0.0.0" } }),
       );
       const check = checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok);
-      expect(check?.source).toBe("mxlang");
-      expect(check?.diagnostics).toHaveLength(1);
-      expect(check?.diagnostics[0]?.origin?.file).toBe(
-        join(dependency, "package.json"),
-      );
-      expect(check?.diagnostics[0]?.message).toMatch(
-        /^`mx\.dialect\.tagDirs`: "\.\.\/out" .* \(in .*kit\/package\.json:\d+:\d+\)$/s,
-      );
+      const manifestFile = join(dependency, "package.json");
+      expect(check).toEqual({
+        source: "mxlang",
+        diagnostics: [
+          {
+            severity: "error",
+            message: `\`mx.dialect.tagDirs\`: "../out" is a path; write a directory name (\`components\`) (in ${manifestFile}:1:121)`,
+            line: 1,
+            column: 0,
+            offset: 0,
+            origin: { file: manifestFile, line: 1, column: 120 },
+          },
+        ],
+      });
     });
 
     it("emitOf calls the file unsettled, and dialectExtensions still lists what the manifest claims", () => {
@@ -405,15 +409,36 @@ describe("checkDialectFile", () => {
       expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
     });
 
-    it("a manifest whose `extensions` is itself invalid claims nothing", () => {
+    it.each([
+      ["a native extension", [".ts"]],
+      ["MX's own extension", [".mx"]],
+      ["a non-string entry", [".probe", 3]],
+      ["a double dot", ["..probe"]],
+      ["a space", [".pro be"]],
+      ["a duplicate", [".probe", ".probe"]],
+      ["not an array", "oops"],
+      ["an empty array", []],
+    ])(
+      "an `extensions` list core would refuse (%s) claims nothing, with a bad tagDirs too",
+      (_what, extensions) => {
+        const project = probeProject(
+          {},
+          { manifest: { extensions, tagDirs: [] } as never },
+        );
+        expect(dialectExtensions(project.dir)).toEqual([]);
+        expect(isDialectFile(project.path("a.ts"))).toBe(false);
+        expect(isDialectFile(project.path("a.probe"))).toBe(false);
+        expect(checkDialectFile(project.path("a.ts"), "")).toBeUndefined();
+        expect(checkDialectFile(project.path("a.probe"), "")).toBeUndefined();
+      },
+    );
+
+    it("a `tagExtensions` entry repeating an `extensions` one is not claimed with them", () => {
       const project = probeProject(
         {},
-        { manifest: { extensions: "oops" } as never },
+        { manifest: { tagExtensions: [".probe"], tagDirs: [] } },
       );
-      expect(
-        checkDialectFile(project.path("a.probe"), PROBE_SOURCES.ok),
-      ).toBeUndefined();
-      expect(dialectExtensions(project.dir)).toEqual([]);
+      expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
     });
   });
 
@@ -752,31 +777,27 @@ describe("dialectExtensions", () => {
   });
 });
 
-describe("dialectWatchExtensions", () => {
+describe("dialectExtensions: tag files", () => {
   const withKinds = () =>
     probeProject(
       {},
       { manifest: { tagDirs: ["concepts"], tagExtensions: [".concept"] } },
     );
 
-  it("adds a dialect's `tagExtensions` to what dialectExtensions lists, and dialectExtensions does not list them", () => {
+  it("lists a dialect's `tagExtensions` after its `extensions`, even one no claimed extension ends", () => {
     const project = withKinds();
-    expect(dialectExtensions(project.dir)).toEqual([".probe", ".probe.mx"]);
-    expect(dialectWatchExtensions(project.dir)).toEqual([
+    expect(dialectExtensions(project.dir)).toEqual([
       ".probe",
       ".probe.mx",
       ".concept",
     ]);
-  });
-
-  it("is dialectExtensions for a dialect with no `tagExtensions`", () => {
-    const project = probeProject();
-    expect(dialectWatchExtensions(project.dir)).toEqual(
-      dialectExtensions(project.dir),
+    expect(isDialectFile(project.path("concepts/money.concept"))).toBe(true);
+    expect(isDialectFile(project.path("concepts/money.conceptual"))).toBe(
+      false,
     );
   });
 
-  it("lists `tagExtensions` of every package under the root, and only of those", () => {
+  it("lists the `tagExtensions` of every package under the root, and only of those", () => {
     const project = probeProject(
       {
         "pkg/package.json": JSON.stringify({
@@ -794,16 +815,12 @@ describe("dialectWatchExtensions", () => {
       },
       { manifest: null },
     );
-    expect(dialectWatchExtensionsUnder(project.dir)).toEqual([
+    expect(dialectExtensionsUnder(project.dir)).toEqual([
       ".probe",
       ".probe.mx",
       ".concept",
     ]);
-    expect(dialectExtensionsUnder(project.dir)).toEqual([
-      ".probe",
-      ".probe.mx",
-    ]);
-    expect(dialectWatchExtensionsUnder(project.path("other"))).toEqual([]);
+    expect(dialectExtensionsUnder(project.path("other"))).toEqual([]);
   });
 });
 

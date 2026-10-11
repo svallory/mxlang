@@ -73,6 +73,16 @@ Beyond the registry it adds:
   dialect file), hands the result's `customTags` to `lowerSource` and reports the
   scan's own diagnostics as warnings, so `mx.contracts` and `tags/` apply as they
   do to an MX file (core never discovers tags itself).
+  `dialectExtensions(dir)` lists what the dialects claim (`extensions`, then
+  `tagExtensions`) and what `mx.extensions` routes: a tag file whose extension
+  only `tagExtensions` names (`.concept`) is a dialect file like any other, so
+  the TS plugin, `mx-tsc` and the language server's watchers all list it.
+  A dialect manifest that is invalid in another field (a bad `tagDirs`) does not
+  hide its files: the raw `extensions`/`tagExtensions` lists are used when core
+  would accept them (dotted, none reserved like `.ts`/`.mx`, none twice), so
+  `checkDialectFile` returns the manifest's error at the head of the file with
+  `origin` at the manifest field, and `emitOf` reports the file unsettled. A
+  list core would refuse claims nothing, so it never takes another tool's files.
   `dialectExtensionsUnder(root)` unions `dialectExtensions` over every package
   under a project root (skipping `node_modules`, dot-directories and symlinks),
   for tools that must list extensions before the program exists. Tests use

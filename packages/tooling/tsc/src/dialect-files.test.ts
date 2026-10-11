@@ -279,3 +279,25 @@ describe("dialectProjectDirs", () => {
     ).toEqual([first.dir, second.dir]);
   });
 });
+
+describe("mx-tsc on a tag file whose extension only `tagExtensions` names", () => {
+  it("checks it as it checks a claimed one, and prints its error", {
+    timeout: 120_000,
+  }, () => {
+    const project = probeProject(
+      {
+        "tsconfig.json": JSON.stringify({
+          ...JSON.parse(TSCONFIG),
+          include: ["**/*.probe", "**/*.concept"],
+        }),
+        "concepts/money.concept": "<y !bad/>\n",
+      },
+      { manifest: { tagDirs: ["concepts"], tagExtensions: [".concept"] } },
+    );
+    const result = runInProcess(["-p", project.dir, "--pretty", "false"]);
+    expect(result.status).toBe(1);
+    expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
+      `${shown(project.path("concepts/money.concept"))}(1,4): error PROBE_BAD: bad probe\n`,
+    );
+  });
+});

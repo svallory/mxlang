@@ -970,10 +970,7 @@ describe("stdio server (e2e)", () => {
     });
     const uri = pathToFileURL(project.path("a.probe")).href;
     const packageUri = pathToFileURL(packageFile).href;
-    const seen = new Map<
-      string,
-      Array<{ message: string; source?: string; severity?: number }>
-    >();
+    const seen = new Map<string, unknown[]>();
     conn.onNotification(PublishDiagnosticsNotification, (params) => {
       seen.set(params.uri, params.diagnostics);
     });
@@ -990,7 +987,11 @@ describe("stdio server (e2e)", () => {
     }
     const message =
       '`mx.dialect.tagDirs` must be a non-empty array of the directory names the dialect\'s files discover tags in (`["components"]`)';
-    expect(seen.get(uri)).toMatchObject([
+    const onPackage = {
+      start: { line: 0, character: 130 },
+      end: { line: 0, character: 131 },
+    };
+    expect(seen.get(uri)).toEqual([
       {
         severity: 1,
         source: "mxlang",
@@ -999,18 +1000,13 @@ describe("stdio server (e2e)", () => {
           start: { line: 0, character: 0 },
           end: { line: 0, character: 1 },
         },
+        relatedInformation: [
+          { location: { uri: packageUri, range: onPackage }, message },
+        ],
       },
     ]);
-    expect(seen.get(packageUri)).toMatchObject([
-      {
-        severity: 1,
-        source: "mxlang",
-        message: expect.stringContaining(message),
-        range: {
-          start: { line: 0, character: 130 },
-          end: { line: 0, character: 131 },
-        },
-      },
+    expect(seen.get(packageUri)).toEqual([
+      { severity: 1, source: "mxlang", message, range: onPackage },
     ]);
   }, 15000);
 
