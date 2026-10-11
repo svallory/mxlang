@@ -617,6 +617,12 @@ export interface MxWarning {
   line: number;
   column: number;
   file?: string;
+  /**
+   * A stable, machine-readable code (`MX_DUPLICATE_ATTRIBUTE`), so a consumer
+   * matches the rule rather than its wording. Absent on a warning without
+   * one. Reaches `IrDiagnostic.code`. @unstable
+   */
+  code?: string;
 }
 
 /**

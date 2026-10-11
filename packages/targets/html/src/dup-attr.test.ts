@@ -34,6 +34,7 @@ describe("duplicate attributes (html)", () => {
         line: 1,
         column: 5,
         file: "/fixtures/test.mx",
+        code: "MX_DUPLICATE_ATTRIBUTE",
       },
     ]);
     // Only the survivor is emitted.

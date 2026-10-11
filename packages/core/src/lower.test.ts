@@ -3500,6 +3500,7 @@ describe("duplicate attributes resolve last-wins (decision 135)", () => {
         line: 1,
         column: 5,
         file: "test.mx",
+        code: "MX_DUPLICATE_ATTRIBUTE",
       },
     ]);
   });

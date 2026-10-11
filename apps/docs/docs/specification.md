@@ -738,6 +738,10 @@ UTF-16 code units). Three occurrences give two warnings, each naming the last:
 
 > `duplicate attribute \`class\`: the later one at 1:16 wins, so this one is dropped`
 
+The warning has the stable code `MX_DUPLICATE_ATTRIBUTE`. It is `MxWarning.code`
+and reaches `IrDiagnostic.code` (and so a data consumer's diagnostics), so a
+tool matches the rule, not the wording.
+
 | Case | Result |
 |---|---|
 | Same name, case-sensitive (`class` twice, `on-click` twice) | last wins; one warning per dropped occurrence |
@@ -748,6 +752,7 @@ UTF-16 code units). Three occurrences give two warnings, each naming the last:
 | `onClick` next to `on-click` | distinct names (Marko registers both handlers); silent |
 | Angular `x`, `[x]`, `(x)`, `#x` | distinct names; silent |
 | The same name on different tags | silent |
+| `run [after=1] (x) { go(x) }`, `run a=1, (x) { go(x) }` (a default method after other attributes) | one default `value`, the method; silent. The parser reads the method's empty name twice at one offset, which is one authored attribute, not a duplicate |
 | `<Card a=1 a=2/>`, `<@x a=1 a=2/>` | the callee receives one `a`, the last |
 
 Spreads follow the same rule on a string-concatenating target: `@mxlang/target-html`
@@ -758,6 +763,14 @@ which keeps the first duplicate, sees the survivor. This is tested by rendering.
 
 The warning is an mx-only lint beyond Marko (which accepts ordinary duplicate
 attributes silently), recorded in `divergences.md`; decisions 133 and 135.
+
+A default method after another attribute is Marko's own reading too: the
+concise `run [after=1] (x) { go(x) }` compiles to one default method, as does
+`run (x) { go(x) }`. Stock Marko refuses the same bytes after a space-separated
+attribute or in the HTML form (`run after=1 (x) { go(x) }`,
+`<run after=1 (x) { go(x) }/>`): the method is read as the rest of `after`'s
+value, so they are the error ``Expected a single expression, but found `{` after
+it.`` at the `{`, and so they are here.
 
 Builtin value syntax is different: duplicate shorthand/named/bound `value`
 spellings on `<let>` and `<return>` fail with Marko's
@@ -3508,7 +3521,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (today, a dialect's `ctx.fail(message, { code })`). On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|

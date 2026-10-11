@@ -1262,6 +1262,9 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
   }
 }
 
+/** `MxWarning.code` of the duplicate-attribute warning. */
+export const DUPLICATE_ATTRIBUTE_CODE = "MX_DUPLICATE_ATTRIBUTE";
+
 /**
  * Resolves a repeated attribute name to its last occurrence (decision 135).
  * Stock Marko 6.3.51 is last-wins (`class` and `style` are not merged, and the
@@ -1283,6 +1286,7 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
  * name and naming the survivor, so three occurrences warn twice. The text's
  * `line:column` is 1-based, like `mx-tsc` and editors; the structured warning
  * position keeps core's 0-based column. Never an error, `mx.strict` included.
+ * The warning's `code` is `MX_DUPLICATE_ATTRIBUTE`.
  */
 function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
   const survivor = new Map<string, Exclude<Attr, { kind: "spread" }>>();
@@ -1296,6 +1300,18 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
       kept.push(attr);
       continue;
     }
+    // htmljs-parser 5.18.0 reads one authored default method after another
+    // attribute (`run [a=1] (x) { y }`, `run a=1, (x) { y }`) as TWO
+    // empty-named attributes at the same offset, and Marko's last-wins keeps
+    // the method. That pair is one attribute, not an authored duplicate: drop
+    // the empty one without a warning. Two authored defaults never share an
+    // offset (`<a ="x" ="y"/>` is two places).
+    if (
+      attr.nameSpan.sourceStart === attr.nameSpan.sourceEnd &&
+      attr.nameSpan.sourceStart === winner.nameSpan.sourceStart
+    ) {
+      continue;
+    }
     // A dropped occurrence: warn in document order, at its own name.
     const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
     const wins = positionAtOffset(ctx, winner.nameSpan.sourceStart);
@@ -1304,6 +1320,7 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
       line: at.line,
       column: at.column,
       file: ctx.filename,
+      code: DUPLICATE_ATTRIBUTE_CODE,
     });
   }
   return kept;

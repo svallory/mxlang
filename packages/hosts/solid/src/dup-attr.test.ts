@@ -37,6 +37,7 @@ describe("duplicate attributes (solid)", () => {
         line: 1,
         column: 5,
         file: "fixture.solid.mx",
+        code: "MX_DUPLICATE_ATTRIBUTE",
       },
     ]);
     // Only the survivor is emitted.

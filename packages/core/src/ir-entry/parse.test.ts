@@ -726,8 +726,93 @@ describe("duplicate attributes", () => {
         column: 3,
         offset: 3,
         // No `file`: the warning is in the parsed file (review 460 F8).
+        code: "MX_DUPLICATE_ATTRIBUTE",
       },
     ]);
+  });
+
+  it("carries the stable code on every dropped occurrence, concise or HTML", () => {
+    for (const source of [
+      "<a x=1 x=2/>\n",
+      "a x=1 x=2\n",
+      "<a x=1 x=2 x=3/>\n",
+    ]) {
+      const { diagnostics } = lowerSource(source, "/t.mx");
+      expect(diagnostics.length).toBeGreaterThan(0);
+      for (const d of diagnostics) {
+        expect(d).toMatchObject({
+          severity: "warning",
+          code: "MX_DUPLICATE_ATTRIBUTE",
+        });
+      }
+    }
+  });
+
+  it("a spelled `value` twice is still a duplicate (only the parser's empty twin is exempt)", () => {
+    expect(
+      lowerSource(`<a value=1 value=2/>\n`, "/t.mx").diagnostics.map((d) => [
+        d.code,
+        d.message,
+      ]),
+    ).toEqual([
+      [
+        "MX_DUPLICATE_ATTRIBUTE",
+        "duplicate attribute `value`: the later one at 1:12 wins, so this one is dropped",
+      ],
+    ]);
+  });
+});
+
+/**
+ * Marko 6.4.4 on the stock htmljs-parser 5.18.0 reads `run [a=1] (x) { y }`
+ * as one default method: the parser emits two empty-named attributes at the
+ * same offset and Marko's last-wins keeps the method (probed in a clean
+ * install: concise forms compile, no warning). The same bytes after a
+ * space-separated attribute, and the HTML form, are Marko's own error.
+ */
+describe("a default method after other attributes (one `value`, no warning)", () => {
+  const method = (source: string) => {
+    const result = lowerSource(source, "/t.mx");
+    const tag = firstTag(result.ir as NonNullable<typeof result.ir>);
+    return {
+      diagnostics: result.diagnostics,
+      names: tag.attrs.map((a: SpannedAttr) => a.name),
+    };
+  };
+
+  it.each([
+    ["run [after=1] (x) { go(x) }\n", ["after", "value"]],
+    ["run (x) { go(x) }\n", ["value"]],
+    ["run [after=1] value(x) { go(x) }\n", ["after", "value"]],
+    ["run [after=1] [b=2] (x) { go(x) }\n", ["after", "b", "value"]],
+    ["run a=1, (x) { go(x) }\n", ["a", "value"]],
+    ["<run(x) { go(x) }/>\n", ["value"]],
+  ])("%j lowers one `value` and no diagnostic", (source, names) => {
+    const { diagnostics, names: got } = method(source);
+    expect(diagnostics).toEqual([]);
+    expect(got).toEqual(names);
+  });
+
+  it("keeps the method, not the empty twin, as the surviving value", () => {
+    const result = lowerSource("run [after=1] (x) { go(x) }\n", "/t.mx");
+    const tag = firstTag(result.ir as NonNullable<typeof result.ir>);
+    const value = tag.attrs.find((a: SpannedAttr) => a.name === "value");
+    expect(value?.kind).not.toBe("static");
+  });
+
+  it.each([
+    ["<run after=1 (x) { go(x) }/>\n", 18],
+    ["run after=1 (x) { go(x) }\n", 17],
+  ])("%j is Marko's error at column %i", (source, column) => {
+    const result = lowerSource(source, "/t.mx");
+    expect(result.ir).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      severity: "error",
+      message: "Expected a single expression, but found `{` after it.",
+      line: 1,
+      column: column - 1,
+    });
   });
 });
 

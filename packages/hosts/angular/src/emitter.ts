@@ -1865,9 +1865,8 @@ class AngularEmitter implements Emitter<string> {
    * a consumer that *makes* that edit itself has to drop the advice, and
    * matching the prose to do it would silently start leaking (or swallowing)
    * the day anyone rewords a message. `.ng.mx` is that consumer — see
-   * `ng-mx.ts`. `MxWarning` has no `code` field of its own (it is core's
-   * type, owned by the tag-unit squad), so the marker rides as an extra
-   * property; a reader that does not know it simply ignores it.
+   * `ng-mx.ts`. `MxWarning.code` is core's optional field; a reader that
+   * does not know the code simply ignores it.
    */
   private warnOnce(
     key: string,

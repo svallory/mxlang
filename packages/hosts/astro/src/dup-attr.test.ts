@@ -36,6 +36,7 @@ describe("duplicate attributes (astro)", () => {
         line: 4,
         column: 5,
         file: "Test.amx",
+        code: "MX_DUPLICATE_ATTRIBUTE",
       },
     ]);
     // Only the survivor is emitted.

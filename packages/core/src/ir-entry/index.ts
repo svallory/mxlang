@@ -304,7 +304,7 @@ export function lowerSource(
           "warning",
           warning.message,
           warning,
-          undefined,
+          warning.code,
           lineStarts,
           source,
           filename,

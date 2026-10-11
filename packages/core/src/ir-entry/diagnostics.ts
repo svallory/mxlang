@@ -32,9 +32,9 @@ export interface IrDiagnostic {
    */
   file?: string;
   /**
-   * A machine-readable code, when the error carries one
-   * (`TranslateError.diagnosticCode`): today a dialect's
-   * `ctx.fail(message, { code })`. @unstable
+   * A machine-readable code, when the diagnostic carries one: an error's
+   * `TranslateError.diagnosticCode` (a dialect's `ctx.fail(message, { code })`)
+   * or a warning's `MxWarning.code` (`MX_DUPLICATE_ATTRIBUTE`). @unstable
    */
   code?: string;
 }
