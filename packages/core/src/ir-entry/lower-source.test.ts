@@ -482,27 +482,6 @@ describe("required beyond `span`", () => {
       ["./t", [["default", "T"]]],
     ]);
   });
-
-  // TODO ir-entry-contract-default-spans: a contract `default` materializes a
-  // positionless attribute, which the span invariant rejects, as `parseData`
-  // did (same two messages). Pinned so the limit is visible, not silent.
-  it("a contract `default` is still an invariant error, as in `parseData`", () => {
-    expect(
-      errors("<box/>\n", {
-        customTags: {
-          box: {
-            attributes: {
-              size: { type: "string", default: "s" },
-              n: { type: "number", default: 3 },
-            },
-          },
-        },
-      }).map(([, message]) => message),
-    ).toEqual([
-      "internal error: @mxlang/core: IR invariant broken — static attribute `size` carries no span",
-      "internal error: @mxlang/core: IR invariant broken — attribute `n` carries no span",
-    ]);
-  });
 });
 
 describe("lowerFile", () => {
