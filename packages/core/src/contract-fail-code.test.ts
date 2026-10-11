@@ -17,17 +17,16 @@ const SOURCE = "<box/>\n<box/>\n";
 const AT = { line: 2, column: 0 };
 
 type FailFn = (message: string, ...rest: unknown[]) => never;
-type Hook = (ctx: {
-  fail: (message: string, ...rest: unknown[]) => never;
-}) => never;
+type HookCtx = { fail: FailFn };
+type Hook = (ctx: HookCtx) => never;
 
 function tags(
   hook: Hook,
   where: "analyze" | "transform",
 ): Record<string, CustomTag> {
   return where === "analyze"
-    ? { box: { analyze: (_calls, ctx) => hook(ctx) } }
-    : { box: { transform: (_call, ctx) => hook(ctx) } };
+    ? { box: { analyze: (_calls, ctx) => hook(ctx as unknown as HookCtx) } }
+    : { box: { transform: (_call, ctx) => hook(ctx as unknown as HookCtx) } };
 }
 
 function run(hook: Hook, where: "analyze" | "transform") {
