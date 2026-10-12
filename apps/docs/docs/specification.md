@@ -4183,7 +4183,7 @@ or a bare table; the same frozen object is then not validated again on a later
 `compileSource`, `parseFragment` or `lowerSource` call. An object that is not
 frozen is validated again on every call, because a mutable object can change
 between calls. The check is shallow, and core never validates a nested change
-made after the first call. A dialect's `table` is copied when the dialect is
+to a frozen object made after the first call. A dialect's `table` is copied when the dialect is
 validated, so a later change to it is ignored. A bare table is used as passed,
 so a later change to it reaches the parse unchecked. A dialect's other nested
 objects (`contracts`, for one) are not checked again either. A dialect or table

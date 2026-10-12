@@ -545,8 +545,8 @@ routing.
 Core validates that dialect, and remembers the result only when the object is
 frozen. A frozen dialect (or table) is validated once; one that is not frozen is
 validated again on every call, because a mutable object can change between
-calls. The check is shallow, and core never validates a nested change made after
-the first call: a dialect's `table` is copied when it is validated, so a later
+calls. The check is shallow, and core never validates a nested change to a
+frozen object made after the first call: a dialect's `table` is copied when it is validated, so a later
 change to it is ignored, while a bare table is used as passed, so a later
 change reaches the parse unchecked. A dialect or table you build once and pass
 on every call should be frozen deeply (`Object.freeze` on it and on every
