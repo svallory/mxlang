@@ -4588,9 +4588,10 @@ const EFFECT_TAG_MESSAGE =
  * html targets): one error, with its own code, ahead of wildcard, custom-tag
  * and default-tag resolution. Two exceptions. The `none` tag rules preset,
  * where every name but the module statements is an ordinary tag. And a host
- * that declares its own disposition for the name: that host says what it
- * does with `<effect>` in its own words, so its row is applied here, ahead of
- * a parent's `children` claiming the name, and core adds nothing.
+ * or policy (the html `strict` policy) that declares its own disposition for
+ * the name: it says what it does with `<effect>` in its own words, so its row
+ * is applied here, ahead of a parent's `children` claiming the name, and core
+ * adds nothing.
  */
 function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
   if (name !== "effect" || ctx.tagRules === "none") return;
@@ -5801,6 +5802,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     filename: tag.filename,
     customTags: ctx.customTags as Record<string, CustomTag> | undefined,
     nativeTags: ctx.declarations.nativeTags,
+    targets: ctx.targets,
   });
   const templateCtx = newCtx(
     tag.source,

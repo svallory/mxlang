@@ -521,6 +521,14 @@ export const escapeFrom = "@mxlang/target-html";
  */
 const STRICT_TAGS: Record<string, Disposition> = {
   ...TAGS,
+  // The default policy has no `effect` row (core refuses the name on a
+  // target); the strict policy has no reactive runtime, so it words the
+  // refusal like its `<let>` and `<script>` rows, and core yields to it.
+  effect: {
+    kind: "error",
+    reason:
+      "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target",
+  },
   let: {
     kind: "error",
     reason:

@@ -75,7 +75,7 @@ export interface CompileOptions {
    */
   targets?: TargetLookup;
   /**
-   * Rejects reactive constructs (`<let>`, `<lifecycle>`,
+   * Rejects reactive constructs (`<let>`, `<effect>`, `<lifecycle>`,
    * `<script>`, `client` blocks, `<id>`) by name instead of rendering their
    * initial value or treating them as inert. Folded from `.mx`'s dialect
    * (decision 68) as an opt-in stance for an author who wants those

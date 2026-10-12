@@ -2984,13 +2984,17 @@ Decision 65, normatively:
 
 `<effect>` is refused in every form (bodied, `<effect/>`, `<effect() { … }/>`,
 `<effect=…/>`, with attributes or a spread) on every target (`lowerSource` and
-the html targets):
+the html targets). The default policy and `lowerSource` say:
 
 > `<effect>` is not an MX tag. Use `<script>`: its body runs after render and
 > again when a value it reads changes.
 
 The error is core's, code `MX_RESERVED_EFFECT_TAG`, positioned at the tag name
-with its end. It is a target rule: a host (embedded MX in Preact, React, Hono,
+with its end. The html `strict` policy has no reactive runtime and declares its
+own row, worded like its `<let>` and `<script>` rows ("`<effect>` is a reactive
+effect and requires a runtime; this strict policy has no reactive target", code
+`MX_UNSUPPORTED_CONSTRUCT`), which core yields to; Astro `.mx` follows strict. It
+is a target rule: a host (embedded MX in Preact, React, Hono,
 Solid, Angular or Astro) declares its own disposition for `effect` and reports
 that, never this text. The other exception is the `none` tag-rules preset (a
 dialect's, or `lowerSource({ tagRules: "none" })`), where `effect` is an
@@ -3026,7 +3030,7 @@ tag taking a body (raw text).
 ### The `strict` policy
 
 An opt-in stance, not the default (decision 68's policy fold). Under `strict`,
-the same five constructs — `<let>`, `<lifecycle>`, `<script>`, `client`
+the same six constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
 blocks, `<id>` — become errors naming the construct, for an author who wants
 "this template needs a reactive runtime" enforced at compile time.
 
@@ -3311,7 +3315,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 
 | Tag | html | html-strict / Astro `.mx` | Solid | Preact/React/Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|
-| `<effect>` | error (core's, `MX_RESERVED_EFFECT_TAG`) | error (core's) | error | error | error | error — fixed, was **literal element** (bug 1) |
+| `<effect>` | error (core's, `MX_RESERVED_EFFECT_TAG`) | error (strict row's own text) | error | error | error | error — fixed, was **literal element** (bug 1) |
 | `<lifecycle>` | inert | error | error | error | error | error — fixed, was **literal element** |
 | `<script>` | inert (body `text`) | error | error | error | error | error — fixed, was **literal element** |
 | `<id>` | inert | error | field-guard error | error | error | error — fixed, was field-guard-only |

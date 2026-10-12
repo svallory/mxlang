@@ -80,7 +80,8 @@ emits, minus resume markers. **Inert** (accepted, no output, each verified
 byte-identical against Marko): `<lifecycle>`, `<script>`, `<id>`,
 `<log>`, `<debug>`, `client` blocks (client-only), and `by=` on `<for>`.
 `<effect>` is not a row at all: core refuses it in every form on a target
-(`MX_RESERVED_EFFECT_TAG`), default and strict alike. A
+(`MX_RESERVED_EFFECT_TAG`). The strict policy does have an `effect` row, an
+error worded like its `<let>`/`<script>` rows, and core yields to it. A
 `server` block is **not** inert — this is the server render, so it runs and
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is
@@ -158,7 +159,7 @@ than assumed:
 ### The `strict` policy
 
 Decision 68's policy fold: the retired `.mx` dialect rejected reactive
-constructs (`<let>`, `<lifecycle>`, `<script>`, `client` blocks,
+constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks,
 `<id>`) by name, since standalone MX had no reactive target at all. The
 default `policy` above instead renders what Marko's own server render would
 emit for those (inert, or `<let>`'s initial value) — decision 65's table.

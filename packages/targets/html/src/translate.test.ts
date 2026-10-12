@@ -230,10 +230,41 @@ describe("<effect> is not an MX tag", () => {
     expect(error.end).toEqual({ line, column: column + "effect".length });
   });
 
-  it("refuses it under { strict: true } with the same text", () => {
-    expect(() => compile(src("<effect/>"), file, { strict: true })).toThrow(
-      EFFECT_MESSAGE,
-    );
+  it("under { strict: true } the strict policy words it, like its <let> and <script> rows", () => {
+    const STRICT =
+      "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target";
+    // Like its sibling rows, the strict row's error sits on the tag, from its
+    // `<` (column 0) to the end of its name.
+    for (const [source, line] of [
+      ["<effect/>", 1],
+      ["<effect() { go() }>x</effect>", 1],
+      ["<p>a</p>\n<effect=go()/>", 2],
+    ] as const) {
+      let error: any;
+      try {
+        compile(src(source), file, { strict: true });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: STRICT,
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+        line,
+        column: 0,
+      });
+      expect(error.end).toEqual({ line, column: 7 });
+    }
+  });
+
+  it("the default policy still gets core's MX_RESERVED_EFFECT_TAG", () => {
+    let error: any;
+    try {
+      compile(src("<effect/>"), file, { strict: false });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error.diagnosticCode).toBe("MX_RESERVED_EFFECT_TAG");
+    expect(error.message).toBe(EFFECT_MESSAGE);
   });
 
   it("accepts the <script> it points to", () => {

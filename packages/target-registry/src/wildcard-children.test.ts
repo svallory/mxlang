@@ -224,22 +224,51 @@ describe("a target's built-ins are never wildcard-matched", () => {
   const EFFECT =
     "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.";
 
-  const htmlTargets = ["html", "astro-html"];
+  const STRICT_EFFECT =
+    "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target";
 
-  it.each(htmlTargets)(
-    "%s: <effect> inside a catch-all parent is core's effect error",
-    async (target) => {
+  it.each([
+    ["html", EFFECT, {}],
+    ["astro-html", STRICT_EFFECT, { strict: true }],
+  ])(
+    "%s: <effect> inside a catch-all parent is the target's own effect error",
+    async (target, expected, extra) => {
       const message = await run(
-        byDescriptor(target, {
-          customTags: catchAll,
-          ...(target === "astro-html" ? { strict: true } : {}),
-        }),
+        byDescriptor(target, { customTags: catchAll, ...extra }),
         '<resource><effect nope="a"/></resource>\n',
         page(`e-${target}`),
       );
-      expect(message).toBe(EFFECT);
+      expect(message).toBe(expected);
     },
   );
+
+  it("astro-html (Astro `.mx`) follows the strict row exactly, in or out of a parent", async () => {
+    const compile = byDescriptor("astro-html", {
+      customTags: catchAll,
+      strict: true,
+    });
+    for (const [source, line] of [
+      ["<effect/>\n", 1],
+      ["<p>a</p>\n<effect() { go() }/>\n", 2],
+      ['<resource>\n<effect nope="a"/>\n</resource>\n', 2],
+    ] as const) {
+      let error: any;
+      try {
+        await compile(source, page("e-exact"));
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: STRICT_EFFECT,
+        diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+        line,
+        column: 0,
+      });
+      expect(error.end).toEqual({ line, column: 7 });
+    }
+  });
+
+  const htmlTargets = ["html", "astro-html"];
 
   it.each(
     compilersWith(catchAll)
