@@ -114,13 +114,14 @@ describe("scriptlets (html)", () => {
       try {
         compile(source, "/fixtures/test.mx", STRICT);
       } catch (error) {
-        return error as {
+        const e = error as {
           message: string;
           code?: string;
           line?: number;
           column?: number;
           end?: { line: number; column: number };
         };
+        return { ...e, message: e.message.replace(ANSI, "") };
       }
       throw new Error("expected a compile error, but the template compiled");
     }
