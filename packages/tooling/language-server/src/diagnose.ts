@@ -131,6 +131,27 @@ export interface RelatedDiagnostics {
 }
 
 /**
+ * The LSP end of a range that starts at 0-based `line`/`character`.
+ *
+ * `end` is core's exclusive end (1-based line, 0-based column) when it knows
+ * one. Without it, or when it is empty or lies before the start (a point parse
+ * error), the range is one character wide, as before.
+ */
+function rangeEnd(
+  line: number,
+  character: number,
+  end?: { line: number; column: number },
+): { line: number; character: number } {
+  if (end !== undefined) {
+    const endLine = end.line - 1;
+    const endCharacter = Math.max(0, end.column);
+    if (endLine > line || (endLine === line && endCharacter > character))
+      return { line: endLine, character: endCharacter };
+  }
+  return { line, character: character + 1 };
+}
+
+/**
  * Turns collected warnings into diagnostics, routing each to its own file.
  *
  * A warning raised inside a tag template is measured there, exactly as an
@@ -153,10 +174,11 @@ function warningDiagnostics(
           line: Math.max(0, warning.line - 1),
           character: Math.max(0, warning.column),
         },
-        end: {
-          line: Math.max(0, warning.line - 1),
-          character: Math.max(0, warning.column) + 1,
-        },
+        end: rangeEnd(
+          Math.max(0, warning.line - 1),
+          Math.max(0, warning.column),
+          warning.end,
+        ),
       },
     };
     if (warning.file && warning.file !== filePathOf(uri)) {
@@ -248,11 +270,19 @@ export function splitCodeFrame(
   };
 }
 
-function errorPosition(
-  error: unknown,
-): { line: number; column: number; file?: string } | null {
+function errorPosition(error: unknown): {
+  line: number;
+  column: number;
+  file?: string;
+  end?: { line: number; column: number };
+} | null {
   if (isTranslateError(error)) {
-    return { line: error.line, column: error.column, file: error.file };
+    return {
+      line: error.line,
+      column: error.column,
+      file: error.file,
+      end: error.end,
+    };
   }
   if (!error || typeof error !== "object") return null;
 
@@ -268,7 +298,15 @@ function errorPosition(
   if (!start || typeof start !== "object") return null;
   const nested = start as { line?: unknown; column?: unknown };
   if (typeof nested.line === "number" && typeof nested.column === "number") {
-    return { line: nested.line, column: nested.column };
+    // A template parse error's `loc` also holds its exclusive end.
+    const end = (loc as { end?: { line?: unknown; column?: unknown } }).end;
+    return {
+      line: nested.line,
+      column: nested.column,
+      ...(typeof end?.line === "number" && typeof end.column === "number"
+        ? { end: { line: end.line, column: end.column } }
+        : {}),
+    };
   }
   return null;
 }
@@ -366,10 +404,11 @@ export function diagnoseDocument(
           message: diagnostic.message,
           range: {
             start: { line: diagnostic.line - 1, character: diagnostic.column },
-            end: {
-              line: diagnostic.line - 1,
-              character: diagnostic.column + 1,
-            },
+            end: rangeEnd(
+              diagnostic.line - 1,
+              diagnostic.column,
+              diagnostic.end,
+            ),
           },
         };
         const origin = diagnostic.origin;
@@ -380,7 +419,7 @@ export function diagnoseDocument(
         // its head, whose `relatedInformation` leads there.
         const range = {
           start: { line: origin.line - 1, character: origin.column },
-          end: { line: origin.line - 1, character: origin.column + 1 },
+          end: rangeEnd(origin.line - 1, origin.column, origin.end),
         };
         const text = diagnostic.message.replace(
           ` (in ${origin.file}:${origin.line}:${origin.column + 1})`,
@@ -559,8 +598,8 @@ export function diagnoseDocument(
       // are 0-based on both axes.
       const line = Math.max(0, position.line - 1);
       const column = Math.max(0, position.column);
-      // These errors carry only a start position, not a span, so synthesize a
-      // one-character range that marks where the error occurred.
+      // An error that carries an end is underlined to it; one without (a
+      // Babel error, a file-level error) gets the one character at its start.
       const raw =
         error instanceof Error
           ? error.message
@@ -591,6 +630,10 @@ export function diagnoseDocument(
       const diagnostic: Diagnostic = {
         severity: DiagnosticSeverity.Error,
         source: "mxlang",
+        ...(typeof (error as { diagnosticCode?: unknown }).diagnosticCode ===
+        "string"
+          ? { code: (error as { diagnosticCode: string }).diagnosticCode }
+          : {}),
         message,
         ...(codeFrame === undefined ? {} : { data: { codeFrame } }),
         ...(callee
@@ -617,7 +660,7 @@ export function diagnoseDocument(
           : {}),
         range: {
           start: { line, character: column },
-          end: { line, character: column + 1 },
+          end: rangeEnd(line, column, position.end),
         },
       };
       // The third position rule (custom tags spec §2): an error raised inside

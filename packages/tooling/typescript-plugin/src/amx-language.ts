@@ -36,6 +36,7 @@ import {
   type DependencyLanguagePluginOptions,
   decodeMappings,
   diagnosticsFrom,
+  errorDiagnostic,
   foreignTemplateError,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
@@ -259,7 +260,7 @@ export function createAmxLanguagePlugin(
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
         fenceEnds.delete(fileName);
-        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
+        compileDiagnostics.set(fileName, [errorDiagnostic(error, cause)]);
         return createVirtualCode(
           typescript,
           failedModuleStub(typescript, source),

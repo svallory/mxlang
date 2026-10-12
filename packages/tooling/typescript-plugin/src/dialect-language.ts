@@ -73,6 +73,10 @@ export function createDialectLanguagePlugin(
           source,
           category: diagnostic.severity,
           diagnosticSource: check.source,
+          ...(diagnostic.end === undefined ||
+          diagnostic.end.offset <= diagnostic.offset
+            ? {}
+            : { length: diagnostic.end.offset - diagnostic.offset }),
           ...(diagnostic.code === undefined
             ? {}
             : { diagnosticCode: diagnostic.code }),

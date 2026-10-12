@@ -98,6 +98,11 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
    * place of `80001`/`80002`. Only a dialect's file sets it.
    */
   diagnosticCode?: string;
+  /**
+   * How many characters the diagnostic covers from `offset`, when the compiler
+   * reported where the problem ends. Absent means one character.
+   */
+  length?: number;
 }
 
 export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
@@ -327,7 +332,7 @@ export function createRegionLanguagePlugin(
         }
         const error = toSyntaxError(fileName, source, cause);
         syntaxErrors.set(fileName, error);
-        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
+        compileDiagnostics.set(fileName, [errorDiagnostic(error, cause)]);
         return createVirtualCode(
           typescript,
           failedModuleStub(typescript, source),
@@ -459,9 +464,9 @@ export function createNgMxLanguagePlugin(
       // Only for what it reports: this file's host is fixed by its extension.
       hostPolicies.resolve(fileName, source);
       compiled.delete(fileName);
-      const fail = (error: SolidMxSyntaxError) => {
+      const fail = (error: SolidMxSyntaxError, cause?: unknown) => {
         syntaxErrors.set(fileName, error);
-        compileDiagnostics.set(fileName, [{ ...error, category: "error" }]);
+        compileDiagnostics.set(fileName, [errorDiagnostic(error, cause)]);
         return createVirtualCode(
           typescript,
           failedModuleStub(typescript, source),
@@ -554,7 +559,7 @@ export function createNgMxLanguagePlugin(
             "ts",
           );
         }
-        return fail(toSyntaxError(fileName, source, cause));
+        return fail(toSyntaxError(fileName, source, cause), cause);
       }
     },
 
@@ -651,6 +656,67 @@ export function diagnosticsFrom(
     : (diagnostics.get(fileName) ?? []);
 }
 
+/**
+ * The number of characters from `offset` to a compiler-reported exclusive end
+ * (1-based line, 0-based column) in `source`, or `undefined` when there is no
+ * end or the end does not lie after the start.
+ */
+export function lengthTo(
+  source: string,
+  offset: number,
+  end: { line: number; column: number } | undefined,
+): number | undefined {
+  if (end === undefined) return undefined;
+  const lineStart =
+    lineOffsets(source)[Math.max(0, end.line - 1)] ?? source.length;
+  const endOffset = Math.min(
+    source.length,
+    lineStart + Math.max(0, end.column),
+  );
+  return endOffset > offset ? endOffset - offset : undefined;
+}
+
+/**
+ * The exclusive end a thrown error reports: a `TranslateError`'s `end`, or the
+ * `loc.end` of a template parse error, which has the same line and column.
+ */
+function endOfError(
+  cause: unknown,
+): { line: number; column: number } | undefined {
+  const own = isTranslateError(cause) ? cause.end : undefined;
+  if (own !== undefined) return own;
+  const end = (
+    cause as { loc?: { end?: { line?: unknown; column?: unknown } } }
+  )?.loc?.end;
+  return typeof end?.line === "number" && typeof end.column === "number"
+    ? { line: end.line, column: end.column }
+    : undefined;
+}
+
+/** MX's stable code on a thrown error (`MX_PARSE_MISSING_END_TAG`), when it has one. */
+export function codeOfError(cause: unknown): string | undefined {
+  const code = (cause as { diagnosticCode?: unknown } | null)?.diagnosticCode;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * The compile diagnostic of one thrown error: the positioned syntax error plus
+ * the span and the code that error carries, when it has them.
+ */
+export function errorDiagnostic(
+  error: SolidMxSyntaxError,
+  cause: unknown,
+): MxCompileDiagnostic {
+  const length = lengthTo(error.source, error.offset, endOfError(cause));
+  const code = codeOfError(cause);
+  return {
+    ...error,
+    category: "error",
+    ...(length === undefined ? {} : { length }),
+    ...(code === undefined ? {} : { diagnosticCode: code }),
+  };
+}
+
 export function warningDiagnostic(
   fileName: string,
   source: string,
@@ -658,12 +724,18 @@ export function warningDiagnostic(
 ): MxCompileDiagnostic {
   const lineStart =
     lineOffsets(source)[Math.max(0, warning.line - 1)] ?? source.length;
+  const offset = Math.min(
+    source.length,
+    lineStart + Math.max(0, warning.column),
+  );
+  const length = lengthTo(source, offset, warning.end);
   return {
     fileName,
     message: warning.message,
-    offset: Math.min(source.length, lineStart + Math.max(0, warning.column)),
+    offset,
     source,
     category: "warning",
+    ...(length === undefined ? {} : { length }),
   };
 }
 
@@ -730,6 +802,12 @@ export function foreignTemplateError(
     lineStart + Math.max(0, cause.column),
   );
 
+  const templateLength = lengthTo(templateSource, templateOffset, cause.end);
+  const code =
+    cause.diagnosticCode === undefined
+      ? {}
+      : { diagnosticCode: cause.diagnosticCode };
+
   return {
     templateFileName,
     templateDiagnostic: {
@@ -738,6 +816,8 @@ export function foreignTemplateError(
       offset: templateOffset,
       source: templateSource,
       category: "error",
+      ...(templateLength === undefined ? {} : { length: templateLength }),
+      ...code,
     },
     callerDiagnostic: {
       fileName: callerFileName,
@@ -754,6 +834,7 @@ export function foreignTemplateError(
       offset: 0,
       source: callerSource,
       category: "error",
+      ...code,
     },
   };
 }

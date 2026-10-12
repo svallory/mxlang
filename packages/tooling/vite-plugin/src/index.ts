@@ -338,7 +338,10 @@ function splitId(id: string): [path: string, suffix: string] {
 const SPECIAL_QUERY_RE = /[?&](?:worker|sharedworker|raw|url)\b/;
 
 /**
- * A one-line code frame: the offending line plus a caret under `column`.
+ * A one-line code frame: the offending line plus a caret under `column`, or a
+ * run of carets from `column` to `endColumn` (exclusive) when the diagnostic's
+ * end is known. The run stops at the end of the line, so a diagnostic that
+ * spans lines underlines the rest of its first line; it is at least one caret.
  *
  * Vite does not export `generateCodeFrame` from its public entry (checked at
  * runtime against 8.2.2: the export is `undefined`), so the frame the error
@@ -349,14 +352,20 @@ export function codeFrame(
   source: string,
   line: number,
   column: number,
+  endColumn?: number,
 ): string {
   const lines = source.split("\n");
   const target = lines[line - 1];
   if (target === undefined) return "";
 
   const gutter = `${line} | `;
-  const caretPad = " ".repeat(gutter.length + Math.max(0, column));
-  return `${gutter}${target}\n${caretPad}^`;
+  const start = Math.max(0, column);
+  const run =
+    endColumn === undefined
+      ? 1
+      : Math.max(1, Math.min(endColumn, target.length) - start);
+  const caretPad = " ".repeat(gutter.length + start);
+  return `${gutter}${target}\n${caretPad}${"^".repeat(run)}`;
 }
 
 /**
@@ -412,6 +421,8 @@ function locate(
     file: string;
     line: number;
     column: number;
+    /** Where the diagnostic ends (exclusive), when known. */
+    end?: { line: number; column: number };
     source: string | undefined;
     message?: string;
   },
@@ -421,7 +432,15 @@ function locate(
   located.id = at.file;
   located.loc = { file: at.file, line: at.line, column: at.column };
   if (at.source !== undefined) {
-    located.frame = codeFrame(at.source, at.line, at.column);
+    // An end on the same line stops the caret run there; an end on a later
+    // line runs it to the end of this one.
+    const endColumn =
+      at.end === undefined
+        ? undefined
+        : at.end.line === at.line
+          ? at.end.column
+          : Number.POSITIVE_INFINITY;
+    located.frame = codeFrame(at.source, at.line, at.column, endColumn);
   }
   located.stack = `${err.name}: ${located.message}`;
   return located;
@@ -713,6 +732,20 @@ function markoPosition(
   );
   if (!match) return undefined;
   return { line: Number(match[1]), column: Math.max(0, Number(match[2]) - 1) };
+}
+
+/**
+ * The exclusive end of a template parse error, when its `loc` carries one
+ * (MX's own `CompileError` does: `loc.start` and `loc.end`, same line and
+ * column as a `TranslateError`).
+ */
+function markoEnd(err: {
+  loc?: unknown;
+}): { line: number; column: number } | undefined {
+  const end = (err.loc as { end?: { line?: unknown; column?: unknown } })?.end;
+  return typeof end?.line === "number" && typeof end.column === "number"
+    ? { line: end.line, column: end.column }
+    : undefined;
 }
 
 /**
@@ -1487,6 +1520,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             file: errorFile,
             line: err.line,
             column: err.column,
+            end: err.end,
             source: errorSource,
             message: rest === "" ? own : `${own ?? plain}${rest}`,
           });
@@ -1503,6 +1537,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           throw locate(err, {
             file: errorFile,
             ...position,
+            end: markoEnd(err),
             source: errorFile === source ? code : readTemplateSource(errorFile),
             // Marko's own message is `\n    at <path>:L:C` plus a code frame;
             // `label` is the reason alone, and `loc` + `frame` replace the

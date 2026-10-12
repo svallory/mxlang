@@ -349,7 +349,15 @@ function withSyntaxDiagnostics(
               typescript.ScriptKind.TSX,
             ),
             start: diagnostic.offset,
-            length: Math.min(1, diagnostic.source.length - diagnostic.offset),
+            // The compiler's span when it reported one, else one character;
+            // never past the end of the text.
+            length: Math.max(
+              0,
+              Math.min(
+                diagnostic.length ?? 1,
+                diagnostic.source.length - diagnostic.offset,
+              ),
+            ),
             category:
               diagnostic.category === "error"
                 ? typescript.DiagnosticCategory.Error

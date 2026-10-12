@@ -44,6 +44,7 @@ import {
   type DependencyLanguagePluginOptions,
   decodeMappings,
   diagnosticsFrom,
+  errorDiagnostic,
   foreignTemplateError,
   type MxCompileDiagnostic,
   type MxDiagnosticLanguagePlugin,
@@ -258,7 +259,7 @@ export function createMxLanguagePlugin(
           }
           const error = toSyntaxError(fileName, source, each);
           firstSyntaxError ??= error;
-          diagnostics.push({ ...error, category: "error" });
+          diagnostics.push(errorDiagnostic(error, each));
         }
         if (firstSyntaxError) syntaxErrors.set(fileName, firstSyntaxError);
         else syntaxErrors.delete(fileName);

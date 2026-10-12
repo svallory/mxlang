@@ -908,7 +908,13 @@ export function reportCompileDiagnostics(
               typescript.ScriptKind.TSX,
             ),
             start: diagnostic.offset,
-            length: Math.min(1, diagnostic.source.length - diagnostic.offset),
+            length: Math.max(
+              0,
+              Math.min(
+                diagnostic.length ?? 1,
+                diagnostic.source.length - diagnostic.offset,
+              ),
+            ),
             category:
               diagnostic.category === "error"
                 ? typescript.DiagnosticCategory.Error
@@ -928,8 +934,9 @@ export function reportCompileDiagnostics(
           getNewLine: () => "\n",
         },
       );
-      // tsc prints `TS<number>`; a dialect's own code is a name, printed as
-      // it is: `page.probe(1,4): error PROBE_BAD: bad probe`.
+      // tsc prints `TS<number>`; MX's own code is a name, printed as it is:
+      // `page.mx(1,4): error MX_PARSE_MISSING_END_TAG: …`. `TS80001` and
+      // `TS80002` remain for a diagnostic that has no code.
       return diagnostic.diagnosticCode === undefined
         ? line
         : line.replace(
