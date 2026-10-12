@@ -68,8 +68,10 @@ Five facts worth knowing before editing it:
   trailing object `{ head, content }` as the next argument, so it binds to
   whichever param follows the positional args (the define destructures it:
   `|title, { head }|`), every later param reads `undefined` and nothing is
-  filled by name. When the args already fill every param Marko drops the
-  extras. The html and the shared preact/react/hono emitters and Solid's
+  filled by name. When the args already fill every fixed param and the
+  define has no rest param, Marko drops the extras; a rest param collects the
+  object after the args (`|a, ...rest|` with `<D(1, 2)>x</D>` reads
+  `rest = [2, { content }]`). The html and the shared preact/react/hono emitters and Solid's
   `#defineComponent` all emit exactly that (a no-args call still passes one
   attribute object, decision 160).
   Solid needed no emitter change for the dynamic-tag case — its design
