@@ -2154,7 +2154,8 @@ describe("MX language plugin", () => {
         project.service
           .getSyntacticDiagnostics(lateCaller)
           .filter(
-            (diagnostic) => diagnostic.code === "MX_UNREADABLE_CALLEE_INPUT",
+            (diagnostic) =>
+              (diagnostic.code as unknown) === "MX_UNREADABLE_CALLEE_INPUT",
           )
           .map((diagnostic) => diagnostic.messageText);
       project.service.getSemanticDiagnostics(lateConsumer);
