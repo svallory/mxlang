@@ -473,6 +473,51 @@ describe("bindings may not shadow the input parameter", () => {
     expect(html).toBe("<p>0</p>");
   });
 
+  // Marko 6.4.4: a rest param collects the trailing object wherever the args
+  // stop, so `|a, ...rest|` with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`.
+  it("appends the trailing object after args that fill every fixed param of a rest define", async () => {
+    const entry =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "<define/One|a, ...rest|><div>${a}:<${rest[0]?.content}/></div></define>\n<define/Two|a, ...rest|><div>${a}:${rest[0]}:<${rest[1]?.content}/></div></define>\n<define/Three|a, ...rest|><div>${a}:${rest[0]}:${rest[1]}:<${rest[2]?.content}/></div></define>\n<One(1)>x</One>\n<Two(1, 2)>x</Two>\n<Three(1, 2, 3)>x</Three>";
+    const { code } = compile(src(entry), file);
+    for (const call of ["One(1, {", "Two(1, 2, {", "Three(1, 2, 3, {"]) {
+      expect(code).toContain(`__mxOut.write(${call} content: () => {`);
+    }
+    const html = await renderModules({ "entry.mx": entry }, "entry.mx");
+    expect(html).toBe("<div>1:x</div><div>1:2:x</div><div>1:2:3:x</div>");
+  });
+
+  it("appends the trailing object to a define whose only param is a rest param", async () => {
+    const entry =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "<define/Only|...rest|><div>${rest[0]}:${rest[1]}:<${rest[2]?.content}/></div></define>\n<Only(1, 2)>x</Only>";
+    const { code } = compile(src(entry), file);
+    expect(code).toContain("__mxOut.write(Only(1, 2, { content: () => {");
+    expect(await renderModules({ "entry.mx": entry }, "entry.mx")).toBe(
+      "<div>1:2:x</div>",
+    );
+  });
+
+  it("appends an attribute-tag object after the args of a rest define", async () => {
+    const entry =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+      "<define/Tagged|a, ...rest|><div>${a}:${rest[0]}:<${rest[1]?.item}/>:<${rest[1]?.content}/>:${Object.keys(rest[1] ?? {}).sort().join(',')}</div></define>\n<Tagged(1, 2)><@item>I</@item>x</Tagged>";
+    expect(await renderModules({ "entry.mx": entry }, "entry.mx")).toBe(
+      "<div>1:2:I:x:content,item</div>",
+    );
+  });
+
+  it("appends nothing to a rest define when the call has no body or attribute tag", () => {
+    const { code } = compile(
+      src(
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
+        "<define/Row|a, ...rest|><div>${a}${rest.length}</div></define>\n<Row(1, 2)/>",
+      ),
+      file,
+    );
+    expect(code).toContain("__mxOut.write(Row(1, 2));");
+  });
+
   it("pads the fixed params before a rest param, and leaves the rest empty", async () => {
     const html = await renderModules(
       {

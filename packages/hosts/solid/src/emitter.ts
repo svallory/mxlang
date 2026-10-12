@@ -2257,10 +2257,13 @@ export class SolidEmitter implements Emitter<string> {
     // it — a define without params ignores the call's extras, and building
     // a part renders its expression, which registers state (a lazy scope,
     // hoisted defines) that must not run for output nobody reads.
+    const restParam = target.params.some((param) =>
+      param.trimStart().startsWith("..."),
+    );
     const objectUsed =
       node.args.length === 0
         ? target.params.length > 0
-        : node.args.length < target.params.length;
+        : restParam || node.args.length < target.params.length;
     for (const attr of node.attrs) {
       if (attr.kind === "spread" && node.args.length > 0) {
         fail(
@@ -2328,11 +2331,15 @@ export class SolidEmitter implements Emitter<string> {
       // argument, so it fills the first unfilled param and every param after
       // it reads `undefined`; nothing is bound by name, not even a param
       // sharing an attribute tag's name. When the args already fill every
-      // param Marko drops the extras entirely. Params left unfilled are
+      // fixed param and the define has no rest param Marko drops the extras
+      // entirely; with a rest param the object follows the args wherever they
+      // stop (`|a, ...rest|` with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`).
+      // Params left unfilled are
       // still passed as `undefined` for the type checker (TS2554), matching
       // the no-args shape's padding.
       // `parts` is only ever filled when `objectUsed` holds, which with
-      // args means a param is left unfilled for the object to land in.
+      // args means a param is left unfilled for the object to land in, or a
+      // rest param is there to collect it.
       const takesObject = parts.length > 0;
       args = [
         ...node.args.map((arg) => mappedExpr(arg)),

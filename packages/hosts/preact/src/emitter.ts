@@ -1833,8 +1833,11 @@ export class PreactEmitter implements Emitter<string> {
       // `content` — as the next argument, so it fills the first unfilled
       // parameter and every parameter after it reads `undefined`; nothing
       // is bound by name, not even a parameter sharing an attribute tag's
-      // name. When the args already fill every parameter Marko drops the
-      // extras entirely. `#propsObject` builds the object (a plain attribute
+      // name. When the args already fill every fixed parameter and the
+      // define has no rest param Marko drops the extras entirely; with a rest
+      // param the object follows the args wherever they stop (`|a, ...rest|`
+      // with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`).
+      // `#propsObject` builds the object (a plain attribute
       // alongside args is core's error, so only attribute tags and `content`
       // can be in it); unfilled parameters are padded `undefined` so the
       // emitted call keeps the function's arity (a type checker counts a
@@ -1850,9 +1853,10 @@ export class PreactEmitter implements Emitter<string> {
       const fixedParamCount = node.target.params.filter(
         (param: string) => !param.trimStart().startsWith("..."),
       ).length;
+      const hasRestParam = node.target.params.length > fixedParamCount;
       const takesObject =
         node.args.length > 0 &&
-        node.args.length < node.target.params.length &&
+        (hasRestParam || node.args.length < fixedParamCount) &&
         (node.attrTagProps.length > 0 ||
           (node.content?.children.length ?? 0) > 0);
       if (takesObject) argList.push(this.#propsObject(node));

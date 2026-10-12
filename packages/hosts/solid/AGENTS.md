@@ -287,7 +287,9 @@ Three facts worth knowing before touching it:
   and a rest param is never padded). Nothing is bound by name: `|a, { head }|`
   reads the attribute tag out of the object, and a param that merely shares
   an attribute tag's name gets the whole object. When the args already fill
-  every param the extras are dropped, as Marko drops them. A spread there is
+  every fixed param and the define has no rest param the extras are dropped,
+  as Marko drops them; a rest param collects the object after the args
+  (`|a, ...rest|` with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`). A spread there is
   rejected, since its keys are only known at run time. The capture check binds the names a destructured
   param introduces (`paramBindingNames`: `Define.params` is source text, so
   `|{ n }|` is one string), a real capture still errors. One difference from html's `content`/attribute-tag values is

@@ -1457,8 +1457,13 @@ argument, so it lands in the first unfilled parameter and every parameter
 after it reads `undefined`; nothing is bound by name, so a parameter that
 shares an attribute tag's name receives the whole object, not the tag's
 value (destructure it: `|a, { b }|`). When the tag arguments already fill
-every parameter, the extras are dropped. A rest parameter is never padded
-with `undefined`: when nothing fills it, it is the empty array, as in Marko.
+every fixed parameter and the define has no rest parameter, the extras are
+dropped. A rest parameter collects the trailing object wherever the arguments
+stop: `|a, ...rest|` called as `<D(1, 2)>x</D>` reads `rest = [2, { content }]`,
+and a define whose only parameter is `...rest` called as `<D(1, 2)>x</D>` reads
+`rest = [1, 2, { content }]`. A call with no body and no attribute tags appends
+nothing. A rest parameter is never padded with `undefined`: when nothing fills
+it, it is the empty array, as in Marko.
 A define with no params still ignores the attributes. Decision 160 is the language rule for every
 target; Angular keeps its own call shape until `define-call-attrs-angular`
 lands.
@@ -5014,7 +5019,8 @@ deferred (decision 85).
    (the attribute tags by name plus `content`) is appended as the next
    argument and lands in the first unfilled parameter, every later
    parameter reads `undefined`, and when the args already fill every
-   parameter the extras are dropped. The named-lookup scheme this item
+   fixed parameter of a define with no rest parameter the extras are dropped
+   (a rest parameter collects the object after the args). The named-lookup scheme this item
    closed on is withdrawn (§5.4).
 10. **`<define>` is supported in `.solid.mx` regions — closed by decision
    110b.** Previously a compile error ("cannot declare a function inside a

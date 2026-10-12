@@ -841,6 +841,63 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
     },
   );
 
+  // Marko 6.4.4: a rest param collects the trailing object wherever the args
+  // stop, so `|a, ...rest|` with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`.
+  it.each(hosts)(
+    "%s: appends the trailing object after args that fill every fixed param of a rest define",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const source =
+        "<define/One|a, ...rest|><div>${a}:<${rest[0]?.content}/></div></define>\n<define/Two|a, ...rest|><div>${a}:${rest[0]}:<${rest[1]?.content}/></div></define>\n<define/Three|a, ...rest|><div>${a}:${rest[0]}:${rest[1]}:<${rest[2]?.content}/></div></define>\n<One(1)>x</One>\n<Two(1, 2)>x</Two>\n<Three(1, 2, 3)>x</Three>";
+      const { code } = compile(source, "/tmp/mx-define-call/entry.mx");
+      expect(code).toContain("{One(1, { content: () => <><>x</></> })}");
+      expect(code).toContain("{Two(1, 2, { content: () => <><>x</></> })}");
+      expect(code).toContain(
+        "{Three(1, 2, 3, { content: () => <><>x</></> })}",
+      );
+      expect(await renderFixture(host, { "main.mx": source })).toBe(
+        "<div>1:x</div><div>1:2:x</div><div>1:2:3:x</div>",
+      );
+    },
+  );
+
+  it.each(hosts)(
+    "%s: appends the trailing object to a define whose only param is a rest param",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const source =
+        "<define/Only|...rest|><div>${rest[0]}:${rest[1]}:<${rest[2]?.content}/></div></define>\n<Only(1, 2)>x</Only>";
+      const { code } = compile(source, "/tmp/mx-define-call/entry.mx");
+      expect(code).toContain("{Only(1, 2, { content: () => <><>x</></> })}");
+      expect(await renderFixture(host, { "main.mx": source })).toBe(
+        "<div>1:2:x</div>",
+      );
+    },
+  );
+
+  it.each(hosts)(
+    "%s: appends an attribute-tag object after the args of a rest define",
+    async (host) => {
+      const html = await renderFixture(host, {
+        "main.mx":
+          "<define/Tagged|a, ...rest|><div>${a}:${rest[0]}:<${rest[1]?.item}/>:<${rest[1]?.content}/>:${Object.keys(rest[1] ?? {}).sort().join(',')}</div></define>\n<Tagged(1, 2)><@item>I</@item>x</Tagged>",
+      });
+      expect(html).toBe("<div>1:2:I:x:content,item</div>");
+    },
+  );
+
+  it.each(hosts)(
+    "%s: appends nothing to a rest define when the call has no body or attribute tag",
+    async (host) => {
+      const compile = await compilerFor(host);
+      const { code } = compile(
+        "<define/Row|a, ...rest|><div>${a}${rest.length}</div></define>\n<Row(1, 2)/>",
+        "/tmp/mx-define-call/entry.mx",
+      );
+      expect(code).toContain("{Row(1, 2)}");
+    },
+  );
+
   it.each(hosts)(
     "%s: pads the fixed params before a rest param and leaves the rest empty",
     async (host) => {

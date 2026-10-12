@@ -1,0 +1,9 @@
+<define/Only|...rest|><div>${rest[0]}:${rest[1]}:<${rest[2]?.content}/></div></define>
+<define/Fixed|a, b, ...rest|><div>${a}:<${b?.content}/>:${rest.length}</div></define>
+<define/Fixed2|a, b, ...rest|><div>${a}:${b}:<${rest[0]?.content}/></div></define>
+<define/Fixed3|a, b, ...rest|><div>${a}:${b}:${rest[0]}:<${rest[1]?.content}/></div></define>
+
+<Only(1, 2)>x</Only>
+<Fixed(1)>y</Fixed>
+<Fixed2(1, 2)>z</Fixed2>
+<Fixed3(1, 2, 3)>w</Fixed3>

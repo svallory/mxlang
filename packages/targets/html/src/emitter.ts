@@ -1034,8 +1034,11 @@ export function createEmitter(
         // as the next argument, so it lands in the first unfilled parameter
         // and every parameter after it reads `undefined` — nothing is bound
         // by name, not even a parameter that shares an attribute tag's name.
-        // When the args already fill every parameter Marko drops the extras
-        // entirely, so no object is appended. Parameters left unfilled are
+        // When the args already fill every fixed parameter and the define has
+        // no rest param Marko drops the extras entirely, so no object is
+        // appended; with a rest param the object follows the args wherever
+        // they stop (`|a, ...rest|` with `<D(1, 2)>x</D>` reads
+        // `rest = [2, { content }]`). Parameters left unfilled are
         // still passed as `undefined` so the call keeps the arity of the
         // function the define declared (a type checker counts a missing
         // argument as an error even though JS tolerates it).
@@ -1050,9 +1053,10 @@ export function createEmitter(
         const fixedParamCount = target.params.filter(
           (param: string) => !param.trimStart().startsWith("..."),
         ).length;
+        const hasRestParam = target.params.length > fixedParamCount;
         const takesObject =
           node.args.length > 0 &&
-          node.args.length < target.params.length &&
+          (hasRestParam || node.args.length < fixedParamCount) &&
           parts.length > 0;
         const args: Array<string | MappedCode> =
           node.args.length > 0

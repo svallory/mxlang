@@ -167,6 +167,24 @@ const CASES: Array<[string, string, string, string]> = [
     "<ul><li>u:0</li></ul>",
   ],
   [
+    "a rest param collects the trailing object after args that fill every fixed param",
+    "<define/One|a, ...rest|><li>${a}:${rest[0]?.content}</li></define><define/Two|a, ...rest|><li>${a}:${rest[0]}:${rest[1]?.content}</li></define><define/Three|a, ...rest|><li>${a}:${rest[0]}:${rest[1]}:${rest[2]?.content}</li></define><One(1)>x</One><Two(1, 2)>x</Two><Three(1, 2, 3)>x</Three>",
+    "",
+    "<ul><li>1:x</li><li>1:2:x</li><li>1:2:3:x</li></ul>",
+  ],
+  [
+    "a define whose only param is a rest param collects the trailing object after the args",
+    "<define/Only|...rest|><li>${rest[0]}:${rest[1]}:${rest[2]?.content}</li></define><Only(1, 2)>x</Only>",
+    "",
+    "<ul><li>1:2:x</li></ul>",
+  ],
+  [
+    "a rest param collects an attribute-tag object after the args",
+    "<define/Tagged|a, ...rest|><li>${a}:${rest[0]}:${rest[1]?.item}:${rest[1]?.content}:${Object.keys(rest[1] ?? {}).sort().join(',')}</li></define><Tagged(1, 2)><@item>I</@item>x</Tagged>",
+    "",
+    "<ul><li>1:2:I:x:content,item</li></ul>",
+  ],
+  [
     "a destructuring default applies to a missing attribute",
     "<define/Row|{ n = 9 }|><li>${n}</li></define><Row/>",
     "",
@@ -242,6 +260,29 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     expect(noArgs.code).toBe(
       `{${noArgs.hoistedDefines[0]?.binding}({ content: <>x</> })}`,
     );
+  });
+
+  it("appends the trailing object after args that fill every fixed param of a rest define", () => {
+    const one = compile(
+      "<define/Row|a, ...rest|><li>${a}</li></define><Row(1, 2)>x</Row>",
+      "",
+    );
+    expect(one.code).toBe(
+      `{${one.hoistedDefines[0]?.binding}(1, 2, { content: <>x</> })}`,
+    );
+    const only = compile(
+      "<define/Row|...rest|><li>${rest.length}</li></define><Row(1, 2, 3)>x</Row>",
+      "",
+    );
+    expect(only.code).toBe(
+      `{${only.hoistedDefines[0]?.binding}(1, 2, 3, { content: <>x</> })}`,
+    );
+    // No body and no attribute tag: nothing to collect, nothing appended.
+    const bare = compile(
+      "<define/Row|a, ...rest|><li>${a}</li></define><Row(1, 2)/>",
+      "",
+    );
+    expect(bare.code).toBe(`{${bare.hoistedDefines[0]?.binding}(1, 2)}`);
   });
 
   it("emits no argument for a define without params", () => {
