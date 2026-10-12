@@ -20,6 +20,7 @@ function refusal(template: string) {
       line: error.line,
       column: error.column,
       end: error.end,
+      fixes: error.fixes,
     };
   }
   throw new Error("expected the file to fail lowering");
@@ -64,6 +65,7 @@ describe("Astro: a tag the host does not support", () => {
       );
       expect(error.message).not.toContain("<script>");
       expect(error.code).toBe(CODE);
+      expect(error.fixes).toBeUndefined();
     },
   );
 

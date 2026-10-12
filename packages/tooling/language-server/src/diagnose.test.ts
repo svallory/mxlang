@@ -895,6 +895,30 @@ describe("custom tag template positions", () => {
     );
   });
 
+  it("offers no fix for a template's `<effect>`, on the caller or the template", () => {
+    const related: RelatedDiagnostics[] = [];
+    const diagnostics = diagnoseDocument(
+      "<div>\n  <box/>\n</div>\n",
+      "file:///app/page.mx",
+      policy("html"),
+      undefined,
+      "",
+      // The rename's offsets index the template, not this document: a fix in
+      // `data` would edit the wrong text, and an unopened file has no edit here.
+      template("<div>\n</div>\n<effect>go()</effect>\n"),
+      related,
+    );
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.code).toBe("MX_RESERVED_EFFECT_TAG");
+    expect(JSON.stringify(diagnostics[0]?.data ?? null)).not.toContain("fixes");
+    expect(related).toHaveLength(1);
+    expect(related[0]?.diagnostics[0]?.code).toBe("MX_RESERVED_EFFECT_TAG");
+    expect(
+      JSON.stringify(related[0]?.diagnostics[0]?.data ?? null),
+    ).not.toContain("fixes");
+  });
+
   it("reports a dropped body as a warning on the calling document", () => {
     const related: RelatedDiagnostics[] = [];
     const diagnostics = diagnoseDocument(

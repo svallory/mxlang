@@ -13,6 +13,7 @@ interface Refusal {
   line: number;
   column: number;
   end?: { line: number; column: number };
+  fixes?: unknown;
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
@@ -29,6 +30,7 @@ function refusal(run: () => unknown): Refusal {
       line: e.line,
       column: e.column,
       end: e.end,
+      fixes: e.fixes,
     };
   }
   throw new Error("expected a compile error");
@@ -87,6 +89,7 @@ describe("Angular: a tag the host does not support", () => {
         );
         expect(error.message).not.toContain("<script>");
         expect(error.code).toBe(CODE);
+        expect(error.fixes).toBeUndefined();
       }
     },
   );

@@ -13,6 +13,7 @@ import * as core from "@mxlang/core";
 import {
   type CustomTag,
   dropOwnParserPosition,
+  type IrDiagnosticFix,
   isTranslateError,
   type MxWarning,
   type ScanDiagnostic,
@@ -276,6 +277,7 @@ function errorPosition(error: unknown): {
   column: number;
   file?: string;
   end?: { line: number; column: number };
+  fixes?: readonly IrDiagnosticFix[];
 } | null {
   if (isTranslateError(error)) {
     return {
@@ -283,6 +285,7 @@ function errorPosition(error: unknown): {
       column: error.column,
       file: error.file,
       end: error.end,
+      ...(error.fixes ? { fixes: error.fixes } : {}),
     };
   }
   if (!error || typeof error !== "object") return null;
@@ -304,12 +307,14 @@ function errorPosition(error: unknown): {
           typeof candidate?.line === "number" &&
           typeof candidate.column === "number",
       );
+    const fixes = fixesOf(error);
     return {
       line: direct.line,
       column: direct.column,
       ...(end
         ? { end: { line: end.line as number, column: end.column as number } }
         : {}),
+      ...(fixes ? { fixes } : {}),
     };
   }
 
@@ -325,9 +330,44 @@ function errorPosition(error: unknown): {
       ...(typeof end?.line === "number" && typeof end.column === "number"
         ? { end: { line: end.line, column: end.column } }
         : {}),
+      ...(fixesOf(error) ? { fixes: fixesOf(error) } : {}),
     };
   }
   return null;
+}
+
+/** `diagnostic` without the quick fixes in its `data`. */
+function withoutFixes(diagnostic: Diagnostic): Diagnostic {
+  const data = diagnostic.data as { codeFrame?: string } | undefined;
+  if (data === undefined || !("fixes" in data)) return diagnostic;
+  const { fixes: _fixes, ...rest } = data as Record<string, unknown>;
+  const { data: _data, ...without } = diagnostic;
+  return Object.keys(rest).length === 0 ? without : { ...without, data: rest };
+}
+
+/** The fixes a host error re-raised by the parser carries (non-enumerable `fixes`), if any. */
+function fixesOf(error: unknown): readonly IrDiagnosticFix[] | undefined {
+  const fixes = (error as { fixes?: unknown } | null)?.fixes;
+  return Array.isArray(fixes) && fixes.length > 0 ? fixes : undefined;
+}
+
+/**
+ * The `data` of a published diagnostic: the code frame the message was split
+ * from, and the quick fixes (`TranslateError.fixes`, UTF-16 offsets into the
+ * document the diagnostic is published for). The server turns the fixes into
+ * code actions (`fixActions`).
+ */
+function diagnosticData(
+  codeFrame: string | undefined,
+  fixes: readonly IrDiagnosticFix[] | undefined,
+): { data: { codeFrame?: string; fixes?: readonly IrDiagnosticFix[] } } | {} {
+  if (codeFrame === undefined && fixes === undefined) return {};
+  return {
+    data: {
+      ...(codeFrame === undefined ? {} : { codeFrame }),
+      ...(fixes === undefined ? {} : { fixes }),
+    },
+  };
 }
 
 /** A filesystem path for `uri`, which may already be one. */
@@ -429,6 +469,7 @@ export function diagnoseDocument(
               diagnostic.end,
             ),
           },
+          ...diagnosticData(undefined, diagnostic.fixes),
         };
         const origin = diagnostic.origin;
         if (origin === undefined) return own;
@@ -654,7 +695,7 @@ export function diagnoseDocument(
           ? { code: (error as { diagnosticCode: string }).diagnosticCode }
           : {}),
         message,
-        ...(codeFrame === undefined ? {} : { data: { codeFrame } }),
+        ...diagnosticData(codeFrame, position.fixes),
         ...(callee
           ? {
               relatedInformation: [
@@ -690,13 +731,17 @@ export function diagnoseDocument(
       // pointer at its head so an author is not left with a compile that fails
       // for no visible reason.
       if (position.file && position.file !== filePathOf(uri)) {
+        // The fixes' offsets index the template's text, which this server may
+        // not hold (it is not open): no quick fix is offered across files. The
+        // template, opened, is diagnosed on its own and offers its fixes there.
+        const own = withoutFixes(diagnostic);
         related?.push({
           uri: uriOf(position.file),
-          diagnostics: [diagnostic],
+          diagnostics: [own],
         });
         return [
           {
-            ...diagnostic,
+            ...own,
             range: {
               start: { line: 0, character: 0 },
               end: { line: 0, character: 1 },

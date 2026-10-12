@@ -493,6 +493,82 @@ describe("stdio server (e2e)", () => {
     expect(params.diagnostics[0]?.message).toMatch(/let/i);
   }, 15000);
 
+  it("offers a quick fix for `<effect>` over stdio, only while the text is the one diagnosed", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "mx-lsp-fixit-"));
+    try {
+      writeFileSync(
+        join(directory, "package.json"),
+        '{"name":"x","mx":{"host":"html"}}',
+      );
+      const conn = startClient();
+      const init = (await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: null,
+        capabilities: {},
+      })) as { capabilities: { codeActionProvider?: unknown } };
+      expect(init.capabilities.codeActionProvider).toEqual({
+        codeActionKinds: ["quickfix"],
+      });
+      const uri = pathToFileURL(join(directory, "page.mx")).href;
+      const text = "<div>\n  <effect>go()</effect>\n</div>\n";
+      const published = nextDiagnostics(conn, (params) => params.uri === uri);
+      conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "mx", version: 1, text },
+      });
+      const { diagnostics } = await published;
+      expect(diagnostics).toHaveLength(1);
+
+      const ask = () =>
+        conn.sendRequest("textDocument/codeAction", {
+          textDocument: { uri },
+          range: (diagnostics[0] as { range?: unknown }).range,
+          context: { diagnostics },
+        }) as Promise<
+          Array<{
+            title: string;
+            kind: string;
+            edit: {
+              changes: Record<
+                string,
+                Array<{ range: unknown; newText: string }>
+              >;
+            };
+          }>
+        >;
+
+      const actions = await ask();
+      expect(actions).toHaveLength(1);
+      expect(actions[0]?.title).toBe("Rename to `<script>`");
+      expect(actions[0]?.kind).toBe("quickfix");
+      expect(actions[0]?.edit.changes[uri]).toEqual([
+        {
+          range: {
+            start: { line: 1, character: 3 },
+            end: { line: 1, character: 9 },
+          },
+          newText: "script",
+        },
+        {
+          range: {
+            start: { line: 1, character: 16 },
+            end: { line: 1, character: 22 },
+          },
+          newText: "script",
+        },
+      ]);
+
+      // The document moves on: the old offsets no longer apply, so no action
+      // is offered until it is diagnosed again.
+      conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ text: `// edited\n${text}` }],
+      });
+      expect(await ask()).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 15000);
+
   it("discovers a tag from the document's own path, given a file:// URI", async () => {
     const conn = startClient();
 

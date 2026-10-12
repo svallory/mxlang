@@ -3,12 +3,12 @@
  * `resolveTargetPolicy` (see `/core`'s `host-policy.ts`) into a `vscode-languageserver`
  * connection.
  *
- * Diagnostics only (decision 71/72): `textDocumentSync` is the one
- * capability advertised. No completion, hover, or go-to-definition — Marko's
- * own language server keeps those; this server exists only to surface the
- * host-policy errors Marko's server cannot see (`host-diagnostics.md` §1,
- * `<let>` under a strict policy being valid Marko syntax and therefore
- * invisible to it).
+ * Diagnostics, and the quick fixes they carry (`fix-actions.ts`):
+ * `textDocumentSync` and `codeActionProvider` are the capabilities advertised.
+ * No completion, hover, or go-to-definition — Marko's own language server keeps
+ * those; this server exists only to surface the host-policy errors Marko's
+ * server cannot see (`host-diagnostics.md` §1, `<let>` under a strict policy
+ * being valid Marko syntax and therefore invisible to it).
  */
 
 import { existsSync } from "node:fs";
@@ -25,6 +25,7 @@ import {
   isDialectFile,
 } from "@mxlang/targets/dialect-check";
 import {
+  CodeActionKind,
   createConnection,
   type Diagnostic,
   DidChangeWatchedFilesNotification,
@@ -39,6 +40,7 @@ import {
   REGION_LANGUAGE_IDS,
   type RelatedDiagnostics,
 } from "./diagnose.ts";
+import { fixActions } from "./fix-actions.ts";
 
 /** Milliseconds to wait after the last edit before compiling (brief §3). */
 /**
@@ -137,6 +139,10 @@ export function startServer(
   //
   // The open documents' own diagnostics, by document URI.
   const ownDiagnostics = new Map<string, Diagnostic[]>();
+  // The text each document's own diagnostics were computed from. Their fixes
+  // are offsets into it, so they are offered only while the document is still
+  // that text.
+  const diagnosedText = new Map<string, string>();
   // What each open document (the *caller*) raises on other URIs, by target
   // URI then caller URI. A target is not itself open (or, if it is, has its
   // own diagnostics above), so nothing else would ever clear a caller's part.
@@ -399,6 +405,7 @@ export function startServer(
       // What this document raised last time and no longer does is gone from
       // those URIs, and what other documents raise on them stays.
       ownDiagnostics.set(uri, diagnostics);
+      diagnosedText.set(uri, text);
       const dropped = setRaised(uri, merged);
       publish(uri);
       for (const target of [...dropped, ...merged.keys()]) {
@@ -424,8 +431,24 @@ export function startServer(
       params.capabilities.workspace?.didChangeWatchedFiles
         ?.relativePatternSupport === true;
     return {
-      capabilities: { textDocumentSync: TextDocumentSyncKind.Incremental },
+      capabilities: {
+        textDocumentSync: TextDocumentSyncKind.Incremental,
+        codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
+      },
     };
+  });
+
+  connection.onCodeAction((params) => {
+    const document = documents.get(params.textDocument.uri);
+    // The fixes are offsets into the text the diagnostics were computed from:
+    // none is offered once the document has moved on, until it is diagnosed again.
+    if (
+      document === undefined ||
+      diagnosedText.get(document.uri) !== document.getText()
+    ) {
+      return [];
+    }
+    return fixActions(document, params.context.diagnostics);
   });
 
   connection.onInitialized(() => {
@@ -511,6 +534,7 @@ export function startServer(
     // Closing drops this document's own diagnostics and what it raised on
     // other URIs; what other documents still raise on this URI stays.
     ownDiagnostics.delete(event.document.uri);
+    diagnosedText.delete(event.document.uri);
     const dropped = setRaised(event.document.uri, new Map());
     publish(event.document.uri);
     for (const target of dropped) publish(target);
