@@ -110,6 +110,7 @@ describe("unresolved tag hints (solid)", () => {
     expect(error.message).toBe(
       "Unable to find entry point for custom tag `<Bage>`. Did you mean `<Badge>`?",
     );
-    expect(error.loc).toMatchObject({ line: 4, column: 4 });
+    // At the tag itself (`<Bage`, column 9), not at the region's `<div>`.
+    expect(error.loc).toMatchObject({ line: 4, column: 9 });
   });
 });
