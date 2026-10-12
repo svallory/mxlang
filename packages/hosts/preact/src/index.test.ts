@@ -1180,10 +1180,18 @@ describe("<try>", () => {
 describe("stateful Marko tags are errors naming the Preact equivalent", () => {
   it.each([
     ["<let>", "<let/count=0/>\n<p>${count}</p>", "useState"],
-    ["<effect>", "<effect() { go(); }/>", "useEffect"],
+    [
+      "<effect>",
+      "<effect() { go(); }/>",
+      "`<effect>` is not supported in embedded MX on Preact.",
+    ],
     ["<lifecycle>", "<lifecycle onMount() { go(); }/>", "useEffect"],
     ["<id>", "<id/x/>\n<p>${x}</p>", "useId"],
-    ["<script>", "<script>go();</script>", "client-runtime tag"],
+    [
+      "<script>",
+      "<script>go();</script>",
+      "`<script>` is not supported in embedded MX on Preact. Write client code in a module the component imports.",
+    ],
     [
       "a client block",
       "client const x = 1;\n<p>${x}</p>",
