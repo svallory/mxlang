@@ -282,6 +282,11 @@ function attributeTagNamePosition(ctx: Ctx, tag: AttributeTag): Position {
   return positionAtOffset(ctx, tag.nameSpan.sourceStart);
 }
 
+/** Where an attribute tag's name ends (exclusive): the end of its `<@name`. */
+function attributeTagNameEnd(ctx: Ctx, tag: AttributeTag): Position {
+  return positionAtOffset(ctx, tag.nameSpan.sourceEnd);
+}
+
 function nodeSpan(ctx: Ctx, node: Node): SourceSpan {
   const span = node?.loc ? undefined : mxSpanOf(node);
   if (span) return span;
@@ -994,6 +999,11 @@ function lowerAttr(
         ? { sourceStart: outer.start, sourceEnd: outer.end }
         : undefined;
     const span = wholeAttrSpan(lowered, argsSpan);
+    // The parsed attribute ends at its last character; the value's own span
+    // leaves out a parenthesised value's closing `)` (`a=(\n  1\n)`).
+    if (span && attr?.type === "MxAttribute" && typeof attr.end === "number") {
+      span.sourceEnd = Math.max(span.sourceEnd, attr.end);
+    }
     if (span) lowered.span = span;
   }
   return lowered;
@@ -1870,6 +1880,18 @@ function occurrenceRange(
   return { min, max, inFor, conditional };
 }
 
+/**
+ * Where a `<for>` between attribute tags ends for a diagnostic: the end of its
+ * `<for`, as a whole-tag error ends at its name. `undefined` when the loop
+ * carries no span.
+ */
+function forNameEnd(ctx: Ctx, loop: AttributeTagNode): Position | undefined {
+  const span = loop.kind === "AttributeTagFor" ? loop.span : undefined;
+  return span
+    ? positionAtOffset(ctx, span.sourceStart + "<for".length)
+    : undefined;
+}
+
 function firstNodeOfKind(
   nodes: AttributeTagNode[],
   kind: "AttributeTagIf" | "AttributeTagFor",
@@ -1924,7 +1946,9 @@ function planAttributeTags(
         raise(
           REPEATED_ATTRIBUTE_TAG_CODE,
           `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
-          loop ? { loc: { start: loop.loc } } : ownerNode,
+          loop
+            ? { loc: { start: loop.loc, end: forNameEnd(ctx, loop) } }
+            : ownerNode,
         );
       }
       if (range.max > 1) {
@@ -1933,7 +1957,12 @@ function planAttributeTags(
           REPEATED_ATTRIBUTE_TAG_CODE,
           `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           repeated
-            ? { loc: { start: attributeTagNamePosition(ctx, repeated) } }
+            ? {
+                loc: {
+                  start: attributeTagNamePosition(ctx, repeated),
+                  end: attributeTagNameEnd(ctx, repeated),
+                },
+              }
             : ownerNode,
         );
       }

@@ -594,6 +594,31 @@ describe("an `mx.contracts` entry", () => {
     ]);
   });
 
+  it("ends at the key: a bare key and a quoted one, quotes included", () => {
+    contractsProject(
+      'export default {\n  for: { attributes: {} },\n  "else-if": { attributes: {} },\n};\n',
+    );
+    expect(
+      scan("page.mx").diagnostics.map((d) => [d.code, d.line, d.column, d.end]),
+    ).toEqual([
+      [RESERVED_CODE, 2, 2, { line: 2, column: 5 }],
+      [RESERVED_CODE, 3, 2, { line: 3, column: 11 }],
+    ]);
+  });
+
+  it("states no end where it cannot name the key (the module's 1:0)", () => {
+    contractsProject(
+      "const base = { for: { attributes: {} } };\nexport default { ...base };\n",
+    );
+    const [diagnostic] = scan("page.mx").diagnostics;
+    expect([diagnostic?.code, diagnostic?.line, diagnostic?.column]).toEqual([
+      RESERVED_CODE,
+      1,
+      0,
+    ]);
+    expect(diagnostic).not.toHaveProperty("end");
+  });
+
   it("is reported at the module's 1:0 when the exported object is not a literal", () => {
     contractsProject(
       "const build = () => ({ for: { attributes: {} }, box: { attributes: {} } });\nexport default build();\n",
@@ -632,6 +657,8 @@ describe("an `mx.contracts` entry", () => {
           "`<entity>` cannot be defined by `mx.contracts`: Kit reserves it",
         line: 2,
         column: 2,
+        // `entity` is 6 characters: the range covers the key.
+        end: { line: 2, column: 8 },
         severity: "error",
         code: RESERVED_CODE,
       },

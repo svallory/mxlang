@@ -1,0 +1,5 @@
+---
+packages: [core, target-registry]
+kind: Fixed
+---
+Five diagnostics now end where the thing they name ends. A repeated attribute tag against a callee's `Input` (`MX_REPEATED_ATTRIBUTE_TAG`, in a `<for>` or at the second `<@name>`) carries an `end`: the end of `<@name` or of `<for`. An unnamed tag's whole-tag error (`<#a/>`, `<.x#y/>`; for example `MX_TAG_NOT_ALLOWED`) ends after its head (`<#a`, `<.x#y`), not at its `<`. An attribute with a parenthesised value ends after its `)` on any line, so `MX_DUPLICATE_ATTRIBUTE` for `<div a=(\n  1\n) a=2/>` ends at offset 14, not 12, and the attribute's `span` in the IR covers the `)` too. `ScanDiagnostic` has an optional `end` (same shape as the diagnostic's own), which a contracts key that takes a reserved name (`MX_RESERVED_TAG`) now fills with the end of the key, and `checkDialectFile` carries it as `origin.end` instead of leaving a one-character range. A tag file's diagnostic that a dialect forwards from `ctx.lower` keeps the `end` core measured for it.

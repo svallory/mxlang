@@ -510,6 +510,14 @@ export interface ScanDiagnostic {
   line: number;
   column: number;
   /**
+   * Where the range ends in `file` (exclusive; 1-based line, 0-based column),
+   * when the scan knows what the position names: a contract key in a
+   * contracts module ends after the key. Absent for a point, a whole-file
+   * problem or a position the scan cannot measure (a YAML or module config).
+   * @unstable
+   */
+  end?: { line: number; column: number };
+  /**
    * How bad it is, when the scan says: an `error` is a file the scan
    * skipped, a `warning` one it kept or ignored on purpose. Absent on the
    * scan's older diagnostics. @unstable
@@ -1007,9 +1015,10 @@ function resolveObjectLiteral(
 function staticKeyPosition(
   file: string,
   name: string,
-): { line: number; column: number } | undefined {
-  const at = staticKeyPathPosition(file, [name]);
-  return at && { line: at.line, column: at.column };
+):
+  | { line: number; column: number; end?: { line: number; column: number } }
+  | undefined {
+  return staticKeyPathPosition(file, [name]);
 }
 
 /** `value` without its `satisfies`/`as` wrappers. */

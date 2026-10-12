@@ -136,10 +136,39 @@ describe("the unnamed tag in a data file resolves to the built-in `object`", () 
         line: 2,
         column: 2,
         offset: 9,
-        // The shorthand has no name: its whole-tag range is the `<`.
-        end: { line: 2, column: 3, offset: 10 },
+        // The shorthand has no name: its whole-tag range is the head, `<#a`.
+        end: { line: 2, column: 5, offset: 12 },
         code: "MX_TAG_NOT_ALLOWED",
       },
+    ]);
+  });
+
+  it("the whole-tag range of an unnamed tag covers every shorthand of its head", () => {
+    // `<#a.b` is offsets 9..14: the `#a` and the `.b` are both part of the head.
+    const { ir, diagnostics } = parse("<card>\n  <#a.b/>\n</card>", {
+      customTags: { card: { children: { item: {} } } },
+    });
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toEqual([
+      {
+        severity: "error",
+        message:
+          "`<card>`: `<object>` is not allowed here; allowed children: `<item>`",
+        line: 2,
+        column: 2,
+        offset: 9,
+        end: { line: 2, column: 7, offset: 14 },
+        code: "MX_TAG_NOT_ALLOWED",
+      },
+    ]);
+  });
+
+  it("the head range of an unnamed tag with a class first ends after the id too", () => {
+    const { diagnostics } = parse("<card>\n  <.x#y/>\n</card>", {
+      customTags: { card: { children: { item: {} } } },
+    });
+    expect(diagnostics.map((d) => [d.code, d.offset, d.end])).toEqual([
+      ["MX_TAG_NOT_ALLOWED", 9, { line: 2, column: 7, offset: 14 }],
     ]);
   });
 

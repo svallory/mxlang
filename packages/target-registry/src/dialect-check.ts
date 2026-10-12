@@ -420,6 +420,7 @@ export function checkDialectFile(
           filePath,
           diagnostic.severity ?? "warning",
           diagnostic.code,
+          diagnostic.end,
         ),
       })),
       ...diagnostics.map((diagnostic) => {

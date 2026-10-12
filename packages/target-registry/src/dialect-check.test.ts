@@ -741,6 +741,8 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
         file: project.path("concepts/b.thing.probe"),
         line: 1,
         column: 0,
+        // `<a`: the call in the tag file, ended where its name ends.
+        end: { line: 1, column: 2 },
       },
     });
     // The caller's own call is reported at the call, with its own code.
@@ -810,6 +812,39 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
         origin: { file: project.path("contracts.cjs"), line: 1, column: 0 },
       },
     ]);
+  });
+
+  it("a scan error that names a range in the contracts module carries it as `origin.end`", () => {
+    // `if` is a structural name: a contracts key may not take it. The scan
+    // blames the key, `if` at columns 2 to 4 of line 2.
+    const project = probeProject(
+      {
+        "contracts.mjs": "export default {\n  if: { attributes: {} },\n};\n",
+      },
+      {
+        packageJson: {
+          mx: { dialect: PROBE_MANIFEST, contracts: "./contracts.mjs" },
+        },
+      },
+    );
+    const diagnostics = checkDialectFile(
+      project.path("a.probe"),
+      "<p/>\n",
+    )?.diagnostics;
+    expect(diagnostics).toHaveLength(1);
+    const [diagnostic] = diagnostics ?? [];
+    expect(diagnostic?.code).toBe("MX_RESERVED_TAG");
+    // Shown at the head of the checked file, with the module's range in `origin`.
+    expect([diagnostic?.line, diagnostic?.column, diagnostic?.offset]).toEqual([
+      1, 0, 0,
+    ]);
+    expect(diagnostic?.end).toBeUndefined();
+    expect(diagnostic?.origin).toEqual({
+      file: project.path("contracts.mjs"),
+      line: 2,
+      column: 2,
+      end: { line: 2, column: 4 },
+    });
   });
 
   it("records the files it read as dependencies: the tag files, and the contracts module", () => {

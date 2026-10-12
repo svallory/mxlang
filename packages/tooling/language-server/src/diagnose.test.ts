@@ -1530,7 +1530,7 @@ describe("a dialect's files", () => {
         code: "MX_TAG_FILE_CYCLE",
         range: {
           start: { line: 0, character: 0 },
-          end: { line: 0, character: 1 },
+          end: { line: 0, character: 2 },
         },
         message:
           "tag files call each other in a cycle: concepts/a.thing.probe → concepts/b.thing.probe → concepts/a.thing.probe",
@@ -1673,7 +1673,8 @@ describe("a diagnostic's range ends where core says it ends", () => {
       policy("html"),
     );
     expect(diagnostic?.code).toBe("MX_DUPLICATE_ATTRIBUTE");
-    expect(span(diagnostic)).toEqual([0, 5, 1, 3]);
+    // The attribute ends after its `)`, on line 3.
+    expect(span(diagnostic)).toEqual([0, 5, 2, 1]);
   });
 
   it("widens a point parse error to one character", () => {

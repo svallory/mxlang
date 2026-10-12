@@ -825,6 +825,11 @@ export function blameEnd(
     isMxAttributeTag(node) ||
     node?.type === "MxModuleStatement"
   ) {
+    // An unnamed tag (`<#a.b>`) has no name: its head is the shorthands that
+    // stand for one, so it ends where the last of them does.
+    if (node.name?.kind === "unnamed") {
+      return { offset: unnamedHeadEnd(node, span.sourceEnd) };
+    }
     // A dynamic name is its expression: past its `${…}`, when it has them.
     const name = tagNameSpanOf(node);
     const named =
@@ -834,6 +839,20 @@ export function blameEnd(
     if (named !== undefined) return { offset: named };
   }
   return { offset: span.sourceEnd };
+}
+
+/**
+ * Where an unnamed tag's head ends (exclusive): past its tag-adjacent
+ * shorthands (`<#a.b` in `<#a.b/>`), else past its `<`. Never past `limit`.
+ */
+function unnamedHeadEnd(node: Node, limit: number): number {
+  let end: number = node.name?.span?.end ?? node.start;
+  for (const shorthand of node.shorthands ?? []) {
+    if (shorthand?.position === "tag" && typeof shorthand.end === "number") {
+      end = Math.max(end, shorthand.end);
+    }
+  }
+  return Math.min(end, limit);
 }
 
 /**
