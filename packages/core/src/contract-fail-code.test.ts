@@ -204,3 +204,40 @@ describe("ctx.fail from a tag nested in a template", () => {
     }
   });
 });
+
+describe.each(["analyze", "transform"] as const)(
+  "ctx.fail(msg, { at: span }) in %s",
+  (where) => {
+    it("keeps the span on the error, a position keeps none", () => {
+      const failed = (at: unknown): TranslateError => {
+        try {
+          compileSource(
+            SOURCE,
+            "/app/page.mx",
+            { tags: {}, isElement: () => true, isComponent: () => false },
+            {
+              targets,
+              emitIr: () => "",
+              // `analyze` alone leaves a call nothing to expand to, an
+              // earlier error; an empty `transform` keeps the hook's own.
+              customTags: {
+                box: {
+                  transform: () => [],
+                  ...tags((ctx) => ctx.fail("boom", { at }), where).box,
+                },
+              },
+            },
+          );
+        } catch (error) {
+          if (error instanceof TranslateError) return error;
+          throw error;
+        }
+        throw new Error("did not fail");
+      };
+      const spanned = failed({ sourceStart: 8, sourceEnd: 11 });
+      expect(spanned.span).toEqual({ sourceStart: 8, sourceEnd: 11 });
+      expect([spanned.line, spanned.column]).toEqual([2, 1]);
+      expect(failed(AT).span).toBeUndefined();
+    });
+  },
+);

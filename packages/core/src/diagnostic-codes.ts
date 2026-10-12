@@ -10,21 +10,15 @@
  * ({@link isReservedHookCode}). No code names a host, target or dialect.
  *
  * Core raises through `raise(code, …)` and `codedError(code, …)`
- * (`core.ts`), whose `code` is a {@link MxDiagnosticCode}: a code missing
- * from {@link MX_DIAGNOSTIC_CODES} does not compile.
+ * (`core.ts`), whose `code` is a {@link MxDiagnosticCode}: a string that is
+ * none of this module's codes does not compile. The union and
+ * {@link MX_DIAGNOSTIC_CODES} are kept by hand; `diagnostic-code-table.test.ts`
+ * fails when a `*_CODE` constant is missing from the catalogue or a
+ * catalogue code has no input that reaches it (or no reason it cannot).
  */
 
 // --- Lowering of authored source: what the file's author wrote ---
 
-/** An authored tag with no contract, under `unknownTags: "reject"`. */
-export const UNKNOWN_TAG_CODE = "MX_UNKNOWN_TAG";
-/**
- * A definition that names a reserved tag, from any source: a discovered tag
- * file, an `mx.tags` directory, an `mx.contracts` entry or a `customTags`
- * entry, and a call of a built-in a definition shadows. The definition is
- * dropped.
- */
-export const RESERVED_TAG_CODE = "MX_RESERVED_TAG";
 /** An attribute name, `on:`/`on-` form, function value, argument list or second member the language rejects. */
 export const INVALID_ATTRIBUTE_CODE = "MX_INVALID_ATTRIBUTE";
 /** `:=` on something that is not an identifier or member expression. */
@@ -86,11 +80,20 @@ export const INVALID_ACCESSOR_ASSIGNMENT_CODE =
 export const INVALID_TRIGGER_USE_CODE = "MX_INVALID_TRIGGER_USE";
 /** A trigger, block tag or filter with no lowering hook. */
 export const NO_LOWERING_CODE = "MX_NO_LOWERING";
-/** A contract's `defaultTag` that does not name a tag the parent can use. */
-export const INVALID_DEFAULT_TAG_CODE = "MX_INVALID_DEFAULT_TAG";
 
 // --- Contract checks at a call site ---
 
+/** An authored tag with no contract, under `unknownTags: "reject"`. */
+export const UNKNOWN_TAG_CODE = "MX_UNKNOWN_TAG";
+/**
+ * A definition that names a reserved tag, from any source: a discovered tag
+ * file, an `mx.tags` directory, an `mx.contracts` entry or a `customTags`
+ * entry, and a call of a built-in a definition shadows. The definition is
+ * dropped.
+ */
+export const RESERVED_TAG_CODE = "MX_RESERVED_TAG";
+/** A contract's `defaultTag` that does not name a tag the parent can use. */
+export const INVALID_DEFAULT_TAG_CODE = "MX_INVALID_DEFAULT_TAG";
 /** An attribute the tag's contract does not declare. */
 export const UNKNOWN_ATTRIBUTE_CODE = "MX_UNKNOWN_ATTRIBUTE";
 /** A required attribute that is absent. */
@@ -358,11 +361,6 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
     [
       ...errors([
         [
-          UNKNOWN_TAG_CODE,
-          'an authored tag with no contract, under `unknownTags: "reject"`',
-        ],
-        [RESERVED_TAG_CODE, "a definition that names a reserved tag"],
-        [
           INVALID_ATTRIBUTE_CODE,
           "an attribute name, form, value or argument list the language rejects",
         ],
@@ -440,6 +438,11 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           NO_LOWERING_CODE,
           "a trigger, block tag or filter with no lowering hook",
         ],
+        [
+          UNKNOWN_TAG_CODE,
+          'an authored tag with no contract, under `unknownTags: "reject"`',
+        ],
+        [RESERVED_TAG_CODE, "a definition that names a reserved tag"],
         [
           INVALID_DEFAULT_TAG_CODE,
           "a contract's `defaultTag` the parent cannot use",
@@ -607,8 +610,6 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
 
 /** Every code core raises: a constant of this module, or `MX_PARSE_<CODE>`. */
 export type MxDiagnosticCode =
-  | typeof UNKNOWN_TAG_CODE
-  | typeof RESERVED_TAG_CODE
   | typeof INVALID_ATTRIBUTE_CODE
   | typeof INVALID_BOUND_ATTRIBUTE_CODE
   | typeof DUPLICATE_VALUE_ATTRIBUTE_CODE
@@ -639,6 +640,8 @@ export type MxDiagnosticCode =
   | typeof INVALID_ACCESSOR_ASSIGNMENT_CODE
   | typeof INVALID_TRIGGER_USE_CODE
   | typeof NO_LOWERING_CODE
+  | typeof UNKNOWN_TAG_CODE
+  | typeof RESERVED_TAG_CODE
   | typeof INVALID_DEFAULT_TAG_CODE
   | typeof UNKNOWN_ATTRIBUTE_CODE
   | typeof MISSING_ATTRIBUTE_CODE
