@@ -25,6 +25,33 @@ export interface IrDiagnosticEnd {
   offset: number;
 }
 
+/**
+ * One text replacement of an {@link IrDiagnosticFix}: the UTF-16 code units
+ * `offset` up to, and excluding, `end` become `newText`. An insertion has
+ * `offset === end`. @unstable
+ */
+export interface IrDiagnosticEdit {
+  /** UTF-16 code-unit offset of the first replaced unit. */
+  offset: number;
+  /** UTF-16 code-unit offset just past the last replaced unit (exclusive). */
+  end: number;
+  newText: string;
+}
+
+/**
+ * A change that resolves a diagnostic, for a tool to offer as a quick fix.
+ *
+ * Every offset indexes the same file as the diagnostic's own `offset`: the
+ * lowered file, or `file` when the diagnostic names another one. The edits of
+ * one fix never overlap, so applying all of them (each against the original
+ * text, last one first) yields the fixed source. @unstable
+ */
+export interface IrDiagnosticFix {
+  /** What applying the fix does, in a few words: "Rename to `<script>`". */
+  title: string;
+  edits: readonly IrDiagnosticEdit[];
+}
+
 export interface IrDiagnostic {
   severity: "error" | "warning";
   message: string;
@@ -63,6 +90,14 @@ export interface IrDiagnostic {
    * the end of `<name`, never at the element's close. @unstable
    */
   end?: IrDiagnosticEnd;
+  /**
+   * The changes that resolve the diagnostic, one fix per alternative, when
+   * core knows them. Absent on nearly every diagnostic: a fix is offered only
+   * where the repair is mechanical and unambiguous. Offsets are UTF-16
+   * code-unit offsets in the same file as `offset`, `end` is exclusive and
+   * the edits of one fix never overlap. @unstable
+   */
+  fixes?: readonly IrDiagnosticFix[];
 }
 
 /** The start offset of every line of `source`. */
@@ -91,6 +126,7 @@ export interface ErrorPosition {
   column: number;
   file?: string;
   end?: { line: number; column: number };
+  fixes?: readonly IrDiagnosticFix[];
 }
 
 /** The position an error carries, in the shape core and Marko each report. */
@@ -101,6 +137,7 @@ function errorPosition(error: unknown): ErrorPosition | null {
       column: error.column,
       file: error.file,
       ...(error.end ? { end: error.end } : {}),
+      ...(error.fixes ? { fixes: error.fixes } : {}),
     };
   }
   if (!error || typeof error !== "object") return null;
@@ -214,6 +251,9 @@ export function toDiagnostic(
               : offsetOf(lineStarts, source, end.line, end.column),
           },
         }
+      : {}),
+    ...(at.fixes !== undefined && at.fixes.length > 0
+      ? { fixes: at.fixes }
       : {}),
   };
 }

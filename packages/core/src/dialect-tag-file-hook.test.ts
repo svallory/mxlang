@@ -97,7 +97,12 @@ export default {
     const d = head ? JSON.parse(head[1]) : {};
     for (const path of d.dependsOn ?? []) ctx.dependsOn(path);
     if (d.throw !== undefined) {
-      throw d.throwAt ? positioned(d.throw, ...d.throwAt) : new Error(d.throw);
+      const thrown = d.throwAt
+        ? positioned(d.throw, ...d.throwAt)
+        : new Error(d.throw);
+      if (d.throwFixes) thrown.fixes = d.throwFixes;
+      if (d.throwFile) thrown.file = d.throwFile;
+      throw thrown;
     }
     if ("result" in d) return d.result;
     if (d.contractFrom) {
@@ -1011,6 +1016,43 @@ describe("diagnostics", () => {
       line: 4,
       column: 6,
       end: { line: 4, column: 9, offset: -1 },
+    });
+  });
+
+  describe("a thrown error's `fixes`", () => {
+    const FIXES = [
+      {
+        title: "Rename to `<script>`",
+        edits: [{ offset: 2, end: 8, newText: "script" }],
+      },
+    ];
+    const throwing = (extra: Record<string, unknown>) => {
+      kitProject();
+      tagFile("money", {
+        throw: "bad here",
+        throwAt: [4, 6, 4, 9],
+        throwFixes: FIXES,
+        ...extra,
+      });
+      return lowerAt("page.kit.mx", "<money/>\n").diagnostics.find(
+        (d) => d.message === "bad here",
+      );
+    };
+
+    it("are kept when the throw is positioned in the tag file", () => {
+      expect(throwing({})?.fixes).toEqual(FIXES);
+    });
+
+    it("are kept when the throw names the tag file itself", () => {
+      expect(
+        throwing({ throwFile: join(dir, "concepts/money.kit.mx") })?.fixes,
+      ).toEqual(FIXES);
+    });
+
+    it("are dropped when the throw is positioned in another file", () => {
+      const own = throwing({ throwFile: join(dir, "elsewhere.kit.mx") });
+      expect(own).toBeDefined();
+      expect(own?.fixes).toBeUndefined();
     });
   });
 

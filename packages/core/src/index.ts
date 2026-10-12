@@ -248,7 +248,9 @@ export { IR_VERSION } from "./ir.ts";
  */
 export {
   type IrDiagnostic,
+  type IrDiagnosticEdit,
   type IrDiagnosticEnd,
+  type IrDiagnosticFix,
   type LowerSourceOptions,
   type LowerSourceResult,
   lowerFile,

@@ -305,6 +305,7 @@ export function metadataForTemplate(
       }
       if (error.spans !== undefined) positioned.spans = error.spans;
       if (error.end !== undefined) positioned.end = error.end;
+      if (error.fixes !== undefined) positioned.fixes = error.fixes;
       const carried = (error as { [CALLEE_INPUT_ERROR]?: unknown })[
         CALLEE_INPUT_ERROR
       ];

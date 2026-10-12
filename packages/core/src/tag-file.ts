@@ -704,9 +704,11 @@ function thrownError(error: unknown, path: string): TranslateError {
       placed.diagnosticCode = error.diagnosticCode;
     }
     // The throw's own range, in the same file as its start.
-    if (error.end && (error.file === undefined || error.file === path)) {
-      placed.end = error.end;
-    }
+    const sameFile = error.file === undefined || error.file === path;
+    if (error.end && sameFile) placed.end = error.end;
+    // The fixes' offsets index the file the throw is positioned in, so they
+    // too are only carried when that is this tag file.
+    if (error.fixes !== undefined && sameFile) placed.fixes = error.fixes;
     return placed;
   }
   const placed = codedError(

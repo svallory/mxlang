@@ -78,7 +78,12 @@ import { finishIr, type SpannedIr } from "./spans.ts";
 import "../tag-file.ts";
 import { type Explainer, explainerFor } from "./unknown-tag-view.ts";
 
-export type { IrDiagnostic, IrDiagnosticEnd } from "./diagnostics.ts";
+export type {
+  IrDiagnostic,
+  IrDiagnosticEdit,
+  IrDiagnosticEnd,
+  IrDiagnosticFix,
+} from "./diagnostics.ts";
 export type { Spanned, SpannedIr } from "./spans.ts";
 
 /** @unstable */

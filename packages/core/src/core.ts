@@ -49,6 +49,7 @@ import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import { handleNode } from "./host-handle.ts";
 import type { Atom, Expr, IrNode, Position } from "./ir.ts";
+import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import type { Dialect } from "./syntax-table.ts";
@@ -125,6 +126,15 @@ export class TranslateError extends Error {
    * at the end of `<name`, never at the element's close. @unstable
    */
   end?: { line: number; column: number };
+  /**
+   * The changes that resolve the error, when its raiser knows a mechanical,
+   * unambiguous repair (the `<effect>` error: rename to `<script>`). Offsets
+   * are UTF-16 code-unit offsets in the same file as `line`/`column` (`file`
+   * when set), `end` exclusive, the edits of one fix never overlapping. A
+   * consumer that re-raises the error copies it with `code` and `end`.
+   * @unstable
+   */
+  fixes?: readonly IrDiagnosticFix[];
   /**
    * Every callee file the failed compile's `readCalleeInput` had already
    * resolved before the error was raised (decision 106/107). Set by
@@ -811,11 +821,23 @@ export function fail(
   file?: string,
   options?: FailOptions,
 ): never {
+  return failWith(message, node, file, options?.code);
+}
+
+/** {@link fail} with the fixes of the error, which only core attaches. Internal. */
+function failWith(
+  message: string,
+  node: Node,
+  file: string | undefined,
+  code: string | undefined,
+  fixes?: readonly IrDiagnosticFix[],
+): never {
   const span = node?.loc ? undefined : mxSpanOf(node);
   const end = blameEnd(node);
   if (span) {
     const error = new TranslateError(message, 0, 0, file);
-    if (options?.code !== undefined) error.diagnosticCode = options.code;
+    if (code !== undefined) error.diagnosticCode = code;
+    if (fixes !== undefined) error.fixes = fixes;
     error.span = span;
     if (end !== undefined && "offset" in end) {
       // A range never ends before it starts.
@@ -826,13 +848,14 @@ export function fail(
   }
   const loc = node?.loc?.start ?? node?.start ?? { line: 0, column: 0 };
   const error = codedErrorOf(
-    options?.code,
+    code,
     message,
     loc.line ?? 0,
     loc.column ?? 0,
     file,
   );
   if (end !== undefined && "line" in end) error.end = end;
+  if (fixes !== undefined) error.fixes = fixes;
   throw error;
 }
 
@@ -910,7 +933,20 @@ export function raise(
   node: Node,
   file?: string,
 ): never {
-  return fail(message, node, file, { code });
+  return failWith(message, node, file, code);
+}
+
+/**
+ * {@link raise} for an error that carries its fixes
+ * (`TranslateError.fixes`). Internal.
+ */
+export function raiseWithFixes(
+  code: MxDiagnosticCode,
+  message: string,
+  node: Node,
+  fixes: readonly IrDiagnosticFix[],
+): never {
+  return failWith(message, node, undefined, code, fixes);
 }
 
 /**

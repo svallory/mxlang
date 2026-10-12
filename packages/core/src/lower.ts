@@ -93,6 +93,7 @@ import {
   positionError,
   productOf,
   raise,
+  raiseWithFixes,
   recover,
   rejectInertShape,
   rejectUnsupportedFields,
@@ -193,6 +194,10 @@ import type {
   TagAlias,
   TagTrigger,
 } from "./ir.ts";
+import type {
+  IrDiagnosticEdit,
+  IrDiagnosticFix,
+} from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
@@ -4606,11 +4611,36 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
     }
     return;
   }
-  raise(
-    RESERVED_EFFECT_TAG_CODE,
-    EFFECT_TAG_MESSAGE,
-    tagNameSpanOf(node) ?? node.name ?? node,
-  );
+  const at = tagNameSpanOf(node) ?? node.name ?? node;
+  const fixes = effectRenameFixes(node);
+  if (fixes !== undefined) {
+    raiseWithFixes(RESERVED_EFFECT_TAG_CODE, EFFECT_TAG_MESSAGE, at, fixes);
+  }
+  raise(RESERVED_EFFECT_TAG_CODE, EFFECT_TAG_MESSAGE, at);
+}
+
+/**
+ * The one fix of the `<effect>` error: rename the tag to `<script>`, at the
+ * open tag's name and at the close tag's name when the tag is closed by name.
+ * A self-closing tag, a concise-mode tag and a `</>` close have no close name,
+ * so they get the one edit. `undefined` when the tag carries no offsets (not
+ * an MX node) or a name that is not plain text in the source.
+ */
+function effectRenameFixes(node: Node): readonly IrDiagnosticFix[] | undefined {
+  const name = node?.name;
+  if (name?.kind !== "static") return undefined;
+  const open = name.span;
+  if (typeof open?.start !== "number" || typeof open.end !== "number") {
+    return undefined;
+  }
+  const edits: IrDiagnosticEdit[] = [
+    { offset: open.start, end: open.end, newText: "script" },
+  ];
+  const close = node.closeTag?.nameSpan;
+  if (typeof close?.start === "number" && typeof close.end === "number") {
+    edits.push({ offset: close.start, end: close.end, newText: "script" });
+  }
+  return [{ title: "Rename to `<script>`", edits }];
 }
 
 /**

@@ -267,6 +267,43 @@ describe("<effect> is not an MX tag", () => {
     expect(error.message).toBe(EFFECT_MESSAGE);
   });
 
+  it("the default policy's error carries the rename to `<script>`", () => {
+    const source = "<p>a</p>\n<effect>go()</effect>";
+    let error: any;
+    try {
+      compile(src(source), file);
+    } catch (caught) {
+      error = caught;
+    }
+    const written = src(source);
+    expect(error.fixes).toHaveLength(1);
+    expect(error.fixes[0].title).toBe("Rename to `<script>`");
+    expect(
+      error.fixes[0].edits.map(
+        (edit: { offset: number; end: number; newText: string }) =>
+          written.slice(edit.offset, edit.end),
+      ),
+    ).toEqual(["effect", "effect"]);
+    expect(
+      error.fixes[0].edits.every(
+        (edit: { newText: string }) => edit.newText === "script",
+      ),
+    ).toBe(true);
+  });
+
+  it("the strict policy's own row offers no fix", () => {
+    for (const source of ["<effect/>", "<effect>go()</effect>"]) {
+      let error: any;
+      try {
+        compile(src(source), file, { strict: true });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect(error.fixes).toBeUndefined();
+    }
+  });
+
   it("accepts the <script> it points to", () => {
     const { code } = compile(
       src("<p>a</p>\n<script>console.log(1)</script>"),

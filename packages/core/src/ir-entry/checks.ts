@@ -1041,6 +1041,8 @@ export function labelInside(
     if (code !== undefined) labelled.diagnosticCode = code;
     const end = (error as TranslateError).end;
     if (end !== undefined) labelled.end = end;
+    const fixes = (error as TranslateError).fixes;
+    if (fixes !== undefined) labelled.fixes = fixes;
     return labelled;
   });
 }
