@@ -542,6 +542,15 @@ loading any code, and `routeDialect(file)` says which one a file goes to.
 (a dialect with its `id` and `name`, or a bare table), which wins over
 routing.
 
+Core validates that dialect, and remembers the result only when the object is
+frozen. A frozen dialect (or table) is validated once; one that is not frozen is
+validated again on every call, because a mutable object can change between
+calls. The check is shallow: `Object.freeze(dialect)` is enough to be
+remembered, so a change to `dialect.table` afterwards is not seen. A dialect
+you build once and pass on every call should be frozen, deeply, so the freeze
+is true. A dialect loaded from its module is validated once per revision of
+its module file and needs none of this.
+
 ### Node types (`@unstable`)
 
 A dialect can register its own node types, keyed `id:Type` in one registry

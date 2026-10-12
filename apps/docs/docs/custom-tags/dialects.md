@@ -103,6 +103,10 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 - **`.mx` files are unaffected.** They route to no dialect.
 - **A wrong value** is an error in your module, like a wrong `tagRules`: `` `structural` must be "pass" or "reject" ``.
 
+## Passing your dialect to a call
+
+A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a frozen object. Core validates the object it is given and remembers the result only when the object is frozen: a frozen dialect is validated once, an unfrozen one again on every call, because a mutable object can change between calls. `Object.freeze(YOUR_DIALECT)` is enough to be remembered, but the check is shallow, so a change to `YOUR_DIALECT.table` after the first call would not be seen; freeze the nested objects too (a deep freeze). The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.
+
 ## Explaining an unknown tag
 
 A tag with no contract is not always a mistake in your language. A dialect that reads `entity:Todo` as a member of a family it does not declare can say so, in its own words and code, with `explainUnknownTag`. The hook only explains: it cannot claim the tag or give it IR.

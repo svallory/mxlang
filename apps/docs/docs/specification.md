@@ -3623,7 +3623,7 @@ read throws, as `readFileSync` does.
 | Option | Values | Meaning |
 |---|---|---|
 | `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Contract packages](/custom-tags/contract-packages/)) |
-| `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9) |
+| `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9). A dialect passed on every call should be frozen: an unfrozen one is validated again on each call (§13.9.2) |
 | `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting (ruling 209) |
 | `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
 | `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``the data tree is static; this file's consumer does not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
@@ -4177,12 +4177,25 @@ is refused like any value that is neither (``the `dialect` option must be a
 dialect or a syntax table object, not null; omit it to use the dialect that
 claims the file's extension``).
 
+**Freeze a dialect you pass on every call.** Core remembers a validated `dialect`
+option only when the object is frozen (`Object.isFrozen`), whether it is a dialect
+or a bare table; the same frozen object is then not validated again on a later
+`compileSource`, `parseFragment` or `lowerSource` call. An object that is not
+frozen is validated again on every call, because a mutable object can change
+between calls. The check is shallow: `Object.freeze(dialect)` is enough for the
+dialect to be remembered, and a change to a nested object (`dialect.table`) made
+after the first call is then not seen. A dialect built once and passed on every
+call should therefore be frozen, with its `table` and any other nested object
+frozen too (a deep freeze) so the freeze means what it says. A dialect loaded
+from its module is not affected: it is validated once per revision of its module
+file.
+
 **Identity.** A resolved table is deep-frozen and interned by its **hash**: the
 sha256 of its canonical JSON (keys sorted at every level, `undefined` fields
 dropped), so two tables with equal content hash alike and share one frozen object
 for the process. A table whose content equals the default row resolves to the
 default row itself, and a default-row project runs no extra parse and pays one
-comparison. An explicit table is validated once per frozen object. A manifest
+comparison. An explicit dialect or table is validated once per frozen object (an unfrozen one on every call, as above). A manifest
 read is resolved once; an unchanged manifest is not re-validated. A dialect
 module is loaded once per revision of its file (its mtime): a module that fails to
 load reports that first error until the file changes, and an edited module is
@@ -4492,7 +4505,7 @@ results live beside it and are what attribute, child and expression readers see,
 so `Expr.code` and the source text at `Expr.span` differ: an expression trigger's replacement is
 **printed and spliced into `code`** at the trigger's span (`&status` becomes
 `self.status`), and an atom-marked literal's string is spliced the same way, so emitting hosts emit
-valid code, while `text` and every offset stay the authored text. The stand-in
+valid code, while the source text at `Expr.span` and every offset stay the authored text. The stand-in
 node the parser hands the expression parser carries `extra.mxTrigger = { id, span }`,
 and core's built-in string and identifier replacements keep it.
 

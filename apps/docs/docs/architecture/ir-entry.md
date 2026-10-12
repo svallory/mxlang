@@ -103,7 +103,7 @@ lowerSource(source, filename, {
 ```
 
 - **`customTags`** declares the vocabulary: required attributes, attribute types, allowed children and parents (decisions 130 and 138). `lowerSource` does not scan `tags/` or `package.json`; this map is all it knows. Contracts are enforced at every depth, `analyze` included. See [Contract packages](/custom-tags/contract-packages/).
-- **`dialect`** is the file's dialect, or a bare syntax table, for a consumer that builds its own (Mesh passes its dialect, hooks included). Omitted, the dialect that claims the file's extension applies (decision 212).
+- **`dialect`** is the file's dialect, or a bare syntax table, for a consumer that builds its own (Mesh passes its dialect, hooks included). Omitted, the dialect that claims the file's extension applies (decision 212). A dialect you pass on every call should be `Object.freeze`d: core validates a frozen one once and an unfrozen one again on every call, because a mutable object can change between calls.
 - **`tagRules`** picks the parse rules the source is read under ([below](#core-ir-entry-point-and-dialects-tag-rules-presets)). It is an option of this function only, never a project or host setting (ruling 209).
 - **`defaultTag`** is what `<#id>` and `<.class>` stand for in place of `object`.
 - **`structural`**, **`imports`** and **`unknownTags`** each default to the value the file's dialect states on its module (the `dialect` option's, else the one the file routes to), then to the value named below. A call that states one wins. A `.mx` file has no dialect, so it gets the defaults below. See [How strict your files are](/custom-tags/dialects/#writing-a-dialect-how-strict-your-files-are-structural-imports-unknowntags).
