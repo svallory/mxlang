@@ -155,17 +155,33 @@ export function startServer(
    * caller raised on it (callers in URI order), identical diagnostics once.
    * Open documents of one package all report the same `package.json` problem,
    * and a tag file's own error is the one its callers raise on it, so the
-   * same diagnostic from two parts is one diagnostic.
+   * same diagnostic from two parts is one diagnostic (a different end does
+   * not make it another; the wider range is kept).
    */
   function publish(uri: string): void {
-    const seen = new Set<string>();
+    // Two parts can report one problem with different ends: a tag file's own
+    // check ends it where core says, while a caller's scan of that file only
+    // knows where it starts. They agree on everything else, so they are one
+    // diagnostic, painted over the wider range.
+    const at = new Map<string, number>();
     const union: Diagnostic[] = [];
+    const endsAfter = (a: Diagnostic, b: Diagnostic): boolean =>
+      a.range.end.line > b.range.end.line ||
+      (a.range.end.line === b.range.end.line &&
+        a.range.end.character > b.range.end.character);
     const add = (list: readonly Diagnostic[]): void => {
       for (const diagnostic of list) {
-        const key = JSON.stringify(diagnostic);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        union.push(diagnostic);
+        const key = JSON.stringify({
+          ...diagnostic,
+          range: diagnostic.range.start,
+        });
+        const found = at.get(key);
+        if (found === undefined) {
+          at.set(key, union.length);
+          union.push(diagnostic);
+        } else if (endsAfter(diagnostic, union[found] as Diagnostic)) {
+          union[found] = diagnostic;
+        }
       }
     };
     add(ownDiagnostics.get(uri) ?? []);

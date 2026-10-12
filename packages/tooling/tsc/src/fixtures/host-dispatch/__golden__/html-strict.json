@@ -101,7 +101,7 @@
             "line": 3,
             "column": 0
           },
-          "frame": "3 | <div>\n    ^"
+          "frame": "3 | <div>\n    ^^^^^"
         },
         "warnings": []
       }

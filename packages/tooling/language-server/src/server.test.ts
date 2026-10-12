@@ -98,19 +98,21 @@ function nextDiagnostics(
 
 describe("stdio server (e2e)", () => {
   it.each([
-    ["<p>ok</p>\n\n<div>\n", 3, 0, 'Missing ending "div" tag', undefined],
+    // The unclosed `<div>` is painted to its end (5 characters), not one.
+    ["<p>ok</p>\n\n<div>\n", 3, 0, 5, 'Missing ending "div" tag', undefined],
     // An aggregate callee: the callee's own diagnostic counts what the first
     // reason leaves out, since only the frame shows the rest.
     [
       "<div a=(x +)/>\n<span>",
       1,
       11,
+      12,
       "Unexpected token (+1 more)",
       'Missing ending "span" tag',
     ],
   ] as const)(
     "publishes a child template syntax error on the child's URI and range",
-    async (source, line, column, message, frameReason) => {
+    async (source, line, column, endColumn, message, frameReason) => {
       const directory = mkdtempSync(join(tmpdir(), "mx-lsp-callee-"));
       try {
         writeFileSync(
@@ -149,7 +151,7 @@ describe("stdio server (e2e)", () => {
         }
         expect((result.diagnostics[0] as { range?: unknown }).range).toEqual({
           start: { line: line - 1, character: column },
-          end: { line: line - 1, character: column + 1 },
+          end: { line: line - 1, character: endColumn },
         });
       } finally {
         rmSync(directory, { recursive: true, force: true });
@@ -183,7 +185,7 @@ describe("stdio server (e2e)", () => {
         message: "bad probe",
         range: {
           start: { line: 0, character: 3 },
-          end: { line: 0, character: 4 },
+          end: { line: 0, character: 7 },
         },
       },
     ]);
@@ -1133,7 +1135,7 @@ describe("stdio server (e2e)", () => {
         "Invalid attribute name `!bad` — an attribute name may use letters, digits and `._:-`",
       range: {
         start: { line: 0, character: 3 },
-        end: { line: 0, character: 4 },
+        end: { line: 0, character: 7 },
       },
     };
     // The editor's text of the tag file: the callers read it (not the
