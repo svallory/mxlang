@@ -131,6 +131,10 @@ interface BabelNode {
   declarations?: BabelNode[];
   specifiers?: BabelNode[];
   declaration?: BabelNode;
+  /** `let` / `var` / `const` on a `VariableDeclaration`. */
+  kind?: string;
+  /** `type` on `import type …` and on an `import { type X }` specifier. */
+  importKind?: string;
 }
 
 interface BabelFile {
@@ -167,7 +171,26 @@ interface InputProp {
  * about to be handed to `tsc`, which reports it properly.
  */
 function collectAuthoredIdentifiers(statements: string[]): Set<string> {
-  const names = new Set<string>();
+  return new Set(collectModuleBindings(statements).keys());
+}
+
+/**
+ * What a module-level name is, for a template that reads it through a class
+ * member: `mutable` (`let`, `var`) can be reassigned by the module's own code,
+ * `value` (`const`, a function, a class, an enum, a value import) cannot, and
+ * `type` (an interface, a type alias, a type-only import) has no run-time
+ * value to read.
+ */
+type ModuleBindingKind = "mutable" | "value" | "type";
+
+/**
+ * Every top-level identifier the given module-level statements bind, with its
+ * kind. Parsed, not scanned: see `collectAuthoredIdentifiers`.
+ */
+function collectModuleBindings(
+  statements: string[],
+): Map<string, ModuleBindingKind> {
+  const names = new Map<string, ModuleBindingKind>();
   if (statements.length === 0) return names;
 
   const babel = babelParser as unknown as {
@@ -185,23 +208,29 @@ function collectAuthoredIdentifiers(statements: string[]): Set<string> {
   }
 
   /** Collects every name a binding pattern introduces. */
-  const fromPattern = (node: BabelNode | undefined | null): void => {
+  const fromPattern = (
+    node: BabelNode | undefined | null,
+    kind: ModuleBindingKind,
+  ): void => {
     if (!node) return;
     switch (node.type) {
       case "Identifier":
-        if (node.name) names.add(node.name);
+        if (node.name) names.set(node.name, kind);
         return;
       case "ObjectPattern":
         for (const prop of node.properties ?? []) {
-          fromPattern(prop.type === "RestElement" ? prop.argument : prop.value);
+          fromPattern(
+            prop.type === "RestElement" ? prop.argument : prop.value,
+            kind,
+          );
         }
         return;
       case "ArrayPattern":
-        for (const el of node.elements ?? []) fromPattern(el);
+        for (const el of node.elements ?? []) fromPattern(el, kind);
         return;
       case "RestElement":
       case "AssignmentPattern":
-        fromPattern(node.argument ?? node.left);
+        fromPattern(node.argument ?? node.left, kind);
         return;
       default:
         return;
@@ -218,17 +247,28 @@ function collectAuthoredIdentifiers(statements: string[]): Set<string> {
 
     switch (node.type) {
       case "ImportDeclaration":
-        for (const spec of node.specifiers ?? []) fromPattern(spec.local);
+        for (const spec of node.specifiers ?? []) {
+          fromPattern(
+            spec.local,
+            node.importKind === "type" || spec.importKind === "type"
+              ? "type"
+              : "value",
+          );
+        }
         break;
       case "VariableDeclaration":
-        for (const decl of node.declarations ?? []) fromPattern(decl.id);
+        for (const decl of node.declarations ?? []) {
+          fromPattern(decl.id, node.kind === "const" ? "value" : "mutable");
+        }
         break;
       case "FunctionDeclaration":
       case "ClassDeclaration":
+      case "TSEnumDeclaration":
+        fromPattern(node.id, "value");
+        break;
       case "TSInterfaceDeclaration":
       case "TSTypeAliasDeclaration":
-      case "TSEnumDeclaration":
-        fromPattern(node.id);
+        fromPattern(node.id, "type");
         break;
       default:
         break;
@@ -721,6 +761,161 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
   walkSiblings(body, false);
 }
 
+/**
+ * Every bare name the template's expressions read, with the position of its
+ * first read.
+ *
+ * A template reads a component member by its bare name, so a module-level
+ * name (`static let n`, an import) the template reads has to become a member
+ * of the generated class. This finds the reads: an `Identifier` in a value
+ * position of any expression, where a member name (`a.n`), an object key
+ * (`{ n: 1 }`), a type annotation and a name an arrow or function parameter
+ * binds are not reads.
+ *
+ * It does not track the template's own variables (`<for|n|>`, `<const/n=…>`),
+ * so a template variable that shares a module-level name counts as a read. The
+ * consequence is one unused class member; the variable still shadows it in the
+ * template, as Angular resolves the template's variables first.
+ *
+ * Run before `rewriteInputReads`, while `input.x` is still a member read and
+ * not the bare `x` it becomes.
+ */
+function bareReads(body: IrNode[]): Map<string, Position> {
+  const reads = new Map<string, Position>();
+
+  const patternNames = (node: unknown, into: Set<string>): void => {
+    if (!node || typeof node !== "object") return;
+    const record = node as BabelNode & {
+      properties?: Array<BabelNode & { argument?: BabelNode }>;
+    };
+    switch (record.type) {
+      case "Identifier":
+        if (record.name) into.add(record.name);
+        return;
+      case "ObjectPattern":
+        for (const prop of record.properties ?? []) {
+          patternNames(
+            prop.type === "RestElement" ? prop.argument : prop.value,
+            into,
+          );
+        }
+        return;
+      case "ArrayPattern":
+        for (const el of record.elements ?? []) patternNames(el, into);
+        return;
+      case "RestElement":
+        patternNames(record.argument, into);
+        return;
+      case "AssignmentPattern":
+        patternNames(record.left, into);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const visit = (
+    value: unknown,
+    shadowed: ReadonlySet<string>,
+    loc: Position,
+  ): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, shadowed, loc);
+      return;
+    }
+    const node = value as Record<string, unknown> & { type?: string };
+
+    if (node.type === "Identifier") {
+      const name = node.name;
+      if (typeof name === "string" && !shadowed.has(name) && !reads.has(name)) {
+        reads.set(name, loc);
+      }
+      return;
+    }
+
+    let inner = shadowed;
+    if (
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ObjectMethod"
+    ) {
+      const bound = new Set(shadowed);
+      for (const param of (node.params as unknown[]) ?? []) {
+        patternNames(param, bound);
+      }
+      if (node.type === "FunctionExpression") {
+        patternNames(node.id, bound);
+      }
+      inner = bound;
+    }
+
+    for (const [key, child] of Object.entries(node)) {
+      if (
+        key === "loc" ||
+        key === "extra" ||
+        key === "typeAnnotation" ||
+        key === "typeParameters" ||
+        key === "typeArguments" ||
+        key === "returnType"
+      ) {
+        continue;
+      }
+      // A parameter list is a binding position, not a read; its defaults are
+      // reads, reached through `right`.
+      if (key === "params" && inner !== shadowed) {
+        for (const param of child as unknown[]) {
+          const pattern = param as { type?: string; right?: unknown };
+          if (pattern.type === "AssignmentPattern") {
+            visit(pattern.right, inner, loc);
+          }
+        }
+        continue;
+      }
+      if (key === "id" && node.type === "FunctionExpression") continue;
+      // `a.n` and `{ n: 1 }` name a property; `a[n]` and `{ [n]: 1 }` read.
+      if (
+        key === "property" &&
+        (node.type === "MemberExpression" ||
+          node.type === "OptionalMemberExpression") &&
+        node.computed !== true
+      ) {
+        continue;
+      }
+      if (
+        key === "key" &&
+        (node.type === "ObjectProperty" || node.type === "ObjectMethod") &&
+        node.computed !== true
+      ) {
+        continue;
+      }
+      visit(child, inner, loc);
+    }
+  };
+
+  const walk = (value: unknown, loc: Position): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, loc);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    // An `Expr` is the only IR value carrying both `code` and `node`.
+    if (typeof record.code === "string" && record.node) {
+      visit(record.node, new Set(), (record.loc as Position) ?? loc);
+      return;
+    }
+    const here = (record.loc as Position) ?? loc;
+    for (const [key, child] of Object.entries(record)) {
+      if (key === "node" || key === "loc" || key === "end") continue;
+      walk(child, here);
+    }
+  };
+
+  for (const node of body) walk(node, node.loc);
+  return reads;
+}
+
 /** Whether a value is an IR node (carries a `kind` and a position). */
 function isIrNode(value: unknown): boolean {
   return (
@@ -963,6 +1158,8 @@ export function compileTagModule(
   let moduleLines: string[] = [];
   let inputProps: InputProp[] = [];
   const passthroughExports: string[] = [];
+  /** Every bare name the template reads, with its first position. */
+  let templateReads = new Map<string, Position>();
 
   const result = compileSourceWithHint(source, filename, tagDeclarations, {
     customTags: options.customTags,
@@ -974,6 +1171,9 @@ export function compileTagModule(
       // `Expr.code` and the parser nodes in place, so they run on a private
       // copy: the IR is read-only to an emitter (ir-spec E21).
       const ir = cloneIr(lowered, { nodes: true });
+      // Before `input.x` is rewritten to the bare `x`: only a name the author
+      // wrote bare can be a module-level name.
+      templateReads = bareReads(ir.body);
       className = moduleExportName(ir, "@mxlang/host-angular");
       // `<return>` hands a value to the tag's *caller*, through `/var` on
       // every host whose template can bind one. An Angular component is
@@ -1156,6 +1356,47 @@ export function compileTagModule(
   // when `authored` happens to contain it.
   if (hasInputs) angularImports.push(importSpec("Input", "NgInput"));
 
+  /**
+   * The class members that expose the module-level names the template reads.
+   *
+   * A template resolves a bare name against the component instance, and a
+   * module-level `let`, `const`, function or import is not a member of it:
+   * `{{ n }}` renders blank, or fails `ng build` under `strictTemplates`.
+   * Each name is exposed through an accessor rather than a copy, so a
+   * `static let` that the module's own code reassigns is read at its current
+   * value; a `let` or `var` also gets a setter, so an assignment in the
+   * template reaches the module's variable. Inside the accessor the name is
+   * the module's: a class member is not a lexical binding.
+   */
+  const moduleNameMembers = (): string[] => {
+    const members: string[] = [];
+    const bindings = collectModuleBindings([
+      ...moduleLines,
+      ...passthroughExports,
+    ]);
+    const inputNames = new Set(inputProps.map((prop) => prop.name));
+    for (const [name, at] of templateReads) {
+      const kind = bindings.get(name);
+      if (kind === undefined || kind === "type") continue;
+      if (inputNames.has(name)) {
+        throw new TranslateError(
+          `\`${name}\` is both an input of this tag and a name its module declares, so a template read of \`${name}\` is ambiguous. Rename one of them.`,
+          at.line,
+          at.column,
+          filename,
+        );
+      }
+      members.push(`  protected get ${name}() { return ${name}; }`);
+      if (kind === "mutable") {
+        // The parameter cannot be called `value`: the module may declare it.
+        members.push(
+          `  protected set ${name}(__mxNext: typeof ${name}) { ${name} = __mxNext; }`,
+        );
+      }
+    }
+    return members;
+  };
+
   const lines: string[] = [
     `import { ${angularImports.join(", ")} } from "@angular/core";`,
   ];
@@ -1202,6 +1443,7 @@ export function compileTagModule(
   }
   // The template calls the event invoker on the component instance, so the
   // class must carry it (detected from the emitted text, like directives).
+  lines.push(...moduleNameMembers());
   lines.push(...helperMembersFor(template));
   lines.push("}", `export default ${className};`, "");
 

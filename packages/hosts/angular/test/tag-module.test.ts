@@ -757,3 +757,188 @@ describe("compileTagModule: event handlers", () => {
     expect(code).not.toContain("__mxOn");
   });
 });
+
+describe("compileTagModule: module-level names the template reads", () => {
+  // A template resolves a bare name against the component instance, and a
+  // module-level binding is not a member of it: `{{ x }}` rendered blank, or
+  // failed `ng build` under `strictTemplates`, with no MX diagnostic.
+  const classBody = (code: string): string =>
+    code.slice(code.indexOf("export class"), code.indexOf("export default"));
+
+  it("exposes a `static let` through a getter and a setter, not a copy", () => {
+    const { code } = compileTag("static let x = 1;\n<p>${x}</p>\n", "let.mx");
+
+    expect(classBody(code)).toBe(
+      [
+        "export class Let {",
+        "  protected get x() { return x; }",
+        "  protected set x(__mxNext: typeof x) { x = __mxNext; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(code).toContain("\nlet x = 1;\n");
+    assertModuleTypechecks(code);
+  });
+
+  it("exposes a `static const` through a getter only", () => {
+    const { code } = compileTag(
+      "static const y = 2;\n<p>${y}</p>\n",
+      "const-name.mx",
+    );
+
+    expect(classBody(code)).toBe(
+      [
+        "export class ConstName {",
+        "  protected get y() { return y; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("exposes a `static function` called from the template", () => {
+    const { code } = compileTag(
+      "static function f() { return 3; }\n<p>${f()}</p>\n",
+      "fn.mx",
+    );
+
+    expect(templateOf(code)).toBe("<p>{{ f() }}</p>");
+    expect(classBody(code)).toBe(
+      ["export class Fn {", "  protected get f() { return f; }", "}", ""].join(
+        "\n",
+      ),
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("exposes a value import, and not a type-only one", () => {
+    const { code } = compileTag(
+      [
+        'import { fmt } from "./util.ts";',
+        'import type { Shape } from "./shape.ts";',
+        'import { type Kind, kinds } from "./kind.ts";',
+        "<p>${fmt(1)}${kinds}</p>",
+        "",
+      ].join("\n"),
+      "imp.mx",
+    );
+
+    expect(classBody(code)).toBe(
+      [
+        "export class Imp {",
+        "  protected get fmt() { return fmt; }",
+        "  protected get kinds() { return kinds; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("exposes every name of a multi-declarator or destructuring declaration", () => {
+    const { code } = compileTag(
+      "static let a = 1, b = 2;\nstatic const { p, q } = { p: 1, q: 2 };\n<p>${a}${b}${p}${q}</p>\n",
+      "multi.mx",
+    );
+
+    expect(classBody(code)).toBe(
+      [
+        "export class Multi {",
+        "  protected get a() { return a; }",
+        "  protected set a(__mxNext: typeof a) { a = __mxNext; }",
+        "  protected get b() { return b; }",
+        "  protected set b(__mxNext: typeof b) { b = __mxNext; }",
+        "  protected get p() { return p; }",
+        "  protected get q() { return q; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("exposes a name an event handler reads, beside the helper members", () => {
+    const { code } = compileTag(
+      "static let n = 0;\nstatic function bump() { n++; }\n<button onClick=bump>${n}</button>\n",
+      "counter.mx",
+    );
+
+    expect(templateOf(code)).toBe(
+      '<button (click)="__mxOn(bump, this, $event)">{{ n }}</button>',
+    );
+    const body = classBody(code);
+    expect(body).toContain("  protected get bump() { return bump; }");
+    expect(body).toContain("  protected get n() { return n; }");
+    expect(body).toContain(
+      "  protected set n(__mxNext: typeof n) { n = __mxNext; }",
+    );
+    expect(body.indexOf("get n()")).toBeLessThan(body.indexOf("__mxOn ="));
+  });
+
+  it("a `static` reassignment statement leaves the name bound once", () => {
+    const { code } = compileTag(
+      "static let x = 1;\nstatic x = 2;\n<p>${x}</p>\n",
+      "assign.mx",
+    );
+
+    expect(code).toContain("\nlet x = 1;\nx = 2;\n");
+    expect(classBody(code).match(/get x\(\)/g)).toHaveLength(1);
+    assertModuleTypechecks(code);
+  });
+
+  it("adds nothing for a name the template does not read as a name", () => {
+    // A member name, an object key and an arrow parameter are not reads of
+    // the module's `a`; neither is a type-only name or a name never read.
+    const { code } = compileTag(
+      "static const a = 1;\nstatic const unused = 2;\nstatic interface Shape { a: number }\n<p>${o.a}${{ a: 1 }.a}${[1].map((a) => a)}</p>\n",
+      "none.mx",
+    );
+
+    expect(classBody(code)).toBe("export class None {\n}\n");
+  });
+
+  it("a name the module does not declare gets no member", () => {
+    const { code } = compileTag("<p>${nowhere}</p>\n", "nowhere.mx");
+
+    expect(classBody(code)).toBe("export class Nowhere {\n}\n");
+  });
+
+  it("the setter parameter cannot capture a module name called `value`", () => {
+    const { code } = compileTag(
+      "static let value = 0;\n<p>${value}</p>\n",
+      "value.mx",
+    );
+
+    expect(classBody(code)).toContain(
+      "  protected set value(__mxNext: typeof value) { value = __mxNext; }",
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("errors, positioned at the read, when an input and a module name share a name", () => {
+    try {
+      compileTag(
+        "export interface Input { size: number }\nstatic const size = 3;\n<p>${size}</p>\n",
+        "clash.mx",
+      );
+      throw new Error("expected compileTagModule to throw");
+    } catch (err) {
+      const e = err as { message: string; line?: number; column?: number };
+      expect(e.message).toBe(
+        "`size` is both an input of this tag and a name its module declares, so a template read of `size` is ambiguous. Rename one of them.",
+      );
+      expect(e.line).toBe(3);
+      expect(e.column).toBe(3);
+    }
+  });
+
+  it("reads `input.size` beside a module `size` without error", () => {
+    const { code } = compileTag(
+      "export interface Input { size: number }\nstatic const size = 3;\n<p>${input.size}</p>\n",
+      "noclash.mx",
+    );
+
+    expect(classBody(code)).not.toContain("get size()");
+  });
+});
