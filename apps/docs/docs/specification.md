@@ -1614,7 +1614,7 @@ The **normative** order, as shipped (decisions 93, 113). On a target, `<effect>`
 before any of these (§11), unless the `none` tag-rules preset is in force or a
 host's own disposition (step 1) claims the name:
 
-1. Host tag disposition (`declarations.tags[name]` — error or inert)
+1. Host tag disposition (`declarations.tags[name]` — unsupported, error or inert)
 2. Core structural tags: `import`, `static`, `export`, `for`, `const`,
    `define`, `return`, `else`, `else-if` — **never shadowable**
 3. `@`-prefixed names → attribute-tag error
@@ -2996,7 +2996,9 @@ effect and requires a runtime; this strict policy has no reactive target", code
 `MX_UNSUPPORTED_CONSTRUCT`), which core yields to; Astro `.mx` follows strict. It
 is a target rule: a host (embedded MX in Preact, React, Hono,
 Solid, Angular or Astro) declares its own disposition for `effect` and reports
-that, never this text. The other exception is the `none` tag-rules preset (a
+that, never this text. Every host words it the same way as any tag it does not
+support in embedded MX: "`<effect>` is not supported in embedded MX on
+Preact." (see "A tag a host does not support" below), with no second sentence. The other exception is the `none` tag-rules preset (a
 dialect's, or `lowerSource({ tagRules: "none" })`), where `effect` is an
 ordinary tag name.
 
@@ -3333,6 +3335,26 @@ four entries. Every undeclared name there falls through to element/component
 resolution, and because Solid's `isElement` is a bare case test, an unhandled
 stateful tag still becomes a **literal lowercase element** in the output —
 the S8 silent-wrong-render class the field guard exists to close.
+
+### A tag a host does not support
+
+Every tag a host cannot express in embedded MX (a `.preact.mx`, `.react.mx`,
+`.hono.mx`, `.solid.mx` or `.astro.mx` file, a region inside a TypeScript module,
+an Angular template) is refused with one message shape, code
+`MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name with its end:
+
+> `<let>` is not supported in embedded MX on Preact. Use Preact's `useState` via `<const/x=useState(0)/>` or in the surrounding module.
+
+Core writes the first sentence from the tag name, the product ("MX") and the
+host's display name ("Preact", "React", "Hono", "Solid", "Angular", "Astro"). The
+host adds an optional second sentence, a hint that names what to write instead; it
+starts with a capital, ends with a period, and is absent when there is nothing to
+point at. `<effect>` never has a hint. A region file and a whole file get the same
+first sentence; only the hint may differ (a region has no `<const>`, so its hint
+names the surrounding component). `<return>` on Angular and Astro follows the same
+shape. A `client` or `server` block and the other refusals that are about a
+construct's shape or place, not its support (a dynamic tag name, an array attribute
+tag, a tag variable or tag params in a region), keep their own wording.
 
 ### 13.4 Where hosts genuinely disagree
 

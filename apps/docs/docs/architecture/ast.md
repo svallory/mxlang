@@ -1684,7 +1684,7 @@ as option (a) by the lead under decision 163's frame.)
 `server` and `client` are `MxModuleStatement`s in the AST where the target's
 statement set includes them (§3.10), and route through the same machinery as
 tags (ruling Q5/P5): first the host's `declarations.tags` disposition
-(`inert`/`error`, with `rejectInertShape`, `lower.ts` `lowerAuthoredTag`,
+(`inert`/`unsupported`/`error`, with `rejectInertShape`, `lower.ts` `lowerAuthoredTag`,
 which is how html's `client` disposition, `targets/html/src/translate.ts`
 `TAGS`, applies), then `isDelegatedTag` / `resolveDelegatedTag`
 (`lower.ts` `lowerAuthoredTag`) with the statement's view, so html's `server`

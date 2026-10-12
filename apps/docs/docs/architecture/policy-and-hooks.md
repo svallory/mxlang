@@ -9,7 +9,8 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 
 | Member | What it decides |
 | --- | --- |
-| `tags` | Per-tag-name disposition: `inert` (accepted, produces no output, in a declared shape) or `error` (this target cannot express the tag). |
+| `tags` | Per-tag-name disposition: `inert` (accepted, produces no output, in a declared shape), `unsupported` (this target cannot express the tag: core words the refusal as "`<X>` is not supported in embedded MX on <hostName>." and the host adds an optional `hint` sentence) or `error` (a refusal in the host's own words). |
+| `hostName?` | The host's display name ("Preact", "Angular") that the `unsupported` refusal names. Unset, the sentence ends after "embedded MX". |
 | `isElement(name, ctx)` | Whether an unbound lowercase tag name is a real HTML/SVG element. |
 | `isComponent(name, ctx)` | Whether a tag name resolves to a component in this host. |
 | `isDelegatedTag?(name, ctx)` | Whether this host handles the tag itself, rather than letting the core route it to a component or an element. |

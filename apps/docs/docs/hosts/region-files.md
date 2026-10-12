@@ -36,7 +36,7 @@ What stays outside, in your TypeScript:
 
 | Written in a region | Error | Do this |
 |---|---|---|
-| `<let>`, `<effect>`, `<id>`, `<lifecycle>` | ``<let> is Marko reactive state; use React's `useState` in the surrounding component`` (each names its hook) | Call the hook in the component. |
+| `<let>`, `<effect>`, `<id>`, `<lifecycle>` | ``<let> is not supported in embedded MX on React. Use React's `useState` in the surrounding component.`` (each names its hook; `<effect>` has no second sentence) | Call the hook in the component. |
 | `<const/x=…/>` | ``<const> cannot declare a binding inside a `.react.mx` expression; declare it in the surrounding component`` | Write `const x = …` above the `return`. |
 | `import`, `static`, `export`, `<return>` | ``module-level MX statements cannot appear inside a `.react.mx` expression; write them in the surrounding TypeScript module`` | Write them in the module. |
 

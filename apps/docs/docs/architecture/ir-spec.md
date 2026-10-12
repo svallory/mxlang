@@ -29,7 +29,7 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
 4. **Export name** (`Ir.exportName`), computed before the walk because a self-recursive call resolves to it during the walk (invariant §7.5-7).
 5. **The walk** (`lowerChildren`). Each child becomes zero or more IR nodes. Tag routing, in precedence order (`lowerAuthoredTag`):
    1. a dynamic tag name (`<${expr}>`) → `DelegatedTag` if the host claims `DYNAMIC_TAG`, else `Component` with a `dynamic` target;
-   2. a host **disposition** (`declarations.tags[name]`): `error` fails, `inert` validates the shape and yields an empty `Text`;
+   2. a host **disposition** (`declarations.tags[name]`): `unsupported` or `error` fails (`unsupported` with core's one sentence plus the host's hint, `error` with the host's own text), `inert` validates the shape and yields an empty `Text`;
    3. core structural tags: `import`/`static`/`export` (statement nodes), `for`, `const`, `define`, `return`, a stray `else`/`else-if` (error); `if` is grouped with its `else` siblings before this switch;
    4. built-in custom tags (`try`, never shadowable);
    5. a PascalCase name the file binds (an import, a `<define>`, a `<const>`, a tag param — `fileLocalBinding`) skips steps 6 and 7;

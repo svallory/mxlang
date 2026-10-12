@@ -17,7 +17,15 @@ is rejected on every target (`lowerSource` and the html targets), in every form 
 
 > `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
 
-The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. A host (embedded MX in a framework) words its own rejection of `<effect>`; this text is the default target's; the html `strict` policy says "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. A host (embedded MX in a framework) says "`<effect>` is not supported in embedded MX on Preact." (its own name, no second sentence); this text is the default target's; the html `strict` policy says "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+
+## A tag a host does not support
+
+Embedded MX (a `.preact.mx`, `.react.mx`, `.hono.mx`, `.solid.mx` or `.astro.mx` file, a region in a TypeScript module, an Angular template) refuses every tag its host cannot express with one sentence, code `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name:
+
+> `<let>` is not supported in embedded MX on Preact. Use Preact's `useState` via `<const/x=useState(0)/>` or in the surrounding module.
+
+The first sentence is the same on every host: the tag, then the host's name. The second sentence, when the host has one, says what to write instead. `<effect>` never has one. A region file gets the same first sentence as a whole file; its hint points at the surrounding component instead of `<const>`.
 
 ## A stateful tag under `strict`
 

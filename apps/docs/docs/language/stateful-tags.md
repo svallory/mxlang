@@ -11,7 +11,7 @@ description: "Why <let>, <lifecycle>, and friends mean whatever the host says."
 
 > `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
 
-The error is a target rule. On a host (embedded MX in Preact, React, Hono, Solid, Angular or Astro) `<effect>` stays one more unsupported tag, with the host's own message. Under `{ strict: true }` the html target words it like its other reactive rows: "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name.
+The error is a target rule. On a host (embedded MX in Preact, React, Hono, Solid, Angular or Astro) `<effect>` stays one more unsupported tag, worded like every other: "`<effect>` is not supported in embedded MX on Preact." Under `{ strict: true }` the html target words it like its other reactive rows: "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name.
 
 A template using `<let>` means something different depending on which host compiles it — the same way a piece of JSX means something different depending on which framework's compiler processes it. The structural tags in [Structural tags](/language/structural-tags/) are portable across hosts; stateful tags are not.
 
@@ -38,6 +38,8 @@ Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifec
 The one check that applies regardless of `strict` is the `input`-shadowing guard: a `<let>` or `<const>` binding named `input` is always rejected, since it would silently break the template's own input parameter either way.
 
 ## How other hosts differ
+
+A host that does not support a tag says so in one shape: core writes "`<let>` is not supported in embedded MX on Preact." and the host may add a second sentence naming what to write instead ("Use Preact's `useState` via `<const/x=useState(0)/>` or in the surrounding module."). The same applies to `<effect>` (without the second sentence), `<lifecycle>`, `<script>`, `<id>`, `<await>`, `<try>` and the other tags a host lists, on every host, in a whole file and in a region.
 
 A reactive host — Solid, Preact, React, Hono, Astro, or Angular — implements the same six constructs against its own framework's primitives instead of treating them as inert — `<let>` becomes real state, `<effect>` becomes a real side effect. Parity with Marko's server render doesn't apply here, because there is no server render to match: the host is tested against its own framework's behavior.
 
