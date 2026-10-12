@@ -43,7 +43,7 @@ resource="post" table="posts"
 | Field | Meaning |
 |---|---|
 | `ir` | a `SpannedIr`, or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic[]`: `{ severity, message, line, column, offset, end?, file?, code? }`. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic[]`: `{ severity, message, line, column, offset, end?, file?, code?, fixes? }`. On success it holds this call's warnings only |
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
 

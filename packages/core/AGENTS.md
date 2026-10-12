@@ -1280,6 +1280,21 @@ Five facts worth knowing before editing it:
   `export interface Input` and annotates `function Card(input: Input)`, as the
   other JSX hosts do; the output is TSX carrying types and runs through a
   TS-aware step (vite, `.tsx` id) at build time.
+- **A diagnostic's `fixes` (`@unstable`) travel like `code` and `end`.**
+  `IrDiagnostic.fixes` is `IrDiagnosticFix[]`: `{ title, edits: { offset, end,
+  newText }[] }`, UTF-16 offsets into the file the diagnostic is positioned in
+  (the lowered file; `file` when foreign, where `offset` is `-1`), `end`
+  exclusive, no overlap in one fix. `TranslateError.fixes` carries them; only
+  `raiseWithFixes` (internal, not in `FailOptions`) sets them, today for
+  `rejectEffectTag` (`effectRenameFixes`: the open name span, and
+  `closeTag.nameSpan` when there is one). Every re-raise that copies `code`
+  and `end` copies `fixes` beside them: `errorPosition`/`toDiagnostic`
+  (`ir-entry/diagnostics.ts`), `labelInside`, `metadataForTemplate`'s
+  positioned error, and `thrownError` in `tag-file.ts` (only when the throw is
+  in the tag file itself). A fix is dropped, never remapped, when the error
+  moves to another file. A region or `.astro.mx` file keeps core's spans
+  file-absolute, so its fixes need no remapping. Pins:
+  `diagnostic-fixes.test.ts`.
 
 ## Target contract (unstable; decisions 129 and 132)
 
