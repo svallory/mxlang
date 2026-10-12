@@ -84,7 +84,7 @@ describe("scriptlets (html)", () => {
   });
 
   it.each(["let", "var"])(
-    "names the %s construct with its initial-value limit; strict mode omits advice",
+    "names the %s construct with its initial-value limit",
     (keyword) => {
       const source = `$ ${keyword} x = 1;\n<p>\${x}</p>`;
       expect(failure(source).message).toBe(
@@ -93,12 +93,6 @@ describe("scriptlets (html)", () => {
       expect(() =>
         compile(`<let/x=1/><p>\${x}</p>`, "/fixtures/test.mx"),
       ).not.toThrow();
-      expect(() =>
-        compile(source, "/fixtures/test.mx", { strict: true }),
-      ).toThrow(/^scriptlets \(`\$ statement`\) are not supported in MX$/);
-      expect(() =>
-        compile("<let/x=1/>", "/fixtures/test.mx", { strict: true }),
-      ).toThrow("`<let>` is reactive state");
     },
   );
 
@@ -110,6 +104,76 @@ describe("scriptlets (html)", () => {
       );
     },
   );
+
+  describe("strict mode", () => {
+    const STRICT = { strict: true };
+    const STRICT_LET =
+      "scriptlets (`$ statement`) are not supported in MX; declare a value with `<const/x=…/>` (this strict policy rejects `<let>`, which is reactive state)";
+
+    function strictFailure(source: string) {
+      try {
+        compile(source, "/fixtures/test.mx", STRICT);
+      } catch (error) {
+        return error as {
+          message: string;
+          code?: string;
+          line?: number;
+          column?: number;
+          end?: { line: number; column: number };
+        };
+      }
+      throw new Error("expected a compile error, but the template compiled");
+    }
+
+    it.each([
+      ["let", `$ let x = 1;\n<p>\${x}</p>`, 12],
+      ["var", `$ var x = 1;\n<p>\${x}</p>`, 12],
+    ])(
+      "$ %s states the rule and the fix, at the statement",
+      (_keyword, source, endColumn) => {
+        const e = strictFailure(source);
+        expect(e.message).toBe(STRICT_LET);
+        expect(e.code).toBe("BABEL_TRANSFORM_ERROR");
+        expect(e.line).toBe(1);
+        expect(e.column).toBe(0);
+        expect(e.end).toEqual({ line: 1, column: endColumn });
+      },
+    );
+
+    it("keeps the position of a later statement and names its variable", () => {
+      const e = strictFailure(`<p>1</p>\n$ var count = 0;\n<p>\${count}</p>`);
+      expect(e.message).toBe(STRICT_LET.replace("/x=", "/count="));
+      expect(e.line).toBe(2);
+      expect(e.column).toBe(0);
+    });
+
+    it("the form it suggests compiles in strict mode", () => {
+      expect(() =>
+        compile(`<const/x=1/>\n<p>\${x}</p>`, "/fixtures/test.mx", STRICT),
+      ).not.toThrow();
+      expect(() => compile("<let/x=1/>", "/fixtures/test.mx", STRICT)).toThrow(
+        "`<let>` is reactive state",
+      );
+    });
+
+    it.each(["let", "var"])(
+      "a malformed $ %s carries the same clause",
+      (kw) => {
+        expect(reasonOf(strictFailure(`$ ${kw} x = ;\n<p>1</p>`).message)).toBe(
+          "Unexpected token; scriptlets (`$ …`) are not supported; declare a value with `<const/x=…/>` (this strict policy rejects `<let>`, which is reactive state)",
+        );
+      },
+    );
+
+    it("leaves $ const and a non-declaring statement as they were", () => {
+      expect(strictFailure(`$ const z = 3;\n<p>\${z}</p>`).message).toBe(
+        "scriptlets (`$ statement`) are not supported in MX; declare a value with `<const/z=…/>`",
+      );
+      expect(strictFailure("$ foo()\n<p>1</p>").message).toBe(
+        "scriptlets (`$ statement`) are not supported in MX; a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template",
+      );
+    });
+  });
 
   it("a valid scriptlet carries the same fix", () => {
     expect(failure(`$ const x = 1;\n<p>\${x}</p>`).message).toBe(

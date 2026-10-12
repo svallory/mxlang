@@ -579,8 +579,12 @@ const STRICT_TAGS: Record<string, Disposition> = {
 export const strictPolicy: Policy = {
   ...policy,
   tags: STRICT_TAGS,
+  // `<let>` is rejected here, so `<const>` is the one form this policy accepts
+  // for a declared value; a render declares a value once and never reassigns it.
   scriptletReplacement: (name, keyword) =>
-    keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
+    keyword === "const"
+      ? `declare a value with \`<const/${name}=…/>\``
+      : `declare a value with \`<const/${name}=…/>\` (this strict policy rejects \`<let>\`, which is reactive state)`,
 };
 
 /**
