@@ -659,6 +659,13 @@ const ROWS: Row[] = [
   lowerRow("MX_LET_WRITE_IN_RENDER", "<let/n=0/>\n<p>${n++}</p>\n", 2, 5, {
     tagRules: "html",
   }),
+  lowerRow(
+    "MX_STALE_DERIVED_READ",
+    "<let/n=0/>\n<const/d=n * 2/>\n<button onClick() {\n  n = 1;\n  log(d);\n}>x</button>\n",
+    5,
+    6,
+    { tagRules: "html" },
+  ),
   compileRow("MX_UNSUPPORTED_CONSTRUCT", "<div(1) a=1/>\n", 1, 5),
   compileRow(
     "MX_NOT_A_DOM_EVENT",

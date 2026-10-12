@@ -603,6 +603,27 @@ describe("Solid host errors", () => {
     });
   });
 
+  it("refuses `<let>` itself before a stale read of a derived `<const>` is looked at", () => {
+    let error: Error | undefined;
+    try {
+      compileSolidMx(
+        "<let/items=[]/>\n<const/total=items.length/>\n<button onClick() {\n  items = [];\n  log(total);\n}>x</button>\n",
+        { filename: "page.solid.mx" },
+      );
+    } catch (caught) {
+      error = caught as Error;
+    }
+    expect(error?.message).toContain(
+      "`<let>` is not supported in embedded MX on Solid.",
+    );
+    expect(error?.message).not.toContain("is stale here");
+    expect(error).toMatchObject({
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column: 0,
+    });
+  });
+
   const errors: Array<[string, string, string]> = [
     ["let", `<let/x=1/>`, "createSignal"],
     [
