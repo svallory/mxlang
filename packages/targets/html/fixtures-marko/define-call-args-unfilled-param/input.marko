@@ -1,0 +1,7 @@
+<define/Row|a, b, c|><li>${a}|<${b?.b}/>|<${b?.c}/>|<${b?.content}/>|${c === undefined ? "none" : "set"}</li></define>
+
+<ul>
+  <Row(1)><@b>named-b</@b></Row>
+  <Row(2)><@c>named-c</@c></Row>
+  <Row(3)>content-only</Row>
+</ul>

@@ -1,0 +1,7 @@
+<define/Card|n, tags|><div>${n}:<${tags?.head}/>:<${tags?.content}/>:${Object.keys(tags ?? {}).sort().join(",")}</div></define>
+
+<Card(1)>
+  <@head>H</@head>
+  tail
+</Card>
+<Card(input.n)><@head>only</@head></Card>

@@ -1,0 +1,6 @@
+<define/Card|n, props|><div>${n}<${props?.content}/></div></define>
+<define/Named|n, content|><p>${n}<${content?.content}/>${typeof content}</p></define>
+
+<Card(1)>body</Card>
+<Named(2)>text</Named>
+<Card(input.n)/>
