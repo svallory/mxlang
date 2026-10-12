@@ -699,14 +699,18 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
 
 function rejectUnknownTag(
   name: string,
-  node: { loc: Position },
+  node: { loc?: { start?: Position } },
   ctx: Ctx,
 ): void {
-  fail(
+  rawFail(
     unresolvedCustomTagMessage(name, {
       candidates: [...ctx.imports, ...ctx.defines.keys()],
       hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
-    }),
+    }) +
+      // A colon name is one tag name; say so, with the fix.
+      (name.includes(":")
+        ? ` A colon belongs to the tag name: declare a tag named \`${name}\`, or write the name without the colon.`
+        : ""),
     node,
   );
 }
@@ -729,7 +733,10 @@ export const solidDeclarations: HostDeclarations = {
     context.configured ??
     DEFAULT_TAG,
   tags: STATEFUL_ERRORS,
-  isElement: (name) => !/^[A-Z]/.test(name),
+  // A colon name is one custom-tag name, never an element: JSX would read it
+  // as a namespace element (`<uuid:id/>`), not the one tag the name is.
+  // Unresolved, it takes `rejectUnknownTag`.
+  isElement: (name) => !/^[A-Z]/.test(name) && !name.includes(":"),
   isComponent,
   rejectUnknownTag,
   isDelegatedTag: (name) => name === "try" || name === "html-comment",

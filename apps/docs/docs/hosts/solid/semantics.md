@@ -22,6 +22,8 @@ Each MX region compiles to Solid 2 JSX at the same position in the file, and Sol
 | `<if>` chain with three or more | `<Switch fallback><Match when>…</Match></Switch>` |
 | `<try>` | `<Loading fallback>`, inside `<Errored fallback>` when there is a `<@catch>`; Solid's `Errored` fallback receives an `ErrorAccessor` function, so the lowering calls it once and passes the result to an inner arrow whose parameter list is the author's `<@catch>` params verbatim — `<Errored fallback={(__mxErr, ...__mxArgs) => ((e, reset) => …)(__mxErr(), ...__mxArgs)}>`, so defaults, type annotations, destructuring and rest all stay valid (a param-less catch keeps a plain body fallback) |
 
+A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no contract, import or tag file for it, it is a compile error at the tag, ``Unable to find entry point for custom tag `<uuid:id>`.``. Declare a tag with that name, or write the name without the colon.
+
 ## `<for>`
 
 | Written | Emitted |

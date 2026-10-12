@@ -30,6 +30,8 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 
 MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.
 
+A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no contract, import or tag file for it, it is a compile error at the tag, ``Unable to find entry point for custom tag `<uuid:id>`.``. Declare a tag with that name, or write the name without the colon.
+
 ## Keys
 
 Every `<for>` row carries a `key`: `by="id"` keys by a field of the row, `by=fn` by a function of it, and with no `by` the key is the row itself. A server render does not need them; they matter when the same component runs under `hono/jsx/dom` in the browser, where a list of objects or a list with duplicates needs a `by`.

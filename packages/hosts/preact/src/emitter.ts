@@ -168,6 +168,13 @@ export function componentAlias(name: string): string {
     : name;
 }
 
+/** The fix appended to an unresolved colon name: the colon is part of the name. */
+function colonNameFix(name: string): string {
+  return name.includes(":")
+    ? ` A colon belongs to the tag name: declare a tag named \`${name}\`, or write the name without the colon.`
+    : "";
+}
+
 function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name);
 }
@@ -236,7 +243,10 @@ export function createJsxDeclarations(
     isElement: (name, ctx) => {
       const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
       if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
-      return !isComponentName(name);
+      // A colon name is one custom-tag name, never an element: JSX would read it
+      // as a namespace element (`<uuid:id/>`), not the one tag the name is.
+      // Unresolved, it takes `rejectUnknownTag` below.
+      return !isComponentName(name) && !name.includes(":");
     },
     // Resolves a capitalized tag only when it genuinely resolves (decision
     // 114): a scope binding (checked here for a direct caller of this
@@ -259,7 +269,7 @@ export function createJsxDeclarations(
         unresolvedCustomTagMessage(name, {
           candidates: [...ctx.imports, ...ctx.defines.keys()],
           hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
-        }),
+        }) + colonNameFix(name),
         node,
       );
     },

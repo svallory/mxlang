@@ -30,6 +30,8 @@ React has no control-flow components, so every structural tag becomes a plain JS
 
 MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.
 
+A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no contract, import or tag file for it, it is a compile error at the tag, ``Unable to find entry point for custom tag `<uuid:id>`.``. Declare a tag with that name, or write the name without the colon.
+
 ## Keys
 
 Every `<for>` row carries a `key`.
