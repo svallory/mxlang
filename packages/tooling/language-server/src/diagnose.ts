@@ -324,13 +324,14 @@ function errorPosition(error: unknown): {
   if (typeof nested.line === "number" && typeof nested.column === "number") {
     // A template parse error's `loc` also holds its exclusive end.
     const end = (loc as { end?: { line?: unknown; column?: unknown } }).end;
+    const fixes = fixesOf(error);
     return {
       line: nested.line,
       column: nested.column,
       ...(typeof end?.line === "number" && typeof end.column === "number"
         ? { end: { line: end.line, column: end.column } }
         : {}),
-      ...(fixesOf(error) ? { fixes: fixesOf(error) } : {}),
+      ...(fixes ? { fixes } : {}),
     };
   }
   return null;
@@ -360,7 +361,7 @@ function fixesOf(error: unknown): readonly IrDiagnosticFix[] | undefined {
 function diagnosticData(
   codeFrame: string | undefined,
   fixes: readonly IrDiagnosticFix[] | undefined,
-): { data: { codeFrame?: string; fixes?: readonly IrDiagnosticFix[] } } | {} {
+): { data?: { codeFrame?: string; fixes?: readonly IrDiagnosticFix[] } } {
   if (codeFrame === undefined && fixes === undefined) return {};
   return {
     data: {

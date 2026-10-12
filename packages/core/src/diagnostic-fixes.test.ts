@@ -32,29 +32,53 @@ export function applyFix(source: string, fix: IrDiagnosticFix): string {
   return out;
 }
 
-/** The form, the edit ranges as the text they replace, and the source. */
-const FORMS: Array<[string, string, string[]]> = [
-  ["bodied", "<effect>go()</effect>", ["effect", "effect"]],
+/**
+ * The form, its source, the edit ranges as the text they replace, and the
+ * codes of the errors the fixed source still has (what `<script>` says about
+ * that form: the rename resolves this error, not every other one).
+ */
+const FORMS: Array<[string, string, string[], string[]]> = [
+  ["bodied", "<effect>go()</effect>", ["effect", "effect"], []],
   [
     "bodied with an element",
     "<effect><div>x</div></effect>",
     ["effect", "effect"],
+    [],
   ],
   [
     "bodied with a method",
     "<effect() { go() }>x</effect>",
     ["effect", "effect"],
+    [],
   ],
-  ["bodied with a variable", "<effect/x>y</effect>", ["effect", "effect"]],
-  ["a `</>` close", "<effect>go()</>", ["effect"]],
-  ["self-closing", "<effect/>", ["effect"]],
-  ["self-closing method", "<effect() { go() }/>", ["effect"]],
-  ["self-closing value", "<effect=go()/>", ["effect"]],
-  ["an attribute", '<effect foo="bar"/>', ["effect"]],
-  ["concise with a body", "effect\n  -- go()", ["effect"]],
-  ["concise with a child tag", "effect\n  div", ["effect"]],
-  ["concise value", "effect=go()", ["effect"]],
-  ["concise block", "effect {\n  go()\n}", ["effect"]],
+  [
+    "bodied with a variable",
+    "<effect/x>y</effect>",
+    ["effect", "effect"],
+    // `<script/x>`: a tag variable is not allowed in a data file.
+    ["MX_NOT_IN_DATA_FILE"],
+  ],
+  ["a `</>` close", "<effect>go()</>", ["effect"], []],
+  ["self-closing", "<effect/>", ["effect"], []],
+  ["self-closing method", "<effect() { go() }/>", ["effect"], []],
+  ["self-closing value", "<effect=go()/>", ["effect"], []],
+  ["an attribute", '<effect foo="bar"/>', ["effect"], []],
+  ["concise with a body", "effect\n  -- go()", ["effect"], []],
+  [
+    "concise with a child tag",
+    "effect\n  div",
+    ["effect"],
+    // `script` takes a text body, not a child line.
+    ["MX_PARSE_INVALID_LINE_START"],
+  ],
+  ["concise value", "effect=go()", ["effect"], []],
+  [
+    "concise block",
+    "effect {\n  go()\n}",
+    ["effect"],
+    // `script { … }`: the block is an attribute `script` does not take.
+    ["MX_INVALID_ATTRIBUTE"],
+  ],
 ];
 
 function fixesOf(source: string, filename = "/tmp/page.mx"): IrDiagnostic {
@@ -114,13 +138,29 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
   });
 
   it.each(FORMS)(
-    "applying the edits yields source with no `<effect>` error: %s",
-    (_n, source) => {
+    "applying the edits resolves the `<effect>` error, and leaves only what `<script>` says: %s",
+    (_n, source, _replaced, remaining) => {
       const [fix] = fixesOf(source).fixes as IrDiagnosticFix[];
       const fixed = applyFix(`${source}\n`, fix as IrDiagnosticFix);
       expect(fixed).not.toContain("effect");
       const { diagnostics } = lowerSource(fixed, "/tmp/page.mx");
-      expect(diagnostics.map((d) => d.code)).not.toContain(CODE);
+      expect(diagnostics.map((d) => d.code)).toEqual(remaining);
+    },
+  );
+
+  it.each([
+    ["a space before the close `>`", "<effect>x</effect >"],
+    ["a close name in another case", "<effect>x</EFFECT>"],
+  ])(
+    "%s is a parse error, and so has no `<effect>` error and no fix",
+    (_n, source) => {
+      // The parser does not match this close to the open (`<div>x</div >` fails
+      // the same way), so lowering stops before the `<effect>` rule.
+      const { diagnostics } = lowerSource(`${source}\n`, "/tmp/page.mx");
+      expect(diagnostics.map((d) => d.code)).toEqual([
+        "MX_PARSE_MISMATCHED_CLOSING_TAG",
+      ]);
+      expect(diagnostics.some((d) => d.fixes !== undefined)).toBe(false);
     },
   );
 

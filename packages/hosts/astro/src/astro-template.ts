@@ -131,6 +131,7 @@ export class AstroTemplateError extends Error {
   file?: string;
   diagnosticCode?: string;
   end?: { line: number; column: number };
+  /** Core's quick fixes for this error, offsets in the whole `.astro.mx` file. @unstable */
   fixes?: readonly IrDiagnosticFix[];
   loc: {
     line: number;
