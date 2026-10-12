@@ -354,16 +354,14 @@ export const view = () => (
     );
 
     expect(diagnostics).toHaveLength(1);
-    // MX's code now reaches the editor. The range stays one character: the
-    // server's direct-position branch reads no `end`, though the error
-    // carries one.
+    // MX's code reaches the editor and the range covers the whole `<let`.
     expect(diagnostics[0]).toMatchObject({
       severity: 1,
       source: "mxlang",
       code: "MX_UNSUPPORTED_CONSTRUCT",
       range: {
         start: { line: 4, character: 4 },
-        end: { line: 4, character: 5 },
+        end: { line: 4, character: 8 },
       },
     });
     expect(diagnostics[0]?.message).toMatch(/let/i);

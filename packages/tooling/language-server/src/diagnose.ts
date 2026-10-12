@@ -292,7 +292,25 @@ function errorPosition(error: unknown): {
 
   const direct = loc as { line?: unknown; column?: unknown };
   if (typeof direct.line === "number" && typeof direct.column === "number") {
-    return { line: direct.line, column: direct.column };
+    // A host error re-raised by the parser carries its exclusive end on the
+    // error (`end`) and on `loc.end`.
+    const end = [
+      (error as { end?: unknown }).end,
+      (loc as { end?: unknown }).end,
+    ]
+      .map((candidate) => candidate as { line?: unknown; column?: unknown })
+      .find(
+        (candidate) =>
+          typeof candidate?.line === "number" &&
+          typeof candidate.column === "number",
+      );
+    return {
+      line: direct.line,
+      column: direct.column,
+      ...(end
+        ? { end: { line: end.line as number, column: end.column as number } }
+        : {}),
+    };
   }
 
   const start = (loc as { start?: unknown }).start;
