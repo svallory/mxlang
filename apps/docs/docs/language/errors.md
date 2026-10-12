@@ -26,11 +26,11 @@ The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. The diagn
 <p>${count++}</p>
 ```
 
-is rejected where the target has `<let>` (the html default policy and `lowerSource`):
+is rejected on the html default policy:
 
 > `count` is a `<let>` and cannot be written while the template renders. Write it in an event handler or a `<script>` body, or derive a value with `<const>`.
 
-The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, a `<const>` value, and an `<if>` or `<for>` header. A write inside a function, arrow or method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, the attributes and arguments of `<log>`, `<debug>`, `<id>`, `<lifecycle>` and `<script>` (not a `<script>` body), the attributes of the `<let>` itself, a `<const>` value, the default of a tag param, and an `<if>` or `<for>` header. A write inside a function, arrow or object method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. `lowerSource` refuses every `<let>` tag variable (a data file has no state) and reports a render write first. See [Stateful tags](/language/stateful-tags/).
 
 ## A tag a host does not support
 

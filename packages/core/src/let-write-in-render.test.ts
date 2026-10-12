@@ -1,7 +1,7 @@
 /**
  * A `<let>` cannot be written while the template renders. Core raises one
  * error, positioned at the assignment or update with its end, on `lowerSource`
- * and on every target that has `<let>`. The code inside a function is not
+ * and on the html default policy. The code inside a function is not
  * render position: that is where a `<let>` is written.
  */
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
@@ -200,6 +200,32 @@ const POSITIONS: Form[] = [
     "<div>\n  <ul>\n    <li class=(count++)/>\n  </ul>\n</div>",
     "count++",
   ],
+  // A class member is not a function to Marko, which refuses these writes.
+  ["a class method", "<p>${class { bump() { count++ } }}</p>", "count++"],
+  [
+    "a private class method",
+    "<p>${class { #bump() { count++ } }}</p>",
+    "count++",
+  ],
+  [
+    "a class getter",
+    "<p>${class { get x() { return count++ } }}</p>",
+    "count++",
+  ],
+  ["a computed class key", "<p>${class { [count++]() {} }}</p>", "count++"],
+  ["a class field initializer", "<p>${class { x = count++ }}</p>", "count++"],
+  ["a class static block", "<p>${class { static { count++ } }}</p>", "count++"],
+  // The defaults of a tag's params run while the template renders.
+  [
+    "a `<for>` param default",
+    "<for|x = (count++)| of=xs>\n  <p/>\n</for>",
+    "count++",
+  ],
+  [
+    "a `<define>` param default",
+    "<define/D|a = count++|>\n  <p/>\n</define>",
+    "count++",
+  ],
 ];
 
 describe("a `<let>` write while the template renders is one error", () => {
@@ -378,12 +404,17 @@ describe("what is not render position", () => {
       "<p data=(xs.map(x => (count += x)))/>",
     ],
     [
-      "a class method in a placeholder",
-      "<p>${class { bump() { count++ } }}</p>",
-    ],
-    [
       "a handler on a nested element",
       "<div><b onClick=() => (count = 0)/></div>",
+    ],
+    ["an arrow in a class field", "<p>${class { x = () => count++ }}</p>"],
+    [
+      "an arrow inside a class method",
+      "<p>${class { bump() { return () => count++ } }}</p>",
+    ],
+    [
+      "an object method inside a class method",
+      "<p>${class { make() { return { bump() { count++ } } } }}</p>",
     ],
     ["a `<script>` body", "<script>count++</script>"],
     [
@@ -600,4 +631,91 @@ describe("a host or policy that refuses `<let>` never reaches the write", () => 
       expect(error?.message).not.toContain("cannot be written");
     },
   );
+});
+
+describe("a `<let>`'s own attributes", () => {
+  it.each([
+    ["its initial value", "<let/count=(count = 1)/>\n", "count = 1"],
+    ["its initial value, an update", "<let/count=(count++)/>\n", "count++"],
+    [
+      "a `valueChange` that is not a function",
+      "<let/count=0 valueChange=(count = 1, null)/>\n",
+      "count = 1",
+    ],
+    ["another attribute", "<let/count=0 data-x=(count += 2)/>\n", "count += 2"],
+  ])("refuses a write in %s", (_name, source, write) => {
+    const error = attempt(source);
+    const at = span(source, write);
+    expect(error?.message).toBe(message("count"));
+    expect(error?.diagnosticCode).toBe(CODE);
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+    expect(error?.end).toEqual(at.end);
+  });
+
+  it.each([
+    [
+      "a `valueChange` arrow",
+      "<let/count=0 valueChange=(v => { count = v })/>\n",
+    ],
+    ["a `valueChange` method", "<let/count=0 valueChange(v) { count = v }/>\n"],
+    [
+      "a `valueChange` function",
+      "<let/count=0 valueChange=(function (v) { count = v })/>\n",
+    ],
+    ["a read of the name", "<let/count=0 data-x=(count)/>\n"],
+  ])("accepts %s", (_name, source) => {
+    expect(attempt(source)).toBeUndefined();
+  });
+
+  it("lowerSource refuses the same write", () => {
+    const source = "<let/count=(count = 1)/>\n";
+    const { diagnostics } = lowerSource(source, "/page.mx", {
+      tagRules: "html",
+    });
+    expect(diagnostics.filter((d) => d.code === CODE)).toHaveLength(1);
+  });
+});
+
+describe("an inert tag's attributes and arguments", () => {
+  const inert = (source: string) =>
+    attempt(source, {
+      ...withLet,
+      tags: {
+        log: { kind: "inert", attributes: "none", body: "none" },
+        debug: { kind: "inert", attributes: "none", body: "none" },
+        id: { kind: "inert", attributes: "none", body: "none" },
+        lifecycle: { kind: "inert", attributes: "any", body: "none" },
+        script: { kind: "inert", attributes: "any", body: "text" },
+      },
+    } as never);
+
+  it.each([
+    ["`<log>`", "<log=(count++)/>", "count++"],
+    ["`<debug>`", "<debug=(count++)/>", "count++"],
+    ["`<id>`", "<id/x=(count++)/>", "count++"],
+    ["`<lifecycle>`", "<lifecycle onMount=(count++)/>", "count++"],
+    ["`<script>`", "<script async=(count++)></script>", "count++"],
+  ])("refuses a write in %s", (_name, body, write) => {
+    const source = `${LET}${body}\n`;
+    const error = inert(source);
+    const at = span(source, write);
+    expect(error?.message).toBe(message("count"));
+    expect(error?.diagnosticCode).toBe(CODE);
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+    expect(error?.end).toEqual(at.end);
+  });
+
+  it.each([
+    ["a `<script>` body", "<script>count++</script>"],
+    ["a handler on `<lifecycle>`", "<lifecycle onMount=(() => count++)/>"],
+    ["a read", "<log=(count)/>"],
+  ])("accepts %s", (_name, body) => {
+    expect(inert(`${LET}${body}\n`)).toBeUndefined();
+  });
 });

@@ -10,11 +10,18 @@
  * read off the expression and not off how the file is used: a placeholder, an
  * attribute or tag argument, a `<const>` value, an `<if>` or `<for>` header.
  * The code inside a function (an event handler, an arrow passed as an
- * attribute, a method shorthand, a `<let>`'s own `valueChange`) runs when
+ * attribute, an object method, a `<let>`'s own `valueChange`) runs when
  * that function is called, so a write there is the way a `<let>` is written
  * and is never refused. A function called while the template renders is not
  * followed: there is no flow analysis, so a write inside `${bump()}`'s
  * callee is not detected.
+ *
+ * What counts as a function is Marko's own list: a function declaration, a
+ * function expression, an arrow and an object method. A class member is not
+ * one (its body runs when the class is used, but Marko refuses a write there
+ * and so does MX): a method, getter, private method, computed key, field
+ * initializer or static block of a class in an expression is render position,
+ * unless a function of the list encloses the write.
  *
  * A parameter or a local of the same spelling as the `<let>` can only be
  * declared inside a function, so skipping the code inside functions also
@@ -32,6 +39,19 @@ export type LetWrite = {
   /** The `<let>` it writes. */
   readonly name: string;
 };
+
+/** Is `path` inside a function that runs later than the render? */
+function insideFunction(path: Node): boolean {
+  return Boolean(
+    path.findParent(
+      (parent: Node) =>
+        parent.isFunctionDeclaration() ||
+        parent.isFunctionExpression() ||
+        parent.isArrowFunctionExpression() ||
+        parent.isObjectMethod(),
+    ),
+  );
+}
 
 /** Every identifier an assignment target binds, in source order. */
 function targetNames(target: Node, out: string[]): void {
@@ -80,13 +100,15 @@ export function findLetWrite(
 ): LetWrite | undefined {
   if (lets.size === 0 || !expression) return undefined;
   const { traverse, types } = coreBabel();
+  // A tag param (`x = count++`) is a pattern, which `expressionStatement`
+  // would refuse; the walk validates nothing, so the node is wrapped as is.
   const file = types.file(
-    types.program([types.expressionStatement(expression)]),
+    types.program([{ type: "ExpressionStatement", expression } as Node]),
   );
   let found: LetWrite | undefined;
 
   const check = (path: Node, target: Node): void => {
-    if (found || path.getFunctionParent()) return;
+    if (found || insideFunction(path)) return;
     const names: string[] = [];
     targetNames(target, names);
     for (const name of names) {

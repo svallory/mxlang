@@ -15,7 +15,7 @@ The error is a target rule. On a host (embedded MX in Preact, React, Hono, Solid
 
 A template using `<let>` means something different depending on which host compiles it — the same way a piece of JSX means something different depending on which framework's compiler processes it. The structural tags in [Structural tags](/language/structural-tags/) are portable across hosts; stateful tags are not.
 
-A `<let>` is written in an event handler or a `<script>` body, never while the template renders: `${count++}`, `<p class=(count = 1)/>` or `<const/next=(count += 1)/>` is a compile error (`MX_LET_WRITE_IN_RENDER`), on the targets that have `<let>`, with the fix in the message. Derive a value with `<const>` instead. A write inside a function that the template calls while it renders is not detected. See [Errors](/language/errors/).
+A `<let>` is written in an event handler or a `<script>` body, never while the template renders: `${count++}`, `<p class=(count = 1)/>` or `<const/next=(count += 1)/>` is a compile error (`MX_LET_WRITE_IN_RENDER`), on the html default policy, with the fix in the message. Derive a value with `<const>` instead. A write inside a function that the template calls while it renders is not detected. See [Errors](/language/errors/).
 
 ## The html target's policy
 

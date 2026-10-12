@@ -32,6 +32,40 @@ describe("the html target's default policy", () => {
       "count = 2",
     ],
     ["an `<if>`", "<let/count=0/>\n<if=(--count)>\n  <p/>\n</if>\n", "--count"],
+    ["`<log>`", "<let/count=0/>\n<log=(count++)/>\n", "count++"],
+    ["`<debug>`", "<let/count=0/>\n<debug=(count++)/>\n", "count++"],
+    ["`<id>`", "<let/count=0/>\n<id/x=(count++)/>\n", "count++"],
+    [
+      "`<lifecycle>`",
+      "<let/count=0/>\n<lifecycle onMount=(count++)/>\n",
+      "count++",
+    ],
+    [
+      "`<script>`",
+      "<let/count=0/>\n<script async=(count++)></script>\n",
+      "count++",
+    ],
+    ["a `<let>`'s own value", "<let/count=(count = 1)/>\n", "count = 1"],
+    [
+      "a `<let>`'s `valueChange` that is not a function",
+      "<let/count=0 valueChange=(count = 1, null)/>\n",
+      "count = 1",
+    ],
+    [
+      "a `<for>` param default",
+      "<let/count=0/>\n<for|x = (count++)| of=xs>\n  <p/>\n</for>\n",
+      "count++",
+    ],
+    [
+      "a `<define>` param default",
+      "<let/count=0/>\n<define/D|a = count++|>\n  <p/>\n</define>\n",
+      "count++",
+    ],
+    [
+      "a class method",
+      "<let/count=0/>\n<p>${class { bump() { count++ } }}</p>\n",
+      "count++",
+    ],
   ])("refuses a write in %s", (_name, source, write) => {
     const error = thrown(source);
     const start = source.indexOf(write);
@@ -50,6 +84,9 @@ describe("the html target's default policy", () => {
     ["a `<script>` body", "<script>count++</script>"],
     ["a shadowing parameter", "<p>${((count) => count++)(1)}</p>"],
     ["a read", "<p>${count}</p>"],
+    ["a `<log>` read", "<log=(count)/>"],
+    ["a function in a `<lifecycle>`", "<lifecycle onMount=(() => count++)/>"],
+    ["a class field arrow", "<p>${class { x = () => count++ }}</p>"],
   ])("accepts %s", (_name, body) => {
     expect(thrown(`<let/count=0/>\n${body}\n`)).toBeUndefined();
   });

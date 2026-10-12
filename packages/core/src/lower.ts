@@ -635,14 +635,16 @@ function methodBodySpan(
  * expression is the way a `<let>` is written and passes. The set of names is
  * `ctx.renderLets`, empty in a file with no `<let>`, which skips the parse.
  */
-function checkLetWrites(ctx: Ctx, code: string, node: Node): void {
+function checkLetWrites(ctx: Ctx, code: string | undefined, node: Node): void {
   const lets = ctx.renderLets;
   if (!lets?.size) return;
-  // A name that is not in the text cannot be written, and most expressions
-  // mention none of them.
-  if (![...lets].some((name) => code.includes(name))) return;
-  // And a write needs an assignment or an update operator in the text.
-  if (!/=|\+\+|--/.test(code)) return;
+  if (code !== undefined) {
+    // A name that is not in the text cannot be written, and most expressions
+    // mention none of them.
+    if (![...lets].some((name) => code.includes(name))) return;
+    // And a write needs an assignment or an update operator in the text.
+    if (!/=|\+\+|--/.test(code)) return;
+  }
   const write = findLetWrite(node, lets);
   if (!write) return;
   raise(
@@ -650,6 +652,23 @@ function checkLetWrites(ctx: Ctx, code: string, node: Node): void {
     `\`${write.name}\` is a \`<let>\` and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`,
     write.node,
   );
+}
+
+/**
+ * The same check over the values a tag carries that `exprOf` never reads: the
+ * attributes and arguments of an inert tag (`<log=…/>`, `<id/x=…/>`,
+ * `<lifecycle onMount=…/>`, `<script async=…>`) and of a `<let>` itself. The
+ * text body of a `<script>` is not looked at; it is a `<script>` body.
+ */
+function checkTagValueWrites(ctx: Ctx, node: Node): void {
+  if (!ctx.renderLets?.size) return;
+  for (const arg of tagArgsOf(node) ?? []) checkLetWrites(ctx, undefined, arg);
+  for (const attr of tagAttributesOf(node)) {
+    for (const arg of attrArgsOf(attr) ?? []) {
+      checkLetWrites(ctx, undefined, arg);
+    }
+    checkLetWrites(ctx, undefined, attrValueOf(ctx, attr));
+  }
 }
 
 /**
@@ -665,6 +684,10 @@ function declareRenderLet(ctx: Ctx, child: Node): void {
   const names = bindingIdentifiers(tagVarOf(child));
   if (names.length === 0) return;
   ctx.renderLets = new Set([...(ctx.renderLets ?? []), ...names]);
+  // The `<let>`'s own attributes were lowered before its name was known, so a
+  // write to it there (`<let/n=(n = 1)/>`, `valueChange=(n = 1, null)`) is
+  // looked for now; a write to an earlier `<let>` was refused by `exprOf`.
+  checkTagValueWrites(ctx, child);
 }
 
 /**
@@ -1572,6 +1595,8 @@ function rejectUnreadableParams(ctx: Ctx, node: Node): void {
 /** The tag params of `<for|a, b|>` / `<@name|p|>`, as source text. */
 function paramsOf(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
+  // A default (`|x = count++|`) runs while the template renders.
+  for (const param of tagParamsOf(node)) checkLetWrites(ctx, undefined, param);
   return tagParamsOf(node).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
     // printed outside its parameter-list context. The Marko node's location
@@ -4842,6 +4867,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       raiseDisposition(ctx, name, disposition, node);
     }
     rejectInertShape(ctx, node, name, disposition);
+    checkTagValueWrites(ctx, node);
     // Inert: accepted, contributes nothing to the IR.
     return { kind: "Text", value: "", loc: posOf(ctx, node) };
   }
