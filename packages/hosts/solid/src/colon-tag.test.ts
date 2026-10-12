@@ -1,9 +1,12 @@
-import type { CustomTag } from "@mxlang/core";
-import { describe, expect, it } from "vitest";
-import { compileSolidMx, compileSolidUnit } from "./index.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type CustomTag, getCustomTags } from "@mxlang/core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { compileSolidMx, compileSolidUnit, solidTargets } from "./index.ts";
 
 const FIX = (name: string) =>
-  ` A colon belongs to the tag name: declare a tag named \`${name}\`, or write the name without the colon.`;
+  ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: "${name.slice(0, name.lastIndexOf(":") + 1)}"\`.`;
 const UNRESOLVED = (name: string) =>
   `Unable to find entry point for custom tag \`<${name}>\`.`;
 
@@ -53,6 +56,8 @@ describe("Solid: an undeclared colon tag name", () => {
     ["with a body", "<kind:name>hi</kind:name>", "kind:name", 1, 0],
     ["after a hyphenated name", "<my-widget:x a=1/>", "my-widget:x", 1, 0],
     ["with a leading colon", "<:email/>", ":email", 1, 0],
+    ["when capitalized", "<Foo:bar/>", "Foo:bar", 1, 0],
+    ["with two colons", "<a:b:c/>", "a:b:c", 1, 0],
   ])("is rejected %s, at the tag", (_label, source, name, line, column) => {
     expect(errorOf(source)).toEqual({
       message: UNRESOLVED(name) + FIX(name),
@@ -103,5 +108,56 @@ describe("Solid: an unresolved capitalized tag", () => {
       line: 2,
       column: 2,
     });
+  });
+});
+
+/**
+ * The route a colon tag is declared by files: an `mx.tags` directory whose
+ * `prefix` ends in the colon. Unlike the `transform` contract above, the
+ * discovered tag reaches the host as a component call.
+ */
+describe("Solid: a colon tag declared from an mx.tags prefix directory", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mx-solid-colon-tag-"));
+  const scan = (file: string) => getCustomTags(file, { targets: solidTargets });
+
+  beforeAll(() => {
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "t",
+        mx: { tags: [{ dir: "ui", prefix: "uuid:" }] },
+      }),
+    );
+    mkdirSync(join(dir, "ui"));
+    writeFileSync(
+      join(dir, "ui", "id.mx"),
+      "export interface Input { label: string }\n<b title=input.label/>\n",
+    );
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("is found by the scan under its full name", () => {
+    expect(Object.keys(scan(join(dir, "page.mx")))).toEqual(["uuid:id"]);
+  });
+
+  it("whole-file unit: imports the tag file and calls it", () => {
+    const file = join(dir, "page.mx");
+    const code = compileSolidUnit('<div><uuid:id label="a"/></div>', {
+      filename: file,
+      customTags: scan(file),
+    }).code;
+    expect(code).toMatch(/import \$mx_Uuid_id\d+ from "\.\/ui\/id\.mx"/);
+    expect(code).toMatch(/<div><\$mx_Uuid_id\d+ label="a" \/><\/div>/);
+    expect(code).not.toContain("<uuid:id");
+  });
+
+  it("region: calls the tag", () => {
+    const file = join(dir, "page.solid.mx");
+    const code = compileSolidMx('<uuid:id label="a"/>', {
+      filename: file,
+      customTags: scan(file),
+    }).code;
+    expect(code).toMatch(/<\$mx_Uuid_id\d+ label="a" \/>/);
+    expect(code).not.toContain("<uuid:id");
   });
 });

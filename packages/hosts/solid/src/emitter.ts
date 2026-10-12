@@ -697,6 +697,17 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
   return (ctx.imports?.has(name) ?? false) || SOLID_BUILTIN_TAG_NAMES.has(name);
 }
 
+/**
+ * The fix appended to an unresolved colon name. The colon is part of the name,
+ * and no import binds it and no `tags/` file name can spell it, so the one
+ * discovery route is an `mx.tags` directory whose `prefix` ends in the colon.
+ */
+function colonNameFix(name: string): string {
+  return name.includes(":")
+    ? ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: "${name.slice(0, name.lastIndexOf(":") + 1)}"\`.`
+    : "";
+}
+
 function rejectUnknownTag(
   name: string,
   node: { loc?: { start?: Position } },
@@ -705,12 +716,10 @@ function rejectUnknownTag(
   rawFail(
     unresolvedCustomTagMessage(name, {
       candidates: [...ctx.imports, ...ctx.defines.keys()],
-      hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
-    }) +
-      // A colon name is one tag name; say so, with the fix.
-      (name.includes(":")
-        ? ` A colon belongs to the tag name: declare a tag named \`${name}\`, or write the name without the colon.`
-        : ""),
+      hint: name.includes(":")
+        ? undefined
+        : `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
+    }) + colonNameFix(name),
     node,
   );
 }

@@ -168,10 +168,14 @@ export function componentAlias(name: string): string {
     : name;
 }
 
-/** The fix appended to an unresolved colon name: the colon is part of the name. */
+/**
+ * The fix appended to an unresolved colon name. The colon is part of the name,
+ * and no import binds it and no `tags/` file name can spell it, so the one
+ * discovery route is an `mx.tags` directory whose `prefix` ends in the colon.
+ */
 function colonNameFix(name: string): string {
   return name.includes(":")
-    ? ` A colon belongs to the tag name: declare a tag named \`${name}\`, or write the name without the colon.`
+    ? ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: "${name.slice(0, name.lastIndexOf(":") + 1)}"\`.`
     : "";
 }
 
@@ -268,7 +272,9 @@ export function createJsxDeclarations(
       rawFail(
         unresolvedCustomTagMessage(name, {
           candidates: [...ctx.imports, ...ctx.defines.keys()],
-          hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
+          hint: name.includes(":")
+            ? undefined
+            : `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
         }) + colonNameFix(name),
         node,
       );
