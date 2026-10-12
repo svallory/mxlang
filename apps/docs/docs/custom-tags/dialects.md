@@ -105,7 +105,7 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 
 ## Passing your dialect to a call
 
-A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a frozen object. Core validates the object it is given and remembers the result only when the object is frozen: a frozen dialect is validated once, an unfrozen one again on every call, because a mutable object can change between calls. `Object.freeze(YOUR_DIALECT)` is enough to be remembered, but the check is shallow, so a change to `YOUR_DIALECT.table` after the first call would not be seen; freeze the nested objects too (a deep freeze). The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.
+A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a deep-frozen object. Core validates the object it is given and remembers the result only when the object is deep-frozen, that is, it and every plain object and array inside it (`table`, its rows, `contracts`) are frozen: a deep-frozen dialect is validated once, any other again on every call, because a mutable object can change between calls. A dialect frozen only at the top, with an unfrozen `table` or `contracts` inside, is validated again on every call, so a change to those is seen. RegExps and functions inside it need not be frozen. Freeze the nested objects and arrays too (a deep freeze) to have the dialect validated once. The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.
 
 ## Explaining an unknown tag
 

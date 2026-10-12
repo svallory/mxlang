@@ -529,8 +529,8 @@ Five facts worth knowing before editing it:
   deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),
   cached per manifest read. `compileSource`, `parseFragment` and
   `lowerSource` take an explicit `dialect` option (a dialect
-  or a bare table) that wins, validated once per frozen object
-  (`explicitSyntaxOf`/`explicitSyntax`) as the caller's error at the file
+  or a bare table) that wins, validated once per deep-frozen object
+  (`explicitSyntaxOf`/`explicitSyntax`; `isDeepFrozen` gates every such cache) as the caller's error at the file
   start, naming `dialect.<field>`. The table is the front end's parse table
   (one parse, PR 5): for a non-default table, `tableParseError` reads the
   first trigger, block tag, filter or table-caused template error from the

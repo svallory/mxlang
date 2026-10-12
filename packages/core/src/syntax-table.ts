@@ -621,7 +621,53 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** Hashes already computed, per table object (tables are frozen data). */
+/**
+ * Objects already proven deep-frozen. A deep-frozen object cannot change, so
+ * a positive answer is final and is asked once per object.
+ */
+const deepFrozen = new WeakSet<object>();
+
+/** Whether `value` is a plain object or an array: the shapes core walks and validates. */
+function isWalked(value: object): boolean {
+  if (Array.isArray(value)) return true;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Whether `value` is frozen all the way down, over what core validates: the
+ * plain objects and arrays in it. RegExps, functions, Maps, Sets and class
+ * instances are opaque: they are not walked and need not be frozen (a `g` or
+ * `y` RegExp cannot be frozen safely). The top `value` itself must be frozen.
+ * An accessor property counts as not frozen (its result can change).
+ *
+ * This is the gate of every cache keyed on a table or dialect object:
+ * `Object.isFrozen` alone is shallow, and a nested object left unfrozen could
+ * change after the cache was filled. The answer is remembered per object, so
+ * a deep-frozen dialect is walked once.
+ */
+export function isDeepFrozen(value: object): boolean {
+  if (deepFrozen.has(value)) return true;
+  const seen = new Set<object>();
+  const walk = (node: object): boolean => {
+    if (deepFrozen.has(node) || seen.has(node)) return true;
+    if (!isWalked(node)) return true;
+    if (!Object.isFrozen(node)) return false;
+    seen.add(node);
+    for (const key of Object.keys(node)) {
+      const descriptor = Object.getOwnPropertyDescriptor(node, key);
+      if (!descriptor || !("value" in descriptor)) return false;
+      const field: unknown = descriptor.value;
+      if (field && typeof field === "object" && !walk(field)) return false;
+    }
+    return true;
+  };
+  if (!Object.isFrozen(value) || !walk(value)) return false;
+  for (const node of seen) deepFrozen.add(node);
+  return true;
+}
+
+/** Hashes already computed, per deep-frozen table object. */
 const hashes = new WeakMap<object, string>();
 
 /** For tests: how many tables have been hashed (cache misses) in this process. */
@@ -633,7 +679,7 @@ export function syntaxHash(table: SyntaxTable): string {
   if (hash === undefined) {
     syntaxHashes.count++;
     hash = createHash("sha256").update(canonical(table)).digest("hex");
-    if (Object.isFrozen(table)) hashes.set(table, hash);
+    if (isDeepFrozen(table)) hashes.set(table, hash);
   }
   return hash;
 }
@@ -1234,10 +1280,10 @@ export function resolveSyntax(filename: string): SyntaxTable {
   return resolveSyntaxOf(filename).table;
 }
 
-/** Explicit tables already validated (tables are frozen data, checked once per object). */
+/** Explicit tables already validated (deep-frozen tables, checked once per object). */
 const validExplicit = new WeakSet<object>();
 
-/** Explicit dialects already resolved, per frozen dialect object. */
+/** Explicit dialects already resolved, per deep-frozen dialect object. */
 const explicitModules = new WeakMap<object, ResolvedSyntax>();
 
 /**
@@ -1289,7 +1335,9 @@ export function explicitSyntaxOf(
   const unregistered = unregisteredNodeRow(table, dialect, "dialect.table");
   if (unregistered) invalid(unregistered);
   const resolved: ResolvedSyntax = { table, dialect };
-  if (Object.isFrozen(value)) explicitModules.set(value, resolved);
+  // Only a deep-frozen dialect is remembered: a nested object left unfrozen
+  // could change, so a partly frozen one is validated on every call.
+  if (isDeepFrozen(value)) explicitModules.set(value, resolved);
   return resolved;
 }
 
@@ -1331,8 +1379,9 @@ export function explicitSyntax(
       );
     }
   }
-  // Only a frozen table is remembered: an unfrozen one could change.
-  if (Object.isFrozen(table)) validExplicit.add(table);
+  // Only a deep-frozen table is remembered: one with any unfrozen nested
+  // object or array could change, so it is validated on every call.
+  if (isDeepFrozen(table)) validExplicit.add(table);
   return table;
 }
 
