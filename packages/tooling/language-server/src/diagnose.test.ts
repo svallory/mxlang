@@ -1707,7 +1707,11 @@ describe("a diagnostic's range ends where core says it ends", () => {
     );
     // Own diagnostic: `!bad`; the call is blamed as `<money`.
     expect(
-      span(diagnostics.find((d) => d.message.startsWith("Invalid attribute"))),
+      span(
+        diagnostics.find((d) =>
+          String(d.message).startsWith("Invalid attribute"),
+        ),
+      ),
     ).toEqual([0, 3, 0, 7]);
     expect(
       span(diagnostics.find((d) => d.code === "MX_TAG_FILE_ERROR")),
