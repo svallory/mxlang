@@ -1547,18 +1547,21 @@ wrote on line 5. Compute from `items` directly, or move the check into a
 the write stays allowed, and so does the read in a `<script>` body. Scope: a
 handler is a function (attribute method, arrow or function expression) given to
 an `on…` attribute of any tag, a custom tag and an attribute tag included
-(`<lifecycle>`'s hooks are not handlers); the dependency set is transitive (a
+(`<lifecycle>`'s hooks are not event handlers and are not looked at); the dependency set is transitive (a
 `<const>` of a `<const>` of the `<let>`); "after" is source order in the
 handler's own body, so a write in an earlier branch or block counts, a read
 after an `await` counts, and a read that shares a loop with the write counts
-(the write of one iteration comes before the read of the next); the writes are
+(the write of one iteration comes before the read of the next; a `for`
+initializer and a `for…of` / `for…in` subject run once before it and do not); the writes are
 those of the previous paragraph's list; a read in the value of the write itself
 (`items = [...items, total]`) comes first and is fine. A read inside a nested
 function or callback (`setTimeout`, `.then`) is not looked at, and a parameter
 or local that shadows the `<const>` or the `<let>` is neither a read nor a write.
 Not detected: a handler held in a variable or built by a call, a function
 declared with `<const>` and called from a handler, a write made inside a nested
-function, and any other flow through a called function. Hosts and the html
+function, a `for (items of …)` head used as a write, a `<const>` declared below
+the handler's tag, a write followed by a read inside one `<lifecycle>` hook, and
+any other flow through a called function. Hosts and the html
 `strict` policy refuse `<let>` itself, so they never reach this check, and under
 the `none` tag-rules preset nothing fires.
 

@@ -145,8 +145,15 @@ export function findStaleRead(
       /** The loops of the handler's own body that enclose `path`. */
       const loopsOf = (path: Node): Set<Node> => {
         const loops = new Set<Node>();
+        let child = path;
         for (let at = path.parentPath; at && at !== handlerPath; ) {
-          if (LOOPS.has(at.node.type)) loops.add(at.node);
+          // A `for` initializer and a `for…of` / `for…in` subject run once,
+          // before any write in the body, so they are not inside the loop.
+          const once =
+            child.key === "init" ||
+            (child.key === "right" && at.node.type !== "ForStatement");
+          if (LOOPS.has(at.node.type) && !once) loops.add(at.node);
+          child = at;
           at = at.parentPath;
         }
         return loops;

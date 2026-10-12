@@ -680,8 +680,12 @@ function checkTagValueWrites(ctx: Ctx, node: Node): void {
 /**
  * Rejects a handler that reads a derived `<const>` after writing a `<let>` the
  * `<const>` depends on (`findStaleRead`). A handler is the function given to
- * an `on…` attribute of any tag; `<lifecycle>`'s `onMount` and `onUpdate` run
- * after the write has settled and are not handlers in this sense.
+ * an `on…` attribute of any tag; `<lifecycle>`'s `onMount` and `onUpdate` are
+ * not event handlers and are out of scope (a write and a read inside one hook
+ * is not detected).
+ *
+ * When the walk collects errors the stale read is recorded and the tag keeps
+ * lowering, so its other errors are still reported; otherwise it throws.
  */
 function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
   const derived = ctx.derivedConsts;
@@ -694,11 +698,18 @@ function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
     const handler = handlerFunction(attrValueOf(ctx, attr));
     const stale = handler ? findStaleRead(handler, lets, derived) : undefined;
     if (!stale) continue;
-    raise(
-      STALE_DERIVED_READ_CODE,
-      `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which this handler wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly, or move the check into a \`<script>\`, which runs after the write settles on every target.`,
-      stale.read,
-    );
+    try {
+      raise(
+        STALE_DERIVED_READ_CODE,
+        `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which this handler wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly, or move the check into a \`<script>\`, which runs after the write settles on every target.`,
+        stale.read,
+      );
+    } catch (error) {
+      if (!ctx.errors || !isTranslateError(error)) throw error;
+      positionError(ctx, error);
+      ctx.errors.push(error);
+      return;
+    }
   }
 }
 

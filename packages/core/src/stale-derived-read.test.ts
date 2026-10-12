@@ -591,6 +591,16 @@ describe("a loop that repeats the write", () => {
       "i += total",
     ],
     [
+      "`for` with only a test that reads, no initializer",
+      "  for (; i < total; i++) {\n    items = [...items, i];\n  }",
+      "i < total",
+    ],
+    [
+      "`for` with only an update that reads",
+      "  for (; ok(); i += total) {\n    items = [...items, i];\n  }",
+      "i += total",
+    ],
+    [
       "`for…of`",
       "  for (const x of xs) {\n    log(total);\n    items = [...items, x];\n  }",
       "log(total)",
@@ -652,6 +662,18 @@ describe("a loop that repeats the write", () => {
     [
       "two loops: the read in the first, the write in the second",
       "  for (const x of xs) {\n    log(total);\n  }\n  for (const y of ys) {\n    items = [...items, y];\n  }",
+    ],
+    [
+      "a `for…of` subject that reads, run once before the body",
+      "  for (const x of total.toString()) {\n    items = [...items, x];\n  }",
+    ],
+    [
+      "a `for…in` subject that reads",
+      "  for (const k in { total }) {\n    items = [];\n  }",
+    ],
+    [
+      "a `for` initializer that reads",
+      "  for (let i = 0, m = total; i < m; i++) {\n    items = [...items, i];\n  }",
     ],
   ])("accepts %s", (_name, handler) => {
     expect(attempt(body(handler))).toBeUndefined();
@@ -798,7 +820,7 @@ describe("what is not a stale read", () => {
     expect(attempt(source)).toBeUndefined();
   });
 
-  it("a `<const>` declared after the handler's tag is not that tag's `<const>`", () => {
+  it("a `<const>` declared below the handler's tag is not detected", () => {
     const source = `<let/items=[]/>\n<button onClick() {\n  items = [];\n  log(total);\n}>x</button>\n<const/total=items.length/>\n`;
     expect(attempt(source)).toBeUndefined();
   });
@@ -875,7 +897,7 @@ describe("what is not a handler", () => {
     ],
     ["a spread of handlers", `${CART}<button ...handlers>x</button>\n`],
     [
-      "a `<lifecycle>` hook, which runs after the write settles",
+      "a `<lifecycle>` hook (not an event handler; not detected)",
       `${CART}<lifecycle onMount() { items = []; log(total) } onUpdate() { items = []; log(total) }/>\n`,
     ],
     [
@@ -985,6 +1007,16 @@ describe("lowerSource keeps going after the error", () => {
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("keeps lowering the tag, so its other errors are reported too", () => {
+    const source = `${CART}<button class=(items = [1]) onClick() {\n  items = [];\n  log(total);\n}><p>\${items++}</p></button>\n`;
+    const { diagnostics } = lowerSource(source, join(dir, "page.mx"), {
+      tagRules: "html",
+    });
+    const codes = diagnostics.map((d) => d.code);
+    expect(codes).toContain(CODE);
+    expect(codes.filter((c) => c === "MX_LET_WRITE_IN_RENDER")).toHaveLength(2);
   });
 
   it("reports a stale read in a second handler after the first handler's", () => {
