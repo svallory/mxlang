@@ -1534,6 +1534,34 @@ renders is not detected. Hosts and the html `strict` policy refuse `<let>`
 itself, so they never reach this check, and under the `none` tag-rules preset
 `let` is an ordinary tag name.
 
+**A handler does not read a stale `<const>`.** Targets disagree on what a
+`<const>` shows inside the handler that just wrote a `<let>` it derives from:
+Marko, React and Solid 2 apply the write when the turn ends and return the value
+from before it; Svelte, Vue, Angular and Lit recompute and return the new one.
+Where the html default policy compiles `<let>` (and `lowerSource`), reading such
+a `<const>` after writing any `<let>` in its dependency set, inside one handler
+body, is a compile error, `MX_STALE_DERIVED_READ`, positioned at the read with
+its end: "`total` is stale here: it derives from `items`, which this handler
+wrote on line 5. Compute from `items` directly, or move the check into a
+`<script>`, which runs after the write settles on every target." A read before
+the write stays allowed, and so does the read in a `<script>` body. Scope: a
+handler is a function (attribute method, arrow or function expression) given to
+an `on…` attribute of any tag, a custom tag and an attribute tag included
+(`<lifecycle>`'s hooks are not handlers); the dependency set is transitive (a
+`<const>` of a `<const>` of the `<let>`); "after" is source order in the
+handler's own body, so a write in an earlier branch or block counts, a read
+after an `await` counts, and a read that shares a loop with the write counts
+(the write of one iteration comes before the read of the next); the writes are
+those of the previous paragraph's list; a read in the value of the write itself
+(`items = [...items, total]`) comes first and is fine. A read inside a nested
+function or callback (`setTimeout`, `.then`) is not looked at, and a parameter
+or local that shadows the `<const>` or the `<let>` is neither a read nor a write.
+Not detected: a handler held in a variable or built by a call, a function
+declared with `<const>` and called from a handler, a write made inside a nested
+function, and any other flow through a called function. Hosts and the html
+`strict` policy refuse `<let>` itself, so they never reach this check, and under
+the `none` tag-rules preset nothing fires.
+
 ### 5.6 A binding named `input`
 
 A **render-scope** binding named `input` (`<let/input=…>`, `<const/input=…>`) is

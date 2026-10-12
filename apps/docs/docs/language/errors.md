@@ -32,6 +32,25 @@ is rejected on the html default policy:
 
 The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, the attributes and arguments of `<log>`, `<debug>`, `<id>`, `<lifecycle>` and `<script>` (not a `<script>` body), the attributes of the `<let>` itself, a `<const>` value, the default of a tag param, and an `<if>` or `<for>` header. A write inside a function, arrow or object method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. `lowerSource` refuses every `<let>` tag variable (a data file has no state) and reports a render write first. See [Stateful tags](/language/stateful-tags/).
 
+## A derived `<const>` read after its `<let>` was written
+
+```html
+<let/items=[]/>
+<const/total=items.reduce((sum, item) => sum + item.price, 0)/>
+<button onClick() {
+  items = [...items, input.candidate];
+  if (total > 100) applyDiscount();
+}>Add</button>
+```
+
+is rejected on the html default policy and in `lowerSource`:
+
+> `total` is stale here: it derives from `items`, which this handler wrote on line 5. Compute from `items` directly, or move the check into a `<script>`, which runs after the write settles on every target.
+
+Marko, React and Solid 2 return the value from before the write there; Svelte, Vue, Angular and Lit return the new one, so one source cannot mean the same thing everywhere. The code is `MX_STALE_DERIVED_READ` and the position is the read, with its end. Compute the value from `items` directly (`const next = [...items, input.candidate]`), or check it in a `<script>` body, which runs after the write has settled.
+
+What counts: the function given to an `on…` attribute of any tag (an attribute method, an arrow or a function expression, on a native element, a custom tag or an attribute tag), a `<const>` that reaches the written `<let>` through other `<const>`s, and any read that follows a write in source order in the handler's own body: a write in an earlier branch or block, a read after an `await`, and a read in a loop that also writes. Compound, logical and destructuring assignments and `++`/`--` all write. What does not: a read before the write, a read in a nested function or callback, a `<script>` body, a `<lifecycle>` hook, a `<const>` that does not depend on the written `<let>`, and a parameter or local that shadows either name. Not detected: a handler held in a variable or built by a call, a function declared with `<const>` and called from a handler, and a write made inside a nested function. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+
 ## A tag a host does not support
 
 Embedded MX (a `.mx` file compiled for a host, a `.solid.mx` or `.astro.mx` file, a region in a `.react.mx`, `.preact.mx` or `.hono.mx` module, an Angular template) refuses every tag its host cannot express with one sentence, code `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name:
