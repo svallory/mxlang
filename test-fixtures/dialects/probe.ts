@@ -78,10 +78,8 @@ export const PROBE_TAG_HOOK_MODULE = `module.exports.default = {
   tagRules: "none",
   table: {},
   tagFile(file, ctx) {
-    const diagnostics = ctx.lower().diagnostics.map((x) => ({
-      severity: x.severity, message: x.message, line: x.line, column: x.column,
-      ...(x.code ? { code: x.code } : {}), ...(x.file ? { file: x.file } : {}),
-    }));
+    // The objects \`ctx.lower\` returned, as they are: core keeps their codes and ends.
+    const diagnostics = [...ctx.lower().diagnostics];
     if (file.source.includes("BAD")) {
       diagnostics.push({ severity: "error", message: "bad concept", line: 2, column: 4, code: "KIT_BAD" });
     }
@@ -91,13 +89,11 @@ export const PROBE_TAG_HOOK_MODULE = `module.exports.default = {
 `;
 
 /**
- * {@link PROBE_TAG_HOOK_MODULE} forwarding each diagnostic's range end as the
- * hook's `endLine`/`endColumn`, as a hook that keeps what `ctx.lower` found.
+ * {@link PROBE_TAG_HOOK_MODULE}, for the tests of a tag file's range: the hook
+ * returns the diagnostics of \`ctx.lower\` as they are, so core keeps each one's
+ * range end (a copy would lose both its \`MX_\` code and its end).
  */
-export const PROBE_TAG_HOOK_END_MODULE = PROBE_TAG_HOOK_MODULE.replace(
-  "...(x.code ? { code: x.code } : {})",
-  "...(x.end ? { endLine: x.end.line, endColumn: x.end.column } : {}), ...(x.code ? { code: x.code } : {})",
-);
+export const PROBE_TAG_HOOK_END_MODULE = PROBE_TAG_HOOK_MODULE;
 
 /**
  * The probe dialect whose `tagFile` hook reads `money.json` beside the tag

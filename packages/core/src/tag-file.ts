@@ -137,14 +137,17 @@ export interface TagFileDiagnostic {
   /**
    * Where the range ends (exclusive), in `file`: both or neither. Core reads
    * them into the diagnostic's `end`; a half, or one before the start, is
-   * dropped. 1-based line, 0-based column.
+   * dropped. 1-based line, 0-based column. A diagnostic passed on as it is
+   * from `ctx.lower` needs neither: core keeps the `end` it carries.
    */
   readonly endLine?: number;
   readonly endColumn?: number;
   /**
    * A code, when the diagnostic has one, in the dialect's own prefix. A code
-   * starting with `MX_` is MX's own: it is taken only on a diagnostic
-   * forwarded from `ctx.lower`, which reported it; any other is refused.
+   * starting with `MX_` is MX's own: it is kept only on a diagnostic object
+   * `ctx.lower` returned, passed on as it is (the same object: a copy or a
+   * rewrite of it is the hook's own, and is refused under an `MX_` code); any
+   * other is refused.
    */
   readonly code?: string;
   /**
@@ -575,13 +578,12 @@ function runHook(
   } finally {
     stack.pop();
   }
-  // The codes core itself reported to the hook: forwarding one of them is
-  // passing on MX's rule, not claiming an `MX_` code of the dialect's own.
-  const forwardable = new Set<string>();
+  // The diagnostics core itself reported to the hook, as the objects
+  // `ctx.lower` returned: passing one of them on is passing on MX's rule, not
+  // claiming an `MX_` code of the dialect's own. A copy is the hook's own.
+  const forwardable = new Set<object>();
   for (const each of lowered.values()) {
-    for (const diagnostic of each.diagnostics) {
-      if (diagnostic.code !== undefined) forwardable.add(diagnostic.code);
-    }
+    for (const diagnostic of each.diagnostics) forwardable.add(diagnostic);
   }
   return answerOf(tag, dialect, result, thrown, forwardable);
 }
@@ -592,7 +594,7 @@ function answerOf(
   dialect: Dialect,
   result: unknown,
   thrown: { error: unknown } | undefined,
-  forwardable: ReadonlySet<string> = new Set(),
+  forwardable: ReadonlySet<object> = new Set(),
 ): DeferredRead {
   const path = tag.tagFile as string;
   const errors: TranslateError[] = [];
@@ -722,7 +724,7 @@ function thrownError(error: unknown, path: string): TranslateError {
 function diagnosticOf(
   diagnostic: TagFileDiagnostic,
   path: string,
-  forwardable: ReadonlySet<string>,
+  forwardable: ReadonlySet<object>,
 ):
   | { severity: "warning"; warning: MxWarning }
   | { severity: "error"; error: TranslateError } {
@@ -747,19 +749,18 @@ function diagnosticOf(
     valid && typeof diagnostic.code === "string" && diagnostic.code !== ""
       ? diagnostic.code
       : undefined;
-  if (
-    code !== undefined &&
-    isReservedHookCode(code) &&
-    !forwardable.has(code)
-  ) {
+  const forwarded = valid && forwardable.has(diagnostic);
+  if (code !== undefined && isReservedHookCode(code) && !forwarded) {
     // An `MX_` code is MX's own: a consumer must be able to trust that one
     // is MX's rule, so a hook's diagnostic with one that core did not report
-    // to it (`ctx.lower`) is refused, not passed on.
+    // to it is refused, not passed on. Reported to it means the object
+    // `ctx.lower` returned, not a copy or a rewrite of it, which would put the
+    // hook's own words under MX's code.
     return {
       severity: "error",
       error: codedError(
         DIALECT_HOOK_ERROR_CODE,
-        `the dialect's \`tagFile\` hook returned a diagnostic whose ${reservedHookCodeMessage(code)} (only a diagnostic \`ctx.lower\` reported keeps an \`MX_\` code)`,
+        `the dialect's \`tagFile\` hook returned a diagnostic whose ${reservedHookCodeMessage(code)} (only a diagnostic object \`ctx.lower\` returned, passed on as it is, keeps an \`MX_\` code)`,
         line,
         column,
         file,
@@ -767,21 +768,16 @@ function diagnosticOf(
     };
   }
   // The range's end, when the hook gave a whole one that does not end before
-  // it starts; a half or backwards one is dropped, not guessed at.
-  const end =
-    valid &&
-    Number.isInteger(diagnostic.endLine) &&
-    Number.isInteger(diagnostic.endColumn) &&
-    (diagnostic.endLine as number) >= 1 &&
-    (diagnostic.endColumn as number) >= 0 &&
-    ((diagnostic.endLine as number) > line ||
-      ((diagnostic.endLine as number) === line &&
-        (diagnostic.endColumn as number) >= column))
-      ? {
-          line: diagnostic.endLine as number,
-          column: diagnostic.endColumn as number,
-        }
-      : undefined;
+  // it starts; a half or backwards one is dropped, not guessed at. A diagnostic
+  // passed on as it is keeps the `end` core measured for it (`IrDiagnostic.end`),
+  // whether or not the hook copied it into `endLine`/`endColumn`.
+  const carried = forwarded
+    ? (diagnostic as { end?: { line?: unknown; column?: unknown } }).end
+    : undefined;
+  const end = valid
+    ? (rangeEnd(diagnostic.endLine, diagnostic.endColumn, line, column) ??
+      rangeEnd(carried?.line, carried?.column, line, column))
+    : undefined;
   if (valid && diagnostic.severity === "warning") {
     return {
       severity: "warning",
@@ -799,6 +795,23 @@ function diagnosticOf(
   if (code !== undefined) error.diagnosticCode = code;
   if (end) error.end = end;
   return { severity: "error", error };
+}
+
+/** `{ line, column }` when both are a position that does not end before `line:column`. */
+function rangeEnd(
+  endLine: unknown,
+  endColumn: unknown,
+  line: number,
+  column: number,
+): { line: number; column: number } | undefined {
+  if (!Number.isInteger(endLine) || !Number.isInteger(endColumn)) {
+    return undefined;
+  }
+  const toLine = endLine as number;
+  const toColumn = endColumn as number;
+  if (toLine < 1 || toColumn < 0) return undefined;
+  if (toLine < line || (toLine === line && toColumn < column)) return undefined;
+  return { line: toLine, column: toColumn };
 }
 
 /**

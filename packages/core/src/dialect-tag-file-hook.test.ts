@@ -109,15 +109,12 @@ export default {
     if (d.lower) {
       const lowered = ctx.lower();
       if (d.lowerTwice && ctx.lower() !== lowered) throw new Error("not memoized");
+      // \`lower: true\` passes on the objects \`ctx.lower\` returned; "copy" and
+      // "reword" pass on a copy of each, the second with a message of its own.
       for (const x of lowered.diagnostics) {
-        diagnostics.push({
-          severity: x.severity,
-          message: x.message,
-          line: x.line,
-          column: x.column,
-          ...(x.code ? { code: x.code } : {}),
-          ...(x.file ? { file: x.file } : {}),
-        });
+        diagnostics.push(
+          d.lower === "copy" ? { ...x } : d.lower === "reword" ? { ...x, message: "x" } : x,
+        );
       }
     }
     return { contract: d.contract ?? {}, diagnostics };
@@ -1148,6 +1145,112 @@ describe("diagnostics", () => {
       }),
     );
     expect(found.map((d) => d.code)).not.toContain("MX_DIALECT_HOOK_ERROR");
+  });
+
+  describe("forwarding a diagnostic `ctx.lower` returned", () => {
+    // `<money>` lowers `<money2/>`, which lacks its required `v`: core reports
+    // MX_MISSING_ATTRIBUTE to the hook, at `<money2` (line 2 of the tag file).
+    const MISSING = {
+      message: "`<money2>`: missing required attribute `v`",
+      line: 2,
+      column: 0,
+      code: "MX_MISSING_ATTRIBUTE",
+      file: "concepts/money.kit.mx",
+    };
+    const REFUSED = {
+      message:
+        "the dialect's `tagFile` hook returned a diagnostic whose code `MX_MISSING_ATTRIBUTE` starts with `MX_`, which is MX's own prefix for its diagnostic codes; use the dialect's own prefix (only a diagnostic object `ctx.lower` returned, passed on as it is, keeps an `MX_` code)",
+      line: 2,
+      column: 0,
+      code: "MX_DIALECT_HOOK_ERROR",
+      file: "concepts/money.kit.mx",
+    };
+    /** `<money>` called from a page, its tag file passing `lower` on. */
+    function callMoney(lower: boolean | "copy" | "reword") {
+      kitProject();
+      tagFile("money", { lower }, "<money2/>\n");
+      tagFile("money2", {
+        contract: { attributes: { v: { required: true } } },
+      });
+      return brief(lowerAt("page.kit.mx", "<money/>\n"));
+    }
+
+    it("(a) the very object `ctx.lower` returned is forwarded unchanged, with its code and range", () => {
+      const found = callMoney(true);
+      expect(found).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        MISSING,
+      ]);
+      const full = lowerAt("page.kit.mx", "<money/>\n").diagnostics.find(
+        (d) => d.code === "MX_MISSING_ATTRIBUTE",
+      );
+      // The range core measured travels with it: `<money2`, in the tag file (so no offset).
+      expect(full?.end).toEqual({ line: 2, column: 7, offset: -1 });
+    });
+
+    it("(b) a copy with another message is refused: the hook's words do not go under MX's code", () => {
+      expect(callMoney("reword")).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        REFUSED,
+      ]);
+    });
+
+    it("(c) an unchanged copy is refused too: the object counts, not its fields", () => {
+      expect(callMoney("copy")).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        REFUSED,
+      ]);
+    });
+
+    it("(d) a code of the hook's own, not `MX_`, passes unchanged", () => {
+      kitProject();
+      tagFile("money", {
+        contract: {},
+        diagnostics: [
+          {
+            severity: "error",
+            message: "bad concept",
+            line: 2,
+            column: 0,
+            code: "KIT_BAD",
+          },
+        ],
+      });
+      expect(brief(lowerAt("page.kit.mx", "<money/>\n"))).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        {
+          message: "bad concept",
+          line: 2,
+          column: 0,
+          code: "KIT_BAD",
+          file: "concepts/money.kit.mx",
+        },
+      ]);
+    });
   });
 
   it("an unknown nested key goes through the registration checks, at the call", () => {

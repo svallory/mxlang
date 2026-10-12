@@ -321,14 +321,7 @@ const KIT_HOOK = String.raw`export default {
     const head = /^<!--([\s\S]*?)-->/.exec(file.source);
     return {
       contract: head ? JSON.parse(head[1]) : {},
-      diagnostics: lowered.diagnostics.map((x) => ({
-        severity: x.severity,
-        message: x.message,
-        line: x.line,
-        column: x.column,
-        ...(x.code ? { code: x.code } : {}),
-        ...(x.file ? { file: x.file } : {}),
-      })),
+      diagnostics: [...lowered.diagnostics],
     };
   },
 };`;
