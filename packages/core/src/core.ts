@@ -604,6 +604,16 @@ export interface Ctx {
    * `shadowBindings`, which already runs at every site that binds params.
    */
   tagVarShadowed?: ReadonlySet<string>;
+  /**
+   * The names of the `<let>` tags in scope at the point being lowered: the
+   * bindings a write in render position is refused on (`checkLetWrites`).
+   * Replaced, never mutated, so a scope snapshot is one assignment.
+   * `scopeBindings` reverts it at the end of a block, and `shadowBindings`
+   * drops the names a parameter, a `<const>` or a loop variable rebinds.
+   * Absent when the file has no `<let>`, and always absent under the `none`
+   * tag rules, where `let` is an ordinary tag.
+   */
+  renderLets?: ReadonlySet<string>;
   /** Serial for block ids, so two sibling blocks are never confused. */
   tagVarBlockSeq?: number;
   /**
@@ -1293,10 +1303,12 @@ export function declName(ctx: Ctx, node: Node): string {
 export function scopeBindings(ctx: Ctx): () => void {
   const saved = ctx.bindings.snapshot();
   const savedShadowed = ctx.tagVarShadowed;
+  const savedLets = ctx.renderLets;
   const savedSites = new Map(ctx.bindingSites);
   return () => {
     ctx.bindings.restore(saved);
     ctx.tagVarShadowed = savedShadowed;
+    ctx.renderLets = savedLets;
     // A `<define>` is in scope only inside the block that declares it, so the
     // positions decision 164's diagnostic reads revert with the block.
     for (const name of [...ctx.bindingSites.keys()]) {
@@ -1323,9 +1335,15 @@ export function shadowBindings(ctx: Ctx, names: string[]): () => void {
   if (names.length > 0) {
     ctx.tagVarShadowed = new Set([...(outerShadowed ?? []), ...names]);
   }
+  // A `<let>` of the same spelling is not what the body reads either.
+  const outerLets = ctx.renderLets;
+  if (outerLets && names.some((name) => outerLets.has(name))) {
+    ctx.renderLets = new Set([...outerLets].filter((n) => !names.includes(n)));
+  }
   return () => {
     for (const [name, rewrite] of saved) ctx.bindings.register(name, rewrite);
     ctx.tagVarShadowed = outerShadowed;
+    ctx.renderLets = outerLets;
   };
 }
 

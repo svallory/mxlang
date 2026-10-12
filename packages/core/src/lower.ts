@@ -154,6 +154,7 @@ import {
   INVALID_TAG_CALL_CODE,
   INVALID_TAG_NAME_CODE,
   INVALID_TAG_VAR_CODE,
+  LET_WRITE_IN_RENDER_CODE,
   LOWERCASE_BINDING_NOT_CALLED_CODE,
   MISSING_ATTRIBUTE_TAG_CODE,
   NEAR_EXPLICIT_CHILD_CODE,
@@ -212,6 +213,7 @@ import {
   scriptletSentence,
 } from "./parse-error-hints.ts";
 import { payloadOf } from "./payload.ts";
+import { findLetWrite } from "./render-let-write.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
@@ -569,6 +571,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   }
   const code = expr(ctx, node);
   checkTagVarReads(ctx, code, node);
+  checkLetWrites(ctx, code, node);
   const span = exprSpan(ctx, node);
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   const bodySpan =
@@ -621,6 +624,47 @@ function methodBodySpan(
     return { sourceStart: sourceStart - 1, sourceEnd: sourceEnd + 1 };
   }
   return undefined;
+}
+
+/**
+ * Rejects a write to a `<let>` made while the template renders.
+ *
+ * Every expression of the template goes through `exprOf`, so one check here
+ * covers placeholders, attribute and argument values, spreads, `<const>`
+ * values and the `<if>` and `<for>` headers; a write inside a function in the
+ * expression is the way a `<let>` is written and passes. The set of names is
+ * `ctx.renderLets`, empty in a file with no `<let>`, which skips the parse.
+ */
+function checkLetWrites(ctx: Ctx, code: string, node: Node): void {
+  const lets = ctx.renderLets;
+  if (!lets?.size) return;
+  // A name that is not in the text cannot be written, and most expressions
+  // mention none of them.
+  if (![...lets].some((name) => code.includes(name))) return;
+  // And a write needs an assignment or an update operator in the text.
+  if (!/=|\+\+|--/.test(code)) return;
+  const write = findLetWrite(node, lets);
+  if (!write) return;
+  raise(
+    LET_WRITE_IN_RENDER_CODE,
+    `\`${write.name}\` is a \`<let>\` and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`,
+    write.node,
+  );
+}
+
+/**
+ * Records the `<let>` a lowered child tag declares, for the writes after it
+ * in the same block and the blocks below. Under the `none` tag rules
+ * `let` is an ordinary tag, and a name a caller registered as a custom tag
+ * is that tag, so neither declares anything.
+ */
+function declareRenderLet(ctx: Ctx, child: Node): void {
+  if (ctx.tagRules === "none") return;
+  if (tagNameOf(child) !== "let" || !tagVarOf(child)) return;
+  if (ctx.customTags && Object.hasOwn(ctx.customTags, "let")) return;
+  const names = bindingIdentifiers(tagVarOf(child));
+  if (names.length === 0) return;
+  ctx.renderLets = new Set([...(ctx.renderLets ?? []), ...names]);
 }
 
 /**
@@ -5401,6 +5445,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           const lowered = lowerTag(ctx, child);
           if (Array.isArray(lowered)) out.push(...lowered);
           else out.push(lowered);
+          declareRenderLet(ctx, child);
           break;
         }
         // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
@@ -5684,6 +5729,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   // file's block path, which would make a legal read look out of scope.
   ctx.tagVarBlock = [];
   ctx.tagVars = undefined;
+  ctx.renderLets = undefined;
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
   // Decision 162: the walk recorded errors instead of throwing the first. The

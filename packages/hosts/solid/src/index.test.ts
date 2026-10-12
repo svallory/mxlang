@@ -582,6 +582,27 @@ describe("Solid host errors", () => {
     }
   });
 
+  it("refuses `<let>` itself before any write to it is looked at", () => {
+    let error: Error | undefined;
+    try {
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: MX interpolation, not a JS template
+      compileSolidMx("<let/count=0/>\n<p>${count++}</p>\n", {
+        filename: "page.solid.mx",
+      });
+    } catch (caught) {
+      error = caught as Error;
+    }
+    expect(error?.message).toContain(
+      "`<let>` is not supported in embedded MX on Solid.",
+    );
+    expect(error?.message).not.toContain("cannot be written");
+    expect(error).toMatchObject({
+      diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT",
+      line: 1,
+      column: 0,
+    });
+  });
+
   const errors: Array<[string, string, string]> = [
     ["let", `<let/x=1/>`, "createSignal"],
     [

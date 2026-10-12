@@ -19,6 +19,19 @@ is rejected on every target (`lowerSource` and the html targets), in every form 
 
 The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. The diagnostic carries one quick fix, "Rename to `<script>`", that renames the open and close tag; an editor shows it as a code action. A host (embedded MX in a framework) says "`<effect>` is not supported in embedded MX on Preact." (its own name, no second sentence); this text is the default target's; the html `strict` policy says "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
 
+## A `<let>` written while the template renders
+
+```html
+<let/count=0/>
+<p>${count++}</p>
+```
+
+is rejected where the target has `<let>` (the html default policy and `lowerSource`):
+
+> `count` is a `<let>` and cannot be written while the template renders. Write it in an event handler or a `<script>` body, or derive a value with `<const>`.
+
+The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, a `<const>` value, and an `<if>` or `<for>` header. A write inside a function, arrow or method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+
 ## A tag a host does not support
 
 Embedded MX (a `.mx` file compiled for a host, a `.solid.mx` or `.astro.mx` file, a region in a `.react.mx`, `.preact.mx` or `.hono.mx` module, an Angular template) refuses every tag its host cannot express with one sentence, code `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name:

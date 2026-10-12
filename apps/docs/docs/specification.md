@@ -1509,6 +1509,25 @@ Note that Angular rejects `<let>` only *incidentally*, through the generic
 `tag variable` field guard rather than a stateful-tag policy — so `<let x=1/>`
 with no `/var` is not rejected at all (bug 1, §13.6).
 
+**A `<let>` is not written while the template renders.** Where a target has
+`<let>` (the html default policy and `lowerSource`), a write to the binding
+(`=`, a compound or logical assignment, `++`/`--`, or a destructuring
+assignment with the binding as a target) in code that runs during render is a
+compile error, `MX_LET_WRITE_IN_RENDER`, positioned at the assignment or update
+with its end: "`count` is a `<let>` and cannot be written while the template
+renders. Write it in an event handler or a `<script>` body, or derive a value
+with `<const>`." Render position is a placeholder (`${}`, `$!{}`), an attribute,
+tag-argument, spread or attribute-tag value, a `<const>` value, and an `<if>` or
+`<for>` header. The body of a function, arrow or method (an event handler, a
+callback, a `<let>`'s own `valueChange`), a `<script>` body and `static`,
+`server` and `client` code are not render position, and a parameter or local
+that shadows the `<let>` is not a write to it. Writing a member of the value
+(`count.total = 1`) is not a write to the binding. There is no flow analysis:
+a write inside a function that the template calls while it renders is not
+detected. Hosts and the html `strict` policy refuse `<let>` itself, so they
+never reach this check, and under the `none` tag-rules preset `let` is an
+ordinary tag name.
+
 ### 5.6 A binding named `input`
 
 A **render-scope** binding named `input` (`<let/input=…>`, `<const/input=…>`) is

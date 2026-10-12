@@ -1,0 +1,5 @@
+---
+packages: [core, html]
+kind: Changed
+---
+Writing a `<let>` while the template renders is now a compile error on every target that has `<let>` (the html default policy and `lowerSource`): "`count` is a `<let>` and cannot be written while the template renders. Write it in an event handler or a `<script>` body, or derive a value with `<const>`." Core raises it, with the new code `MX_LET_WRITE_IN_RENDER`, at the assignment or update with its end. Render position is a placeholder (`${}`, `$!{}`), an attribute, tag-argument, spread or attribute-tag value, a `<const>` value, and an `<if>` or `<for>` header. The body of a function, arrow or method (an event handler, a callback, a `<let>`'s own `valueChange`) and a `<script>` body are not render position, a parameter or local that shadows the `<let>` is not a write to it, and a write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself and never reach the check; under the `none` tag-rules preset `let` is an ordinary tag name. Before, the html target compiled such a write without a message.

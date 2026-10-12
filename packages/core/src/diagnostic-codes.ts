@@ -67,6 +67,8 @@ export const UNSUPPORTED_CONSTRUCT_CODE = "MX_UNSUPPORTED_CONSTRUCT";
 export const INERT_TAG_SHAPE_CODE = "MX_INERT_TAG_SHAPE";
 /** `<effect>`, a reserved name that is not a tag; `<script>` is the effect. */
 export const RESERVED_EFFECT_TAG_CODE = "MX_RESERVED_EFFECT_TAG";
+/** A write to a `<let>` while the template renders. */
+export const LET_WRITE_IN_RENDER_CODE = "MX_LET_WRITE_IN_RENDER";
 /** A `.marko` file used as a tag or an import. */
 export const UNSUPPORTED_MARKO_FILE_CODE = "MX_UNSUPPORTED_MARKO_FILE";
 /** A bad `#id`/`.class` shorthand, or one with no default tag. */
@@ -426,6 +428,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "`<effect>`, which is not a tag; `<script>` runs a body after render",
         ],
         [
+          LET_WRITE_IN_RENDER_CODE,
+          "a write to a `<let>` while the template renders",
+        ],
+        [
           UNSUPPORTED_MARKO_FILE_CODE,
           "a `.marko` file used as a tag or an import",
         ],
@@ -640,6 +646,7 @@ export type MxDiagnosticCode =
   | typeof UNSUPPORTED_CONSTRUCT_CODE
   | typeof INERT_TAG_SHAPE_CODE
   | typeof RESERVED_EFFECT_TAG_CODE
+  | typeof LET_WRITE_IN_RENDER_CODE
   | typeof UNSUPPORTED_MARKO_FILE_CODE
   | typeof INVALID_SHORTHAND_CODE
   | typeof RESERVED_BINDING_CODE
