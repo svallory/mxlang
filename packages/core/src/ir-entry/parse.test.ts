@@ -1020,6 +1020,7 @@ describe("round 2 (rev-236)", () => {
             line: 1,
             column: 0,
             offset: 0,
+            end: { line: 1, column: 7, offset: 7 },
           },
         ]);
         for (const diagnostic of result.diagnostics) {
@@ -1053,6 +1054,7 @@ describe("round 2 (rev-236)", () => {
           line: 1,
           column: 0,
           offset: 0,
+          end: { line: 1, column: 0, offset: 0 },
         },
       ]);
     });
@@ -1138,6 +1140,7 @@ describe("round 2 (rev-236)", () => {
           line: 2,
           column: 0,
           offset: 11,
+          end: { line: 2, column: 15, offset: 26 },
         },
       ]);
     });
@@ -1171,6 +1174,7 @@ describe("round 2 (rev-236)", () => {
             line: 1,
             column: 3,
             offset: 3,
+            end: { line: 1, column: 18, offset: 18 },
           },
         ]);
       }
@@ -1771,6 +1775,7 @@ describe("fail-fast parse (the addendum's item 8)", () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 0, offset: 0 },
       },
     ]);
   });
@@ -1785,6 +1790,7 @@ describe("fail-fast parse (the addendum's item 8)", () => {
         line: 2,
         column: 5,
         offset: 23,
+        end: { line: 2, column: 5, offset: 23 },
       },
     ]);
   });
@@ -1890,6 +1896,7 @@ describe("an error in another file keeps `offset: -1`", () => {
         line: 1,
         column: 0,
         offset: -1,
+        end: { line: 1, column: 7, offset: -1 },
         file: "/t/tags/badge.mx",
       },
     ]);

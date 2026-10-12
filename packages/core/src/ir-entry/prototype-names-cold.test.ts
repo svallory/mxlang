@@ -39,6 +39,7 @@ describe("cold lookup cache", () => {
           line: 1,
           column: 0,
           offset: 0,
+          end: { line: 1, column: name.length + 1, offset: name.length + 1 },
           code: "MX_UNKNOWN_TAG",
         },
         {
@@ -69,6 +70,7 @@ describe("cold lookup cache", () => {
         offset: 0,
         endLine: 1,
         endColumn: name.length + 3,
+        nameEnd: { line: 1, column: name.length + 1 },
       },
     ]);
   });

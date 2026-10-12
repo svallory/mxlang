@@ -42,6 +42,7 @@ describe("MX_UNKNOWN_TAG", () => {
         line: 2,
         column: 2,
         offset: 6,
+        end: { line: 2, column: 7, offset: 11 },
         code: "MX_UNKNOWN_TAG",
       },
     ]);
@@ -62,6 +63,7 @@ describe("MX_UNKNOWN_TAG", () => {
       line: 2,
       column: 2,
       offset: 9,
+      end: { line: 2, column: 7, offset: 14 },
       code: "MX_UNKNOWN_TAG",
     });
   });
@@ -176,6 +178,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 6,
         offset: 6,
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);
@@ -189,6 +192,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 5,
         offset: 5,
+        end: { line: 1, column: 5, offset: 5 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);
@@ -202,6 +206,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 7,
         offset: 7,
+        end: { line: 1, column: 7, offset: 7 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);

@@ -80,6 +80,7 @@ describe("R8: the tools check a dialect file with the dialect's values", () => {
           line: 4,
           column: 2,
           offset: 37,
+          end: { line: 4, column: 5, offset: 40 },
         },
         {
           severity: "error",
@@ -87,6 +88,7 @@ describe("R8: the tools check a dialect file with the dialect's values", () => {
           line: 5,
           column: 0,
           offset: 60,
+          end: { line: 5, column: 6, offset: 66 },
           code: "MX_UNKNOWN_TAG",
         },
       ],

@@ -125,6 +125,11 @@ export interface TagFileDiagnostic {
   readonly line: number;
   /** 0-based. */
   readonly column: number;
+  /**
+   * Where the range ends (exclusive), in `file`: both or neither. Core reads
+   * them into the diagnostic's `end`; a half, or one before the start, is
+   * dropped. 1-based line, 0-based column.
+   */
   readonly endLine?: number;
   readonly endColumn?: number;
   /** `MX_`-style upper snake case, when the diagnostic has one. */
@@ -672,6 +677,10 @@ function thrownError(error: unknown, path: string): TranslateError {
       error.file ?? path,
     );
     placed.diagnosticCode = error.diagnosticCode ?? "MX_TAG_FILE_ERROR";
+    // The throw's own range, in the same file as its start.
+    if (error.end && (error.file === undefined || error.file === path)) {
+      placed.end = error.end;
+    }
     return placed;
   }
   const placed = new TranslateError(
@@ -712,14 +721,38 @@ function diagnosticOf(
     valid && typeof diagnostic.file === "string" ? diagnostic.file : path;
   const code =
     valid && typeof diagnostic.code === "string" ? diagnostic.code : undefined;
+  // The range's end, when the hook gave a whole one that does not end before
+  // it starts; a half or backwards one is dropped, not guessed at.
+  const end =
+    valid &&
+    Number.isInteger(diagnostic.endLine) &&
+    Number.isInteger(diagnostic.endColumn) &&
+    (diagnostic.endLine as number) >= 1 &&
+    (diagnostic.endColumn as number) >= 0 &&
+    ((diagnostic.endLine as number) > line ||
+      ((diagnostic.endLine as number) === line &&
+        (diagnostic.endColumn as number) >= column))
+      ? {
+          line: diagnostic.endLine as number,
+          column: diagnostic.endColumn as number,
+        }
+      : undefined;
   if (valid && diagnostic.severity === "warning") {
     return {
       severity: "warning",
-      warning: { message, line, column, file, ...(code ? { code } : {}) },
+      warning: {
+        message,
+        line,
+        column,
+        file,
+        ...(code ? { code } : {}),
+        ...(end ? { end } : {}),
+      },
     };
   }
   const error = new TranslateError(message, line, column, file);
   if (code) error.diagnosticCode = code;
+  if (end) error.end = end;
   return { severity: "error", error };
 }
 

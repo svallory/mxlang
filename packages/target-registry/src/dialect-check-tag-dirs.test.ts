@@ -57,6 +57,7 @@ describe("checkDialectFile and the dialect's `tagDirs`", () => {
         line: 1,
         column: 3,
         offset: 3,
+        end: { line: 1, column: 7, offset: 7 },
         code: "PROBE_BAD",
       },
     ]);

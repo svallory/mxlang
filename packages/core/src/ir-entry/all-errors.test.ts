@@ -39,6 +39,7 @@ describe("every error is reported", () => {
         line: 1,
         column: 6,
         offset: 6,
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
       {
@@ -47,6 +48,7 @@ describe("every error is reported", () => {
         line: 1,
         column: 11,
         offset: 11,
+        end: { line: 1, column: 11, offset: 11 },
       },
     ]);
   });
@@ -278,6 +280,7 @@ describe("no input makes lowerSource throw", () => {
         line: 1,
         column: 1,
         offset: 1,
+        end: { line: 1, column: 2, offset: 2 },
       },
     ]);
   });

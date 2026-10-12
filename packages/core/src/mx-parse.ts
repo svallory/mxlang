@@ -423,9 +423,12 @@ export function frontEndErrorOf(document: Node): TranslateError | undefined {
       : error.start;
   const { line, column } = filePosition(document, at);
   const failure = new TranslateError(error.message, line, column);
-  // The rule's own range; a point (or the bare `,`, moved back onto the `,`)
-  // ends no earlier than its start.
-  failure.end = filePosition(document, Math.max(error.end, at));
+  // The rule's own range, no earlier than its start; the bare `,` is moved
+  // back onto the `,`, so its range is that one character.
+  failure.end = filePosition(
+    document,
+    error.code === "MX_TAG_NAME_MISSING" ? at + 1 : Math.max(error.end, at),
+  );
   return failure;
 }
 

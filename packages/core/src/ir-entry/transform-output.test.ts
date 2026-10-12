@@ -96,6 +96,7 @@ describe("transform output through lowerSource", () => {
         line: 1,
         column: 6,
         offset: 6,
+        end: { line: 1, column: 7, offset: 7 },
         code: "MX_UNKNOWN_TAG",
       },
       {
@@ -104,6 +105,7 @@ describe("transform output through lowerSource", () => {
         line: 1,
         column: 12,
         offset: 12,
+        end: { line: 1, column: 13, offset: 13 },
         code: "MX_UNKNOWN_TAG",
       },
     ]);

@@ -91,6 +91,15 @@ export const PROBE_TAG_HOOK_MODULE = `module.exports.default = {
 `;
 
 /**
+ * {@link PROBE_TAG_HOOK_MODULE} forwarding each diagnostic's range end as the
+ * hook's `endLine`/`endColumn`, as a hook that keeps what `ctx.lower` found.
+ */
+export const PROBE_TAG_HOOK_END_MODULE = PROBE_TAG_HOOK_MODULE.replace(
+  "...(x.code ? { code: x.code } : {})",
+  "...(x.end ? { endLine: x.end.line, endColumn: x.end.column } : {}), ...(x.code ? { code: x.code } : {})",
+);
+
+/**
  * The probe dialect whose `tagFile` hook reads `money.json` beside the tag
  * file, names it with `ctx.dependsOn`, and reports `bad money.json` (1:2,
  * `KIT_BAD`) when it says BAD. A `.json` file is no file any watcher glob

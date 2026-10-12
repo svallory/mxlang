@@ -10,6 +10,7 @@ import {
   PROBE_MANIFEST,
   PROBE_SOURCES,
   PROBE_TAG_DIALECT,
+  PROBE_TAG_HOOK_END_MODULE,
   probeProject,
   tagDiscoveryProject,
 } from "../../../test-fixtures/dialects/probe.ts";
@@ -45,6 +46,7 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 3,
           offset: 3,
+          end: { line: 1, column: 7, offset: 7 },
           code: "PROBE_BAD",
         },
       ],
@@ -129,6 +131,7 @@ describe("checkDialectFile", () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 5, offset: 5 },
       },
     ]);
   });
@@ -194,6 +197,7 @@ describe("checkDialectFile", () => {
       line,
       column,
       offset,
+      end: { line, column: column + name.length, offset: offset + name.length },
       code: "PROBE_UNSPACED",
     });
 
@@ -252,6 +256,7 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 0,
           offset: 0,
+          end: { line: 1, column: 7, offset: 7 },
           code: "MX_DIALECT_HOOK_ERROR",
         },
       ]);
@@ -624,6 +629,7 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
         line: 2,
         column: 0,
         offset: 5,
+        end: { line: 2, column: 6, offset: 11 },
         code: "MX_TAG_FILE_ERROR",
       },
       {
@@ -642,6 +648,57 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
     ]);
     // The call is at the offset the first diagnostic names.
     expect(text.slice(5)).toMatch(/^<money\/>/);
+  });
+
+  it("a range reaches the diagnostic: `end` on one in the checked file, `origin.end` (and no `end`) on one in another file", () => {
+    const project = tagDiscoveryProject({
+      // Core rejects `!bad` as an attribute name, at columns 3 to 7 of this file.
+      "concepts/money.thing.probe": "<y !bad/>\n",
+      "dialect.cjs": PROBE_TAG_HOOK_END_MODULE,
+    });
+    const text = "<p !bad/>\n<money/>\n";
+    const diagnostics = checkDialectFile(
+      project.path("a.probe"),
+      text,
+    )?.diagnostics;
+    const own = diagnostics?.find(
+      (diagnostic) =>
+        diagnostic.message.startsWith("Invalid attribute name") &&
+        diagnostic.origin === undefined,
+    );
+    // In the checked file: the range, with the offsets of this text.
+    expect(own).toMatchObject({
+      line: 1,
+      column: 3,
+      offset: 3,
+      end: { line: 1, column: 7, offset: 7 },
+    });
+    expect(text.slice(own?.offset, own?.end?.offset)).toBe("!bad");
+    // The call to the broken tag file is blamed on the call: `<money`.
+    const call = diagnostics?.find((d) => d.code === "MX_TAG_FILE_ERROR");
+    expect(call).toMatchObject({
+      line: 2,
+      column: 0,
+      offset: 10,
+      end: { line: 2, column: 6, offset: 16 },
+    });
+    expect(text.slice(call?.offset, call?.end?.offset)).toBe("<money");
+    // In the tag file: shown at the call, with the file's own range in
+    // `origin`, which has no `end` of its own.
+    const foreign = diagnostics?.find(
+      (diagnostic) =>
+        diagnostic.message.startsWith("Invalid attribute name") &&
+        diagnostic.origin !== undefined,
+    );
+    expect(foreign).toBeDefined();
+    expect(foreign?.end).toBeUndefined();
+    expect(Object.keys(foreign ?? {})).not.toContain("end");
+    expect(foreign?.origin).toEqual({
+      file: project.path("concepts/money.thing.probe"),
+      line: 1,
+      column: 3,
+      end: { line: 1, column: 7 },
+    });
   });
 
   it("a tag file that is fine, in either tag directory, is a clean call", () => {
@@ -683,6 +740,7 @@ describe("checkDialectFile: tag discovery diagnostics", () => {
       line: 2,
       column: 0,
       offset: 5,
+      end: { line: 2, column: 2, offset: 7 },
       code: "MX_TAG_FILE_ERROR",
     });
     expect(check?.diagnostics.every((d) => d.severity === "error")).toBe(true);
@@ -816,6 +874,7 @@ describe("checkDialectFile: files a hook reads through ctx.dependsOn", () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_TAG_FILE_ERROR",
       },
       {

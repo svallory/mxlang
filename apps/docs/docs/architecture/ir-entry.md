@@ -43,11 +43,13 @@ resource="post" table="posts"
 | Field | Meaning |
 |---|---|
 | `ir` | a `SpannedIr`, or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic[]`: `{ severity, message, line, column, offset, file?, code? }`. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic[]`: `{ severity, message, line, column, offset, end?, file?, code? }`. On success it holds this call's warnings only |
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
 
-`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set when the error carries a machine-readable code; a dialect's `ctx.fail(message, { code })` and a contract hook's `ctx.fail(message, { at?, code? })` give one.
+`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have).
+
+`end` is where the diagnostic stops: `{ line, column, offset }`, exclusive, with `line` 1-based and `column` 0-based as the start. It is absent when core does not know a range, and a consumer then underlines from `line`/`column` as it did before. A diagnostic that blames a whole tag ends at the end of `<name`, so a tag with a long body is not underlined from top to bottom. An attribute ends after its value, an expression at its last character, and a parse error at the end of the range the parser gave, which for a point error is its start. A file-level diagnostic (a bad `customTags` registration, a warning with no source position) has no `end`. `end.offset` follows the start: it is a valid offset in the lowered file for every diagnostic located there, and `-1` only when `file` names another file. The range is never backwards: `end` is the start or later. `code` is set when the error carries a machine-readable code; a dialect's `ctx.fail(message, { code })` and a contract hook's `ctx.fail(message, { at?, code? })` give one.
 
 ### `SpannedIr`
 

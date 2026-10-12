@@ -36,6 +36,7 @@ describe('unknownTags: "reject"', () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_UNKNOWN_TAG",
       },
     ]);
@@ -124,6 +125,7 @@ describe('unknownTags: "reject"', () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 8, offset: 8 },
         code: "MX_UNKNOWN_TAG",
       },
       {

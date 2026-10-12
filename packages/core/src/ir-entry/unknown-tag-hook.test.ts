@@ -95,6 +95,7 @@ interface Expected {
   line: number;
   column: number;
   offset: number;
+  end?: { line: number; column: number; offset: number };
 }
 
 function error(expected: Expected) {
@@ -132,6 +133,7 @@ const successRows: Row[] = [
       line: 1,
       column: 0,
       offset: 0,
+      end: { line: 1, column: 11, offset: 11 },
     },
   },
   {
@@ -143,6 +145,7 @@ const successRows: Row[] = [
       line: 1,
       column: 1,
       offset: 1,
+      end: { line: 1, column: 12, offset: 12 },
     },
   },
   {
@@ -154,6 +157,7 @@ const successRows: Row[] = [
       line: 2,
       column: 2,
       offset: 9,
+      end: { line: 2, column: 9, offset: 16 },
     },
   },
   {
@@ -165,6 +169,7 @@ const successRows: Row[] = [
       line: 2,
       column: 3,
       offset: 12,
+      end: { line: 2, column: 15, offset: 24 },
     },
   },
   {
@@ -177,6 +182,7 @@ const successRows: Row[] = [
       line: 2,
       column: 3,
       offset: 9,
+      end: { line: 2, column: 5, offset: 11 },
     },
   },
   {
@@ -188,6 +194,7 @@ const successRows: Row[] = [
       line: 2,
       column: 2,
       offset: 8,
+      end: { line: 2, column: 5, offset: 11 },
     },
   },
 ];
@@ -203,6 +210,7 @@ const closedRows: Row[] = [
       line: 3,
       column: 4,
       offset: 24,
+      end: { line: 3, column: 11, offset: 31 },
     },
   },
   {
@@ -214,6 +222,7 @@ const closedRows: Row[] = [
       line: 2,
       column: 15,
       offset: 24,
+      end: { line: 2, column: 27, offset: 36 },
     },
   },
   {
@@ -226,6 +235,7 @@ const closedRows: Row[] = [
       line: 2,
       column: 2,
       offset: 6,
+      end: { line: 2, column: 4, offset: 8 },
     },
   },
 ];
@@ -308,6 +318,7 @@ describe("explainUnknownTag: the Mesh-style table, in both modes", () => {
           line: 3,
           column: 4,
           offset: 24,
+          end: { line: 3, column: 7, offset: 27 },
         },
       ]);
     });
@@ -347,6 +358,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
       line: 2,
       column: 15,
       offset: 24,
+      end: { line: 2, column: 27, offset: 36 },
     });
   });
 
@@ -404,6 +416,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
             line: 3,
             column: 15,
             offset: 33,
+            end: { line: 3, column: 27, offset: 45 },
           }),
         ]);
       });
@@ -422,6 +435,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
           line: 3,
           column: 14,
           offset: 32,
+          end: { line: 3, column: 27, offset: 45 },
         }),
       ]);
     });
@@ -467,6 +481,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
         line: 3,
         column: 3,
         offset: 18,
+        end: { line: 3, column: 6, offset: 21 },
       }),
     );
   });
@@ -859,6 +874,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
       message,
       code: "MX_DIALECT_HOOK_ERROR",
       ...at,
+      end: { line: 2, column: 6, offset: 15 },
     };
   }
 
@@ -1018,6 +1034,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
         line: 2,
         column: 2,
         offset: 11,
+        end: { line: 2, column: 8, offset: 17 },
       },
     ]);
   });
@@ -1027,7 +1044,14 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
       dialect: dialectOf(() => ({ message: "here" })),
     });
     expect(result.diagnostics).toEqual([
-      { severity: "error", message: "here", line: 2, column: 2, offset: 11 },
+      {
+        severity: "error",
+        message: "here",
+        line: 2,
+        column: 2,
+        offset: 11,
+        end: { line: 2, column: 6, offset: 15 },
+      },
     ]);
   });
 
@@ -1045,6 +1069,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
         line: 4,
         column: 0,
         offset: source.length,
+        end: { line: 4, column: 0, offset: source.length },
       },
     ]);
   });

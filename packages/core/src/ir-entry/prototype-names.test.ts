@@ -59,6 +59,7 @@ describe('unknownTags: "reject"', () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: name.length + 1, offset: name.length + 1 },
         code: "MX_UNKNOWN_TAG",
       },
     ]);
