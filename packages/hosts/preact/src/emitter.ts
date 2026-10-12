@@ -31,6 +31,7 @@ import {
   type Emitter,
   type Expr,
   type ForHead,
+  fail as failAtNode,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -169,14 +170,32 @@ export function componentAlias(name: string): string {
 }
 
 /**
- * The fix appended to an unresolved colon name. The colon is part of the name,
- * and no import binds it and no `tags/` file name can spell it, so the one
- * discovery route is an `mx.tags` directory whose `prefix` ends in the colon.
+ * The `mx.tags` prefix that declares a colon name, or `undefined` when none can.
+ *
+ * Discovery names a tag file `<prefix><file stem>`, and a stem is a letter,
+ * digit or `_` followed by letters, digits, `_` or `-` (core's `TAG_NAME_RE`
+ * minus the dot, which a call cannot write inside one tag name). Any prefix is
+ * allowed, so a name is declarable exactly when it ends in such a stem; the
+ * prefix is everything before the longest one. `uuid:` and `a:b$` end in no
+ * stem, so no prefix produces them.
+ */
+function mxTagsPrefixOf(name: string): string | undefined {
+  const stem = /[A-Za-z0-9_][A-Za-z0-9_-]*$/.exec(name);
+  return stem ? name.slice(0, stem.index) : undefined;
+}
+
+/**
+ * The fix appended to an unresolved colon name. The colon is part of the name
+ * and no import binds it, so the fixes are to drop the colon or, when a tag
+ * file can carry the name, to declare it from an `mx.tags` directory whose
+ * `prefix` is the name up to that file's stem.
  */
 function colonNameFix(name: string): string {
-  return name.includes(":")
-    ? ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: "${name.slice(0, name.lastIndexOf(":") + 1)}"\`.`
-    : "";
+  if (!name.includes(":")) return "";
+  const prefix = mxTagsPrefixOf(name);
+  return prefix === undefined
+    ? " A colon belongs to the tag name: write the name without the colon."
+    : ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: ${JSON.stringify(prefix)}\`.`;
 }
 
 function isComponentName(name: string): boolean {
@@ -271,7 +290,7 @@ export function createJsxDeclarations(
       return false;
     },
     rejectUnknownTag(name, node, ctx) {
-      rawFail(
+      failAtNode(
         unresolvedCustomTagMessage(name, {
           candidates: [...ctx.imports, ...ctx.defines.keys()],
           hint: name.includes(":")

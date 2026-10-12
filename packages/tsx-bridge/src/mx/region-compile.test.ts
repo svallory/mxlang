@@ -281,6 +281,108 @@ describe("mxRegionCompile", () => {
       expect(raised.column).toBe(2);
     });
 
+    /** What a tool reads off the thrown error: code, start and exclusive end. */
+    function carriedBy(error: Error & Record<string, unknown>) {
+      const loc = error.loc as { line: number; column: number; end?: unknown };
+      return {
+        diagnosticCode: error.diagnosticCode,
+        end: error.end,
+        locEnd: loc.end,
+        keys: Object.keys(error),
+      };
+    }
+
+    function thrownBy(hookError: unknown): Error & Record<string, unknown> {
+      try {
+        parse(source, "x.solid.mx", {
+          mxRegionCompile: () => {
+            throw hookError;
+          },
+        });
+      } catch (error) {
+        return error as Error & Record<string, unknown>;
+      }
+      throw new Error("expected the region to fail");
+    }
+
+    it("carries the host error's code and end onto the raised error", () => {
+      // A host error with a code and a range: the tools show the code and
+      // underline to `end`, so both must survive the rethrow.
+      const hostError = Object.assign(new FakeTranslateError("x", 5, 2), {
+        diagnosticCode: "MX_INVALID_FOR",
+        end: { line: 5, column: 9 },
+      });
+      const raised = thrownBy(hostError);
+      expect(raised.message).toBe("x");
+      expect(carriedBy(raised)).toMatchObject({
+        diagnosticCode: "MX_INVALID_FOR",
+        end: { line: 5, column: 9 },
+        locEnd: { line: 5, column: 9 },
+      });
+    });
+
+    it("adds them without changing the error's enumerable shape", () => {
+      const plain = thrownBy(new FakeTranslateError("x", 5, 2));
+      const carried = thrownBy(
+        Object.assign(new FakeTranslateError("x", 5, 2), {
+          diagnosticCode: "MX_INVALID_FOR",
+          end: { line: 5, column: 9 },
+        }),
+      );
+      expect(carriedBy(carried).keys).toEqual(carriedBy(plain).keys);
+    });
+
+    it("carries a code with no end, and an end with no code", () => {
+      const codeOnly = carriedBy(
+        thrownBy(
+          Object.assign(new FakeTranslateError("x", 5, 2), {
+            diagnosticCode: "MX_X",
+          }),
+        ),
+      );
+      expect(codeOnly).toMatchObject({
+        diagnosticCode: "MX_X",
+        end: undefined,
+        locEnd: undefined,
+      });
+      const endOnly = carriedBy(
+        thrownBy(
+          Object.assign(new FakeTranslateError("x", 5, 2), {
+            end: { line: 6, column: 1 },
+          }),
+        ),
+      );
+      expect(endOnly).toMatchObject({
+        diagnosticCode: undefined,
+        end: { line: 6, column: 1 },
+        locEnd: { line: 6, column: 1 },
+      });
+    });
+
+    it("ignores a code that is not a string and an end that is not a position", () => {
+      const raised = carriedBy(
+        thrownBy(
+          Object.assign(new FakeTranslateError("x", 5, 2), {
+            diagnosticCode: 42,
+            end: { line: "6", column: 1 },
+          }),
+        ),
+      );
+      expect(raised).toMatchObject({
+        diagnosticCode: undefined,
+        end: undefined,
+        locEnd: undefined,
+      });
+    });
+
+    it("carries nothing for a plain Error, which has no code or end to give", () => {
+      expect(carriedBy(thrownBy(new Error("plain")))).toMatchObject({
+        diagnosticCode: undefined,
+        end: undefined,
+        locEnd: undefined,
+      });
+    });
+
     it("positions a plain Error at the region's start, not V8's throw site", () => {
       // An ordinary `Error` carries V8's `line`, which points inside the
       // *host's* module. Trusting it reported a line in neither file.

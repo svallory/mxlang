@@ -31,7 +31,7 @@ Preact has no control-flow components, so every structural tag becomes a plain J
 
 MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.
 
-A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no declaration for it, it is a compile error at the tag: ``Unable to find entry point for custom tag `<uuid:id>`.`` and the fix. Write the name without the colon, or declare the tag from an [`mx.tags` directory](/custom-tags/discovery/) with `prefix: "uuid:"`; an import cannot bind a colon name and a `tags/` file name cannot spell one.
+A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no declaration for it, it is a compile error at the tag: ``Unable to find entry point for custom tag `<uuid:id>`.`` and the fix. Write the name without the colon, or declare the tag from an [`mx.tags` directory](/custom-tags/discovery/) with `prefix: "uuid:"`. A prefix can produce a name only when the name ends in a file stem (a letter, digit or `_`, then letters, digits, `_` or `-`): the prefix is everything before that stem, so `<a:-x/>` is `prefix: "a:-"` with `x.mx`. A name that ends otherwise (`<uuid:/>`, `<a:b$/>`) is told only to write it without the colon. An import cannot bind a colon name and a `tags/` file name cannot spell one.
 
 ## Keys
 

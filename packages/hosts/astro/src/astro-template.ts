@@ -24,6 +24,7 @@ import {
   type Emitter,
   type Expr,
   emit,
+  fail as failAt,
   firstAttributeTag,
   type HostDeclarations,
   type Ir,
@@ -113,18 +114,45 @@ export const astroTargets = ownTargets;
  * A lowering failure positioned in the enclosing `.astro.mx` file, or — when
  * `file` is set — in a tag template it called (spec §2's third position
  * rule, carried through from a `TranslateError`).
+ *
+ * It carries what the `TranslateError` it was made from carried: the MX
+ * `diagnosticCode` and the exclusive `end` of the range (1-based line,
+ * 0-based column), so a tool shows the code and underlines the whole range.
+ * `loc` is the same position as Marko's `CompileError` holds it, the shape
+ * the TypeScript plugin and `mx-tsc` read an error's end from.
  */
 export class AstroTemplateError extends Error {
   line: number;
   column: number;
   file?: string;
+  diagnosticCode?: string;
+  end?: { line: number; column: number };
+  loc: {
+    line: number;
+    column: number;
+    end?: { line: number; column: number };
+  };
 
-  constructor(message: string, line: number, column: number, file?: string) {
+  constructor(
+    message: string,
+    line: number,
+    column: number,
+    file?: string,
+    carried: {
+      diagnosticCode?: string;
+      end?: { line: number; column: number };
+    } = {},
+  ) {
     super(message);
     this.name = "AstroTemplateError";
     this.line = line;
     this.column = column;
     this.file = file;
+    if (carried.diagnosticCode !== undefined) {
+      this.diagnosticCode = carried.diagnosticCode;
+    }
+    if (carried.end !== undefined) this.end = carried.end;
+    this.loc = { line, column, ...(carried.end ? { end: carried.end } : {}) };
   }
 }
 
@@ -242,12 +270,44 @@ function isComponent(name: string, ctx: { imports?: Set<string> }): boolean {
   return (ctx.imports?.has(name) ?? false) || ASTRO_BUILTIN_TAG_NAMES.has(name);
 }
 
+/**
+ * The `mx.tags` prefix that declares a colon name, or `undefined` when none can.
+ *
+ * Discovery names a tag file `<prefix><file stem>`, and a stem is a letter,
+ * digit or `_` followed by letters, digits, `_` or `-` (core's `TAG_NAME_RE`
+ * minus the dot, which a call cannot write inside one tag name). Any prefix is
+ * allowed, so a name is declarable exactly when it ends in such a stem; the
+ * prefix is everything before the longest one. `uuid:` and `a:b$` end in no
+ * stem, so no prefix produces them.
+ */
+function mxTagsPrefixOf(name: string): string | undefined {
+  const stem = /[A-Za-z0-9_][A-Za-z0-9_-]*$/.exec(name);
+  return stem ? name.slice(0, stem.index) : undefined;
+}
+
+/**
+ * The fix appended to an unresolved colon name. The colon is part of the name
+ * and no import binds it, so the fixes are to drop the colon or, when a tag
+ * file can carry the name, to declare it from an `mx.tags` directory whose
+ * `prefix` is the name up to that file's stem.
+ */
+function colonNameFix(name: string): string {
+  if (!name.includes(":")) return "";
+  const prefix = mxTagsPrefixOf(name);
+  return prefix === undefined
+    ? " A colon belongs to the tag name: write the name without the colon."
+    : ` A colon belongs to the tag name: write the name without the colon, or declare it from an \`mx.tags\` directory with \`prefix: ${JSON.stringify(prefix)}\`.`;
+}
+
 function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
-  fail(
+  failAt(
     unresolvedCustomTagMessage(name, {
       candidates: [...ctx.imports, ...ctx.defines.keys()],
-      hint: `Import it in the \`---\` fence (\`import ${name} from "./${name}.astro"\`) or add \`tags/${name}.mx\`.`,
-    }),
+      // A colon name is neither a fence import nor a `tags/` file name.
+      hint: name.includes(":")
+        ? undefined
+        : `Import it in the \`---\` fence (\`import ${name} from "./${name}.astro"\`) or add \`tags/${name}.mx\`.`,
+    }) + colonNameFix(name),
     node,
   );
 }
@@ -283,7 +343,9 @@ export const astroTemplateDeclarations: HostDeclarations = {
     context.configured ??
     DEFAULT_TAG,
   tags: TAGS,
-  isElement: (name) => !isComponentName(name),
+  // A colon belongs to a custom tag's name (Marko reads `<ns:tag/>` as one),
+  // so a colon name is never a native element: undeclared, it is rejected.
+  isElement: (name) => !isComponentName(name) && !name.includes(":"),
   isComponent,
   rejectUnknownTag,
   scriptletReplacement: (name, keyword) =>
@@ -1524,6 +1586,7 @@ export function lowerAstroMx(
         error.line,
         error.column,
         error.file,
+        { diagnosticCode: error.diagnosticCode, end: error.end },
       );
     }
     throw error;

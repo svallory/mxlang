@@ -3030,6 +3030,75 @@ describe("MX language plugin", () => {
     expect(diagnostic?.length).toBe(1);
   });
 
+  it("shows MX's code and paints a .solid.mx region's lowering error to its end", () => {
+    // The region host rethrows a lowering error as the parser's positioned
+    // error; it now carries the lowering diagnostic's code and end, so the
+    // range is the whole `<for` and the code is MX's, not `TS80001` and one
+    // character.
+    const fileName = "/project/lowering.solid.mx";
+    const consumer = "/project/index.ts";
+    const source = "const el = <for|x|/>;\n";
+    const service = createPluginService(
+      {
+        [fileName]: source,
+        [consumer]: 'import "./lowering.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    const diagnostics = service.getSyntacticDiagnostics(fileName);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      start: source.indexOf("<for"),
+      length: "<for".length,
+      source: "solidmx",
+      code: "MX_INVALID_FOR",
+      category: ts.DiagnosticCategory.Error,
+    });
+  });
+
+  it("shows MX's code and paints an .astro.mx lowering error to its end", () => {
+    // `AstroTemplateError` carries the lowering diagnostic's code and range.
+    const dir = mkdtempSync(join(tmpdir(), "mx-amx-lowering-"));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"a","mx":{"host":"astro"}}',
+      );
+      const page = join(dir, "page.astro.mx");
+      const plugin = createAmxLanguagePlugin(ts);
+      const check = (source: string) => {
+        plugin.createVirtualCode?.(
+          page,
+          AMX_LANGUAGE_ID,
+          ts.ScriptSnapshot.fromString(source),
+          { getAssociatedScript: () => undefined },
+        );
+        return plugin.getCompileDiagnostics(page);
+      };
+
+      const lowering = "---\n---\n<div>\n  <for|x|/>\n</div>\n";
+      const [diagnostic] = check(lowering);
+      expect(diagnostic).toMatchObject({
+        offset: lowering.indexOf("<for"),
+        length: "<for".length,
+        diagnosticCode: "MX_INVALID_FOR",
+      });
+
+      // An undeclared colon tag has no code, but its range is the whole name.
+      const colon = "---\n---\n<ns:tag/>\n";
+      const [undeclared] = check(colon);
+      expect(undeclared).toMatchObject({
+        offset: colon.indexOf("<ns:tag"),
+        length: "<ns:tag".length,
+      });
+      expect(undeclared?.diagnosticCode).toBeUndefined();
+      expect(undeclared?.message).toContain("A colon belongs to the tag name");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("maps a type error amid other text to its source expression column", () => {
     const component = "/project/Column.mx";
     const consumer = "/project/index.ts";

@@ -279,6 +279,8 @@ export function mxParseElementAt(
       column?: number;
       reasonCode?: unknown;
       code?: unknown;
+      diagnosticCode?: unknown;
+      end?: { line?: unknown; column?: unknown };
       loc?: { start?: { line?: number; column?: number; index?: number } };
     };
     const line = error.line ?? error.loc?.start?.line;
@@ -317,11 +319,15 @@ export function mxParseElementAt(
       typeof error.loc?.start?.index === "number";
     if (positioned && typeof line === "number" && typeof column === "number") {
       const offset = offsetAt(source, line, column);
-      throw raiseAndThrow(
-        parser,
-        MxErrors.HostError,
-        positionAt(source, offset, parser.state.startIndex),
-        { message: error.message ?? "Invalid MX element." },
+      throw carryDiagnostic(
+        () =>
+          raiseAndThrow(
+            parser,
+            MxErrors.HostError,
+            positionAt(source, offset, parser.state.startIndex),
+            { message: error.message ?? "Invalid MX element." },
+          ),
+        error,
       );
     }
     // Anything else — a plain `Error`, or a non-`Error` value a host threw —
@@ -685,6 +691,51 @@ function offsetAt(source: string, line: number, column: number): number {
     if (source.charCodeAt(offset++) === 10) currentLine++;
   }
   return Math.min(source.length, offset + column);
+}
+
+/**
+ * Runs `raise`, which throws the Babel error (or returns it, under
+ * `errorRecovery`), and adds what the host's own error carried to it: MX's
+ * `diagnosticCode` and the exclusive `end` of the range (1-based line, 0-based
+ * column, file-absolute like the start). The tools read the code from
+ * `diagnosticCode`, and an end from `end` or `loc.end`; without them a host's
+ * lowering error shows no code and a one-character range.
+ *
+ * Both are added non-enumerable, so the error keeps the shape it had.
+ */
+function carryDiagnostic(
+  raise: () => unknown,
+  from: {
+    diagnosticCode?: unknown;
+    end?: { line?: unknown; column?: unknown };
+  },
+): unknown {
+  let raised: unknown;
+  try {
+    raised = raise();
+  } catch (thrown) {
+    raised = thrown;
+  }
+  if (raised === null || typeof raised !== "object") return raised;
+  const define = (target: object, key: string, value: unknown): void => {
+    Object.defineProperty(target, key, {
+      value,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    });
+  };
+  if (typeof from.diagnosticCode === "string") {
+    define(raised, "diagnosticCode", from.diagnosticCode);
+  }
+  const { end } = from;
+  if (typeof end?.line === "number" && typeof end.column === "number") {
+    const position = { line: end.line, column: end.column };
+    define(raised, "end", position);
+    const loc = (raised as { loc?: unknown }).loc;
+    if (loc !== null && typeof loc === "object") define(loc, "end", position);
+  }
+  return raised;
 }
 
 /**

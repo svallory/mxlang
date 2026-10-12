@@ -25,6 +25,8 @@ The `---` fence passes through byte for byte. The template under it compiles to 
 | `<textarea value=expr/>` | `<textarea>{expr}</textarea>`, escaped |
 | several root elements | several root elements |
 
+A colon in a tag name is part of the name: `<ns:tag/>` is one custom tag, never an Astro namespace element. With no declaration for it, it is a build error at the tag, ``Unable to find entry point for custom tag `<ns:tag>`.`` and the fix. Write the name without the colon, or declare the tag from an [`mx.tags` directory](/custom-tags/discovery/) with `prefix: "ns:"`. A prefix can produce a name only when the name ends in a file stem (a letter, digit or `_`, then letters, digits, `_` or `-`); a name that ends otherwise (`<uuid:/>`, `<a:b$/>`) is told only to write it without the colon. An import cannot bind a colon name and a `tags/` file name cannot spell one.
+
 `<html-comment>` and `<textarea value>` follow Marko: the comment escapes `>` so a value cannot close it early, and the textarea renders its value as content, never as an attribute. A `value` together with a body is a build error.
 
 ## Not supported
