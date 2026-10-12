@@ -163,6 +163,7 @@ import {
   REPEATED_ATTRIBUTE_TAG_CODE,
   RESERVED_EFFECT_TAG_CODE,
   RESERVED_TAG_CODE,
+  STALE_DERIVED_READ_CODE,
   UNBOUND_COMPONENT_CODE,
   UNKNOWN_ATTRIBUTE_TAG_CODE,
   UNKNOWN_TAG_CODE,
@@ -215,6 +216,11 @@ import {
 import { payloadOf } from "./payload.ts";
 import { findLetWrite } from "./render-let-write.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
+import {
+  derivedFrom,
+  findStaleRead,
+  handlerFunction,
+} from "./stale-derived-read.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   fileTagRules,
@@ -672,6 +678,31 @@ function checkTagValueWrites(ctx: Ctx, node: Node): void {
 }
 
 /**
+ * Rejects a handler that reads a derived `<const>` after writing a `<let>` the
+ * `<const>` depends on (`findStaleRead`). A handler is the function given to
+ * an `on…` attribute of any tag; `<lifecycle>`'s `onMount` and `onUpdate` run
+ * after the write has settled and are not handlers in this sense.
+ */
+function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
+  const derived = ctx.derivedConsts;
+  const lets = ctx.renderLets;
+  if (!derived?.size || !lets?.size || tagNameOf(tag) === "lifecycle") return;
+  for (const attr of tagAttributesOf(tag)) {
+    if (isSpreadAttributeNode(attr) || !/^on[A-Z-]/.test(attrNameOf(attr))) {
+      continue;
+    }
+    const handler = handlerFunction(attrValueOf(ctx, attr));
+    const stale = handler ? findStaleRead(handler, lets, derived) : undefined;
+    if (!stale) continue;
+    raise(
+      STALE_DERIVED_READ_CODE,
+      `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which this handler wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly, or move the check into a \`<script>\`, which runs after the write settles on every target.`,
+      stale.read,
+    );
+  }
+}
+
+/**
  * Records the `<let>` a lowered child tag declares, for the writes after it
  * in the same block and the blocks below. Under the `none` tag rules
  * `let` is an ordinary tag, and a name a caller registered as a custom tag
@@ -684,6 +715,22 @@ function declareRenderLet(ctx: Ctx, child: Node): void {
   const names = bindingIdentifiers(tagVarOf(child));
   if (names.length === 0) return;
   ctx.renderLets = new Set([...(ctx.renderLets ?? []), ...names]);
+  // A `<const>` that depended on an outer `<let>` of this spelling does not
+  // depend on the new one.
+  const derived = ctx.derivedConsts;
+  if (
+    derived &&
+    [...derived.values()].some((from) => names.some((n) => from.has(n)))
+  ) {
+    ctx.derivedConsts = new Map(
+      [...derived]
+        .map(([name, from]): [string, ReadonlySet<string>] => [
+          name,
+          new Set([...from].filter((n) => !names.includes(n))),
+        ])
+        .filter(([, from]) => from.size > 0),
+    );
+  }
   // The `<let>`'s own attributes were lowered before its name was known, so a
   // write to it there (`<let/n=(n = 1)/>`, `valueChange=(n = 1, null)`) is
   // looked for now; a write to an earlier `<let>` was refused by `exprOf`.
@@ -2205,6 +2252,7 @@ function lowerAuthoredAttributeTag(
       tagNameSpanOf(node) ?? node,
     );
   }
+  checkStaleDerivedReads(ctx, node);
   const hasParamsAtCall = hasParams(ctx, node);
   if (declaration && declaration.hasParams !== hasParamsAtCall) {
     raise(
@@ -2915,7 +2963,17 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   ) {
     ctx.unknownLocalValue.add(name);
   }
-  shadowBindings(ctx, bindingIdentifiers(tagVarOf(node)));
+  const constNames = bindingIdentifiers(tagVarOf(node));
+  const from = ctx.renderLets?.size
+    ? derivedFrom(valueNode, ctx.renderLets, ctx.derivedConsts)
+    : undefined;
+  shadowBindings(ctx, constNames);
+  if (from?.size) {
+    ctx.derivedConsts = new Map([
+      ...(ctx.derivedConsts ?? []),
+      ...constNames.map((name): [string, ReadonlySet<string>] => [name, from]),
+    ]);
+  }
 
   return {
     kind: "Const",
@@ -5468,6 +5526,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           // trap a hoist from inside an `<if>` in that branch, which is the one
           // thing decision 70's hoist hook exists to prevent: the declaration
           // has to outlive the block it was written in.
+          // Before the tag's own lowering: a host with no runtime for the
+          // handler refuses it there, and the stale read is the first thing
+          // wrong with it.
+          checkStaleDerivedReads(ctx, child);
           const lowered = lowerTag(ctx, child);
           if (Array.isArray(lowered)) out.push(...lowered);
           else out.push(lowered);
@@ -5756,6 +5818,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.tagVarBlock = [];
   ctx.tagVars = undefined;
   ctx.renderLets = undefined;
+  ctx.derivedConsts = undefined;
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
   // Decision 162: the walk recorded errors instead of throwing the first. The

@@ -54,34 +54,34 @@ function insideFunction(path: Node): boolean {
 }
 
 /** Every identifier an assignment target binds, in source order. */
-function targetNames(target: Node, out: string[]): void {
+export function assignedNames(target: Node, out: string[]): void {
   switch (target?.type) {
     case "Identifier":
       out.push(target.name);
       return;
     case "ArrayPattern":
-      for (const element of target.elements ?? []) targetNames(element, out);
+      for (const element of target.elements ?? []) assignedNames(element, out);
       return;
     case "ObjectPattern":
       for (const property of target.properties ?? []) {
-        targetNames(
+        assignedNames(
           property.type === "RestElement" ? property : property.value,
           out,
         );
       }
       return;
     case "RestElement":
-      targetNames(target.argument, out);
+      assignedNames(target.argument, out);
       return;
     case "AssignmentPattern":
-      targetNames(target.left, out);
+      assignedNames(target.left, out);
       return;
     case "TSAsExpression":
     case "TSNonNullExpression":
     case "TSSatisfiesExpression":
     case "TSTypeAssertion":
     case "ParenthesizedExpression":
-      targetNames(target.expression, out);
+      assignedNames(target.expression, out);
       return;
     default:
       // A member target (`p.count = 1`) mutates the object the name holds
@@ -110,7 +110,7 @@ export function findLetWrite(
   const check = (path: Node, target: Node): void => {
     if (found || insideFunction(path)) return;
     const names: string[] = [];
-    targetNames(target, names);
+    assignedNames(target, names);
     for (const name of names) {
       if (!lets.has(name)) continue;
       found = { node: path.node, name };

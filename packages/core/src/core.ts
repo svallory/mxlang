@@ -614,6 +614,16 @@ export interface Ctx {
    * tag rules, where `let` is an ordinary tag.
    */
   renderLets?: ReadonlySet<string>;
+  /**
+   * The `<const>`s in scope whose value depends on a `<let>`, each with the
+   * `<let>`s it depends on (resolved through other derived `<const>`s when it
+   * is declared): what a handler that writes one of them may not read
+   * afterwards (`findStaleRead`). Replaced, never mutated; `scopeBindings`
+   * reverts it, `shadowBindings` drops the names a parameter, a `<const>` or
+   * a loop variable rebinds. Absent when no `<const>` derives from a `<let>`,
+   * and under the `none` tag rules.
+   */
+  derivedConsts?: ReadonlyMap<string, ReadonlySet<string>>;
   /** Serial for block ids, so two sibling blocks are never confused. */
   tagVarBlockSeq?: number;
   /**
@@ -1304,11 +1314,13 @@ export function scopeBindings(ctx: Ctx): () => void {
   const saved = ctx.bindings.snapshot();
   const savedShadowed = ctx.tagVarShadowed;
   const savedLets = ctx.renderLets;
+  const savedDerived = ctx.derivedConsts;
   const savedSites = new Map(ctx.bindingSites);
   return () => {
     ctx.bindings.restore(saved);
     ctx.tagVarShadowed = savedShadowed;
     ctx.renderLets = savedLets;
+    ctx.derivedConsts = savedDerived;
     // A `<define>` is in scope only inside the block that declares it, so the
     // positions decision 164's diagnostic reads revert with the block.
     for (const name of [...ctx.bindingSites.keys()]) {
@@ -1340,10 +1352,18 @@ export function shadowBindings(ctx: Ctx, names: string[]): () => void {
   if (outerLets && names.some((name) => outerLets.has(name))) {
     ctx.renderLets = new Set([...outerLets].filter((n) => !names.includes(n)));
   }
+  // Nor is a `<const>` of the same spelling the derived one.
+  const outerDerived = ctx.derivedConsts;
+  if (outerDerived && names.some((name) => outerDerived.has(name))) {
+    ctx.derivedConsts = new Map(
+      [...outerDerived].filter(([name]) => !names.includes(name)),
+    );
+  }
   return () => {
     for (const [name, rewrite] of saved) ctx.bindings.register(name, rewrite);
     ctx.tagVarShadowed = outerShadowed;
     ctx.renderLets = outerLets;
+    ctx.derivedConsts = outerDerived;
   };
 }
 

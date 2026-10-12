@@ -69,6 +69,8 @@ export const INERT_TAG_SHAPE_CODE = "MX_INERT_TAG_SHAPE";
 export const RESERVED_EFFECT_TAG_CODE = "MX_RESERVED_EFFECT_TAG";
 /** A write to a `<let>` while the template renders. */
 export const LET_WRITE_IN_RENDER_CODE = "MX_LET_WRITE_IN_RENDER";
+/** A handler reads a derived `<const>` after writing a `<let>` it depends on. */
+export const STALE_DERIVED_READ_CODE = "MX_STALE_DERIVED_READ";
 /** A `.marko` file used as a tag or an import. */
 export const UNSUPPORTED_MARKO_FILE_CODE = "MX_UNSUPPORTED_MARKO_FILE";
 /** A bad `#id`/`.class` shorthand, or one with no default tag. */
@@ -432,6 +434,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a write to a `<let>` while the template renders",
         ],
         [
+          STALE_DERIVED_READ_CODE,
+          "a handler reads a derived `<const>` after writing a `<let>` it depends on",
+        ],
+        [
           UNSUPPORTED_MARKO_FILE_CODE,
           "a `.marko` file used as a tag or an import",
         ],
@@ -647,6 +653,7 @@ export type MxDiagnosticCode =
   | typeof INERT_TAG_SHAPE_CODE
   | typeof RESERVED_EFFECT_TAG_CODE
   | typeof LET_WRITE_IN_RENDER_CODE
+  | typeof STALE_DERIVED_READ_CODE
   | typeof UNSUPPORTED_MARKO_FILE_CODE
   | typeof INVALID_SHORTHAND_CODE
   | typeof RESERVED_BINDING_CODE
