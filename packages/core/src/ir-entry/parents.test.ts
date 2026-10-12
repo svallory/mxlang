@@ -56,6 +56,7 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
         line: 2,
         column: 2,
         offset: 8,
+        code: "MX_PARENT_NOT_ALLOWED",
       },
       {
         severity: "error",
@@ -64,6 +65,7 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
         line: 3,
         column: 2,
         offset: 32,
+        code: "MX_PARENT_NOT_ALLOWED",
       },
     ]);
     const root = lowerSource('<attribute="status"/>', "/resource.mx", {

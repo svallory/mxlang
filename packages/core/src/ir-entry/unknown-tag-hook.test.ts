@@ -110,6 +110,7 @@ function needsAt(source: string): Expected {
     line: lines.length,
     column: 0,
     offset,
+    code: "MX_MISSING_ATTRIBUTE",
   };
 }
 
@@ -402,6 +403,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
       line: 1,
       column: 0,
       offset: 0,
+      code: "MX_MISSING_ATTRIBUTE",
     });
 
     for (const mode of ["reject", "allow"] as const) {
@@ -924,6 +926,11 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
       'the dialect\'s `explainUnknownTag` must return `code` as a non-empty string, got "" for `<a:b>`',
     ],
     [
+      "returns a code that starts with `MX_`, MX's own prefix",
+      () => ({ message: "x", code: "MX_UNKNOWN_TAG" }),
+      "the dialect's `explainUnknownTag` returned a reserved `code` for `<a:b>`: code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix for its diagnostic codes; use the dialect's own prefix",
+    ],
+    [
       "returns a string",
       () => "nope" as never,
       'the dialect\'s `explainUnknownTag` must return an explanation object or undefined, got "nope" for `<a:b>`',
@@ -1017,7 +1024,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
     expect(result.ir).toBeDefined();
   });
 
-  it("a valid span with no code gives a codeless error at `at`", () => {
+  it("a valid span with no code gives the default `MX_DIALECT_ERROR` at `at`", () => {
     const result = run(source, "allow", {
       dialect: dialectOf((tag) => ({
         message: "plain",
@@ -1035,6 +1042,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
         column: 2,
         offset: 11,
         end: { line: 2, column: 8, offset: 17 },
+        code: "MX_DIALECT_ERROR",
       },
     ]);
   });
@@ -1051,6 +1059,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
         column: 2,
         offset: 11,
         end: { line: 2, column: 6, offset: 15 },
+        code: "MX_DIALECT_ERROR",
       },
     ]);
   });
@@ -1070,6 +1079,7 @@ describe("explainUnknownTag: a hook that misbehaves is one positioned diagnostic
         column: 0,
         offset: source.length,
         end: { line: 4, column: 0, offset: source.length },
+        code: "MX_DIALECT_ERROR",
       },
     ]);
   });

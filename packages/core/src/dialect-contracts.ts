@@ -19,6 +19,7 @@ import {
 } from "./custom-tags.ts";
 import { isDeepFrozen } from "./deep-frozen.ts";
 import {
+  DIALECT_HOOK_ERROR_CODE,
   INVALID_DIALECT_CONTRACT_CODE,
   isReservedHookCode,
 } from "./diagnostic-codes.ts";
@@ -49,12 +50,14 @@ const CORE_RESERVED: ReadonlySet<string> = new Set(RESERVED_NAMES);
 
 /**
  * The code a refused entry carries: the dialect's own, when its
- * `checkContract` gave one; otherwise this rule's. A code of MX's own (the
- * cause's rule, or the default of a `checkContract` that gave none) is
- * reported as this rule.
+ * `checkContract` gave one; `MX_DIALECT_HOOK_ERROR` when the hook was misused
+ * (an `MX_` code, an empty message); otherwise this rule's. Any other code of
+ * MX's own (the cause's rule, or the default of a `checkContract` that gave
+ * none) is reported as this rule.
  */
 function causeCode(cause: TranslateError): string {
   const code = cause.diagnosticCode;
+  if (code === DIALECT_HOOK_ERROR_CODE) return code;
   return code !== undefined && !isReservedHookCode(code)
     ? code
     : INVALID_DIALECT_CONTRACT_CODE;

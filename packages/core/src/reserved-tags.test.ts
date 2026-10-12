@@ -739,9 +739,9 @@ describe("passed `customTags`", () => {
       structural: "reject",
       customTags: { if: DEFINITION },
     });
-    expect(result.diagnostics.map((d) => d.code ?? "core")).toEqual([
+    expect(result.diagnostics.map((d) => d.code)).toEqual([
       RESERVED_CODE,
-      "core",
+      "MX_STRUCTURAL_CONSTRUCT",
     ]);
     expect(result.diagnostics[1]?.message).toContain("the data tree is static");
   });

@@ -141,7 +141,11 @@ export interface TagFileDiagnostic {
    */
   readonly endLine?: number;
   readonly endColumn?: number;
-  /** `MX_`-style upper snake case, when the diagnostic has one. */
+  /**
+   * A code, when the diagnostic has one, in the dialect's own prefix. A code
+   * starting with `MX_` is MX's own: it is taken only on a diagnostic
+   * forwarded from `ctx.lower`, which reported it; any other is refused.
+   */
   readonly code?: string;
   /**
    * The file `line`/`column` are in, when it is not the tag file: a
@@ -571,7 +575,15 @@ function runHook(
   } finally {
     stack.pop();
   }
-  return answerOf(tag, dialect, result, thrown);
+  // The codes core itself reported to the hook: forwarding one of them is
+  // passing on MX's rule, not claiming an `MX_` code of the dialect's own.
+  const forwardable = new Set<string>();
+  for (const each of lowered.values()) {
+    for (const diagnostic of each.diagnostics) {
+      if (diagnostic.code !== undefined) forwardable.add(diagnostic.code);
+    }
+  }
+  return answerOf(tag, dialect, result, thrown, forwardable);
 }
 
 /** The hook's answer, as a read: its contract, or the error a call raises. */
@@ -580,6 +592,7 @@ function answerOf(
   dialect: Dialect,
   result: unknown,
   thrown: { error: unknown } | undefined,
+  forwardable: ReadonlySet<string> = new Set(),
 ): DeferredRead {
   const path = tag.tagFile as string;
   const errors: TranslateError[] = [];
@@ -597,7 +610,7 @@ function answerOf(
   } else {
     const answer = result as TagFileResult;
     for (const diagnostic of answer.diagnostics ?? []) {
-      const read = diagnosticOf(diagnostic, path);
+      const read = diagnosticOf(diagnostic, path, forwardable);
       if (read.severity === "warning") warnings.push(read.warning);
       else errors.push(read.error);
     }
@@ -709,6 +722,7 @@ function thrownError(error: unknown, path: string): TranslateError {
 function diagnosticOf(
   diagnostic: TagFileDiagnostic,
   path: string,
+  forwardable: ReadonlySet<string>,
 ):
   | { severity: "warning"; warning: MxWarning }
   | { severity: "error"; error: TranslateError } {
@@ -733,14 +747,19 @@ function diagnosticOf(
     valid && typeof diagnostic.code === "string" && diagnostic.code !== ""
       ? diagnostic.code
       : undefined;
-  if (code !== undefined && isReservedHookCode(code)) {
+  if (
+    code !== undefined &&
+    isReservedHookCode(code) &&
+    !forwardable.has(code)
+  ) {
     // An `MX_` code is MX's own: a consumer must be able to trust that one
-    // is MX's rule, so the hook's diagnostic is refused, not passed on.
+    // is MX's rule, so a hook's diagnostic with one that core did not report
+    // to it (`ctx.lower`) is refused, not passed on.
     return {
       severity: "error",
       error: codedError(
         DIALECT_HOOK_ERROR_CODE,
-        `the dialect's \`tagFile\` hook returned a diagnostic whose ${reservedHookCodeMessage(code)}`,
+        `the dialect's \`tagFile\` hook returned a diagnostic whose ${reservedHookCodeMessage(code)} (only a diagnostic \`ctx.lower\` reported keeps an \`MX_\` code)`,
         line,
         column,
         file,

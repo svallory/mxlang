@@ -59,6 +59,7 @@ const IF = {
     "the data tree is static; this file's consumer does not evaluate `<if>`",
   line: 4,
   column: 2,
+  code: "MX_STRUCTURAL_CONSTRUCT",
 } as const;
 const IMPORT = {
   severity: "error",
@@ -66,6 +67,7 @@ const IMPORT = {
     "the data tree is static; this file's consumer does not evaluate `import`",
   line: 1,
   column: 0,
+  code: "MX_STRUCTURAL_CONSTRUCT",
 } as const;
 const UNKNOWN = {
   severity: "error",
@@ -297,6 +299,7 @@ describe("R5: a value outside the option's set", () => {
         message: `the \`dialect\` option is not a valid dialect: ${message}`,
         line: 1,
         column: 0,
+        code: "MX_INVALID_DIALECT_MODULE",
       },
     ]);
   });

@@ -45,7 +45,15 @@ describe("the scriptlet error", () => {
     "%j reads exactly, positioned at the `$`",
     (source, message, line, column, offset, end) => {
       expect(lowerSource(source, "/t.mx").diagnostics).toEqual([
-        { severity: "error", message, line, column, offset, end },
+        {
+          severity: "error",
+          message,
+          line,
+          column,
+          offset,
+          end,
+          code: "MX_UNSUPPORTED_CONSTRUCT",
+        },
       ]);
     },
   );

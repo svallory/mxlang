@@ -405,10 +405,10 @@ describe("`unit.fail` and `unit.warn`", () => {
     expect(error.file).toBeUndefined();
   });
 
-  it("without `at` the error is file-level (0:0), with no code or spans", () => {
+  it("without `at` the error is file-level (0:0), with the default code and no spans", () => {
     const error = failing((unit) => unit.fail("whole file"));
     expect([error.line, error.column]).toEqual([0, 0]);
-    expect(error.diagnosticCode).toBeUndefined();
+    expect(error.diagnosticCode).toBe("MX_DIALECT_ERROR");
     expect(error.spans).toBeUndefined();
   });
 
@@ -450,9 +450,60 @@ describe("`unit.fail` and `unit.warn`", () => {
       { warnings },
     );
     expect(warnings).toEqual([
-      { message: "here", line: 2, column: 1 },
-      { message: "file", line: 0, column: 0 },
+      { message: "here", line: 2, column: 1, code: "MX_DIALECT_WARNING" },
+      { message: "file", line: 0, column: 0, code: "MX_DIALECT_WARNING" },
     ]);
+  });
+
+  it("keeps the span of `at` on the error, so a tool can draw its end", () => {
+    const error = failing((unit) =>
+      unit.fail("nope", { at: { sourceStart: 5, sourceEnd: 9 } }),
+    );
+    expect([error.line, error.column]).toEqual([2, 0]);
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 9 });
+  });
+
+  it("refuses a `code` that starts with `MX_`, MX's own prefix", () => {
+    const error = failing((unit) =>
+      unit.fail("nope", { code: "MX_UNKNOWN_TAG" }),
+    );
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.message).toContain(
+      "code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+    );
+  });
+
+  it("`warn` takes `{ at, code }`: the dialect's code at the span's start", () => {
+    const warnings: MxWarning[] = [];
+    compile(
+      "<x/>\n<y/>",
+      {},
+      {
+        ...noHooks,
+        afterLower: (unit) => {
+          unit.warn("here", {
+            at: { sourceStart: 6, sourceEnd: 7 },
+            code: "MESH_W",
+          });
+          unit.warn("no code", { at: { sourceStart: 0, sourceEnd: 1 } });
+        },
+      },
+      { warnings },
+    );
+    expect(warnings).toEqual([
+      { message: "here", line: 2, column: 1, code: "MESH_W" },
+      { message: "no code", line: 1, column: 0, code: "MX_DIALECT_WARNING" },
+    ]);
+  });
+
+  it("`warn` refuses a `code` that starts with `MX_`", () => {
+    const error = failing((unit) =>
+      unit.warn("w", { code: "MX_DUPLICATE_ATTRIBUTE" }),
+    );
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.message).toContain(
+      "code `MX_DUPLICATE_ATTRIBUTE` starts with `MX_`",
+    );
   });
 });
 

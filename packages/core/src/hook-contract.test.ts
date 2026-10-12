@@ -188,6 +188,17 @@ describe("hook contract additions", () => {
     expect([error.line, error.column]).toEqual([1, 6]);
   });
 
+  it("`ctx.fail` refuses a code that starts with `MX_`, MX's own prefix", () => {
+    const module = probe((_id, _text, _span, ctx) =>
+      ctx.fail("here", { code: "MX_UNKNOWN_TAG" }),
+    );
+    const error = caught(() => irOf("<div !ab/>", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.message).toContain(
+      "`ctx.fail`'s code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+    );
+  });
+
   it('`value: "refuse"` is a parser error at the operator', () => {
     const module = probe((_id, _text, _span, ctx) => ctx.attribute("x", true), {
       value: "refuse",

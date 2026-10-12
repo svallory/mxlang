@@ -48,6 +48,7 @@ describe("cold lookup cache", () => {
           line: 2,
           column: 2,
           offset: 13 + (name.length - "toString".length),
+          code: "MX_PARENT_NOT_ALLOWED",
         },
       ]);
     },

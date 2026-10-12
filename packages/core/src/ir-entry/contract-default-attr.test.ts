@@ -184,6 +184,7 @@ describe("customTags: a contract default on a contract-only tag", () => {
         line: 2,
         column: 0,
         offset: 1,
+        code: "MX_INVALID_CONTRACT",
       },
     ]);
   });

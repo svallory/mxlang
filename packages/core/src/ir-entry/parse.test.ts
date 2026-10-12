@@ -1021,6 +1021,7 @@ describe("round 2 (rev-236)", () => {
             column: 0,
             offset: 0,
             end: { line: 1, column: 7, offset: 7 },
+            code: "MX_NOT_IN_DATA_FILE",
           },
         ]);
         for (const diagnostic of result.diagnostics) {
@@ -1055,6 +1056,7 @@ describe("round 2 (rev-236)", () => {
           column: 0,
           offset: 0,
           end: { line: 1, column: 0, offset: 0 },
+          code: "MX_PARSE_MALFORMED_OPEN_TAG",
         },
       ]);
     });
@@ -1141,6 +1143,7 @@ describe("round 2 (rev-236)", () => {
           column: 0,
           offset: 11,
           end: { line: 2, column: 15, offset: 26 },
+          code: "MX_UNSUPPORTED_CONSTRUCT",
         },
       ]);
     });
@@ -1175,6 +1178,7 @@ describe("round 2 (rev-236)", () => {
             column: 3,
             offset: 3,
             end: { line: 1, column: 18, offset: 18 },
+            code: "MX_UNSUPPORTED_CONSTRUCT",
           },
         ]);
       }
@@ -1776,6 +1780,7 @@ describe("fail-fast parse (the addendum's item 8)", () => {
         column: 0,
         offset: 0,
         end: { line: 1, column: 0, offset: 0 },
+        code: "MX_PARSE_MALFORMED_OPEN_TAG",
       },
     ]);
   });
@@ -1791,6 +1796,7 @@ describe("fail-fast parse (the addendum's item 8)", () => {
         column: 5,
         offset: 23,
         end: { line: 2, column: 5, offset: 23 },
+        code: "MX_PARSE_INVALID_ATTRIBUTE_VALUE",
       },
     ]);
   });
@@ -1818,6 +1824,7 @@ describe("a registration error with no source position is file-level", () => {
         line: 1,
         column: 0,
         offset: 0,
+        code: "MX_INVALID_CONTRACT",
       },
     ]);
   });
@@ -1898,6 +1905,7 @@ describe("an error in another file keeps `offset: -1`", () => {
         offset: -1,
         end: { line: 1, column: 7, offset: -1 },
         file: "/t/tags/badge.mx",
+        code: "MX_NOT_IN_DATA_FILE",
       },
     ]);
   });

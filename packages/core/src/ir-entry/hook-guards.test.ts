@@ -109,10 +109,10 @@ describe("hook-contract guards and carriers", () => {
       message: "nope",
       code: "FIXTURE001",
     });
-    // A diagnostic with no code carries none.
-    expect(
-      lowerSource("<y x=(/>", "/v/x.mx", {}).diagnostics[0],
-    ).not.toHaveProperty("code");
+    // A diagnostic core raises carries core's own code.
+    expect(lowerSource("<y x=(/>", "/v/x.mx", {}).diagnostics[0]?.code).toMatch(
+      /^MX_/,
+    );
   });
 
   it("a method value the hook drops is named a method value", () => {

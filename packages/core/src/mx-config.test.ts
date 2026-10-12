@@ -953,6 +953,7 @@ describe("the tag scan reads the same config", () => {
         ),
         line: 1,
         column: expect.any(Number),
+        code: "MX_IGNORED_CONFIG",
       },
     ]);
   });

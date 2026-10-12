@@ -350,9 +350,11 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
 
   describe("`defaultTag`: the registration check, at the derived contract's call", () => {
     const SOURCE = "<money>\n  <.x/>\n</money>\n";
-    const messages = (
-      list: ReadonlyArray<{ message: string; code?: string }>,
-    ) => list.map(({ message, code }) => ({ message, code }));
+    // The registration check is a host-policy diagnostic and keeps its own
+    // `invalid-default-tag` code; the lowering's copy at the call carries the
+    // catalogue's `MX_INVALID_DEFAULT_TAG`. The two sides agree on the text.
+    const messages = (list: ReadonlyArray<{ message: string }>) =>
+      list.map(({ message }) => message);
 
     /** The eager side's registration diagnostics (the registry's check). */
     function registration(
@@ -372,7 +374,7 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
       });
     }
 
-    it("a bad value: the same message and code, the eager one at its declaration, the derived one at the call", () => {
+    it("a bad value: the same message, the eager one at its declaration, the derived one at the call", () => {
       bothSides({ defaultTag: "nowhere" });
       const eager = [
         ...registration(),
@@ -386,7 +388,7 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
             "invalid `defaultTag` value: `<nowhere>` is not a tag reachable from this package (contract of `<money>`)",
           line: 1,
           column: 0,
-          code: "invalid-default-tag",
+          code: "MX_INVALID_DEFAULT_TAG",
         },
       ]);
     });
@@ -451,7 +453,7 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
       const derived = compileErrors("page.kit.mx", policy);
       expect(derived).toEqual(eager);
       expect(derived.map((each) => each.code)).not.toContain(
-        "invalid-default-tag",
+        "MX_INVALID_DEFAULT_TAG",
       );
     });
 
@@ -465,12 +467,12 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
         expect.objectContaining({
           line: 1,
           column: 0,
-          code: "invalid-default-tag",
+          code: "MX_INVALID_DEFAULT_TAG",
         }),
         expect.objectContaining({
           line: 1,
           column: 0,
-          code: "invalid-default-tag",
+          code: "MX_INVALID_DEFAULT_TAG",
         }),
       ]);
       expect(
@@ -497,7 +499,7 @@ describe("the pin: a derived contract behaves as the same `.tag.ts` contract", (
         {
           message:
             "`defaultTag` in the contract of `<money>` is not allowed: target `page` does not permit per-tag default tags",
-          code: "invalid-default-tag",
+          code: "MX_INVALID_DEFAULT_TAG",
           line: 1,
           column: 0,
         },
@@ -559,6 +561,7 @@ describe("lazy derivation", () => {
         message: expect.stringContaining("amount"),
         line: 1,
         column: 0,
+        code: "MX_MISSING_ATTRIBUTE",
       },
     ]);
     expect(count("money.kit.mx")).toBe(2);
@@ -642,6 +645,7 @@ describe("lazy derivation", () => {
           message: `\`<${name}>\`: missing required attribute \`v\``,
           line: 2,
           column: 0,
+          code: "MX_MISSING_ATTRIBUTE",
           file: "concepts/money.kit.mx",
         },
       ]);
@@ -797,6 +801,7 @@ describe("dependencies", () => {
         message: expect.stringContaining("`v`"),
         line: 2,
         column: 0,
+        code: "MX_MISSING_ATTRIBUTE",
         file: "concepts/money.kit.mx",
       },
     ]);
@@ -1109,6 +1114,42 @@ describe("diagnostics", () => {
     });
   });
 
+  it("a diagnostic the hook makes up with an `MX_` code is refused as the hook's error", () => {
+    kitProject();
+    tagFile("money", {
+      contract: {},
+      diagnostics: [
+        {
+          severity: "error",
+          message: "bad",
+          line: 2,
+          column: 0,
+          code: "MX_UNKNOWN_TAG",
+        },
+      ],
+    });
+    const found = brief(lowerAt("page.kit.mx", "<money/>\n"));
+    expect(found.map((d) => d.code)).toContain("MX_DIALECT_HOOK_ERROR");
+    expect(found.map((d) => d.code)).not.toContain("MX_UNKNOWN_TAG");
+    expect(found.map((d) => d.message).join("\n")).toContain(
+      "code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+    );
+  });
+
+  it("a diagnostic `ctx.lower` reported keeps core's `MX_` code when the hook forwards it", () => {
+    kitProject();
+    tagFile("money", { lower: true }, "<money2/>\n");
+    tagFile("money2", { contract: { attributes: { v: { required: true } } } });
+    const found = brief(lowerAt("page.kit.mx", "<money/>\n"));
+    expect(found).toContainEqual(
+      expect.objectContaining({
+        code: "MX_MISSING_ATTRIBUTE",
+        file: "concepts/money.kit.mx",
+      }),
+    );
+    expect(found.map((d) => d.code)).not.toContain("MX_DIALECT_HOOK_ERROR");
+  });
+
   it("an unknown nested key goes through the registration checks, at the call", () => {
     kitProject();
     tagFile("money", { contract: { attributes: { a: { values: ["x"] } } } });
@@ -1119,6 +1160,7 @@ describe("diagnostics", () => {
         message: expect.stringContaining('Unknown key "values"'),
         line: 2,
         column: 2,
+        code: "MX_INVALID_CONTRACT",
       },
     ]);
   });
@@ -1140,6 +1182,7 @@ describe("diagnostics", () => {
           message: expect.stringContaining("kind must not be bad"),
           line: 2,
           column: 2,
+          code: "MX_DIALECT_ERROR",
         },
       ],
     );
@@ -1372,6 +1415,7 @@ describe("unsaved tag files", () => {
         message: expect.stringContaining("`v`"),
         line: 2,
         column: 0,
+        code: "MX_MISSING_ATTRIBUTE",
         file: "concepts/money.kit.mx",
       },
     ]);

@@ -123,7 +123,7 @@ describe("customTags", () => {
     );
     expect(error).toMatchObject({
       message: unknownKey("atributes", "card"),
-      code: undefined,
+      code: "MX_INVALID_CONTRACT",
       file: undefined,
       line: 0,
       column: 0,
@@ -138,6 +138,7 @@ describe("customTags", () => {
       line: 1,
       column: 0,
       offset: 0,
+      code: "MX_INVALID_CONTRACT",
     });
   });
 
@@ -181,7 +182,7 @@ describe("a sidecar", () => {
     const caught = refusal(() => readAll(scan().customTags.card));
     expect(caught).toMatchObject({
       message: unknownKey("atributes", "card"),
-      code: undefined,
+      code: "MX_INVALID_CONTRACT",
       file,
       line: 3,
       column: 2,
@@ -286,7 +287,7 @@ describe("an `mx.contracts` module", () => {
     const caught = refusal(() => scan());
     expect(caught).toMatchObject({
       message: unknownKey("atributes", "card", MX_CONTRACTS_ALLOWED),
-      code: undefined,
+      code: "MX_INVALID_CONTRACT",
       file,
       line: 4,
       column: 4,

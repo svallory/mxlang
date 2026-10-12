@@ -3197,6 +3197,7 @@ describe("event attributes", () => {
         line: 1,
         column: 8,
         file: "test.mx",
+        code: "MX_NOT_A_DOM_EVENT",
       },
     ]);
   });
@@ -3214,7 +3215,13 @@ describe("event attributes", () => {
     ])("warns at the tag name for %s", (_name, call) => {
       const { warnings } = lowerWithWarnings(def + call, flagged());
       expect(warnings).toEqual([
-        { message, line: 2, column: 1, file: "test.mx" },
+        {
+          message,
+          line: 2,
+          column: 1,
+          file: "test.mx",
+          code: "MX_DEFINE_EXTRA_PARAMS",
+        },
       ]);
     });
 

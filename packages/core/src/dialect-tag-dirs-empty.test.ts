@@ -282,7 +282,12 @@ describe("the `tagDirs` field", () => {
 
   it("(d) a string is still an error at the field, in the new words", () => {
     expect(manifestError({ tagDirs: "tags" })).toEqual([
-      { message: FIELD, line: 11, column: 6, code: undefined },
+      {
+        message: FIELD,
+        line: 11,
+        column: 6,
+        code: "MX_INVALID_DIALECT_MANIFEST",
+      },
     ]);
   });
 
@@ -291,7 +296,12 @@ describe("the `tagDirs` field", () => {
     ["a number", { tagDirs: 1 }],
   ])("%s is the same error", (_name, fields) => {
     expect(manifestError(fields)).toEqual([
-      { message: FIELD, line: 11, column: 6, code: undefined },
+      {
+        message: FIELD,
+        line: 11,
+        column: 6,
+        code: "MX_INVALID_DIALECT_MANIFEST",
+      },
     ]);
   });
 
@@ -301,7 +311,7 @@ describe("the `tagDirs` field", () => {
         message: "`mx.dialect.tagDirs`: 7 is not a directory name",
         line: 11,
         column: 6,
-        code: undefined,
+        code: "MX_INVALID_DIALECT_MANIFEST",
       },
     ]);
   });
@@ -312,7 +322,7 @@ describe("the `tagDirs` field", () => {
         message: "`mx.dialect.tagDirs` lists `a` twice",
         line: 11,
         column: 6,
-        code: undefined,
+        code: "MX_INVALID_DIALECT_MANIFEST",
       },
     ]);
   });

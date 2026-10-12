@@ -52,9 +52,9 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
   const DEFAULT = { line: 1, column: 0, offset: 0 };
   const PLACED = { line: 2, column: 0, offset: 7 };
 
-  it("keeps the positional form, with no code", () => {
+  it("keeps the positional form, with the default code", () => {
     const got = run((ctx) => ctx.fail("boom", AT), where);
-    expect(got).toMatchObject({ code: undefined, ...PLACED });
+    expect(got).toMatchObject({ code: "MX_TAG_ERROR", ...PLACED });
     expect(got?.message).toContain("boom");
   });
   it("takes at and code", () => {
@@ -68,13 +68,48 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
     const got = run((ctx) => ctx.fail("boom", { code: "X_ONE" }), where);
     expect(got).toMatchObject({ code: "X_ONE", ...DEFAULT });
   });
-  it("takes at alone, with no code", () => {
+  it("takes at alone, with the default code", () => {
     const got = run((ctx) => ctx.fail("boom", { at: AT }), where);
-    expect(got).toMatchObject({ code: undefined, ...PLACED });
+    expect(got).toMatchObject({ code: "MX_TAG_ERROR", ...PLACED });
+  });
+  it("takes at as a source span, positioned at its start", () => {
+    // `<box/>\n<box/>\n`: offset 8 is the second call's name, 2:1.
+    const got = run(
+      (ctx) =>
+        ctx.fail("boom", {
+          at: { sourceStart: 8, sourceEnd: 11 },
+          code: "X_SPAN",
+        }),
+      where,
+    );
+    expect(got).toMatchObject({
+      code: "X_SPAN",
+      line: 2,
+      column: 1,
+      offset: 8,
+    });
+  });
+  it("refuses a span outside the document", () => {
+    const got = run(
+      (ctx) => ctx.fail("boom", { at: { sourceStart: 5, sourceEnd: 99 } }),
+      where,
+    );
+    expect(got?.message).toContain("span inside the document (0 to 14)");
+    expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
+  });
+  it("refuses a code with MX's own `MX_` prefix", () => {
+    const got = run(
+      (ctx) => ctx.fail("boom", { at: AT, code: "MX_UNKNOWN_TAG" }),
+      where,
+    );
+    expect(got?.message).toContain(
+      "code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+    );
+    expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
   it("takes no second argument", () => {
     expect(run((ctx) => ctx.fail("boom"), where)).toMatchObject({
-      code: undefined,
+      code: "MX_TAG_ERROR",
       ...DEFAULT,
     });
   });
@@ -94,12 +129,12 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
     const got = run((ctx) => ctx.fail("boom", arg), where);
     expect(got?.message).toContain("takes a position or");
     expect(got?.message).toContain(why);
-    expect(got).toMatchObject({ code: undefined, ...DEFAULT });
+    expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
   it("refuses an empty code", () => {
     const got = run((ctx) => ctx.fail("boom", { at: AT, code: "" }), where);
     expect(got?.message).toContain("`code` must be a non-empty string");
-    expect(got).toMatchObject({ code: undefined, ...DEFAULT });
+    expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
 });
 

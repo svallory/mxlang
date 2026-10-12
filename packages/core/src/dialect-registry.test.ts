@@ -382,6 +382,20 @@ describe("the type's hooks are checked, positioned at the trigger", () => {
     );
   });
 
+  it("`ctx.fail` refuses a code that starts with `MX_`, MX's own prefix", () => {
+    const dialect = refWith({
+      parse: (_text, _span, ctx) =>
+        ctx.fail("here", { code: "MX_UNKNOWN_TAG" }),
+    });
+    const error = caught(() => irOf("sort ~user\n", dialect));
+    expect((error as { diagnosticCode?: string }).diagnosticCode).toBe(
+      "MX_DIALECT_HOOK_ERROR",
+    );
+    expect(error.message).toContain(
+      "`ctx.fail`'s code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+    );
+  });
+
   it("`ctx.fail` at a span inside the document", () => {
     const dialect = refWith({
       parse: (_text, span, ctx) =>

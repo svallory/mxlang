@@ -10,6 +10,7 @@ import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { describe, expect, it } from "vitest";
 import { compileSource } from "../compile.ts";
 import type { CustomTag } from "../custom-tags.ts";
+import { MX_DIAGNOSTIC_CODES } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
 import { taglibsOfRules, tagRulesPreset } from "../tag-presets.ts";
 import { createTargetLookup } from "../target-descriptor.ts";
@@ -49,6 +50,7 @@ describe("every error is reported", () => {
         column: 11,
         offset: 11,
         end: { line: 1, column: 11, offset: 11 },
+        code: "MX_PARSE_MALFORMED_COMMENT",
       },
     ]);
   });
@@ -281,6 +283,7 @@ describe("no input makes lowerSource throw", () => {
         column: 1,
         offset: 1,
         end: { line: 1, column: 2, offset: 2 },
+        code: "MX_INPUT_ENDS_IN_DELIMITER",
       },
     ]);
   });
@@ -344,6 +347,7 @@ describe("no input makes lowerSource throw", () => {
         line: 1,
         column: 0,
         offset: 0,
+        code: "MX_INTERNAL_ERROR",
       },
     ]);
   });
@@ -556,5 +560,48 @@ describe("checkIr lists the errors lowerSource reports", () => {
       expect.stringContaining("`import` statement carries no span"),
       "injected",
     ]);
+  });
+});
+
+describe("every diagnostic carries a code from the catalogue", () => {
+  const catalogue = new Set(MX_DIAGNOSTIC_CODES.map((entry) => entry.code));
+  // One input per way an error reaches `lowerSource`'s list: the template
+  // parser, the front end, Babel, a lowering reject, the check, an unknown
+  // tag, a warning, a malformed transform (core's own invariant) and an
+  // aggregate of several.
+  it.each<[string, string, LowerSourceOptions?]>([
+    ["template parser", "<div></span>\n"],
+    ["template parser, recovered aggregate", "<a x=${y}/><!-- c\n<b x=(\n"],
+    ["front end", "x<a x=`${<a>"],
+    ["Babel", "<x a=(1 +)/>\n"],
+    ["lowering reject", "$ foo()\n"],
+    ["build rejects", "<${x}/>\n<${y}/>\n<a/>\n<!doctype html>\n"],
+    ["unknown tag", "<nowhere/>\n", { unknownTags: "reject" }],
+    ["duplicate attribute (a warning)", "<div a=1 a=2/>\n"],
+    [
+      "internal invariant",
+      "<m/>\n",
+      {
+        customTags: {
+          m: {
+            transform: () => [
+              { kind: "Text", value: "x", loc: { line: 1, column: 0 } },
+            ],
+          },
+        },
+      },
+    ],
+  ])("%s", (_, source, options) => {
+    const { diagnostics } = lowerSource(source, "/t.mx", {
+      customTags,
+      ...options,
+    });
+    expect(diagnostics.length).toBeGreaterThan(0);
+    for (const diagnostic of diagnostics) {
+      expect(diagnostic.code, diagnostic.message).toBeDefined();
+      expect(catalogue.has(diagnostic.code as string), diagnostic.code).toBe(
+        true,
+      );
+    }
   });
 });

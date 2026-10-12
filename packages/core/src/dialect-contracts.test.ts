@@ -183,7 +183,7 @@ describe("R1: a dialect contract checks a call exactly as the same contract pass
     expect(at(CALLS["missing attribute"] as string)).toEqual([
       {
         message: "`<panel>`: missing required attribute `title`",
-        code: undefined,
+        code: "MX_MISSING_ATTRIBUTE",
         line: 1,
         column: 0,
         offset: 0,
@@ -343,7 +343,7 @@ describe("R3: precedence, one fixture per source", () => {
       ...options,
     });
   const MISSING_K = (name: string) => ({
-    code: undefined,
+    code: "MX_MISSING_ATTRIBUTE",
     message: `\`<${name}>\`: missing required attribute \`k\``,
     line: 1,
     column: 0,
@@ -521,7 +521,7 @@ describe("R3: precedence, one fixture per source", () => {
     // Without the caller's definition the dialect's contract applies.
     expect(compilePage('<plain other="x"/>\n', {})).toEqual({
       message: "`<plain>`: unknown attribute `other`",
-      code: undefined,
+      code: "MX_UNKNOWN_ATTRIBUTE",
     });
   });
 
@@ -553,7 +553,7 @@ describe("R3: precedence, one fixture per source", () => {
     // The control: without the caller's definition the reserved contract applies.
     expect(compilePage('<sealed other="x"/>\n', {}, dialect)).toEqual({
       message: "`<sealed>`: unknown attribute `other`",
-      code: undefined,
+      code: "MX_UNKNOWN_ATTRIBUTE",
     });
   });
 
@@ -617,7 +617,7 @@ describe("R3: precedence, one fixture per source", () => {
         lowerSource(source, page(), { customTags: { sealed: loose } })
           .diagnostics,
       ).map((d) => (d as { code?: string }).code),
-    ).toEqual([RESERVED_CODE, undefined]);
+    ).toEqual([RESERVED_CODE, "MX_UNKNOWN_ATTRIBUTE"]);
     // Explicit, the same dialect object's caller owns the vocabulary.
     expect(
       lowerSource(source, page(), {
@@ -645,7 +645,7 @@ describe("R3: precedence, one fixture per source", () => {
     // contract is never consulted.
     expect(brief(bound.diagnostics)).toEqual([
       {
-        code: undefined,
+        code: "MX_NOT_IN_DATA_FILE",
         message:
           // biome-ignore lint/suspicious/noTemplateCurlyInString: MX syntax in a message.
           "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
@@ -867,6 +867,15 @@ describe("R4: a contract that cannot register fails the dialect at load", () => 
         at(module, "`contracts.box`: box cannot be square", 8, 4, "LEXI_SHAPE"),
       );
     });
+    it("a code that starts with `MX_` is refused, naming MX's prefix", () => {
+      moduleProject(source('ctx.fail("no", { code: "MX_UNKNOWN_TAG" });'));
+      const found = reported();
+      expect(found).toHaveLength(1);
+      expect(found[0]?.code).toBe("MX_DIALECT_HOOK_ERROR");
+      expect(found[0]?.message).toContain(
+        "code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
+      );
+    });
     it("without a code, the dialect-contract code", () => {
       const module = moduleProject(
         // biome-ignore lint/suspicious/noTemplateCurlyInString: JavaScript source text for a fixture module.
@@ -1036,7 +1045,7 @@ describe("R5: a dialect's reserved contract is refused everywhere exactly as cor
     expect(shape(ofLexi.diagnostics, lexi)).toHaveLength(1);
     // And the call keeps the owner's contract.
     expect(brief(ofLexi.diagnostics)[1]).toEqual({
-      code: undefined,
+      code: "MX_MISSING_ATTRIBUTE",
       message: "`<trial>`: missing required attribute `k`",
       line: 1,
       column: 0,
@@ -1250,7 +1259,12 @@ describe("a dialect with `contracts` and `explainUnknownTag`, in allow mode", ()
     expect(
       diagnostics.map((d) => [d.code, d.message, d.line, d.column]),
     ).toEqual([
-      [undefined, "`<entity>`: missing required attribute `name`", 1, 0],
+      [
+        "MX_MISSING_ATTRIBUTE",
+        "`<entity>`: missing required attribute `name`",
+        1,
+        0,
+      ],
     ]);
   });
 });

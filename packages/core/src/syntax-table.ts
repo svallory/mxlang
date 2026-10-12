@@ -31,7 +31,9 @@ import {
   INVALID_DIALECT_CONTRACT_CODE,
   INVALID_DIALECT_MODULE_CODE,
   MODULE_LOAD_FAILED_CODE,
+  type MxDiagnosticCode,
   NO_LOWERING_CODE,
+  parseDiagnosticCode,
   RESERVED_TAG_CODE,
 } from "./diagnostic-codes.ts";
 import {
@@ -1419,12 +1421,25 @@ export function tableParseError(
   if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
     return undefined;
   }
-  let found: { start: number; message: string } | undefined;
-  const consider = (start: number, message: string) => {
-    if (!found || start < found.start) found = { start, message };
+  let found:
+    | { start: number; message: string; code: MxDiagnosticCode }
+    | undefined;
+  const consider = (
+    start: number,
+    message: string,
+    code: MxDiagnosticCode = NO_LOWERING_CODE,
+  ) => {
+    if (!found || start < found.start) found = { start, message, code };
   };
   for (const error of document.errors ?? []) {
-    if (error.origin === "template") consider(error.start, error.message);
+    // A template parse error keeps the parser's own code.
+    if (error.origin === "template") {
+      consider(
+        error.start,
+        error.message,
+        parseDiagnosticCode(error.code) ?? NO_LOWERING_CODE,
+      );
+    }
   }
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
@@ -1455,11 +1470,5 @@ export function tableParseError(
   visit(document.body);
   if (!found) return undefined;
   const { line, column } = filePosition(document, found.start);
-  return codedError(
-    NO_LOWERING_CODE,
-    found.message,
-    line,
-    column,
-    site.filename,
-  );
+  return codedError(found.code, found.message, line, column, site.filename);
 }

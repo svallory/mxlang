@@ -211,11 +211,37 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
       },
     ]);
   });
+});
 
-  it("an unrelated parse error carries no code", () => {
-    const [diagnostic] = only(`<x a=(1 +)/>\n`, {});
-    expect(diagnostic).toBeDefined();
-    expect(diagnostic).not.toHaveProperty("code");
+describe("parse errors carry a code", () => {
+  const at = (source: string) =>
+    only(source, {}).map(({ code, line, column }) => ({ code, line, column }));
+
+  it("a template parse error carries `MX_PARSE_<CODE>`", () => {
+    expect(at("<div></span>\n")).toEqual([
+      { code: "MX_PARSE_MISMATCHED_CLOSING_TAG", line: 1, column: 5 },
+    ]);
+    expect(at("<x>\n")).toEqual([
+      { code: "MX_PARSE_MISSING_END_TAG", line: 1, column: 0 },
+    ]);
+  });
+
+  it("an expression's parse error carries `MX_PARSE_EXPRESSION`", () => {
+    expect(at("<x a=(1 +)/>\n")).toEqual([
+      { code: "MX_PARSE_EXPRESSION", line: 1, column: 9 },
+    ]);
+  });
+
+  it("a root-level attribute tag is `MX_ATTRIBUTE_TAG_AT_ROOT`", () => {
+    expect(at("<@foo/>\n")).toEqual([
+      { code: "MX_ATTRIBUTE_TAG_AT_ROOT", line: 1, column: 1 },
+    ]);
+  });
+
+  it("a bare `,` is `MX_TAG_NAME_MISSING`", () => {
+    expect(at(",\n")).toEqual([
+      { code: "MX_TAG_NAME_MISSING", line: 1, column: 0 },
+    ]);
   });
 });
 
