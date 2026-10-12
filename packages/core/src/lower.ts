@@ -999,14 +999,74 @@ function lowerAttr(
         ? { sourceStart: outer.start, sourceEnd: outer.end }
         : undefined;
     const span = wholeAttrSpan(lowered, argsSpan);
-    // The parsed attribute ends at its last character; the value's own span
-    // leaves out a parenthesised value's closing `)` (`a=(\n  1\n)`).
-    if (span && attr?.type === "MxAttribute" && typeof attr.end === "number") {
-      span.sourceEnd = Math.max(span.sourceEnd, attr.end);
+    if (span) {
+      span.sourceEnd = closeValueParens(ctx.source, lowered, span, argsSpan);
+      lowered.span = span;
     }
-    if (span) lowered.span = span;
   }
   return lowered;
+}
+
+/**
+ * Where a named attribute ends once the `)` that close a parenthesised value
+ * are in: the value's own span leaves them out (`a=(\n  1\n)` ends at the
+ * `1`). The parentheses opened between the name (or its arguments) and the
+ * value are counted, comments skipped, and one `)` per level is taken after
+ * the value, with whitespace and comments between. A trailing comment that is
+ * not followed by a `)` is not part of the attribute, and nothing changes
+ * when the value has no leading parenthesis (`a=(1)+(2)` starts its value at
+ * the first one).
+ */
+function closeValueParens(
+  source: string,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  span: SourceSpan,
+  argsSpan?: SourceSpan,
+): number {
+  const value =
+    attr.kind === "static"
+      ? attr.valueSpan
+      : attr.kind === "boolean"
+        ? undefined
+        : attr.value.span;
+  if (!value) return span.sourceEnd;
+  let from = Math.max(attr.nameSpan?.sourceEnd ?? 0, argsSpan?.sourceEnd ?? 0);
+  if (attr.kind === "bound" && attr.refinement?.span) {
+    from = Math.max(from, attr.refinement.span.sourceEnd);
+  }
+  let open = 0;
+  for (let at = from; at < value.sourceStart; ) {
+    const skipped = skipTrivia(source, at);
+    if (skipped > at) at = skipped;
+    else {
+      if (source[at] === "(") open++;
+      at++;
+    }
+  }
+  let end = span.sourceEnd;
+  for (let level = 0; level < open; level++) {
+    const at = skipTrivia(source, end);
+    if (source[at] !== ")") break;
+    end = at + 1;
+  }
+  return end;
+}
+
+/** The offset after the whitespace and comments that start at `at`. */
+function skipTrivia(source: string, at: number): number {
+  let end = at;
+  for (;;) {
+    if (/\s/.test(source[end] ?? "")) end++;
+    else if (source.startsWith("/*", end)) {
+      const close = source.indexOf("*/", end + 2);
+      if (close < 0) return source.length;
+      end = close + 2;
+    } else if (source.startsWith("//", end)) {
+      const newline = source.indexOf("\n", end);
+      if (newline < 0) return source.length;
+      end = newline + 1;
+    } else return end;
+  }
 }
 
 /**

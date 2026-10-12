@@ -145,9 +145,9 @@ export interface TagFileDiagnostic {
   /**
    * A code, when the diagnostic has one, in the dialect's own prefix. A code
    * starting with `MX_` is MX's own: it is kept only on a diagnostic object
-   * `ctx.lower` returned, passed on as it is (the same object: a copy or a
-   * rewrite of it is the hook's own, and is refused under an `MX_` code); any
-   * other is refused.
+   * `ctx.lower` returned, passed on as it is (the same object, unchanged: a
+   * copy, a rewrite or an edit in place is the hook's own, and is refused
+   * under an `MX_` code); any other is refused.
    */
   readonly code?: string;
   /**
@@ -522,6 +522,8 @@ function runHook(
 ): DeferredRead {
   const path = tag.tagFile as string;
   const lowered = new Map<string, LowerSourceResult>();
+  // What each diagnostic `ctx.lower` returned said when it returned it.
+  const reported = new Map<object, string>();
   const mergedIds = new WeakMap<object, number>();
   let nextId = 0;
   const ctx: TagFileContext = {
@@ -557,6 +559,9 @@ function runHook(
           : {}),
       });
       lowered.set(key, result);
+      for (const diagnostic of result.diagnostics) {
+        reported.set(diagnostic, snapshotOf(diagnostic));
+      }
       return result;
     },
     dependsOn(file) {
@@ -578,14 +583,11 @@ function runHook(
   } finally {
     stack.pop();
   }
-  // The diagnostics core itself reported to the hook, as the objects
-  // `ctx.lower` returned: passing one of them on is passing on MX's rule, not
-  // claiming an `MX_` code of the dialect's own. A copy is the hook's own.
-  const forwardable = new Set<object>();
-  for (const each of lowered.values()) {
-    for (const diagnostic of each.diagnostics) forwardable.add(diagnostic);
-  }
-  return answerOf(tag, dialect, result, thrown, forwardable);
+  // The diagnostics core itself reported to the hook are the objects
+  // `ctx.lower` returned, as they said when it returned them: passing one on
+  // is passing on MX's rule, not claiming an `MX_` code of the dialect's own.
+  // A copy is the hook's own, and so is an object the hook changed in place.
+  return answerOf(tag, dialect, result, thrown, reported);
 }
 
 /** The hook's answer, as a read: its contract, or the error a call raises. */
@@ -594,7 +596,7 @@ function answerOf(
   dialect: Dialect,
   result: unknown,
   thrown: { error: unknown } | undefined,
-  forwardable: ReadonlySet<object> = new Set(),
+  reported: ReadonlyMap<object, string> = new Map(),
 ): DeferredRead {
   const path = tag.tagFile as string;
   const errors: TranslateError[] = [];
@@ -612,7 +614,7 @@ function answerOf(
   } else {
     const answer = result as TagFileResult;
     for (const diagnostic of answer.diagnostics ?? []) {
-      const read = diagnosticOf(diagnostic, path, forwardable);
+      const read = diagnosticOf(diagnostic, path, reported);
       if (read.severity === "warning") warnings.push(read.warning);
       else errors.push(read.error);
     }
@@ -724,7 +726,7 @@ function thrownError(error: unknown, path: string): TranslateError {
 function diagnosticOf(
   diagnostic: TagFileDiagnostic,
   path: string,
-  forwardable: ReadonlySet<object>,
+  reported: ReadonlyMap<object, string>,
 ):
   | { severity: "warning"; warning: MxWarning }
   | { severity: "error"; error: TranslateError } {
@@ -749,13 +751,15 @@ function diagnosticOf(
     valid && typeof diagnostic.code === "string" && diagnostic.code !== ""
       ? diagnostic.code
       : undefined;
-  const forwarded = valid && forwardable.has(diagnostic);
+  const forwarded =
+    valid && reported.get(diagnostic) === snapshotOf(diagnostic);
   if (code !== undefined && isReservedHookCode(code) && !forwarded) {
     // An `MX_` code is MX's own: a consumer must be able to trust that one
     // is MX's rule, so a hook's diagnostic with one that core did not report
     // to it is refused, not passed on. Reported to it means the object
-    // `ctx.lower` returned, not a copy or a rewrite of it, which would put the
-    // hook's own words under MX's code.
+    // `ctx.lower` returned, still as it said then: not a copy, and not that
+    // object changed in place, either of which would put the hook's own words
+    // (or a code core never reported) under MX's code.
     return {
       severity: "error",
       error: codedError(
@@ -795,6 +799,30 @@ function diagnosticOf(
   if (code !== undefined) error.diagnosticCode = code;
   if (end) error.end = end;
   return { severity: "error", error };
+}
+
+/** The fields of a diagnostic that say what it is, as one string to compare. */
+function snapshotOf(diagnostic: object): string {
+  const d = diagnostic as {
+    severity?: unknown;
+    message?: unknown;
+    line?: unknown;
+    column?: unknown;
+    offset?: unknown;
+    file?: unknown;
+    code?: unknown;
+    end?: { line?: unknown; column?: unknown; offset?: unknown };
+  };
+  return JSON.stringify([
+    d.severity,
+    d.message,
+    d.line,
+    d.column,
+    d.offset,
+    d.file,
+    d.code,
+    d.end && [d.end.line, d.end.column, d.end.offset],
+  ]);
 }
 
 /** `{ line, column }` when both are a position that does not end before `line:column`. */

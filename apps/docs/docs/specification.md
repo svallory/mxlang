@@ -3776,8 +3776,9 @@ host, a target or a dialect.
   `checkContract`'s `fail`, a `tagFile` hook's diagnostics) gets
   `MX_DIALECT_HOOK_ERROR` (`MX_TAG_HOOK_ERROR` from a contract hook) in place of
   its error, naming the code. A `tagFile` hook may hand back a diagnostic object
-  that `ctx.lower` returned, as that same object, with core's code unchanged; a
-  copy or a rewrite of it under an `MX_` code is refused the same way.
+  that `ctx.lower` returned, as that same object and unchanged, with core's code;
+  a copy, a rewrite, or an edit in place under an `MX_` code is refused the same
+  way.
 - **A bug in MX** surfaces as `MX_INTERNAL_ERROR` at 1:0, with the
   `internal error: ` prefix, so even a defect has a code.
 

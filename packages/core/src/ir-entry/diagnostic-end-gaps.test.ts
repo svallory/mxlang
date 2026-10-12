@@ -179,6 +179,31 @@ describe("an attribute with a parenthesised value ends after the `)`", () => {
     });
   });
 
+  it.each([
+    // [source, end offset of the first `a`, what the attribute covers]
+    ["<div a=1 /* c */ a=2/>\n", 8, "a=1"],
+    ["<div a=1 // c\n a=2/>\n", 8, "a=1"],
+    ["<div a=(1) /* c */ a=2/>\n", 10, "a=(1)"],
+    ["<div a=(1)\n  /* c */\n a=2/>\n", 10, "a=(1)"],
+    ["<div a=((1)) a=2/>\n", 12, "a=((1))"],
+    ["<div a=(1) /* ) */ a=2/>\n", 10, "a=(1)"],
+    ["<div a=(1 /* ) */) a=2/>\n", 18, "a=(1 /* ) */)"],
+    ["<div a=( /* ( */ 1) a=2/>\n", 19, "a=( /* ( */ 1)"],
+    ["<div a=(\n  1 // c\n) a=2/>\n", 19, "a=(\n  1 // c\n)"],
+    ["<div a=(1)+(2) a=3/>\n", 14, "a=(1)+(2)"],
+  ])(
+    "a comment after the value is not part of the attribute: %j ends at %i",
+    (source, end, covers) => {
+      const { diagnostics } = lowerSource(source, "/t.mx");
+      expect(diagnostics.map((d) => d.code)).toEqual([
+        "MX_DUPLICATE_ATTRIBUTE",
+      ]);
+      expect(diagnostics[0]?.offset).toBe(5);
+      expect(diagnostics[0]?.end?.offset).toBe(end);
+      expect(source.slice(5, diagnostics[0]?.end?.offset)).toBe(covers);
+    },
+  );
+
   it("an attribute without parentheses is unchanged", () => {
     const { diagnostics } = lowerSource("<div a=1 a=2/>\n", "/t.mx");
     expect(range(diagnostics[0])).toEqual({ start: [1, 5, 5], end: [1, 8, 8] });
@@ -198,6 +223,11 @@ describe("an attribute with a parenthesised value ends after the `)`", () => {
     ["x a=1 b=(\n 2\n)\n", "b", "b=(\n 2\n)"],
     ["x a=[\n 1\n] b=2\n", "a", "a=[\n 1\n]"],
     ["x a=1 b=2\n", "b", "b=2"],
+    ["x a=1 /* c */ b=2\n", "a", "a=1"],
+    ["x a=1 // c\n b=2\n", "a", "a=1"],
+    ["x a=(1) /* c */ b=2\n", "a", "a=(1)"],
+    ["x a=((1)) b=2\n", "a", "a=((1))"],
+    ["x a=(1) /* ) */ b=2\n", "a", "a=(1)"],
   ])("`Attr.span` of %j covers the whole attribute", (source, name, text) => {
     const found = attrsOf(source).find(
       (a) => a.kind !== "spread" && a.name === name,

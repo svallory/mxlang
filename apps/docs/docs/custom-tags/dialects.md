@@ -247,7 +247,7 @@ Every error MX reports carries a `code`, and every MX code starts with `MX_`. Th
 | a contract hook: `ctx.fail(message, { at, code })` | `MX_TAG_ERROR` | `MX_TAG_HOOK_ERROR` |
 | `tagFile`: a diagnostic you return | `MX_TAG_FILE_ERROR` (an error), `MX_DIALECT_WARNING` (a warning) | `MX_DIALECT_HOOK_ERROR`, unless it is a diagnostic object `ctx.lower` returned |
 
-`at` is a position (`{ line, column }`) or a span of the document (`{ sourceStart, sourceEnd }`); a span keeps its end, so an editor underlines the whole range. A `tagFile` hook may return the diagnostic objects `ctx.lower()` gave it as they are, codes included: forwarding MX's own diagnostic is not claiming its prefix. It has to be the same object. A copy (`{ ...d }`) or a rewrite (`{ ...d, message }`) is your own diagnostic, and under an `MX_` code it is refused: give it a code in your dialect's namespace, or none. Match on codes, not on message text: the codes are stable, the wording is not.
+`at` is a position (`{ line, column }`) or a span of the document (`{ sourceStart, sourceEnd }`); a span keeps its end, so an editor underlines the whole range. A `tagFile` hook may return the diagnostic objects `ctx.lower()` gave it as they are, codes included: forwarding MX's own diagnostic is not claiming its prefix. It has to be the same object, unchanged. A copy (`{ ...d }`), a rewrite (`{ ...d, message }`) and an edit of `d` in place are your own diagnostic, and under an `MX_` code they are refused: give it a code in your dialect's namespace, or none. Match on codes, not on message text: the codes are stable, the wording is not.
 
 ### A dialect's check in your own tool
 

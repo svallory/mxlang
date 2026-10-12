@@ -109,12 +109,20 @@ export default {
     if (d.lower) {
       const lowered = ctx.lower();
       if (d.lowerTwice && ctx.lower() !== lowered) throw new Error("not memoized");
-      // \`lower: true\` passes on the objects \`ctx.lower\` returned; "copy" and
-      // "reword" pass on a copy of each, the second with a message of its own.
+      // \`lower: true\` passes on the objects \`ctx.lower\` returned. "copy" and
+      // "reword" pass on a copy of each, the second with a message of its own;
+      // "inplace" and "forge" change the object itself, its message and then
+      // its code.
       for (const x of lowered.diagnostics) {
-        diagnostics.push(
-          d.lower === "copy" ? { ...x } : d.lower === "reword" ? { ...x, message: "x" } : x,
-        );
+        if (d.lower === "copy") diagnostics.push({ ...x });
+        else if (d.lower === "reword") diagnostics.push({ ...x, message: "x" });
+        else if (d.lower === "inplace") {
+          diagnostics.push(Object.assign(x, { message: "hook words" }));
+        } else if (d.lower === "forge") {
+          diagnostics.push(
+            Object.assign(x, { code: "MX_INTERNAL_ERROR", message: "forged" }),
+          );
+        } else diagnostics.push(x);
       }
     }
     return { contract: d.contract ?? {}, diagnostics };
@@ -1166,7 +1174,9 @@ describe("diagnostics", () => {
       file: "concepts/money.kit.mx",
     };
     /** `<money>` called from a page, its tag file passing `lower` on. */
-    function callMoney(lower: boolean | "copy" | "reword") {
+    function callMoney(
+      lower: boolean | "copy" | "reword" | "inplace" | "forge",
+    ) {
       kitProject();
       tagFile("money", { lower }, "<money2/>\n");
       tagFile("money2", {
@@ -1218,6 +1228,34 @@ describe("diagnostics", () => {
         },
         REFUSED,
       ]);
+    });
+
+    it("(e) the object reworded in place is refused too: it must still say what core said", () => {
+      expect(callMoney("inplace")).toEqual([
+        {
+          message:
+            "`<money>`'s definition has errors (concepts/money.kit.mx:2:1)",
+          line: 1,
+          column: 0,
+          code: "MX_TAG_FILE_ERROR",
+        },
+        REFUSED,
+      ]);
+    });
+
+    it("(f) the object given a code core never reported is refused, naming that code", () => {
+      const found = callMoney("forge");
+      expect(found.map((d) => d.code)).toEqual([
+        "MX_TAG_FILE_ERROR",
+        "MX_DIALECT_HOOK_ERROR",
+      ]);
+      expect(found[1]).toEqual({
+        ...REFUSED,
+        message: REFUSED.message.replace(
+          "MX_MISSING_ATTRIBUTE",
+          "MX_INTERNAL_ERROR",
+        ),
+      });
     });
 
     it("(d) a code of the hook's own, not `MX_`, passes unchanged", () => {
