@@ -1004,7 +1004,7 @@ export function resolveTargetPolicyDetailed(
         : undefined;
     const dataReserved =
       value === "data"
-        ? ' "data" is reserved for the evaluated tree target; a consumer that reads the tree calls lowerSource from @mxlang/core.'
+        ? ' "data" is reserved for a future evaluated target; a consumer that reads the tree calls lowerSource from @mxlang/core.'
         : "";
     diagnostics.push({
       code: "unknown-target",

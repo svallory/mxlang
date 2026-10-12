@@ -82,7 +82,7 @@ it('mx.target: "data" is refused as the reserved name', () => {
     length: 6,
   });
   expect(diagnostics[0]?.message).toBe(
-    'unknown mx.target "data"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. "data" is reserved for the evaluated tree target; a consumer that reads the tree calls lowerSource from @mxlang/core. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
+    'unknown mx.target "data"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. "data" is reserved for a future evaluated target; a consumer that reads the tree calls lowerSource from @mxlang/core. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
   );
 });
 it("tree is neither advertised nor suggested for an unknown target", () => {

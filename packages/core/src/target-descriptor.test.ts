@@ -589,7 +589,7 @@ describe("createTargetLookup", () => {
         'target "b" is built on "c"',
       );
       expect(message([html, built("mesh", "data")])).toBe(
-        'target "mesh" is built on "data", which is not a registered target (registered: html, mesh); "data" is reserved for the evaluated tree target; a consumer that reads the tree calls lowerSource from @mxlang/core',
+        'target "mesh" is built on "data", which is not a registered target (registered: html, mesh); "data" is reserved for a future evaluated target; a consumer that reads the tree calls lowerSource from @mxlang/core',
       );
       expect(message([data, solid, built("mesh", "solid")])).toBe(
         'target "mesh" is built on "solid", which is not a registered target (registered: data, solid-jsx, mesh); "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)',

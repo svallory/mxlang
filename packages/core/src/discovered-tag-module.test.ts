@@ -134,9 +134,28 @@ describe("a tag a translator taglib registers", () => {
     ]);
   });
 
+  it("tells a dialect user to import it, without the MX tag-file clause", () => {
+    let error: unknown;
+    try {
+      compileSource("<badge/>", CALLER, policy(), {
+        targets: lookup,
+        taglibs: [["acme-tags", { "<badge>": {} }]],
+        tagDiscoveryDirs: [],
+        productName: "Acme",
+        emitIr: () => "",
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect((error as Error).message).toBe(
+      "`<badge>` is declared by a taglib with no template (a `renderer`), which Acme cannot call. Import it explicitly.",
+    );
+    expect(error).toMatchObject({ line: 1, column: 0 });
+  });
+
   it("is an error when nothing resolves it to a module", () => {
     expect(() => lowerWithTaglib("<badge/>", policy())).toThrow(
-      "`<badge>` is declared by a taglib with no template (a `renderer`), which",
+      "`<badge>` is declared by a taglib with no template (a `renderer`), which MX cannot call. Write the tag as `tags/badge.mx`, or import it explicitly.",
     );
   });
 

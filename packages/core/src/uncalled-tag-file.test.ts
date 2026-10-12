@@ -105,4 +105,26 @@ describe("messages", () => {
     expect(message).toContain("`<x>` matches `tags/x/index.mx`");
     expect(message).toContain("MX calls flat `tags/<name>.mx` files only");
   });
+
+  it("a dialect's messages name its product and drop the `.mx` file clause", () => {
+    const found = {
+      file: join(root, "tags/x/index.mx"),
+      shape: "index" as const,
+    };
+    expect(
+      uncalledTagFileMessage(join(root, "page.mx"), "x", found, "Acme"),
+    ).toBe(
+      "`<x>` matches `tags/x/index.mx`, which Acme cannot call. Import it explicitly.",
+    );
+    expect(
+      markoFileTagMessage(
+        join(root, "page.mx"),
+        "x",
+        join(root, "tags/x/index.marko"),
+        "Acme",
+      ),
+    ).toBe(
+      "`<x>` resolves to `tags/x/index.marko`, a `.marko` file, and Acme does not compile `.marko` files. Convert it to a file Acme compiles.",
+    );
+  });
 });

@@ -74,6 +74,10 @@ export function uncalledTagFileMessage(
   product = MX_DIALECT.name,
 ): string {
   const shown = relative(dirname(resolve(filename)), found.file);
+  // A dialect names its own tag files, so the flat `.mx` clause is MX's alone.
+  if (product !== MX_DIALECT.name) {
+    return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call. Import it explicitly.`;
+  }
   return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call: ${product} calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
 }
 
@@ -90,6 +94,9 @@ export function markoFileTagMessage(
   product = MX_DIALECT.name,
 ): string {
   const shown = relative(dirname(resolve(filename)), file);
+  if (product !== MX_DIALECT.name) {
+    return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to a file ${product} compiles.`;
+  }
   const mx = shown.replace(/\.marko$/, ".mx");
   return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to \`.mx\` (\`${mx}\`).`;
 }

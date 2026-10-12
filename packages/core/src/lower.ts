@@ -126,6 +126,7 @@ import {
   invalidDefaultTagHint,
   resolveUnnamedTags,
 } from "./default-tag.ts";
+import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
 import { parseFragment } from "./fragment.ts";
@@ -2748,8 +2749,9 @@ function discoveredTagModuleOf(
 function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
   const found = uncalledTagFileOf(ctx, name);
   if (found) failUncalled(ctx, name, found, node);
+  const product = productOf(ctx);
   fail(
-    `\`<${name}>\` is declared by a taglib with no template (a \`renderer\`), which ${productOf(ctx)} cannot call. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`,
+    `\`<${name}>\` is declared by a taglib with no template (a \`renderer\`), which ${product} cannot call. ${product === MX_DIALECT.name ? `Write the tag as \`tags/${name}.mx\`, or import it explicitly.` : "Import it explicitly."}`,
     node,
   );
 }
