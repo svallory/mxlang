@@ -56,7 +56,7 @@ The real template binds `data-kind` through an `@let` that applies the value rul
 - **Selector**: `mx-` plus the file name (`mx-badge`). Change the prefix with `mx.angular.tagSelectorPrefix`, or one tag with `export const selector = "acme-card";`.
 - **No `@Output()`**: a function-typed property is an input, and the caller passes a callback.
 - **`import` and `static`** stay in the tag's module. An import of another `.mx` tag is rewritten to its generated module.
-- **Module names in the template**: a template can read what the tag's module declares, such as `static let n`, `static const k`, a `static function f` or an imported value. The generated class gets a member for each name the template reads, so `${n}` shows the current value of `n` after module code changes it, and a `let` can be assigned from the template. A name that is both a module name and an `Input` property is an error: rename one.
+- **Module names in the template**: a template can read what the tag's module declares, such as `static let n`, `static const k`, a `static function f` or an imported value. The generated class gets a member for each name the template reads, so `${n}` shows the current value of `n` after module code changes it, and a `let` can be assigned from the template. A name the template binds itself (`<for|n|>`, `<const/n=…/>`) still means that binding. When the name is also an `Input` property, the module's value is read through a generated member, `__mxModule_<name>`, and `input.<name>` stays the input. A `const enum` has no run-time value to read and is an error at the read: drop `const`.
 
 Projection places nodes; it cannot pass values or repeat. So in a tag, these are errors and not blank output:
 

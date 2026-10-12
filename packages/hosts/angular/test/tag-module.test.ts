@@ -916,29 +916,151 @@ describe("compileTagModule: module-level names the template reads", () => {
     assertModuleTypechecks(code);
   });
 
-  it("errors, positioned at the read, when an input and a module name share a name", () => {
+  it("reads a module name that is also an input through a generated member", () => {
+    const { code } = compileTag(
+      "export interface Input { size: number }\nstatic const size = 3;\n<p>${1 + size}${input.size}</p>\n",
+      "clash.mx",
+    );
+
+    expect(templateOf(code)).toBe("<p>{{ 1 + __mxModule_size }}{{ size }}</p>");
+    expect(classBody(code)).toBe(
+      [
+        "export class Clash {",
+        "  @NgInput({ required: true }) size!: number;",
+        "  protected get __mxModule_size() { return size; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("keeps a template variable that shares a module name, and adds no member for it", () => {
+    const { code } = compileTag(
+      "export interface Input { size: number }\nstatic const size = 3;\n<for|size| of=[1, 2]><p>${size}</p></for>\n",
+      "loopvar.mx",
+    );
+
+    expect(templateOf(code)).toBe(
+      "@for (size of [1, 2]; track $index) { <p>{{ size }}</p> }",
+    );
+    expect(classBody(code)).not.toContain("get ");
+  });
+
+  it("a `<const>` hides the module name only for the siblings after it", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\nstatic const n = 1;\n<p>${n}</p>\n<const/n=2/>\n<p>${n}</p>\n",
+      "constvar.mx",
+    );
+
+    expect(templateOf(code)).toContain("{{ __mxModule_n }}");
+    expect(classBody(code).match(/get __mxModule_n\(\)/g)).toHaveLength(1);
+    expect(templateOf(code).match(/__mxModule_n/g)).toHaveLength(1);
+  });
+
+  it("a `<define>` parameter hides the module name inside the define", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\nstatic const n = 1;\n<define/Row|n|><b>${n}</b></define>\n<Row(5)/>\n",
+      "definevar.mx",
+    );
+
+    expect(classBody(code)).not.toContain("get ");
+  });
+
+  it("an arrow parameter hides the module name inside the arrow", () => {
+    const { code } = compileTag(
+      "export interface Input { n: number }\nstatic const n = 1;\n<p>${[1].map((n) => n)}</p>\n",
+      "arrowvar.mx",
+    );
+
+    expect(classBody(code)).not.toContain("get ");
+  });
+
+  it("rewrites a shorthand property read of a module name that is also an input", () => {
+    const { code } = compileTag(
+      "export interface Input { size: number }\nstatic const size = 3;\n<p>${JSON.stringify({ size })}</p>\n",
+      "short.mx",
+    );
+
+    expect(templateOf(code)).toContain("{ size: __mxModule_size }");
+  });
+
+  it("reads a module name Angular treats specially on a class through a generated member", () => {
+    const { code } = compileTag(
+      "static function ngOnInit() { return 1; }\n<p>${ngOnInit()}</p>\n",
+      "hook.mx",
+    );
+
+    expect(templateOf(code)).toBe("<p>{{ __mxModule_ngOnInit() }}</p>");
+    expect(classBody(code)).toBe(
+      [
+        "export class Hook {",
+        "  protected get __mxModule_ngOnInit() { return ngOnInit; }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("reads a module name `constructor` through a generated member", () => {
+    const { code } = compileTag(
+      "static const constructor = 1;\n<p>${constructor}</p>\n",
+      "ctor.mx",
+    );
+
+    expect(classBody(code)).toContain(
+      "  protected get __mxModule_constructor() { return constructor; }",
+    );
+    assertModuleTypechecks(code);
+  });
+
+  it("errors, positioned at the read with its end, on a `const enum`", () => {
     try {
       compileTag(
-        "export interface Input { size: number }\nstatic const size = 3;\n<p>${size}</p>\n",
-        "clash.mx",
+        "static const enum E { A = 1 }\n<p>${1 + E.A}</p>\n",
+        "cenum.mx",
       );
       throw new Error("expected compileTagModule to throw");
     } catch (err) {
-      const e = err as { message: string; line?: number; column?: number };
+      const e = err as {
+        message: string;
+        line?: number;
+        column?: number;
+        end?: { line: number; column: number };
+      };
       expect(e.message).toBe(
-        "`size` is both an input of this tag and a name its module declares, so a template read of `size` is ambiguous. Rename one of them.",
+        "`E` is a `const enum`, which has no run-time value for a template to read. Drop `const` from the enum.",
       );
-      expect(e.line).toBe(3);
-      expect(e.column).toBe(3);
+      expect(e.line).toBe(2);
+      expect(e.column).toBe(9);
+      expect(e.end).toEqual({ line: 2, column: 10 });
     }
   });
 
-  it("reads `input.size` beside a module `size` without error", () => {
+  it("exposes a value `enum` and a value `namespace`, not a types-only namespace", () => {
     const { code } = compileTag(
-      "export interface Input { size: number }\nstatic const size = 3;\n<p>${input.size}</p>\n",
-      "noclash.mx",
+      "static enum E { A = 1 }\nstatic namespace NS { export const a = 2; }\nstatic namespace Types { export interface T { a: 1 } }\n<p>${E.A}${NS.a}${Types}</p>\n",
+      "enumns.mx",
     );
 
-    expect(classBody(code)).not.toContain("get size()");
+    const body = classBody(code);
+    expect(body).toContain("  protected get E() { return E; }");
+    expect(body).toContain("  protected get NS() { return NS; }");
+    expect(body).not.toContain("get Types()");
+  });
+
+  it("exposes a `var` declared inside a `static { }` block", () => {
+    const { code } = compileTag(
+      "static { var q = 1; let hidden = 2; }\n<p>${q}${hidden}</p>\n",
+      "blockvar.mx",
+    );
+
+    const body = classBody(code);
+    expect(body).toContain("  protected get q() { return q; }");
+    expect(body).toContain(
+      "  protected set q(__mxNext: typeof q) { q = __mxNext; }",
+    );
+    expect(body).not.toContain("hidden");
   });
 });

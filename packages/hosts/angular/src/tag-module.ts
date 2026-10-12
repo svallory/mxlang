@@ -131,6 +131,9 @@ interface BabelNode {
   declarations?: BabelNode[];
   specifiers?: BabelNode[];
   declaration?: BabelNode;
+  body?: BabelNode | BabelNode[];
+  /** `const enum`, and `declare` on an ambient declaration. */
+  const?: boolean;
   /** `let` / `var` / `const` on a `VariableDeclaration`. */
   kind?: string;
   /** `type` on `import type …` and on an `import { type X }` specifier. */
@@ -179,9 +182,10 @@ function collectAuthoredIdentifiers(statements: string[]): Set<string> {
  * member: `mutable` (`let`, `var`) can be reassigned by the module's own code,
  * `value` (`const`, a function, a class, an enum, a value import) cannot, and
  * `type` (an interface, a type alias, a type-only import) has no run-time
- * value to read.
+ * value to read, and neither has a `constEnum`: TypeScript inlines its members,
+ * so a class member returning it is an error.
  */
-type ModuleBindingKind = "mutable" | "value" | "type";
+type ModuleBindingKind = "mutable" | "value" | "type" | "constEnum";
 
 /**
  * Every top-level identifier the given module-level statements bind, with its
@@ -237,6 +241,50 @@ function collectModuleBindings(
     }
   };
 
+  /** Does a namespace declare anything but types? */
+  const isInstantiated = (node: BabelNode): boolean => {
+    const block = node.body as BabelNode | undefined;
+    const statements = Array.isArray(block?.body) ? block.body : [];
+    return statements.some((statement) => {
+      const inner =
+        statement.type === "ExportNamedDeclaration"
+          ? (statement.declaration ?? statement)
+          : statement;
+      return (
+        inner.type !== "TSInterfaceDeclaration" &&
+        inner.type !== "TSTypeAliasDeclaration"
+      );
+    });
+  };
+
+  /** Collects the `var` declarations under a block, not entering functions. */
+  const hoistedVars = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) hoistedVars(item);
+      return;
+    }
+    const record = node as BabelNode & Record<string, unknown>;
+    if (
+      record.type === "FunctionDeclaration" ||
+      record.type === "FunctionExpression" ||
+      record.type === "ArrowFunctionExpression" ||
+      record.type === "ClassDeclaration" ||
+      record.type === "ClassExpression"
+    ) {
+      return;
+    }
+    if (record.type === "VariableDeclaration" && record.kind === "var") {
+      for (const decl of record.declarations ?? []) {
+        fromPattern(decl.id, "mutable");
+      }
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key === "loc" || key === "extra") continue;
+      hoistedVars(child);
+    }
+  };
+
   for (const statement of ast.program.body ?? []) {
     // `export const x = 1` / `export function f()` bind through `declaration`.
     const node =
@@ -263,8 +311,21 @@ function collectModuleBindings(
         break;
       case "FunctionDeclaration":
       case "ClassDeclaration":
-      case "TSEnumDeclaration":
         fromPattern(node.id, "value");
+        break;
+      case "TSEnumDeclaration":
+        fromPattern(node.id, node.const === true ? "constEnum" : "value");
+        break;
+      case "TSModuleDeclaration":
+        // A namespace holding only types has no run-time value.
+        if (node.id?.type === "Identifier" && isInstantiated(node)) {
+          fromPattern(node.id, "value");
+        }
+        break;
+      case "BlockStatement":
+        // `static { var q = 1; }`: a `var` hoists out of the block to module
+        // scope. A `let`/`const` in it stays inside the braces.
+        hoistedVars(node);
         break;
       case "TSInterfaceDeclaration":
       case "TSTypeAliasDeclaration":
@@ -762,27 +823,33 @@ function rewriteInputReads(body: IrNode[], ctx: Ctx): void {
 }
 
 /**
- * Every bare name the template's expressions read, with the position of its
- * first read.
+ * Finds every read of a module-level name in the template's expressions, and
+ * renames the ones that cannot keep their name.
  *
- * A template reads a component member by its bare name, so a module-level
- * name (`static let n`, an import) the template reads has to become a member
- * of the generated class. This finds the reads: an `Identifier` in a value
- * position of any expression, where a member name (`a.n`), an object key
- * (`{ n: 1 }`), a type annotation and a name an arrow or function parameter
- * binds are not reads.
+ * A template reads a component member by its bare name, so a module-level name
+ * (`static let n`, an import) the template reads has to become a member of the
+ * generated class. `resolve` is asked about each read of a name the template
+ * does not itself bind and answers the member that read must use, or
+ * `undefined` when the name is not a module-level value. When the member is not
+ * the name itself (the name is also an input, or a class member Angular treats
+ * specially), the read is rewritten in place to the member.
  *
- * It does not track the template's own variables (`<for|n|>`, `<const/n=…>`),
- * so a template variable that shares a module-level name counts as a read. The
- * consequence is one unused class member; the variable still shadows it in the
- * template, as Angular resolves the template's variables first.
+ * What counts as a read: an `Identifier` in a value position. A member name
+ * (`a.n`), an object key (`{ n: 1 }`), a type annotation and a name an arrow or
+ * function parameter binds are not reads. A name the template binds hides the
+ * module's inside that binding's scope: a `<for|n|>` or `<define|n|>`
+ * parameter, a tag parameter, a `<const/n=…>` or a tag variable `/n` for the
+ * siblings after it. A tag whose parameters cannot be parsed binds nothing
+ * (core reports that error).
  *
  * Run before `rewriteInputReads`, while `input.x` is still a member read and
  * not the bare `x` it becomes.
  */
-function bareReads(body: IrNode[]): Map<string, Position> {
-  const reads = new Map<string, Position>();
-
+function bindModuleReads(
+  body: IrNode[],
+  ctx: Ctx,
+  resolve: (name: string, at: IdentifierAt) => string | undefined,
+): void {
   const patternNames = (node: unknown, into: Set<string>): void => {
     if (!node || typeof node !== "object") return;
     const record = node as BabelNode & {
@@ -814,24 +881,49 @@ function bareReads(body: IrNode[]): Map<string, Position> {
     }
   };
 
+  /** The names a tag's parameter list or tag variable (source text) binds. */
+  const namesOfSource = (sources: unknown, into: Set<string>): void => {
+    const texts = (Array.isArray(sources) ? sources : [sources]).filter(
+      (t): t is string => typeof t === "string" && t.trim() !== "",
+    );
+    if (texts.length === 0) return;
+    try {
+      const babel = babelParser as unknown as {
+        parseExpression(source: string, options?: unknown): unknown;
+      };
+      const arrow = babel.parseExpression(`(${texts.join(", ")}) => 0`, {
+        plugins: ["typescript"],
+      }) as { params?: unknown[] };
+      for (const param of arrow.params ?? []) patternNames(param, into);
+    } catch {
+      // Core reports unparsable parameters.
+    }
+  };
+
   const visit = (
     value: unknown,
     shadowed: ReadonlySet<string>,
     loc: Position,
-  ): void => {
-    if (!value || typeof value !== "object") return;
+  ): boolean => {
+    if (!value || typeof value !== "object") return false;
     if (Array.isArray(value)) {
-      for (const item of value) visit(item, shadowed, loc);
-      return;
+      let changed = false;
+      for (const item of value) changed = visit(item, shadowed, loc) || changed;
+      return changed;
     }
     const node = value as Record<string, unknown> & { type?: string };
 
     if (node.type === "Identifier") {
       const name = node.name;
-      if (typeof name === "string" && !shadowed.has(name) && !reads.has(name)) {
-        reads.set(name, loc);
-      }
-      return;
+      if (typeof name !== "string" || shadowed.has(name)) return false;
+      const member = resolve(name, {
+        loc: node.loc as IdentifierAt["loc"],
+        file: loc.file,
+        fallback: loc,
+      });
+      if (member === undefined || member === name) return false;
+      node.name = member;
+      return true;
     }
 
     let inner = shadowed;
@@ -844,12 +936,11 @@ function bareReads(body: IrNode[]): Map<string, Position> {
       for (const param of (node.params as unknown[]) ?? []) {
         patternNames(param, bound);
       }
-      if (node.type === "FunctionExpression") {
-        patternNames(node.id, bound);
-      }
+      if (node.type === "FunctionExpression") patternNames(node.id, bound);
       inner = bound;
     }
 
+    let changed = false;
     for (const [key, child] of Object.entries(node)) {
       if (
         key === "loc" ||
@@ -867,7 +958,7 @@ function bareReads(body: IrNode[]): Map<string, Position> {
         for (const param of child as unknown[]) {
           const pattern = param as { type?: string; right?: unknown };
           if (pattern.type === "AssignmentPattern") {
-            visit(pattern.right, inner, loc);
+            changed = visit(pattern.right, inner, loc) || changed;
           }
         }
         continue;
@@ -889,31 +980,103 @@ function bareReads(body: IrNode[]): Map<string, Position> {
       ) {
         continue;
       }
-      visit(child, inner, loc);
+      changed = visit(child, inner, loc) || changed;
+    }
+    // `{ n }` prints as shorthand only while key and value agree.
+    if (changed && node.type === "ObjectProperty" && node.shorthand === true) {
+      node.shorthand = false;
+    }
+    return changed;
+  };
+
+  /** Walks a list of IR nodes; a `<const/n>` or tag variable binds for the rest. */
+  const walkSiblings = (
+    nodes: unknown[],
+    shadowed: ReadonlySet<string>,
+    loc: Position,
+  ): void => {
+    let scope = shadowed;
+    for (const node of nodes) {
+      walk(node, scope, loc);
+      const after = new Set<string>();
+      const record = node as { kind?: unknown; name?: unknown; var?: unknown };
+      if (record?.kind === "Const" && typeof record.name === "string") {
+        after.add(record.name);
+      }
+      if (record?.var) namesOfSource(record.var, after);
+      if (after.size > 0) scope = new Set([...scope, ...after]);
     }
   };
 
-  const walk = (value: unknown, loc: Position): void => {
+  const walk = (
+    value: unknown,
+    shadowed: ReadonlySet<string>,
+    loc: Position,
+  ): void => {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) {
-      for (const item of value) walk(item, loc);
+      walkSiblings(value, shadowed, loc);
       return;
     }
-    const record = value as Record<string, unknown>;
+    const record = value as Record<string, unknown> & { kind?: string };
+    const here = (record.loc as Position) ?? loc;
+
     // An `Expr` is the only IR value carrying both `code` and `node`.
     if (typeof record.code === "string" && record.node) {
-      visit(record.node, new Set(), (record.loc as Position) ?? loc);
+      if (visit(record.node, shadowed, here)) {
+        record.code = ctx.generate(
+          record.node as Parameters<Ctx["generate"]>[0],
+        );
+      }
       return;
     }
-    const here = (record.loc as Position) ?? loc;
+
+    // What this node's own parameters and bindings hide from its children.
+    const bound = new Set<string>();
+    if (Array.isArray(record.bindings)) {
+      for (const name of record.bindings) {
+        if (typeof name === "string") bound.add(name);
+      }
+    }
+    if (Array.isArray(record.params)) namesOfSource(record.params, bound);
+    const inner = bound.size > 0 ? new Set([...shadowed, ...bound]) : shadowed;
+
     for (const [key, child] of Object.entries(record)) {
       if (key === "node" || key === "loc" || key === "end") continue;
-      walk(child, here);
+      // A loop's source is evaluated outside the loop's own parameters.
+      const scope = key === "source" ? shadowed : inner;
+      walk(child, scope, here);
     }
   };
 
-  for (const node of body) walk(node, node.loc);
-  return reads;
+  walkSiblings(body, new Set(), body[0]?.loc as Position);
+}
+
+/**
+ * Names a component class gives a meaning of its own: a module name equal to
+ * one cannot be a plain member, so it is read through `__mxModule_<name>`.
+ */
+const CLASS_SPECIAL_MEMBERS: ReadonlySet<string> = new Set([
+  "constructor",
+  "ngOnChanges",
+  "ngOnInit",
+  "ngDoCheck",
+  "ngAfterContentInit",
+  "ngAfterContentChecked",
+  "ngAfterViewInit",
+  "ngAfterViewChecked",
+  "ngOnDestroy",
+]);
+
+/** Where an `Identifier` read sits, for an error raised at it. */
+interface IdentifierAt {
+  loc?: {
+    start?: { line: number; column: number };
+    end?: { line: number; column: number };
+  };
+  file?: string;
+  /** The enclosing expression's position, when the node has none. */
+  fallback: Position;
 }
 
 /** Whether a value is an IR node (carries a `kind` and a position). */
@@ -1158,8 +1321,13 @@ export function compileTagModule(
   let moduleLines: string[] = [];
   let inputProps: InputProp[] = [];
   const passthroughExports: string[] = [];
-  /** Every bare name the template reads, with its first position. */
-  let templateReads = new Map<string, Position>();
+  /**
+   * The module-level names the template reads, in first-read order, each with
+   * the class member the template reads it through.
+   */
+  const moduleReads = new Map<string, string>();
+  /** What every module-level name is, for the accessors `moduleNameMembers` writes. */
+  let moduleBindings = new Map<string, ModuleBindingKind>();
 
   const result = compileSourceWithHint(source, filename, tagDeclarations, {
     customTags: options.customTags,
@@ -1171,9 +1339,6 @@ export function compileTagModule(
       // `Expr.code` and the parser nodes in place, so they run on a private
       // copy: the IR is read-only to an emitter (ir-spec E21).
       const ir = cloneIr(lowered, { nodes: true });
-      // Before `input.x` is rewritten to the bare `x`: only a name the author
-      // wrote bare can be a module-level name.
-      templateReads = bareReads(ir.body);
       className = moduleExportName(ir, "@mxlang/host-angular");
       // `<return>` hands a value to the tag's *caller*, through `/var` on
       // every host whose template can bind one. An Angular component is
@@ -1244,6 +1409,39 @@ export function compileTagModule(
         }
         moduleLines.push(ir.inputInterface.code);
       }
+
+      // Before `input.x` is rewritten to the bare `x`: only a name the author
+      // wrote bare can be a module-level name. A module name that is also an
+      // input, or that Angular treats specially on a class, is read through a
+      // generated member, so the bare `x` of an input and of the module stay
+      // two members.
+      moduleBindings = collectModuleBindings([
+        ...moduleLines,
+        ...passthroughExports,
+      ]);
+      const inputNames = new Set(inputProps.map((prop) => prop.name));
+      bindModuleReads(ir.body, ctx, (name, at) => {
+        const kind = moduleBindings.get(name);
+        if (kind === undefined || kind === "type") return undefined;
+        const start = at.loc?.start ?? at.fallback;
+        if (kind === "constEnum") {
+          const error = new TranslateError(
+            `\`${name}\` is a \`const enum\`, which has no run-time value for a template to read. Drop \`const\` from the enum.`,
+            start.line,
+            start.column,
+            at.file ?? filename,
+          );
+          const end = at.loc?.end ?? start;
+          error.end = { line: end.line, column: end.column };
+          throw error;
+        }
+        const member =
+          inputNames.has(name) || CLASS_SPECIAL_MEMBERS.has(name)
+            ? `__mxModule_${name}`
+            : name;
+        moduleReads.set(name, member);
+        return member;
+      });
 
       // Order matters: slot reads are `input.content()` / `input.header()`
       // calls, so they must be recognised and replaced *before* `input.` is
@@ -1366,31 +1564,18 @@ export function compileTagModule(
    * `static let` that the module's own code reassigns is read at its current
    * value; a `let` or `var` also gets a setter, so an assignment in the
    * template reaches the module's variable. Inside the accessor the name is
-   * the module's: a class member is not a lexical binding.
+   * the module's: a class member is not a lexical binding. A name that is also
+   * an input is exposed as `__mxModule_<name>`, and the template's reads of it
+   * were rewritten to that.
    */
   const moduleNameMembers = (): string[] => {
     const members: string[] = [];
-    const bindings = collectModuleBindings([
-      ...moduleLines,
-      ...passthroughExports,
-    ]);
-    const inputNames = new Set(inputProps.map((prop) => prop.name));
-    for (const [name, at] of templateReads) {
-      const kind = bindings.get(name);
-      if (kind === undefined || kind === "type") continue;
-      if (inputNames.has(name)) {
-        throw new TranslateError(
-          `\`${name}\` is both an input of this tag and a name its module declares, so a template read of \`${name}\` is ambiguous. Rename one of them.`,
-          at.line,
-          at.column,
-          filename,
-        );
-      }
-      members.push(`  protected get ${name}() { return ${name}; }`);
-      if (kind === "mutable") {
+    for (const [name, member] of moduleReads) {
+      members.push(`  protected get ${member}() { return ${name}; }`);
+      if (moduleBindings.get(name) === "mutable") {
         // The parameter cannot be called `value`: the module may declare it.
         members.push(
-          `  protected set ${name}(__mxNext: typeof ${name}) { ${name} = __mxNext; }`,
+          `  protected set ${member}(__mxNext: typeof ${name}) { ${name} = __mxNext; }`,
         );
       }
     }
