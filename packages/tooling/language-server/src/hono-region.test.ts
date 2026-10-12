@@ -38,7 +38,7 @@ export function Panel() {
     expect(
       stripVTControlCharacters(String(diagnostics[0]?.message ?? "")),
     ).toContain(
-      "`<let>` is Marko reactive state; use Hono's `useState` in the surrounding component",
+      "`<let>` is not supported in embedded MX on Hono. Use Hono's `useState` in the surrounding component.",
     );
   });
 

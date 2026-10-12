@@ -114,7 +114,7 @@
             "severity": 1,
             "source": "mxlang",
             "code": "MX_UNSUPPORTED_CONSTRUCT",
-            "message": "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "message": "`<let>` is not supported in embedded MX on React. Use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module.",
             "range": {
               "start": {
                 "line": 2,
@@ -140,7 +140,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/react/page.mx",
-            "message": "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+            "message": "`<let>` is not supported in embedded MX on React. Use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module.",
             "offset": 30,
             "category": "error",
             "length": 4,
@@ -153,7 +153,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+          "message": "`<let>` is not supported in embedded MX on React. Use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module.",
           "id": "<root>/react/page.mx",
           "loc": {
             "file": "<root>/react/page.mx",
@@ -246,6 +246,6 @@
   },
   "mxTsc": [
     "<root>/react/broken.mx(3,1): error MX_PARSE_MISSING_END_TAG: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
-    "<root>/react/page.mx(3,1): error MX_UNSUPPORTED_CONSTRUCT: `<let>` is Marko reactive state; use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module"
+    "<root>/react/page.mx(3,1): error MX_UNSUPPORTED_CONSTRUCT: `<let>` is not supported in embedded MX on React. Use React's `useState` via `<const/x=useState(0)/>` or in the surrounding module."
   ]
 }

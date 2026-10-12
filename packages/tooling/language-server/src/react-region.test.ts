@@ -38,7 +38,7 @@ export function Panel() {
     expect(
       stripVTControlCharacters(String(diagnostics[0]?.message ?? "")),
     ).toContain(
-      "`<let>` is Marko reactive state; use React's `useState` in the surrounding component",
+      "`<let>` is not supported in embedded MX on React. Use React's `useState` in the surrounding component.",
     );
   });
 

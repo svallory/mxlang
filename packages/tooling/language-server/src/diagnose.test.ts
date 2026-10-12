@@ -687,7 +687,7 @@ describe("the Angular host", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.severity).toBe(DiagnosticSeverity.Error);
     expect(diagnostics[0]?.message).toContain(
-      "`<return>` is not supported on Angular",
+      "`<return>` is not supported in embedded MX on Angular.",
     );
     expect(diagnostics[0]?.range.start).toEqual({ line: 0, character: 14 });
   });

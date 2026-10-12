@@ -437,7 +437,7 @@ describe("compileTagModule: `<return>` (S8 silent-drop guard)", () => {
     // diagnostic pointing at the cause. There is no Angular template
     // binding position to receive a returned value at all.
     expect(() => compileTag("<return value=42/>\n<span>hi</span>\n")).toThrow(
-      "`<return>` is not supported on Angular",
+      "`<return>` is not supported in embedded MX on Angular. Declare the value as an `@Input()`, or expose it as a `static`/`export` from the tag's module.",
     );
   });
 

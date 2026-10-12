@@ -38,6 +38,7 @@ import {
   isTagModuleImport,
   kebabCase,
   REFINE_HELPER_ADVICE_CODE,
+  returnRefusal,
   selectorDeclarationOf,
   tagBasename,
   type UsedTag,
@@ -1354,11 +1355,11 @@ export function compileTagModule(
       // for `ng build`/`parseTemplate` to discover downstream.
       if (ir.returnValue) {
         const at = ir.returnValue.node?.loc?.start;
-        throw new TranslateError(
-          "`<return>` is not supported on Angular: a component is called by its selector, as a plain element, and Angular template syntax has no binding position to receive a returned value. Declare the value as an `@Input()` instead, or expose it as a `static`/`export` from the tag's module.",
-          at?.line ?? 0,
-          at?.column ?? 0,
+        throw returnRefusal(
+          ctx,
           filename,
+          at,
+          "Declare the value as an `@Input()`, or expose it as a `static`/`export` from the tag's module.",
         );
       }
       // The tag's own `import`s and `static`/`export` blocks are ordinary

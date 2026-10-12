@@ -34,6 +34,7 @@ import {
   type TemplateMetadata,
   TranslateError,
   unresolvedCustomTagMessage,
+  unsupportedTagMessage,
   warn,
 } from "@mxlang/core";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -70,9 +71,11 @@ function positionOf(node: { loc: Position }): Position {
   return node.loc;
 }
 
-function fail(message: string, node: { loc: Position }): never {
+function fail(message: string, node: { loc: Position }, code?: string): never {
   const { line, column, file } = positionOf(node);
-  throw new TranslateError(message, line, column, file);
+  const error = new TranslateError(message, line, column, file);
+  if (code !== undefined) error.diagnosticCode = code;
+  throw error;
 }
 
 function rawPosition(node: { loc?: { start?: Position } }): Position {
@@ -101,12 +104,29 @@ function unknownTagMessage(name: string): string {
 const MODULE_LEVEL_MESSAGE =
   "cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.";
 
-const TRY_MESSAGE =
-  "`<try>` cannot be emitted into an Angular template: Angular has no template-level error boundary. `@defer`'s `@error` block only covers a failed lazy chunk load, not a render error. Handle the error in the component and render the fallback with `<if>`.";
+const TRY_HINT =
+  "Handle the error in the component and render the fallback with `<if>`; Angular has no template-level error boundary, and `@defer`'s `@error` block only covers a failed lazy chunk load, not a render error.";
+
+/** The `MX_UNSUPPORTED_CONSTRUCT` refusal of `<return>` in an Angular tag or page, in core's one shape. */
+export function returnRefusal(
+  ctx: Ctx,
+  filename: string,
+  at: Position | undefined,
+  hint: string,
+): TranslateError {
+  const error = new TranslateError(
+    unsupportedTagMessage(ctx, "return", hint),
+    at?.line ?? 0,
+    at?.column ?? 0,
+    filename,
+  );
+  error.diagnosticCode = "MX_UNSUPPORTED_CONSTRUCT";
+  return error;
+}
 
 /**
- * The Marko stateful tags this host refuses, each naming what to write
- * instead on Angular (spec §11, §13.3 bug 1). Same wording family as
+ * The Marko stateful tags this host refuses, each with a hint naming what to
+ * write instead on Angular (spec §11, §13.3 bug 1). Same wording family as
  * `@mxlang/host-preact`'s `statefulErrors` and `@mxlang/host-solid`'s
  * `STATEFUL_ERRORS` — these are Marko's own reactivity, and Angular has its
  * own. Left undeclared, each name falls through `isElement`'s bare case test
@@ -115,34 +135,25 @@ const TRY_MESSAGE =
  */
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   let: {
-    kind: "error",
-    reason:
-      "`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`",
+    kind: "unsupported",
+    hint: "Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.",
   },
-  effect: {
-    kind: "error",
-    reason:
-      "`<effect>` is a Marko reactive effect; use Angular's `effect()` in the component class",
-  },
+  effect: { kind: "unsupported" },
   lifecycle: {
-    kind: "error",
-    reason:
-      "`<lifecycle>` is a Marko lifecycle hook; use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class",
+    kind: "unsupported",
+    hint: "Use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class.",
   },
   script: {
-    kind: "error",
-    reason:
-      "`<script>` is a Marko client-runtime tag; write client code in the component class",
+    kind: "unsupported",
+    hint: "Write client code in the component class.",
   },
   log: {
-    kind: "error",
-    reason:
-      "`<log>` is a Marko debug tag; call `console.log` from the component class",
+    kind: "unsupported",
+    hint: "Call `console.log` from the component class.",
   },
   debug: {
-    kind: "error",
-    reason:
-      "`<debug>` is a Marko debugger hook; use the component class instead",
+    kind: "unsupported",
+    hint: "Use the component class instead.",
   },
   client: {
     kind: "error",
@@ -155,14 +166,12 @@ const STATEFUL_ERRORS: HostDeclarations["tags"] = {
       "a `server` block runs only during a server render; Angular has no server-render pass to run it in — move its statements into the component class",
   },
   id: {
-    kind: "error",
-    reason:
-      "`<id>` allocates an identifier for Marko's reactive runtime; use Angular's own `inject(...)`-based id generation or a static string",
+    kind: "unsupported",
+    hint: "Use Angular's own `inject(...)`-based id generation or a static string.",
   },
   await: {
-    kind: "error",
-    reason:
-      "`<await>` needs Marko's suspense; use `@defer` with an `@placeholder`/`@loading` block instead",
+    kind: "unsupported",
+    hint: "Use `@defer` with an `@placeholder`/`@loading` block instead.",
   },
 };
 
@@ -172,6 +181,7 @@ export const DEFAULT_TAG = "div";
 
 export const angularDeclarations: HostDeclarations = {
   name: "@mxlang/host-angular",
+  hostName: "Angular",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
@@ -190,7 +200,7 @@ export const angularDeclarations: HostDeclarations = {
   acceptsForeignAttrNames: true,
   tags: {
     ...STATEFUL_ERRORS,
-    try: { kind: "error", reason: TRY_MESSAGE },
+    try: { kind: "unsupported", hint: TRY_HINT },
   },
   // Element-vs-component follows Marko's own rule — what the taglib lookup
   // resolves the name to — with casing only as the fallback for a name no
@@ -2645,7 +2655,11 @@ class AngularEmitter implements Emitter<string> {
     const tag = node.tag;
     const data = tag.data as TryData | HtmlCommentData | DynamicComponentData;
     if (data.kind === "try") {
-      fail(TRY_MESSAGE, node);
+      fail(
+        unsupportedTagMessage(this.ctx, "try", TRY_HINT),
+        node,
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
     }
     if (data.kind === "dynamic-component") {
       // core PR #103 (main 50877ea8, decision "bare placeholder is a dynamic

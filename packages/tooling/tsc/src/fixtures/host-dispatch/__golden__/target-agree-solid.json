@@ -148,7 +148,7 @@
             "severity": 1,
             "source": "mxlang",
             "code": "MX_UNSUPPORTED_CONSTRUCT",
-            "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+            "message": "`<let>` is not supported in embedded MX on Solid. Use Solid's `createSignal` in the surrounding TypeScript module.",
             "range": {
               "start": {
                 "line": 2,
@@ -172,7 +172,7 @@
         "compileDiagnostics": [
           {
             "fileName": "<root>/target-agree-solid/page.mx",
-            "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+            "message": "`<let>` is not supported in embedded MX on Solid. Use Solid's `createSignal` in the surrounding TypeScript module.",
             "offset": 30,
             "category": "error",
             "length": 4,
@@ -185,7 +185,7 @@
       "vite": {
         "threw": {
           "name": "TranslateError",
-          "message": "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+          "message": "`<let>` is not supported in embedded MX on Solid. Use Solid's `createSignal` in the surrounding TypeScript module.",
           "id": "<root>/target-agree-solid/page.mx",
           "loc": {
             "file": "<root>/target-agree-solid/page.mx",
@@ -295,6 +295,6 @@
   },
   "mxTsc": [
     "<root>/target-agree-solid/broken.mx(3,1): error MX_PARSE_MISSING_END_TAG: \n      1 | export interface Input {}\n      2 |\n    > 3 | <div>\n        | ^^^^^ Missing ending \"div\" tag\n      4 |",
-    "<root>/target-agree-solid/page.mx(3,1): error MX_UNSUPPORTED_CONSTRUCT: `<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module"
+    "<root>/target-agree-solid/page.mx(3,1): error MX_UNSUPPORTED_CONSTRUCT: `<let>` is not supported in embedded MX on Solid. Use Solid's `createSignal` in the surrounding TypeScript module."
   ]
 }

@@ -46,24 +46,17 @@ import { solidEventPropName } from "./event-names.ts";
 
 const STATEFUL_ERRORS: HostDeclarations["tags"] = {
   let: {
-    kind: "error",
-    reason:
-      "`<let>` is Marko reactive state; use Solid's `createSignal` in the surrounding TypeScript module",
+    kind: "unsupported",
+    hint: "Use Solid's `createSignal` in the surrounding TypeScript module.",
   },
-  effect: {
-    kind: "error",
-    reason:
-      "`<effect>` is a Marko reactive effect; use Solid's `createEffect` in the surrounding TypeScript module",
-  },
+  effect: { kind: "unsupported" },
   lifecycle: {
-    kind: "error",
-    reason:
-      "`<lifecycle>` is a Marko lifecycle hook; use Solid's lifecycle primitives in the surrounding TypeScript module",
+    kind: "unsupported",
+    hint: "Use Solid's lifecycle primitives in the surrounding TypeScript module.",
   },
   script: {
-    kind: "error",
-    reason:
-      "`<script>` is a Marko client-runtime tag; write client code in the surrounding TypeScript module",
+    kind: "unsupported",
+    hint: "Write client code in the surrounding TypeScript module.",
   },
   client: {
     kind: "error",
@@ -749,6 +742,7 @@ export const DEFAULT_TAG = "div";
 
 export const solidDeclarations: HostDeclarations = {
   name: "@mxlang/host-solid",
+  hostName: "Solid",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,

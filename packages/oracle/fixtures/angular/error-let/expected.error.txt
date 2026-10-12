@@ -1,1 +1,1 @@
-`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`
+`<let>` is not supported in embedded MX on Angular. Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.

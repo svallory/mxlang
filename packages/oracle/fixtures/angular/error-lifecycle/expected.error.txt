@@ -1,1 +1,1 @@
-`<lifecycle>` is a Marko lifecycle hook; use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class
+`<lifecycle>` is not supported in embedded MX on Angular. Use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class.

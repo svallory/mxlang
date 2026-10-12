@@ -1,1 +1,1 @@
-`<debug>` is a Marko debugger hook; use the component class instead
+`<debug>` is not supported in embedded MX on Angular. Use the component class instead.

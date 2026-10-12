@@ -575,14 +575,20 @@ describe("Solid host errors", () => {
         }
         throw new Error("expected a compile error");
       })();
-      expect(message).toContain("`<effect>` is a Marko reactive effect");
+      expect(message).toContain(
+        "`<effect>` is not supported in embedded MX on Solid.",
+      );
       expect(message).not.toContain("Use `<script>`");
     }
   });
 
   const errors: Array<[string, string, string]> = [
     ["let", `<let/x=1/>`, "createSignal"],
-    ["effect", `<effect() { run() }/>`, "createEffect"],
+    [
+      "effect",
+      `<effect() { run() }/>`,
+      "`<effect>` is not supported in embedded MX on Solid.",
+    ],
     ["lifecycle", `<lifecycle onMount() { run() }/>`, "lifecycle primitives"],
     ["script", `<script>run()</script>`, "surrounding TypeScript module"],
     ["bound attribute", `<input value:=name>`, "bound attribute"],

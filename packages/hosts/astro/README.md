@@ -285,7 +285,9 @@ registered page extension, pages follow with no language change.
 ### Errors
 
 Nothing silently degrades: every construct this target cannot express is a
-build error naming the construct, the reason, and the line in the `.astro.mx` file.
+build error naming the construct and the line in the `.astro.mx` file. A tag it
+does not support reads "`<let>` is not supported in embedded MX on Astro.", then a
+sentence saying why or what to write instead.
 
 - **Stateful tags** — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
   blocks, `<id>`. Same stance as `.mx` under this host (decision 71): static

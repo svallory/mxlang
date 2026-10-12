@@ -10,15 +10,19 @@
  */
 
 import { readFileSync } from "node:fs";
-import {
-  type AttrTagConfig,
-  type CompileResult,
-  type CustomTag,
-  type MxWarning,
-  type TargetLookup,
-  TranslateError,
+import type {
+  AttrTagConfig,
+  CompileResult,
+  CustomTag,
+  MxWarning,
+  TargetLookup,
 } from "@mxlang/core";
-import { angularDeclarations, emitTemplate, type UsedTag } from "./emitter.ts";
+import {
+  angularDeclarations,
+  emitTemplate,
+  returnRefusal,
+  type UsedTag,
+} from "./emitter.ts";
 import { type AngularMapping, encodeMappings } from "./mapping.ts";
 import { angularOwnTargets } from "./own-targets.ts";
 import { compileSourceWithHint } from "./structural-attr-hint.ts";
@@ -163,11 +167,11 @@ export function compile(
       // §13.3 bug 8) — the S8 silent-drop class this checks against.
       if (ir.returnValue) {
         const at = ir.returnValue.node?.loc?.start;
-        throw new TranslateError(
-          "`<return>` is not supported on Angular: a page has no caller to hand a value to, and Angular template syntax has no binding position to receive one. Declare the value as a `@Input()`/class member instead, or expose it as a `static`/`export`.",
-          at?.line ?? 0,
-          at?.column ?? 0,
+        throw returnRefusal(
+          ctx,
           filename,
+          at,
+          "Declare the value as a `@Input()`/class member, or expose it as a `static`/`export`.",
         );
       }
       return emitTemplate(

@@ -9,23 +9,27 @@ import { emit } from "./helpers.ts";
 // adapted to name an Angular equivalent.
 describe("stateful tags: positioned errors, not literal elements", () => {
   it("rejects <let> even with no /var", () => {
-    expect(() => emit("<let x=1/>")).toThrow(/`<let>` is Marko reactive state/);
+    expect(() => emit("<let x=1/>")).toThrow(
+      "`<let>` is not supported in embedded MX on Angular. Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.",
+    );
   });
 
   it("rejects <let> with a /var", () => {
-    expect(() => emit("<let/x=1/>")).toThrow(/`<let>` is Marko reactive state/);
+    expect(() => emit("<let/x=1/>")).toThrow(
+      "`<let>` is not supported in embedded MX on Angular. Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.",
+    );
   });
 
   it("rejects <effect>", () => {
     expect(() => emit("<effect><div>x</div></effect>")).toThrow(
-      /`<effect>` is a Marko reactive effect/,
+      "`<effect>` is not supported in embedded MX on Angular.",
     );
   });
 
   it("keeps its own <effect> error, never a target's", () => {
     for (const source of ["<effect/>", "<effect() { go() }/>"]) {
       expect(() => emit(source)).toThrow(
-        /`<effect>` is a Marko reactive effect/,
+        "`<effect>` is not supported in embedded MX on Angular.",
       );
       expect(() => emit(source)).not.toThrow(/Use `<script>`/);
     }
@@ -33,23 +37,25 @@ describe("stateful tags: positioned errors, not literal elements", () => {
 
   it("rejects <lifecycle>", () => {
     expect(() => emit("<lifecycle/>")).toThrow(
-      /`<lifecycle>` is a Marko lifecycle hook/,
+      "`<lifecycle>` is not supported in embedded MX on Angular. Use Angular's own lifecycle hooks (`ngOnInit`, etc.) in the component class.",
     );
   });
 
   it("rejects <script>", () => {
     expect(() => emit("<script>console.log(1)</script>")).toThrow(
-      /`<script>` is a Marko client-runtime tag/,
+      "`<script>` is not supported in embedded MX on Angular. Write client code in the component class.",
     );
   });
 
   it("rejects <log>", () => {
-    expect(() => emit("<log=1/>")).toThrow(/`<log>` is a Marko debug tag/);
+    expect(() => emit("<log=1/>")).toThrow(
+      "`<log>` is not supported in embedded MX on Angular. Call `console.log` from the component class.",
+    );
   });
 
   it("rejects <debug>", () => {
     expect(() => emit("<debug/>")).toThrow(
-      /`<debug>` is a Marko debugger hook/,
+      "`<debug>` is not supported in embedded MX on Angular. Use the component class instead.",
     );
   });
 
@@ -67,13 +73,13 @@ describe("stateful tags: positioned errors, not literal elements", () => {
 
   it("rejects <id>", () => {
     expect(() => emit("<id/x/>")).toThrow(
-      /`<id>` allocates an identifier for Marko's reactive runtime/,
+      "`<id>` is not supported in embedded MX on Angular. Use Angular's own `inject(...)`-based id generation or a static string.",
     );
   });
 
   it("rejects <await>", () => {
     expect(() => emit("<await>y</await>")).toThrow(
-      /`<await>` needs Marko's suspense/,
+      "`<await>` is not supported in embedded MX on Angular. Use `@defer` with an `@placeholder`/`@loading` block instead.",
     );
   });
 });
@@ -83,7 +89,7 @@ describe("stateful tags: positioned errors, not literal elements", () => {
 describe("<return> in a page template", () => {
   it("is a positioned error, not a silent drop", () => {
     expect(() => emit("<return value=42/>\n<span>hi</span>\n")).toThrow(
-      "`<return>` is not supported on Angular",
+      "`<return>` is not supported in embedded MX on Angular. Declare the value as a `@Input()`/class member, or expose it as a `static`/`export`.",
     );
   });
 

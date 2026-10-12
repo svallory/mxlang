@@ -1,1 +1,1 @@
-`<return>` is not supported on Angular: a page has no caller to hand a value to, and Angular template syntax has no binding position to receive one. Declare the value as a `@Input()`/class member instead, or expose it as a `static`/`export`.
+`<return>` is not supported in embedded MX on Angular. Declare the value as a `@Input()`/class member, or expose it as a `static`/`export`.

@@ -73,7 +73,7 @@ it.each(["let", "var"])(
       `${HINT}; ${CLASS_FIX}`,
     );
     expect(() => compile("<let/x=1/>", "/fixtures/Test.mx")).toThrow(
-      "`<let>` is Marko reactive state",
+      "`<let>` is not supported in embedded MX on Angular.",
     );
   },
 );

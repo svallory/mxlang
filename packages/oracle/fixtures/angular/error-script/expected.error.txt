@@ -1,1 +1,1 @@
-`<script>` is a Marko client-runtime tag; write client code in the component class
+`<script>` is not supported in embedded MX on Angular. Write client code in the component class.

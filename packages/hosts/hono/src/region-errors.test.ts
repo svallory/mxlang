@@ -308,19 +308,19 @@ describe("reactive-tag errors in a region name only the hook", () => {
   it.each([
     [
       "<let/count=0/>",
-      "`<let>` is Marko reactive state; use Hono's `useState` in the surrounding component",
+      "`<let>` is not supported in embedded MX on Hono. Use Hono's `useState` in the surrounding component.",
     ],
     [
       "<effect() { console.log(1) }/>",
-      "`<effect>` is a Marko reactive effect; use Hono's `useEffect` in the surrounding component",
+      "`<effect>` is not supported in embedded MX on Hono.",
     ],
     [
       "<id/key/>",
-      "`<id>` allocates an identifier for Marko's reactive runtime; use Hono's `useId` in the surrounding component",
+      "`<id>` is not supported in embedded MX on Hono. Use Hono's `useId` in the surrounding component.",
     ],
     [
       "<lifecycle onMount() {}/>",
-      "`<lifecycle>` is a Marko lifecycle hook; use Hono's `useEffect`/`useLayoutEffect` in the surrounding component",
+      "`<lifecycle>` is not supported in embedded MX on Hono. Use Hono's `useEffect`/`useLayoutEffect` in the surrounding component.",
     ],
   ])("%s", (tag, message) => {
     const error = errorOf(inRegion(tag));
@@ -334,8 +334,9 @@ describe("<effect> keeps this host's own error, never a target's", () => {
     "region: %s",
     (tag) => {
       const { message } = errorOf(inRegion(tag));
-      expect(message).toContain("`<effect>` is a Marko reactive effect");
-      expect(message).toContain("useEffect");
+      expect(message).toBe(
+        "`<effect>` is not supported in embedded MX on Hono.",
+      );
       expect(message).not.toContain("Use `<script>`");
     },
   );
@@ -349,7 +350,9 @@ describe("<effect> keeps this host's own error, never a target's", () => {
       } catch (error) {
         message = stripAnsi((error as Error).message);
       }
-      expect(message).toContain("`<effect>` is a Marko reactive effect");
+      expect(message).toBe(
+        "`<effect>` is not supported in embedded MX on Hono.",
+      );
       expect(message).not.toContain("Use `<script>`");
     },
   );
@@ -368,19 +371,19 @@ describe("whole-file reactive-tag errors are unchanged", () => {
   it.each([
     [
       "<let/count=0/>",
-      "`<let>` is Marko reactive state; use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module",
+      "`<let>` is not supported in embedded MX on Hono. Use Hono's `useState` via `<const/x=useState(0)/>` or in the surrounding module.",
     ],
     [
       "<effect() { console.log(1) }/>",
-      "`<effect>` is a Marko reactive effect; use Hono's `useEffect` via `<const/_=useEffect(...)/>` or in the surrounding module",
+      "`<effect>` is not supported in embedded MX on Hono.",
     ],
     [
       "<id/key/>",
-      "`<id>` allocates an identifier for Marko's reactive runtime; use Hono's `useId`",
+      "`<id>` is not supported in embedded MX on Hono. Use Hono's `useId`.",
     ],
     [
       "<lifecycle onMount() {}/>",
-      "`<lifecycle>` is a Marko lifecycle hook; use Hono's `useEffect`/`useLayoutEffect` instead",
+      "`<lifecycle>` is not supported in embedded MX on Hono. Use Hono's `useEffect`/`useLayoutEffect`.",
     ],
   ])("%s", (tag, message) => {
     expect(wholeFileError(tag)).toContain(message);

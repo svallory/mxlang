@@ -1,1 +1,1 @@
-`<id>` allocates an identifier for Marko's reactive runtime; use Angular's own `inject(...)`-based id generation or a static string
+`<id>` is not supported in embedded MX on Angular. Use Angular's own `inject(...)`-based id generation or a static string.

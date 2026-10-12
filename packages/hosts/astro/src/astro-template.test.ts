@@ -705,39 +705,61 @@ describe("AttrTag type import", () => {
 
 describe("unsupported constructs", () => {
   it.each([
-    ["let", "<let/count=1/>", /reactive state and requires a runtime/],
-    ["effect", "<effect() { go() }/>", /reactive effect/],
-    ["lifecycle", "<lifecycle onMount=f/>", /reactive lifecycle hook/],
-    ["id", "<id/x/>", /allocates an identifier/],
-    ["await", "<await=p><p>x</p></await>", /suspense-capable renderer/],
-  ])("rejects <%s>", (_name, template, pattern) => {
-    expect(errorFor(template).message).toMatch(pattern);
+    [
+      "let",
+      "<let/count=1/>",
+      "`<let>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+    ],
+    [
+      "effect",
+      "<effect() { go() }/>",
+      "`<effect>` is not supported in embedded MX on Astro.",
+    ],
+    [
+      "lifecycle",
+      "<lifecycle onMount=f/>",
+      "`<lifecycle>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+    ],
+    [
+      "id",
+      "<id/x/>",
+      "`<id>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+    ],
+    [
+      "await",
+      "<await=p><p>x</p></await>",
+      "`<await>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+    ],
+  ])("rejects <%s>", (_name, template, message) => {
+    expect(errorFor(template).message).toBe(message);
   });
 
   it.each(["<effect() { go() }/>", "<effect/>", "<effect>go()</effect>"])(
     "<effect> keeps this host's own error, never a target's: %s",
     (template) => {
       const { message } = errorFor(template);
-      expect(message).toMatch(/reactive effect/);
+      expect(message).toBe(
+        "`<effect>` is not supported in embedded MX on Astro.",
+      );
       expect(message).not.toContain("Use `<script>`");
     },
   );
 
   it("rejects <const>, which a template expression cannot declare", () => {
-    expect(errorFor("<const/n=1/>").message).toMatch(
-      /declare it in the `---` fence instead/,
+    expect(errorFor("<const/n=1/>").message).toBe(
+      "`<const>` is not supported in embedded MX on Astro. Declare it in the `---` fence instead: an Astro template expression cannot declare a binding.",
     );
   });
 
   it("rejects <define>, pointing at a separate file", () => {
-    expect(errorFor("<define/Row><p>x</p></define>").message).toMatch(
-      /extract it into its own `\.astro.mx` file/,
+    expect(errorFor("<define/Row><p>x</p></define>").message).toBe(
+      "`<define>` is not supported in embedded MX on Astro. Extract it into its own `.astro.mx` file and import it: an Astro template has no local component form.",
     );
   });
 
   it("rejects <try>, which Astro has no error boundary for", () => {
-    expect(errorFor("<try><p>x</p></try>").message).toMatch(
-      /needs an error boundary/,
+    expect(errorFor("<try><p>x</p></try>").message).toBe(
+      "`<try>` is not supported in embedded MX on Astro. Astro renders components statically at build time and has no error boundary.",
     );
   });
 
@@ -860,7 +882,9 @@ describe("a tag that returns a value", () => {
         "---\n---\n<div>x</div>\n<return value=41 + 1/>\n",
         "Test.astro.mx",
       ),
-    ).toThrow(/`<return>` hands a value to whoever called this unit/);
+    ).toThrow(
+      "`<return>` is not supported in embedded MX on Astro. Move the markup into a `.mx` tag file if the value is what you need",
+    );
   });
 
   it("rejects /var on it, naming the tag as written", () => {

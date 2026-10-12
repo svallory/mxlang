@@ -1,1 +1,1 @@
-`<log>` is a Marko debug tag; call `console.log` from the component class
+`<log>` is not supported in embedded MX on Angular. Call `console.log` from the component class.

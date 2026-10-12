@@ -53,7 +53,7 @@ it.each(["let", "var"])(
       "Unexpected token; scriptlets (`$ …`) are not supported; move the statement out of the template",
     );
     expect(() => compile("<let/x=1/>", "/fixtures/Test.mx")).toThrow(
-      "`<let>` is Marko reactive state",
+      "`<let>` is not supported in embedded MX on Hono.",
     );
   },
 );

@@ -49,12 +49,18 @@ import { decodeHTML } from "entities";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 
 /**
- * The Marko tags this host refuses, each naming what to write instead.
+ * The Marko tags this host refuses, each with a hint naming what to write
+ * instead.
  *
  * Same shape as `@mxlang/host-solid`'s table, and for the same reason: these are
  * Marko's *own* reactivity, and this target has its own. Decision 65's rule
- * holds — the message says what this target cannot express and where the
- * equivalent lives, never "not implemented".
+ * holds: core words the refusal ("`<let>` is not supported in embedded MX on
+ * Preact."), and a hint, where there is one, says where the equivalent lives,
+ * never "not implemented". `<effect>` has no hint: it is not an MX tag on any
+ * target, so no host points it anywhere.
+ *
+ * `client`/`server` blocks and the `<else>` chain errors are not tag support
+ * refusals; they keep their own words.
  */
 function statefulErrors(
   dialectName: string,
@@ -67,27 +73,21 @@ function statefulErrors(
   const inComponent = " in the surrounding component";
   return {
     let: {
-      kind: "error",
-      reason: region
-        ? `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\`${inComponent}`
-        : `\`<let>\` is Marko reactive state; use ${dialectName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module`,
+      kind: "unsupported",
+      hint: region
+        ? `Use ${dialectName}'s \`useState\`${inComponent}.`
+        : `Use ${dialectName}'s \`useState\` via \`<const/x=useState(0)/>\` or in the surrounding module.`,
     },
-    effect: {
-      kind: "error",
-      reason: region
-        ? `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\`${inComponent}`
-        : `\`<effect>\` is a Marko reactive effect; use ${dialectName}'s \`useEffect\` via \`<const/_=useEffect(...)/>\` or in the surrounding module`,
-    },
+    effect: { kind: "unsupported" },
     lifecycle: {
-      kind: "error",
-      reason: region
-        ? `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\`${inComponent}`
-        : `\`<lifecycle>\` is a Marko lifecycle hook; use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\` instead`,
+      kind: "unsupported",
+      hint: region
+        ? `Use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\`${inComponent}.`
+        : `Use ${dialectName}'s \`useEffect\`/\`useLayoutEffect\`.`,
     },
     script: {
-      kind: "error",
-      reason:
-        "`<script>` is a Marko client-runtime tag; write client code in a module the component imports",
+      kind: "unsupported",
+      hint: "Write client code in a module the component imports.",
     },
     client: {
       kind: "error",
@@ -98,13 +98,12 @@ function statefulErrors(
       reason: `a \`server\` block runs only during a server render; a ${dialectName} component has no per-template server pass to run it in — write the statement in the surrounding TypeScript module`,
     },
     id: {
-      kind: "error",
-      reason: `\`<id>\` allocates an identifier for Marko's reactive runtime; use ${dialectName}'s \`useId\`${region ? inComponent : ""}`,
+      kind: "unsupported",
+      hint: `Use ${dialectName}'s \`useId\`${region ? inComponent : ""}.`,
     },
     await: {
-      kind: "error",
-      reason:
-        "`<await>` needs Marko's suspense; use `<try>` with a `<@placeholder>`, whose body may suspend",
+      kind: "unsupported",
+      hint: "Use `<try>` with a `<@placeholder>`, whose body may suspend.",
     },
     // `<return>` is **not** an error here. It was, on the grounds that "a
     // component returns its own markup" — true while a tag template was
@@ -235,6 +234,7 @@ export function createJsxDeclarations(
           : dialectName;
   return {
     name: declarationName,
+    hostName: dialectName,
     nativeTags: WEB_ELEMENTS,
     attrTags: 2,
     defineCallPassesAttrs: true,

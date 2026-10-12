@@ -38,6 +38,7 @@ import {
   rejectUnsupportedFields,
   type TargetLookup,
   unresolvedCustomTagMessage,
+  unsupportedTagMessage,
 } from "@mxlang/core";
 import {
   type SourceBindingsError,
@@ -165,24 +166,17 @@ function fail(message: string, node: Positioned | Node): never {
 
 const TAGS: HostDeclarations["tags"] = {
   let: {
-    kind: "error",
-    reason:
-      "`<let>` is reactive state and requires a runtime; `.astro.mx` renders static markup at build time",
+    kind: "unsupported",
+    hint: "A `.astro.mx` file renders static markup at build time.",
   },
-  effect: {
-    kind: "error",
-    reason:
-      "`<effect>` is a reactive effect and requires a runtime; `.astro.mx` renders static markup at build time",
-  },
+  effect: { kind: "unsupported" },
   lifecycle: {
-    kind: "error",
-    reason:
-      "`<lifecycle>` is a reactive lifecycle hook and requires a runtime; `.astro.mx` renders static markup at build time",
+    kind: "unsupported",
+    hint: "A `.astro.mx` file renders static markup at build time.",
   },
   script: {
-    kind: "error",
-    reason:
-      "`<script>` as a Marko tag runs client code and requires a runtime; `.astro.mx` renders static markup at build time",
+    kind: "unsupported",
+    hint: "A `.astro.mx` file renders static markup at build time.",
   },
   client: {
     kind: "error",
@@ -195,14 +189,12 @@ const TAGS: HostDeclarations["tags"] = {
       "a `server` block runs a statement per render and `.astro.mx` has no render-time statement position; write it in the `---` fence instead",
   },
   id: {
-    kind: "error",
-    reason:
-      "`<id>` allocates an identifier for the reactive runtime; `.astro.mx` renders static markup at build time",
+    kind: "unsupported",
+    hint: "A `.astro.mx` file renders static markup at build time.",
   },
   await: {
-    kind: "error",
-    reason:
-      "`<await>` needs a suspense-capable renderer; `.astro.mx` renders static markup at build time",
+    kind: "unsupported",
+    hint: "A `.astro.mx` file renders static markup at build time.",
   },
   // `<return>` is **not** listed. A `.astro.mx` file cannot declare one — it is an
   // Astro component, whose output is its markup — but this table is consulted
@@ -212,19 +204,16 @@ const TAGS: HostDeclarations["tags"] = {
   // calls its default export, which returns the markup alone; the value stays
   // with `render` (decision 155).
   const: {
-    kind: "error",
-    reason:
-      "`<const>` declares a binding, which an Astro template expression cannot do; declare it in the `---` fence instead",
+    kind: "unsupported",
+    hint: "Declare it in the `---` fence instead: an Astro template expression cannot declare a binding.",
   },
   define: {
-    kind: "error",
-    reason:
-      "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
+    kind: "unsupported",
+    hint: "Extract it into its own `.astro.mx` file and import it: an Astro template has no local component form.",
   },
   try: {
-    kind: "error",
-    reason:
-      "`<try>` needs an error boundary; Astro renders components statically at build time and has no equivalent",
+    kind: "unsupported",
+    hint: "Astro renders components statically at build time and has no error boundary.",
   },
   else: { kind: "error", reason: "`<else>` must follow an `<if>`" },
   "else-if": { kind: "error", reason: "`<else-if>` must follow an `<if>`" },
@@ -322,6 +311,7 @@ export const DEFAULT_TAG = "div";
 
 export const astroTemplateDeclarations: HostDeclarations = {
   name: "@mxlang/host-astro",
+  hostName: "Astro",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   // The ladder (decision 145): the parent's contract `defaultTag`, then
@@ -1507,9 +1497,15 @@ export function lowerAstroMx(
     if (ir.returnValue) {
       const at = ir.returnValue.node?.loc?.start;
       throw new AstroTemplateError(
-        "`<return>` hands a value to whoever called this unit; an `.astro.mx` file is an Astro component, whose output is its markup, so there is nothing to return it to — move the markup into a `.mx` tag file if the value is what you need",
+        unsupportedTagMessage(
+          ctx,
+          "return",
+          "Move the markup into a `.mx` tag file if the value is what you need: an `.astro.mx` file is an Astro component, whose output is its markup, so there is nothing to return a value to.",
+        ),
         at?.line ?? 0,
         at?.column ?? 0,
+        undefined,
+        { diagnosticCode: "MX_UNSUPPORTED_CONSTRUCT" },
       );
     }
     const componentNames = astroComponentNames(ctx, source, ir.imports);
