@@ -18,6 +18,7 @@ import {
   type CustomTag,
   cloneIr,
   type Expr,
+  type HostDeclarations,
   type Ir,
   type IrNode,
   type MxWarning,
@@ -920,6 +921,20 @@ function quoteTemplate(template: string): string {
 }
 
 /**
+ * A tag file has no class the author can write (the component class is
+ * generated), so the page text "declare it in the component class" would send
+ * the author nowhere. A `const` still becomes a `<const>` (`@let`); a `let` or
+ * `var` is pointed at a `.ng.mx` component, which owns its class.
+ */
+const tagDeclarations: HostDeclarations = {
+  ...angularDeclarations,
+  scriptletReplacement: (name, keyword) =>
+    keyword === "const"
+      ? `declare a value with \`<const/${name}=…/>\``
+      : "a tag has no class of its own: write the component as `.ng.mx` and declare it in its class",
+};
+
+/**
  * Compiles a whole `.mx` tag file to a standalone Angular component module.
  *
  * This is the tag-unit entry point, beside `compile()`'s page-template one. A
@@ -949,7 +964,7 @@ export function compileTagModule(
   let inputProps: InputProp[] = [];
   const passthroughExports: string[] = [];
 
-  const result = compileSourceWithHint(source, filename, angularDeclarations, {
+  const result = compileSourceWithHint(source, filename, tagDeclarations, {
     customTags: options.customTags,
     defaultTag: options.defaultTag,
     targets: options.targets ?? angularOwnTargets,

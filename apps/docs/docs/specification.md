@@ -551,7 +551,7 @@ the app.
 
 | Message | When |
 |---|---|
-| `scriptlets (\`$ statement\`) are not supported in MX; a template holds values, not statements: write a value with \`<const/x=…/>\`, or move the statement out of the template` | A `MarkoScriptlet` appears in any child list. A `$ const`, `$ let` or `$ var` declaration gets its host's replacement in place of the generic fix, or none where the host has no immutable one. |
+| `scriptlets (\`$ statement\`) are not supported in MX; a template holds values, not statements: write a value with \`<const/x=…/>\`, or move the statement out of the template` | A `MarkoScriptlet` appears in any child list. A `$ const`, `$ let` or `$ var` declaration gets its host's replacement in place of the generic fix. Where the host has no mutable `<let>`, a `let` or `var` is told where the statement goes instead: out of the template, or into the code around it (the component, its class, the module or the `---` fence). Only the HTML target's strict mode gives no fix for a `$ let` or `$ var`. |
 
 Decision 54's reasoning: Marko 6's reactive compiler cannot assign a bare
 statement re-run, dependency, server/client or serialization semantics.

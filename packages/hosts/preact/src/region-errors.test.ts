@@ -19,14 +19,11 @@ const FILE = "/fixtures/region-errors/Panel.preact.mx";
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
 const stripAnsi = (text: string) => text.replace(/\u001b\[[0-9;]*m/g, "");
 
-function errorOf(
+/** The error a region compile raised, as thrown. */
+function thrownBy(
   source: string,
   file = FILE,
-): {
-  message: string;
-  line: number;
-  column: number;
-} {
+): Error & { code?: string; loc?: { line: number; column: number } } {
   try {
     print(source, file, {
       mx: true,
@@ -38,16 +35,30 @@ function errorOf(
         >,
     });
   } catch (error) {
-    const e = error as Error & { loc?: { line: number; column: number } };
-    if (!e.loc) throw new Error(`expected a positioned error: ${e.message}`);
-    return {
-      // The parser appends ` (line:column)` to a positioned message.
-      message: stripAnsi(e.message).replace(/ \(\d+:\d+\)$/, ""),
-      line: e.loc.line,
-      column: e.loc.column,
+    return error as Error & {
+      code?: string;
+      loc?: { line: number; column: number };
     };
   }
   throw new Error("expected a compile error, but the module compiled");
+}
+
+function errorOf(
+  source: string,
+  file = FILE,
+): {
+  message: string;
+  line: number;
+  column: number;
+} {
+  const e = thrownBy(source, file);
+  if (!e.loc) throw new Error(`expected a positioned error: ${e.message}`);
+  return {
+    // The parser appends ` (line:column)` to a positioned message.
+    message: stripAnsi(e.message).replace(/ \(\d+:\d+\)$/, ""),
+    line: e.loc.line,
+    column: e.loc.column,
+  };
 }
 
 /** A component whose region spans lines 3-7 and holds `body` on line 5. */
@@ -125,6 +136,9 @@ describe("region rule", () => {
         line: 5,
         column: 6,
       });
+      expect(thrownBy(inRegion(`$ ${keyword} n = 1;`)).code).toBe(
+        "BABEL_PARSER_SYNTAX_ERROR",
+      );
     },
   );
 
