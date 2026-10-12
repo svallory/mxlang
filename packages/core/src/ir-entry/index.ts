@@ -78,7 +78,7 @@ import { finishIr, type SpannedIr } from "./spans.ts";
 import "../tag-file.ts";
 import { type Explainer, explainerFor } from "./unknown-tag-view.ts";
 
-export type { IrDiagnostic } from "./diagnostics.ts";
+export type { IrDiagnostic, IrDiagnosticEnd } from "./diagnostics.ts";
 export type { Spanned, SpannedIr } from "./spans.ts";
 
 /** @unstable */
@@ -370,7 +370,11 @@ function reservedDiagnostics(
       toDiagnostic(
         "error",
         message,
-        at,
+        {
+          line: at.line,
+          column: at.column,
+          ...("nameEnd" in at && at.nameEnd ? { end: at.nameEnd } : {}),
+        },
         RESERVED_TAG_CODE,
         lineStarts,
         source,
@@ -612,6 +616,7 @@ export function lowerSource(
           tag.line,
           tag.column,
         );
+        if (tag.nameEnd) unknownError.end = tag.nameEnd;
         unknownError.diagnosticCode = UNKNOWN_TAG_CODE;
         return unknownError;
       });

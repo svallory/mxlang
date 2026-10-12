@@ -160,6 +160,7 @@ function nodeClaims(
     const { line, column } = filePosition(site, at.sourceStart);
     const error = new TranslateError(message, line, column);
     error.span = at;
+    error.end = filePosition(site, Math.max(at.sourceEnd, at.sourceStart));
     if (code !== undefined) error.diagnosticCode = String(code);
     throw error;
   };
@@ -421,7 +422,11 @@ export function frontEndErrorOf(document: Node): TranslateError | undefined {
       ? base + document.source.lastIndexOf(",", error.start - base)
       : error.start;
   const { line, column } = filePosition(document, at);
-  return new TranslateError(error.message, line, column);
+  const failure = new TranslateError(error.message, line, column);
+  // The rule's own range; a point (or the bare `,`, moved back onto the `,`)
+  // ends no earlier than its start.
+  failure.end = filePosition(document, Math.max(error.end, at));
+  return failure;
 }
 
 /** Documents with front-end errors, by each body array lowering may be handed. */
@@ -480,7 +485,9 @@ export function endOfInputError(
   );
   if (!error) return undefined;
   const { line, column } = filePosition(document, error.start);
-  return new TranslateError(error.message, line, column);
+  const failure = new TranslateError(error.message, line, column);
+  failure.end = filePosition(document, Math.max(error.end, error.start));
+  return failure;
 }
 
 /** 1-based line, 0-based column of a document offset, in file coordinates. */

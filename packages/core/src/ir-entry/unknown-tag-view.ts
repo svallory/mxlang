@@ -170,9 +170,15 @@ export function explainerFor(
   const hook = dialect?.explainUnknownTag;
   if (!dialect || !hook) return undefined;
   const { mode, file, source, lineStarts, env } = options;
-  const errorAt = (offset: number, message: string, code?: string) => {
+  const errorAt = (
+    offset: number,
+    endOffset: number,
+    message: string,
+    code?: string,
+  ) => {
     const position = positionAt(lineStarts, offset);
     const error = new TranslateError(message, position.line, position.column);
+    error.end = positionAt(lineStarts, Math.max(offset, endOffset));
     if (code !== undefined) error.diagnosticCode = code;
     return error;
   };
@@ -182,6 +188,8 @@ export function explainerFor(
       const hookError = (what: string) =>
         errorAt(
           facts.span.sourceStart,
+          // Blamed on the tag: its `<name`.
+          facts.nameSpan?.sourceEnd ?? facts.span.sourceStart,
           `the dialect's \`explainUnknownTag\` ${what}`,
           DIALECT_HOOK_ERROR_CODE,
         );
@@ -231,8 +239,12 @@ export function explainerFor(
             `must return \`at\` as a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${source.length}) for \`<${facts.name}>\``,
           );
         }
+        const range = at as SourceSpan | undefined;
         return errorAt(
-          (at as SourceSpan | undefined)?.sourceStart ?? facts.span.sourceStart,
+          range?.sourceStart ?? facts.span.sourceStart,
+          range?.sourceEnd ??
+            facts.nameSpan?.sourceEnd ??
+            facts.span.sourceStart,
           message,
           code as string | undefined,
         );

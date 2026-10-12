@@ -40,6 +40,14 @@ export interface DialectDiagnostic {
   /** A machine-readable code, when there is one: the dialect's (`ctx.fail`'s `code`) or core's warning code (`MX_DUPLICATE_ATTRIBUTE`). */
   code?: string;
   /**
+   * Where the range ends (exclusive), in this file, when core knows it: the
+   * same meaning, rules and offsets as `IrDiagnostic.end`. Equal to the start
+   * for a point error. Absent for a diagnostic measured in another file (see
+   * {@link DialectDiagnostic.origin}, whose `end` carries it) and for one with
+   * no source position. @unstable
+   */
+  end?: { line: number; column: number; offset: number };
+  /**
    * Where the problem really is, when it is not in the checked file: a tag
    * file's own error, a dialect manifest's field error, a misplaced tag
    * file. `line` and `column` here are measured in `file` (1-based and
@@ -49,7 +57,16 @@ export interface DialectDiagnostic {
    * underlines what the author has at that spot in the checked file. A tool
    * that can address the other file (an editor) shows the diagnostic there.
    */
-  origin?: { file: string; line: number; column: number };
+  origin?: {
+    file: string;
+    line: number;
+    column: number;
+    /**
+     * Where the problem ends in `file` (exclusive; 1-based line, 0-based
+     * column), when known. @unstable
+     */
+    end?: { line: number; column: number };
+  };
 }
 
 /** The result of checking one dialect file. */
@@ -344,6 +361,7 @@ export function checkDialectFile(
           filePath,
           "error",
           error.diagnosticCode,
+          error.end,
         ),
       ],
     };
@@ -372,6 +390,7 @@ export function checkDialectFile(
           filePath,
           "error",
           error.diagnosticCode,
+          error.end,
         ),
       ],
     };
@@ -414,6 +433,7 @@ export function checkDialectFile(
               filePath,
               diagnostic.severity,
               diagnostic.code,
+              diagnostic.end,
             ),
           };
         }
@@ -424,6 +444,7 @@ export function checkDialectFile(
           column: diagnostic.column,
           offset: diagnostic.offset,
           ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
+          ...(diagnostic.end === undefined ? {} : { end: diagnostic.end }),
         };
       }),
     ],
@@ -442,6 +463,7 @@ function elsewhere(
   filePath: string,
   severity: "error" | "warning" = "error",
   code?: string,
+  end?: { line: number; column: number },
 ): DialectDiagnostic {
   const other = file !== undefined && file !== filePath;
   return {
@@ -451,6 +473,17 @@ function elsewhere(
     column: 0,
     offset: 0,
     ...(code === undefined ? {} : { code }),
-    ...(other ? { origin: { file, line, column } } : {}),
+    // The head-of-file marker is not a range, so the diagnostic itself keeps
+    // no `end`; the real range ends at `origin.end`.
+    ...(other
+      ? {
+          origin: {
+            file,
+            line,
+            column,
+            ...(end ? { end: { line: end.line, column: end.column } } : {}),
+          },
+        }
+      : {}),
   };
 }

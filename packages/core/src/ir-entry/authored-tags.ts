@@ -40,6 +40,8 @@ export interface AuthoredTag {
   /** Where the whole element ends (after its closing tag), when known. */
   endLine?: number;
   endColumn?: number;
+  /** Where the tag's `<name` ends (exclusive): the range an error blames. */
+  nameEnd?: { line: number; column: number };
   /**
    * The dialect's error for this tag, when its `explainUnknownTag` explained
    * it (or failed doing so). Set only on a tag with no contract.
@@ -236,6 +238,9 @@ export function scanAuthoredTags(
           offset: node.start,
           endLine: end.line,
           endColumn: end.column,
+          ...(nameSpan
+            ? { nameEnd: positionAt(lineStarts, nameSpan.sourceEnd) }
+            : {}),
           ...(explained ? { explained } : {}),
         });
       }

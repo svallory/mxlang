@@ -86,8 +86,57 @@ function structuralMessage(construct: string): string {
   return `the data tree is static; this file's consumer does not evaluate ${construct}`;
 }
 
-function fail(message: string, at: Position): never {
-  throw new TranslateError(message, at.line, at.column, at.file);
+/**
+ * Where a rejected construct ends (exclusive), as a position: the end of the
+ * name a whole-tag reject blames (`<name`), never the element's close. Without
+ * one the error is a point, ending where it starts.
+ */
+type BlameEnd = { line: number; column: number } | undefined;
+
+function fail(message: string, at: Position, end?: BlameEnd): never {
+  throw errorAt(message, at, end);
+}
+
+function errorAt(
+  message: string,
+  at: Position,
+  end?: BlameEnd,
+  code?: string,
+): TranslateError {
+  const error = new TranslateError(message, at.line, at.column, at.file);
+  error.end = end ?? { line: at.line, column: at.column };
+  if (code !== undefined) error.diagnosticCode = code;
+  return error;
+}
+
+/** The end of a node's span, when core gave a finite one. */
+function spanEndOf(span: SourceSpan | undefined): BlameEnd {
+  return span && Number.isFinite(span.sourceEnd)
+    ? positionOfOffset(span.sourceEnd)
+    : undefined;
+}
+
+/** The end of a tag's `<name`: its name span's end, when core gave a finite one. */
+function nameEndOf(tag: { nameSpan?: SourceSpan | null }): BlameEnd {
+  const span = tag.nameSpan;
+  return span && Number.isFinite(span.sourceEnd)
+    ? positionOfOffset(span.sourceEnd)
+    : undefined;
+}
+
+/**
+ * The end of the `name` a construct opens with at `at` (`<if`, `<for`, `<const`,
+ * `<!doctype`, or a statement's `import`), read off the source because the IR
+ * keeps no span for a keyword. `undefined` when the source does not say `name`
+ * there, so the error stays a point.
+ */
+function keywordEnd(at: Position, name: string): BlameEnd {
+  let offset = offsetOfPosition(at.line, at.column);
+  if (activeSource[offset] === "<") offset += 1;
+  const written = activeSource.slice(offset, offset + name.length);
+  return written.toLowerCase() === name
+    ? positionOfOffset(offset + name.length)
+    : undefined;
 }
 
 /**
@@ -183,14 +232,18 @@ function unusableTagName(name: string): boolean {
   );
 }
 
-function checkTagName(name: string, at: Position): void {
+function checkTagName(
+  name: string,
+  tag: { loc: Position; nameSpan?: SourceSpan | null },
+): void {
   if (!unusableTagName(name)) return;
   if (name.startsWith("$") && name.includes("{")) {
-    fail(DYNAMIC_TAG_MESSAGE, at);
+    fail(DYNAMIC_TAG_MESSAGE, tag.loc, nameEndOf(tag));
   }
   fail(
     `\`${name}\` is not a tag name a data file can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which a data file does not have`,
-    at,
+    tag.loc,
+    nameEndOf(tag),
   );
 }
 
@@ -225,7 +278,11 @@ const SYNTHESIZED_SHORTHAND_CLASS =
  * different mistake, so a different message. Only `class` merges silently;
  * core rejects a shorthand `#id` beside an authored `id` itself.
  */
-function rejectSpanlessShorthand(attrs: Attr[], at: Position): void {
+function rejectSpanlessShorthand(
+  attrs: Attr[],
+  tag: { loc: Position; nameSpan?: SourceSpan | null },
+): void {
+  const at = tag.loc;
   for (const attr of attrs) {
     if (attr.kind === "spread") continue;
     if (attr.name !== "id" && attr.name !== "class") continue;
@@ -241,13 +298,15 @@ function rejectSpanlessShorthand(attrs: Attr[], at: Position): void {
     const where = nameSpan
       ? { ...at, ...positionOfOffset(nameSpan.sourceStart) }
       : at;
+    // The sigil's own attribute (`#a${x}`, `.a${x}`): its name through its end.
+    const attrEnd = nameSpan ? positionOfOffset(nameSpan.sourceEnd) : undefined;
     if (attr.name === "id" && sigil === "#") {
-      fail(SYNTHESIZED_SHORTHAND_ID, where);
+      fail(SYNTHESIZED_SHORTHAND_ID, where, attrEnd);
     }
     if (attr.name === "class" && sigil === ".") {
-      fail(SYNTHESIZED_SHORTHAND_CLASS, where);
+      fail(SYNTHESIZED_SHORTHAND_CLASS, where, attrEnd);
     }
-    if (attr.name === "class") fail(MERGED_SHORTHAND_CLASS, at);
+    if (attr.name === "class") fail(MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
   }
 }
 
@@ -368,11 +427,11 @@ function inSourceOrder(
 }
 
 function checkTag(tag: DelegatedTag<unknown>): void {
-  attempt(() => checkTagName(tag.name, tag.loc));
+  attempt(() => checkTagName(tag.name, tag));
   // A merged class has no span, so checking that tag's attributes would add an
   // internal "no span" error that is only the same mistake again: skip them.
   const attrsCheckable = attempt(() => {
-    rejectSpanlessShorthand(tag.attrs, tag.loc);
+    rejectSpanlessShorthand(tag.attrs, tag);
     return true;
   });
   if (tag.var !== null) {
@@ -380,6 +439,7 @@ function checkTag(tag: DelegatedTag<unknown>): void {
       fail(
         `tag variable \`/${tag.var}\` on \`<${tag.name}>\`: the data tree is static; a binding without evaluation means nothing`,
         tag.loc,
+        nameEndOf(tag),
       ),
     );
   }
@@ -405,9 +465,9 @@ function checkParts(attrTagNodes: AttributeTagNode[], childNodes: IrNode[]) {
 }
 
 function checkAttrTag(tag: AttributeTag): void {
-  attempt(() => checkTagName(tag.name, tag.loc));
+  attempt(() => checkTagName(tag.name, tag));
   const attrsCheckable = attempt(() => {
-    rejectSpanlessShorthand(tag.attrs, tag.loc);
+    rejectSpanlessShorthand(tag.attrs, tag);
     return true;
   });
   if (attrsCheckable) each(tag.attrs, checkAttr);
@@ -526,17 +586,19 @@ function checkNode(node: IrNode): void {
       return;
     case "Component":
       if (node.target.kind === "dynamic") {
-        fail(DYNAMIC_TAG_MESSAGE, node.loc);
+        fail(DYNAMIC_TAG_MESSAGE, node.loc, nameEndOf(node));
       }
       fail(
         `\`<${node.authoredName ?? node.target.name}>\` calls a template tag; a data file cannot call a template tag`,
         node.loc,
+        nameEndOf(node),
       );
       break;
     case "DocumentType":
       fail(
         "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
         node.loc,
+        keywordEnd(node.loc, "!doctype"),
       );
       break;
     default:
@@ -629,6 +691,8 @@ interface UnknownTagHit {
   at: Position;
   /** Where the tag's element ends, to label the errors inside it. */
   end?: Position;
+  /** Where the error's range ends: the end of the tag's `<name`. */
+  blameEnd?: BlameEnd;
   /** The dialect's error for this tag, when it explained it: it replaces core's. */
   explained?: TranslateError;
 }
@@ -671,6 +735,7 @@ function allUnknownTags(
         message: unknownTagMessage(tag.name, declaredTags, dialectId),
         code: UNKNOWN_TAG_CODE,
         at: tag.loc,
+        blameEnd: nameEndOf(tag),
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
           ? { end: positionOfOffset(tag.span.sourceEnd) }
           : {}),
@@ -731,6 +796,8 @@ function allUnknownTags(
 interface StructuralHit {
   construct: string;
   at: Position;
+  /** Where the error's range ends; a point when unset. */
+  blameEnd?: BlameEnd;
 }
 
 /** Every structural construct among a tag's attribute tags and children. */
@@ -751,9 +818,17 @@ function structuralInAttrTagNodes(
 ): void {
   for (const node of nodes) {
     if (node.kind === "AttributeTagIf") {
-      out.push({ construct: "`<if>`", at: node.loc });
+      out.push({
+        construct: "`<if>`",
+        at: node.loc,
+        blameEnd: keywordEnd(node.loc, "if"),
+      });
     } else if (node.kind === "AttributeTagFor") {
-      out.push({ construct: "`<for>`", at: node.loc });
+      out.push({
+        construct: "`<for>`",
+        at: node.loc,
+        blameEnd: keywordEnd(node.loc, "for"),
+      });
     } else {
       structuralInParts(
         node.tag.attributeTagTree,
@@ -773,19 +848,39 @@ function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
   for (const node of nodes) {
     switch (node.kind) {
       case "Text":
-        out.push({ construct: "text", at: textPosition(node.span, node.loc) });
+        out.push({
+          construct: "text",
+          at: textPosition(node.span, node.loc),
+          blameEnd: spanEndOf(node.span),
+        });
         break;
       case "Interpolation":
-        out.push({ construct: `\`\${}\``, at: node.loc });
+        out.push({
+          construct: `\`\${}\``,
+          at: node.loc,
+          blameEnd: spanEndOf(node.span),
+        });
         break;
       case "IfChain":
-        out.push({ construct: "`<if>`", at: node.loc });
+        out.push({
+          construct: "`<if>`",
+          at: node.loc,
+          blameEnd: keywordEnd(node.loc, "if"),
+        });
         break;
       case "For":
-        out.push({ construct: "`<for>`", at: node.loc });
+        out.push({
+          construct: "`<for>`",
+          at: node.loc,
+          blameEnd: keywordEnd(node.loc, "for"),
+        });
         break;
       case "Const":
-        out.push({ construct: "`<const>`", at: node.loc });
+        out.push({
+          construct: "`<const>`",
+          at: node.loc,
+          blameEnd: keywordEnd(node.loc, "const"),
+        });
         break;
       case "DelegatedTag":
         structuralInParts(node.tag.attributeTagTree, node.tag.children, out);
@@ -804,7 +899,7 @@ function allStructural(
   ir: Ir,
   stmts: Statement[],
   options: CheckOptions,
-): { message: string; at: Position }[] {
+): { message: string; at: Position; blameEnd?: BlameEnd }[] {
   const hits: StructuralHit[] = [];
   if (options.structural === "reject") structuralInNodes(ir.body, hits);
   for (const stmt of stmts) {
@@ -814,14 +909,17 @@ function allStructural(
     } else if (options.structural !== "reject") {
       continue;
     }
+    const at = positionOfOffset(stmt.span.sourceStart);
     hits.push({
       construct: `\`${stmt.kind}\``,
-      at: positionOfOffset(stmt.span.sourceStart),
+      at,
+      blameEnd: keywordEnd(at, stmt.kind),
     });
   }
   return hits.map((found) => ({
     message: structuralMessage(found.construct),
     at: found.at,
+    ...(found.blameEnd ? { blameEnd: found.blameEnd } : {}),
   }));
 }
 
@@ -890,6 +988,8 @@ export function labelInside(
     // The label is prose; the code of the error it labels stays.
     const code = (error as TranslateError).diagnosticCode;
     if (code !== undefined) labelled.diagnosticCode = code;
+    const end = (error as TranslateError).end;
+    if (end !== undefined) labelled.end = end;
     return labelled;
   });
 }
@@ -970,15 +1070,13 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
     message,
     at,
     code,
+    blameEnd,
   }: {
     message: string;
     at: Position;
     code?: string;
-  }) => {
-    const error = new TranslateError(message, at.line, at.column, at.file);
-    if (code !== undefined) error.diagnosticCode = code;
-    return error;
-  };
+    blameEnd?: BlameEnd;
+  }) => errorAt(message, at, blameEnd, code);
   attempt(() => {
     for (const found of allStructural(ir, stmts, options)) {
       extra.push(asError(found));

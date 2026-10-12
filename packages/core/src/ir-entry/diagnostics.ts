@@ -7,6 +7,23 @@
 import { resolve } from "node:path";
 import { isTranslateError } from "../core.ts";
 
+/**
+ * Where an {@link IrDiagnostic}'s range ends, measured in the same file as its
+ * start. The end is exclusive. @unstable
+ */
+export interface IrDiagnosticEnd {
+  /** 1-based, as `IrDiagnostic.line`. */
+  line: number;
+  /** 0-based, as `IrDiagnostic.column`. The first column after the range. */
+  column: number;
+  /**
+   * UTF-16 code-unit offset in the same file as `IrDiagnostic.offset`: never
+   * `-1` for a diagnostic in the lowered file, and `-1` exactly when `file`
+   * names another file (as `IrDiagnostic.offset`).
+   */
+  offset: number;
+}
+
 export interface IrDiagnostic {
   severity: "error" | "warning";
   message: string;
@@ -37,6 +54,14 @@ export interface IrDiagnostic {
    * or a warning's `MxWarning.code` (`MX_DUPLICATE_ATTRIBUTE`). @unstable
    */
   code?: string;
+  /**
+   * Where the range ends (exclusive), in the same file as the start. Absent
+   * for a file-level diagnostic (no source position) and wherever core knows
+   * no end. Equal to the start for a point error (a parse error at one
+   * offset): a tool widens an empty range itself. A whole-tag error ends at
+   * the end of `<name`, never at the element's close. @unstable
+   */
+  end?: IrDiagnosticEnd;
 }
 
 /** The start offset of every line of `source`. */
@@ -59,12 +84,23 @@ function offsetOf(
   return Math.min(start + column, source.length);
 }
 
+/** What an error or warning says about where it is: a start, a file, an end. */
+export interface ErrorPosition {
+  line: number;
+  column: number;
+  file?: string;
+  end?: { line: number; column: number };
+}
+
 /** The position an error carries, in the shape core and Marko each report. */
-function errorPosition(
-  error: unknown,
-): { line: number; column: number; file?: string } | null {
+function errorPosition(error: unknown): ErrorPosition | null {
   if (isTranslateError(error)) {
-    return { line: error.line, column: error.column, file: error.file };
+    return {
+      line: error.line,
+      column: error.column,
+      file: error.file,
+      ...(error.end ? { end: error.end } : {}),
+    };
   }
   if (!error || typeof error !== "object") return null;
   const loc = (error as { loc?: unknown }).loc;
@@ -77,7 +113,18 @@ function errorPosition(
   if (!start || typeof start !== "object") return null;
   const nested = start as { line?: unknown; column?: unknown };
   if (typeof nested.line === "number" && typeof nested.column === "number") {
-    return { line: nested.line, column: nested.column };
+    // A parse error's range: Marko's point error shares one object between
+    // `start` and `end`, so a point has an end equal to its start.
+    const to = (loc as { end?: unknown }).end as
+      | { line?: unknown; column?: unknown }
+      | undefined;
+    return {
+      line: nested.line,
+      column: nested.column,
+      ...(typeof to?.line === "number" && typeof to?.column === "number"
+        ? { end: { line: to.line, column: to.column } }
+        : {}),
+    };
   }
   return null;
 }
@@ -120,7 +167,7 @@ function errorMessage(error: unknown, filename: string): string {
 export function toDiagnostic(
   severity: "error" | "warning",
   message: string,
-  at: { line: number; column: number; file?: string },
+  at: ErrorPosition,
   code: string | undefined,
   lineStarts: number[],
   source: string,
@@ -138,6 +185,16 @@ export function toDiagnostic(
   // report it at the start of the file so `line` stays 1-based. `at` is the
   // caller's object (a warning sink entry): read it, never write to it.
   const [line, column] = at.line < 1 ? [1, 0] : [at.line, at.column];
+  // A file-level diagnostic is not a range: it has no end. Otherwise the end
+  // is measured in the same file as the start, with the same rules, and never
+  // before it.
+  const to = at.line < 1 ? undefined : at.end;
+  const end =
+    to === undefined
+      ? undefined
+      : to.line < line || (to.line === line && to.column < column)
+        ? { line, column }
+        : to;
   return {
     severity,
     message,
@@ -146,6 +203,17 @@ export function toDiagnostic(
     offset: foreign ? -1 : offsetOf(lineStarts, source, line, column),
     ...(foreign ? { file: at.file } : {}),
     ...(code !== undefined ? { code } : {}),
+    ...(end
+      ? {
+          end: {
+            line: end.line,
+            column: end.column,
+            offset: foreign
+              ? -1
+              : offsetOf(lineStarts, source, end.line, end.column),
+          },
+        }
+      : {}),
   };
 }
 

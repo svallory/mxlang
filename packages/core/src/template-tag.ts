@@ -247,7 +247,10 @@ export function metadataForTemplate(
       (error.name === "CompileError" || error.name === "CompileErrors")
     ) {
       type ParsedError = Error & {
-        loc?: { start?: { line: number; column: number } };
+        loc?: {
+          start?: { line: number; column: number };
+          end?: { line: number; column: number };
+        };
         frame?: string;
         label?: string;
         errors?: ParsedError[];
@@ -255,7 +258,7 @@ export function metadataForTemplate(
       const parsed = error as ParsedError;
       const entries = parsed.errors?.length ? parsed.errors : [parsed];
       const first = entries[0] ?? parsed;
-      throw new TranslateError(
+      const failure = new TranslateError(
         entries
           .map((entry) => entry.frame ?? entry.label ?? entry.message)
           .join("\n\n"),
@@ -263,6 +266,14 @@ export function metadataForTemplate(
         first.loc?.start?.column ?? 0,
         tag.filename,
       );
+      // The first error's range, when the parser gave a position at all.
+      if (first.loc?.start && first.loc.end) {
+        failure.end = {
+          line: first.loc.end.line,
+          column: first.loc.end.column,
+        };
+      }
+      throw failure;
     }
     if (isTranslateError(error) && error.file === undefined) {
       const positioned = new TranslateError(
@@ -276,6 +287,7 @@ export function metadataForTemplate(
         positioned.diagnosticCode = error.diagnosticCode;
       }
       if (error.spans !== undefined) positioned.spans = error.spans;
+      if (error.end !== undefined) positioned.end = error.end;
       const carried = (error as { [CALLEE_INPUT_ERROR]?: unknown })[
         CALLEE_INPUT_ERROR
       ];

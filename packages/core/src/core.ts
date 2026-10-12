@@ -112,6 +112,14 @@ export class TranslateError extends Error {
    */
   span?: SourceSpan;
   /**
+   * Where the error's range ends (exclusive), in the same file as
+   * `line`/`column` (1-based line, 0-based column). Set where the raiser
+   * blamed a node or a span; equal to the start for a point error; unset for
+   * a file-level error and wherever core knows no end. A whole-tag error ends
+   * at the end of `<name`, never at the element's close. @unstable
+   */
+  end?: { line: number; column: number };
+  /**
    * Every callee file the failed compile's `readCalleeInput` had already
    * resolved before the error was raised (decision 106/107). Set by
    * `compileSource`'s catch, from the same-shaped `Ctx.dependencies` a
@@ -619,6 +627,11 @@ export interface MxWarning {
   column: number;
   file?: string;
   /**
+   * Where the warning's range ends (exclusive), in the same file as
+   * `line`/`column`, when core knows it. @unstable
+   */
+  end?: { line: number; column: number };
+  /**
    * A stable, machine-readable code (`MX_DUPLICATE_ATTRIBUTE`), so a consumer
    * matches the rule rather than its wording. Absent on a warning without
    * one. Reaches `IrDiagnostic.code`. @unstable
@@ -724,14 +737,69 @@ export function otherErrorsText(error: TranslateError): string {
 
 export function fail(message: string, node: Node, file?: string): never {
   const span = node?.loc ? undefined : mxSpanOf(node);
+  const end = blameEnd(node);
   if (span) {
     const error = new TranslateError(message, 0, 0, file);
     error.span = span;
+    if (end !== undefined && "offset" in end) {
+      // A range never ends before it starts.
+      spanEnds.set(error, Math.max(end.offset, span.sourceStart));
+    }
     unpositioned.add(error);
     throw error;
   }
   const loc = node?.loc?.start ?? node?.start ?? { line: 0, column: 0 };
-  throw new TranslateError(message, loc.line ?? 0, loc.column ?? 0, file);
+  const error = new TranslateError(
+    message,
+    loc.line ?? 0,
+    loc.column ?? 0,
+    file,
+  );
+  if (end !== undefined && "line" in end) error.end = end;
+  throw error;
+}
+
+/**
+ * Where the range `fail` blames on `node` ends (exclusive), or `undefined`
+ * when the node carries no end. An MX node gives a file `offset` (the lowering
+ * boundary turns it into a line and column against the source); a Marko or
+ * Babel node gives its `loc.end`.
+ *
+ * A tag ends at the end of its name (`<name`), never at its closing tag: the
+ * range a tool underlines is the tag's name, not the element with its body.
+ * Everything else ends where the node does: an attribute after its value, an
+ * expression after its last character, a text run after its `valueSpan`.
+ */
+export function blameEnd(
+  node: Node,
+): { offset: number } | { line: number; column: number } | undefined {
+  if (node?.loc) {
+    const to = node.type === "MarkoTag" ? node.name?.loc?.end : node.loc.end;
+    return typeof to?.line === "number" && typeof to?.column === "number"
+      ? { line: to.line, column: to.column }
+      : undefined;
+  }
+  const span = mxSpanOf(node);
+  if (span === undefined) {
+    const end = node?.end;
+    return typeof end?.line === "number" && typeof end?.column === "number"
+      ? { line: end.line, column: end.column }
+      : undefined;
+  }
+  if (
+    isTagNode(node) ||
+    isMxAttributeTag(node) ||
+    node?.type === "MxModuleStatement"
+  ) {
+    // A dynamic name is its expression: past its `${…}`, when it has them.
+    const name = tagNameSpanOf(node);
+    const named =
+      typeof name?.outer?.end === "number"
+        ? name.outer.end
+        : mxSpanOf(name)?.sourceEnd;
+    if (named !== undefined) return { offset: named };
+  }
+  return { offset: span.sourceEnd };
 }
 
 /**
@@ -771,6 +839,9 @@ export function mxSpanOf(node: Node): SourceSpan | undefined {
 /** Errors `fail` raised on an MX node, whose `line`/`column` are not filled in yet. */
 const unpositioned = new WeakSet<TranslateError>();
 
+/** The end offset `fail` blamed on an MX node, for `positionError` to turn into a line and column. */
+const spanEnds = new WeakMap<TranslateError, number>();
+
 /** The 1-based line and 0-based column of a UTF-16 offset into `ctx.source`. */
 export function positionAtOffset(ctx: Ctx, offset: number): Position {
   let line = 1;
@@ -806,6 +877,11 @@ export function positionError(ctx: Ctx, error: unknown): void {
   // `line`/`column` are read-only to consumers; this is their one writer.
   (error as { line: number }).line = at.line;
   (error as { column: number }).column = at.column;
+  const endOffset = spanEnds.get(error);
+  if (endOffset !== undefined) {
+    error.end = positionAtOffset(ctx, endOffset);
+    spanEnds.delete(error);
+  }
   unpositioned.delete(error);
 }
 
