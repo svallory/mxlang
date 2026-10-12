@@ -1,0 +1,3 @@
+static let n = 0;
+static function bump() { n++; }
+<button onClick=bump>${n}</button>

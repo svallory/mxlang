@@ -62,7 +62,7 @@ None. The two A1 rows this file used to list as absent — a tag's own
 `<content>` and a named slot in a tag file — now have fixtures
 (`tag-content`, `tag-named-slot`), along with the rest of task 1.7's surface:
 inputs (`tag-inputs`), the selector override (`tag-selector-override`),
-module-level statements (`tag-static-import`), and a page calling a
+module-level statements (`tag-static-import`, and a reassigned `static let` in `tag-static-let`), and a page calling a
 discovered tag (`page-calls-discovered-tag`), and one whose callee exports
 a `selector` (`page-calls-tag-selector-override`).
 

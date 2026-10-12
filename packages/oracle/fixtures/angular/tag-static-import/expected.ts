@@ -9,5 +9,6 @@ const PREFIX = "#";
   template: "<i>{{ PREFIX }}</i>",
 })
 export class StaticImport {
+  protected get PREFIX() { return PREFIX; }
 }
 export default StaticImport;
