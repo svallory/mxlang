@@ -541,7 +541,7 @@ export function lowerSource(
     };
     // `rules` is already this file's preset (`presetOf`): the call's
     // `tagRules` wins over the dialect's, so the compile must not re-pick.
-    tagRulesDecided.add(host);
+    tagRulesDecided.set(host, presetOf(options, dialectOnce));
     compileSource(source, filename, declarations, host);
   } catch (error) {
     const reject = modes.unknownTags === "reject";

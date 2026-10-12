@@ -655,6 +655,7 @@ const ROWS: Row[] = [
     1,
   ),
   compileRow("MX_INVALID_TAG_NAME", "<foo~bar/>\n", 1, 1),
+  compileRow("MX_RESERVED_EFFECT_TAG", "<effect/>\n", 1, 1),
   compileRow("MX_UNSUPPORTED_CONSTRUCT", "<div(1) a=1/>\n", 1, 5),
   compileRow(
     "MX_NOT_A_DOM_EVENT",

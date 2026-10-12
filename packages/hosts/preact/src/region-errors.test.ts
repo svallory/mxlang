@@ -332,6 +332,32 @@ describe("reactive-tag errors in a region name only the hook", () => {
   });
 });
 
+describe("<effect> keeps this host's own error, never a target's", () => {
+  it.each(["<effect() { go() }/>", "<effect>{ go() }</effect>", "<effect/>"])(
+    "region: %s",
+    (tag) => {
+      const { message } = errorOf(inRegion(tag));
+      expect(message).toContain("`<effect>` is a Marko reactive effect");
+      expect(message).toContain("useEffect");
+      expect(message).not.toContain("Use `<script>`");
+    },
+  );
+
+  it.each(["<effect() { go() }/>", "<effect>{ go() }</effect>", "<effect/>"])(
+    "whole file: %s",
+    (tag) => {
+      let message = "";
+      try {
+        compilePreactMx(tag, "/fixtures/whole.mx", { targets });
+      } catch (error) {
+        message = stripAnsi((error as Error).message);
+      }
+      expect(message).toContain("`<effect>` is a Marko reactive effect");
+      expect(message).not.toContain("Use `<script>`");
+    },
+  );
+});
+
 describe("whole-file reactive-tag errors are unchanged", () => {
   function wholeFileError(source: string): string {
     try {

@@ -1,11 +1,17 @@
 ---
 title: "Stateful tags"
-description: "Why <let>, <effect>, and friends mean whatever the host says."
+description: "Why <let>, <lifecycle>, and friends mean whatever the host says."
 ---
 
 # Stateful tags
 
-`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, and the `:=` assignment operator are **not** part of the portable structural core. They're framework territory: MX's core provides three hooks a host can use to give these tags real meaning, and each host's `Policy` decides what happens.
+`<let>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, and the `:=` assignment operator are **not** part of the portable structural core. They're framework territory: MX's core provides three hooks a host can use to give these tags real meaning, and each host's `Policy` decides what happens.
+
+`<effect>` is not an MX tag. On a target (`lowerSource` and the html targets) every form of it is the same compile error, and the fix is `<script>`:
+
+> `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
+
+The error is a target rule. On a host (embedded MX in Preact, React, Hono, Solid, Angular or Astro) `<effect>` stays one more unsupported tag, with the host's own message. A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name.
 
 A template using `<let>` means something different depending on which host compiles it — the same way a piece of JSX means something different depending on which framework's compiler processes it. The structural tags in [Structural tags](/language/structural-tags/) are portable across hosts; stateful tags are not.
 
@@ -15,7 +21,7 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 | Tag | Default behavior |
 |---|---|
-| `<effect>`, `<lifecycle>`, `<script>`, `<id>`, `<log>`, `<debug>`, `client` blocks | Inert — accepted, no output |
+| `<lifecycle>`, `<script>`, `<id>`, `<log>`, `<debug>`, `client` blocks | Inert — accepted, no output |
 | `<let>`, `<const>`, `:=` | Evaluated for their initial value only |
 | `server` block | **Not** inert — this is the server render, so it runs like `static` and its bindings are readable in the template |
 | `<await>` | Error — the host genuinely can't render a pending value to a string |
@@ -27,7 +33,7 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 ### Opting into `strict`
 
-Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).
+Pass `{ strict: true }` to reject seven constructs (`<let>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).
 
 The one check that applies regardless of `strict` is the `input`-shadowing guard: a `<let>` or `<const>` binding named `input` is always rejected, since it would silently break the template's own input parameter either way.
 

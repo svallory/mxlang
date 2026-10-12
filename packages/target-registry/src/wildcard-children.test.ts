@@ -188,7 +188,7 @@ describe("a target's built-ins are never wildcard-matched", () => {
     `\`<resource>\`: \`<${name}>\` is not allowed here; names must match \`.+\` (\`<${name}>\` is a built-in tag, so the wildcard does not apply to it)`;
 
   it.each(
-    ["let", "style", "effect", "script"].flatMap((name) =>
+    ["let", "style", "script"].flatMap((name) =>
       compilersWith(catchAll).map(
         ([target, compile]) => [target, name, compile] as const,
       ),
@@ -206,7 +206,7 @@ describe("a target's built-ins are never wildcard-matched", () => {
     },
   );
 
-  it.each(["let", "style", "effect", "script"])(
+  it.each(["let", "style", "script"])(
     "lowerSource: <%s> inside a catch-all parent is the built-in",
     (name) => {
       const { diagnostics } = core.lowerSource(
@@ -217,6 +217,68 @@ describe("a target's built-ins are never wildcard-matched", () => {
       expect(diagnostics[0]?.message).toBe(expected(name));
     },
   );
+
+  // `<effect>` is not a tag on a target: core's one error, never the
+  // contract's "not allowed here" and never "a built-in tag". A host keeps
+  // its own rejection of the name, also ahead of the parent's contract.
+  const EFFECT =
+    "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.";
+
+  const htmlTargets = ["html", "astro-html"];
+
+  it.each(htmlTargets)(
+    "%s: <effect> inside a catch-all parent is core's effect error",
+    async (target) => {
+      const message = await run(
+        byDescriptor(target, {
+          customTags: catchAll,
+          ...(target === "astro-html" ? { strict: true } : {}),
+        }),
+        '<resource><effect nope="a"/></resource>\n',
+        page(`e-${target}`),
+      );
+      expect(message).toBe(EFFECT);
+    },
+  );
+
+  it.each(
+    compilersWith(catchAll)
+      .filter(([target]) => !htmlTargets.includes(target))
+      .map(([target, compile]) => [target, compile] as const),
+  )(
+    "%s: <effect> inside a catch-all parent is the host's own error",
+    async (target, compile) => {
+      const inside = await run(
+        compile,
+        '<resource><effect nope="a"/></resource>\n',
+        page(`e-${target}`),
+      );
+      const alone = await run(
+        compile,
+        '<effect nope="a"/>\n',
+        page(`e2-${target}`),
+      );
+      expect(inside).toBe(alone);
+      expect(inside).toContain("`<effect>`");
+      expect(inside).not.toContain("Use `<script>`");
+      expect(inside).not.toContain("is not allowed here");
+    },
+  );
+
+  it("lowerSource: <effect> inside a catch-all parent is core's effect error", () => {
+    const { diagnostics } = core.lowerSource(
+      '<resource>\n  <effect nope="a"/>\n</resource>\n',
+      "/d.mx",
+      { customTags: catchAll },
+    );
+    expect(diagnostics[0]).toMatchObject({
+      code: "MX_RESERVED_EFFECT_TAG",
+      message: EFFECT,
+      line: 2,
+      column: 3,
+      end: { line: 2, column: 9 },
+    });
+  });
 
   it.each(
     compilersWith(catchAll).filter(

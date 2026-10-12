@@ -196,32 +196,71 @@ describe("reserved attribute writer after #294", () => {
   });
 });
 
-describe("an inert tag is inert only in its declared shape", () => {
-  // Inert means the construct emits nothing — never that a body or an extra
-  // attribute may be discarded. `<effect><div>x</div></effect>` compiled clean
-  // with the `<div>` gone before this rule existed: a successful compile that
-  // silently deleted authored markup, the S8 failure class the field guard
-  // exists to close. Marko itself rejects both shapes.
-  // `<effect>` is the tag that actually reaches this guard. `<log>`, `<debug>`,
-  // `<id>` and `<lifecycle>` are `openTagOnly` in Marko's own definition, so a
-  // body on those is a parse error before any translator runs — the guard
-  // still declares `body: "none"` for them, for a taglib that omits that parse
-  // option, but the reachable case to pin is this one.
-  it("rejects a body on <effect>", () => {
-    expect(() =>
-      compile(src("<effect() { go() }><div>inside</div></effect>"), file),
-    ).toThrow(/`<effect>` does not support body content/);
+const EFFECT_MESSAGE =
+  "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.";
+
+describe("<effect> is not an MX tag", () => {
+  // Every form is refused at the tag name, with the same text and code: the
+  // name is reserved, so a body, a method, a value, an attribute and a spread
+  // are all the same mistake. `<script>` is the one construct that runs code
+  // after render.
+  it.each([
+    ["a body", "<effect>go()</effect>", 1, 1],
+    ["markup in a body", "<effect() { go() }><div>inside</div></effect>", 1, 1],
+    ["a method", "<effect() { go() }/>", 1, 1],
+    ["a value", "<effect=() => 1/>", 1, 1],
+    ["a bare tag", "<effect/>", 1, 1],
+    ["an attribute", '<effect foo="bar"/>', 1, 1],
+    ["a spread", "<effect ...input.attrs/>", 1, 1],
+    ["a later line", "<p>a</p>\n<effect() { go() }/>", 2, 1],
+    ["a nested tag", "<if=input.on><effect/></if>", 1, 14],
+  ])("refuses %s", (_what, source, line, column) => {
+    let error: any;
+    try {
+      compile(src(source), file);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      message: EFFECT_MESSAGE,
+      diagnosticCode: "MX_RESERVED_EFFECT_TAG",
+      line,
+      column,
+    });
+    expect(error.end).toEqual({ line, column: column + "effect".length });
   });
 
-  it("rejects an unexpected attribute on <effect>", () => {
-    expect(() => compile(src('<effect foo="bar"/>'), file)).toThrow(
-      /`<effect>` does not support the `foo` attribute/,
+  it("refuses it under { strict: true } with the same text", () => {
+    expect(() => compile(src("<effect/>"), file, { strict: true })).toThrow(
+      EFFECT_MESSAGE,
+    );
+  });
+
+  it("accepts the <script> it points to", () => {
+    const { code } = compile(
+      src("<p>a</p>\n<script>console.log(1)</script>"),
+      file,
+    );
+    expect(code).toContain('__mxOut.write("<p>a</p>")');
+  });
+});
+
+describe("an inert tag is inert only in its declared shape", () => {
+  // Inert means the construct emits nothing — never that a body or an extra
+  // attribute may be discarded. Marko itself rejects both shapes. `<log>`,
+  // `<debug>`, `<id>` and `<lifecycle>` are `openTagOnly` in Marko's own
+  // definition, so a body on those is a parse error before any translator
+  // runs; the guard still declares `body: "none"` for them, for a taglib that
+  // omits that parse option (core pins the body rule with a declared tag).
+  it("rejects an unexpected attribute on <log>", () => {
+    expect(() => compile(src('<log=1 foo="bar"/>'), file)).toThrow(
+      /`<log>` does not support the `foo` attribute/,
     );
   });
 
   it("accepts the attributes a tag's own definition allows", () => {
     // Per tag, not uniform, because Marko is: `<lifecycle foo="bar"/>`
-    // compiles there while `<effect foo="bar"/>` does not — a lifecycle tag's
+    // compiles there while `<log=1 foo="bar"/>` does not — a lifecycle tag's
     // attributes are its configuration.
     const { code } = compile(
       src('<p>a</p>\n<lifecycle onMount() { } foo="bar"/>'),
@@ -231,8 +270,8 @@ describe("an inert tag is inert only in its declared shape", () => {
   });
 
   it("rejects a spread on an inert tag", () => {
-    expect(() => compile(src("<effect ...input.attrs/>"), file)).toThrow(
-      /spread attributes on `<effect>` are not supported/,
+    expect(() => compile(src("<lifecycle ...input.attrs/>"), file)).toThrow(
+      /spread attributes on `<lifecycle>` are not supported/,
     );
   });
 
@@ -589,7 +628,6 @@ describe("inert constructs (decision 65): accepted, no output", () => {
   // byte-identical with and without the construct. Rejecting them would be an
   // implementation limit dressed as a rule.
   it.each([
-    ["effect", "<p>a</p>\n<effect() { go() }/>"],
     ["lifecycle", "<p>a</p>\n<lifecycle onMount() { }/>"],
     ["script", "<p>a</p>\n<script>console.log(1)</script>"],
     ["log", "<p>a</p>\n<log=1/>"],
@@ -2323,7 +2361,6 @@ describe("module shape", () => {
 describe("the strict policy (decision 68's fold): reactive tags error by name", () => {
   it.each([
     ["<let>", "<let/count=5/>\n<p>x</p>", /`<let>` is reactive state/],
-    ["<effect>", "<effect() { go() }/>", /`<effect>` is a reactive effect/],
     [
       "<lifecycle>",
       "<lifecycle/>",
@@ -2344,11 +2381,6 @@ describe("the strict policy (decision 68's fold): reactive tags error by name", 
 
   it.each([
     ["<let>", "<let/count=5/>\n<p>${count}</p>", "const count = 5;"],
-    [
-      "<effect>",
-      "<effect() { go() }/>",
-      "function Probe(input: Input): string {",
-    ],
     [
       "<lifecycle>",
       "<lifecycle onCreate() { go() }/>",

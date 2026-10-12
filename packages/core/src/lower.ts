@@ -157,6 +157,7 @@ import {
   NO_LOWERING_CODE,
   NOT_A_DOM_EVENT_CODE,
   REPEATED_ATTRIBUTE_TAG_CODE,
+  RESERVED_EFFECT_TAG_CODE,
   RESERVED_TAG_CODE,
   UNBOUND_COMPONENT_CODE,
   UNKNOWN_ATTRIBUTE_TAG_CODE,
@@ -206,7 +207,11 @@ import {
 import { payloadOf } from "./payload.ts";
 import { checkReservedTemplate } from "./reserved-bindings.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
-import type { SyntaxBuildContext } from "./syntax-table.ts";
+import {
+  fileTagRules,
+  resolveSyntaxOf,
+  type SyntaxBuildContext,
+} from "./syntax-table.ts";
 import {
   hasStaticName,
   tagArgsOf,
@@ -4055,6 +4060,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           loc,
         });
       } else {
+        rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
         const known = wildcard ? undefined : wildcardIneligibility(name, ctx);
@@ -4569,6 +4575,41 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
 }
 
+/**
+ * The text of the error for `<effect>`, in any form, on a target: the name is
+ * reserved and is not a tag. `<script>` is the one construct for code that
+ * runs after render.
+ */
+const EFFECT_TAG_MESSAGE =
+  "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.";
+
+/**
+ * `<effect>` is not a tag, bodied or not, on any target (`lowerSource` and the
+ * html targets): one error, with its own code, ahead of wildcard, custom-tag
+ * and default-tag resolution. Two exceptions. The `none` tag rules preset,
+ * where every name but the module statements is an ordinary tag. And a host
+ * that declares its own disposition for the name: that host says what it
+ * does with `<effect>` in its own words, so its row is applied here, ahead of
+ * a parent's `children` claiming the name, and core adds nothing.
+ */
+function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
+  if (name !== "effect" || ctx.tagRules === "none") return;
+  const claimed = Object.hasOwn(ctx.declarations.tags, name)
+    ? ctx.declarations.tags[name]
+    : undefined;
+  if (claimed) {
+    if (claimed.kind === "error") {
+      raise(claimed.code ?? UNSUPPORTED_CONSTRUCT_CODE, claimed.reason, node);
+    }
+    return;
+  }
+  raise(
+    RESERVED_EFFECT_TAG_CODE,
+    EFFECT_TAG_MESSAGE,
+    tagNameSpanOf(node) ?? node.name ?? node,
+  );
+}
+
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — Marko's concise mode has no other shape for
@@ -4622,6 +4663,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       node.name,
     );
   }
+  rejectEffectTag(ctx, node, name);
   // A parent's `children["*"]` claimed this tag (decision 147): it is a call
   // of the matched contract, under the canonical name, ahead of every
   // host-specific reading of the authored name (disposition, claim, element).
@@ -5712,6 +5754,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
     ctx.targets,
   );
   scratch.customTags = customTags;
+  scratch.tagRules = ctx.tagRules;
   // The file's dialect: a call's checks read the keys it claims and the
   // wording it gives (`describeAttribute`), and this walk's errors are the
   // file's. The same dialect also reaches `lowerBlockTag` and `lowerFilter`
@@ -5768,6 +5811,13 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
     ctx.targets,
   );
   templateCtx.customTags = ctx.customTags;
+  // The unit parses under its own file's rules (a dialect tag file: the
+  // dialect's), not the caller's, as `parseFragment` above did.
+  templateCtx.tagRules = fileTagRules(
+    resolveSyntaxOf(tag.filename, {
+      hostSegments: ctx.targets?.moduleSegments(),
+    }),
+  );
   // A tag unit is a file that compiles to a module of its own, whatever the
   // caller is — so its self-recursive calls resolve to its own export.
   templateCtx.emitsModule = true;

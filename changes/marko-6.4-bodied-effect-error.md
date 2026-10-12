@@ -1,0 +1,5 @@
+---
+packages: [core, html]
+kind: Changed
+---
+`<effect>` is not an MX tag, in any form, on a target. Every use of it (with a body, `<effect/>`, `<effect() { … }/>`, `<effect=…/>`, with attributes or a spread) is now one compile error on `lowerSource` and on the html target, default and strict policy alike: "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes." Core raises it, with the new code `MX_RESERVED_EFFECT_TAG`, at the tag name with its end. Before, the html target accepted `<effect/>` and `<effect() { … }/>` as inert and answered a body with a generic "does not support body content" error. A host (embedded MX in Preact, React, Hono, Solid, Angular or Astro) keeps its own error for `<effect>`, unchanged. Under the `none` tag-rules preset (a dialect's, or `lowerSource({ tagRules: "none" })`) `effect` stays an ordinary tag name. Marko 6.4 accepts the bodiless forms and the attribute form; the divergence is recorded in `divergences.md`.

@@ -65,17 +65,8 @@ const TAGS: Record<string, Disposition> = {
   // Each row declares the shape the tag is inert *in*, taken from its own
   // Marko tag definition. Inert means the construct emits nothing; it never
   // means a body or an extra attribute may be discarded. Marko itself rejects
-  // both (`<effect>` with a body is "does not support body content" there),
-  // and the shapes below reproduce that.
-  effect: {
-    kind: "inert",
-    reason:
-      "`<effect>` runs after render, on the client; a server render emits nothing for it (verified against Marko's own html output)",
-    body: "none",
-    // Marko: `<effect foo="bar"/>` is "does not support the `foo` attribute",
-    // and a spread is refused too. Only the `effect() { … }` call is its own.
-    attributes: "none",
-  },
+  // both, and the shapes below reproduce that. `<effect>` has no row: core
+  // refuses the name on every target before a declaration is read.
   lifecycle: {
     kind: "inert",
     reason:
@@ -514,7 +505,7 @@ export const escapeFrom = "@mxlang/target-html";
  *
  * Kept from `.mx`'s dialect (decision 68's policy fold) as an opt-in stance,
  * not the default: `policy.tags` renders `<let>`'s initial value and treats
- * `<effect>`/`<lifecycle>`/`<script>`/`<client>`/`<id>` as inert, matching
+ * `<lifecycle>`/`<script>`/`<client>`/`<id>` as inert, matching
  * what Marko's own server render emits (decision 65). A `strict` author may
  * instead want a construct that only makes sense with a reactive runtime to
  * be a compile error, naming the construct, rather than silently accepted.
@@ -534,11 +525,6 @@ const STRICT_TAGS: Record<string, Disposition> = {
     kind: "error",
     reason:
       "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
-  },
-  effect: {
-    kind: "error",
-    reason:
-      "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target",
   },
   lifecycle: {
     kind: "error",

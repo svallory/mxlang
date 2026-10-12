@@ -220,6 +220,7 @@ let current: {
   code: string | null;
   policy: Policy;
   tagTable?: TagTable;
+  tagRules?: TagRulesPreset;
   postEmit?: (code: string) => string;
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
@@ -305,6 +306,7 @@ function translatorClaiming(
             state.targets,
           );
           ctx.customTags = state.customTags;
+          ctx.tagRules = state.tagRules;
           ctx.defaultTag = state.defaultTag;
           ctx.warnings = state.warnings;
           ctx.productName = state.productName;
@@ -451,9 +453,10 @@ export function parseMxDocument(
 /**
  * Host options whose taglibs already state the file's tag rules: the IR
  * entry's, which picks the preset itself (its `tagRules` option wins over
- * the dialect's). Internal: not exported from the package.
+ * the dialect's), mapped to that preset. Internal: not exported from the
+ * package.
  */
-export const tagRulesDecided = new WeakSet<HostOptions>();
+export const tagRulesDecided = new WeakMap<HostOptions, TagRulesPreset>();
 
 /** `preset`'s rules over the target's native elements (none under `none`). */
 function rulesUnder(preset: TagRulesPreset, policy: Policy): TagRules {
@@ -511,6 +514,9 @@ export function compileSource(
     ? undefined
     : fileTagRules(resolvedSyntax);
   const rules = preset === undefined ? undefined : rulesUnder(preset, policy);
+  // The preset the file parses under, decided by the IR entry or by its
+  // dialect; absent for MX's own files.
+  const fileRules = tagRulesDecided.get(host) ?? preset;
   const claimed = claimedFields(resolvedSyntax.dialect);
   // The dialect's `contracts` register beside the host's `customTags`
   // (memoized per map, so the translator caches keyed on it stay warm).
@@ -548,6 +554,7 @@ export function compileSource(
     // The host's taglibs over the target's native elements; tags beside the
     // file reach it as `customTags`, never by a directory walk here.
     tagTable: lookup,
+    tagRules: fileRules,
   };
 
   const previous = current;

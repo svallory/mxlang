@@ -714,6 +714,15 @@ describe("unsupported constructs", () => {
     expect(errorFor(template).message).toMatch(pattern);
   });
 
+  it.each(["<effect() { go() }/>", "<effect/>", "<effect>go()</effect>"])(
+    "<effect> keeps this host's own error, never a target's: %s",
+    (template) => {
+      const { message } = errorFor(template);
+      expect(message).toMatch(/reactive effect/);
+      expect(message).not.toContain("Use `<script>`");
+    },
+  );
+
   it("rejects <const>, which a template expression cannot declare", () => {
     expect(errorFor("<const/n=1/>").message).toMatch(
       /declare it in the `---` fence instead/,

@@ -65,6 +65,8 @@ export const INVALID_CALLEE_INPUT_CODE = "MX_INVALID_CALLEE_INPUT";
 export const UNSUPPORTED_CONSTRUCT_CODE = "MX_UNSUPPORTED_CONSTRUCT";
 /** A spread, attribute or body on a tag that emits nothing. */
 export const INERT_TAG_SHAPE_CODE = "MX_INERT_TAG_SHAPE";
+/** `<effect>`, a reserved name that is not a tag; `<script>` is the effect. */
+export const RESERVED_EFFECT_TAG_CODE = "MX_RESERVED_EFFECT_TAG";
 /** A `.marko` file used as a tag or an import. */
 export const UNSUPPORTED_MARKO_FILE_CODE = "MX_UNSUPPORTED_MARKO_FILE";
 /** A bad `#id`/`.class` shorthand, or one with no default tag. */
@@ -420,6 +422,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a spread, attribute or body on a tag that emits nothing",
         ],
         [
+          RESERVED_EFFECT_TAG_CODE,
+          "`<effect>`, which is not a tag; `<script>` runs a body after render",
+        ],
+        [
           UNSUPPORTED_MARKO_FILE_CODE,
           "a `.marko` file used as a tag or an import",
         ],
@@ -633,6 +639,7 @@ export type MxDiagnosticCode =
   | typeof INVALID_CALLEE_INPUT_CODE
   | typeof UNSUPPORTED_CONSTRUCT_CODE
   | typeof INERT_TAG_SHAPE_CODE
+  | typeof RESERVED_EFFECT_TAG_CODE
   | typeof UNSUPPORTED_MARKO_FILE_CODE
   | typeof INVALID_SHORTHAND_CODE
   | typeof RESERVED_BINDING_CODE

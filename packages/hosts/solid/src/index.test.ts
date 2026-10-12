@@ -565,6 +565,21 @@ describe("Solid callee Input reader", () => {
 });
 
 describe("Solid host errors", () => {
+  it("keeps its own `<effect>` error, never a target's", () => {
+    for (const source of ["<effect() { run() }/>", "<effect/>"]) {
+      const message = (() => {
+        try {
+          compile(source);
+        } catch (error) {
+          return (error as Error).message;
+        }
+        throw new Error("expected a compile error");
+      })();
+      expect(message).toContain("`<effect>` is a Marko reactive effect");
+      expect(message).not.toContain("Use `<script>`");
+    }
+  });
+
   const errors: Array<[string, string, string]> = [
     ["let", `<let/x=1/>`, "createSignal"],
     ["effect", `<effect() { run() }/>`, "createEffect"],

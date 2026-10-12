@@ -61,6 +61,7 @@ import {
   tagParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
+import type { TagRulesPreset } from "./tag-presets.ts";
 import type { TagTable } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { childrenWithTriggers } from "./triggers.ts";
@@ -239,8 +240,8 @@ export type Disposition =
       /**
        * Whether the tag's own definition accepts attributes beyond its value.
        *
-       * Per tag, not uniform, because Marko is: `<effect foo="bar"/>` and
-       * `<log=1 foo="bar"/>` are "does not support the `foo` attribute" there,
+       * Per tag, not uniform, because Marko is: `<log=1 foo="bar"/>` is
+       * "only supports the `value=` attribute" there,
        * while `<lifecycle foo="bar"/>` compiles — a lifecycle tag's
        * attributes *are* its configuration. Verified against Marko for each
        * row.
@@ -406,6 +407,13 @@ export interface Ctx {
    * host's declarations alone.
    */
   tagTable?: TagTable;
+  /**
+   * The tag rules preset the file parses under, when the caller decided one
+   * (the IR entry point, or a file routed to a dialect). Absent for MX's own
+   * files and for a region. Only `"none"` changes a rule today: under it
+   * `effect` is an ordinary tag name.
+   */
+  tagRules?: TagRulesPreset;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Readonly<Record<string, CustomTag>>;
   /**
@@ -1853,15 +1861,14 @@ export function rejectUnsupportedFields(
  * Enforces that an inert tag appears in the shape its own definition allows.
  *
  * A tag is inert because *it* emits nothing, not because anything written
- * inside it may be thrown away. `<effect><div>x</div></effect>` compiled clean
- * with the `<div>` gone before this existed — a successful compile that
+ * inside it may be thrown away. `<log=1 foo="bar"/>` compiled clean
+ * with `foo` gone before this existed — a successful compile that
  * silently deleted authored markup, which is the exact failure class (S8) the
  * field guard was built to close.
  *
  * The declared shapes come from each tag's own Marko definition, and the
- * outcomes match what Marko itself does: `<effect>` with a body is
- * "does not support body content" there, an unknown attribute is "does not
- * support the `foo` attribute", and `<lifecycle>`/`<id>`/`<log>`/`<debug>` are
+ * outcomes match what Marko itself does: an unknown attribute is rejected,
+ * and `<lifecycle>`/`<id>`/`<log>`/`<debug>` are
  * `openTagOnly` so a body is a parse error before any translator sees it.
  */
 export function rejectInertShape(

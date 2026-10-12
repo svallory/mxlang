@@ -22,6 +22,15 @@ describe("stateful tags: positioned errors, not literal elements", () => {
     );
   });
 
+  it("keeps its own <effect> error, never a target's", () => {
+    for (const source of ["<effect/>", "<effect() { go() }/>"]) {
+      expect(() => emit(source)).toThrow(
+        /`<effect>` is a Marko reactive effect/,
+      );
+      expect(() => emit(source)).not.toThrow(/Use `<script>`/);
+    }
+  });
+
   it("rejects <lifecycle>", () => {
     expect(() => emit("<lifecycle/>")).toThrow(
       /`<lifecycle>` is a Marko lifecycle hook/,

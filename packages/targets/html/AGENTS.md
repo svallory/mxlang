@@ -77,8 +77,10 @@ unchanged. The `./core` export is **gone** (breaking): importers take
 
 Policy table (decision 65): the target renders what Marko's server render
 emits, minus resume markers. **Inert** (accepted, no output, each verified
-byte-identical against Marko): `<effect>`, `<lifecycle>`, `<script>`, `<id>`,
-`<log>`, `<debug>`, `client` blocks (client-only), and `by=` on `<for>`. A
+byte-identical against Marko): `<lifecycle>`, `<script>`, `<id>`,
+`<log>`, `<debug>`, `client` blocks (client-only), and `by=` on `<for>`.
+`<effect>` is not a row at all: core refuses it in every form on a target
+(`MX_RESERVED_EFFECT_TAG`), default and strict alike. A
 `server` block is **not** inert — this is the server render, so it runs and
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is
@@ -100,9 +102,9 @@ run them all (the JSX hosts pass the body as a thunk, TODO
 **Inert is a shape, not a licence to drop.** An inert row declares the body
 and attributes its own Marko tag definition allows, and anything else is an
 error naming the tag and what was found — otherwise
-`<effect><div>x</div></effect>` compiles clean with the `<div>` deleted, which
+`<log=1 foo="bar"/>` compiles clean with `foo` deleted, which
 is the S8 silent-drop class reopened. The declarations are per tag because
-Marko is: `<effect foo="bar"/>` and `<log=1 foo="bar"/>` are refused there,
+Marko is: `<log=1 foo="bar"/>` is refused there,
 while `<lifecycle foo="bar"/>` compiles (a lifecycle tag's attributes are its
 configuration), and `<script>` is the one inert tag taking a body (raw text).
 
@@ -156,7 +158,7 @@ than assumed:
 ### The `strict` policy
 
 Decision 68's policy fold: the retired `.mx` dialect rejected reactive
-constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks,
+constructs (`<let>`, `<lifecycle>`, `<script>`, `client` blocks,
 `<id>`) by name, since standalone MX had no reactive target at all. The
 default `policy` above instead renders what Marko's own server render would
 emit for those (inert, or `<let>`'s initial value) — decision 65's table.

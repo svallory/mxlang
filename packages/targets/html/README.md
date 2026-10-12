@@ -287,7 +287,7 @@ construct that only MX has (see `divergences.md`) is not understood by it:
 Decision 68's policy fold: `.mx`'s reactive-constructs-are-errors stance is
 folded in as an opt-in `strict` policy, rather than the default. The default
 `policy` renders what Marko's own server render would emit (`<let>`'s initial
-value, `<effect>`/`<lifecycle>`/`<script>`/`client`/`<id>` as inert) — see the
+value, `<lifecycle>`/`<script>`/`client`/`<id>` as inert) — see the
 policy table below. `strictPolicy` instead rejects those same constructs by
 name, for an author who wants "this needs a reactive runtime" to be a compile
 error rather than silently accepted:
@@ -344,7 +344,7 @@ compared for semantic HTML equality.
 > escape helper — roughly 200 bytes — and compiles to
 > `(input: Input) => string`, usable from Express, Hono, Workers, email
 > pipelines, or a static site generator with zero bundle cost and no render
-> API. The reactive constructs (`<effect>`, `<lifecycle>`, `<script>`, `<await>`,
+> API. The reactive constructs (`<lifecycle>`, `<script>`, `<await>`,
 > `:=` as a two-way binding) either become inert or fail at compile time with a
 > message naming them, so the boundary is visible to the author rather than
 > silent. We have implemented this as a translator against `@marko/compiler`
@@ -371,7 +371,6 @@ byte-identical with and without the construct.
 
 | Construct | Why it emits nothing |
 |---|---|
-| `<effect>` | Runs after render, on the client. |
 | `<lifecycle>` | Client-side lifecycle hook. |
 | `<script>` (the core tag) | Client behaviour, not markup. `<html-script>` emits a literal `<script>` element. |
 | `<id>` | Allocates an identifier for the reactive runtime. |
@@ -509,13 +508,13 @@ own Marko tag definition allows — and anything else is an error naming the tag
 and what was found:
 
 ```marko
-<effect() { go() }><div>inside</div></effect>
+<log=1 foo="bar"/>
 ```
-> `` `<effect>` does not support body content; it emits nothing, so the body
-> would be silently discarded ``
+> `` `<log>` does not support the `foo` attribute; it emits nothing, so the
+> attribute would be silently discarded ``
 
-That matches Marko, which rejects the same template with *"The `<effect>` tag
-does not support body content"*. `<script>` is the one inert tag that **does**
+That matches Marko, which rejects the same template with *"The `<log>` tag only
+supports the `value=` attribute"*. `<script>` is the one inert tag that **does**
 take a body — its definition declares a raw-text one — and it is declared that
 way rather than special-cased.
 

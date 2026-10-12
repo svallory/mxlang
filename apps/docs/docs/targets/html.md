@@ -163,7 +163,7 @@ const html = render({ name: "World" });
 
 ## Strict mode
 
-By default this target renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<effect>`/`<lifecycle>`/`<script>`/`client` blocks/`<id>` as inert — contributing no output). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
+By default this target renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<lifecycle>`/`<script>`/`client` blocks/`<id>` as inert — contributing no output). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
 
 ```typescript
 const { code } = compile(source, "greeting.mx", { strict: true });
@@ -179,14 +179,14 @@ The target is Marko's own server render, minus resume markers. That is the whole
 
 | Construct | Why it renders nothing |
 |---|---|
-| `<effect>`, `<lifecycle>` | Client-side lifecycle; there is no client here |
+| `<lifecycle>` | Client-side lifecycle; there is no client here |
 | `<script>` | Component script, not a rendered `<script>` element |
 | `<id>` | Identity for hydration |
 | `<log>`, `<debug>` | Developer output |
 | `client` blocks | Client-only by definition |
 | `by=` on `<for>` | Reconciliation key; a string render reconciles nothing |
 
-Inert is a *shape*, not permission to drop content. Each inert tag still declares the body and attributes its own Marko definition allows, and anything else is an error naming the tag and what was found — otherwise `<effect><div>x</div></effect>` would compile clean with the `<div>` silently deleted. The declarations are per tag, because Marko's are: `<effect foo="bar"/>` is refused, `<lifecycle foo="bar"/>` compiles (its attributes are its configuration), and `<script>` is the one inert tag that takes a body.
+Inert is a *shape*, not permission to drop content. Each inert tag still declares the body and attributes its own Marko definition allows, and anything else is an error naming the tag and what was found — otherwise `<log=1 foo="bar"/>` would compile clean with `foo` silently deleted. The declarations are per tag, because Marko's are: `<log=1 foo="bar"/>` is refused, `<lifecycle foo="bar"/>` compiles (its attributes are its configuration), and `<script>` is the one inert tag that takes a body.
 
 **Evaluated** — the initial value is computed and rendered:
 

@@ -944,7 +944,7 @@ with the same reasons and code, at that call. The reasons:
 | ``mx.html.defaultTag is a number, expected a tag name string`` (also `an empty string`, `an array`, …) | the package value is not a non-empty string |
 | ``` `<my-list>`: `defaultTag` must be a tag name string, got … ``` | a contract's value is not a non-empty string (a registration error of the contract) |
 | ``` `<nope>` is not a tag reachable from this package ``` | no element of the target and no custom tag by that name |
-| ``` `<await>` is not an element of this target ``` | a name the lookup knows, but that is Marko core or translator vocabulary, not an element of this target (`await`, `try`, `define`, `effect`; on data, every html name) |
+| ``` `<await>` is not an element of this target ``` | a name the lookup knows, but that is Marko core or translator vocabulary, not an element of this target (`await`, `try`, `define`; on data, every html name) |
 | ``` `<input>` is a void tag, not a plain tag ``` | `openTagOnly`; also `a text tag` (`title`, `textarea`, `script`, `style`), `a statement tag` (`import`, `export`, `static`, `class`), `a control-flow tag` (`if`, `else`, `else-if`, `for`) and `a whitespace-preserving tag` (`pre`) |
 | ``` `defaultTag` in the contract of `<my-list>` is not allowed: host `…` does not permit per-tag default tags ``` | a contract declares one, but the target's declarations set `allowContractDefaultTag: false` |
 
@@ -1610,7 +1610,9 @@ one.
 
 ### Resolution precedence
 
-The **normative** order, as shipped (decisions 93, 113):
+The **normative** order, as shipped (decisions 93, 113). On a target, `<effect>` is refused
+before any of these (§11), unless the `none` tag-rules preset is in force or a
+host's own disposition (step 1) claims the name:
 
 1. Host tag disposition (`declarations.tags[name]` — error or inert)
 2. Core structural tags: `import`, `static`, `export`, `for`, `const`,
@@ -2959,7 +2961,7 @@ flips the assertion.
 
 ## 11. Stateful tags
 
-`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<id>`, `client` blocks and `:=`
+`<let>`, `<lifecycle>`, `<script>`, `<id>`, `client` blocks and `:=`
 are **not part of the portable structural core**. They are framework territory:
 core provides three hooks, and **each host's declarations decide what they mean**
 (decisions 70, 71).
@@ -2978,11 +2980,27 @@ Decision 65, normatively:
 > output); the first must **lower** or must **error**. And **"my code can't" is
 > never a reason for a table row — only "this target can't."**
 
+### `<effect>` is not an MX tag
+
+`<effect>` is refused in every form (bodied, `<effect/>`, `<effect() { … }/>`,
+`<effect=…/>`, with attributes or a spread) on every target (`lowerSource` and
+the html targets):
+
+> `<effect>` is not an MX tag. Use `<script>`: its body runs after render and
+> again when a value it reads changes.
+
+The error is core's, code `MX_RESERVED_EFFECT_TAG`, positioned at the tag name
+with its end. It is a target rule: a host (embedded MX in Preact, React, Hono,
+Solid, Angular or Astro) declares its own disposition for `effect` and reports
+that, never this text. The other exception is the `none` tag-rules preset (a
+dialect's, or `lowerSource({ tagRules: "none" })`), where `effect` is an
+ordinary tag name.
+
 ### Inert is a shape, not a licence to drop
 
 An inert tag's own attributes and body are validated against what its Marko tag
 definition allows; anything else is an error naming the tag. Otherwise
-`<effect><div>x</div></effect>` compiles clean with the `<div>` deleted.
+`<log=1 foo="bar"/>` compiles clean with `foo` deleted.
 
 | Message |
 |---|
@@ -2990,8 +3008,9 @@ definition allows; anything else is an error naming the tag. Otherwise
 | `` `<${name}>` does not support the `${attr.name}` attribute; it emits nothing, so the attribute would be silently discarded `` |
 | `` `<${name}>` does not support body content; it emits nothing, so the body would be silently discarded `` |
 
-Declarations are **per tag**, because Marko is: `<effect foo="bar"/>` and
-`<log=1 foo="bar"/>` are refused, while `<lifecycle foo="bar"/>` compiles (a
+Declarations are **per tag**, because Marko is: `<log=1 foo="bar"/>` is
+refused (a body on `<log>`, `<debug>`, `<id>` or `<lifecycle>` is already a
+parse error, as in Marko), while `<lifecycle foo="bar"/>` compiles (a
 lifecycle tag's attributes are its configuration) and `<script>` is the one inert
 tag taking a body (raw text).
 
@@ -3007,7 +3026,7 @@ tag taking a body (raw text).
 ### The `strict` policy
 
 An opt-in stance, not the default (decision 68's policy fold). Under `strict`,
-the same six constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
+the same five constructs — `<let>`, `<lifecycle>`, `<script>`, `client`
 blocks, `<id>` — become errors naming the construct, for an author who wants
 "this template needs a reactive runtime" enforced at compile time.
 
@@ -3292,7 +3311,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 
 | Tag | html | html-strict / Astro `.mx` | Solid | Preact/React/Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|
-| `<effect>` | inert | error | error | error | error | error — fixed, was **literal element** (bug 1) |
+| `<effect>` | error (core's, `MX_RESERVED_EFFECT_TAG`) | error (core's) | error | error | error | error — fixed, was **literal element** (bug 1) |
 | `<lifecycle>` | inert | error | error | error | error | error — fixed, was **literal element** |
 | `<script>` | inert (body `text`) | error | error | error | error | error — fixed, was **literal element** |
 | `<id>` | inert | error | field-guard error | error | error | error — fixed, was field-guard-only |
@@ -3814,6 +3833,7 @@ host, a target or a dialect.
 | `MX_INVALID_CALLEE_INPUT` | error | a callee's `Input` that cannot be read |
 | `MX_UNSUPPORTED_CONSTRUCT` | error | a construct the target or the product cannot express |
 | `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing |
+| `MX_RESERVED_EFFECT_TAG` | error | `<effect>` on a target, which is not a tag; `<script>` runs a body after render |
 | `MX_UNSUPPORTED_MARKO_FILE` | error | a `.marko` file used as a tag or an import |
 | `MX_INVALID_SHORTHAND` | error | a bad `#id`/`.class` shorthand |
 | `MX_RESERVED_BINDING` | error | a binding name core reserves |

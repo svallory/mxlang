@@ -7,9 +7,21 @@ description: "The compile-time errors you're likely to see and why they exist."
 
 MX prefers a compile error over silently dropping or misinterpreting a construct. This page catalogs the errors you're most likely to run into and why each one exists.
 
+## `<effect>`
+
+```html
+<effect() { go() }/>
+```
+
+is rejected on every target (`lowerSource` and the html targets), in every form (with a body, self-closing, with attributes or a spread):
+
+> `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
+
+The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. A host (embedded MX in a framework) words its own rejection of `<effect>`; this text is the target's. A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+
 ## A stateful tag under `strict`
 
-If the project (or a `<let>`/`<effect>`/etc. author) opted into the `strict` policy, using `<let>`, `<effect>`, `<lifecycle>`, `<script>`, a `client` block, or `<id>` on a host with no reactive target is a compile error naming the construct. The `input`-shadowing check below is not one of these six — it applies regardless of `strict`. See [Stateful tags](/language/stateful-tags/).
+If the project (or a `<let>`/`<lifecycle>`/etc. author) opted into the `strict` policy, using `<let>`, `<lifecycle>`, `<script>`, a `client` block, or `<id>` on a host with no reactive target is a compile error naming the construct. The `input`-shadowing check below is not one of these five — it applies regardless of `strict`. See [Stateful tags](/language/stateful-tags/).
 
 ## `<await>` on the html target
 
