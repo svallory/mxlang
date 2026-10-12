@@ -463,6 +463,33 @@ describe("`unit.fail` and `unit.warn`", () => {
     expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 9 });
   });
 
+  it("reports anything else the hook throws as the hook failing, at the file", () => {
+    const error = failing(() => {
+      throw new Error("boom");
+    });
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.message).toBe("the dialect's `afterLower` threw: boom");
+    expect([error.line, error.column]).toEqual([0, 0]);
+    const thrown = failing(() => {
+      throw "plain";
+    });
+    expect(thrown.message).toBe("the dialect's `afterLower` threw: plain");
+  });
+
+  it("lets `unit.fail`'s error through the hook unchanged", () => {
+    let raised: unknown;
+    const error = failing((unit) => {
+      try {
+        unit.fail("nope", { code: "MESH_X" });
+      } catch (cause) {
+        raised = cause;
+        throw cause;
+      }
+    });
+    expect(error).toBe(raised);
+    expect(error.diagnosticCode).toBe("MESH_X");
+  });
+
   it("refuses a `code` that starts with `MX_`, MX's own prefix", () => {
     const error = failing((unit) =>
       unit.fail("nope", { code: "MX_UNKNOWN_TAG" }),

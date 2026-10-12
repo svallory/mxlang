@@ -30,6 +30,7 @@ import { rewriteReadsInCode } from "../accessor-reads.ts";
 import { compileSource, type HostOptions } from "../compile.ts";
 import type { CustomTag } from "../custom-tags.ts";
 import type { Policy } from "../declarations.ts";
+import * as codes from "../diagnostic-codes.ts";
 import { MX_DIAGNOSTIC_CODES } from "../diagnostic-codes.ts";
 import { MEMBER } from "../fixtures/syntax/member-fixture.ts";
 import { parseFragment } from "../fragment.ts";
@@ -598,12 +599,15 @@ const ROWS: Row[] = [
     ...afterLower(((unit: { warn: (message: string, at: object) => void }) =>
       unit.warn("w", { sourceStart: 5, sourceEnd: 6 })) as never),
   }),
-  // Suspicious: an `afterLower` that throws is MX_INTERNAL_ERROR at 1:0, where
-  // a `lowerTrigger` that throws is MX_DIALECT_HOOK_ERROR at the trigger.
-  lowerRow("MX_INTERNAL_ERROR", "<x/>\n", 1, 0, {
-    ...afterLower((() => {
-      throw new Error("boom");
-    }) as never),
+  // A core invariant: a macro's node with no span is core's bug to report.
+  lowerRow("MX_INTERNAL_ERROR", "<a/>\n<m/>\n", 1, 0, {
+    customTags: {
+      m: {
+        transform: () => [
+          { kind: "Text", value: "x", loc: { line: 2, column: 0 } },
+        ],
+      } as never,
+    },
   }),
   lowerRow("MX_TAG_ERROR", "<x/>\n", 1, 0, {
     customTags: {
@@ -929,6 +933,16 @@ describe("diagnostic code table", () => {
     );
     expect(listed.filter((c) => !CATALOGUE.has(c))).toEqual([]);
     expect(listed).toHaveLength(MX_DIAGNOSTIC_CODES.length);
+  });
+
+  it("catalogues every code constant core raises with", () => {
+    // `MxDiagnosticCode` is kept by hand beside the constants; a constant
+    // left out of the catalogue would be a code no consumer can look up.
+    const constants = Object.entries(codes)
+      .filter(([name]) => name.endsWith("_CODE"))
+      .map(([, value]) => value);
+    expect(constants.length).toBeGreaterThan(80);
+    expect(constants.filter((c) => !CATALOGUE.has(c as string))).toEqual([]);
   });
 
   it("gives every unreachable code a reason", () => {

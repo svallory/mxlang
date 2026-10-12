@@ -35,6 +35,7 @@
 import { coreBabel } from "./babel.ts";
 import {
   type Ctx,
+  codedError,
   isTranslateError,
   type Node,
   positionAtOffset,
@@ -333,9 +334,25 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
     const afterLower = dialect.afterLower;
     if (afterLower) {
       // The dialect sees the unit through its public view, never the `Ctx`.
+      // A `TranslateError` (`unit.fail`, a broken hook contract) leaves as
+      // is; anything else the hook throws is the dialect's hook failing.
       ctx.afterLower = [
         ...(ctx.afterLower ?? []),
-        (unit) => afterLower(loweredUnitOf(unit)),
+        (unit) => {
+          try {
+            afterLower(loweredUnitOf(unit));
+          } catch (error) {
+            if (isTranslateError(error)) throw error;
+            const message =
+              error instanceof Error ? error.message : String(error);
+            throw codedError(
+              DIALECT_HOOK_ERROR_CODE,
+              `the dialect's \`afterLower\` threw: ${message}`,
+              0,
+              0,
+            );
+          }
+        },
       ];
     }
     if (dialect.contractFields) {
