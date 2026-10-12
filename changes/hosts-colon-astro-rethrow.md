@@ -1,5 +1,0 @@
----
-packages: [astro, solid, preact, react, hono, tsx-bridge, typescript-plugin, language-server, tsc]
-kind: Fixed
----
-An undeclared colon tag in an `.astro.mx` file (`<ns:tag/>`, `<Ns:Tag/>`) is now a compile error at the tag, as in the JSX hosts: Astro used to emit it silently as a namespace element. The fix the error names is now true for every name. It suggests an `mx.tags` `prefix` only when some prefix can produce the name (the name ends in a file stem: `<a:-x/>` takes `prefix: "a:-"`), and for a name no tag file can end (`<uuid:/>`, `<a:b$/>`) it says only to write the name without the colon. The error now carries the end of the name, so an editor underlines all of it. A lowering error inside a region of a `.solid.mx`, `.preact.mx`, `.react.mx` or `.hono.mx` file, and in an `.astro.mx` file, now reaches `mx-tsc` and the TypeScript plugin with its `MX_*` code and its whole range, where it showed `TS80001` and one character. The language server shows the same code and underlines the whole range for such an error, where it showed one character.
