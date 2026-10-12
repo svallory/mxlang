@@ -14,6 +14,7 @@
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { coreBabel } from "./babel.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
+import { callNameEnd } from "./contract-facts.ts";
 import type { Ctx, Node } from "./core.ts";
 import { codedError, isTranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
@@ -988,6 +989,7 @@ export function routeTemplateCall(
       message: `\`<${call.name}>\`: body content was dropped; ${tag.filename} has no \`<\${input.content}/>\` placeholder`,
       line: call.loc.line,
       column: call.loc.column,
+      ...callNameEnd(ctx, call),
       file: call.loc.file,
       code: BODY_DROPPED_CODE,
     });
@@ -999,6 +1001,7 @@ export function routeTemplateCall(
       message: `\`<${call.name}>\`: \`<@${attributeTag.name}>\` was dropped; ${tag.filename} does not read \`input.${attributeTag.name}\``,
       line: call.loc.line,
       column: call.loc.column,
+      ...callNameEnd(ctx, call),
       file: call.loc.file,
       code: ATTRIBUTE_TAG_DROPPED_CODE,
     });

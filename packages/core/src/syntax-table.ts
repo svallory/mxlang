@@ -967,17 +967,15 @@ function loadDialect(
   };
   // A contract's error is at its key when the module writes it as a literal.
   const failContract: ContractFail = (message, at, code) => {
-    const { line, column } = staticKeyPathPosition(file, at) ?? {
-      line: 1,
-      column: 0,
-    };
+    const key = staticKeyPathPosition(file, at);
     const error = codedError(
       INVALID_DIALECT_CONTRACT_CODE,
       message,
-      line,
-      column,
+      key?.line ?? 1,
+      key?.column ?? 0,
       file,
     );
+    if (key?.end) error.end = key.end;
     error.diagnosticCode = code;
     throw error;
   };

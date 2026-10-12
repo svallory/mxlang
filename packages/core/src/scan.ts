@@ -1008,7 +1008,8 @@ function staticKeyPosition(
   file: string,
   name: string,
 ): { line: number; column: number } | undefined {
-  return staticKeyPathPosition(file, [name]);
+  const at = staticKeyPathPosition(file, [name]);
+  return at && { line: at.line, column: at.column };
 }
 
 /** `value` without its `satisfies`/`as` wrappers. */
@@ -1029,13 +1030,19 @@ function unwrapTypeAssertions(
  * {@link staticKeyPosition} along a key path (`["contracts", "card"]`): each
  * key's value is itself an object literal, or an identifier bound once at
  * module scope to one (through `satisfies`/`as`), and the last key's
- * position is returned. `undefined` as soon as one step cannot be read
- * without running the module.
+ * position is returned, with `end` just past the key. `undefined` as soon as
+ * one step cannot be read without running the module.
  */
 export function staticKeyPathPosition(
   file: string,
   path: readonly string[],
-): { line: number; column: number } | undefined {
+):
+  | {
+      line: number;
+      column: number;
+      end?: { line: number; column: number };
+    }
+  | undefined {
   try {
     const ast = coreBabel().parse(readFileSync(file, "utf8"), {
       sourceType: "module",
@@ -1049,7 +1056,14 @@ export function staticKeyPathPosition(
     ) as { declaration?: Record<string, unknown> } | undefined;
     // `export default { … } satisfies ContractMap`: the literal is one level down.
     let value = unwrapTypeAssertions(defaultExport?.declaration);
-    let key: { loc?: { start?: { line: number; column: number } } } | undefined;
+    let key:
+      | {
+          loc?: {
+            start?: { line: number; column: number };
+            end?: { line: number; column: number };
+          };
+        }
+      | undefined;
     for (const name of path) {
       if (!value) return undefined;
       const literal = resolveObjectLiteral(value, body);
@@ -1061,7 +1075,13 @@ export function staticKeyPathPosition(
       );
     }
     const start = key?.loc?.start;
-    return start ? { line: start.line, column: start.column } : undefined;
+    const end = key?.loc?.end;
+    if (!start) return undefined;
+    return {
+      line: start.line,
+      column: start.column,
+      ...(end && { end: { line: end.line, column: end.column } }),
+    };
   } catch {
     return undefined;
   }

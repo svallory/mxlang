@@ -111,6 +111,8 @@ function needsAt(source: string): Expected {
     column: 0,
     offset,
     code: "MX_MISSING_ATTRIBUTE",
+    // A whole-tag error ends at the end of `<needs`.
+    end: { line: lines.length, column: 6, offset: offset + 6 },
   };
 }
 
@@ -307,6 +309,7 @@ describe("explainUnknownTag: the Mesh-style table, in both modes", () => {
       line: 3,
       column: 4,
       offset: 24,
+      end: { line: 3, column: 7, offset: 27 },
     };
 
     it("is core's `MX_UNKNOWN_TAG` alone in reject mode", () => {
@@ -403,6 +406,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
       line: 1,
       column: 0,
       offset: 0,
+      end: { line: 1, column: 6, offset: 6 },
       code: "MX_MISSING_ATTRIBUTE",
     });
 
@@ -455,6 +459,7 @@ describe("explainUnknownTag: one tag, one diagnostic", () => {
           line: 3,
           column: 14,
           offset: 32,
+          end: { line: 3, column: 27, offset: 45 },
         }),
       ]);
     });

@@ -24,4 +24,6 @@ Hooks may pass `at` as a span (`{ sourceStart, sourceEnd }`) as well as a positi
 
 The `MX_` prefix is reserved for MX's own codes. A hook that passes a code starting with `MX_` gets `MX_DIALECT_HOOK_ERROR` (`MX_TAG_HOOK_ERROR` from a contract hook) in place of its diagnostic; a `tagFile` hook may still forward the diagnostics `ctx.lower()` gave it, codes included. Give your dialect's codes your own prefix.
 
+More diagnostics now say where they end (`end`, exclusive): a contract error ends at the end of `<name` when it is about the whole tag, after the value of the attribute it names, or at the end of the text it refuses; a `ctx.fail` given a span ends at the span's end; a contract key a dialect module or `mx.contracts` module writes ends at the end of the key; core's lowering warnings (`MX_DUPLICATE_ATTRIBUTE`, `MX_NOT_A_DOM_EVENT`, `MX_DEFINE_EXTRA_PARAMS`, `MX_BODY_DROPPED`, ...) end with the attribute or tag name they blame; a statement that does not parse is a point.
+
 Changed: the IR entry's `invalid-default-tag` code is now `MX_INVALID_DEFAULT_TAG`. The target-policy diagnostic keeps `invalid-default-tag`. No other code is renamed. An `afterLower` that throws is now `MX_DIALECT_HOOK_ERROR` (`the dialect's \`afterLower\` threw: …`), where it was reported as an internal error.

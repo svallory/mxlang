@@ -12,7 +12,7 @@ import {
   fallbackAttrTagShape,
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
-import { positionAt } from "./contract-facts.ts";
+import { callNameEnd, positionAt } from "./contract-facts.ts";
 import {
   type ClaimedFields,
   checkClaimedContract,
@@ -20,7 +20,13 @@ import {
   frozenData,
 } from "./contract-fields.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
-import { codedError, isTranslateError, TranslateError, warn } from "./core.ts";
+import {
+  codedError,
+  endErrorAt,
+  isTranslateError,
+  TranslateError,
+  warn,
+} from "./core.ts";
 import {
   ATTRIBUTE_TAG_DROPPED_CODE,
   CONTENT_NOT_ALLOWED_CODE,
@@ -522,6 +528,7 @@ function rebuildAttributeTagPlan(
           owner,
           `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           occurrences[0]?.loc ?? { line: 0, column: 0 },
+          nameEndOf(occurrences[0]),
         );
       }
       if (range.max > 1) {
@@ -530,6 +537,7 @@ function rebuildAttributeTagPlan(
           owner,
           `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           (occurrences[1] ?? occurrences[0])?.loc ?? { line: 0, column: 0 },
+          nameEndOf(occurrences[1] ?? occurrences[0]),
         );
       }
     }
@@ -851,8 +859,9 @@ function failAt(
   tagName: string,
   message: string,
   at: Position,
+  end?: number,
 ): never {
-  return failForOwner(code, `\`<${tagName}>\``, message, at);
+  return failForOwner(code, `\`<${tagName}>\``, message, at, undefined, end);
 }
 
 function isPosition(value: unknown): value is Position {
@@ -942,7 +951,14 @@ function failFromHook(
     }
   }
   try {
-    return failForOwner(TAG_ERROR_CODE, owner, message, at);
+    return failForOwner(
+      TAG_ERROR_CODE,
+      owner,
+      message,
+      at,
+      undefined,
+      span?.sourceEnd,
+    );
   } catch (error) {
     if (isTranslateError(error)) {
       if (code !== undefined) error.diagnosticCode = code;
@@ -985,6 +1001,7 @@ function failForOwner(
   message: string,
   at: Position,
   occurrence?: TagOccurrence,
+  end?: number,
 ): never {
   const error = codedError(
     code,
@@ -994,7 +1011,20 @@ function failForOwner(
     at.file,
   );
   if (occurrence !== undefined) occurrences.set(error, occurrence);
+  // Where the blamed construct ends in the file (exclusive): a tag at the end
+  // of its `<name`, an attribute after its value.
+  endErrorAt(error, end);
   throw error;
+}
+
+/** Where a blamed tag ends: its `<name`. */
+function nameEndOf(tag: { nameSpan?: SourceSpan | null } | undefined) {
+  return tag?.nameSpan?.sourceEnd;
+}
+
+/** Where a blamed attribute ends: after its value. */
+function attrEndOf(attr: { span?: SourceSpan } | undefined) {
+  return attr?.span?.sourceEnd;
 }
 
 /** The authored tag a "not allowed here" error is about. */
@@ -1019,6 +1049,14 @@ const childOffsets = new WeakMap<object, number>();
 /** Records where `node`'s `<` is in the file (an MX node). */
 export function setChildOffset(node: object, offset: number): void {
   childOffsets.set(node, offset);
+}
+
+/** Where each authored child ends in the file: a tag's `<name`, a text run's text. */
+const childEnds = new WeakMap<object, number>();
+
+/** Records where `node` (an authored child) ends in the file. */
+export function setChildEnd(node: object, offset: number): void {
+  childEnds.set(node, offset);
 }
 
 /**
@@ -1388,6 +1426,8 @@ function checkCompositeAttr(
       owner,
       `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
       attr.loc,
+      undefined,
+      attrEndOf(attr),
     );
   }
   if (
@@ -1410,6 +1450,8 @@ function checkCompositeAttr(
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
+      undefined,
+      attrEndOf(attr),
     );
   }
 }
@@ -1439,6 +1481,8 @@ function checkAtomAttr(
       owner,
       `attribute ${attrLabel(attr)} must be an atom, got a member${expected}`,
       at,
+      undefined,
+      attrEndOf(attr),
     );
   }
   const shape = attrShape(attr);
@@ -1469,6 +1513,8 @@ function checkAtomAttr(
       owner,
       `attribute ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
       at,
+      undefined,
+      attrEndOf(attr),
     );
   }
   if (
@@ -1488,6 +1534,8 @@ function checkAtomAttr(
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
+      undefined,
+      attrEndOf(attr),
     );
   }
 }
@@ -1528,6 +1576,8 @@ function checkMemberAttr(
     owner,
     `attribute ${attrLabel(attr)} must be a member, got ${got}`,
     valueLoc(attr, locate),
+    undefined,
+    attrEndOf(attr),
   );
 }
 
@@ -1617,6 +1667,7 @@ export function validateCustomTagParents(
   loc: Position,
   parent: string,
   label = `\`<${name}>\``,
+  nameEnd?: number,
 ): void {
   const parents = definition.parents;
   // A dynamic parent's diagnostic placeholder is not an authored name.
@@ -1630,13 +1681,15 @@ export function validateCustomTagParents(
       : "inside an allowed parent (none declared)";
   const found =
     parent === "#root" ? "at the top level" : `inside \`<${parent}>\``;
-  throw codedError(
+  const error = codedError(
     PARENT_NOT_ALLOWED_CODE,
     `${label} must be ${required}; found ${found}`,
     loc.line,
     loc.column,
     loc.file,
   );
+  endErrorAt(error, nameEnd);
+  throw error;
 }
 
 /** Validates authored children before any plain child is lowered. */
@@ -1644,6 +1697,7 @@ export function validateCustomTagChildren(
   definition: Pick<CustomTag, "children">,
   call: Pick<TagCall, "name" | "loc" | "childTree">,
   owner = `\`<${call.name}>\``,
+  nameEnd?: number,
 ): void {
   if (!definition.children) return;
   const declarations = definition.children;
@@ -1721,6 +1775,8 @@ export function validateCustomTagChildren(
           owner,
           `a dynamic tag \`<\${…}>\` cannot be checked against the declared children`,
           node.loc,
+          undefined,
+          childEnds.get(node),
         );
       } else {
         const name = node.kind === "ChildTag" ? node.name : "#text";
@@ -1732,6 +1788,8 @@ export function validateCustomTagChildren(
               owner,
               `text is not allowed here; ${textRule}`,
               node.loc,
+              undefined,
+              childEnds.get(node),
             );
           }
           const { message, guidance } = notAllowed(node);
@@ -1750,6 +1808,7 @@ export function validateCustomTagChildren(
                     ? { guidance: `inside ${owner}: ${guidance}` }
                     : {}),
                 },
+            childEnds.get(node),
           );
         }
         leaves.push(node);
@@ -1775,6 +1834,8 @@ export function validateCustomTagChildren(
         owner,
         `${label} may not be repeated`,
         repeated?.loc ?? call.loc,
+        undefined,
+        repeated ? childEnds.get(repeated) : nameEnd,
       );
     }
     if (declaration.required && range.min === 0) {
@@ -1783,6 +1844,8 @@ export function validateCustomTagChildren(
         owner,
         `missing required child \`<${name}>\``,
         call.loc,
+        undefined,
+        nameEnd,
       );
     }
   }
@@ -1819,6 +1882,7 @@ function validateAttributes(
   loc: Position,
   locate?: Locate,
   claims?: ClaimContext,
+  locEnd?: number,
 ): void {
   if (!attributes) return;
   // An empty closed contract rejects named and spread attributes identically.
@@ -1833,6 +1897,8 @@ function validateAttributes(
           ? "accepts no attributes"
           : "spread attributes cannot be checked against this tag's declared attributes",
         attr.loc,
+        undefined,
+        attrEndOf(attr),
       );
     }
     const declaration = Object.hasOwn(attributes, attr.name)
@@ -1846,6 +1912,8 @@ function validateAttributes(
           ? "accepts no attributes"
           : `unknown attribute ${attrLabel(attr)}`,
         attr.loc,
+        undefined,
+        attrEndOf(attr),
       );
     }
     present.add(attr.name);
@@ -1856,6 +1924,8 @@ function validateAttributes(
         owner,
         `attribute ${attrLabel(attr)} must be a literal`,
         attr.loc,
+        undefined,
+        attrEndOf(attr),
       );
     }
     if (declaration.type === "atom") {
@@ -1878,6 +1948,8 @@ function validateAttributes(
         owner,
         `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
         valueAt(attr, locate),
+        undefined,
+        attrEndOf(attr),
       );
     }
     if (
@@ -1890,6 +1962,8 @@ function validateAttributes(
         owner,
         `attribute ${attrLabel(attr)} must be an expression`,
         attr.loc,
+        undefined,
+        attrEndOf(attr),
       );
     }
     if (declaration.enum) {
@@ -1899,6 +1973,8 @@ function validateAttributes(
           owner,
           `attribute ${attrLabel(attr)} must be a static value from ${listEnum(declaration.enum)}`,
           attr.loc,
+          undefined,
+          attrEndOf(attr),
         );
       }
       // Enum members are strings: no coercion of booleans or numbers.
@@ -1913,6 +1989,8 @@ function validateAttributes(
           owner,
           `attribute ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
           attr.loc,
+          undefined,
+          attrEndOf(attr),
         );
       }
       if (!declaration.enum.includes(literal.value)) {
@@ -1921,6 +1999,8 @@ function validateAttributes(
           owner,
           `attribute ${attrLabel(attr)} must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
           attr.loc,
+          undefined,
+          attrEndOf(attr),
         );
       }
     }
@@ -1932,6 +2012,8 @@ function validateAttributes(
         owner,
         `missing required attribute \`${name}\``,
         loc,
+        undefined,
+        locEnd,
       );
     }
   }
@@ -1958,6 +2040,7 @@ function validateAttributeTags(
   allowUncontractedTags: boolean,
   locate?: Locate,
   claims?: ClaimContext,
+  locEnd?: number,
 ): void {
   const wildcardMatches = new Map<
     string,
@@ -1983,6 +2066,8 @@ function validateAttributeTags(
           owner,
           `attribute tag \`<@${tag.name}>\` does not support attributes`,
           tag.attrs[0]?.loc ?? tag.loc,
+          undefined,
+          tag.attrs[0] ? attrEndOf(tag.attrs[0]) : nameEndOf(tag),
         );
       }
       if (tag.attributeTags.length > 0) {
@@ -1991,6 +2076,8 @@ function validateAttributeTags(
           owner,
           `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
           tag.attributeTags[0]?.loc ?? tag.loc,
+          undefined,
+          nameEndOf(tag.attributeTags[0] ?? tag),
         );
       }
     }
@@ -2000,6 +2087,8 @@ function validateAttributeTags(
         owner,
         `unknown attribute tag \`<@${tag.name}>\``,
         tag.loc,
+        undefined,
+        nameEndOf(tag),
       );
     }
     if (declaration) {
@@ -2011,6 +2100,7 @@ function validateAttributeTags(
         tag.loc,
         locate,
         claims,
+        nameEndOf(tag),
       );
       validateAttributeTags(
         nestedOwner,
@@ -2022,6 +2112,7 @@ function validateAttributeTags(
           (extended && declaration.attributeTags === undefined),
         locate,
         claims,
+        nameEndOf(tag),
       );
     }
   }
@@ -2034,6 +2125,10 @@ function validateAttributeTags(
         owner,
         `attribute tag \`<@${name}>\` may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
+        undefined,
+        occurrences.length > 0
+          ? nameEndOf(occurrences[1] ?? occurrences[0])
+          : locEnd,
       );
     }
     if (declaration.required && range.min === 0) {
@@ -2042,6 +2137,8 @@ function validateAttributeTags(
         owner,
         `missing required attribute tag \`<@${name}>\``,
         loc,
+        undefined,
+        locEnd,
       );
     }
   }
@@ -2058,6 +2155,10 @@ function validateAttributeTags(
         owner,
         `attribute tag \`<@${name}>\` may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
+        undefined,
+        occurrences.length > 0
+          ? nameEndOf(occurrences[1] ?? occurrences[0])
+          : locEnd,
       );
     }
   }
@@ -2121,13 +2222,15 @@ export function validateCustomTagCall(
   claims?: ClaimContext,
 ): void {
   const owner = tagLabel(call.name, call.alias);
-  validateCustomTagChildren(definition, call, owner);
+  validateCustomTagChildren(definition, call, owner, nameEndOf(call));
   if (definition.parseOptions?.openTagOnly && call.content) {
     failForOwner(
       CONTENT_NOT_ALLOWED_CODE,
       owner,
       "does not accept content",
       call.loc,
+      undefined,
+      nameEndOf(call),
     );
   }
   validateAttributes(
@@ -2137,6 +2240,7 @@ export function validateCustomTagCall(
     call.loc,
     locate,
     claims,
+    nameEndOf(call),
   );
   validateAttributeTags(
     owner,
@@ -2147,6 +2251,7 @@ export function validateCustomTagCall(
     hasTemplate(definition),
     locate,
     claims,
+    nameEndOf(call),
   );
 }
 
@@ -2305,7 +2410,7 @@ export const CUSTOM_TAG_KEYS = [
 export type LocateTagKey = (
   tagName: string,
   key: string,
-) => Position | undefined;
+) => (Position & { end?: { line: number; column: number } }) | undefined;
 
 /**
  * Rejects a key `tagName`'s definition states that is not a `CustomTag` key
@@ -2330,13 +2435,15 @@ export function rejectUnknownTagKeys(
     if (key === "declares" || claimed.tag.has(key)) continue;
     const at = locate?.(tagName, key);
     const allowed = [...new Set([...keys, ...claimed.tag])];
-    throw codedError(
+    const error = codedError(
       INVALID_CONTRACT_CODE,
       `Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: ${allowed.join(", ")}`,
       at?.line ?? 0,
       at?.column ?? 0,
       at?.file,
     );
+    if (at?.end) error.end = at.end;
+    throw error;
   }
 }
 
@@ -3634,6 +3741,8 @@ export function transformCustomTag(
         ? `an inline \`children["*"]\` contract has no transform; on ${ctx.declarations.name ?? "this target"} a matched child needs \`contract:\` naming a tag with a transform or template`
         : "custom tag has neither a `transform` nor a template file, so a call has nothing to expand to",
       call.loc,
+      undefined,
+      nameEndOf(call),
     );
   }
 
@@ -3768,6 +3877,8 @@ export function transformCustomTag(
       owner,
       "custom tag transform must return an array of IR nodes or a TagCall for its template",
       call.loc,
+      undefined,
+      nameEndOf(call),
     );
   }
   // A routed template call reports dropped attribute tags from its metadata;
@@ -3783,6 +3894,7 @@ export function transformCustomTag(
       code: ATTRIBUTE_TAG_DROPPED_CODE,
       line: call.loc.line,
       column: call.loc.column,
+      ...callNameEnd(ctx, call),
       file: call.loc.file,
     });
   }

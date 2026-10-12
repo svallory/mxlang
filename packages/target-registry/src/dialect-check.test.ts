@@ -107,6 +107,7 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 0,
           offset: 0,
+          end: { line: 1, column: 8, offset: 8 },
           code: "MX_MISSING_ATTRIBUTE",
         },
       ],
@@ -236,6 +237,7 @@ describe("checkDialectFile", () => {
           line: 2,
           column: 0,
           offset: 12,
+          end: { line: 2, column: 8, offset: 20 },
           code: "MX_MISSING_ATTRIBUTE",
         },
       ]);

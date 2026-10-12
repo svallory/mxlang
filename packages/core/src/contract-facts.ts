@@ -26,6 +26,20 @@ export interface DerivedDeclaration {
   scope?: string | string[];
 }
 
+/**
+ * Where a warning on a call ends: `{ end }` at the end of its `<name`, when the
+ * call is in this file and has a name span; nothing otherwise.
+ */
+export function callNameEnd(
+  ctx: Ctx,
+  call: Pick<TagCall, "loc" | "nameSpan">,
+): { end?: { line: number; column: number } } {
+  const to = call.nameSpan?.sourceEnd;
+  if (call.loc.file !== undefined || to === undefined) return {};
+  const at = positionAt(ctx, Math.max(to, 0));
+  return { end: { line: at.line, column: at.column } };
+}
+
 /** The 1-based line and 0-based column of a source offset. */
 export function positionAt(ctx: Ctx, offset: number) {
   let line = 1;

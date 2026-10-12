@@ -35,6 +35,7 @@ describe("duplicate attributes (astro)", () => {
         message: MESSAGE("class", 4, 15),
         line: 4,
         column: 5,
+        end: { line: 4, column: 14 },
         file: "Test.amx",
         code: "MX_DUPLICATE_ATTRIBUTE",
       },

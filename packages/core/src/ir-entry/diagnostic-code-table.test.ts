@@ -49,6 +49,8 @@ interface Found {
   severity: string | undefined;
   line: number;
   column: number;
+  /** Where the range ends (exclusive), when the diagnostic carries one. */
+  end?: { line: number; column: number };
 }
 
 interface Env {
@@ -97,16 +99,23 @@ function ofLower(
     severity: d.severity,
     line: d.line,
     column: d.column,
+    ...(d.end ? { end: { line: d.end.line, column: d.end.column } } : {}),
   }));
 }
 
 /** A thrown error (or the several a compile throws together) as `Found`. */
 function ofThrown(cause: unknown): Found[] {
   const error = cause as {
-    errors?: { diagnosticCode?: string; line: number; column: number }[];
+    errors?: {
+      diagnosticCode?: string;
+      line: number;
+      column: number;
+      end?: { line: number; column: number };
+    }[];
     diagnosticCode?: string;
     line: number;
     column: number;
+    end?: { line: number; column: number };
   };
   const all = error.errors?.length ? error.errors : [error];
   return all.map((e) => ({
@@ -114,6 +123,7 @@ function ofThrown(cause: unknown): Found[] {
     severity: "error",
     line: e.line,
     column: e.column,
+    ...(e.end ? { end: e.end } : {}),
   }));
 }
 
@@ -130,7 +140,12 @@ function ofCompile(
   declarations: Record<string, unknown> = {},
   host: Record<string, unknown> = {},
 ): Found[] {
-  const warnings: { code?: string; line: number; column: number }[] = [];
+  const warnings: {
+    code?: string;
+    line: number;
+    column: number;
+    end?: { line: number; column: number };
+  }[] = [];
   const found: Found[] = [];
   try {
     compileSource(
@@ -155,6 +170,7 @@ function ofCompile(
       severity: "warning",
       line: w.line,
       column: w.column,
+      ...(w.end ? { end: w.end } : {}),
     });
   }
   return found;

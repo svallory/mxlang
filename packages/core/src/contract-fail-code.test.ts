@@ -208,7 +208,7 @@ describe("ctx.fail from a tag nested in a template", () => {
 describe.each(["analyze", "transform"] as const)(
   "ctx.fail(msg, { at: span }) in %s",
   (where) => {
-    it("keeps the span on the error, a position keeps none", () => {
+    it("keeps the span and its end on the error, a position keeps no span", () => {
       const failed = (at: unknown): TranslateError => {
         try {
           compileSource(
@@ -237,6 +237,8 @@ describe.each(["analyze", "transform"] as const)(
       const spanned = failed({ sourceStart: 8, sourceEnd: 11 });
       expect(spanned.span).toEqual({ sourceStart: 8, sourceEnd: 11 });
       expect([spanned.line, spanned.column]).toEqual([2, 1]);
+      // The span's end, exclusive: offset 11 is line 2, column 4.
+      expect(spanned.end).toEqual({ line: 2, column: 4 });
       expect(failed(AT).span).toBeUndefined();
     });
   },

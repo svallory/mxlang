@@ -33,6 +33,7 @@ describe("duplicate attributes (hono)", () => {
         message: MESSAGE("class", 1, 15),
         line: 1,
         column: 5,
+        end: { line: 1, column: 14 },
         file: "/fixtures/test.mx",
         code: "MX_DUPLICATE_ATTRIBUTE",
       },

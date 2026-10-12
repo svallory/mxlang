@@ -135,6 +135,7 @@ describe('unknownTags: "reject"', () => {
         line: 2,
         column: 2,
         offset: 18,
+        end: { line: 2, column: 12, offset: 28 },
         code: "MX_PARENT_NOT_ALLOWED",
       },
     ]);

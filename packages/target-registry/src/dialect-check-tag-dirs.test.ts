@@ -34,6 +34,7 @@ describe("checkDialectFile and the dialect's `tagDirs`", () => {
         line: 1,
         column: 0,
         offset: 0,
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_MISSING_ATTRIBUTE",
       },
     ]);

@@ -61,6 +61,7 @@ import {
   attrByName,
   bindingIdentifierNodes,
   bindingIdentifiers,
+  blameEnd,
   bodyChildren,
   type Ctx,
   codedError,
@@ -114,6 +115,7 @@ import {
   isDeferredContract,
   runAnalyzeHooks,
   runFinalizeHooks,
+  setChildEnd,
   setChildOffset,
   shadowedBuiltinMessage,
   type TagCall,
@@ -739,6 +741,7 @@ function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
       (suggestion ? `; did you mean \`${suggestion}\`` : ""),
     line: pos.line,
     column: pos.column,
+    ...warningEnd(ctx, attr),
     file: ctx.filename,
     code: NOT_A_DOM_EVENT_CODE,
   });
@@ -1408,10 +1411,19 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
     // A dropped occurrence: warn in document order, at its own name.
     const at = positionAtOffset(ctx, attr.nameSpan.sourceStart);
     const wins = positionAtOffset(ctx, winner.nameSpan.sourceStart);
+    // The dropped attribute, through its value.
+    const end = positionAtOffset(
+      ctx,
+      Math.max(
+        attr.span?.sourceEnd ?? attr.nameSpan.sourceEnd,
+        attr.nameSpan.sourceStart,
+      ),
+    );
     warn(ctx, {
       message: `duplicate attribute ${attrLabel(attr)}: the later one${winner.sugar ? ` (${attrLabel(winner)})` : ""} at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
       line: at.line,
       column: at.column,
+      end: { line: end.line, column: end.column },
       file: ctx.filename,
       code: DUPLICATE_ATTRIBUTE_CODE,
     });
@@ -1642,6 +1654,7 @@ function warnDefineExtraParams(
     message: `\`<${name}>\` has ${params.length} params, but only the first parameter receives the attributes object; destructure it (\`|{ a, b }|\`) instead of reading one param per attribute`,
     line: pos.line,
     column: pos.column,
+    ...warningEnd(ctx, node),
     file: ctx.filename,
     code: DEFINE_EXTRA_PARAMS_CODE,
   });
@@ -2948,6 +2961,7 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
     message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
     line: at.line,
     column: at.column,
+    ...warningEnd(ctx, node),
     code: LOWERCASE_BINDING_NOT_CALLED_CODE,
   });
 }
@@ -3223,15 +3237,18 @@ function rejectInvalidStatement(
     // joined expression's own error; that message stays Babel's.
     if (jsx && !followsGreaterThan(code, jsx)) {
       const at = place(jsx);
-      throw codedError(
+      const failure = codedError(
         INVALID_STATEMENT_CODE,
         `JSX is not read inside a \`${keyword}\` statement: its text is TypeScript. Write the markup as a tag in the template, or in a \`<define>\``,
         at.line,
         at.column,
       );
+      // A point: the first element's `<`.
+      failure.end = { line: at.line, column: at.column };
+      throw failure;
     }
     const at = place((error as { loc?: { line: number; column: number } }).loc);
-    throw codedError(
+    const failure = codedError(
       INVALID_STATEMENT_CODE,
       String((error as Error).message)
         .replace(/\s*\(\d+:\d+\)$/, "")
@@ -3239,6 +3256,9 @@ function rejectInvalidStatement(
       at.line,
       at.column,
     );
+    // Babel's parse error is a point, so its range ends where it starts.
+    failure.end = { line: at.line, column: at.column };
+    throw failure;
   }
 }
 
@@ -3759,6 +3779,7 @@ function validateCustomAttributeTagBodies(
           childTree: authoredChildTree(ctx, bodyChildren(tag)),
         },
         nestedOwner,
+        blameEndOffset(tag),
       );
     }
     validateCustomAttributeTagBodies(
@@ -3842,22 +3863,55 @@ function rejectNearExplicitChild(
   );
 }
 
+/**
+ * Where a warning that blames `node` ends (exclusive), as a line and column in
+ * the file: `{ end }` to spread into the warning, or nothing when `node`
+ * carries no end.
+ */
+function warningEnd(
+  ctx: Ctx,
+  node: Node,
+): { end?: { line: number; column: number } } {
+  const end = blameEnd(node);
+  if (end === undefined) return {};
+  const at = "offset" in end ? positionAtOffset(ctx, end.offset) : end;
+  return { end: { line: at.line, column: at.column } };
+}
+
+/**
+ * Where an error that blames `node` ends, as an offset into the file: a tag at
+ * the end of its `<name`, anything else where it ends. `undefined` for a node
+ * with no MX span (a Marko node's end is a line and column, not an offset).
+ */
+function blameEndOffset(node: Node): number | undefined {
+  const end = blameEnd(node);
+  return end !== undefined && "offset" in end ? end.offset : undefined;
+}
+
 /** Retains authored names and groups transparent control flow without lowering its contents. */
 function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
   const tree: ChildNode[] = [];
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
     const loc = posOf(ctx, node);
+    // Where the child ends in the file, for an error that blames it.
+    const ended = <T extends ChildNode>(child: T): T => {
+      const end = blameEndOffset(node);
+      if (end !== undefined) setChildEnd(child, end);
+      return child;
+    };
     if (isTextNode(node)) {
-      if (node.value.trim() !== "") tree.push({ kind: "ChildText", loc });
+      if (node.value.trim() !== "") {
+        tree.push(ended({ kind: "ChildText", loc }));
+      }
     } else if (
       node.type === "MarkoPlaceholder" ||
       node.type === "MxPlaceholder"
     ) {
-      tree.push({ kind: "ChildText", loc });
+      tree.push(ended({ kind: "ChildText", loc }));
     } else if (isTagNode(node)) {
       if (!hasStaticName(node)) {
-        tree.push({ kind: "ChildDynamic", loc });
+        tree.push(ended({ kind: "ChildDynamic", loc }));
         continue;
       }
       const name = tagNameOf(node) as string;
@@ -3925,7 +3979,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         };
         const span = mxSpanOf(node);
         if (span) setChildOffset(child, span.sourceStart);
-        tree.push(child);
+        tree.push(ended(child));
       }
     }
   }
@@ -4051,6 +4105,7 @@ function lowerCustomTag(
     posOf(ctx, node),
     ctx.authoredAncestors?.at(-2) ?? "#root",
     label,
+    blameEndOffset(node),
   );
   if (wildcard) rejectNearExplicitChild(node, wildcard, label);
   rejectUnsupportedFields(ctx, node, label, {
@@ -4105,6 +4160,7 @@ function lowerCustomTag(
     definition,
     { name, loc: posOf(ctx, node), childTree },
     label,
+    blameEndOffset(node),
   );
   const handsToHost =
     !isBuiltin &&
@@ -4228,6 +4284,7 @@ function lowerComponent(
       message: `couldn't read \`<${owner}>\`'s Input (\`${input.specifier}\` not resolvable); attribute-tag shape inferred from this call`,
       line: pos.line,
       column: pos.column,
+      ...warningEnd(ctx, node),
       file: ctx.filename,
       code: UNREADABLE_CALLEE_INPUT_CODE,
     });

@@ -56,6 +56,7 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
         line: 2,
         column: 2,
         offset: 8,
+        end: { line: 2, column: 12, offset: 18 },
         code: "MX_PARENT_NOT_ALLOWED",
       },
       {
@@ -65,6 +66,7 @@ describe("allowed parents under delegate-everything declarations (decision 138 E
         line: 3,
         column: 2,
         offset: 32,
+        end: { line: 3, column: 12, offset: 42 },
         code: "MX_PARENT_NOT_ALLOWED",
       },
     ]);

@@ -918,6 +918,40 @@ const unpositioned = new WeakSet<TranslateError>();
 /** The end offset `fail` blamed on an MX node, for `positionError` to turn into a line and column. */
 const spanEnds = new WeakMap<TranslateError, number>();
 
+/**
+ * Records where a positioned error's range ends, as an offset into the
+ * lowered source: the lowering boundary (`positionError`) turns it into
+ * `error.end`. For an error core places by line and column (a contract
+ * check's) whose blamed node carries a span. Ignored without an offset, and
+ * on an error that already has an end. Internal.
+ */
+export function endErrorAt(
+  error: TranslateError,
+  offset: number | undefined,
+): void {
+  if (offset === undefined || !Number.isFinite(offset)) return;
+  if (error.end !== undefined) return;
+  spanEnds.set(error, offset);
+}
+
+/** `endErrorAt`'s offset as `error.end`, when the error is in this file. */
+function positionEnd(ctx: Ctx, error: TranslateError): void {
+  const offset = spanEnds.get(error);
+  if (offset === undefined) return;
+  spanEnds.delete(error);
+  if (error.end !== undefined || error.line < 1) return;
+  // An offset into this file says nothing about a position in another one.
+  if (error.file !== undefined && error.file !== ctx.filename) return;
+  const end = positionAtOffset(ctx, Math.min(offset, ctx.source.length));
+  // A range never ends before it starts.
+  const before =
+    end.line < error.line ||
+    (end.line === error.line && end.column < error.column);
+  error.end = before
+    ? { line: error.line, column: error.column }
+    : { line: end.line, column: end.column };
+}
+
 /** The 1-based line and 0-based column of a UTF-16 offset into `ctx.source`. */
 export function positionAtOffset(ctx: Ctx, offset: number): Position {
   let line = 1;
@@ -944,7 +978,10 @@ export function positionError(ctx: Ctx, error: unknown): void {
   for (const related of relatedErrors.get(error) ?? []) {
     positionError(ctx, related);
   }
-  if (!unpositioned.has(error)) return;
+  if (!unpositioned.has(error)) {
+    positionEnd(ctx, error);
+    return;
+  }
   // Offsets into another file (`error.file`) mean nothing against this
   // source: left unpositioned, so `assertPositioned` refuses them rather
   // than reporting a line in the wrong file.
