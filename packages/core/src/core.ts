@@ -256,7 +256,42 @@ export type Disposition =
        * unset. @unstable
        */
       code?: MxDiagnosticCode;
+    }
+  | {
+      /**
+       * This host cannot express the tag. Core words the refusal, one shape on
+       * every host: "`<X>` is not supported in embedded MX on <Host>." (the
+       * host's name is `HostDeclarations.hostName`), then `hint` as a second
+       * sentence when there is one. The host supplies only the hint: what to
+       * write instead, as an imperative sentence that starts with a capital
+       * and ends with a period. Raised as `MX_UNSUPPORTED_CONSTRUCT` unless
+       * `code` says otherwise. For a refusal in the host's own words, use
+       * `kind: "error"`. @unstable
+       */
+      kind: "unsupported";
+      hint?: string;
+      code?: MxDiagnosticCode;
     };
+
+/**
+ * The refusal text for a tag a host cannot express, the one shape every host
+ * shares: "`<X>` is not supported in embedded MX on <Host>." (the product from
+ * {@link productOf}, the host from `HostDeclarations.hostName`), then `hint`
+ * as a second sentence when there is one. A declaration with no `hostName`
+ * drops the " on <Host>" half rather than naming a host core does not know.
+ * Core raises it for an `unsupported` tag disposition; a host calls it for a
+ * refusal it raises itself, after lowering. @unstable
+ */
+export function unsupportedTagMessage(
+  ctx: Ctx,
+  tag: string,
+  hint?: string,
+): string {
+  const { hostName } = ctx.declarations;
+  const where = hostName === undefined ? "" : ` on ${hostName}`;
+  const first = `\`<${tag}>\` is not supported in embedded ${productOf(ctx)}${where}.`;
+  return hint === undefined || hint === "" ? first : `${first} ${hint}`;
+}
 
 /**
  * A host's rewrite for references to one registered binding (decision 70).

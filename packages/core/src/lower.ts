@@ -66,6 +66,7 @@ import {
   type Ctx,
   codedError,
   collectedError,
+  type Disposition,
   DYNAMIC_TAG,
   declName,
   expr,
@@ -101,6 +102,7 @@ import {
   sliceLoc,
   sliceNode,
   type TranslateError,
+  unsupportedTagMessage,
   warn,
 } from "./core.ts";
 import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
@@ -4599,8 +4601,8 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
     ? ctx.declarations.tags[name]
     : undefined;
   if (claimed) {
-    if (claimed.kind === "error") {
-      raise(claimed.code ?? UNSUPPORTED_CONSTRUCT_CODE, claimed.reason, node);
+    if (claimed.kind === "error" || claimed.kind === "unsupported") {
+      raiseDisposition(ctx, name, claimed, node);
     }
     return;
   }
@@ -4609,6 +4611,24 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
     EFFECT_TAG_MESSAGE,
     tagNameSpanOf(node) ?? node.name ?? node,
   );
+}
+
+/**
+ * Raises a host's refusal of tag `name`: its own `reason` for an `error`, core's
+ * one sentence shape (plus the host's hint) for an `unsupported`. Both are
+ * positioned at the tag, `MX_UNSUPPORTED_CONSTRUCT` unless the row names a code.
+ */
+function raiseDisposition(
+  ctx: Ctx,
+  name: string,
+  disposition: Extract<Disposition, { kind: "error" | "unsupported" }>,
+  node: Node,
+): never {
+  const message =
+    disposition.kind === "error"
+      ? disposition.reason
+      : unsupportedTagMessage(ctx, name, disposition.hint);
+  return raise(disposition.code ?? UNSUPPORTED_CONSTRUCT_CODE, message, node);
 }
 
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
@@ -4744,12 +4764,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ? ctx.declarations.tags[name]
     : undefined;
   if (disposition) {
-    if (disposition.kind === "error") {
-      raise(
-        disposition.code ?? UNSUPPORTED_CONSTRUCT_CODE,
-        disposition.reason,
-        node,
-      );
+    if (disposition.kind === "error" || disposition.kind === "unsupported") {
+      raiseDisposition(ctx, name, disposition, node);
     }
     rejectInertShape(ctx, node, name, disposition);
     // Inert: accepted, contributes nothing to the IR.

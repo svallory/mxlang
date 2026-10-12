@@ -85,6 +85,7 @@ export {
   TranslateError,
   type UnresolvedTagOptions,
   unresolvedCustomTagMessage,
+  unsupportedTagMessage,
   VOID_TAGS,
   warn,
 } from "./core.ts";

@@ -111,6 +111,14 @@ export interface HostDeclarations {
   nativeTags?: NativeTags;
   /** Human-readable host name used by positioned capability diagnostics. */
   name?: string;
+  /**
+   * The host's display name as an author knows it ("Preact", "Angular"): what
+   * core's refusal of an `unsupported` tag disposition names ("`<let>` is not
+   * supported in embedded MX on Preact."). Distinct from `name`, which
+   * identifies the host package. Unset, that sentence ends after "embedded
+   * MX". @unstable
+   */
+  hostName?: string;
   /** Attribute-tag IR/emission contract implemented by this host. */
   attrTags?: 2;
   /**
@@ -136,8 +144,9 @@ export interface HostDeclarations {
   defineCallPassesAttrs?: true;
   /**
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
-   * shape) or `error` (this target cannot express it). Decision 65: never "my
-   * code cannot".
+   * shape), `unsupported` (this target cannot express it; core words the
+   * refusal and the host adds a hint) or `error` (a refusal in the host's own
+   * words). Decision 65: never "my code cannot".
    */
   tags: Record<string, Disposition>;
   /**

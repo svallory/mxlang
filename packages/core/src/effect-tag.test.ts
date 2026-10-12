@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
-import { TranslateError } from "./core.ts";
+import type { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { dialectProject } from "./test-dialect-project.ts";
@@ -349,5 +349,34 @@ describe("a host that declares `effect` keeps its own error", () => {
   it("an inert row is the host's reading too: core adds nothing", () => {
     const inert = hostWith({ kind: "inert", reason: "nothing", body: "text" });
     expect(attemptOn(inert, "<effect/>")).toBeUndefined();
+  });
+});
+
+describe("a tag unit in a project whose dialect claims a host file kind", () => {
+  // The shared lookup has the host file kinds `.u.mx` and `.v.mx`. A dialect
+  // that claims `.u.mx` claims a host's file kind: an error at the dialect's
+  // manifest wherever core resolves a file's syntax with the caller's targets.
+  // The page here is in a project with no dialect, so only the unit's own
+  // metadata compile reaches the claim; it resolves the unit's syntax twice
+  // (to parse it, then for its tag rules) and both must pass the targets, or
+  // the parse runs under the claimed dialect and reads the unit first.
+  it("is refused with the manifest error before the unit's `<effect>` is read", () => {
+    const dep = join(dir, "dep");
+    mkdirSync(dep);
+    dialectProject(dep, {
+      manifest: { extensions: [".tst", ".u.mx"] },
+      module: 'export default { table: {}, tagRules: "none" };',
+    });
+    writeFileSync(join(dir, "package.json"), '{ "name": "app" }\n');
+    const error = attempt("<outer/>\n", join(dir, "page.mx"), {
+      outer: {
+        template: {
+          filename: join(dep, "outer.u.mx"),
+          source: "<effect/>\n<div>\n",
+        },
+      },
+    });
+    expect(error?.message).toContain("`.u.mx` is a host's file kind");
+    expect(error?.diagnosticCode).not.toBe(CODE);
   });
 });
