@@ -2645,15 +2645,17 @@ Six invariants:
 
 **`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
 where `options` is a plain `{ at?, code? }` object or a bare position, which is
-the same as `{ at }`. `at` is a `Position`, defaulting to the tag's first call
-in `analyze` and to the call in `transform`. `code` is a non-empty string
-carried as `TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code`
-(also for a failure inside a tag template); it belongs to the dialect's or
-module's own namespace, since the `MX_` prefix is core's own, and core does
-not check its prefix. An empty `code`, an
-`at` that is not a position, an unknown option, a position that also carries
+the same as `{ at }`. `at` is a `Position` or a `{ sourceStart, sourceEnd }`
+span inside the document (the error starts at `sourceStart` and keeps the
+span), defaulting to the tag's first call in `analyze` and to the call in
+`transform`. `code` is a non-empty string carried as
+`TranslateError.diagnosticCode`, so it reaches `IrDiagnostic.code` (also for a
+failure inside a tag template); without one the error is `MX_TAG_ERROR`. It
+belongs to the module's own namespace: a code that starts with `MX_`, MX's own
+prefix, is refused. An empty `code`, a code that starts with `MX_`, an
+`at` that is neither a position nor a span inside the document, an unknown option, a position that also carries
 `at` or `code`, a non-plain object, or any other second argument is a
-positioned error naming the mistake. `finalize` has no `fail`.
+positioned `MX_TAG_HOOK_ERROR` naming the mistake. `finalize` has no `fail`.
 
 The metadata cache is **bounded** (256 entries, oldest-inserted evicted), keyed by
 path + mtime + source, with a provisional entry seeded before the compile so
@@ -3617,7 +3619,7 @@ read throws, as `readFileSync` does.
 | Result field | Meaning |
 |---|---|
 | `ir` | the `SpannedIr` (§13.7.2), or `undefined` when `diagnostics` holds an error |
-| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, end?, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). `end` is `{ line, column, offset }`, where the diagnostic stops: exclusive, with the start's line and column base, and never before the start. It is absent when core knows no range, and a consumer then underlines from the start. A diagnostic that blames a whole tag ends at the end of `<name` (a tag with a long body is not underlined to its close), an attribute after its value, an expression at its last character, and a parse error at the end of the range the parser gave (a point error ends where it starts). A file-level diagnostic has no `end`. `end.offset` follows the rule of `offset`: not `-1` for a diagnostic located in the lowered file, and `-1` only when `file` names another file. An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is the error's `TranslateError.diagnosticCode` when it has one (a dialect's `ctx.fail(message, { code })`, or a contract hook's `ctx.fail(message, { at?, code? })`, or `MX_TAG_FILE_ERROR` for a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` for tag files that call each other, §9.2), or a warning's `MxWarning.code` (the duplicate-attribute warning is `MX_DUPLICATE_ATTRIBUTE`). Core's own errors a consumer matches carry a stable code too, so it matches the code and never the wording: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_RESERVED_TAG` (a `customTags` definition that names a reserved tag, at each call of the name, §13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none) and `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds). `MX_DIALECT_HOOK_ERROR` is a dialect's `explainUnknownTag` that threw or returned a malformed value (§13.9.3), at the tag. `MX_INVALID_DIALECT_CONTRACT` is an entry of the dialect's `contracts` that cannot register (§13.9.3), in the dialect's module (`file`). The code survives the label an error gets inside an unknown tag, and a template compile carries `MX_TAG_NOT_ALLOWED` and `MX_TEXT_NOT_ALLOWED` as `TranslateError.diagnosticCode` and `MX_EXPECTED_SINGLE_EXPRESSION` as `diagnosticCode` on the thrown `CompileError` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is core's own: a contract's or a dialect's code belongs to its own namespace, so a consumer can tell core's codes from a module's. Core does not check the prefix. On success it holds this call's warnings only |
+| `diagnostics` | `IrDiagnostic`: `{ severity, message, line, column, offset, end?, file?, code? }`. `line` is 1-based and `column` 0-based, as `TranslateError` and `MxWarning`. `offset` is the UTF-16 offset derived from them (`-1` when `file` names another file, whose text `lowerSource` does not have). `end` is `{ line, column, offset }`, where the diagnostic stops: exclusive, with the start's line and column base, and never before the start. It is absent when core knows no range, and a consumer then underlines from the start. A diagnostic that blames a whole tag ends at the end of `<name` (a tag with a long body is not underlined to its close), an attribute after its value, an expression at its last character, and a parse error at the end of the range the parser gave (a point error ends where it starts). A file-level diagnostic has no `end`. `end.offset` follows the rule of `offset`: not `-1` for a diagnostic located in the lowered file, and `-1` only when `file` names another file. An error or warning with no source position (core's 0:0, as for a bad `customTags` registration) is file-level: `line: 1`, `column: 0`, `offset: 0`. `code` is set on every error and on every core warning: core's own code (`MX_…`, one per rule, listed in §13.7.5), or the code a dialect or contract hook gave (`ctx.fail(message, { code })`, `unit.warn(message, { code })`). A consumer matches the code, never the wording. The five codes a closed vocabulary turns on keep their meaning: `MX_UNKNOWN_TAG` (a tag with no contract, under `unknownTags: "reject"`), `MX_TAG_NOT_ALLOWED` (a child tag a `children` contract does not allow; under `unknownTags: "reject"` a child with no contract gets `MX_UNKNOWN_TAG` alone), `MX_TEXT_NOT_ALLOWED` (text where a `children` contract allows none), `MX_EXPECTED_SINGLE_EXPRESSION` (a second expression after the one an expression position holds) and `MX_DUPLICATE_ATTRIBUTE` (a warning: a later attribute of the same name wins). `MX_RESERVED_TAG` is a `customTags` definition that names a reserved tag, at each call of the name (§13.7.4 Reserved names; such a call gets no `MX_UNKNOWN_TAG` and no `MX_TAG_NOT_ALLOWED`). `MX_TAG_FILE_ERROR` is a call to a dialect tag file the dialect cannot read or whose definition has errors, and `MX_TAG_FILE_CYCLE` tag files that call each other (§9.2). `MX_DIALECT_HOOK_ERROR` is a dialect hook that broke its contract (§13.9.3), at the tag or trigger. `MX_INVALID_DIALECT_CONTRACT` is an entry of the dialect's `contracts` that cannot register (§13.9.3), in the dialect's module (`file`). The code survives the label an error gets inside an unknown tag, and a template compile carries the same code as `TranslateError.diagnosticCode` (`MX_UNKNOWN_TAG` is a `lowerSource` option's error only). The `MX_` prefix is MX's own: a hook that passes a code starting with `MX_` gets `MX_DIALECT_HOOK_ERROR` (`MX_TAG_HOOK_ERROR` from a contract hook) in place of its error, so a consumer can tell MX's codes from a module's. On success it holds this call's warnings only |
 
 | Option | Values | Meaning |
 |---|---|---|
@@ -3745,6 +3747,166 @@ named after one of the dialect's `reservedTags` (§9.2).
 vocabulary, so the dialect's `reservedTags` do not apply to them, and they
 override the dialect's `contracts`; core's names still do. Without an explicit
 `dialect` the dialect the file routes to decides.
+
+#### 13.7.5 Diagnostic codes
+
+Every error `lowerSource` reports, and every warning core raises, carries a
+`code`: one code per rule, never per message, so a consumer matches the code
+and never the wording. The list is exported as `MX_DIAGNOSTIC_CODES`
+(`@unstable`), a frozen array of `{ code, severity, summary }`; a code is never
+renamed or reused for another rule, and new rules add codes. No code names a
+host, a target or a dialect.
+
+- **Parse errors** carry the parser's own code. A template-parser error is
+  `MX_PARSE_<CODE>` (`<div></span>` is `MX_PARSE_MISMATCHED_CLOSING_TAG`); an
+  expression that does not parse is `MX_PARSE_EXPRESSION`, except a second
+  expression after the one a position holds, which is
+  `MX_EXPECTED_SINGLE_EXPRESSION`; the front end's own rules keep their names
+  (`<@foo/>` at the root is `MX_ATTRIBUTE_TAG_AT_ROOT`). The same holds under a
+  dialect's syntax table: an unclosed block tag is
+  `MX_PARSE_MALFORMED_BLOCK_TAG`.
+- **A hook's error** carries the code the hook gave, or the hook's default:
+  `MX_DIALECT_ERROR` for a dialect's `ctx.fail`, `unit.fail` and
+  `explainUnknownTag`, `MX_DIALECT_WARNING` for `unit.warn`, `MX_TAG_ERROR` for
+  a contract hook's `ctx.fail`, `MX_TAG_FILE_ERROR` for a dialect tag file. A
+  hook that breaks its contract is `MX_DIALECT_HOOK_ERROR`
+  (`MX_TAG_HOOK_ERROR` for a contract hook).
+- **`MX_` is MX's own prefix.** A hook that passes a code starting with `MX_`
+  (`ctx.fail`, `unit.fail`, `unit.warn`, `explainUnknownTag`, a
+  `checkContract`'s `fail`, a `tagFile` hook's diagnostics) gets
+  `MX_DIALECT_HOOK_ERROR` (`MX_TAG_HOOK_ERROR` from a contract hook) in place of
+  its error, naming the code. A `tagFile` hook may hand back a diagnostic that
+  `ctx.lower` reported with core's code unchanged.
+- **A bug in MX** surfaces as `MX_INTERNAL_ERROR` at 1:0, with the
+  `internal error: ` prefix, so even a defect has a code.
+
+**Lowering: the language's own rules.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_INVALID_ATTRIBUTE` | error | an attribute name, form, value or argument list the language rejects |
+| `MX_INVALID_BOUND_ATTRIBUTE` | error | `:=` on something that is not an identifier or member expression |
+| `MX_DUPLICATE_VALUE_ATTRIBUTE` | error | a second value attribute |
+| `MX_UNSUPPORTED_TAG_ARGUMENTS` | error | tag arguments beside attributes or a body |
+| `MX_INVALID_EXPRESSION` | error | an expression lowering cannot read |
+| `MX_INVALID_IF` | error | the shape rules of `<if>`, `<else-if>` and `<else>` |
+| `MX_INVALID_FOR` | error | the shape rules of `<for>` |
+| `MX_INVALID_CONST` | error | the shape rules of `<const>` |
+| `MX_INVALID_DEFINE` | error | the shape rules of `<define>` |
+| `MX_INVALID_RETURN` | error | the shape rules of `<return>` |
+| `MX_INVALID_TRY` | error | the shape rules of `<try>` |
+| `MX_INVALID_STATEMENT` | error | an `import`, `export` or `static` statement core cannot take |
+| `MX_INVALID_TAG_NAME` | error | a tag name the language refuses |
+| `MX_UNBOUND_COMPONENT` | error | a capitalized tag with no import or `<define>` in scope |
+| `MX_INVALID_TAG_CALL` | error | a tag that cannot be called here |
+| `MX_INVALID_TAG_VAR` | error | a `/var` that cannot bind, or is read out of scope |
+| `MX_INVALID_ATTRIBUTE_TAG` | error | an attribute tag in a place or shape that is not allowed |
+| `MX_UNKNOWN_ATTRIBUTE_TAG` | error | an attribute tag the contract or `Input` does not declare |
+| `MX_MISSING_ATTRIBUTE_TAG` | error | a required attribute tag that is absent |
+| `MX_REPEATED_ATTRIBUTE_TAG` | error | a single attribute tag given twice, or inside `<for>` |
+| `MX_INVALID_CALLEE_INPUT` | error | a callee's `Input` that cannot be read |
+| `MX_UNSUPPORTED_CONSTRUCT` | error | a construct the target or the product cannot express |
+| `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing |
+| `MX_UNSUPPORTED_MARKO_FILE` | error | a `.marko` file used as a tag or an import |
+| `MX_INVALID_SHORTHAND` | error | a bad `#id`/`.class` shorthand |
+| `MX_RESERVED_BINDING` | error | a binding name core reserves |
+| `MX_RESERVED_INPUT` | error | `content` or `<@content>` on a template tag call |
+| `MX_INVALID_ACCESSOR_ASSIGNMENT` | error | an assignment to an accessor read |
+| `MX_INVALID_TRIGGER_USE` | error | a trigger written where its row cannot place it |
+| `MX_NO_LOWERING` | error | a trigger, block tag or filter with no lowering hook |
+
+**Contract: a call checked against its tag's contract.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_UNKNOWN_TAG` | error | an authored tag with no contract, under `unknownTags: "reject"` |
+| `MX_RESERVED_TAG` | error | a definition that names a reserved tag |
+| `MX_INVALID_DEFAULT_TAG` | error | a contract's `defaultTag` the parent cannot use |
+| `MX_UNKNOWN_ATTRIBUTE` | error | an attribute the contract does not declare |
+| `MX_MISSING_ATTRIBUTE` | error | a required attribute that is absent |
+| `MX_INVALID_ATTRIBUTE_VALUE` | error | an attribute value of the wrong type or shape |
+| `MX_CONTENT_NOT_ALLOWED` | error | a body on a tag that takes none |
+| `MX_PARENT_NOT_ALLOWED` | error | a tag whose `parents` rule its parent breaks |
+| `MX_TAG_NOT_ALLOWED` | error | a child tag the parent's `children` contract does not allow |
+| `MX_TEXT_NOT_ALLOWED` | error | text where the parent's `children` contract allows none |
+| `MX_REPEATED_CHILD` | error | a child the parent allows once, given again |
+| `MX_MISSING_CHILD` | error | a child the parent requires, absent |
+| `MX_UNCHECKABLE_CHILD` | error | a dynamic tag under a closed `children` contract |
+| `MX_NEAR_EXPLICIT_CHILD` | error | a wildcard child one typo from an explicit child |
+
+**Data file: what a static data tree cannot hold.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_STRUCTURAL_CONSTRUCT` | error | a structural construct in a file whose consumer does not evaluate it |
+| `MX_NOT_IN_DATA_FILE` | error | something a data tree cannot hold |
+
+**Registration: contracts, configuration, dialects and tag files.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_INVALID_CONTRACT` | error | a tag contract with a bad key, contradiction, recursion or reference |
+| `MX_INVALID_DIALECT_CONTRACT` | error | a `Dialect.contracts` entry that cannot load |
+| `MX_INVALID_PARSE_OPTIONS` | error | a `parseOptions` value the scan cannot read |
+| `MX_INVALID_CONFIG` | error | a project `mx` setting |
+| `MX_MODULE_LOAD_FAILED` | error | a module that cannot be resolved or loaded |
+| `MX_INVALID_DIALECT_MANIFEST` | error | a dialect's `package.json#mx.dialect` manifest |
+| `MX_DIALECT_CONFLICT` | error | two dialects with one id, or claiming one extension |
+| `MX_INVALID_DIALECT_MODULE` | error | a dialect module, its table, node types or the `dialect` option |
+| `MX_INVALID_API_USE` | error | a caller's misuse of a core API |
+| `MX_TAG_FILE_ERROR` | error | a dialect tag file with errors, or one its `tagFile` hook refuses |
+| `MX_TAG_FILE_CYCLE` | error | tag files that call each other in a cycle |
+| `MX_INVALID_TAG_FILE_NAME` | error | a tag file whose name cannot be a tag name |
+
+**Hooks: a dialect's or a contract's own errors.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_DIALECT_ERROR` | error | a dialect's own error that gave no code |
+| `MX_DIALECT_HOOK_ERROR` | error | a dialect hook that broke its contract |
+| `MX_TAG_ERROR` | error | a custom tag hook's `ctx.fail` that gave no code |
+| `MX_TAG_HOOK_ERROR` | error | a custom tag hook that broke its contract |
+
+**Parse: the front end.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_EXPECTED_SINGLE_EXPRESSION` | error | a second expression after the one an expression position holds |
+| `MX_PARSE_EXPRESSION` | error | an expression that does not parse |
+| `MX_TAG_NAME_MISSING` | error | a line that continues attributes with no tag to continue |
+| `MX_STATEMENT_IN_HTML_MODE` | error | a statement keyword where the body is HTML |
+| `MX_RESERVED_TAG_NAME` | error | a tag name the front end reserves |
+| `MX_ATTRIBUTE_TAG_AT_ROOT` | error | an attribute tag at the root of the file |
+| `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | error | an unescaped `${` in a quoted attribute value |
+| `MX_TAG_TYPES_MISMATCH` | error | tag type arguments that do not match the tag's type parameters |
+| `MX_INPUT_ENDS_IN_DELIMITER` | error | input that ends inside a concise open delimiter |
+
+**Internal: a bug in MX, not in the file.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_INTERNAL_ERROR` | error | a bug in MX, not in the file |
+| `MX_FRONT_END_INTERNAL` | error | an internal error of the parser's front end |
+
+**Warnings.**
+
+| Code | Severity | Rule |
+|---|---|---|
+| `MX_DUPLICATE_ATTRIBUTE` | warning | a later attribute of the same name wins |
+| `MX_NOT_A_DOM_EVENT` | warning | an event attribute whose lowercase name is not a DOM event |
+| `MX_DEFINE_EXTRA_PARAMS` | warning | a `<define>` param past the first, which the call ignores |
+| `MX_LOWERCASE_BINDING_NOT_CALLED` | warning | a lowercase tag naming a binding, which is not called |
+| `MX_UNREADABLE_CALLEE_INPUT` | warning | a callee whose `Input` cannot be read |
+| `MX_BODY_DROPPED` | warning | a body passed to a tag that never reads it |
+| `MX_ATTRIBUTE_TAG_DROPPED` | warning | an attribute tag passed to a tag that never reads it |
+| `MX_IGNORED_CONFIG` | warning | a project setting the scan cannot apply and ignores |
+| `MX_SHADOWED_CONTRACT` | warning | an `mx.contracts` entry another definition shadows |
+| `MX_MISPLACED_TAG_FILE` | warning | a dialect file in a tag directory the dialect does not discover |
+| `MX_SIDECAR_IGNORED` | warning | a sidecar in a dialect tag directory that reads none |
+| `MX_DOTTED_TAG_FILE_NAME` | warning | a dialect tag file whose dotted name a call cannot write |
+| `MX_DIALECT_WARNING` | warning | a dialect's own warning that gave no code |
+
+**Parse: the template parser.** `MX_PARSE_EXTRA_CLOSING_TAG`, `MX_PARSE_INVALID_ATTRIBUTE_ARGUMENT`, `MX_PARSE_INVALID_ATTRIBUTE_NAME`, `MX_PARSE_INVALID_ATTRIBUTE_VALUE`, `MX_PARSE_INVALID_CHARACTER`, `MX_PARSE_INVALID_CODE_AFTER_SEMICOLON`, `MX_PARSE_INVALID_EXPRESSION`, `MX_PARSE_INVALID_INDENTATION`, `MX_PARSE_INVALID_LINE_START`, `MX_PARSE_INVALID_REGULAR_EXPRESSION`, `MX_PARSE_INVALID_STRING`, `MX_PARSE_INVALID_TAG_ARGUMENT`, `MX_PARSE_INVALID_TAG_SHORTHAND`, `MX_PARSE_INVALID_TEMPLATE_STRING`, `MX_PARSE_MALFORMED_CDATA`, `MX_PARSE_MALFORMED_CLOSE_TAG`, `MX_PARSE_MALFORMED_COMMENT`, `MX_PARSE_MALFORMED_DECLARATION`, `MX_PARSE_MALFORMED_DOCUMENT_TYPE`, `MX_PARSE_MALFORMED_OPEN_TAG`, `MX_PARSE_MALFORMED_PLACEHOLDER`, `MX_PARSE_MISMATCHED_CLOSING_TAG`, `MX_PARSE_MISSING_END_TAG`, `MX_PARSE_MISSING_TAG_VARIABLE`, `MX_PARSE_RESERVED_TAG_NAME`, `MX_PARSE_ROOT_TAG_ONLY`, `MX_PARSE_INVALID_TAG_PARAMS`, `MX_PARSE_INVALID_TAG_TYPES`, `MX_PARSE_INVALID_ATTR_TYPE_PARAMS`, `MX_PARSE_AMBIGUOUS_ATTRIBUTE_VALUE`, `MX_PARSE_INVALID_HTML_COMMENT`, `MX_PARSE_MALFORMED_BLOCK_TAG`, `MX_PARSE_MALFORMED_FILTER`.
 
 ### Host selection
 
@@ -4357,7 +4519,13 @@ raw body; each returns IR built through `ctx.build`, the builders a custom tag's
 the positioned error `a block tag has no lowering yet`; a filter with no
 `lowerFilter`, `` the `<name>` filter has no lowering yet``. `afterLower` joins the
 unit's `afterLower` list, after core's own hooks, and runs once per unit after
-lowering and before emit. The dialect's `name` names the language where core's
+lowering and before emit. In it, `unit.fail(message, { at?, code?, also? })`
+is the file's error at the `{ sourceStart, sourceEnd }` span `at` (the error
+keeps the span; with no `at` it is file-level), with `code` or, without one,
+`MX_DIALECT_ERROR`; `unit.warn(message, { at?, code? })` is a warning at `at`
+with `code` or `MX_DIALECT_WARNING` (a bare span is the same as `{ at }`). A
+`code` that starts with `MX_` is refused with `MX_DIALECT_HOOK_ERROR`, as are an
+empty message and an `at` outside the document. The dialect's `name` names the language where core's
 diagnostics say "MX" on its files, unless the host sets a `productName`; a file
 no dialect claims says "MX".
 
@@ -4411,11 +4579,12 @@ the line, column and offset from `at`; the dialect never does. The hook is data
 in, data out: everything it is handed is frozen.
 
 A hook that throws, or returns something other than an object or `undefined`,
-an empty or non-string `message`, a non-string or empty `code`, or an `at` that
-is not a `{ sourceStart, sourceEnd }` span inside the document, is one error at
-the tag with the code `MX_DIALECT_HOOK_ERROR`, and `lowerSource` never throws.
-`MX_DIALECT_HOOK_ERROR` is core's, like the other `MX_` codes; the dialect's own
-codes belong to its own namespace.
+an empty or non-string `message`, a non-string or empty `code`, a `code` that
+starts with `MX_`, or an `at` that is not a `{ sourceStart, sourceEnd }` span
+inside the document, is one error at the tag with the code
+`MX_DIALECT_HOOK_ERROR`, and `lowerSource` never throws. An explanation with no
+`code` is `MX_DIALECT_ERROR`. `MX_` is MX's own prefix; the dialect's codes
+belong to its own namespace.
 
 `ContractData` (what `checkContract`, `explainUnknownTag` and
 `unit.calls[].contract` carry) has the contract's `defaultTag` when it states

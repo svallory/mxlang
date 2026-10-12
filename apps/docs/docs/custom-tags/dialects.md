@@ -134,7 +134,7 @@ export default {
 
 - It is called for each tag that has no contract, in `"allow"` and `"reject"` mode alike, with the tag's name and spans, the authored tags around it (each with the contract in force inside it, `defaultTag` included), the mode, the file and its text. It is not called for a declared tag, a child a parent's `children["*"]` claims, an `<@attribute-tag>`, a dynamic tag or an `if`/`for`/`const`.
 - Returning `undefined` hands the tag back to core. Returning an explanation makes it the only diagnostic for that tag: no `MX_UNKNOWN_TAG`, and no "not allowed" from a closed parent. The result then has no IR, in `"allow"` mode too.
-- You give `message`, and optionally `code` (your own namespace, not `MX_`) and `at`, a span inside the document. Core computes the position. An empty message, a bad `at`, or a hook that throws is one `MX_DIALECT_HOOK_ERROR` at the tag.
+- You give `message`, and optionally `code` (your own namespace, not `MX_`) and `at`, a span inside the document. Core computes the position. With no `code`, the diagnostic is `MX_DIALECT_ERROR`. An empty message, a bad `at`, a `code` that starts with `MX_`, or a hook that throws is one `MX_DIALECT_HOOK_ERROR` at the tag.
 - The hook gets the same view when the file lowered and when lowering failed elsewhere, so the explanation does not change with an unrelated error.
 
 ## Tag files: a directory of definitions
@@ -234,6 +234,20 @@ A tool that shows a dialect file shows these, each with its severity, code and t
 The scan has more codes (`MX_SIDECAR_IGNORED`, `MX_DOTTED_TAG_FILE_NAME`, `MX_INVALID_TAG_FILE_NAME`, `MX_BUILTIN_TAG_FILE`); the specification lists them all.
 
 A diagnostic that is in a tag file shows at the head of the file that made the call, naming the tag file, and on the tag file itself in an editor.
+
+### Codes your hooks give
+
+Every error MX reports carries a `code`, and every MX code starts with `MX_`. That prefix is MX's own: a hook that reports a problem gives a code in your dialect's namespace (`FORMA_`, `WIDGETS_`), or none and takes the default.
+
+| Hook | Default code | A code that starts with `MX_` |
+|---|---|---|
+| `explainUnknownTag` | `MX_DIALECT_ERROR` | `MX_DIALECT_HOOK_ERROR` at the tag |
+| `afterLower`: `unit.fail(message, { at, code })` | `MX_DIALECT_ERROR` | `MX_DIALECT_HOOK_ERROR` |
+| `afterLower`: `unit.warn(message, { at, code })` | `MX_DIALECT_WARNING` | `MX_DIALECT_HOOK_ERROR` |
+| a contract hook: `ctx.fail(message, { at, code })` | `MX_TAG_ERROR` | `MX_TAG_HOOK_ERROR` |
+| `tagFile`: a diagnostic you return | `MX_TAG_FILE_ERROR` (an error), `MX_DIALECT_WARNING` (a warning) | `MX_DIALECT_HOOK_ERROR`, unless `ctx.lower` reported it |
+
+`at` is a position (`{ line, column }`) or a span of the document (`{ sourceStart, sourceEnd }`); a span keeps its end, so an editor underlines the whole range. A `tagFile` hook may return the diagnostics `ctx.lower()` gave it as they are, codes included: forwarding MX's own diagnostic is not claiming its prefix. Match on codes, not on message text: the codes are stable, the wording is not.
 
 ### A dialect's check in your own tool
 

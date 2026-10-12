@@ -47,9 +47,26 @@ resource="post" table="posts"
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
 
-`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have).
+`offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set on every error and every warning core raises, so a consumer matches the code, never the wording.
 
-`end` is where the diagnostic stops: `{ line, column, offset }`, exclusive, with `line` 1-based and `column` 0-based as the start. It is absent when core does not know a range, and a consumer then underlines from `line`/`column` as it did before. A diagnostic that blames a whole tag ends at the end of `<name`, so a tag with a long body is not underlined from top to bottom. An attribute ends after its value, an expression at its last character, and a parse error at the end of the range the parser gave, which for a point error is its start. A file-level diagnostic (a bad `customTags` registration, a warning with no source position) has no `end`. `end.offset` follows the start: it is a valid offset in the lowered file for every diagnostic located there, and `-1` only when `file` names another file. The range is never backwards: `end` is the start or later. `code` is set when the error carries a machine-readable code; a dialect's `ctx.fail(message, { code })` and a contract hook's `ctx.fail(message, { at?, code? })` give one.
+`end` is where the diagnostic stops: `{ line, column, offset }`, exclusive, with `line` 1-based and `column` 0-based as the start. It is absent when core does not know a range, and a consumer then underlines from `line`/`column` as it did before. A diagnostic that blames a whole tag ends at the end of `<name`, so a tag with a long body is not underlined from top to bottom. An attribute ends after its value, an expression at its last character, and a parse error at the end of the range the parser gave, which for a point error is its start. A file-level diagnostic (a bad `customTags` registration, a warning with no source position) has no `end`. `end.offset` follows the start: it is a valid offset in the lowered file for every diagnostic located there, and `-1` only when `file` names another file. The range is never backwards: `end` is the start or later.
+
+### Diagnostic codes
+
+Each rule has one code, and `MX_DIAGNOSTIC_CODES` (exported from `@mxlang/core`, `@unstable`) lists every one as `{ code, severity, summary }`. [The specification, §13.7.5](/specification/) has the full table. The codes come in families:
+
+| Family | Examples |
+|---|---|
+| Lowering: the language's own rules | `MX_INVALID_IF`, `MX_INVALID_TAG_VAR`, `MX_UNBOUND_COMPONENT`, `MX_UNSUPPORTED_CONSTRUCT` |
+| Contract: a call checked against its tag's contract | `MX_UNKNOWN_TAG`, `MX_MISSING_ATTRIBUTE`, `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`, `MX_INVALID_DEFAULT_TAG` |
+| Data file | `MX_STRUCTURAL_CONSTRUCT`, `MX_NOT_IN_DATA_FILE` |
+| Registration | `MX_INVALID_CONTRACT`, `MX_INVALID_DIALECT_MODULE`, `MX_TAG_FILE_ERROR`, `MX_MODULE_LOAD_FAILED` |
+| Hook defaults | `MX_DIALECT_ERROR`, `MX_DIALECT_WARNING`, `MX_TAG_ERROR`, `MX_DIALECT_HOOK_ERROR`, `MX_TAG_HOOK_ERROR` |
+| Parse | `MX_PARSE_<CODE>` for the template parser (`MX_PARSE_MISMATCHED_CLOSING_TAG`), `MX_PARSE_EXPRESSION` for an expression, and the front end's own (`MX_EXPECTED_SINGLE_EXPRESSION`, `MX_ATTRIBUTE_TAG_AT_ROOT`) |
+| Warnings | `MX_DUPLICATE_ATTRIBUTE`, `MX_NOT_A_DOM_EVENT`, `MX_BODY_DROPPED` |
+| Internal | `MX_INTERNAL_ERROR`: a bug in MX, at `1:0` |
+
+A hook's error carries the code the hook gave, or the hook's default: `MX_DIALECT_ERROR` for a dialect's `ctx.fail`, `unit.fail` and `explainUnknownTag`, `MX_DIALECT_WARNING` for `unit.warn`, `MX_TAG_ERROR` for a contract hook's `ctx.fail`. A hook may pass `at` as a `{ sourceStart, sourceEnd }` span (a contract hook's `ctx.fail` also takes a position), and the error keeps the span. `MX_` is MX's own prefix: a hook that passes a code starting with `MX_` gets `MX_DIALECT_HOOK_ERROR` (`MX_TAG_HOOK_ERROR` from a contract hook) in its place. Use your own prefix.
 
 ### `SpannedIr`
 
