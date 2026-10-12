@@ -45,6 +45,7 @@ describe("R7: the tools check a dialect's vocabulary", () => {
           line: 2,
           column: 0,
           offset: 5,
+          code: "MX_MISSING_ATTRIBUTE",
         },
       ],
     });
@@ -82,6 +83,7 @@ describe("R7: the tools check a dialect's vocabulary", () => {
           line: 1,
           column: 0,
           offset: 0,
+          code: "MX_MISSING_ATTRIBUTE",
         },
       ],
     });

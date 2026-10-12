@@ -187,13 +187,13 @@ describe("dialect files through the TypeScript plugin", () => {
     const service = createService(project.dir, {
       [file]: PROBE_SOURCES.noRules,
     });
-    // A diagnostic with no dialect code keeps the plugin's own 80001.
+    // A parse error carries the parser's code in place of the plugin's 80001.
     expect(shape(service, file)).toEqual([
       {
         start: 0,
         length: 1,
         category: "Error",
-        code: 80001,
+        code: "MX_PARSE_MISSING_END_TAG",
         source: "Probe",
         message: 'Missing ending "input" tag',
       },
@@ -209,7 +209,7 @@ describe("dialect files through the TypeScript plugin", () => {
         start: 0,
         length: 1,
         category: "Error",
-        code: 80001,
+        code: "MX_MISSING_ATTRIBUTE",
         source: "Probe",
         message: PROBE_CONTRACT_MESSAGE,
       },

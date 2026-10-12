@@ -75,7 +75,7 @@ describe("mx-tsc on a dialect's files", () => {
     const { project, status, output } = run({ "a.probe": "<y x=(/>\n" });
     expect(status).toBe(1);
     expect(output).toBe(
-      `${shown(project.path("a.probe"))}(1,7): error TS80001: EOL reached while parsing regular expression\n`,
+      `${shown(project.path("a.probe"))}(1,7): error MX_PARSE_INVALID_REGULAR_EXPRESSION: EOL reached while parsing regular expression\n`,
     );
   });
 
@@ -87,7 +87,7 @@ describe("mx-tsc on a dialect's files", () => {
     });
     expect(status).toBe(1);
     expect(output).toBe(
-      `${shown(project.path("a.probe"))}(1,1): error TS80001: Missing ending "input" tag\n`,
+      `${shown(project.path("a.probe"))}(1,1): error MX_PARSE_MISSING_END_TAG: Missing ending "input" tag\n`,
     );
   });
 
@@ -134,7 +134,7 @@ describe("mx-tsc on a dialect's files", () => {
     const result = runInProcess(["-p", project.dir, "--pretty", "false"]);
     expect(result.status).toBe(1);
     expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
-      `${shown(project.path("a.probe"))}(1,1): error TS80001: ${PROBE_CONTRACT_MESSAGE}\n`,
+      `${shown(project.path("a.probe"))}(1,1): error MX_MISSING_ATTRIBUTE: ${PROBE_CONTRACT_MESSAGE}\n`,
     );
   });
 

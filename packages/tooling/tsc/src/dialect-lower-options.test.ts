@@ -57,7 +57,7 @@ it("R10: prints the dialect's strictness, the unknown tag with its code", {
   const file = relative(process.cwd(), project.path("a.probe"));
   expect(result.status).toBe(1);
   expect(stripVTControlCharacters(result.stderr + result.stdout)).toBe(
-    `${file}(4,3): error TS80001: the data tree is static; this file's consumer does not evaluate \`<if>\`\n` +
+    `${file}(4,3): error MX_STRUCTURAL_CONSTRUCT: the data tree is static; this file's consumer does not evaluate \`<if>\`\n` +
       `${file}(5,1): error MX_UNKNOWN_TAG: \`<widget>\` is not a known tag in the \`probe\` dialect\n`,
   );
 });

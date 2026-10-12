@@ -1,5 +1,5 @@
 ---
-packages: [core]
+packages: [core, target-registry, tsc, typescript-plugin, language-server, vite-plugin]
 kind: Added
 ---
 
@@ -15,6 +15,8 @@ Every error `lowerSource` and the template compilers report now carries a stable
 - **Internal**: `MX_INTERNAL_ERROR` for an error that reaches the entry without a code, which is a bug in MX.
 
 The specification lists every code (§13.7.5 Diagnostic codes).
+
+The tools that already showed a dialect's code now show core's too: on a dialect file `mx-tsc` prints `error MX_PARSE_MISSING_END_TAG:` where it printed `error TS80001:`, the TypeScript plugin gives the code in place of `80001`, the language server sets `code`, and a `@mxlang/vite-plugin` scan warning reads `MX_IGNORED_CONFIG: …`. For a `.mx` file `mx-tsc` still prints `TS80001`.
 
 The five codes a closed vocabulary turns on (`MX_UNKNOWN_TAG`, `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`, `MX_EXPECTED_SINGLE_EXPRESSION`, `MX_DUPLICATE_ATTRIBUTE`) and `MX_TAG_FILE_ERROR` keep their meanings and their sites.
 

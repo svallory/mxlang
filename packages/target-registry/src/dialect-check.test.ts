@@ -62,13 +62,13 @@ describe("checkDialectFile", () => {
     expect(text.slice(diagnostic?.offset)).toMatch(/^!bad/);
   });
 
-  it("a diagnostic with no code carries none", () => {
+  it("a parse error carries the parser's code", () => {
     const project = probeProject();
     const [diagnostic] =
       checkDialectFile(project.path("a.probe"), "<y x=(/>\n")?.diagnostics ??
       [];
     expect(diagnostic?.severity).toBe("error");
-    expect(diagnostic).not.toHaveProperty("code");
+    expect(diagnostic?.code).toBe("MX_PARSE_INVALID_REGULAR_EXPRESSION");
   });
 
   it("honours the dialect's tagRules: <input> is no void element under `none`", () => {
@@ -84,6 +84,7 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 0,
           offset: 0,
+          code: "MX_PARSE_MISSING_END_TAG",
         },
       ],
     });
@@ -106,6 +107,7 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 0,
           offset: 0,
+          code: "MX_MISSING_ATTRIBUTE",
         },
       ],
     });
@@ -132,6 +134,7 @@ describe("checkDialectFile", () => {
         column: 0,
         offset: 0,
         end: { line: 1, column: 5, offset: 5 },
+        code: "MX_NOT_IN_DATA_FILE",
       },
     ]);
   });
@@ -233,6 +236,7 @@ describe("checkDialectFile", () => {
           line: 2,
           column: 0,
           offset: 12,
+          code: "MX_MISSING_ATTRIBUTE",
         },
       ]);
     });
@@ -311,6 +315,7 @@ describe("checkDialectFile", () => {
             line: 1,
             column: 0,
             offset: 0,
+            code: "MX_MODULE_LOAD_FAILED",
             origin: { file: project.path("dialect.cjs"), line: 1, column: 0 },
           },
         ],
@@ -338,6 +343,7 @@ describe("checkDialectFile", () => {
             line: 1,
             column: 0,
             offset: 0,
+            code: "MX_INVALID_DIALECT_MANIFEST",
             origin: { file: packageFile, line: 1, column: 130 },
           },
         ],
@@ -389,6 +395,7 @@ describe("checkDialectFile", () => {
               line: 1,
               column: 0,
               offset: 0,
+              code: "MX_INVALID_DIALECT_MANIFEST",
               origin: { file: packageFile, line: 1, column: 130 },
             },
           ],
@@ -450,6 +457,7 @@ describe("checkDialectFile", () => {
             line: 1,
             column: 0,
             offset: 0,
+            code: "MX_INVALID_DIALECT_MANIFEST",
             origin: { file: manifestFile, line: 1, column: 120 },
           },
         ],

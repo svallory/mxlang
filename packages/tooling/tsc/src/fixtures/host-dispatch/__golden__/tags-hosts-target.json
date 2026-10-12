@@ -9,6 +9,7 @@
           {
             "severity": 2,
             "source": "mxlang",
+            "code": "MX_IGNORED_CONFIG",
             "message": "<root>/tags-hosts-target/package.json:1:1: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")",
             "range": {
               "start": {
@@ -62,6 +63,7 @@
               {
                 "severity": 2,
                 "source": "mxlang",
+                "code": "MX_IGNORED_CONFIG",
                 "message": "`mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")",
                 "range": {
                   "start": {
@@ -110,7 +112,7 @@
           "frame": "1 | <thing/>\n    ^"
         },
         "warnings": [
-          "@mxlang/vite-plugin: <root>/tags-hosts-target/package.json:1:1: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")"
+          "@mxlang/vite-plugin: <root>/tags-hosts-target/package.json:1:1: MX_IGNORED_CONFIG: `mx.tags` names an unknown host in `hosts`: solid-jsx (\"solid-jsx\" is a target; hosts filters by host: use \"solid\")"
         ]
       }
     }

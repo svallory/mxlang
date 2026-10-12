@@ -1337,6 +1337,7 @@ describe("a dialect's files", () => {
       {
         severity: DiagnosticSeverity.Error,
         source: "Probe",
+        code: "MX_PARSE_MISSING_END_TAG",
         message: 'Missing ending "input" tag',
         range: {
           start: { line: 0, character: 0 },
@@ -1377,6 +1378,7 @@ describe("a dialect's files", () => {
       {
         severity: DiagnosticSeverity.Error,
         source: "Probe",
+        code: "MX_MISSING_ATTRIBUTE",
         message: PROBE_CONTRACT_MESSAGE,
         range: {
           start: { line: 0, character: 0 },

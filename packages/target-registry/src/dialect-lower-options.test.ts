@@ -81,6 +81,7 @@ describe("R8: the tools check a dialect file with the dialect's values", () => {
           column: 2,
           offset: 37,
           end: { line: 4, column: 5, offset: 40 },
+          code: "MX_STRUCTURAL_CONSTRUCT",
         },
         {
           severity: "error",
@@ -107,6 +108,7 @@ describe("R8: the tools check a dialect file with the dialect's values", () => {
           line: 1,
           column: 0,
           offset: 0,
+          code: "MX_INVALID_DIALECT_MODULE",
           origin: { file: module, line: 1, column: 0 },
         },
       ],

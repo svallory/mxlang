@@ -1128,6 +1128,7 @@ describe("stdio server (e2e)", () => {
     const OWN = {
       severity: 1,
       source: "Probe",
+      code: "MX_INVALID_ATTRIBUTE",
       message:
         "Invalid attribute name `!bad` — an attribute name may use letters, digits and `._:-`",
       range: {
@@ -1333,6 +1334,7 @@ describe("stdio server (e2e)", () => {
       {
         severity: 1,
         source: "mxlang",
+        code: "MX_INVALID_DIALECT_MANIFEST",
         message: `${message} (in ${packageFile}:1:131)`,
         range: {
           start: { line: 0, character: 0 },
@@ -1344,7 +1346,13 @@ describe("stdio server (e2e)", () => {
       },
     ]);
     expect(seen.get(packageUri)).toEqual([
-      { severity: 1, source: "mxlang", message, range: onPackage },
+      {
+        severity: 1,
+        source: "mxlang",
+        code: "MX_INVALID_DIALECT_MANIFEST",
+        message,
+        range: onPackage,
+      },
     ]);
   }, 15000);
 

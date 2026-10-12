@@ -95,7 +95,7 @@ it("re-checks an open dialect file when only the dialect's module changes", asyn
     },
   });
   const missing = "`<entity>`: missing required attribute `name`";
-  expect(await until(1)).toEqual([`undefined: ${missing}`]);
+  expect(await until(1)).toEqual([`MX_MISSING_ATTRIBUTE: ${missing}`]);
 
   let tick = Date.now() + 10_000;
   const edit = async (text: string, count: number) => {
@@ -119,6 +119,6 @@ it("re-checks an open dialect file when only the dialect's module changes", asyn
   );
   // Fixed again: the failure is not served from the cache.
   expect(await edit(dialectModule(REQUIRED), 4)).toEqual([
-    `undefined: ${missing}`,
+    `MX_MISSING_ATTRIBUTE: ${missing}`,
   ]);
 }, 30000);
