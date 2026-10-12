@@ -1092,25 +1092,29 @@ describe("one fixture per IR kind", () => {
         "else content",
         "<Panel><if=input.a><@h/></if><else><p>dropped</p></else></Panel>",
         35,
+        37,
       ],
       [
         "else-if content",
         "<Panel><if=input.a><@h/></if><else-if=input.b>text</else-if></Panel>",
         46,
+        50,
       ],
       [
         "reverse branch order",
         "<Panel><if=input.a><p>x</p></if><else><@h/></else></Panel>",
         19,
+        21,
       ],
       [
         "nested chain",
         "<Panel><@tab><if=input.a><@h/></if><else><p>dropped</p></else></@tab></Panel>",
         41,
+        43,
       ],
     ])(
       "rejects attribute tags mixed with %s across an if chain",
-      (_case, source, column) => {
+      (_case, source, column, endColumn) => {
         let error: unknown;
         try {
           lowerSource(source, v2());
@@ -1122,6 +1126,9 @@ describe("one fixture per IR kind", () => {
             "Cannot have attribute tags and body content under a control flow tag.",
           line: 1,
           column,
+          // A Marko tag the lowering blames ends at its name (`<p`); a text
+          // run, at its text.
+          end: { line: 1, column: endColumn },
         });
       },
     );

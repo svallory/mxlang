@@ -140,6 +140,23 @@ function keywordEnd(at: Position, name: string): BlameEnd {
 }
 
 /**
+ * The end of a dynamic tag's `<${expr}`: the `}` that closes the placeholder,
+ * read off the source after the expression's span (the IR keeps no span for
+ * the braces). `undefined` when the expression has no span or the source does
+ * not close it there (a comment before the `}` is not read past), so the
+ * error stays a point.
+ */
+function dynamicTagEnd(expr: { span?: SourceSpan }): BlameEnd {
+  const to = expr.span?.sourceEnd;
+  if (to === undefined || !Number.isFinite(to)) return undefined;
+  let offset = to;
+  while (/[\s)]/.test(activeSource[offset] ?? "")) offset += 1;
+  return activeSource[offset] === "}"
+    ? positionOfOffset(offset + 1)
+    : undefined;
+}
+
+/**
  * Every error the walk met, in the order met. The walk recovers per node, per
  * attribute and per argument: a reject there is recorded here and the walk
  * goes on, so one file reports every independent mistake. A non-positioned
@@ -586,7 +603,7 @@ function checkNode(node: IrNode): void {
       return;
     case "Component":
       if (node.target.kind === "dynamic") {
-        fail(DYNAMIC_TAG_MESSAGE, node.loc, nameEndOf(node));
+        fail(DYNAMIC_TAG_MESSAGE, node.loc, dynamicTagEnd(node.target.expr));
       }
       fail(
         `\`<${node.authoredName ?? node.target.name}>\` calls a template tag; a data file cannot call a template tag`,

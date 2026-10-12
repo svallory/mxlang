@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import type { MxWarning } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
+import type { NodeType } from "../dialect-registry.ts";
 import type {
   Dialect,
   UnknownTag,
@@ -67,6 +68,29 @@ describe("a whole-tag error ends at the end of `<name`", () => {
     });
   });
 
+  it("a dynamic tag ends at the close of its `<${…}`", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    const nested = "<div>\n  <${x}/>\n</div>\n";
+    expect(range(only(nested, { structural: "reject" }))).toEqual({
+      start: [2, 2, 8],
+      end: [2, 7, 13],
+    });
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    expect(range(only("<${ (x + 1) }/>\n"))).toEqual({
+      start: [1, 0, 0],
+      end: [1, 13, 13],
+    });
+  });
+
+  it("when core cannot find where the `<${…}` closes, the error is a point on its start", () => {
+    // A comment between the expression and its `}` is not read past.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    expect(range(only("<${x /* c */}/>\n"))).toEqual({
+      start: [1, 0, 0],
+      end: [1, 0, 0],
+    });
+  });
+
   it("a tag variable on a data tag", () => {
     expect(range(only("<div/x/>\n", { structural: "reject" })).end).toEqual([
       1, 4, 4,
@@ -86,6 +110,17 @@ describe("a whole-tag error ends at the end of `<name`", () => {
     });
     const reserved = diagnostics.find((d) => d.code === "MX_RESERVED_TAG");
     expect(range(reserved)).toEqual({ start: [1, 0, 0], end: [1, 3, 3] });
+  });
+});
+
+describe("a Marko tag the lowering blames ends at its name", () => {
+  it("body content beside an attribute tag under a control-flow chain: the `<p`", () => {
+    const source =
+      "<Panel>\n  <@tab>\n    <if=input.a><@h/></if>\n    <else><p>d</p></else>\n  </@tab>\n</Panel>\n";
+    expect(range(only(source))).toEqual({
+      start: [4, 10, 54],
+      end: [4, 12, 56],
+    });
   });
 });
 
@@ -161,10 +196,17 @@ describe("a parse error carries the parser's range", () => {
     });
   });
 
-  it("a range across lines", () => {
+  it("a range on a later line: the close tag that does not match, past an open child", () => {
     expect(range(only("<div>\n  <p>\n</div>\n"))).toEqual({
       start: [3, 0, 12],
       end: [3, 6, 18],
+    });
+  });
+
+  it("a range across lines: a CDATA section is rejected whole", () => {
+    expect(range(only("<div>\n<![CDATA[\nx\n]]>\n</div>\n"))).toEqual({
+      start: [2, 0, 6],
+      end: [4, 3, 21],
     });
   });
 
@@ -302,6 +344,118 @@ describe("a dialect's explanation of an unknown tag", () => {
     });
     expect(d?.code).toBe("MX_DIALECT_HOOK_ERROR");
     expect(range(d)).toEqual({ start: [1, 0, 0], end: [1, 2, 2] });
+  });
+});
+
+describe("a trigger's hooks", () => {
+  /** `~user.bad`: a path, claimed in attribute position by a node type. */
+  const refDialect = (parse: NodeType["parse"]): Dialect => ({
+    id: "ref",
+    name: "Ref",
+    table: {
+      attributeTriggers: [
+        {
+          id: "ref",
+          chars: "~",
+          match: "~[a-z]+(?:\\.[a-z]+)*",
+          standIn: "identifier",
+          node: { type: "Ref", dialect: "ref" },
+        },
+      ],
+    },
+    nodeTypes: {
+      Ref: {
+        keys: [],
+        parse,
+        print: () => "",
+        lower: (_node, ctx) => ctx.attribute("ref", "x"),
+      },
+    },
+  });
+  /** A dialect whose `!ab` attribute trigger calls `hook`. */
+  const probe = (hook: NonNullable<Dialect["lowerTrigger"]>): Dialect => ({
+    id: "probe",
+    name: "Fixture",
+    table: {
+      attributeTriggers: [
+        {
+          id: "probe",
+          chars: "!",
+          match: "![a-z]+",
+          standIn: "keep",
+          node: { call: "probe" },
+        },
+      ],
+    },
+    lowerTrigger: hook,
+  });
+  const run = (source: string, dialect: Dialect) =>
+    lowerSource(source, "/t.mx", { dialect }).diagnostics;
+
+  it("a node type's `parse` that fails without `at` blames the whole trigger text", () => {
+    const [d] = run(
+      "<y ~user.bad/>\n",
+      refDialect((_text, _span, ctx) => ctx.fail("bad field")),
+    );
+    expect(range(d)).toEqual({ start: [1, 3, 3], end: [1, 12, 12] });
+  });
+
+  it("a node type's `parse` that fails with `at` blames that span", () => {
+    const [d] = run(
+      "<y ~user.bad/>\n",
+      refDialect((_text, _span, ctx) =>
+        ctx.fail("bad field", { at: { sourceStart: 5, sourceEnd: 9 } }),
+      ),
+    );
+    expect(range(d)).toEqual({ start: [1, 5, 5], end: [1, 9, 9] });
+  });
+
+  it("a trigger on a later line ends on that line", () => {
+    const [d] = run(
+      "<y\n  ~user.bad/>\n",
+      refDialect((_text, _span, ctx) => ctx.fail("bad field")),
+    );
+    expect(range(d)).toEqual({ start: [2, 2, 5], end: [2, 11, 14] });
+  });
+
+  it("a node type's `parse` that throws blames the whole trigger text", () => {
+    const [d] = run(
+      "<y ~user.bad/>\n",
+      refDialect(() => {
+        throw new Error("boom");
+      }),
+    );
+    expect(d?.message).toContain("threw");
+    expect(range(d)).toEqual({ start: [1, 3, 3], end: [1, 12, 12] });
+  });
+
+  it("`lowerTrigger`'s `ctx.fail` without `at` blames the whole trigger text", () => {
+    const [d] = run(
+      "<y !ab/>\n",
+      probe((_id, _text, _span, ctx) => ctx.fail("x")),
+    );
+    expect(range(d)).toEqual({ start: [1, 3, 3], end: [1, 6, 6] });
+  });
+
+  it("`lowerTrigger`'s `ctx.fail` with `at` blames that span", () => {
+    const [d] = run(
+      "<y !ab/>\n",
+      probe((_id, _text, _span, ctx) =>
+        ctx.fail("x", { at: { sourceStart: 4, sourceEnd: 6 } }),
+      ),
+    );
+    expect(range(d)).toEqual({ start: [1, 4, 4], end: [1, 6, 6] });
+  });
+
+  it("a `lowerTrigger` that throws blames the whole trigger text", () => {
+    const [d] = run(
+      "<y !ab/>\n",
+      probe(() => {
+        throw new Error("boom");
+      }),
+    );
+    expect(d?.message).toContain("threw");
+    expect(range(d)).toEqual({ start: [1, 3, 3], end: [1, 6, 6] });
   });
 });
 

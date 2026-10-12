@@ -76,11 +76,12 @@ function kitModule(fields = ""): string {
   return `
 import { readFileSync } from "node:fs";
 const BRAND = Symbol.for("mxTranslateError");
-function positioned(message, line, column) {
+function positioned(message, line, column, endLine, endColumn) {
   const error = new Error(message);
   error.name = "TranslateError";
   error.line = line;
   error.column = column;
+  if (endLine !== undefined) error.end = { line: endLine, column: endColumn };
   Object.defineProperty(error, BRAND, { value: true });
   return error;
 }
@@ -987,6 +988,20 @@ describe("diagnostics", () => {
         file: "concepts/money.kit.mx",
       },
     ]);
+  });
+
+  it("a thrown positioned error keeps its range, an `end` in the tag file", () => {
+    kitProject();
+    tagFile("money", { throw: "bad here", throwAt: [4, 6, 4, 9] });
+    const own = lowerAt("page.kit.mx", "<money/>\n").diagnostics.find(
+      (d) => d.message === "bad here",
+    );
+    expect(own).toMatchObject({
+      file: join(dir, "concepts/money.kit.mx"),
+      line: 4,
+      column: 6,
+      end: { line: 4, column: 9, offset: -1 },
+    });
   });
 
   it("a failure is cached: the hook does not run again until the file changes", () => {
