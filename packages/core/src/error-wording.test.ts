@@ -17,13 +17,21 @@ const GENERIC_FIX =
 
 describe("the scriptlet error", () => {
   it.each([
-    ["$ foo()\n", `${SCRIPTLET}; ${GENERIC_FIX}`, 1, 0, 0],
+    [
+      "$ foo()\n",
+      `${SCRIPTLET}; ${GENERIC_FIX}`,
+      1,
+      0,
+      0,
+      { line: 1, column: 7, offset: 7 },
+    ],
     [
       "$ const y = 1\n",
       `${SCRIPTLET}; declare a value with \`<const/y=…/>\``,
       1,
       0,
       0,
+      { line: 1, column: 13, offset: 13 },
     ],
     [
       "<div/>\n$ let z = 2;\n",
@@ -31,12 +39,13 @@ describe("the scriptlet error", () => {
       2,
       0,
       7,
+      { line: 2, column: 12, offset: 19 },
     ],
   ])(
     "%j reads exactly, positioned at the `$`",
-    (source, message, line, column, offset) => {
+    (source, message, line, column, offset, end) => {
       expect(lowerSource(source, "/t.mx").diagnostics).toEqual([
-        { severity: "error", message, line, column, offset },
+        { severity: "error", message, line, column, offset, end },
       ]);
     },
   );
