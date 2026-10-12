@@ -17,11 +17,18 @@
 import { attrLabel } from "./attr-label.ts";
 import { positionAt } from "./contract-facts.ts";
 import { claimedFields, contractData } from "./contract-fields.ts";
-import { type Ctx, mxSpanOf, type Node, TranslateError, warn } from "./core.ts";
+import { type Ctx, codedError, mxSpanOf, type Node, warn } from "./core.ts";
 import type {
   CustomTagAttributeTag,
   CustomTagAttributeTags,
 } from "./custom-tags.ts";
+import {
+  DIALECT_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  DIALECT_WARNING_CODE,
+  isReservedHookCode,
+  reservedHookCodeMessage,
+} from "./diagnostic-codes.ts";
 import type { DialectNode } from "./dialect-registry.ts";
 import type { Attr, AttributeTag } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
@@ -36,10 +43,26 @@ export interface LoweredUnitFailOptions {
    * error is; `lowerSource` reports it at 1:0.
    */
   readonly at?: SourceSpan;
-  /** A machine-readable code, carried on the error as `diagnosticCode`. */
+  /**
+   * A machine-readable code, carried on the error as `diagnosticCode`, in
+   * the dialect's own prefix: a code starting with `MX_` is MX's own and is
+   * refused. Without it the error's code is `MX_DIALECT_ERROR`.
+   */
   readonly code?: string;
   /** Further spans the error is about (a duplicate's first site), carried as `TranslateError.spans`. */
   readonly also?: readonly SourceSpan[];
+}
+
+/** Where `LoweredUnit.warn` reports and under which code (all optional). @unstable */
+export interface LoweredUnitWarnOptions {
+  /** Where the warning is, a span inside the document; file-level without it. */
+  readonly at?: SourceSpan;
+  /**
+   * A machine-readable code for the warning, in the dialect's own prefix (a
+   * code starting with `MX_` is refused). Without it the code is
+   * `MX_DIALECT_WARNING`.
+   */
+  readonly code?: string;
 }
 
 /** A name an `analyze` hook declared with `ctx.declare(kind, name, { span, scope })`. @unstable */
@@ -191,8 +214,11 @@ export interface LoweredUnit {
   readonly declared: readonly DeclaredName[];
   /** A positioned error in the module's own words; fatal, as core's own check is. */
   fail(message: string, options?: LoweredUnitFailOptions): never;
-  /** A warning, at `at` (a span inside the document) or file-level. */
-  warn(message: string, at?: SourceSpan): void;
+  /**
+   * A warning, at `at` (a span inside the document) or file-level. The second
+   * argument is the options, or the span alone.
+   */
+  warn(message: string, options?: LoweredUnitWarnOptions | SourceSpan): void;
 }
 
 /** One frozen identity per authored tag instance. */
@@ -312,11 +338,41 @@ function inside(ctx: Ctx, span: unknown): span is SourceSpan {
 
 /** A broken hook contract: a file-level error naming the call. */
 function contractError(ctx: Ctx, what: string): never {
-  throw new TranslateError(
+  throw codedError(
+    DIALECT_HOOK_ERROR_CODE,
     `the dialect's \`afterLower\`: ${what} is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
     0,
     0,
   );
+}
+
+/**
+ * A hook's code as given, or `undefined` without one. A code starting with
+ * `MX_` is MX's own: refused as a misuse of the hook.
+ */
+function hookCode(code: unknown, call: string): string | undefined {
+  if (code === undefined) return undefined;
+  const text = String(code);
+  if (isReservedHookCode(text)) {
+    throw codedError(
+      DIALECT_HOOK_ERROR_CODE,
+      `the dialect's \`afterLower\`: \`${call}\`'s ${reservedHookCodeMessage(text)}`,
+      0,
+      0,
+    );
+  }
+  return text;
+}
+
+/** `unit.warn`'s second argument: the options, or the span alone. */
+function warnOptionsOf(
+  options: LoweredUnitWarnOptions | SourceSpan | undefined,
+): LoweredUnitWarnOptions {
+  if (options === undefined || options === null) return {};
+  if (typeof options === "object" && "sourceStart" in options) {
+    return { at: options };
+  }
+  return options as LoweredUnitWarnOptions;
 }
 
 const units = new WeakMap<Ctx, LoweredUnit>();
@@ -377,7 +433,8 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
     },
     fail(message: string, options?: LoweredUnitFailOptions): never {
       if (typeof message !== "string" || message === "") {
-        throw new TranslateError(
+        throw codedError(
+          DIALECT_HOOK_ERROR_CODE,
           "the dialect's `afterLower`: `unit.fail` takes a non-empty message",
           0,
           0,
@@ -394,27 +451,32 @@ export function loweredUnitOf(ctx: Ctx): LoweredUnit {
       ) {
         contractError(ctx, "each of `unit.fail`'s `also`");
       }
+      const code = hookCode(options?.code, "unit.fail");
       const position = at ? positionAt(ctx, at.sourceStart) : undefined;
-      const error = new TranslateError(
+      const error = codedError(
+        DIALECT_ERROR_CODE,
         message,
         position?.line ?? 0,
         position?.column ?? 0,
       );
+      if (at)
+        error.span = { sourceStart: at.sourceStart, sourceEnd: at.sourceEnd };
       if (also) error.spans = Object.freeze([...also]);
-      if (options?.code !== undefined) {
-        error.diagnosticCode = String(options.code);
-      }
+      if (code !== undefined) error.diagnosticCode = code;
       throw error;
     },
-    warn(message: string, at?: SourceSpan): void {
+    warn(message: string, options?: LoweredUnitWarnOptions | SourceSpan): void {
+      const { at, code } = warnOptionsOf(options);
       if (at !== undefined && !inside(ctx, at)) {
         contractError(ctx, "`unit.warn`'s `at`");
       }
+      const warningCode = hookCode(code, "unit.warn") ?? DIALECT_WARNING_CODE;
       const position = at ? positionAt(ctx, at.sourceStart) : undefined;
       warn(ctx, {
         message: String(message),
         line: position?.line ?? 0,
         column: position?.column ?? 0,
+        code: warningCode,
       });
     },
   });

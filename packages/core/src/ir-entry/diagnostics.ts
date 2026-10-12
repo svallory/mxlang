@@ -6,6 +6,7 @@
 
 import { resolve } from "node:path";
 import { isTranslateError } from "../core.ts";
+import { INTERNAL_ERROR_CODE } from "../diagnostic-codes.ts";
 
 /**
  * Where an {@link IrDiagnostic}'s range ends, measured in the same file as its
@@ -291,8 +292,9 @@ export function errorDiagnostics(
       at ?? { line: 1, column: 0 },
       // Only `diagnosticCode`, ours: a Babel or system error's `code` is not.
       // A `TranslateError` has one, and so does the `CompileError` a parse
-      // error becomes.
-      diagnosticCodeOf(error),
+      // error becomes. One with none is a bug in core: every core raise is
+      // coded, so the net reports it as `MX_INTERNAL_ERROR`, not uncoded.
+      diagnosticCodeOf(error) ?? INTERNAL_ERROR_CODE,
       lineStarts,
       source,
       filename,

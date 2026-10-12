@@ -27,8 +27,15 @@
  * reports under its `internal error: ` prefix, with no IR.
  */
 
-import { isTranslateError, TranslateError } from "../core.ts";
-import { UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
+import { codedError, isTranslateError, type TranslateError } from "../core.ts";
+import {
+  DIALECT_HOOK_ERROR_CODE,
+  INTERNAL_ERROR_CODE,
+  type MxDiagnosticCode,
+  NOT_IN_DATA_FILE_CODE,
+  STRUCTURAL_CONSTRUCT_CODE,
+  UNKNOWN_TAG_CODE,
+} from "../diagnostic-codes.ts";
 import { nearestName } from "../did-you-mean.ts";
 import type {
   Attr,
@@ -93,19 +100,23 @@ function structuralMessage(construct: string): string {
  */
 type BlameEnd = { line: number; column: number } | undefined;
 
-function fail(message: string, at: Position, end?: BlameEnd): never {
-  throw errorAt(message, at, end);
-}
-
-function errorAt(
+function fail(
+  code: MxDiagnosticCode,
   message: string,
   at: Position,
   end?: BlameEnd,
-  code?: string,
+): never {
+  throw errorAt(code, message, at, end);
+}
+
+function errorAt(
+  code: MxDiagnosticCode,
+  message: string,
+  at: Position,
+  end?: BlameEnd,
 ): TranslateError {
-  const error = new TranslateError(message, at.line, at.column, at.file);
+  const error = codedError(code, message, at.line, at.column, at.file);
   error.end = end ?? { line: at.line, column: at.column };
-  if (code !== undefined) error.diagnosticCode = code;
   return error;
 }
 
@@ -255,9 +266,10 @@ function checkTagName(
 ): void {
   if (!unusableTagName(name)) return;
   if (name.startsWith("$") && name.includes("{")) {
-    fail(DYNAMIC_TAG_MESSAGE, tag.loc, nameEndOf(tag));
+    fail(NOT_IN_DATA_FILE_CODE, DYNAMIC_TAG_MESSAGE, tag.loc, nameEndOf(tag));
   }
   fail(
+    NOT_IN_DATA_FILE_CODE,
     `\`${name}\` is not a tag name a data file can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which a data file does not have`,
     tag.loc,
     nameEndOf(tag),
@@ -318,12 +330,18 @@ function rejectSpanlessShorthand(
     // The sigil's own attribute (`#a${x}`, `.a${x}`): its name through its end.
     const attrEnd = nameSpan ? positionOfOffset(nameSpan.sourceEnd) : undefined;
     if (attr.name === "id" && sigil === "#") {
-      fail(SYNTHESIZED_SHORTHAND_ID, where, attrEnd);
+      fail(DIALECT_HOOK_ERROR_CODE, SYNTHESIZED_SHORTHAND_ID, where, attrEnd);
     }
     if (attr.name === "class" && sigil === ".") {
-      fail(SYNTHESIZED_SHORTHAND_CLASS, where, attrEnd);
+      fail(
+        DIALECT_HOOK_ERROR_CODE,
+        SYNTHESIZED_SHORTHAND_CLASS,
+        where,
+        attrEnd,
+      );
     }
-    if (attr.name === "class") fail(MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
+    if (attr.name === "class")
+      fail(DIALECT_HOOK_ERROR_CODE, MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
   }
 }
 
@@ -454,6 +472,7 @@ function checkTag(tag: DelegatedTag<unknown>): void {
   if (tag.var !== null) {
     attempt(() =>
       fail(
+        NOT_IN_DATA_FILE_CODE,
         `tag variable \`/${tag.var}\` on \`<${tag.name}>\`: the data tree is static; a binding without evaluation means nothing`,
         tag.loc,
         nameEndOf(tag),
@@ -603,9 +622,15 @@ function checkNode(node: IrNode): void {
       return;
     case "Component":
       if (node.target.kind === "dynamic") {
-        fail(DYNAMIC_TAG_MESSAGE, node.loc, dynamicTagEnd(node.target.expr));
+        fail(
+          NOT_IN_DATA_FILE_CODE,
+          DYNAMIC_TAG_MESSAGE,
+          node.loc,
+          dynamicTagEnd(node.target.expr),
+        );
       }
       fail(
+        NOT_IN_DATA_FILE_CODE,
         `\`<${node.authoredName ?? node.target.name}>\` calls a template tag; a data file cannot call a template tag`,
         node.loc,
         nameEndOf(node),
@@ -613,6 +638,7 @@ function checkNode(node: IrNode): void {
       break;
     case "DocumentType":
       fail(
+        NOT_IN_DATA_FILE_CODE,
         "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
         node.loc,
         keywordEnd(node.loc, "!doctype"),
@@ -704,7 +730,7 @@ export function unknownTagMessage(
 interface UnknownTagHit {
   name: string;
   message: string;
-  code?: string;
+  code: MxDiagnosticCode;
   at: Position;
   /** Where the tag's element ends, to label the errors inside it. */
   end?: Position;
@@ -916,7 +942,12 @@ function allStructural(
   ir: Ir,
   stmts: Statement[],
   options: CheckOptions,
-): { message: string; at: Position; blameEnd?: BlameEnd }[] {
+): {
+  message: string;
+  at: Position;
+  code: MxDiagnosticCode;
+  blameEnd?: BlameEnd;
+}[] {
   const hits: StructuralHit[] = [];
   if (options.structural === "reject") structuralInNodes(ir.body, hits);
   for (const stmt of stmts) {
@@ -936,6 +967,7 @@ function allStructural(
   return hits.map((found) => ({
     message: structuralMessage(found.construct),
     at: found.at,
+    code: STRUCTURAL_CONSTRUCT_CODE,
     ...(found.blameEnd ? { blameEnd: found.blameEnd } : {}),
   }));
 }
@@ -996,13 +1028,15 @@ export function labelInside(
       }
     }
     if (!innermost) return error;
-    const labelled = new TranslateError(
+    // The label is prose; the code of the error it labels stays (an uncoded
+    // one is MX's bug, as the funnel would say).
+    const labelled = codedError(
+      INTERNAL_ERROR_CODE,
       `${(error as TranslateError).message}${insideUnknownTagLabel(innermost.name)}`,
       at.line,
       at.column,
       at.file,
     );
-    // The label is prose; the code of the error it labels stays.
     const code = (error as TranslateError).diagnosticCode;
     if (code !== undefined) labelled.diagnosticCode = code;
     const end = (error as TranslateError).end;
@@ -1091,9 +1125,9 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   }: {
     message: string;
     at: Position;
-    code?: string;
+    code: MxDiagnosticCode;
     blameEnd?: BlameEnd;
-  }) => errorAt(message, at, blameEnd, code);
+  }) => errorAt(code, message, at, blameEnd);
   attempt(() => {
     for (const found of allStructural(ir, stmts, options)) {
       extra.push(asError(found));

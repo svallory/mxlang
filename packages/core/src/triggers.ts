@@ -35,12 +35,22 @@
 import { coreBabel } from "./babel.ts";
 import {
   type Ctx,
-  fail,
   isTranslateError,
   type Node,
   positionAtOffset,
+  raise,
 } from "./core.ts";
 import { raiseDeferredContractErrors } from "./custom-tags.ts";
+import {
+  DIALECT_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  INTERNAL_ERROR_CODE,
+  INVALID_DIALECT_MODULE_CODE,
+  INVALID_TRIGGER_USE_CODE,
+  isReservedHookCode,
+  NO_LOWERING_CODE,
+  reservedHookCodeMessage,
+} from "./diagnostic-codes.ts";
 import {
   type DialectNode,
   isCallRow,
@@ -490,7 +500,8 @@ function printed(ctx: Ctx, node: Node, trigger: Node): string {
     return ctx.generate(node);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return fail(
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's replacement does not print: ${message}`,
       trigger,
     );
@@ -499,7 +510,8 @@ function printed(ctx: Ctx, node: Node, trigger: Node): string {
 
 /** The positioned error for a hook's result that does not fit its position. */
 function wrongResult(trigger: Node, want: string): never {
-  return fail(
+  return raise(
+    DIALECT_HOOK_ERROR_CODE,
     `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return \`${want}\` for a trigger in ${positionPhrase(trigger.position)}`,
     trigger,
   );
@@ -593,7 +605,8 @@ function failAt(
   options: TriggerFailOptions | undefined,
 ): never {
   if (typeof message !== "string" || message === "") {
-    return fail(
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${label}: \`ctx.fail\` takes a non-empty message`,
       trigger,
     );
@@ -601,11 +614,19 @@ function failAt(
   const at = options?.at
     ? checkPart(ctx, trigger, options.at, "ctx.fail")
     : undefined;
+  const code = options?.code;
+  if (typeof code === "string" && isReservedHookCode(code)) {
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
+      `the \`${trigger.id}\` trigger's ${label}: \`ctx.fail\`'s ${reservedHookCodeMessage(code)}`,
+      trigger,
+    );
+  }
   try {
     const own = asyncTextStart.has(trigger)
       ? { type: "MxTriggerPart", ...spanRange(trigger) }
       : trigger;
-    return fail(message, at ?? own);
+    return raise(DIALECT_ERROR_CODE, message, at ?? own);
   } catch (error) {
     if (options?.code !== undefined && isTranslateError(error)) {
       (error as { diagnosticCode?: string }).diagnosticCode = String(
@@ -651,7 +672,8 @@ function callHook(
     expression(node: object): TriggerExpression {
       const problem = notAnExpression(node);
       if (problem) {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.expression\` takes a Babel expression node, got ${problem}`,
           trigger,
         );
@@ -666,7 +688,8 @@ function callHook(
       options?: TriggerAttributeOptions,
     ): TriggerAttribute {
       if (name !== null && (typeof name !== "string" || name === "")) {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\` takes a non-empty attribute name, or \`null\` for the tag's default value`,
           trigger,
         );
@@ -685,13 +708,15 @@ function callHook(
     },
     shorthand(attribute: "id" | "class", name: string): TriggerShorthand {
       if (attribute !== "id" && attribute !== "class") {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.shorthand\` takes \`"id"\` or \`"class"\``,
           trigger,
         );
       }
       if (typeof name !== "string" || name === "") {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.shorthand\` takes a non-empty name`,
           trigger,
         );
@@ -706,7 +731,8 @@ function callHook(
     },
     child(tagName: string, attrs: readonly TriggerAttribute[]): TriggerChild {
       if (typeof tagName !== "string" || tagName === "") {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.child\` takes a non-empty tag name`,
           trigger,
         );
@@ -715,7 +741,8 @@ function callHook(
         !Array.isArray(attrs) ||
         attrs.some((attr) => !built.has(attr) || attr.kind !== "attribute")
       ) {
-        fail(
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
           `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.child\` takes an array of \`ctx.attribute\` results`,
           trigger,
         );
@@ -738,7 +765,8 @@ function callHook(
   } catch (error) {
     if (isTranslateError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    return fail(
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${label} threw: ${message}`,
       trigger,
     );
@@ -754,7 +782,8 @@ function callHook(
       ? result.length === 0 || result.some(handMade)
       : handMade(result)
   ) {
-    fail(
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
       trigger.position === "value"
         ? `the \`${trigger.id}\` trigger's ${label} must return a string or \`ctx.expression(node)\` for an attribute value`
         : `the \`${trigger.id}\` trigger's ${label} must return what \`ctx.expression\`, \`ctx.attribute\`, \`ctx.shorthand\` or \`ctx.child\` built (a non-empty list of attributes and shorthands in an attribute list)`,
@@ -784,7 +813,8 @@ function checkPart(
     at.sourceStart > at.sourceEnd ||
     at.sourceEnd > ctx.source.length
   ) {
-    return fail(
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`${where}\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
       trigger,
     );
@@ -798,7 +828,8 @@ function checkAttributeOptions(
 ): void {
   if (options === undefined) return;
   const bad = (what: string): never =>
-    fail(
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\`'s options ${what}`,
       trigger,
     );
@@ -841,7 +872,8 @@ function checkAttributeValue(
       return;
     }
   }
-  fail(
+  raise(
+    DIALECT_HOOK_ERROR_CODE,
     `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "atom" | "member", name }\``,
     trigger,
   );
@@ -851,7 +883,8 @@ function checkAttributeValue(
 function rowFor(table: SyntaxTable, trigger: Node) {
   const row = triggerRow(table, trigger);
   if (!row) {
-    fail(
+    raise(
+      INTERNAL_ERROR_CODE,
       `the \`${trigger.id}\` trigger has no row in the syntax table (not yours: an internal bug)`,
       trigger,
     );
@@ -860,11 +893,16 @@ function rowFor(table: SyntaxTable, trigger: Node) {
 }
 
 function noLowering(trigger: Node): never {
-  return fail(`\`${trigger.id}\` trigger has no lowering yet`, trigger);
+  return raise(
+    NO_LOWERING_CODE,
+    `\`${trigger.id}\` trigger has no lowering yet`,
+    trigger,
+  );
 }
 
 function badKind(trigger: Node, kind: string): never {
-  return fail(
+  return raise(
+    INVALID_DIALECT_MODULE_CODE,
     `the \`${trigger.id}\` trigger's \`node: "${kind}"\` has no meaning in ${positionPhrase(trigger.position)}; use \`{ call }\` and a dialect's \`lowerTrigger\``,
     trigger,
   );
@@ -1043,7 +1081,8 @@ function inKeyPosition(site: Site): boolean {
 }
 
 function notWholeOperand(trigger: Node): never {
-  return fail(
+  return raise(
+    INVALID_TRIGGER_USE_CODE,
     `\`${trigger.text}\` is not a whole operand here: the \`${trigger.id}\` trigger lowers to an expression; write it where a value stands`,
     trigger,
   );
@@ -1094,7 +1133,8 @@ function lowerExpressionTriggers(
     if (container.node == null) return;
     if (isNodeTypeRow(row.node)) {
       // The table check refuses this row; a hand-built document may not.
-      fail(
+      raise(
+        INVALID_DIALECT_MODULE_CODE,
         `the \`${trigger.id}\` trigger names a node type (\`${row.node.dialect}:${row.node.type}\`), which has no meaning in an expression yet; use \`{ call }\` and the dialect's \`lowerTrigger\``,
         trigger,
       );
@@ -1106,7 +1146,8 @@ function lowerExpressionTriggers(
     if (!site) notWholeOperand(trigger);
     const at = site as Site;
     if (inBindingPosition(at)) {
-      fail(
+      raise(
+        INVALID_TRIGGER_USE_CODE,
         `\`${trigger.text}\` (the \`${trigger.id}\` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name`,
         trigger,
       );
@@ -1184,13 +1225,15 @@ function valueFormOf(trigger: Node): TriggerValueForm {
 function refuseUnplaceable(trigger: Node): void {
   const form = valueFormOf(trigger);
   if (form === ":=") {
-    fail(
+    raise(
+      INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no bound value (\`:=\`): the \`${trigger.id}\` trigger cannot place one`,
       trigger.value ?? trigger,
     );
   }
   if (form === "arguments") {
-    fail(
+    raise(
+      INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no arguments: the \`${trigger.id}\` trigger cannot place them`,
       trigger.args ?? trigger,
     );
@@ -1303,7 +1346,8 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     container = ownValue;
   } else if (value.kind === "method") {
     // Only the trigger's own method value is ever built (`ctx.value`).
-    return fail(
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: a method value is the trigger's own \`ctx.value\``,
       trigger,
     );
@@ -1437,7 +1481,8 @@ function lowerAttributeTrigger(
     refuseUnplaceable(trigger);
     const value = triggerValue(trigger);
     if (value?.kind === "method") {
-      return fail(
+      return raise(
+        INVALID_DIALECT_MODULE_CODE,
         `the \`${trigger.id}\` trigger's \`node: "attribute"\` takes no method value; use \`{ call }\` and a dialect's \`lowerTrigger\``,
         trigger.value ?? trigger,
       );
@@ -1511,7 +1556,8 @@ function checkOnce(ctx: Ctx, attributes: readonly Node[]): void {
       other.start <= attr.start ? [other, attr] : [attr, other];
     const written = later.mxWritten ?? { start: later.start, end: later.end };
     const at = positionAtOffset(ctx, first.start);
-    fail(
+    raise(
+      INVALID_TRIGGER_USE_CODE,
       String(attr.mxOnce)
         .replaceAll("{written}", ctx.source.slice(written.start, written.end))
         .replaceAll("{first}", `${at.line}:${at.column + 1}`),
@@ -1595,7 +1641,8 @@ function lowerValueAttribute(
       (Array.isArray(result) ||
         (result as { kind?: unknown }).kind !== "expression")
     ) {
-      fail(
+      raise(
+        DIALECT_HOOK_ERROR_CODE,
         `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return a string or \`ctx.expression(node)\` for an attribute value`,
         trigger,
       );
@@ -1644,7 +1691,8 @@ function usesValue(
  */
 function droppedValue(trigger: Node): never {
   const what = trigger.value?.type === "MxMethod" ? "method value" : "`=value`";
-  return fail(
+  return raise(
+    INVALID_TRIGGER_USE_CODE,
     `\`${trigger.text}\` takes no ${what} here: the \`${trigger.id}\` trigger does not place it`,
     trigger.value ?? trigger,
   );

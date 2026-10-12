@@ -7,7 +7,13 @@
  * are keys of that kind); a key core owns stays core's. An unclaimed unknown
  * key is a registration error.
  */
-import { isTranslateError, TranslateError } from "./core.ts";
+import { codedError, isTranslateError } from "./core.ts";
+import {
+  DIALECT_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  isReservedHookCode,
+  reservedHookCodeMessage,
+} from "./diagnostic-codes.ts";
 import type { ContractData } from "./lowered-unit.ts";
 import type { Dialect } from "./syntax-table.ts";
 
@@ -231,16 +237,25 @@ export function checkClaimedContract(
   const check = claimed.check;
   if (!check || !usesClaimed(definition, claimed, true, new Set())) return;
   const fail = (message: string, options?: { code?: string }): never => {
-    const error = new TranslateError(String(message), 0, 0);
-    if (options?.code !== undefined)
-      error.diagnosticCode = String(options.code);
+    const code = options?.code;
+    if (typeof code === "string" && isReservedHookCode(code)) {
+      throw codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        `the dialect's \`checkContract\` on tag "${tag}": \`fail\`'s ${reservedHookCodeMessage(code)}`,
+        0,
+        0,
+      );
+    }
+    const error = codedError(DIALECT_ERROR_CODE, String(message), 0, 0);
+    if (code !== undefined) error.diagnosticCode = String(code);
     throw error;
   };
   try {
     check(tag, contractData(definition, claimed.tag), { fail });
   } catch (error) {
     if (isTranslateError(error)) throw error;
-    throw new TranslateError(
+    throw codedError(
+      DIALECT_HOOK_ERROR_CODE,
       `the dialect's \`checkContract\` threw on tag "${tag}": ${error instanceof Error ? error.message : String(error)}`,
       0,
       0,

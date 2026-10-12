@@ -18,21 +18,26 @@
  * any file using it is even parsed — fails the same way.
  */
 
-import { TranslateError } from "./core.ts";
+import { codedError } from "./core.ts";
 import {
   type CustomTag,
+  markCoreOwned,
   shadowedBuiltinMessage,
   type TagCall,
   type TransformContext,
 } from "./custom-tags.ts";
+import { INVALID_TRY_CODE, RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
 import type { IrNode } from "./ir.ts";
+
+/** `<try>`'s own shape rules: core's tag, so its `ctx.fail` is coded. */
+const TRY = { code: INVALID_TRY_CODE } as const;
 
 function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   if (call.params.length > 0) {
-    ctx.fail("tag params (`|a, b|`) on `<try>`");
+    ctx.fail("tag params (`|a, b|`) on `<try>`", TRY);
   }
   if (call.var !== null) {
-    ctx.fail("tag variable (`/name`) on `<try>`");
+    ctx.fail("tag variable (`/name`) on `<try>`", TRY);
   }
 
   // The declared `attributeTags` contract on this definition already rejects
@@ -43,10 +48,10 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
     (tag) => tag.name === "placeholder",
   );
   if (placeholder && placeholder.block.params.length > 0) {
-    ctx.fail(
-      "tag params (`|a, b|`) on `<@placeholder>`",
-      placeholder.block.loc,
-    );
+    ctx.fail("tag params (`|a, b|`) on `<@placeholder>`", {
+      at: placeholder.block.loc,
+      code: INVALID_TRY_CODE,
+    });
   }
 
   // Marko 6.4's `<try>` analysis, after the placement rule (`<@catch>` and
@@ -55,11 +60,12 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   // content, and one of the two must be present, since without either `<try>`
   // has no effect.
   if ((call.content?.children.length ?? 0) === 0) {
-    ctx.fail("requires body content");
+    ctx.fail("requires body content", TRY);
   }
   if (call.attributeTags.length === 0) {
     ctx.fail(
       "needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+      TRY,
     );
   }
 
@@ -72,7 +78,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   ];
 }
 
-const tryTag: CustomTag = {
+const tryTag: CustomTag = markCoreOwned({
   // Declared empty rather than omitted: an omitted `attributes` skips the
   // generic check entirely (see `validateCustomTagCall`), which would let
   // `<try foo=1>` compile silently instead of failing on the unknown
@@ -83,7 +89,7 @@ const tryTag: CustomTag = {
     placeholder: {},
   },
   transform: tryTransform,
-};
+});
 
 /**
  * Core-owned tag definitions, keyed by name.
@@ -114,7 +120,7 @@ export function rejectShadowedRegistration(
   if (!customTags) return;
   for (const name of Object.keys(customTags)) {
     if (Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)) {
-      throw new TranslateError(shadowedBuiltinMessage(name), 1, 0);
+      throw codedError(RESERVED_TAG_CODE, shadowedBuiltinMessage(name), 1, 0);
     }
   }
 }

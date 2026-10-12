@@ -3,13 +3,14 @@ import { coreParser } from "./babel.ts";
 import {
   bodyChildren,
   type Ctx,
+  codedError,
   isTagNode,
   isTagOrStatementNode,
   type Node,
   positionAtOffset,
   sliceNode,
-  TranslateError,
 } from "./core.ts";
+import { RESERVED_BINDING_CODE } from "./diagnostic-codes.ts";
 import { tagNameOf, tagParamsOf, tagVarOf } from "./tag-fields.ts";
 
 /** Shared diagnostic for authored bindings, including host-only code regions. */
@@ -31,7 +32,8 @@ export function checkReservedBindings(tree: unknown): void {
         const name = pattern.name;
         if (typeof name === "string" && name.startsWith("__mx")) {
           const at = pattern.loc?.start;
-          throw new TranslateError(
+          throw codedError(
+            RESERVED_BINDING_CODE,
             reservedBindingMessage(name),
             at?.line ?? 1,
             at?.column ?? 0,

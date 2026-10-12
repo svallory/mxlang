@@ -23,10 +23,17 @@ import {
   registerSyntaxResolver,
 } from "./contract-fields.ts";
 import type { Node } from "./core.ts";
-import { isTranslateError, TranslateError } from "./core.ts";
+import { codedError, isTranslateError, type TranslateError } from "./core.ts";
 import type { ContractMap, CustomTag, IrBuilders } from "./custom-tags.ts";
 import { isDeepFrozen } from "./deep-frozen.ts";
-import { RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
+import {
+  INVALID_CONFIG_CODE,
+  INVALID_DIALECT_CONTRACT_CODE,
+  INVALID_DIALECT_MODULE_CODE,
+  MODULE_LOAD_FAILED_CODE,
+  NO_LOWERING_CODE,
+  RESERVED_TAG_CODE,
+} from "./diagnostic-codes.ts";
 import {
   type ContractFail,
   checkDialectContracts,
@@ -927,7 +934,13 @@ function loadDialect(
   const failAtModule = (message: string): never => {
     const read = readPackageJsonText(manifest.packageFile);
     const { line, column } = jsonKeyPosition(read, ["mx", "dialect", "module"]);
-    throw new TranslateError(message, line, column, manifest.packageFile);
+    throw codedError(
+      MODULE_LOAD_FAILED_CODE,
+      message,
+      line,
+      column,
+      manifest.packageFile,
+    );
   };
   let file = "";
   const require = createRequire(manifest.packageFile);
@@ -948,7 +961,7 @@ function loadDialect(
     );
   }
   const failInModule = (message: string): never => {
-    throw new TranslateError(message, 1, 0, file);
+    throw codedError(INVALID_DIALECT_MODULE_CODE, message, 1, 0, file);
   };
   // A contract's error is at its key when the module writes it as a literal.
   const failContract: ContractFail = (message, at, code) => {
@@ -956,7 +969,13 @@ function loadDialect(
       line: 1,
       column: 0,
     };
-    const error = new TranslateError(message, line, column, file);
+    const error = codedError(
+      INVALID_DIALECT_CONTRACT_CODE,
+      message,
+      line,
+      column,
+      file,
+    );
     error.diagnosticCode = code;
     throw error;
   };
@@ -1024,7 +1043,8 @@ function rejectRemovedSyntax(source: MxConfigSource | undefined): void {
   if (!source || !config || config.syntax === undefined) return;
   const packageFile = source.file;
   const { line, column } = mxKeyPosition(packageFile, "syntax");
-  throw new TranslateError(
+  throw codedError(
+    INVALID_CONFIG_CODE,
     "`mx.syntax` is removed: a syntax of your own is a dialect, a package that declares itself in its `package.json#mx.dialect` (`id`, `name`, the `extensions` it claims, its `module`) and is one of the project's dependencies; a file goes to the dialect that claims its extension. `.mx` files are always MX's.",
     line,
     column,
@@ -1208,12 +1228,12 @@ export function dialectCustomTags(
   if (!explicit && customTags && !isMergedContracts(customTags)) {
     for (const name of Object.keys(customTags)) {
       if (!reserved.includes(name)) continue;
-      const error = new TranslateError(
+      const error = codedError(
+        RESERVED_TAG_CODE,
         dialectReservedMessage(name, "`customTags`", dialect.name),
         1,
         0,
       );
-      error.diagnosticCode = RESERVED_TAG_CODE;
       throw error;
     }
   }
@@ -1260,7 +1280,7 @@ export function explicitSyntaxOf(
   filename: string,
 ): ResolvedSyntax {
   const fail = (message: string): never => {
-    throw new TranslateError(message, 1, 0, filename);
+    throw codedError(INVALID_DIALECT_MODULE_CODE, message, 1, 0, filename);
   };
   if (!isDialect(value)) {
     const table = explicitSyntax(value, filename);
@@ -1319,7 +1339,7 @@ export function explicitSyntax(
   // `null` is not "omitted" (that is `undefined`, which resolves the
   // manifest): it is refused like any other value that is not a table.
   const fail = (message: string): never => {
-    throw new TranslateError(message, 1, 0, filename);
+    throw codedError(INVALID_DIALECT_MODULE_CODE, message, 1, 0, filename);
   };
   if (!table || typeof table !== "object" || Array.isArray(table)) {
     fail(
@@ -1435,5 +1455,11 @@ export function tableParseError(
   visit(document.body);
   if (!found) return undefined;
   const { line, column } = filePosition(document, found.start);
-  return new TranslateError(found.message, line, column, site.filename);
+  return codedError(
+    NO_LOWERING_CODE,
+    found.message,
+    line,
+    column,
+    site.filename,
+  );
 }

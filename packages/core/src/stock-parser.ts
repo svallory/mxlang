@@ -1,5 +1,6 @@
 import { createParser, TagType } from "@mxlang/parser/lexer";
-import { TranslateError } from "./core.ts";
+import { codedError, type TranslateError } from "./core.ts";
+import { PARSE_INVALID_TAG_PARAMS_CODE } from "./diagnostic-codes.ts";
 
 /**
  * The parse-error rewrite that turns a template-parser failure inside a tag's
@@ -99,5 +100,7 @@ export function tagParamError(
   } catch {
     // A parse that throws still reported the params before it.
   }
-  return inParams ? new TranslateError(reason, at.line, at.column) : undefined;
+  return inParams
+    ? codedError(PARSE_INVALID_TAG_PARAMS_CODE, reason, at.line, at.column)
+    : undefined;
 }

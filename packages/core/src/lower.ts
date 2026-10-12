@@ -63,11 +63,11 @@ import {
   bindingIdentifiers,
   bodyChildren,
   type Ctx,
+  codedError,
   collectedError,
   DYNAMIC_TAG,
   declName,
   expr,
-  fail,
   firstAttributeTag,
   hasContent,
   importBindings,
@@ -90,6 +90,7 @@ import {
   positionAtOffset,
   positionError,
   productOf,
+  raise,
   recover,
   rejectInertShape,
   rejectUnsupportedFields,
@@ -98,7 +99,7 @@ import {
   shadowBindings,
   sliceLoc,
   sliceNode,
-  TranslateError,
+  type TranslateError,
   warn,
 } from "./core.ts";
 import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
@@ -126,6 +127,43 @@ import {
   invalidDefaultTagHint,
   resolveUnnamedTags,
 } from "./default-tag.ts";
+import {
+  DEFINE_EXTRA_PARAMS_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  DUPLICATE_ATTRIBUTE_CODE,
+  DUPLICATE_VALUE_ATTRIBUTE_CODE,
+  INTERNAL_ERROR_CODE,
+  INVALID_ATTRIBUTE_CODE,
+  INVALID_ATTRIBUTE_TAG_CODE,
+  INVALID_BOUND_ATTRIBUTE_CODE,
+  INVALID_CALLEE_INPUT_CODE,
+  INVALID_CONST_CODE,
+  INVALID_CONTRACT_CODE,
+  INVALID_DEFAULT_TAG_CODE,
+  INVALID_DEFINE_CODE,
+  INVALID_EXPRESSION_CODE,
+  INVALID_FOR_CODE,
+  INVALID_IF_CODE,
+  INVALID_RETURN_CODE,
+  INVALID_STATEMENT_CODE,
+  INVALID_TAG_CALL_CODE,
+  INVALID_TAG_NAME_CODE,
+  INVALID_TAG_VAR_CODE,
+  LOWERCASE_BINDING_NOT_CALLED_CODE,
+  MISSING_ATTRIBUTE_TAG_CODE,
+  NEAR_EXPLICIT_CHILD_CODE,
+  NO_LOWERING_CODE,
+  NOT_A_DOM_EVENT_CODE,
+  REPEATED_ATTRIBUTE_TAG_CODE,
+  RESERVED_TAG_CODE,
+  UNBOUND_COMPONENT_CODE,
+  UNKNOWN_ATTRIBUTE_TAG_CODE,
+  UNKNOWN_TAG_CODE,
+  UNREADABLE_CALLEE_INPUT_CODE,
+  UNSUPPORTED_CONSTRUCT_CODE,
+  UNSUPPORTED_MARKO_FILE_CODE,
+  UNSUPPORTED_TAG_ARGUMENTS_CODE,
+} from "./diagnostic-codes.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
@@ -506,7 +544,7 @@ export function expressionShape(node: Node): ExprShape {
  */
 export function exprOf(ctx: Ctx, node: Node): Expr {
   if (node?.type === "MarkoParseError") {
-    fail(node.label ?? "invalid expression", {
+    raise(INVALID_EXPRESSION_CODE, node.label ?? "invalid expression", {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
@@ -614,7 +652,8 @@ function checkTagVarReads(ctx: Ctx, code: string, node: Node): void {
       binding.block.length <= here.length &&
       binding.block.every((id, index) => here[index] === id);
     if (!inScope) {
-      fail(
+      raise(
+        INVALID_TAG_VAR_CODE,
         `\`${name}\` is a \`/var\` bound inside a nested block and is not in scope here; a \`/var\` binds in the call site's own scope only`,
         node,
       );
@@ -622,7 +661,8 @@ function checkTagVarReads(ctx: Ctx, code: string, node: Node): void {
     // Still pending: the walk has not reached the declaring call yet, so
     // this read is earlier in the block than the binding.
     if (binding.pending) {
-      fail(
+      raise(
+        INVALID_TAG_VAR_CODE,
         `\`${name}\` is read before the \`/var\` that binds it; move the read after the call that declares it`,
         node,
       );
@@ -700,6 +740,7 @@ function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
     line: pos.line,
     column: pos.column,
     file: ctx.filename,
+    code: NOT_A_DOM_EVENT_CODE,
   });
 }
 
@@ -832,9 +873,12 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
   if (!isRefinementIdentifier(modifier)) {
     const message =
       "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
-    if (mxAt !== undefined) fail(message, { span: { start: mxAt, end: mxAt } });
-    if (!start) fail(message, attr);
-    fail(message, {
+    if (mxAt !== undefined)
+      raise(INVALID_BOUND_ATTRIBUTE_CODE, message, {
+        span: { start: mxAt, end: mxAt },
+      });
+    if (!start) raise(INVALID_BOUND_ATTRIBUTE_CODE, message, attr);
+    raise(INVALID_BOUND_ATTRIBUTE_CODE, message, {
       // Marko puts it on the modifier's first character, one past the colon.
       loc: {
         start: { line: start.line, column: start.column + nameLength + 1 },
@@ -866,7 +910,8 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
     // (`this.#x`, `(a b)`), which this check refused at the value before the
     // parse error was ever read; a compile reports the parse error first.
     if (attr.type === "MxAttribute" && attr.value?.error) {
-      fail(
+      raise(
+        INVALID_BOUND_ATTRIBUTE_CODE,
         "Attributes may only be bound to identifiers or member expressions",
         attr.value,
       );
@@ -880,7 +925,8 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
         value.property?.type !== "PrivateName"
       )
     ) {
-      fail(
+      raise(
+        INVALID_BOUND_ATTRIBUTE_CODE,
         "Attributes may only be bound to identifiers or member expressions",
         value,
       );
@@ -892,7 +938,8 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
 function validateBuiltinValueAttributes(node: Node, name: string): void {
   if (name === "const" || name === "id") {
     if (tagAttributesOf(node).length > 1) {
-      fail(
+      raise(
+        INVALID_ATTRIBUTE_CODE,
         `The \`<${name}>\` tag only supports the \`value=\` attribute.`,
         node.name,
       );
@@ -901,7 +948,12 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
     let seen = false;
     for (const attr of tagAttributesOf(node)) {
       if (!isAttributeNode(attr) || attrNameOf(attr) !== "value") continue;
-      if (seen) fail("Invalid duplicate value attribute.", attr);
+      if (seen)
+        raise(
+          DUPLICATE_VALUE_ATTRIBUTE_CODE,
+          "Invalid duplicate value attribute.",
+          attr,
+        );
       seen = true;
     }
   }
@@ -1033,7 +1085,8 @@ function lowerAttrNamed(
     typeof attr.name === "string" &&
     !ATTR_NAME.test(attr.name)
   ) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_CODE,
       `Invalid attribute name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx))}`,
       attr,
     );
@@ -1048,7 +1101,11 @@ function lowerAttrNamed(
       : attrNameOf(attr);
 
   if (isElement && attr.modifier === "" && attr.name === "on") {
-    fail("`on:` is not a valid attribute, did you mean `on`?", attr);
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      "`on:` is not a valid attribute, did you mean `on`?",
+      attr,
+    );
   }
 
   // Ordinary native colon names are not handler methods. Marko rejects a
@@ -1064,10 +1121,18 @@ function lowerAttrNamed(
       value?.type === "FunctionExpression" ||
       value?.type === "ArrowFunctionExpression"
     ) {
-      fail(`The \`${name}\` attribute cannot be a function.`, attr);
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `The \`${name}\` attribute cannot be a function.`,
+        attr,
+      );
     }
     if (attrArgsOf(attr)) {
-      fail(`Unsupported arguments on the \`${name}\` attribute.`, attr);
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `Unsupported arguments on the \`${name}\` attribute.`,
+        attr,
+      );
     }
   }
 
@@ -1075,7 +1140,8 @@ function lowerAttrNamed(
     const hooked = markoViewOf(ctx, attr);
     if (ctx.declarations.resolveAttributeMethod?.(hooked, on) !== true) {
       ctx.declarations.rejectAttributeMethod?.(hooked, on);
-      fail(
+      raise(
+        UNSUPPORTED_CONSTRUCT_CODE,
         `attribute method \`${attrNameOf(attr)}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
         attr,
       );
@@ -1116,7 +1182,8 @@ function lowerAttrNamed(
     // walk said so ("… on a component call is not supported"). Losing that
     // distinction was a message regression even though both still fail.
     ctx.declarations.rejectModifier?.(hookView, on);
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template`,
       attr,
     );
@@ -1205,7 +1272,11 @@ function lowerAttrNamed(
   if (isElement && EVENT_ATTR.test(String(name))) {
     const eventName = String(name);
     if (eventName === "on-") {
-      fail("`on-` needs an event name (`on-<event>`)", attr);
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        "`on-` needs an event name (`on-<event>`)",
+        attr,
+      );
     }
     const event =
       eventName[2] === "-"
@@ -1287,7 +1358,8 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
       first.set(attr.name, attr.member);
       continue;
     }
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_CODE,
       `one member per slot: \`${attr.name}\` already holds \`${held.name}\`, so this member cannot also set it`,
       {
         type: "MxTrigger",
@@ -1297,9 +1369,6 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
     );
   }
 }
-
-/** `MxWarning.code` of the duplicate-attribute warning. */
-export const DUPLICATE_ATTRIBUTE_CODE = "MX_DUPLICATE_ATTRIBUTE";
 
 /**
  * Resolves a repeated attribute name to its last occurrence (decision 135).
@@ -1463,7 +1532,8 @@ function requireAttrTagsV2(
   node: Node,
 ): void {
   if (ctx.declarations.attrTags === 2) return;
-  fail(
+  raise(
+    UNSUPPORTED_CONSTRUCT_CODE,
     `${construct} ${verb} supported by ${ctx.declarations.name ?? "the current host"} yet`,
     node,
   );
@@ -1526,7 +1596,8 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
     !target || target.kind === "dynamic" || target.kind === "define";
   if (lenient) {
     if (tagAttributesOf(node).length === 0) return;
-    fail(
+    raise(
+      UNSUPPORTED_TAG_ARGUMENTS_CODE,
       "Tag does not support arguments when attributes present.",
       tagNameSpanOf(node) ?? node,
     );
@@ -1538,7 +1609,8 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
   ) {
     return;
   }
-  fail(
+  raise(
+    UNSUPPORTED_TAG_ARGUMENTS_CODE,
     "Tag does not support arguments when attributes or body present.",
     tagNameSpanOf(node) ?? node,
   );
@@ -1571,6 +1643,7 @@ function warnDefineExtraParams(
     line: pos.line,
     column: pos.column,
     file: ctx.filename,
+    code: DEFINE_EXTRA_PARAMS_CODE,
   });
 }
 
@@ -1584,7 +1657,8 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   );
   const name = attrName(node);
   if (parentAttrs.has(name)) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       `attribute tag \`@${name}\` collides with attribute \`${name}\``,
       tagNameSpanOf(node) ?? node,
     );
@@ -1651,7 +1725,8 @@ function raiseInvalidCalleeInput(
   const parseError = input.errors.get("<parse>");
   if (parseError) {
     const position = spanPosition(ctx, parseError.span);
-    fail(
+    raise(
+      INVALID_CALLEE_INPUT_CODE,
       `can't read \`<${owner}>\`'s Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(parseError.message)}`,
       { loc: { start: attributeTagNamePosition(ctx, firstTag) } },
     );
@@ -1663,7 +1738,8 @@ function raiseInvalidCalleeInput(
     if (!entry) continue;
     const [name, error] = entry;
     const position = spanPosition(ctx, error.span);
-    fail(
+    raise(
+      INVALID_CALLEE_INPUT_CODE,
       `can't read \`<${owner}>\`'s declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`,
       { loc: { start: attributeTagNamePosition(ctx, tag) } },
     );
@@ -1681,7 +1757,7 @@ function raiseInvalidOwnInput(ctx: Ctx, input: CalleeInput): void {
       ? `can't read this component's Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(error.message)}`
       : `can't read this component's declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`;
   try {
-    fail(message, {
+    raise(INVALID_CALLEE_INPUT_CODE, message, {
       loc: { start: positionAtOffset(ctx, error.span.sourceStart) },
     });
   } catch (cause) {
@@ -1700,13 +1776,15 @@ function declarationFor(
   const declaration = schema.declarations?.get(name);
   if (declaration) return declaration;
   if (schema.otherProps?.has(name)) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       `\`${name}\` is declared as a plain prop; declare it \`AttrTag\` to pass it as \`<@${name}>\``,
       tagNameSpanOf(node) ?? node,
     );
   }
   if (schema.declarations && !schema.open) {
-    fail(
+    raise(
+      UNKNOWN_ATTRIBUTE_TAG_CODE,
       `\`<${schema.owner}>\` declares no attribute tag \`${name}\``,
       tagNameSpanOf(node) ?? node,
     );
@@ -1811,7 +1889,8 @@ function planAttributeTags(
     if (declaration.cardinality === "array" && !names.includes(name))
       names.push(name);
     if (declaration.cardinality === "required" && !names.includes(name)) {
-      fail(
+      raise(
+        MISSING_ATTRIBUTE_TAG_CODE,
         `missing required attribute tag \`<@${name}>\``,
         ownerNode.name ?? ownerNode,
       );
@@ -1829,14 +1908,16 @@ function planAttributeTags(
           filterAttributeTagNodes(tree, name),
           "AttributeTagFor",
         );
-        fail(
+        raise(
+          REPEATED_ATTRIBUTE_TAG_CODE,
           `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           loop ? { loc: { start: loop.loc } } : ownerNode,
         );
       }
       if (range.max > 1) {
         const repeated = occurrences[1] ?? first;
-        fail(
+        raise(
+          REPEATED_ATTRIBUTE_TAG_CODE,
           `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           repeated
             ? { loc: { start: attributeTagNamePosition(ctx, repeated) } }
@@ -1848,7 +1929,8 @@ function planAttributeTags(
           filterAttributeTagNodes(tree, name),
           "AttributeTagIf",
         );
-        fail(
+        raise(
+          MISSING_ATTRIBUTE_TAG_CODE,
           `\`<@${name}>\` is required but not provided on every \`<if>\` path`,
           conditional ? { loc: { start: conditional.loc } } : ownerNode,
         );
@@ -1919,7 +2001,8 @@ function lowerAuthoredAttributeTag(
       !isSpreadAttributeNode(attr) && attrNameOf(attr) === "content",
   );
   if (contentAttr) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       "`content` is reserved on an attribute tag; it names the body",
       contentAttr,
     );
@@ -1933,14 +2016,16 @@ function lowerAuthoredAttributeTag(
     );
   }
   if (declaration?.as === "renderable" && attrs.length > 0) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes`,
       tagNameSpanOf(node) ?? node,
     );
   }
   const hasParamsAtCall = hasParams(ctx, node);
   if (declaration && declaration.hasParams !== hasParamsAtCall) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       declaration.hasParams
         ? `\`<@${name}>\` declares params in \`<${schema.owner}>\`; add \`|…|\``
         : `\`<@${name}>\` declares no params in \`<${schema.owner}>\`; remove \`|…|\``,
@@ -1978,7 +2063,8 @@ function lowerAuthoredAttributeTag(
       firstAttrTag,
     );
     if (declaration?.as === "renderable") {
-      fail(
+      raise(
+        INVALID_ATTRIBUTE_TAG_CODE,
         `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes or nested attribute tags`,
         tagNameSpanOf(node) ?? node,
       );
@@ -2072,7 +2158,8 @@ function lowerAttributeIf(
     branches.some((branch) => branch.nodes.length > 0) &&
     branchContent.length > 0
   ) {
-    fail(
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
       "Cannot have attribute tags and body content under a control flow tag.",
       branchContent[0],
     );
@@ -2251,7 +2338,8 @@ function lowerAttributeTags(
   if (inControl && tree.length > 0) {
     const offending = contentChildren.find((child: Node) => !isLayout(child));
     if (offending) {
-      fail(
+      raise(
+        INVALID_ATTRIBUTE_TAG_CODE,
         "Cannot have attribute tags and body content under a control flow tag.",
         offending,
       );
@@ -2271,7 +2359,8 @@ function lowerAttributeTags(
   if (makePlan && hasContent(contentChildren)) {
     const childrenTag = flat.find((tag) => tag.name === "children");
     if (childrenTag) {
-      fail(
+      raise(
+        INVALID_ATTRIBUTE_TAG_CODE,
         "attribute tag `@children` collides with the parent's ordinary children",
         {
           loc: {
@@ -2302,7 +2391,7 @@ function lowerIfChain(
   validateBoundAttributes(ctx, node);
   rejectUnsupportedFields(ctx, node, "`<if>`");
   const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!cond) fail("`<if>` without a condition", node);
+  if (!cond) raise(INVALID_IF_CODE, "`<if>` without a condition", node);
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
   // shadow the host's binding for the code that follows the chain.
@@ -2438,7 +2527,8 @@ function rejectLoopParamInBy(node: Node, by: Node): void {
   const value = by.type === "MxAttribute" ? by.value?.node : by.value;
   const read = findLoopParamRead(value, names);
   if (!read) return;
-  fail(
+  raise(
+    INVALID_FOR_CODE,
     `The \`by=\` attribute is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
     read,
   );
@@ -2469,7 +2559,11 @@ function lowerForHead(
   // outer-scope `item` if one exists, or failing at render time instead of
   // compile time.
   if (params.length === 0) {
-    fail("`<for>` needs tag params: `<for|item| of=…>`", node);
+    raise(
+      INVALID_FOR_CODE,
+      "`<for>` needs tag params: `<for|item| of=…>`",
+      node,
+    );
   }
 
   // The iterable is evaluated *outside* the loop, so a registered name there is
@@ -2489,7 +2583,8 @@ function lowerForHead(
   // index.
   const keyAttr = attrByName(node, "key");
   if (keyAttr) {
-    fail(
+    raise(
+      INVALID_FOR_CODE,
       `The \`<for>\` tag keys items with the \`by=\` attribute, not \`key=\`. ${
         of
           ? 'Use `by="propName"` or `by=(item, index) => key`'
@@ -2505,19 +2600,25 @@ function lowerForHead(
     Boolean,
   ).length;
   if (combos > 1) {
-    fail(
+    raise(
+      INVALID_FOR_CODE,
       "`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
       node,
     );
   }
-  if (to && until) fail("`<for>` with both `to=` and `until=`", node);
+  if (to && until)
+    raise(INVALID_FOR_CODE, "`<for>` with both `to=` and `until=`", node);
   if (step && !(to || until)) {
-    fail("`<for step=...>` is only valid on a range", step);
+    raise(INVALID_FOR_CODE, "`<for step=...>` is only valid on a range", step);
   }
 
   const requireValue = (attr: Node | undefined, label: string): void => {
     if (attr && !hasExpressionValue(attr)) {
-      fail(`\`<for ${label}=...>\` requires an expression value`, attr);
+      raise(
+        INVALID_FOR_CODE,
+        `\`<for ${label}=...>\` requires an expression value`,
+        attr,
+      );
     }
   };
   requireValue(of, "of");
@@ -2544,7 +2645,11 @@ function lowerForHead(
       step: step ? exprOf(ctx, attrValueOf(ctx, step)) : null,
     };
   } else {
-    fail("`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`", node);
+    raise(
+      INVALID_FOR_CODE,
+      "`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`",
+      node,
+    );
   }
 
   // A string `by=` is the property-name shorthand and only `of` has one:
@@ -2554,7 +2659,8 @@ function lowerForHead(
   // paint. `of` keeps the shorthand, so this cannot be "no string `by`".
   const byValue = by ? attrValueOf(ctx, by) : undefined;
   if (!of && byValue?.type === "StringLiteral") {
-    fail(
+    raise(
+      INVALID_FOR_CODE,
       `The \`<for>\` tag only supports a string \`by\` key with \`of\`; use a \`by=(${
         inAttr ? "key, value" : "index"
       }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`,
@@ -2594,7 +2700,8 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
 /** `<const/name=expr/>` — a binding at render scope. */
 function lowerConst(ctx: Ctx, node: Node): IrNode {
   if (!tagVarOf(node)) {
-    fail(
+    raise(
+      INVALID_CONST_CODE,
       "`<const>` without a variable name (write `<const/name=value/>`)",
       node,
     );
@@ -2605,7 +2712,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // to `<const>`.
   ctx.declarations.checkBinding?.(tagVarOf(node), "`<const>`");
   const value = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!value) fail("`<const>` without a value", node);
+  if (!value) raise(INVALID_CONST_CODE, "`<const>` without a value", node);
 
   const name = declName(ctx, tagVarOf(node));
   // The initializer is evaluated *before* the binding exists, so a registered
@@ -2658,7 +2765,8 @@ function failUncalled(
   found: NonNullable<ReturnType<typeof findUncalledTagFile>>,
   node: Node,
 ): never {
-  fail(
+  raise(
+    UNSUPPORTED_MARKO_FILE_CODE,
     found.file.endsWith(".marko")
       ? markoFileTagMessage(ctx.filename, name, found.file, productOf(ctx))
       : uncalledTagFileMessage(ctx.filename, name, found, productOf(ctx)),
@@ -2685,7 +2793,8 @@ function rejectMarkoImportTag(
   ) {
     return;
   }
-  fail(
+  raise(
+    UNSUPPORTED_MARKO_FILE_CODE,
     markoFileTagMessage(
       ctx.filename,
       written,
@@ -2734,7 +2843,8 @@ function discoveredTagModuleOf(
 ): string | undefined {
   const modulePath = ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
   if (modulePath?.endsWith(".marko"))
-    fail(
+    raise(
+      UNSUPPORTED_MARKO_FILE_CODE,
       markoFileTagMessage(ctx.filename, name, modulePath, productOf(ctx)),
       node,
     );
@@ -2750,7 +2860,8 @@ function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
   const found = uncalledTagFileOf(ctx, name);
   if (found) failUncalled(ctx, name, found, node);
   const product = productOf(ctx);
-  fail(
+  raise(
+    INVALID_TAG_CALL_CODE,
     `\`<${name}>\` is declared by a taglib with no template (a \`renderer\`), which ${product} cannot call. ${product === MX_DIALECT.name ? `Write the tag as \`tags/${name}.mx\`, or import it explicitly.` : "Import it explicitly."}`,
     node,
   );
@@ -2837,6 +2948,7 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
     message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
     line: at.line,
     column: at.column,
+    code: LOWERCASE_BINDING_NOT_CALLED_CODE,
   });
 }
 
@@ -2879,7 +2991,11 @@ function lowerDefine(ctx: Ctx, node: Node): IrNode {
 
 function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   if (!tagVarOf(node)) {
-    fail("`<define>` without a name (write `<define/name>`)", node);
+    raise(
+      INVALID_DEFINE_CODE,
+      "`<define>` without a name (write `<define/name>`)",
+      node,
+    );
   }
   rejectUnsupportedFields(ctx, node, "`<define>`", { var: true, params: true });
 
@@ -3107,14 +3223,16 @@ function rejectInvalidStatement(
     // joined expression's own error; that message stays Babel's.
     if (jsx && !followsGreaterThan(code, jsx)) {
       const at = place(jsx);
-      throw new TranslateError(
+      throw codedError(
+        INVALID_STATEMENT_CODE,
         `JSX is not read inside a \`${keyword}\` statement: its text is TypeScript. Write the markup as a tag in the template, or in a \`<define>\``,
         at.line,
         at.column,
       );
     }
     const at = place((error as { loc?: { line: number; column: number } }).loc);
-    throw new TranslateError(
+    throw codedError(
+      INVALID_STATEMENT_CODE,
       String((error as Error).message)
         .replace(/\s*\(\d+:\d+\)$/, "")
         .trim(),
@@ -3301,13 +3419,15 @@ function refuseUnsupportedImport(node: Node): void {
       ? statements[0]
       : undefined);
   if (!declaration) {
-    fail(
+    raise(
+      INVALID_STATEMENT_CODE,
       'an `import` statement must be one ES import declaration (`import … from "…"`); `import x = …` and several statements in one `import` are not supported',
       node,
     );
   }
   if (isTypeofImport(declaration)) {
-    fail(
+    raise(
+      INVALID_STATEMENT_CODE,
       "`import typeof` is Flow syntax; imports here are TypeScript. Use `import type` for an import that binds no value",
       node,
     );
@@ -3321,7 +3441,8 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   // tags; recovering its text from the source would hide that, so it is
   // refused.
   if (!isStatementNode(node)) {
-    fail(
+    raise(
+      INVALID_STATEMENT_CODE,
       `\`${name}\` was parsed as a tag with attributes: this target's translator does not declare the statement tags. Build the translator with \`createTranslator\`, or register core's \`STATEMENT_TAGLIB\` in it`,
       node,
     );
@@ -3406,7 +3527,8 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     registerStaticBindings(ctx, line.replace(/^export\s+/, ""), false);
     return { kind: "Export", code: line, loc, end, span };
   }
-  fail(
+  raise(
+    INVALID_STATEMENT_CODE,
     `unrecognized statement tag \`${name}\`; expected \`import\`, \`static\`, or \`export\``,
     node,
   );
@@ -3487,12 +3609,20 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   rejectUnsupportedFields(ctx, node, "`<return>`");
 
   if (bodyChildren(node).length) {
-    fail("`<return>` does not support body content", node);
+    raise(
+      INVALID_RETURN_CODE,
+      "`<return>` does not support body content",
+      node,
+    );
   }
 
   for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
-      fail("`<return>` does not support spread attributes", attr);
+      raise(
+        INVALID_RETURN_CODE,
+        "`<return>` does not support spread attributes",
+        attr,
+      );
     }
   }
 
@@ -3503,30 +3633,45 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     // `<return value=x/>` as `value`; both are the same authored thing.
     const attrName = isDefaultAttr(attr) ? "value" : String(attrNameOf(attr));
     if (attrName !== "value") {
-      fail(
+      raise(
+        INVALID_RETURN_CODE,
         attrName === "valueChange"
           ? `\`<return>\` does not support the \`valueChange\` attribute; ${productOf(ctx)} returns a value only, with no two-way channel`
           : `\`<return>\` does not support the \`${attrName}\` attribute`,
         attr,
       );
     }
-    if (valueAttr) fail("Invalid duplicate value attribute.", attr);
+    if (valueAttr)
+      raise(
+        DUPLICATE_VALUE_ATTRIBUTE_CODE,
+        "Invalid duplicate value attribute.",
+        attr,
+      );
     valueAttr = attr;
   }
 
   if (!valueAttr) {
-    fail("`<return>` requires a `value=` attribute", node);
+    raise(
+      INVALID_RETURN_CODE,
+      "`<return>` requires a `value=` attribute",
+      node,
+    );
   }
 
   if (nested) {
-    fail(
+    raise(
+      INVALID_RETURN_CODE,
       "`<return>` must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested",
       node,
     );
   }
 
   if (ctx.returnValue) {
-    fail("cannot have multiple `<return>` tags for the template", node);
+    raise(
+      INVALID_RETURN_CODE,
+      "cannot have multiple `<return>` tags for the template",
+      node,
+    );
   }
 
   ctx.returnValue = {
@@ -3573,14 +3718,16 @@ function validateCustomAttributeTagBodies(
     const extended = hasAttributeTagContract(declaration);
     if (!allowUncontractedTags && !extended) {
       if (controlName) {
-        fail(
+        raise(
+          INVALID_ATTRIBUTE_TAG_CODE,
           `${owner}: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
           tagNameSpanOf(tag) ?? tag,
         );
       }
       const attrs = tagAttributesOf(tag);
       if (attrs.length > 0) {
-        fail(
+        raise(
+          INVALID_ATTRIBUTE_TAG_CODE,
           `${owner}: attribute tag \`<@${name}>\` does not support attributes`,
           attrs[0],
         );
@@ -3595,7 +3742,8 @@ function validateCustomAttributeTagBodies(
             (isControl(child) && containsAttributeTags(child)),
         );
       if (nested) {
-        fail(
+        raise(
+          INVALID_ATTRIBUTE_TAG_CODE,
           `${owner}: attribute tag \`<@${name}>\` does not support nested attribute tags`,
           tagNameSpanOf(nested) ?? nested.name ?? nested,
         );
@@ -3687,7 +3835,8 @@ function rejectNearExplicitChild(
 ): void {
   const near = nearestName(match.authored, match.parent.explicit);
   if (near === undefined) return;
-  fail(
+  raise(
+    NEAR_EXPLICIT_CHILD_CODE,
     `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child \`<${near}>\`?`,
     node,
   );
@@ -3818,14 +3967,15 @@ function raiseDeferredContract(
     return;
   }
   if (!isTranslateError(error)) {
-    fail(
+    raise(
+      INVALID_CONTRACT_CODE,
       `\`<${name}>\`: ${error instanceof Error ? error.message : String(error)}`,
       node,
     );
   }
   if (error.file !== undefined) throw error;
   try {
-    fail(error.message, node);
+    raise(INVALID_CONTRACT_CODE, error.message, node);
   } catch (placed) {
     if (isTranslateError(placed)) {
       if (error.diagnosticCode !== undefined) {
@@ -3855,10 +4005,9 @@ function raiseDeferredDefaultTag(
   const placed: TranslateError[] = [];
   for (const message of problems) {
     try {
-      fail(message, node);
+      raise(INVALID_DEFAULT_TAG_CODE, message, node);
     } catch (error) {
       if (!isTranslateError(error)) throw error;
-      error.diagnosticCode = "invalid-default-tag";
       placed.push(error);
     }
   }
@@ -3922,7 +4071,8 @@ function lowerCustomTag(
   // A core-owned built-in is exempt: it validates `/var` itself, with its
   // own wording, inside its `transform`.
   if (!isBuiltin && tagVarOf(node) && !hasTemplate(definition)) {
-    fail(
+    raise(
+      INVALID_TAG_VAR_CODE,
       `\`/var\` on ${label} is not supported: it has no template, so it has no \`<return>\` to bind`,
       node,
     );
@@ -4042,13 +4192,15 @@ function lowerComponent(
   // dynamic tag) has no return shape the core can read, so it stays refused.
   const { shape: returnShape, unreadable } = calleeReturn(target, ctx);
   if (tagVarOf(node) && returnShape === "none") {
-    fail(
+    raise(
+      INVALID_TAG_VAR_CODE,
       `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
       node,
     );
   }
   if (tagVarOf(node) && unreadable) {
-    fail(
+    raise(
+      INVALID_TAG_VAR_CODE,
       `\`/${declName(ctx, tagVarOf(node))}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
       node,
     );
@@ -4077,6 +4229,7 @@ function lowerComponent(
       line: pos.line,
       column: pos.column,
       file: ctx.filename,
+      code: UNREADABLE_CALLEE_INPUT_CODE,
     });
   }
   const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
@@ -4226,7 +4379,8 @@ function rejectUncalledParameterizedAttributeTag(
   const readsDeclaredContent =
     read.declaration.as === "data" && read.readsContent;
   if (!readsDeclaredRenderable && !readsDeclaredContent) return;
-  fail(
+  raise(
+    INVALID_ATTRIBUTE_TAG_CODE,
     `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
     node,
   );
@@ -4289,7 +4443,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     const read = declaredAttributeTagRead(ctx, dynamicExpr.code);
     if (read) {
       if (read.declaration.as === "data" && !read.readsContent) {
-        fail(
+        raise(
+          INVALID_TAG_CALL_CODE,
           `\`input.${read.name}\` is a data attribute tag; render its body with \`<\${input.${read.name}.content}/>\``,
           node.name,
         );
@@ -4315,7 +4470,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
 
   const name = String(tagNameOf(node));
   if (!TAG_NAME.test(name) && !NOT_A_NAME_SHAPE.test(name)) {
-    fail(
+    raise(
+      INVALID_TAG_NAME_CODE,
       `Invalid tag name \`${name}\` — a tag name may use letters (any script), digits and \`-._:$\``,
       node.name,
     );
@@ -4399,7 +4555,13 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ? ctx.declarations.tags[name]
     : undefined;
   if (disposition) {
-    if (disposition.kind === "error") fail(disposition.reason, node);
+    if (disposition.kind === "error") {
+      raise(
+        disposition.code ?? UNSUPPORTED_CONSTRUCT_CODE,
+        disposition.reason,
+        node,
+      );
+    }
     rejectInertShape(ctx, node, name, disposition);
     // Inert: accepted, contributes nothing to the IR.
     return { kind: "Text", value: "", loc: posOf(ctx, node) };
@@ -4419,7 +4581,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         !ctx.tagTable.getTag("class")?.parseOptions?.statement
       )
         break;
-      return fail(
+      return raise(
+        UNSUPPORTED_CONSTRUCT_CODE,
         `\`class { … }\` is not supported in ${productOf(ctx)}: a component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
         node,
       );
@@ -4433,13 +4596,22 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       return lowerReturn(ctx, node, ctx.returnDepth !== 0);
     case "else": {
       const label = attrByName(node, "if") ? "else if" : "else";
-      return fail(`\`<${label}>\` without a preceding \`<if>\``, node);
+      return raise(
+        INVALID_IF_CODE,
+        `\`<${label}>\` without a preceding \`<if>\``,
+        node,
+      );
     }
     case "else-if":
-      return fail(`\`<${name}>\` without a preceding \`<if>\``, node);
+      return raise(
+        INVALID_IF_CODE,
+        `\`<${name}>\` without a preceding \`<if>\``,
+        node,
+      );
   }
 
-  if (name.startsWith("@")) fail(strayAttributeTagMessage(name), node);
+  if (name.startsWith("@"))
+    raise(INVALID_ATTRIBUTE_TAG_CODE, strayAttributeTagMessage(name), node);
 
   // Core-owned custom tags (`<try>`) are consulted before a caller's own
   // `ctx.customTags`, and win unconditionally: a caller registering the same
@@ -4450,7 +4622,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     : undefined;
   if (builtinTag) {
     if (ctx.customTags && Object.hasOwn(ctx.customTags, name)) {
-      fail(shadowedBuiltinMessage(name), node);
+      raise(RESERVED_TAG_CODE, shadowedBuiltinMessage(name), node);
     }
     return lowerCustomTag(ctx, node, name, builtinTag, true);
   }
@@ -4560,7 +4732,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     !isNativeElementName(ctx, name) &&
     !isCoreTaglibTag(ctx, name)
   ) {
-    fail(localVariableTagMessage(name), node.name);
+    raise(INVALID_TAG_NAME_CODE, localVariableTagMessage(name), node.name);
   }
   // A registered taglib tag called `row` is still `row` when a binding of that
   // name is in scope (addendum 1): call the module the host names for the
@@ -4681,7 +4853,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // see and what its fixtures assert. The message below is the fallback
     // for a host that supplies none.
     ctx.declarations.rejectUnknownTag?.(name, markoViewOf(ctx, node), ctx);
-    fail(
+    raise(
+      UNBOUND_COMPONENT_CODE,
       `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
     );
@@ -4695,7 +4868,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     // failure for an unresolved custom tag, which is what its users see and
     // what the fixtures assert. The message below is the fallback.
     ctx.declarations.rejectUnknownTag?.(name, markoViewOf(ctx, node), ctx);
-    fail(
+    raise(
+      UNKNOWN_TAG_CODE,
       lowercaseBinding
         ? `unknown tag \`<${name}>\`: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
         : `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope`,
@@ -4996,7 +5170,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         }
         // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
         case "MxAttributeTag":
-          fail(strayAttributeTagMessage(`@${child.name.value}`), child);
+          raise(
+            INVALID_ATTRIBUTE_TAG_CODE,
+            strayAttributeTagMessage(`@${child.name.value}`),
+            child,
+          );
           break;
         case "MarkoDocumentType":
         case "MxDoctype":
@@ -5024,7 +5202,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           break;
         case "MarkoScriptlet":
         case "MxScriptlet":
-          fail(
+          raise(
+            UNSUPPORTED_CONSTRUCT_CODE,
             `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
             child,
           );
@@ -5040,22 +5219,27 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         // not this switch's, which is why nothing here has to special-case them.
         case "MarkoCDATA":
         case "MxCDATA":
-          fail(CDATA_MESSAGE, child);
+          raise(UNSUPPORTED_CONSTRUCT_CODE, CDATA_MESSAGE, child);
           break;
         case "MarkoDeclaration":
         case "MxDeclaration":
-          fail(DECLARATION_MESSAGE, child);
+          raise(UNSUPPORTED_CONSTRUCT_CODE, DECLARATION_MESSAGE, child);
           break;
         // Decision 182 seam: a line trigger the trigger pass did not lower
         // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
         // refused in the table check's wording; a block tag or filter goes
         // to the dialect's hook (addendum 5), or is refused likewise.
         case "MxTrigger":
-          fail(`\`${child.id}\` trigger has no lowering yet`, child);
+          raise(
+            NO_LOWERING_CODE,
+            `\`${child.id}\` trigger has no lowering yet`,
+            child,
+          );
           break;
         case "MxBlockTag": {
           const hook = ctx.dialect?.lowerBlockTag;
-          if (!hook) fail("a block tag has no lowering yet", child);
+          if (!hook)
+            raise(NO_LOWERING_CODE, "a block tag has no lowering yet", child);
           out.push(
             ...syntaxHookIr(ctx, child, "lowerBlockTag", (build) =>
               (hook as NonNullable<typeof hook>)(
@@ -5070,7 +5254,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         case "MxFilter": {
           const hook = ctx.dialect?.lowerFilter;
           if (!hook) {
-            fail(`the \`${child.name}\` filter has no lowering yet`, child);
+            raise(
+              NO_LOWERING_CODE,
+              `the \`${child.name}\` filter has no lowering yet`,
+              child,
+            );
           }
           out.push(
             ...syntaxHookIr(ctx, child, "lowerFilter", (build) =>
@@ -5088,7 +5276,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           // An MX node kind with no lowering is never dropped silently; a
           // Marko kind this switch has no arm for keeps today's behaviour.
           if (String(child.type).startsWith("Mx")) {
-            fail(
+            raise(
+              INTERNAL_ERROR_CODE,
               `\`${child.type}\` has no lowering yet (not yours: an internal bug)`,
               child,
             );
@@ -5120,11 +5309,16 @@ function syntaxHookIr(
   } catch (error) {
     if (isTranslateError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    return fail(`the dialect's \`${hook}\` threw: ${message}`, node);
+    return raise(
+      DIALECT_HOOK_ERROR_CODE,
+      `the dialect's \`${hook}\` threw: ${message}`,
+      node,
+    );
   }
   const nodes = Array.isArray(result) ? [...result] : [result as IrNode];
   if (nodes.some((each) => !each || typeof each !== "object" || !each.kind)) {
-    fail(
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
       `the dialect's \`${hook}\` must return IR nodes (build them with \`ctx.build\`)`,
       node,
     );

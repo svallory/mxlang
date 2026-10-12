@@ -40,6 +40,11 @@ import type { CalleeInput } from "./callee-input.ts";
 import type { ContractFact, DerivedDeclaration } from "./contract-facts.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { HostDeclarations } from "./declarations.ts";
+import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
+import {
+  INERT_TAG_SHAPE_CODE,
+  UNSUPPORTED_CONSTRUCT_CODE,
+} from "./diagnostic-codes.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import { handleNode } from "./host-handle.ts";
@@ -242,7 +247,15 @@ export type Disposition =
        */
       attributes?: "none" | "any";
     }
-  | { kind: "error"; reason: string };
+  | {
+      kind: "error";
+      reason: string;
+      /**
+       * The diagnostic code of the error; `MX_UNSUPPORTED_CONSTRUCT` when
+       * unset. @unstable
+       */
+      code?: MxDiagnosticCode;
+    };
 
 /**
  * A host's rewrite for references to one registered binding (decision 70).
@@ -735,11 +748,31 @@ export function otherErrorsText(error: TranslateError): string {
   return `\n\n${others.length} more error${others.length === 1 ? "" : "s"} in this file:\n${lines.join("\n")}`;
 }
 
-export function fail(message: string, node: Node, file?: string): never {
+/** Options of {@link fail}. @unstable */
+export interface FailOptions {
+  /**
+   * The diagnostic code the error carries (`TranslateError.diagnosticCode`).
+   * A host's own code; core's codes start with `MX_`.
+   */
+  code?: string;
+}
+
+/**
+ * Throws a `TranslateError` at `node`: the error a host's emitter raises on
+ * a construct it cannot lower. `options.code` gives it a diagnostic code.
+ * Core itself raises through {@link raise}, whose code is required.
+ */
+export function fail(
+  message: string,
+  node: Node,
+  file?: string,
+  options?: FailOptions,
+): never {
   const span = node?.loc ? undefined : mxSpanOf(node);
   const end = blameEnd(node);
   if (span) {
     const error = new TranslateError(message, 0, 0, file);
+    if (options?.code !== undefined) error.diagnosticCode = options.code;
     error.span = span;
     if (end !== undefined && "offset" in end) {
       // A range never ends before it starts.
@@ -749,7 +782,8 @@ export function fail(message: string, node: Node, file?: string): never {
     throw error;
   }
   const loc = node?.loc?.start ?? node?.start ?? { line: 0, column: 0 };
-  const error = new TranslateError(
+  const error = codedErrorOf(
+    options?.code,
     message,
     loc.line ?? 0,
     loc.column ?? 0,
@@ -800,6 +834,48 @@ export function blameEnd(
     if (named !== undefined) return { offset: named };
   }
   return { offset: span.sourceEnd };
+}
+
+/**
+ * Throws core's own `TranslateError` at `node`, with its diagnostic code.
+ * Every error core raises on a node goes through here, so none leaves
+ * uncoded: the code is a catalogue entry ({@link MxDiagnosticCode}).
+ * Internal: not exported from the package.
+ */
+export function raise(
+  code: MxDiagnosticCode,
+  message: string,
+  node: Node,
+  file?: string,
+): never {
+  return fail(message, node, file, { code });
+}
+
+/**
+ * Core's own `TranslateError` at a known position, with its diagnostic code:
+ * the one way core builds an error that `raise` cannot (no node, a position
+ * read from a module or a parse result). Internal.
+ */
+export function codedError(
+  code: MxDiagnosticCode,
+  message: string,
+  line: number,
+  column: number,
+  file?: string,
+): TranslateError {
+  return codedErrorOf(code, message, line, column, file);
+}
+
+function codedErrorOf(
+  code: string | undefined,
+  message: string,
+  line: number,
+  column: number,
+  file?: string,
+): TranslateError {
+  const error = new TranslateError(message, line, column, file);
+  if (code !== undefined) error.diagnosticCode = code;
+  return error;
 }
 
 /**
@@ -1670,7 +1746,8 @@ export function rejectUnsupportedFields(
   const first = allow.attributeTags ? undefined : firstAttributeTag(node);
   if (first) {
     const tagName = String(tagNameOf(first) ?? "@…").replace(/^@/, "");
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call`,
       first,
     );
@@ -1683,7 +1760,8 @@ export function rejectUnsupportedFields(
     // Decision 183: the message is Marko 6.4.3's own, verbatim, so the two
     // languages never diverge on the same construct; MX's event-handler hint
     // stays as a second sentence after it.
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `${tagArgumentsMessage(ctx, node, what)}${eventHandlerHint(ctx, node)}`,
       tagArgsOf(node)?.[0] ?? node,
     );
@@ -1693,19 +1771,22 @@ export function rejectUnsupportedFields(
     // wrote wrong is the binding, and on a long call the tag's start can be
     // far from it (the same report-at-the-thing rule the tag-arguments
     // refusal above follows).
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
       tagVarOf(node),
     );
   }
   if (hasTypeArguments(node)) {
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `type arguments on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
   if (!allow.params && tagParamsOf(node).length) {
-    fail(
+    raise(
+      UNSUPPORTED_CONSTRUCT_CODE,
       `tag params \`|...|\` on ${what} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
@@ -1741,7 +1822,8 @@ export function rejectInertShape(
 
   for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
-      fail(
+      raise(
+        INERT_TAG_SHAPE_CODE,
         `spread attributes on \`<${name}>\` are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
         attr,
       );
@@ -1753,7 +1835,8 @@ export function rejectInertShape(
     // as an attribute with `arguments`, which is likewise the tag's own.
     if (attrNameOf(attr) === "value" || isDefaultAttr(attr) || attrArgsOf(attr))
       continue;
-    fail(
+    raise(
+      INERT_TAG_SHAPE_CODE,
       `\`<${name}>\` does not support the \`${attrNameOf(attr)}\` attribute; it emits nothing, so the attribute would be silently discarded`,
       attr,
     );
@@ -1761,7 +1844,8 @@ export function rejectInertShape(
 
   if (disposition.body === "text") return;
   if (hasContent(bodyChildren(node))) {
-    fail(
+    raise(
+      INERT_TAG_SHAPE_CODE,
       `\`<${name}>\` does not support body content; it emits nothing, so the body would be silently discarded`,
       node,
     );

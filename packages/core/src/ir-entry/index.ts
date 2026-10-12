@@ -29,7 +29,7 @@ import {
   tagRulesDecided,
 } from "../compile.ts";
 import { claimedFields } from "../contract-fields.ts";
-import { type MxWarning, TranslateError } from "../core.ts";
+import { codedError, type MxWarning, type TranslateError } from "../core.ts";
 import {
   type CustomTag,
   registrationView,
@@ -610,14 +610,14 @@ export function lowerSource(
       const errors = reported.map((tag) => {
         if (tag.explained) return tag.explained;
         const extra = guidance.get(`${tag.offset}:${tag.name}`);
-        const unknownError = new TranslateError(
+        const unknownError = codedError(
+          UNKNOWN_TAG_CODE,
           unknownTagMessage(tag.name, declared, dialectId) +
             (extra ? `; ${extra}` : ""),
           tag.line,
           tag.column,
         );
         if (tag.nameEnd) unknownError.end = tag.nameEnd;
-        unknownError.diagnosticCode = UNKNOWN_TAG_CODE;
         return unknownError;
       });
       const ranges = reported.map((tag) => ({

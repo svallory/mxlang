@@ -22,7 +22,11 @@
  */
 
 import { attrArgsOf, attrValueOf } from "./attr-fields.ts";
-import { type Ctx, type Node, TranslateError } from "./core.ts";
+import { type Ctx, codedError, type Node } from "./core.ts";
+import {
+  INVALID_SHORTHAND_CODE,
+  type MxDiagnosticCode,
+} from "./diagnostic-codes.ts";
 import { payloadOf } from "./payload.ts";
 import { markoParser } from "./stock-parser.ts";
 import { recordShorthandAttributes } from "./tag-fields.ts";
@@ -111,9 +115,14 @@ function endOf(ctx: Ctx, node: Node): number {
   return rangeOf(ctx, node).end;
 }
 
-function failAt(ctx: Ctx, message: string, offset: number): never {
+function failAt(
+  code: MxDiagnosticCode,
+  ctx: Ctx,
+  message: string,
+  offset: number,
+): never {
   const at = positionAt(ctx, offset);
-  throw new TranslateError(message, at.line, at.column);
+  throw codedError(code, message, at.line, at.column);
 }
 
 /**
@@ -149,6 +158,7 @@ function checkShorthandWord(
   const offense = bracketOffense(word);
   if (offense !== undefined) {
     failAt(
+      INVALID_SHORTHAND_CODE,
       ctx,
       `\`${sigil}${word}\` is not a valid shorthand ${kind}: a ${kind} part cannot hold an unbalanced \`${offense}\` (a part ends at \`.\`, \`#\`, \`/\`, \`(\`, whitespace, \`=\` or \`>\`); use \`class="…"\` for this ${kind}`,
       at,
@@ -156,6 +166,7 @@ function checkShorthandWord(
   }
   if (sigil === "." && /^[0-9]+$/.test(word)) {
     failAt(
+      INVALID_SHORTHAND_CODE,
       ctx,
       `\`.${word}\` is not a valid shorthand class: a split-off class part cannot be purely numeric; use \`class="…"\` for this class`,
       at,
@@ -655,6 +666,7 @@ function placeTriggerShorthands(
       checkShorthandWord(ctx, sigil, word, token.start);
       if (word === "" || !isShorthandWord(sigil, word)) {
         failAt(
+          INVALID_SHORTHAND_CODE,
           ctx,
           word === ""
             ? `\`${sigil}\` needs a name after it (\`${sigil}main\`)`

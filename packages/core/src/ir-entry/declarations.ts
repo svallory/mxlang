@@ -30,8 +30,9 @@
  */
 
 import { contractDefaultTag } from "../contract-default-tag.ts";
-import { DYNAMIC_TAG, TranslateError } from "../core.ts";
+import { codedError, DYNAMIC_TAG } from "../core.ts";
 import type { HostDeclarations } from "../declarations.ts";
+import { NOT_IN_DATA_FILE_CODE } from "../diagnostic-codes.ts";
 import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
 
@@ -73,16 +74,30 @@ export function entryDeclarations(nativeTags: NativeTags): HostDeclarations {
         context.configured ??
         DEFAULT_TAG,
       tags: {
-        else: { kind: "error", reason: reservedNameMessage("else") },
-        "else-if": { kind: "error", reason: reservedNameMessage("else-if") },
-        try: { kind: "error", reason: reservedNameMessage("try") },
+        else: {
+          kind: "error",
+          reason: reservedNameMessage("else"),
+          code: NOT_IN_DATA_FILE_CODE,
+        },
+        "else-if": {
+          kind: "error",
+          reason: reservedNameMessage("else-if"),
+          code: NOT_IN_DATA_FILE_CODE,
+        },
+        try: {
+          kind: "error",
+          reason: reservedNameMessage("try"),
+          code: NOT_IN_DATA_FILE_CODE,
+        },
         define: {
           kind: "error",
+          code: NOT_IN_DATA_FILE_CODE,
           reason:
             "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
         },
         return: {
           kind: "error",
+          code: NOT_IN_DATA_FILE_CODE,
           reason:
             "`<return>` needs the evaluated mode: the data tree is static and has no value to return",
         },
@@ -94,7 +109,8 @@ export function entryDeclarations(nativeTags: NativeTags): HostDeclarations {
       resolveAttributeMethod: () => true,
       rejectComponentTag: (name, node) => {
         const loc = node?.loc?.start ?? { line: 0, column: 0 };
-        throw new TranslateError(
+        throw codedError(
+          NOT_IN_DATA_FILE_CODE,
           `\`<${name}>\` calls a template tag; a data file cannot call a template tag`,
           loc.line ?? 0,
           loc.column ?? 0,

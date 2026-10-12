@@ -9,7 +9,13 @@
  * `any`-typed path never had the guards below; each one is a behaviour of
  * the MX path and has its own test.
  */
-import { fail, type Node } from "./core.ts";
+
+import { type Node, raise } from "./core.ts";
+import {
+  INTERNAL_ERROR_CODE,
+  NO_LOWERING_CODE,
+  parseDiagnosticCode,
+} from "./diagnostic-codes.ts";
 import { isTriggerLowered } from "./triggers.ts";
 
 /**
@@ -33,11 +39,22 @@ export function payloadOf(container: Node): Node {
   );
   if (trigger) {
     // Decision 182 seam: the trigger pass lowers what it can reach.
-    fail(`\`${trigger.id}\` trigger has no lowering yet`, trigger);
+    raise(
+      NO_LOWERING_CODE,
+      `\`${trigger.id}\` trigger has no lowering yet`,
+      trigger,
+    );
   }
-  if (container.error) fail(container.error.message, container.error);
+  if (container.error) {
+    raise(
+      parseDiagnosticCode(container.error.code) ?? INTERNAL_ERROR_CODE,
+      container.error.message,
+      container.error,
+    );
+  }
   if (container.node == null) {
-    fail(
+    raise(
+      INTERNAL_ERROR_CODE,
       `\`${container.type}\` has neither a payload nor an error (not yours: an internal bug)`,
       container,
     );

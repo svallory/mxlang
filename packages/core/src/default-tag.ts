@@ -1,5 +1,5 @@
 import { contractDefaultTagProblems } from "./contract-default-tag.ts";
-import { bodyChildren, type Ctx, fail, isTagNode, type Node } from "./core.ts";
+import { bodyChildren, type Ctx, isTagNode, type Node, raise } from "./core.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import type { DefaultTagContext, DefaultTagParent } from "./declarations.ts";
 import {
@@ -8,6 +8,7 @@ import {
   nativeElementPredicate,
 } from "./default-tag-check.ts";
 import type { DefaultTagScope } from "./default-tag-validate.ts";
+import { INVALID_SHORTHAND_CODE } from "./diagnostic-codes.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { rewriteShorthands } from "./shorthand.ts";
 import {
@@ -137,7 +138,8 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
         resolved.add(node);
         const resolve = ctx.declarations.resolveDefaultTag;
         if (!resolve) {
-          fail(
+          raise(
+            INVALID_SHORTHAND_CODE,
             "no default tag is declared, so `#id`/`.class` cannot be used without a tag name; write the tag name explicitly",
             tagNameSpanOf(node),
           );

@@ -64,6 +64,7 @@ export {
   DYNAMIC_TAG,
   declName,
   expr,
+  type FailOptions,
   fail,
   firstAttributeTag,
   hasContent,
@@ -132,6 +133,11 @@ export {
   type DefaultTagScope,
   validateDefaultTag,
 } from "./default-tag-validate.ts";
+export {
+  MX_DIAGNOSTIC_CODES,
+  type MxDiagnosticCode,
+  type MxDiagnosticCodeEntry,
+} from "./diagnostic-codes.ts";
 /**
  * Dialect discovery (decision 212): a dialect package declares itself in
  * its `package.json#mx.dialect`; a project uses the dialects among its
@@ -263,6 +269,7 @@ export type {
   DeclaredName,
   LoweredUnit,
   LoweredUnitFailOptions,
+  LoweredUnitWarnOptions,
 } from "./lowered-unit.ts";
 export {
   concatMapped,

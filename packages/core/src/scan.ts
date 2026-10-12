@@ -64,7 +64,7 @@ import {
   claimedFieldsOf,
   dialectModuleOf,
 } from "./contract-fields.ts";
-import { isTranslateError, TranslateError } from "./core.ts";
+import { codedError, isTranslateError, type TranslateError } from "./core.ts";
 import {
   type ContractMap,
   CUSTOM_TAG_KEYS,
@@ -78,7 +78,21 @@ import {
   rejectUnknownTagKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
-import { RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
+import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
+import {
+  DOTTED_TAG_FILE_NAME_CODE,
+  IGNORED_CONFIG_CODE,
+  INVALID_CONFIG_CODE,
+  INVALID_CONTRACT_CODE,
+  INVALID_PARSE_OPTIONS_CODE,
+  INVALID_TAG_FILE_NAME_CODE,
+  MISPLACED_TAG_FILE_CODE,
+  MODULE_LOAD_FAILED_CODE,
+  RESERVED_TAG_CODE,
+  SHADOWED_CONTRACT_CODE,
+  SIDECAR_IGNORED_CODE,
+  TAG_FILE_ERROR_CODE,
+} from "./diagnostic-codes.ts";
 import {
   claimedExtensions,
   type DialectManifest,
@@ -530,8 +544,14 @@ function withCodeOf(cause: unknown, place: () => never): never {
   }
 }
 
-function failIn(file: string, message: string, line = 1, column = 0): never {
-  throw new TranslateError(message, line, column, file);
+function failIn(
+  code: MxDiagnosticCode,
+  file: string,
+  message: string,
+  line = 1,
+  column = 0,
+): never {
+  throw codedError(code, message, line, column, file);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -597,6 +617,7 @@ export function hostRestrictionDiagnostics(
       message: `\`${restriction.key ?? "mx.tags"}\` names an unknown host in \`hosts\`: ${restriction.host}${hint}`,
       line: restriction.line,
       column: restriction.column,
+      code: IGNORED_CONFIG_CODE,
     });
   }
   return diagnostics;
@@ -622,6 +643,7 @@ export function normalizeMxTags(
   }
   if (!Array.isArray(value)) {
     failIn(
+      INVALID_CONFIG_CODE,
       packageFile,
       "`mx.tags` must be a string or an array of { dir, prefix?, hosts?, parseOptions? }",
     );
@@ -633,6 +655,7 @@ export function normalizeMxTags(
     }
     if (!isRecord(entry) || typeof entry.dir !== "string") {
       failIn(
+        INVALID_CONFIG_CODE,
         packageFile,
         `\`mx.tags[${index}]\` must be a string or an object with a \`dir\` string`,
       );
@@ -642,7 +665,11 @@ export function normalizeMxTags(
     };
     if (entry.prefix !== undefined) {
       if (typeof entry.prefix !== "string") {
-        failIn(packageFile, `\`mx.tags[${index}].prefix\` must be a string`);
+        failIn(
+          INVALID_CONFIG_CODE,
+          packageFile,
+          `\`mx.tags[${index}].prefix\` must be a string`,
+        );
       }
       normalized.prefix = entry.prefix;
     }
@@ -652,6 +679,7 @@ export function normalizeMxTags(
         entry.hosts.some((host) => typeof host !== "string")
       ) {
         failIn(
+          INVALID_CONFIG_CODE,
           packageFile,
           `\`mx.tags[${index}].hosts\` must be an array of strings`,
         );
@@ -725,13 +753,15 @@ function mxTagsEntryPosition(
 
 /** Contracts failures address the actual source file, not the calling page. */
 function failContracts(
+  code: MxDiagnosticCode,
   file: string,
   message: string,
   line = 1,
   column = 0,
 ): never {
   const prefix = `${file}: `;
-  throw new TranslateError(
+  throw codedError(
+    code,
     message.startsWith(prefix) ? message.slice(prefix.length) : message,
     line,
     column,
@@ -748,7 +778,7 @@ export function normalizeMxContracts(
   if (value === undefined) return [];
   const { line, column } = contractsPosition(packageFile);
   const reject = (message: string): never =>
-    failContracts(packageFile, message, line, column);
+    failContracts(INVALID_CONFIG_CODE, packageFile, message, line, column);
   return (Array.isArray(value) ? value : [value]).map((entry, index) => {
     const what = `mx.contracts[${index}]`;
     if (typeof entry === "string") entry = { module: entry };
@@ -813,7 +843,13 @@ export function checkParseOptions(
   column = 0,
 ): CustomTagParseOptions {
   if (!isRecord(value)) {
-    failIn(file, `\`${what}\` must be an object literal`, line, column);
+    failIn(
+      INVALID_PARSE_OPTIONS_CODE,
+      file,
+      `\`${what}\` must be an object literal`,
+      line,
+      column,
+    );
   }
   const result: CustomTagParseOptions = {};
   for (const [key, entry] of Object.entries(value)) {
@@ -823,6 +859,7 @@ export function checkParseOptions(
       key !== "openTagOnly"
     ) {
       failIn(
+        INVALID_PARSE_OPTIONS_CODE,
         file,
         `\`${what}.${key}\` is not a parse option; expected \`text\`, \`preserveWhitespace\` or \`openTagOnly\``,
         line,
@@ -830,7 +867,13 @@ export function checkParseOptions(
       );
     }
     if (typeof entry !== "boolean") {
-      failIn(file, `\`${what}.${key}\` must be a boolean`, line, column);
+      failIn(
+        INVALID_PARSE_OPTIONS_CODE,
+        file,
+        `\`${what}.${key}\` must be a boolean`,
+        line,
+        column,
+      );
     }
     result[key] = entry;
   }
@@ -873,6 +916,7 @@ export function readParseOptions(
   } catch (cause) {
     const loc = (cause as { loc?: { line?: number; column?: number } }).loc;
     failIn(
+      INVALID_PARSE_OPTIONS_CODE,
       file,
       `could not be parsed: ${dropOwnParserPosition(cause, (cause as Error).message)}`,
       loc?.line ?? 1,
@@ -897,6 +941,7 @@ export function readParseOptions(
   const value = property.value as Record<string, unknown>;
   if (value?.type !== "ObjectExpression") {
     failIn(
+      INVALID_PARSE_OPTIONS_CODE,
       file,
       "`parseOptions` must be an object literal, so the scan can read it without executing the sidecar",
       loc?.line ?? 1,
@@ -1064,6 +1109,7 @@ function literalToValue(
       const loc = (property.loc as { start?: { line: number; column: number } })
         ?.start;
       failIn(
+        INVALID_PARSE_OPTIONS_CODE,
         file,
         "`parseOptions` must be a plain object literal; a spread or computed key cannot be read without executing the sidecar",
         loc?.line ?? 1,
@@ -1136,6 +1182,7 @@ export function loadDefaultExport(
     const message = cause instanceof Error ? cause.message : String(cause);
     const fail = what === "sidecar" ? failIn : failContracts;
     fail(
+      MODULE_LOAD_FAILED_CODE,
       file,
       `${what} failed to load: ${message}${sidecarHint(message, what === "sidecar" ? "custom tag sidecar" : what)}`,
     );
@@ -1144,6 +1191,7 @@ export function loadDefaultExport(
   if (!isRecord(definition)) {
     const fail = what === "sidecar" ? failIn : failContracts;
     fail(
+      MODULE_LOAD_FAILED_CODE,
       file,
       `${what} must \`export default\` ${what === "sidecar" ? "a CustomTag object" : what === "dialect" ? "a dialect object (`{ table, lowerTrigger?, … }`)" : "a plain ContractMap object"}`,
     );
@@ -1213,7 +1261,9 @@ function lazyTag(tag: DiscoveredTag, claimed: ClaimedFields): CustomTag {
       // key it might have claimed.
       if (claimed.failure !== undefined) throw claimed.failure;
       if (isTranslateError(cause) && cause.file === undefined)
-        withCodeOf(cause, () => failIn(sidecar, cause.message));
+        withCodeOf(cause, () =>
+          failIn(INVALID_CONTRACT_CODE, sidecar, cause.message),
+        );
       throw cause;
     }
     loaded = candidate;
@@ -1298,13 +1348,12 @@ export function tagFileError(tag: DiscoveredTag): TranslateError {
   const shown = relative(dirname(tag.sourceDir ?? dirname(file)), file)
     .split("\\")
     .join("/");
-  const error = new TranslateError(
+  return codedError(
+    TAG_FILE_ERROR_CODE,
     `\`<${tag.name}>\` is defined by ${shown}, but dialect \`${tag.dialect}\` has no tagFile hook to read it.`,
     0,
     0,
   );
-  error.diagnosticCode = "MX_TAG_FILE_ERROR";
-  return error;
 }
 
 /** The reader of a tag file while no `tagFile` reader is registered. */
@@ -1414,6 +1463,7 @@ function readManifest(
         message: `\`package.json\` could not be parsed as JSON: ${error.message}; ${read.manifest === undefined ? "no `mx.tags` or `mx.contracts` are loaded until the manifest parses" : "the previous valid `mx.tags` and `mx.contracts` stay in force"}`,
         line: 1,
         column: 0,
+        code: IGNORED_CONFIG_CODE,
       };
       brokenDiagnostics.set(error, diagnostic);
     }
@@ -1525,7 +1575,7 @@ function skipClaimedFile(
       line: 1,
       column: 0,
       severity: "warning",
-      code: "MX_MISPLACED_TAG_FILE",
+      code: MISPLACED_TAG_FILE_CODE,
     });
   }
   return true;
@@ -1548,7 +1598,7 @@ function invalidTagFileNameDiagnostic(
     line: 1,
     column: 0,
     severity: "error",
-    code: "MX_INVALID_TAG_FILE_NAME",
+    code: INVALID_TAG_FILE_NAME_CODE,
   };
 }
 
@@ -1585,7 +1635,7 @@ function indexTagFiles(
           line: 1,
           column: 0,
           severity: "warning",
-          code: "MX_SIDECAR_IGNORED",
+          code: SIDECAR_IGNORED_CODE,
         });
         continue;
       }
@@ -1608,7 +1658,7 @@ function indexTagFiles(
         line: 1,
         column: 0,
         severity: "warning",
-        code: "MX_DOTTED_TAG_FILE_NAME",
+        code: DOTTED_TAG_FILE_NAME_CODE,
       });
     }
     const name = `${options.prefix ?? ""}${bare}`;
@@ -1693,7 +1743,7 @@ function indexDirectory(
         line: 1,
         column: 0,
         severity: "warning",
-        code: "MX_SIDECAR_IGNORED",
+        code: SIDECAR_IGNORED_CODE,
       });
       continue;
     }
@@ -1873,6 +1923,7 @@ function indexMxTagsEntries(
         message: `\`mx.tags\` names a directory that does not exist: ${entry.dir}`,
         line: 1,
         column: 0,
+        code: IGNORED_CONFIG_CODE,
       });
       continue;
     }
@@ -1952,6 +2003,7 @@ function indexMxConfig(
       message: `\`${basename(source.file)}\` could not be loaded: ${source.error.message}; ${source.config === undefined ? "no `tags` or `contracts` are loaded until it loads" : "the previous valid `tags` and `contracts` stay in force"}`,
       line: source.error.line,
       column: source.error.column,
+      code: IGNORED_CONFIG_CODE,
     });
   }
   indexMxTagsEntries(
@@ -1997,7 +2049,11 @@ function indexMxContractsEntries(
     try {
       files.push({ path: file, mtimeMs: statSync(file).mtimeMs });
     } catch {
-      failContracts(file, "contracts module could not be read");
+      failContracts(
+        MODULE_LOAD_FAILED_CODE,
+        file,
+        "contracts module could not be read",
+      );
     }
     for (const host of entry.hosts ?? []) {
       position ??= contractsPosition(packageJson);
@@ -2022,12 +2078,17 @@ function indexMxContractsEntries(
       };
       if (!plain(exported))
         failContracts(
+          INVALID_CONTRACT_CODE,
           file,
           "contracts module must `export default` a plain ContractMap object",
         );
       for (const [name, definition] of Object.entries(exported)) {
         if (!TAG_NAME_RE.test(name))
-          failContracts(file, `\`${name}\` is not a usable tag name`);
+          failContracts(
+            INVALID_CONTRACT_CODE,
+            file,
+            `\`${name}\` is not a usable tag name`,
+          );
         const refusal = reservedRefusal(name, discovery, "`mx.contracts`");
         if (refusal !== undefined) {
           diagnostics.push({
@@ -2040,11 +2101,16 @@ function indexMxContractsEntries(
           continue;
         }
         if (!isRecord(definition) || !plain(definition))
-          failContracts(file, `\`<${name}>\` must be a plain CustomTag object`);
+          failContracts(
+            INVALID_CONTRACT_CODE,
+            file,
+            `\`<${name}>\` must be a plain CustomTag object`,
+          );
         for (const key of Object.getOwnPropertyNames(definition)) {
           if (MX_CONTRACTS_KEYS.includes(key) || claimed.tag.has(key)) continue;
           if (key === "declares") {
             failContracts(
+              INVALID_CONTRACT_CODE,
               file,
               `\`<${name}>\`: \`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`,
             );
@@ -2052,6 +2118,7 @@ function indexMxContractsEntries(
           // A `CustomTag` key this source does not take (a sidecar's).
           if ((CUSTOM_TAG_KEYS as readonly string[]).includes(key)) {
             failContracts(
+              INVALID_CONTRACT_CODE,
               file,
               `\`<${name}>\`: \`${key}\` is not allowed in \`mx.contracts\`; use a tag sidecar for hooks other than \`analyze\` and for templates`,
             );
@@ -2071,7 +2138,11 @@ function indexMxContractsEntries(
           definition.analyze !== undefined &&
           typeof definition.analyze !== "function"
         )
-          failContracts(file, `\`<${name}>\`.analyze must be a function`);
+          failContracts(
+            INVALID_CONTRACT_CODE,
+            file,
+            `\`<${name}>\`.analyze must be a function`,
+          );
         if (definition.parseOptions !== undefined) {
           checkParseOptions(
             definition.parseOptions,
@@ -2095,6 +2166,7 @@ function indexMxContractsEntries(
       if (isTranslateError(cause) && cause.file !== undefined) throw cause;
       withCodeOf(cause, () =>
         failContracts(
+          INVALID_CONTRACT_CODE,
           file,
           cause instanceof Error ? cause.message : String(cause),
         ),
@@ -2115,6 +2187,7 @@ function indexMxContractsEntries(
           message: existing.module
             ? `\`<${name}>\` is defined twice in \`mx.contracts\`: ${winner} and ${file}; the first module's whole entry wins`
             : `\`<${name}>\` from \`mx.contracts\` (${file}) is shadowed by ${winner}; the module's contract does not apply`,
+          code: SHADOWED_CONTRACT_CODE,
         });
         continue;
       }

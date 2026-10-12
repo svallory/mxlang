@@ -34,10 +34,16 @@
  */
 
 import { rejectShadowedRegistration } from "./builtin-tags.ts";
+import {
+  INVALID_API_USE_CODE,
+  type MxDiagnosticCode,
+  PARSE_INVALID_TAG_PARAMS_CODE,
+  TAG_NAME_MISSING_CODE,
+} from "./diagnostic-codes.ts";
 // Registers the dialect tag-file reader with the scan (side effect).
 import "./tag-file.ts";
 import { type ClaimedFields, claimedFields } from "./contract-fields.ts";
-import { type Node, TranslateError } from "./core.ts";
+import { codedError, type Node } from "./core.ts";
 import {
   PARSE_OPTIONS_TAGLIB,
   PARSE_OPTIONS_TAGLIB_ID,
@@ -297,8 +303,9 @@ function shiftPosition(
 function assertBaseContract(base: FragmentBase, filename: string): void {
   const line = (base.baseLine ?? 0) + 1;
   const column = base.baseColumn ?? 0;
-  const fail = (rule: string): never => {
-    throw new TranslateError(
+  const fail = (code: MxDiagnosticCode, rule: string): never => {
+    throw codedError(
+      code,
       `parseFragment: broken padding contract in ${filename} at line ${Math.max(1, line)}, column ${Math.max(1, column + 1)}: ${rule} ` +
         `(baseOffset: ${base.baseOffset}, baseLine: ${base.baseLine}, baseColumn: ${base.baseColumn})`,
       line,
@@ -309,28 +316,33 @@ function assertBaseContract(base: FragmentBase, filename: string): void {
   for (const name of ["baseOffset", "baseLine", "baseColumn"] as const) {
     const value = base[name];
     if (value !== undefined && !Number.isInteger(value)) {
-      fail(`${name} must be a finite integer`);
+      fail(INVALID_API_USE_CODE, `${name} must be a finite integer`);
     }
   }
   if (base.baseLine !== undefined && base.baseLine < 0) {
-    fail("baseLine must be >= 0");
+    fail(INVALID_API_USE_CODE, "baseLine must be >= 0");
   }
   const { baseOffset, baseColumn = 0 } = base;
   const baseLine = base.baseLine ?? 0;
   if (baseOffset === undefined) {
     if (baseColumn < 0) {
-      fail("a negative baseColumn needs its baseOffset partner");
+      fail(
+        INVALID_API_USE_CODE,
+        "a negative baseColumn needs its baseOffset partner",
+      );
     }
     return;
   }
   if (baseLine === 0) {
     if (baseOffset !== baseColumn) {
       fail(
+        INVALID_API_USE_CODE,
         "baseOffset must equal baseColumn when baseLine is 0 (the fragment is on the file's first line)",
       );
     }
   } else if (baseOffset < baseLine + baseColumn) {
     fail(
+      INVALID_API_USE_CODE,
       "baseOffset must be >= baseLine + baseColumn (the padded prefix would need a negative filler)",
     );
   }
@@ -381,7 +393,8 @@ export function positionRegionSource(
   // The pre-wrapper position is a real file position: neither can be negative.
   // (Only the wrapper-compensated `base` below may be.)
   if (at.baseOffset < 0 || at.baseColumn < 0) {
-    throw new TranslateError(
+    throw codedError(
+      INVALID_API_USE_CODE,
       `parseFragment: broken padding contract in ${filename} at line ${
         at.baseLine + 1
       }, column ${Math.max(1, at.baseColumn + 1)}: baseOffset and baseColumn must be >= 0 before any wrapper is subtracted ` +
@@ -499,7 +512,12 @@ export function parseFragment(
   const comma = bareCommaOf(document);
   if (comma && (!parseError || comma.local < thrownAt(parseError))) {
     const at = filePosition(document, comma.offset);
-    throw new TranslateError(BARE_COMMA_MESSAGE, at.line, at.column);
+    throw codedError(
+      TAG_NAME_MISSING_CODE,
+      BARE_COMMA_MESSAGE,
+      at.line,
+      at.column,
+    );
   }
   const error =
     parseError ??
@@ -516,7 +534,12 @@ export function parseFragment(
     if (rewritten) {
       const at = { line: rewritten.line, column: rewritten.column };
       shiftPosition(at, resolved);
-      throw new TranslateError(rewritten.message, at.line, at.column);
+      throw codedError(
+        PARSE_INVALID_TAG_PARAMS_CODE,
+        rewritten.message,
+        at.line,
+        at.column,
+      );
     }
     // A `CompileErrors` aggregate carries each error's position on that
     // error. Marko's `CompileError` for a point error shares one object

@@ -30,7 +30,8 @@
 
 import { coreBabel } from "./babel.ts";
 import { printExpression } from "./compile.ts";
-import { type Node, TranslateError } from "./core.ts";
+import { codedError, type Node } from "./core.ts";
+import { INVALID_ACCESSOR_ASSIGNMENT_CODE } from "./diagnostic-codes.ts";
 import type { IrNode, Position } from "./ir.ts";
 import { rewriteCodes } from "./rewrite-codes.ts";
 
@@ -117,7 +118,8 @@ export function rewriteReadsInCode(
         case "Identifier": {
           const rewrite = active(path, node.name);
           if (!rewrite) return;
-          throw new TranslateError(
+          throw codedError(
+            INVALID_ACCESSOR_ASSIGNMENT_CODE,
             rewrite.assignError,
             loc.line,
             loc.column,

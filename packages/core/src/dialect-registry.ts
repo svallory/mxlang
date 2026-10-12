@@ -18,6 +18,11 @@
  * row naming a node type is a table error (expression-position rows stay
  * `{ call }`, `"string"` or `"identifier"`).
  */
+import {
+  DIALECT_HOOK_ERROR_CODE,
+  INVALID_DIALECT_MODULE_CODE,
+  type MxDiagnosticCode,
+} from "./diagnostic-codes.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
   Dialect,
@@ -449,7 +454,9 @@ export function claimNode(
   const key = rowKey(row.node);
   const registered = registry.get(key);
   if (!claimsAt(registered, ctx.position)) {
-    return ctx.fail(
+    return failWith(
+      ctx,
+      INVALID_DIALECT_MODULE_CODE,
       notRegisteredMessage(
         `the \`${row.id}\` trigger`,
         key,
@@ -465,11 +472,17 @@ export function claimNode(
   } catch (error) {
     if (isTranslateErrorLike(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    return ctx.fail(`the \`${row.id}\` trigger's ${label} threw: ${message}`);
+    return failWith(
+      ctx,
+      DIALECT_HOOK_ERROR_CODE,
+      `the \`${row.id}\` trigger's ${label} threw: ${message}`,
+    );
   }
   if (fields === undefined) return undefined;
   if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
-    return ctx.fail(
+    return failWith(
+      ctx,
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${row.id}\` trigger's ${label} must return the node's fields as an object, or \`undefined\` to decline the text`,
     );
   }
@@ -477,7 +490,9 @@ export function claimNode(
     (field) => field in fields,
   );
   if (owned.length > 0) {
-    return ctx.fail(
+    return failWith(
+      ctx,
+      DIALECT_HOOK_ERROR_CODE,
       `the \`${row.id}\` trigger's ${label} returns the node's own fields: core sets ${owned.map((field) => `\`${field}\``).join(", ")}`,
     );
   }
@@ -487,6 +502,25 @@ export function claimNode(
     span,
   } as unknown as RegisteredNode;
   return node;
+}
+
+/**
+ * Core's own error through `ctx.fail` (which positions it at the text), with
+ * core's code: `ctx.fail` without one gives the dialect's default.
+ */
+function failWith(
+  ctx: ClaimContext,
+  code: MxDiagnosticCode,
+  message: string,
+): never {
+  try {
+    return ctx.fail(message);
+  } catch (error) {
+    if (isTranslateErrorLike(error)) {
+      (error as { diagnosticCode?: string }).diagnosticCode = code;
+    }
+    throw error;
+  }
 }
 
 /**

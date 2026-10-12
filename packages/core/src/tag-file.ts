@@ -37,9 +37,10 @@ import { unsavedSourceFor } from "./callee-input.ts";
 import { claimedFields } from "./contract-fields.ts";
 import {
   attachRelatedErrors,
+  codedError,
   isTranslateError,
   type MxWarning,
-  TranslateError,
+  type TranslateError,
 } from "./core.ts";
 import {
   type CustomTag,
@@ -47,6 +48,14 @@ import {
   type DeferredReader,
   rejectUnknownTagKeys,
 } from "./custom-tags.ts";
+import {
+  DIALECT_HOOK_ERROR_CODE,
+  DIALECT_WARNING_CODE,
+  isReservedHookCode,
+  reservedHookCodeMessage,
+  TAG_FILE_CYCLE_CODE,
+  TAG_FILE_ERROR_CODE,
+} from "./diagnostic-codes.ts";
 import {
   type LowerSourceOptions,
   type LowerSourceResult,
@@ -410,13 +419,12 @@ function cycleError(tag: DiscoveredTag, at: number): TranslateError {
   const chain = [...stack.slice(at).map((frame) => frame.path), path]
     .map((each) => shownPath(tag, each))
     .join(" → ");
-  const error = new TranslateError(
+  return codedError(
+    TAG_FILE_CYCLE_CODE,
     `tag files call each other in a cycle: ${chain}`,
     0,
     0,
   );
-  error.diagnosticCode = "MX_TAG_FILE_CYCLE";
-  return error;
 }
 
 /**
@@ -576,10 +584,8 @@ function answerOf(
   const path = tag.tagFile as string;
   const errors: TranslateError[] = [];
   const warnings: MxWarning[] = [];
-  const at = (message: string, code = "MX_TAG_FILE_ERROR") => {
-    const error = new TranslateError(message, 1, 0, path);
-    error.diagnosticCode = code;
-    errors.push(error);
+  const at = (message: string) => {
+    errors.push(codedError(TAG_FILE_ERROR_CODE, message, 1, 0, path));
   };
   let contract: Record<string, unknown> | undefined;
   if (thrown) {
@@ -670,28 +676,32 @@ function refuseKeys(
 /** A hook's throw as an error: its own position when it has one, else 1:0. */
 function thrownError(error: unknown, path: string): TranslateError {
   if (isTranslateError(error) && error.line >= 1) {
-    const placed = new TranslateError(
+    const placed = codedError(
+      TAG_FILE_ERROR_CODE,
       error.message,
       error.line,
       error.column,
       error.file ?? path,
     );
-    placed.diagnosticCode = error.diagnosticCode ?? "MX_TAG_FILE_ERROR";
+    if (error.diagnosticCode !== undefined) {
+      placed.diagnosticCode = error.diagnosticCode;
+    }
     // The throw's own range, in the same file as its start.
     if (error.end && (error.file === undefined || error.file === path)) {
       placed.end = error.end;
     }
     return placed;
   }
-  const placed = new TranslateError(
+  const placed = codedError(
+    TAG_FILE_ERROR_CODE,
     `the dialect's \`tagFile\` hook threw: ${error instanceof Error ? error.message : String(error)}`,
     1,
     0,
     path,
   );
-  placed.diagnosticCode =
-    (isTranslateError(error) ? error.diagnosticCode : undefined) ??
-    "MX_TAG_FILE_ERROR";
+  if (isTranslateError(error) && error.diagnosticCode !== undefined) {
+    placed.diagnosticCode = error.diagnosticCode;
+  }
   return placed;
 }
 
@@ -720,7 +730,23 @@ function diagnosticOf(
   const file =
     valid && typeof diagnostic.file === "string" ? diagnostic.file : path;
   const code =
-    valid && typeof diagnostic.code === "string" ? diagnostic.code : undefined;
+    valid && typeof diagnostic.code === "string" && diagnostic.code !== ""
+      ? diagnostic.code
+      : undefined;
+  if (code !== undefined && isReservedHookCode(code)) {
+    // An `MX_` code is MX's own: a consumer must be able to trust that one
+    // is MX's rule, so the hook's diagnostic is refused, not passed on.
+    return {
+      severity: "error",
+      error: codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        `the dialect's \`tagFile\` hook returned a diagnostic whose ${reservedHookCodeMessage(code)}`,
+        line,
+        column,
+        file,
+      ),
+    };
+  }
   // The range's end, when the hook gave a whole one that does not end before
   // it starts; a half or backwards one is dropped, not guessed at.
   const end =
@@ -745,13 +771,13 @@ function diagnosticOf(
         line,
         column,
         file,
-        ...(code ? { code } : {}),
+        code: code ?? DIALECT_WARNING_CODE,
         ...(end ? { end } : {}),
       },
     };
   }
-  const error = new TranslateError(message, line, column, file);
-  if (code) error.diagnosticCode = code;
+  const error = codedError(TAG_FILE_ERROR_CODE, message, line, column, file);
+  if (code !== undefined) error.diagnosticCode = code;
   if (end) error.end = end;
   return { severity: "error", error };
 }
@@ -770,12 +796,12 @@ function definitionError(
   const where = first
     ? `${shownPath(tag, first.file ?? path)}:${first.line}:${first.column + 1}`
     : shownPath(tag, path);
-  const error = new TranslateError(
+  const error = codedError(
+    TAG_FILE_ERROR_CODE,
     `\`<${tag.name}>\`'s definition has errors (${where})`,
     0,
     0,
   );
-  error.diagnosticCode = "MX_TAG_FILE_ERROR";
   attachRelatedErrors(error, errors);
   return error;
 }

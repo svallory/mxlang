@@ -25,8 +25,17 @@ import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
 import { strippedMethodTypeParams } from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
-import { type Node, TranslateError } from "./core.ts";
-import { PARSE_ERROR_DIAGNOSTIC_CODES } from "./diagnostic-codes.ts";
+import { codedError, type Node, type TranslateError } from "./core.ts";
+import {
+  DIALECT_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  INTERNAL_ERROR_CODE,
+  INVALID_SHORTHAND_CODE,
+  isReservedHookCode,
+  type MxDiagnosticCode,
+  parseDiagnosticCode,
+  reservedHookCodeMessage,
+} from "./diagnostic-codes.ts";
 import {
   type ClaimContext,
   type ClaimPosition,
@@ -156,12 +165,17 @@ function nodeClaims(
   const site = { source, base };
   const answers = new Map<string, object | undefined>();
   const placed = new Set<object>();
-  const raise = (message: string, at: SourceSpan, code?: string): never => {
+  const raise = (
+    code: MxDiagnosticCode,
+    message: string,
+    at: SourceSpan,
+    own?: string,
+  ): never => {
     const { line, column } = filePosition(site, at.sourceStart);
-    const error = new TranslateError(message, line, column);
+    const error = codedError(code, message, line, column);
     error.span = at;
     error.end = filePosition(site, Math.max(at.sourceEnd, at.sourceStart));
-    if (code !== undefined) error.diagnosticCode = String(code);
+    if (own !== undefined) error.diagnosticCode = String(own);
     throw error;
   };
   const claim = (
@@ -197,6 +211,7 @@ function nodeClaims(
       fail(message: string, failOptions?: TriggerFailOptions): never {
         if (typeof message !== "string" || message === "") {
           return raise(
+            DIALECT_HOOK_ERROR_CODE,
             `${label}: \`ctx.fail\` takes a non-empty message`,
             span,
           );
@@ -204,11 +219,20 @@ function nodeClaims(
         const at = failOptions?.at;
         if (at !== undefined && !insideDocument(at, base.offset, source)) {
           return raise(
+            DIALECT_HOOK_ERROR_CODE,
             `${label}: \`ctx.fail\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (${base.offset} to ${base.offset + source.length})`,
             span,
           );
         }
-        return raise(message, at ?? span, failOptions?.code);
+        const code = failOptions?.code;
+        if (typeof code === "string" && isReservedHookCode(code)) {
+          return raise(
+            DIALECT_HOOK_ERROR_CODE,
+            `${label}: \`ctx.fail\`'s ${reservedHookCodeMessage(code)}`,
+            span,
+          );
+        }
+        return raise(DIALECT_ERROR_CODE, message, at ?? span, code);
       },
     });
     const text = source.slice(start - base.offset, end - base.offset);
@@ -331,7 +355,7 @@ export function compileErrorOf(
       source,
       loc,
       error.message,
-      PARSE_ERROR_DIAGNOSTIC_CODES[error.code],
+      error.diagnosticCode ?? parseDiagnosticCode(error.code),
     );
   });
   return built.length === 1 ? built[0] : compileErrors(built);
@@ -383,6 +407,7 @@ function shorthandIdErrors(body: readonly Node[]): Node[] {
           end: id.end,
           detectedAt: child.openTag?.end ?? id.end,
           message: "Cannot have shorthand id and id attribute.",
+          diagnosticCode: INVALID_SHORTHAND_CODE,
         });
       }
       if (child.body) visit(child.body);
@@ -422,13 +447,39 @@ export function frontEndErrorOf(document: Node): TranslateError | undefined {
       ? base + document.source.lastIndexOf(",", error.start - base)
       : error.start;
   const { line, column } = filePosition(document, at);
-  const failure = new TranslateError(error.message, line, column);
   // The rule's own range, no earlier than its start; the bare `,` is moved
   // back onto the `,`, so its range is that one character.
-  failure.end = filePosition(
+  return parseFailure(
     document,
+    error,
+    line,
+    column,
+    at,
     error.code === "MX_TAG_NAME_MISSING" ? at + 1 : Math.max(error.end, at),
   );
+}
+
+/**
+ * The `TranslateError` of a front-end parse error: the rule's own code
+ * passed through (`MX_ATTRIBUTE_TAG_AT_ROOT`), its span in the file, and the
+ * exclusive end of that span.
+ */
+function parseFailure(
+  document: Node,
+  error: Node,
+  line: number,
+  column: number,
+  at: number,
+  endAt: number,
+): TranslateError {
+  const failure = codedError(
+    parseDiagnosticCode(error.code) ?? INTERNAL_ERROR_CODE,
+    error.message,
+    line,
+    column,
+  );
+  failure.span = { sourceStart: at, sourceEnd: Math.max(error.end, at) };
+  failure.end = filePosition(document, endAt);
   return failure;
 }
 
@@ -488,9 +539,14 @@ export function endOfInputError(
   );
   if (!error) return undefined;
   const { line, column } = filePosition(document, error.start);
-  const failure = new TranslateError(error.message, line, column);
-  failure.end = filePosition(document, Math.max(error.end, error.start));
-  return failure;
+  return parseFailure(
+    document,
+    error,
+    line,
+    column,
+    error.start,
+    Math.max(error.end, error.start),
+  );
 }
 
 /** 1-based line, 0-based column of a document offset, in file coordinates. */

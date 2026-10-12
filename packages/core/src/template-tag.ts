@@ -15,8 +15,16 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { coreBabel } from "./babel.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import type { Ctx, Node } from "./core.ts";
-import { isTranslateError, TranslateError, warn } from "./core.ts";
+import { codedError, isTranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
+import {
+  ATTRIBUTE_TAG_DROPPED_CODE,
+  BODY_DROPPED_CODE,
+  INTERNAL_ERROR_CODE,
+  INVALID_TAG_CALL_CODE,
+  INVALID_TAG_VAR_CODE,
+  RESERVED_INPUT_CODE,
+} from "./diagnostic-codes.ts";
 import type { Ir, IrNode } from "./ir.ts";
 
 export interface TemplateTag {
@@ -254,11 +262,15 @@ export function metadataForTemplate(
         frame?: string;
         label?: string;
         errors?: ParsedError[];
+        diagnosticCode?: string;
       };
       const parsed = error as ParsedError;
       const entries = parsed.errors?.length ? parsed.errors : [parsed];
       const first = entries[0] ?? parsed;
-      const failure = new TranslateError(
+      // The template's own parse code (`MX_PARSE_*`), which `compileErrorOf`
+      // set; an uncoded one is MX's bug, as the funnel would say.
+      const failure = codedError(
+        INTERNAL_ERROR_CODE,
         entries
           .map((entry) => entry.frame ?? entry.label ?? entry.message)
           .join("\n\n"),
@@ -273,10 +285,14 @@ export function metadataForTemplate(
           column: first.loc.end.column,
         };
       }
+      if (first.diagnosticCode !== undefined) {
+        failure.diagnosticCode = first.diagnosticCode;
+      }
       throw failure;
     }
     if (isTranslateError(error) && error.file === undefined) {
-      const positioned = new TranslateError(
+      const positioned = codedError(
+        INTERNAL_ERROR_CODE,
         error.message,
         error.line,
         error.column,
@@ -900,7 +916,8 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
     // and has no name for a self-call to resolve to. Returning one anyway
     // emitted a reference to a binding nothing declares — valid-looking JSX
     // that fails at runtime with no diagnostic anywhere.
-    throw new TranslateError(
+    throw codedError(
+      INVALID_TAG_CALL_CODE,
       `\`<${call.name}>\` is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
       call.loc.line,
       call.loc.column,
@@ -933,7 +950,8 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
 function rejectReservedInputs(call: TagCall): void {
   for (const attr of call.attrs) {
     if (attr.kind === "spread" || attr.name !== "content") continue;
-    throw new TranslateError(
+    throw codedError(
+      RESERVED_INPUT_CODE,
       `\`<${call.name}>\`: \`content\` is reserved on a template tag; it names the body slot`,
       attr.loc.line,
       attr.loc.column,
@@ -942,7 +960,8 @@ function rejectReservedInputs(call: TagCall): void {
   }
   const contentTag = call.attributeTags.find((tag) => tag.name === "content");
   if (contentTag) {
-    throw new TranslateError(
+    throw codedError(
+      RESERVED_INPUT_CODE,
       `\`<@content>\` is reserved for the body of \`<${call.name}>\``,
       contentTag.loc.line,
       contentTag.loc.column,
@@ -970,6 +989,7 @@ export function routeTemplateCall(
       line: call.loc.line,
       column: call.loc.column,
       file: call.loc.file,
+      code: BODY_DROPPED_CODE,
     });
   }
   for (const attributeTag of call.attributeTags) {
@@ -980,6 +1000,7 @@ export function routeTemplateCall(
       line: call.loc.line,
       column: call.loc.column,
       file: call.loc.file,
+      code: ATTRIBUTE_TAG_DROPPED_CODE,
     });
   }
 
@@ -990,7 +1011,8 @@ export function routeTemplateCall(
   // accused: the same unit's own compile validates its `<return>`, and a
   // self-recursive call that binds its own result is legal.
   if (call.var && !metadata.returnsValue && !metadata.pending) {
-    throw new TranslateError(
+    throw codedError(
+      INVALID_TAG_VAR_CODE,
       `\`<${call.name}>\` does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
       call.loc.line,
       call.loc.column,

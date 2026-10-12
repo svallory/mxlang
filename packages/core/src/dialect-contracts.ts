@@ -6,7 +6,7 @@
  * dialect ({@link withDialectContracts}).
  */
 import { claimedFields } from "./contract-fields.ts";
-import { isTranslateError } from "./core.ts";
+import { isTranslateError, type TranslateError } from "./core.ts";
 import {
   type ContractMap,
   CUSTOM_TAG_KEYS,
@@ -18,7 +18,10 @@ import {
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
 import { isDeepFrozen } from "./deep-frozen.ts";
-import { INVALID_DIALECT_CONTRACT_CODE } from "./diagnostic-codes.ts";
+import {
+  INVALID_DIALECT_CONTRACT_CODE,
+  isReservedHookCode,
+} from "./diagnostic-codes.ts";
 import { checkParseOptions } from "./scan.ts";
 import type { Dialect } from "./syntax-table.ts";
 import {
@@ -43,6 +46,19 @@ const CONTRACT_KEYS = CUSTOM_TAG_KEYS.filter((key) => key !== "template");
 const CONTRACT_HOOKS = ["analyze", "transform", "finalize"] as const;
 
 const CORE_RESERVED: ReadonlySet<string> = new Set(RESERVED_NAMES);
+
+/**
+ * The code a refused entry carries: the dialect's own, when its
+ * `checkContract` gave one; otherwise this rule's. A code of MX's own (the
+ * cause's rule, or the default of a `checkContract` that gave none) is
+ * reported as this rule.
+ */
+function causeCode(cause: TranslateError): string {
+  const code = cause.diagnosticCode;
+  return code !== undefined && !isReservedHookCode(code)
+    ? code
+    : INVALID_DIALECT_CONTRACT_CODE;
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -126,7 +142,7 @@ export function checkDialectContracts(
         );
       } catch (cause) {
         if (!isTranslateError(cause)) throw cause;
-        refuse(cause.message, cause.diagnosticCode);
+        refuse(cause.message, causeCode(cause));
       }
     }
     for (const hook of CONTRACT_HOOKS) {
@@ -159,7 +175,7 @@ export function checkDialectContracts(
       rejectUnreachableHooks(all, only);
     } catch (cause) {
       if (!isTranslateError(cause)) throw cause;
-      refuse(cause.message, cause.diagnosticCode);
+      refuse(cause.message, causeCode(cause));
     }
   }
   markValidatedContracts(map as ContractMap, claimed);

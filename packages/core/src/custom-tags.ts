@@ -20,10 +20,30 @@ import {
   frozenData,
 } from "./contract-fields.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
-import { isTranslateError, TranslateError, warn } from "./core.ts";
+import { codedError, isTranslateError, TranslateError, warn } from "./core.ts";
 import {
+  ATTRIBUTE_TAG_DROPPED_CODE,
+  CONTENT_NOT_ALLOWED_CODE,
+  INVALID_ATTRIBUTE_TAG_CODE,
+  INVALID_ATTRIBUTE_VALUE_CODE,
+  INVALID_CONTRACT_CODE,
+  isReservedHookCode,
+  MISSING_ATTRIBUTE_CODE,
+  MISSING_ATTRIBUTE_TAG_CODE,
+  MISSING_CHILD_CODE,
+  type MxDiagnosticCode,
+  PARENT_NOT_ALLOWED_CODE,
+  REPEATED_ATTRIBUTE_TAG_CODE,
+  REPEATED_CHILD_CODE,
+  reservedHookCodeMessage,
+  TAG_ERROR_CODE,
+  TAG_HOOK_ERROR_CODE,
   TAG_NOT_ALLOWED_CODE,
   TEXT_NOT_ALLOWED_CODE,
+  UNCHECKABLE_CHILD_CODE,
+  UNKNOWN_ATTRIBUTE_CODE,
+  UNKNOWN_ATTRIBUTE_TAG_CODE,
+  UNSUPPORTED_CONSTRUCT_CODE,
 } from "./diagnostic-codes.ts";
 import type {
   Attr,
@@ -248,12 +268,17 @@ export interface TagStore {
  * @unstable
  */
 export interface ContractFailOptions {
-  /** Where the error is; the hook's own default position when absent. */
-  readonly at?: Position;
+  /**
+   * Where the error is: a position, or a `{ sourceStart, sourceEnd }` span
+   * inside the document (a call's `span` or `nameSpan`), which the
+   * diagnostic keeps. The hook's own default position when absent.
+   */
+  readonly at?: Position | SourceSpan;
   /**
    * A machine-readable code, carried on the error as `diagnosticCode` (and on
-   * a diagnostic as `code`). The code belongs to the dialect's or module's own
-   * namespace: core refuses only an empty one.
+   * a diagnostic as `code`). The code belongs to the tag's or dialect's own
+   * namespace: core refuses an empty one and one starting with `MX_`, which
+   * is MX's own prefix. Without it the code is `MX_TAG_ERROR`.
    */
   readonly code?: string;
 }
@@ -493,6 +518,7 @@ function rebuildAttributeTagPlan(
       const occurrences = tags.filter((tag) => tag.name === name);
       if (range.inFor) {
         failAt(
+          REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
           `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           occurrences[0]?.loc ?? { line: 0, column: 0 },
@@ -500,6 +526,7 @@ function rebuildAttributeTagPlan(
       }
       if (range.max > 1) {
         failAt(
+          REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
           `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           (occurrences[1] ?? occurrences[0])?.loc ?? { line: 0, column: 0 },
@@ -819,8 +846,13 @@ function syntheticExpr(code: string): Expr {
  * template's line and column against the caller instead — the cross-file
  * position rule (`Position.file`) exists for exactly this case.
  */
-function failAt(tagName: string, message: string, at: Position): never {
-  return failForOwner(`\`<${tagName}>\``, message, at);
+function failAt(
+  code: MxDiagnosticCode,
+  tagName: string,
+  message: string,
+  at: Position,
+): never {
+  return failForOwner(code, `\`<${tagName}>\``, message, at);
 }
 
 function isPosition(value: unknown): value is Position {
@@ -838,18 +870,22 @@ function isPosition(value: unknown): value is Position {
  * the hook, reported at `fallback` in the hook's own words.
  */
 function failFromHook(
+  ctx: Ctx,
   owner: string,
   message: string,
   arg: unknown,
   fallback: Position,
+  coreOwned = false,
 ): never {
   const misuse = (what: string): never =>
     failForOwner(
+      TAG_HOOK_ERROR_CODE,
       owner,
       `\`ctx.fail\` takes a position or \`{ at?, code? }\`: ${what}`,
       fallback,
     );
   let at = fallback;
+  let span: SourceSpan | undefined;
   let code: string | undefined;
   if (arg !== undefined) {
     if (isPosition(arg)) {
@@ -880,44 +916,83 @@ function failFromHook(
         );
       }
       if (options.at !== undefined) {
-        if (!isPosition(options.at)) {
-          return misuse("`at` must be a position with `line` and `column`");
+        if (isPosition(options.at)) {
+          at = options.at;
+        } else if (isSpanIn(ctx, options.at)) {
+          span = {
+            sourceStart: options.at.sourceStart,
+            sourceEnd: options.at.sourceEnd,
+          };
+          at = positionAt(ctx, span.sourceStart);
+        } else {
+          return misuse(
+            `\`at\` must be a position with \`line\` and \`column\`, or a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${ctx.source.length})`,
+          );
         }
-        at = options.at;
       }
       if (options.code !== undefined) {
         if (typeof options.code !== "string" || options.code === "") {
           return misuse("`code` must be a non-empty string");
+        }
+        if (!coreOwned && isReservedHookCode(options.code)) {
+          return misuse(reservedHookCodeMessage(options.code, "the tag's"));
         }
         code = options.code;
       }
     }
   }
   try {
-    return failForOwner(owner, message, at);
+    return failForOwner(TAG_ERROR_CODE, owner, message, at);
   } catch (error) {
-    if (code !== undefined && isTranslateError(error)) {
-      error.diagnosticCode = code;
+    if (isTranslateError(error)) {
+      if (code !== undefined) error.diagnosticCode = code;
+      if (span !== undefined) error.span = span;
     }
     throw error;
   }
 }
 
+/** Whether `value` is a `{ sourceStart, sourceEnd }` span inside `ctx.source`. */
+function isSpanIn(ctx: Ctx, value: unknown): value is SourceSpan {
+  const at = value as SourceSpan | null | undefined;
+  return (
+    typeof at === "object" &&
+    at !== null &&
+    Number.isInteger(at.sourceStart) &&
+    Number.isInteger(at.sourceEnd) &&
+    at.sourceStart >= 0 &&
+    at.sourceStart <= at.sourceEnd &&
+    at.sourceEnd <= ctx.source.length
+  );
+}
+
+/**
+ * Core's own tag definitions (`<try>`): their `ctx.fail` may pass one of
+ * MX's own `MX_` codes, which a dialect's or an author's hook may not.
+ */
+const coreOwnedTags = new WeakSet<CustomTag>();
+
+/** Marks `definition` as core's own, for {@link coreOwnedTags}. */
+export function markCoreOwned(definition: CustomTag): CustomTag {
+  coreOwnedTags.add(definition);
+  return definition;
+}
+
 /** An already formatted owner chain, shared by contracts at every depth. */
 function failForOwner(
+  code: MxDiagnosticCode,
   owner: string,
   message: string,
   at: Position,
-  code?: string,
   occurrence?: TagOccurrence,
 ): never {
-  const error = new TranslateError(
+  const error = codedError(
+    code,
     `${owner}: ${message}`,
     at.line,
     at.column,
     at.file,
   );
-  if (code !== undefined) error.diagnosticCode = code;
   if (occurrence !== undefined) occurrences.set(error, occurrence);
   throw error;
 }
@@ -1011,6 +1086,7 @@ export function buildersFor(
       // building one with children is an error, never a silent drop.
       if (isVoid && children.length > 0) {
         return failAt(
+          TAG_HOOK_ERROR_CODE,
           tagName,
           `\`<${name}>\` is void and takes no children; pass { void: false } to emit an end tag`,
           loc,
@@ -1086,6 +1162,7 @@ export function buildersFor(
       const spans = spansFrom(from, loc);
       if (node === null) {
         return failAt(
+          TAG_HOOK_ERROR_CODE,
           tagName,
           "`ctx.build.delegatedTag` is not available in `finalize`",
           loc,
@@ -1093,6 +1170,7 @@ export function buildersFor(
       }
       if (ctx.declarations.isDelegatedTag?.(name, ctx) !== true) {
         return failAt(
+          TAG_HOOK_ERROR_CODE,
           tagName,
           `this host does not claim \`<${name}>\`, so a custom tag cannot emit one`,
           loc,
@@ -1144,6 +1222,7 @@ export function buildersFor(
     template: (call) => {
       if (node === null) {
         return failAt(
+          TAG_HOOK_ERROR_CODE,
           tagName,
           "`ctx.build.template` is not available in `finalize`",
           loc,
@@ -1151,6 +1230,7 @@ export function buildersFor(
       }
       if (!hasTemplate(definition)) {
         return failAt(
+          TAG_HOOK_ERROR_CODE,
           tagName,
           "this tag has no template file, so `ctx.build.template(call)` has nothing to expand",
           loc,
@@ -1304,6 +1384,7 @@ function checkCompositeAttr(
   const shape = attrShape(attr);
   if (shape && shape !== declaration.type) {
     failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
       `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
       attr.loc,
@@ -1323,6 +1404,7 @@ function checkCompositeAttr(
     if (!element || !got || got === declaration.items) continue;
     const start = element.loc?.start;
     failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
       `attribute ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
       start
@@ -1353,6 +1435,7 @@ function checkAtomAttr(
   // Decision 182 addendum 4: a member is not an atom, in either form.
   if (isMemberValue(attr)) {
     failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
       `attribute ${attrLabel(attr)} must be an atom, got a member${expected}`,
       at,
@@ -1370,7 +1453,8 @@ function checkAtomAttr(
     plainStringOf(attr) !== undefined
   ) {
     claims.defer(
-      new TranslateError(
+      codedError(
+        INVALID_ATTRIBUTE_VALUE_CODE,
         `${owner}: attribute ${attrLabel(attr)} must be atom, got string${expected}`,
         at.line,
         at.column,
@@ -1381,6 +1465,7 @@ function checkAtomAttr(
   }
   if (shape && shape !== "atom" && shape !== "array") {
     failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
       `attribute ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
       at,
@@ -1397,6 +1482,7 @@ function checkAtomAttr(
     if (!element || !got || got === "atom") continue;
     const start = element.loc?.start;
     failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
       `attribute ${attrLabel(attr)} must be atom, got ${got}${expected}`,
       start
@@ -1438,6 +1524,7 @@ function checkMemberAttr(
         ? "a bare attribute"
         : "an expression";
   failForOwner(
+    INVALID_ATTRIBUTE_VALUE_CODE,
     owner,
     `attribute ${attrLabel(attr)} must be a member, got ${got}`,
     valueLoc(attr, locate),
@@ -1490,6 +1577,7 @@ function defaultAttr(
     };
   }
   return failAt(
+    INVALID_CONTRACT_CODE,
     tagName,
     `attribute \`${name}\` declares a \`default\` that is not a string, number or boolean, so it has no attribute spelling`,
     loc,
@@ -1542,7 +1630,8 @@ export function validateCustomTagParents(
       : "inside an allowed parent (none declared)";
   const found =
     parent === "#root" ? "at the top level" : `inside \`<${parent}>\``;
-  throw new TranslateError(
+  throw codedError(
+    PARENT_NOT_ALLOWED_CODE,
     `${label} must be ${required}; found ${found}`,
     loc.line,
     loc.column,
@@ -1628,6 +1717,7 @@ export function validateCustomTagChildren(
         for (const branch of node.branches) collect(branch.nodes);
       } else if (node.kind === "ChildDynamic") {
         failForOwner(
+          UNCHECKABLE_CHILD_CODE,
           owner,
           `a dynamic tag \`<\${…}>\` cannot be checked against the declared children`,
           node.loc,
@@ -1638,19 +1728,19 @@ export function validateCustomTagChildren(
         if (!matched && !hasExplicitChild(declarations, name)) {
           if (node.kind === "ChildText") {
             failForOwner(
+              TEXT_NOT_ALLOWED_CODE,
               owner,
               `text is not allowed here; ${textRule}`,
               node.loc,
-              TEXT_NOT_ALLOWED_CODE,
             );
           }
           const { message, guidance } = notAllowed(node);
           const offset = childOffsets.get(node);
           failForOwner(
+            TAG_NOT_ALLOWED_CODE,
             owner,
             message,
             node.loc,
-            TAG_NOT_ALLOWED_CODE,
             offset === undefined
               ? undefined
               : {
@@ -1681,13 +1771,19 @@ export function validateCustomTagChildren(
           ? tagLabel(repeated.name, repeated.alias)
           : `\`<${name}>\``;
       failForOwner(
+        REPEATED_CHILD_CODE,
         owner,
         `${label} may not be repeated`,
         repeated?.loc ?? call.loc,
       );
     }
     if (declaration.required && range.min === 0) {
-      failForOwner(owner, `missing required child \`<${name}>\``, call.loc);
+      failForOwner(
+        MISSING_CHILD_CODE,
+        owner,
+        `missing required child \`<${name}>\``,
+        call.loc,
+      );
     }
   }
 }
@@ -1731,6 +1827,7 @@ function validateAttributes(
   for (const attr of attrs) {
     if (attr.kind === "spread") {
       failForOwner(
+        UNKNOWN_ATTRIBUTE_CODE,
         owner,
         acceptsNone
           ? "accepts no attributes"
@@ -1743,6 +1840,7 @@ function validateAttributes(
       : undefined;
     if (!declaration) {
       failForOwner(
+        UNKNOWN_ATTRIBUTE_CODE,
         owner,
         acceptsNone
           ? "accepts no attributes"
@@ -1754,6 +1852,7 @@ function validateAttributes(
     const literal = literalValue(attr);
     if (declaration.literalOnly && !isLiteralAttr(attr)) {
       failForOwner(
+        INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
         `attribute ${attrLabel(attr)} must be a literal`,
         attr.loc,
@@ -1775,6 +1874,7 @@ function validateAttributes(
       declaration.type !== literal.type
     ) {
       failForOwner(
+        INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
         `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
         valueAt(attr, locate),
@@ -1786,6 +1886,7 @@ function validateAttributes(
         attr.kind === "boolean")
     ) {
       failForOwner(
+        INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
         `attribute ${attrLabel(attr)} must be an expression`,
         attr.loc,
@@ -1794,6 +1895,7 @@ function validateAttributes(
     if (declaration.enum) {
       if (!literal) {
         failForOwner(
+          INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
           `attribute ${attrLabel(attr)} must be a static value from ${listEnum(declaration.enum)}`,
           attr.loc,
@@ -1807,6 +1909,7 @@ function validateAttributes(
         typeof literal.value !== "string"
       ) {
         failForOwner(
+          INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
           `attribute ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
           attr.loc,
@@ -1814,6 +1917,7 @@ function validateAttributes(
       }
       if (!declaration.enum.includes(literal.value)) {
         failForOwner(
+          INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
           `attribute ${attrLabel(attr)} must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
           attr.loc,
@@ -1823,7 +1927,12 @@ function validateAttributes(
   }
   for (const [name, declaration] of Object.entries(attributes)) {
     if (declaration.required && !present.has(name)) {
-      failForOwner(owner, `missing required attribute \`${name}\``, loc);
+      failForOwner(
+        MISSING_ATTRIBUTE_CODE,
+        owner,
+        `missing required attribute \`${name}\``,
+        loc,
+      );
     }
   }
 }
@@ -1870,6 +1979,7 @@ function validateAttributeTags(
     if (!allowUncontractedTags && !extended) {
       if (tag.attrs.length > 0) {
         failForOwner(
+          INVALID_ATTRIBUTE_TAG_CODE,
           owner,
           `attribute tag \`<@${tag.name}>\` does not support attributes`,
           tag.attrs[0]?.loc ?? tag.loc,
@@ -1877,6 +1987,7 @@ function validateAttributeTags(
       }
       if (tag.attributeTags.length > 0) {
         failForOwner(
+          INVALID_ATTRIBUTE_TAG_CODE,
           owner,
           `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
           tag.attributeTags[0]?.loc ?? tag.loc,
@@ -1884,7 +1995,12 @@ function validateAttributeTags(
       }
     }
     if (declaredTags && !declaration) {
-      failForOwner(owner, `unknown attribute tag \`<@${tag.name}>\``, tag.loc);
+      failForOwner(
+        UNKNOWN_ATTRIBUTE_TAG_CODE,
+        owner,
+        `unknown attribute tag \`<@${tag.name}>\``,
+        tag.loc,
+      );
     }
     if (declaration) {
       const nestedOwner = `${owner}: \`<@${tag.name}>\``;
@@ -1914,13 +2030,19 @@ function validateAttributeTags(
     if (declaration.repeatable !== true && range.max > 1) {
       const occurrences = tags.filter((tag) => tag.name === name);
       failForOwner(
+        REPEATED_ATTRIBUTE_TAG_CODE,
         owner,
         `attribute tag \`<@${name}>\` may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
       );
     }
     if (declaration.required && range.min === 0) {
-      failForOwner(owner, `missing required attribute tag \`<@${name}>\``, loc);
+      failForOwner(
+        MISSING_ATTRIBUTE_TAG_CODE,
+        owner,
+        `missing required attribute tag \`<@${name}>\``,
+        loc,
+      );
     }
   }
   // A `"*"` entry's cardinality is per matched name: two `<@row>` under one
@@ -1932,6 +2054,7 @@ function validateAttributeTags(
     if (entry.repeatable !== true && range.max > 1) {
       const occurrences = tags.filter((tag) => tag.name === name);
       failForOwner(
+        REPEATED_ATTRIBUTE_TAG_CODE,
         owner,
         `attribute tag \`<@${name}>\` may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
@@ -2000,7 +2123,12 @@ export function validateCustomTagCall(
   const owner = tagLabel(call.name, call.alias);
   validateCustomTagChildren(definition, call, owner);
   if (definition.parseOptions?.openTagOnly && call.content) {
-    failForOwner(owner, "does not accept content", call.loc);
+    failForOwner(
+      CONTENT_NOT_ALLOWED_CODE,
+      owner,
+      "does not accept content",
+      call.loc,
+    );
   }
   validateAttributes(
     owner,
@@ -2072,7 +2200,8 @@ export function rejectUnreachableHooks(
     if (definition.analyze || definition.transform || hasTemplate(definition)) {
       continue;
     }
-    throw new TranslateError(
+    throw codedError(
+      INVALID_CONTRACT_CODE,
       `\`<${name}>\`: a custom tag that defines only \`finalize\` has no call site and nothing to collect; add a \`transform\`, an \`analyze\` or a template file`,
       0,
       0,
@@ -2110,8 +2239,9 @@ function rejectContradictoryAttribute(
   attrName: string,
   declaration: CustomTagAttribute,
 ): void {
-  const reject = (problem: string): never => {
-    throw new TranslateError(
+  const reject = (code: MxDiagnosticCode, problem: string): never => {
+    throw codedError(
+      code,
       `Invalid "${attrName}" attribute declaration of ${owner}: ${problem}`,
       0,
       0,
@@ -2119,20 +2249,29 @@ function rejectContradictoryAttribute(
   };
   if (declaration.items !== undefined) {
     if (declaration.type !== "array") {
-      reject('`items` requires `type: "array"`');
+      reject(INVALID_CONTRACT_CODE, '`items` requires `type: "array"`');
     }
     if (!(ITEM_TYPES as readonly unknown[]).includes(declaration.items)) {
-      reject(`\`items\` must be one of ${ITEM_TYPES.join(", ")}`);
+      reject(
+        INVALID_CONTRACT_CODE,
+        `\`items\` must be one of ${ITEM_TYPES.join(", ")}`,
+      );
     }
   }
   if (declaration.type === "atom" && declaration.enum !== undefined) {
-    reject('`enum` cannot be combined with `type: "atom"`');
+    reject(
+      INVALID_CONTRACT_CODE,
+      '`enum` cannot be combined with `type: "atom"`',
+    );
   }
   if (
     declaration.enum &&
     (declaration.type === "array" || declaration.type === "function")
   ) {
-    reject(`\`enum\` cannot be combined with \`type: "${declaration.type}"\``);
+    reject(
+      INVALID_CONTRACT_CODE,
+      `\`enum\` cannot be combined with \`type: "${declaration.type}"\``,
+    );
   }
 }
 
@@ -2191,7 +2330,8 @@ export function rejectUnknownTagKeys(
     if (key === "declares" || claimed.tag.has(key)) continue;
     const at = locate?.(tagName, key);
     const allowed = [...new Set([...keys, ...claimed.tag])];
-    throw new TranslateError(
+    throw codedError(
+      INVALID_CONTRACT_CODE,
       `Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: ${allowed.join(", ")}`,
       at?.line ?? 0,
       at?.column ?? 0,
@@ -2226,6 +2366,7 @@ export function rejectUnknownDeclarationKeys(
       for (const option of ["text", "openTagOnly"] as const) {
         if (definition.parseOptions?.[option] === true) {
           failAt(
+            INVALID_CONTRACT_CODE,
             tagName,
             `\`children\` cannot be combined with \`parseOptions.${option}: true\``,
             { line: 0, column: 0 },
@@ -2241,6 +2382,7 @@ export function rejectUnknownDeclarationKeys(
             : undefined;
         if (child?.parents !== undefined && !child.parents.includes(tagName)) {
           failAt(
+            INVALID_CONTRACT_CODE,
             tagName,
             `child \`<${childName}>\` declares \`parents\` without \`<${tagName}>\`; add \`<${tagName}>\` to \`<${childName}>\`'s \`parents\`, or remove \`<${childName}>\` from \`<${tagName}>\`'s \`children\``,
             { line: 0, column: 0 },
@@ -2248,7 +2390,8 @@ export function rejectUnknownDeclarationKeys(
         }
         for (const key of Object.keys(declaration)) {
           if (!(CHILD_KEYS as readonly string[]).includes(key)) {
-            throw new TranslateError(
+            throw codedError(
+              INVALID_CONTRACT_CODE,
               `Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: ${CHILD_KEYS.join(", ")}`,
               0,
               0,
@@ -2268,6 +2411,7 @@ export function rejectUnknownDeclarationKeys(
         !wildcardReferences(parent.children, tagName)
       ) {
         failAt(
+          INVALID_CONTRACT_CODE,
           tagName,
           `parent \`<${parentName}>\` declares \`children\` without \`<${tagName}>\`; add \`<${tagName}>\` to \`<${parentName}>\`'s \`children\`, or remove \`<${parentName}>\` from \`<${tagName}>\`'s \`parents\``,
           { line: 0, column: 0 },
@@ -2277,6 +2421,7 @@ export function rejectUnknownDeclarationKeys(
     rejectNonStringDefaultTag(`\`<${tagName}>\``, definition);
     if (Object.hasOwn(definition, "declares") && !claimed.tag.has("declares")) {
       failAt(
+        INVALID_CONTRACT_CODE,
         tagName,
         `\`declares\` is not allowed: no syntax module claims it (\`contractFields\`)`,
         { line: 0, column: 0 },
@@ -2327,6 +2472,7 @@ function rejectAttributeTagParentConflicts(
           !child.parents.includes(parentName)
         ) {
           failForOwner(
+            INVALID_CONTRACT_CODE,
             nestedOwner,
             `child \`<${childName}>\` declares \`parents\` without ${parentLabel}; add ${parentLabel} to \`<${childName}>\`'s \`parents\`, or remove \`<${childName}>\` from ${nestedOwner}'s \`children\``,
             { line: 0, column: 0 },
@@ -2340,6 +2486,7 @@ function rejectAttributeTagParentConflicts(
           !wildcardReferences(tagDeclaration.children, childName)
         ) {
           failAt(
+            INVALID_CONTRACT_CODE,
             childName,
             `parent ${nestedOwner} declares \`children\` without \`<${childName}>\`; add \`<${childName}>\` to ${nestedOwner}'s \`children\`, or remove ${parentLabel} from \`<${childName}>\`'s \`parents\``,
             { line: 0, column: 0 },
@@ -2373,7 +2520,8 @@ function rejectNonStringDefaultTag(
           : typeof value === "object"
             ? "an object"
             : `a ${typeof value}`;
-  throw new TranslateError(
+  throw codedError(
+    INVALID_CONTRACT_CODE,
     `${owner}: \`defaultTag\` must be a tag name string, got ${found}`,
     0,
     0,
@@ -2400,7 +2548,8 @@ function rejectRecursiveContractKeys(
   ): void => {
     for (const key of Object.keys(declaration)) {
       if (!allowed.includes(key)) {
-        throw new TranslateError(
+        throw codedError(
+          INVALID_CONTRACT_CODE,
           `Unknown key "${key}" in the ${description} of ${owner}; allowed: ${allowed.join(", ")}`,
           0,
           0,
@@ -2408,8 +2557,11 @@ function rejectRecursiveContractKeys(
       }
     }
   };
-  const fail: (message: string) => never = (message) => {
-    throw new TranslateError(message, 0, 0);
+  const fail: (code: MxDiagnosticCode, message: string) => never = (
+    code,
+    message,
+  ) => {
+    throw codedError(code, message, 0, 0);
   };
   for (const [attrName, declaration] of Object.entries(
     definition.attributes ?? {},
@@ -2432,6 +2584,7 @@ function rejectRecursiveContractKeys(
     const value: unknown = definition.children[WILDCARD];
     if (value === null || typeof value !== "object") {
       fail(
+        INVALID_CONTRACT_CODE,
         `${label}: \`children["*"]\` must be an entry object or a list of entry objects`,
       );
     }
@@ -2439,18 +2592,22 @@ function rejectRecursiveContractKeys(
     entries.forEach((entry: unknown, index) => {
       const at = `\`children["*"]\` entry ${index + 1}`;
       if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-        fail(`${label}: ${at} must be an object`);
+        fail(INVALID_CONTRACT_CODE, `${label}: ${at} must be an object`);
       }
       const declared = entry as WildcardChildEntry;
       keys(declared, WILDCARD_ENTRY_KEYS, at);
       if (declared.pattern !== undefined) {
         if (typeof declared.pattern !== "string") {
-          fail(`${label}: ${at}: \`pattern\` must be a string`);
+          fail(
+            INVALID_CONTRACT_CODE,
+            `${label}: ${at}: \`pattern\` must be a string`,
+          );
         }
         try {
           entryRegExp(declared);
         } catch (error) {
           fail(
+            INVALID_CONTRACT_CODE,
             `${label}: ${at} has an invalid \`pattern\` ${JSON.stringify(declared.pattern)}: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
@@ -2460,10 +2617,14 @@ function rejectRecursiveContractKeys(
       );
       if (declared.contract !== undefined) {
         if (typeof declared.contract !== "string" || declared.contract === "") {
-          fail(`${label}: ${at}: \`contract\` must be a non-empty tag name`);
+          fail(
+            INVALID_CONTRACT_CODE,
+            `${label}: ${at}: \`contract\` must be a non-empty tag name`,
+          );
         }
         if (inline.length > 0) {
           fail(
+            INVALID_CONTRACT_CODE,
             `${label}: ${at} has both \`contract\` and an inline contract (${inline.map((key) => `\`${key}\``).join(", ")}); use one`,
           );
         }
@@ -2475,6 +2636,7 @@ function rejectRecursiveContractKeys(
       // never finishes being read: the one cycle registration must refuse.
       if (path.has(declared)) {
         fail(
+          INVALID_CONTRACT_CODE,
           `${root}: \`children["*"]\` holds an inline contract that contains itself; declare it as a tag and refer to it with \`contract\``,
         );
       }
@@ -2500,6 +2662,7 @@ function rejectRecursiveContractKeys(
     rejectNonStringDefaultTag(`${owner}: \`<@${name}>\``, named);
     if (path.has(named)) {
       fail(
+        INVALID_CONTRACT_CODE,
         `${label}: \`<@${name}>\`: an attribute-tag declaration contains itself`,
       );
     }
@@ -2521,6 +2684,7 @@ function rejectRecursiveContractKeys(
     const value: unknown = definition.attributeTags[WILDCARD];
     if (value === null || typeof value !== "object") {
       fail(
+        INVALID_CONTRACT_CODE,
         `${label}: \`attributeTags["*"]\` must be an entry object or a list of entry objects`,
       );
     }
@@ -2528,18 +2692,22 @@ function rejectRecursiveContractKeys(
     entries.forEach((entry: unknown, index) => {
       const at = `\`attributeTags["*"]\` entry ${index + 1}`;
       if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-        fail(`${label}: ${at} must be an object`);
+        fail(INVALID_CONTRACT_CODE, `${label}: ${at} must be an object`);
       }
       const declared = entry as WildcardAttributeTagEntry;
       keys(declared, WILDCARD_ATTRIBUTE_TAG_KEYS, at);
       if (declared.pattern !== undefined) {
         if (typeof declared.pattern !== "string") {
-          fail(`${label}: ${at}: \`pattern\` must be a string`);
+          fail(
+            INVALID_CONTRACT_CODE,
+            `${label}: ${at}: \`pattern\` must be a string`,
+          );
         }
         try {
           entryRegExp(declared);
         } catch (error) {
           fail(
+            INVALID_CONTRACT_CODE,
             `${label}: ${at} has an invalid \`pattern\` ${JSON.stringify(declared.pattern)}: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
@@ -2548,6 +2716,7 @@ function rejectRecursiveContractKeys(
       // cycle registration must refuse is self-containment.
       if (path.has(declared)) {
         fail(
+          INVALID_CONTRACT_CODE,
           `${root}: \`attributeTags["*"]\` holds an entry that contains itself`,
         );
       }
@@ -2586,8 +2755,11 @@ export function rejectWildcardReferences(
   subject: (name: string) => boolean = everyTag,
 ): void {
   if (!customTags) return;
-  const fail: (message: string) => never = (message) => {
-    throw new TranslateError(message, 0, 0);
+  const fail: (code: MxDiagnosticCode, message: string) => never = (
+    code,
+    message,
+  ) => {
+    throw codedError(code, message, 0, 0);
   };
   const visit = (
     label: string,
@@ -2608,12 +2780,14 @@ export function rejectWildcardReferences(
         : undefined;
       if (!referenced) {
         fail(
+          INVALID_CONTRACT_CODE,
           `${label}: ${at} references \`contract: ${JSON.stringify(entry.contract)}\`, which is not a tag reachable from this compile`,
         );
       }
       for (const option of ["text", "preserveWhitespace"] as const) {
         if (referenced.parseOptions?.[option] === true) {
           fail(
+            INVALID_CONTRACT_CODE,
             `${label}: ${at} references \`<${entry.contract}>\`, which sets \`parseOptions.${option}\`; parse options apply to the name as written, before the wildcard resolves it`,
           );
         }
@@ -2624,6 +2798,7 @@ export function rejectWildcardReferences(
         !referenced.parents.includes(parentName)
       ) {
         fail(
+          INVALID_CONTRACT_CODE,
           `${label}: \`children["*"]\` references \`<${entry.contract}>\`, which declares \`parents\` without \`<${parentName}>\`; add \`<${parentName}>\` to \`<${entry.contract}>\`'s \`parents\`, or remove the reference`,
         );
       }
@@ -3211,7 +3386,7 @@ export function runAnalyzeHooks(
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
       fail: (message, options) =>
-        failFromHook(`\`<${name}>\``, message, options, first.loc),
+        failFromHook(ctx, `\`<${name}>\``, message, options, first.loc),
       declare: (kind, declaredName, options) => {
         ctx.contractDerived ??= [];
         ctx.contractDerived.push({
@@ -3271,7 +3446,12 @@ export function runFinalizeHooks(
       throw wrapHookError(error, name, "finalize", loc);
     }
     if (!Array.isArray(nodes)) {
-      failAt(name, "`finalize` must return an array of IR nodes", loc);
+      failAt(
+        TAG_HOOK_ERROR_CODE,
+        name,
+        "`finalize` must return an array of IR nodes",
+        loc,
+      );
     }
     prepended.push(...nodes);
   }
@@ -3286,7 +3466,8 @@ function wrapHookError(
   loc: Position,
 ): TranslateError {
   if (isTranslateError(error)) return error;
-  return new TranslateError(
+  return codedError(
+    TAG_HOOK_ERROR_CODE,
     `\`<${tagName}>\`: custom tag \`${hook}\` threw: ${error instanceof Error ? error.message : String(error)}`,
     loc.line,
     loc.column,
@@ -3447,6 +3628,7 @@ export function transformCustomTag(
     const inline =
       call.alias !== undefined && call.alias.authored === call.name;
     failForOwner(
+      UNSUPPORTED_CONSTRUCT_CODE,
       owner,
       inline
         ? `an inline \`children["*"]\` contract has no transform; on ${ctx.declarations.name ?? "this target"} a matched child needs \`contract:\` naming a tag with a transform or template`
@@ -3531,7 +3713,15 @@ export function transformCustomTag(
   const tagContext: TransformContext = {
     build: builders,
     hoist: (code) => ctx.hoist(code, node),
-    fail: (message, options) => failFromHook(owner, message, options, call.loc),
+    fail: (message, options) =>
+      failFromHook(
+        ctx,
+        owner,
+        message,
+        options,
+        call.loc,
+        coreOwnedTags.has(definition),
+      ),
     gensym: (hint) => gensymFor(ctx, call.name, hint),
     store: storeFor(ctx, call.name),
   };
@@ -3546,7 +3736,8 @@ export function transformCustomTag(
       : routeTemplateCall(ctx, definition as TemplateBackedTag, observed.call);
   } catch (error) {
     if (isTranslateError(error)) throw error;
-    throw new TranslateError(
+    throw codedError(
+      TAG_HOOK_ERROR_CODE,
       `${owner}: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
       call.loc.line,
       call.loc.column,
@@ -3573,6 +3764,7 @@ export function transformCustomTag(
     nodes = routeTemplateCall(ctx, definition, routedCall);
   } else {
     failForOwner(
+      TAG_HOOK_ERROR_CODE,
       owner,
       "custom tag transform must return an array of IR nodes or a TagCall for its template",
       call.loc,
@@ -3588,6 +3780,7 @@ export function transformCustomTag(
   ) {
     warn(ctx, {
       message: `${owner}: custom tag transform did not read its attributeTags; authored attribute tags were dropped`,
+      code: ATTRIBUTE_TAG_DROPPED_CODE,
       line: call.loc.line,
       column: call.loc.column,
       file: call.loc.file,

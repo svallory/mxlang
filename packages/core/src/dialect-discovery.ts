@@ -7,8 +7,14 @@
  * `node_modules` and never loads a transitive package. The dialect's module
  * is loaded by `syntax-table.ts`, only for a file with one of its extensions.
  */
+
 import { basename, dirname, join, posix, win32 } from "node:path";
-import { TranslateError } from "./core.ts";
+import { codedError } from "./core.ts";
+import {
+  DIALECT_CONFLICT_CODE,
+  INVALID_CONFIG_CODE,
+  INVALID_DIALECT_MANIFEST_CODE,
+} from "./diagnostic-codes.ts";
 import { CORE_DIALECT, DIALECT_ID } from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
 import { findMxConfig, type MxConfigSource } from "./mx-config.ts";
@@ -221,7 +227,13 @@ export function readDialectManifest(
       field === undefined ? [...MANIFEST_PATH] : [...MANIFEST_PATH, field];
     if (field !== undefined && index !== undefined) path.push(`[${index}]`);
     const { line, column } = jsonKeyPosition(read.text, path);
-    throw new TranslateError(message, line, column, packageFile);
+    throw codedError(
+      INVALID_DIALECT_MANIFEST_CODE,
+      message,
+      line,
+      column,
+      packageFile,
+    );
   };
   if (!isRecord(value)) {
     fail(
@@ -583,7 +595,8 @@ function discover(projectFile: string, read: PackageJsonRead): Discovered {
     const same = dialects.find((other) => other.id === dialect.id);
     if (same) {
       const { line, column } = jsonKeyPosition(read.text, [field, key]);
-      throw new TranslateError(
+      throw codedError(
+        DIALECT_CONFLICT_CODE,
         `two dialects have the id \`${dialect.id}\`: ${packageLabel(same, listedIn.get(same))} and ${packageLabel(dialect, listing)}. A dialect's id is its identity; keep one of these dependencies`,
         line,
         column,
@@ -643,7 +656,7 @@ function extensionOverrides(
       source,
       extension === undefined ? ["extensions"] : ["extensions", extension],
     );
-    throw new TranslateError(message, line, column, source.file);
+    throw codedError(INVALID_CONFIG_CODE, message, line, column, source.file);
   };
   if (!isRecord(value)) {
     fail(
@@ -700,7 +713,8 @@ function rejectHostClaims(
           ...MANIFEST_PATH,
           field,
         ]);
-        throw new TranslateError(
+        throw codedError(
+          INVALID_DIALECT_MANIFEST_CODE,
           claimRefusal(extension, reserved, field),
           line,
           column,
@@ -729,7 +743,7 @@ function rejectDialectOwnedConfig(
   if (!source || !config) return;
   const fail = (message: string, path: readonly string[]): never => {
     const { line, column } = configKeyAt(source, path);
-    throw new TranslateError(message, line, column, source.file);
+    throw codedError(INVALID_CONFIG_CODE, message, line, column, source.file);
   };
   if (config.tagRules !== undefined) {
     fail(
@@ -825,7 +839,8 @@ export function dialectRouter(
         found.read.text,
         listing === undefined ? [] : [listing.field, listing.key],
       );
-      throw new TranslateError(
+      throw codedError(
+        DIALECT_CONFLICT_CODE,
         `two dialects claim \`${extension}\`: \`${first.id}\` (${packageLabel(first, listedIn.get(first))}) and \`${second.id}\` (${packageLabel(second, listing)}). Choose one in \`mx.extensions\` in MX's config: \`"extensions": { "${extension}": "${first.id}" }\``,
         line,
         column,

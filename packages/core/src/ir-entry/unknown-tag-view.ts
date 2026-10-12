@@ -12,9 +12,14 @@
  */
 
 import { contractData } from "../contract-fields.ts";
-import { TranslateError } from "../core.ts";
+import { codedError, type TranslateError } from "../core.ts";
 import type { CustomTag } from "../custom-tags.ts";
-import { DIALECT_HOOK_ERROR_CODE } from "../diagnostic-codes.ts";
+import {
+  DIALECT_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+  isReservedHookCode,
+  reservedHookCodeMessage,
+} from "../diagnostic-codes.ts";
 import type { SourceSpan } from "../mapping.ts";
 import type {
   Dialect,
@@ -174,12 +179,17 @@ export function explainerFor(
     offset: number,
     endOffset: number,
     message: string,
-    code?: string,
+    code: string,
   ) => {
     const position = positionAt(lineStarts, offset);
-    const error = new TranslateError(message, position.line, position.column);
+    const error = codedError(
+      DIALECT_ERROR_CODE,
+      message,
+      position.line,
+      position.column,
+    );
     error.end = positionAt(lineStarts, Math.max(offset, endOffset));
-    if (code !== undefined) error.diagnosticCode = code;
+    error.diagnosticCode = code;
     return error;
   };
   return {
@@ -234,6 +244,11 @@ export function explainerFor(
             `must return \`code\` as a non-empty string, got ${describe(code)} for \`<${facts.name}>\``,
           );
         }
+        if (code !== undefined && isReservedHookCode(code)) {
+          return hookError(
+            `returned a reserved \`code\` for \`<${facts.name}>\`: ${reservedHookCodeMessage(code)}`,
+          );
+        }
         if (at !== undefined && !insideDocument(at, source.length)) {
           return hookError(
             `must return \`at\` as a \`{ sourceStart, sourceEnd }\` span inside the document (0 to ${source.length}) for \`<${facts.name}>\``,
@@ -246,7 +261,7 @@ export function explainerFor(
             facts.nameSpan?.sourceEnd ??
             facts.span.sourceStart,
           message,
-          code as string | undefined,
+          (code as string | undefined) ?? DIALECT_ERROR_CODE,
         );
       } catch (thrown) {
         const reason =
