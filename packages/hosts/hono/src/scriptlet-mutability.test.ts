@@ -20,9 +20,7 @@ it.each(["let", "var"])(
   (keyword) => {
     expect(() =>
       compile(`$ ${keyword} x = 1;\n<p>1</p>`, "/fixtures/Test.mx"),
-    ).toThrow(
-      /^scriptlets \(`\$ statement`\) are not supported in MX \(decision 54\)$/,
-    );
+    ).toThrow(/^scriptlets \(`\$ statement`\) are not supported in MX$/);
     expect(parseReason(`$ ${keyword} x = ;\n<p>1</p>`)).toBe(
       "Unexpected token; scriptlets (`$ …`) are not supported",
     );

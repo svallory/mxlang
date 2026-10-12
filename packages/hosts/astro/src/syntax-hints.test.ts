@@ -21,7 +21,7 @@ function message(source: string): string {
 describe("scriptlets (astro)", () => {
   it("points at the fence, not at <const>", () => {
     expect(message("---\n---\n$ const y = 1;\n<p>${y}</p>")).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the `---` fence (`const y = …;`)",
+      "scriptlets (`$ statement`) are not supported in MX; declare it in the `---` fence (`const y = …;`)",
     );
   });
 
@@ -29,7 +29,7 @@ describe("scriptlets (astro)", () => {
     "preserves %s mutability in fence advice",
     (keyword) => {
       expect(message(`---\n---\n$ ${keyword} y = 1;\n<p>\${y}</p>`)).toBe(
-        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the \`---\` fence (\`${keyword} y = …;\`)`,
+        `scriptlets (\`$ statement\`) are not supported in MX; declare it in the \`---\` fence (\`${keyword} y = …;\`)`,
       );
       expect(() =>
         lowerAstroMx(
@@ -48,7 +48,7 @@ describe("scriptlets (astro)", () => {
 
   it("a statement that declares nothing gets the bare sentence", () => {
     expect(message("---\n---\n$ doThing();\n<p>1</p>")).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+      "scriptlets (`$ statement`) are not supported in MX",
     );
   });
 });

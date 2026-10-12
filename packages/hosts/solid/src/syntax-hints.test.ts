@@ -79,7 +79,7 @@ describe("scriptlets (solid)", () => {
         file(`<div>\n      $ ${keyword} y = 1;\n    </div>`),
       );
       expect(raised.message).toBe(
-        `scriptlets (\`$ statement\`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (\`${keyword} y = …;\`)`,
+        `scriptlets (\`$ statement\`) are not supported in MX; declare it in the surrounding TypeScript module (\`${keyword} y = …;\`)`,
       );
       expect(raised.message).not.toMatch(/\(\d+:\d+\)$/);
       expect(raised.loc).toMatchObject({ line: 4, column: 6 });
@@ -92,7 +92,7 @@ describe("scriptlets (solid)", () => {
   it("s07: says what to write instead", () => {
     const raised = message(file("<div>\n      $ const y = ;\n    </div>"));
     expect(raised.message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare it in the surrounding TypeScript module (`const y = …;`)",
+      "scriptlets (`$ statement`) are not supported in MX; declare it in the surrounding TypeScript module (`const y = …;`)",
     );
     expect(raised.message).not.toMatch(/\(\d+:\d+\)$/);
     expect(raised.loc).toMatchObject({ line: 4, column: 6 });
