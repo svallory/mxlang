@@ -399,6 +399,25 @@ describe("a dialect option that is not deep-frozen is read afresh on every call"
     expect(lower(own)).toEqual(MISSING_K);
   });
 
+  it("a contract entry frozen only at the top, its nested `attributes` changed in place, is checked again, then accepted again after the undo", () => {
+    const attributes: Mutable = { k: { type: "string", required: true } };
+    const box = Object.freeze({ attributes });
+    const own = Object.freeze({
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: { box },
+    });
+    expect(Object.isFrozen(box)).toBe(true);
+    expect(lower(own)).toEqual(MISSING_K);
+    attributes.k = { type: "string", required: true, bogus: 1 };
+    expect(lower(own)).toEqual([
+      'the `dialect` option is not a valid dialect: `dialect.contracts.box`: Unknown key "bogus" in the "k" attribute declaration of tag "box"; allowed: type, items, required, enum, default, literalOnly',
+    ]);
+    attributes.k = { type: "string", required: true };
+    expect(lower(own)).toEqual(MISSING_K);
+  });
+
   it("a claimed contract field removed from an unfrozen `contractFields` array is refused, then accepted again after the undo", () => {
     const tag = ["shape"];
     const own = Object.freeze({
