@@ -17,6 +17,7 @@ import {
   rejectUnknownTagKeys,
   rejectUnreachableHooks,
 } from "./custom-tags.ts";
+import { isDeepFrozen } from "./deep-frozen.ts";
 import { INVALID_DIALECT_CONTRACT_CODE } from "./diagnostic-codes.ts";
 import { checkParseOptions } from "./scan.ts";
 import type { Dialect } from "./syntax-table.ts";
@@ -193,8 +194,11 @@ const merges = new WeakMap<
  * caller that passes the dialect itself (`explicit`), `customTags` are the
  * dialect's own and override every contract. `customTags` itself when the
  * dialect has no contracts; memoized per (dialect, map), so the merged map
- * keeps its identity across compiles and the caches keyed on it stay warm;
- * a dialect whose `contracts` object changed is merged again.
+ * keeps its identity across compiles and the caches keyed on it stay warm; a
+ * dialect whose `contracts` object changed is merged again. For the
+ * `dialect` option (`explicit`) the memo is kept only when `contracts` is
+ * deep-frozen: an unfrozen map is merged on every call, because an entry in
+ * it can change in place.
  */
 export function withDialectContracts(
   customTags: Readonly<Record<string, CustomTag>> | undefined,
@@ -207,14 +211,20 @@ export function withDialectContracts(
   if (customTags && mergedMaps.has(customTags)) {
     return customTags as Record<string, CustomTag>;
   }
-  let byKind = merges.get(dialect);
-  if (byKind?.contracts !== contracts) {
+  // For the `dialect` option, only a deep-frozen `contracts` map is
+  // memoized: an unfrozen one can have an entry added, removed or swapped in
+  // place, which identity cannot see. A routed dialect is loaded once per
+  // revision of its module file and is fixed until the next one, so its merge
+  // is always memoized.
+  const memoized = !explicit || isDeepFrozen(contracts);
+  let byKind = memoized ? merges.get(dialect) : undefined;
+  if (memoized && byKind?.contracts !== contracts) {
     byKind = { contracts, routed: new WeakMap(), explicit: new WeakMap() };
     merges.set(dialect, byKind);
   }
-  const memo = explicit ? byKind.explicit : byKind.routed;
+  const memo = byKind && (explicit ? byKind.explicit : byKind.routed);
   const key = customTags ?? NO_TAGS;
-  const known = memo.get(key);
+  const known = memo?.get(key);
   if (known) return known;
   const isReserved = (name: string) => !explicit && reserved.includes(name);
   const merged: Record<string, CustomTag> = Object.create(null);
@@ -230,6 +240,6 @@ export function withDialectContracts(
     if (isReserved(name)) merged[name] = contracts[name] as CustomTag;
   }
   mergedMaps.add(merged);
-  memo.set(key, merged);
+  memo?.set(key, merged);
   return merged;
 }

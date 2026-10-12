@@ -710,7 +710,9 @@ Five facts worth knowing before editing it:
   ...customTags, ...reserved }`, reserved = the manifest's `reservedTags`
   (`loadedDialects` WeakMap), applied only for a routed dialect; an explicit
   caller's `customTags` override everything. Memoized per dialect, per
-  routed/explicit, per `customTags` map (`NO_TAGS` for none); a merged map is
+  routed/explicit, per `customTags` map (`NO_TAGS` for none); an explicit
+  dialect's merge is memoized only when its `contracts` is deep-frozen
+  (`isDeepFrozen`, `deep-frozen.ts`); a merged map is
   recognised (`mergedMaps`) and passed through. Rank 3 refusals are the
   existing `reservedRefusal` machinery (scan and `lowerSource`); in
   `compileSource`/`parseFragment` the reserved contract simply wins. No

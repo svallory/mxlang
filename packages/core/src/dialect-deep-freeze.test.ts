@@ -11,11 +11,13 @@ import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import type { ContractMap, CustomTag } from "./custom-tags.ts";
+import { isDeepFrozen } from "./deep-frozen.ts";
 import { type LowerSourceOptions, lowerSource } from "./ir-entry/index.ts";
 import {
   defaultSyntax,
+  dialectCustomTags,
   explicitSyntaxOf,
-  isDeepFrozen,
   type SyntaxTable,
   syntaxHashes,
 } from "./syntax-table.ts";
@@ -269,5 +271,93 @@ describe("isDeepFrozen", () => {
         Object.freeze({ a: 1, b: "s", c: null, d: undefined, e: true }),
       ),
     ).toBe(true);
+  });
+});
+
+describe("the dialect option's merged contracts are remembered only for a deep-frozen `contracts` map", () => {
+  const required = (key: string) => ({
+    attributes: { [key]: { type: "string", required: true } },
+  });
+
+  it("an entry swapped in place in an unfrozen map is seen on the next lowering", () => {
+    const contracts: Mutable = { box: required("k") };
+    const own = Object.freeze({
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts,
+    });
+    expect(lower(own)).toEqual(["`<box>`: missing required attribute `k`"]);
+    contracts.box = required("j");
+    expect(lower(own)).toEqual(["`<box>`: missing required attribute `j`"]);
+    contracts.box = required("k");
+    expect(lower(own)).toEqual(["`<box>`: missing required attribute `k`"]);
+  });
+
+  it("an entry added to or removed from an unfrozen map is seen by the next merge", () => {
+    const contracts: Mutable = { plain: {} };
+    const own = { id: "lexi", name: "Lexi", table: {}, contracts };
+    const tags: Record<string, CustomTag> = { other: {} };
+    const merge = () =>
+      Object.keys(dialectCustomTags(tags, own as never, true) ?? {});
+    expect(merge()).toEqual(["plain", "other"]);
+    contracts.extra = {};
+    expect(merge()).toEqual(["plain", "extra", "other"]);
+    delete contracts.plain;
+    expect(merge()).toEqual(["extra", "other"]);
+  });
+
+  it("an unfrozen map is merged on every call", () => {
+    const own = {
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: { plain: {} } as ContractMap,
+    };
+    const tags: Record<string, CustomTag> = { other: {} };
+    const first = dialectCustomTags(tags, own as never, true);
+    expect(dialectCustomTags(tags, own as never, true)).not.toBe(first);
+  });
+
+  it("a map frozen only at the top is merged on every call", () => {
+    const own = {
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: Object.freeze({ plain: {} }) as ContractMap,
+    };
+    const tags: Record<string, CustomTag> = { other: {} };
+    const first = dialectCustomTags(tags, own as never, true);
+    expect(dialectCustomTags(tags, own as never, true)).not.toBe(first);
+  });
+
+  it("a deep-frozen map is merged once: the same inputs give the same map", () => {
+    const own = freezeDeep({
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: { plain: required("k"), fn: { analyze() {} } },
+    });
+    const tags: Record<string, CustomTag> = { other: {} };
+    const first = dialectCustomTags(tags, own as never, true);
+    expect(Object.keys(first ?? {})).toEqual(["plain", "fn", "other"]);
+    for (let i = 0; i < 4; i++) {
+      expect(dialectCustomTags(tags, own as never, true)).toBe(first);
+    }
+    const routed = dialectCustomTags(tags, own as never, false);
+    expect(routed).not.toBe(first);
+    expect(dialectCustomTags(tags, own as never, false)).toBe(routed);
+  });
+
+  it("a routed dialect (loaded once per module revision) is merged once, whatever its freeze", () => {
+    const own = {
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: { plain: {} } as ContractMap,
+    };
+    const tags: Record<string, CustomTag> = { other: {} };
+    const first = dialectCustomTags(tags, own as never, false);
+    expect(dialectCustomTags(tags, own as never, false)).toBe(first);
   });
 });
