@@ -4182,20 +4182,24 @@ option only when the object is frozen (`Object.isFrozen`), whether it is a diale
 or a bare table; the same frozen object is then not validated again on a later
 `compileSource`, `parseFragment` or `lowerSource` call. An object that is not
 frozen is validated again on every call, because a mutable object can change
-between calls. The check is shallow: `Object.freeze(dialect)` is enough for the
-dialect to be remembered, and a change to a nested object (`dialect.table`) made
-after the first call is then not seen. A dialect built once and passed on every
-call should therefore be frozen, with its `table` and any other nested object
-frozen too (a deep freeze) so the freeze means what it says. A dialect loaded
-from its module is not affected: it is validated once per revision of its module
-file.
+between calls. The check is shallow, and core never validates a nested change
+made after the first call. A dialect's `table` is copied when the dialect is
+validated, so a later change to it is ignored. A bare table is used as passed,
+so a later change to it reaches the parse unchecked. A dialect's other nested
+objects (`contracts`, for one) are not checked again either. A dialect or table
+built once and passed on every call should therefore be deep-frozen
+(`Object.freeze` on it and on every nested object), so the freeze means what it
+says. A dialect loaded from its module is not affected: it is validated once per
+revision of its module file.
 
 **Identity.** A resolved table is deep-frozen and interned by its **hash**: the
 sha256 of its canonical JSON (keys sorted at every level, `undefined` fields
 dropped), so two tables with equal content hash alike and share one frozen object
-for the process. A table whose content equals the default row resolves to the
+for the process (a bare table passed as the `dialect` option is the exception: it
+is used as passed). A table whose content equals the default row resolves to the
 default row itself, and a default-row project runs no extra parse and pays one
-comparison. An explicit dialect or table is validated once per frozen object (an unfrozen one on every call, as above). A manifest
+comparison. An explicit dialect or table is validated once per frozen object (an
+unfrozen one on every call, as above). A manifest
 read is resolved once; an unchanged manifest is not re-validated. A dialect
 module is loaded once per revision of its file (its mtime): a module that fails to
 load reports that first error until the file changes, and an edited module is
@@ -4502,10 +4506,11 @@ scratch walk that runs a custom tag's `analyze`) calls no hook twice. Order is
 source order, a tag's attributes before its body, and a trigger's own `=value`
 before the trigger that owns it. The parsed tree stays as parsed. The lowered
 results live beside it and are what attribute, child and expression readers see,
-so `Expr.code` and the source text at `Expr.span` differ: an expression trigger's replacement is
-**printed and spliced into `code`** at the trigger's span (`&status` becomes
-`self.status`), and an atom-marked literal's string is spliced the same way, so emitting hosts emit
-valid code, while the source text at `Expr.span` and every offset stay the authored text. The stand-in
+so `Expr.code` and the source text at `Expr.span` differ: an expression
+trigger's replacement is **printed and spliced into `code`** at the trigger's
+span (`&status` becomes `self.status`), and an atom-marked literal's string is
+spliced the same way, so emitting hosts emit valid code, while the source text
+at `Expr.span` and every offset stay the authored text. The stand-in
 node the parser hands the expression parser carries `extra.mxTrigger = { id, span }`,
 and core's built-in string and identifier replacements keep it.
 
