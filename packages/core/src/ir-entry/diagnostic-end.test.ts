@@ -11,8 +11,8 @@
  * `file` names another file, as for the start's `offset`.
  */
 import { describe, expect, it } from "vitest";
-import type { CustomTag } from "../custom-tags.ts";
 import type { MxWarning } from "../core.ts";
+import type { CustomTag } from "../custom-tags.ts";
 import type {
   Dialect,
   UnknownTag,
@@ -68,9 +68,9 @@ describe("a whole-tag error ends at the end of `<name`", () => {
   });
 
   it("a tag variable on a data tag", () => {
-    expect(
-      range(only("<div/x/>\n", { structural: "reject" })).end,
-    ).toEqual([1, 4, 4]);
+    expect(range(only("<div/x/>\n", { structural: "reject" })).end).toEqual([
+      1, 4, 4,
+    ]);
   });
 
   it("a name no data file can use", () => {
@@ -123,9 +123,10 @@ describe("an expression ends at its last character", () => {
   });
 
   it("an interpolation, braces included", () => {
-    expect(
-      range(only("<div>${x}</div>\n", { structural: "reject" })),
-    ).toEqual({ start: [1, 5, 5], end: [1, 9, 9] });
+    expect(range(only("<div>${x}</div>\n", { structural: "reject" }))).toEqual({
+      start: [1, 5, 5],
+      end: [1, 9, 9],
+    });
   });
 });
 
@@ -365,7 +366,12 @@ describe("the two conditions a consumer copying the fields relies on", () => {
   });
 
   it("`end.offset === -1` only when `file` names another file, as for the start's `offset`", () => {
-    const sources = ["<box/>\n", "<point/>\n", "<forTag/>\n", "<box/>\n<foo/>\n"];
+    const sources = [
+      "<box/>\n",
+      "<point/>\n",
+      "<forTag/>\n",
+      "<box/>\n<foo/>\n",
+    ];
     let foreign = 0;
     for (const source of sources) {
       const { diagnostics } = lowerSource(source, "/app/page.mx", {
