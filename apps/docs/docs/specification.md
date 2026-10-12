@@ -923,13 +923,13 @@ shorthand). Under `lowerSource`, with `attributes` declaring
 `defaultTag: "attribute"` and `children: { other: {} }`:
 
 ```text
-doc.mx(2,3): error TS80001: `<attributes>`: `<attribute>` is not allowed here; allowed children: `<other>`
+doc.mx(2,3): error MX_TAG_NOT_ALLOWED: `<attributes>`: `<attribute>` is not allowed here; allowed children: `<other>`
 ```
 
 and with `attribute` declaring `attributes: { type: {} }` only:
 
 ```text
-doc.mx(2,3): error TS80001: `<attribute>`: unknown attribute `id`
+doc.mx(2,3): error MX_UNKNOWN_ATTRIBUTE: `<attribute>`: unknown attribute `id`
 ```
 
 **The one error: an invalid `defaultTag` value.** It is reported at the
@@ -993,7 +993,7 @@ was rejected and the rung that answered instead is not in the parent's closed
 `object` answered):
 
 ```text
-doc.mx(1,13): error TS80001: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
+doc.mx(1,13): error MX_TAG_NOT_ALLOWED: `<attributes>`: `<object>` is not allowed here; allowed children: `<attribute>` (the parent's `defaultTag` `nope` is invalid; see the declaration)
 ```
 
 **The IR entry point.** `object` is a built-in tag under `lowerSource`: the
@@ -3993,7 +3993,7 @@ three overloads, or one whose input is a constrained type parameter
 constraint, so a call matching an earlier overload, or carrying extra
 attributes, is reported. The preact, react, hono and solid hosts do not
 check these props yet (solid also reports a spurious TS2322 on the call); astro
-refuses such a binding outright (TS80001).
+refuses such a binding outright, with a compile error.
 
 **`<try>` renders its body into a buffered sub-sink**, `createBufferedOut(out)`,
 committed to `out` only when the body finishes. When the body throws, the

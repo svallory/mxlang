@@ -111,7 +111,7 @@ since each spec runs a real `astro build`.
 
 `src/components/stateful.mx` is the component the strict-policy error page
 imports, so it cannot compile by design. `tsconfig.json` excludes it:
-`mx-tsc` reports a stored compile error as a diagnostic (TS80001), and the
+`mx-tsc` reports a stored compile error as a diagnostic, and the
 example's typecheck would otherwise fail on the file that exists to fail.
 
 **`.mx` pages** (decision 76b, `packages/hosts/astro/src/index.ts` +

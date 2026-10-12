@@ -53,7 +53,7 @@ column to 1-based (#227); the transform error and dev overlay retain Vite's
 0-based `loc.column`. Build headers print 1-based columns (#227); the
 `[plugin mx] /…/src/page.mx:1:0` line quoted below is that correction's
 pre-fix record, not a current output. Callee parse messages retain only the
-reasons, one per caret, so an aggregate callee's later reasons are not lost;
+reasons, one per caret, so an aggregate callee's later reasons are not lost (`codeFrame` draws a run of carets to the error's `end` when it is on the same line, to the end of the line when it is on a later one, and one caret without an end; Rollup's `err.code` stays `PLUGIN_ERROR`, so MX's code is not shown there);
 the overlay frame comes from the callee source. `build-error-header.test.ts`
 uses the programmatic build API with a real discovered child syntax error.
 

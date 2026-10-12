@@ -3,7 +3,7 @@ packages: [core, target-registry, tsc, typescript-plugin, language-server, vite-
 kind: Added
 ---
 
-Every error `lowerSource` and the template compilers report now carries a stable code, and so does every core warning: `IrDiagnostic.code` on the IR entry, `TranslateError.diagnosticCode` on a template compile, `MxWarning.code` on a warning. Match on the code; the wording may change, the code does not. Messages, positions and severities are unchanged. Codes come from one catalogue, by family:
+Every error `lowerSource` and the template compilers report now carries a stable code, and so does every core warning: `IrDiagnostic.code` on the IR entry, `TranslateError.diagnosticCode` on a template compile, `MxWarning.code` on a warning. Match on the code; the wording may change, the code does not. Messages, severities and where a diagnostic starts are unchanged. Codes come from one catalogue, by family:
 
 - **Lowering**, the language's own rules: `MX_INVALID_IF`, `MX_INVALID_FOR`, `MX_UNKNOWN_ATTRIBUTE_TAG` and the rest.
 - **Contract**, a call checked against its tag's contract: `MX_UNKNOWN_TAG`, `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`, `MX_MISSING_ATTRIBUTE`, `MX_UNKNOWN_ATTRIBUTE`, `MX_RESERVED_TAG`, `MX_INVALID_DEFAULT_TAG` and the rest.
@@ -16,7 +16,7 @@ Every error `lowerSource` and the template compilers report now carries a stable
 
 The specification lists every code (§13.7.5 Diagnostic codes).
 
-The tools that already showed a dialect's code now show core's too: on a dialect file `mx-tsc` prints `error MX_PARSE_MISSING_END_TAG:` where it printed `error TS80001:`, the TypeScript plugin gives the code in place of `80001`, the language server sets `code`, and a `@mxlang/vite-plugin` scan warning reads `MX_IGNORED_CONFIG: …`. For a `.mx` file `mx-tsc` still prints `TS80001`.
+The tools that already showed a dialect's code now show core's too: on a dialect file `mx-tsc` prints `error MX_PARSE_MISSING_END_TAG:` where it printed `error TS80001:`, the TypeScript plugin gives the code in place of `80001`, the language server sets `code`, and a `@mxlang/vite-plugin` scan warning reads `MX_IGNORED_CONFIG: …`.
 
 The codes a dialect that restricts its tags relies on (`MX_UNKNOWN_TAG`, `MX_TAG_NOT_ALLOWED`, `MX_TEXT_NOT_ALLOWED`, `MX_EXPECTED_SINGLE_EXPRESSION`, `MX_DUPLICATE_ATTRIBUTE`) and `MX_TAG_FILE_ERROR` keep their meanings and their sites.
 

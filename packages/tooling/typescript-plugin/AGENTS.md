@@ -540,3 +540,5 @@ diagnostic's `source` and `code` (tsserver forwards a string `code` as it is).
 `getExternalFiles` lets dialect files through. Extensions are fixed when the
 plugin is created, so the project's directory is read then (`dialectFileExtensions`).
 No file other than a dialect's changes. Pins: `src/dialect-files.test.ts`.
+
+**Span and code of a compile diagnostic.** `MxCompileDiagnostic.length` is how many characters the diagnostic covers from `offset`; the `getSyntacticDiagnostics` proxy paints `length ?? 1`, clamped to the text. A dialect file sets it from `end.offset`; the `.mx` languages set it (`errorDiagnostic`, `warningDiagnostic`, `foreignTemplateError` in `language.ts`) from the thrown error's `end` (a `TranslateError`) or `loc.end` (a template parse error). An empty range (a point error) has no `length` and paints one character. The same functions carry the thrown error's `diagnosticCode` into `MxCompileDiagnostic.diagnosticCode`, so an `.mx` file shows `MX_*` where it showed `80001`.
