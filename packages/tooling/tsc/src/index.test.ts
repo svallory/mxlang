@@ -261,7 +261,9 @@ describe("mx-tsc", () => {
       ]);
 
       expect(result.status).toBe(0);
-      expect(result.stderr).toContain("Page.mx(3,2): warning TS80002");
+      expect(result.stderr).toContain(
+        "Page.mx(3,2): warning MX_UNREADABLE_CALLEE_INPUT",
+      );
       expect(result.stderr).toContain("attribute-tag shape inferred");
     },
     SPAWN_TIMEOUT_MS,

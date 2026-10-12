@@ -2153,7 +2153,9 @@ describe("MX language plugin", () => {
       const warnings = () =>
         project.service
           .getSyntacticDiagnostics(lateCaller)
-          .filter((diagnostic) => diagnostic.code === 80002)
+          .filter(
+            (diagnostic) => diagnostic.code === "MX_UNREADABLE_CALLEE_INPUT",
+          )
           .map((diagnostic) => diagnostic.messageText);
       project.service.getSemanticDiagnostics(lateConsumer);
       expect(warnings()).toEqual([
@@ -3007,6 +3009,7 @@ describe("MX language plugin", () => {
       start: 5,
       length: "a=1".length,
       category: ts.DiagnosticCategory.Warning,
+      code: "MX_DUPLICATE_ATTRIBUTE",
     });
   });
 

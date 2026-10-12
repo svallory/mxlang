@@ -55,6 +55,16 @@ describe("mx-tsc prints MX's code for an .mx file", () => {
     );
   });
 
+  it("a warning: its code too, as a warning", () => {
+    const warnings = lines("page.mx", "<div a=1 a=2/>\n").filter((line) =>
+      line.includes(": warning "),
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(
+      /^page\.mx\(1,6\): warning MX_DUPLICATE_ATTRIBUTE: /,
+    );
+  });
+
   it("keeps TS80001 for an error that has no code", () => {
     const [line] = lines(
       "page.solid.mx",

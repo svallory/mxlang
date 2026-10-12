@@ -10,7 +10,7 @@ import pluginFactory from "./index.ts";
 /**
  * `mx.contracts` (decision 142) through the TypeScript plugin: a contract-only
  * tag declared by a package-level contracts module surfaces the compiler's
- * positioned error as a TS80001 diagnostic on the `.mx` file. The edit half
+ * positioned error as an `MX_*` diagnostic on the `.mx` file. The edit half
  * documents the long-lived-process limitation (TODO `sync-esm-reload-node`):
  * tsserver keeps running, Node's ESM loader cache survives `require.cache`
  * eviction, so the edited module's exports stay stale until restart — the
@@ -186,7 +186,10 @@ function contractProject(moduleSource: string): {
   return { dir, page, consumer };
 }
 
-function mx80001(service: ts.LanguageService, page: string): string[] {
+function mxCompileMessages(
+  service: ts.LanguageService,
+  page: string,
+): string[] {
   return service
     .getSyntacticDiagnostics(page)
     .filter((diagnostic) => diagnostic.source === "mx")
@@ -207,7 +210,7 @@ describe("mx.contracts through the TypeScript plugin", () => {
     );
 
     service.getSemanticDiagnostics(consumer);
-    const messages = mx80001(service, page);
+    const messages = mxCompileMessages(service, page);
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain(
@@ -233,13 +236,13 @@ describe("mx.contracts through the TypeScript plugin", () => {
     setFile(page, PAGE_SOURCE);
     service.getSemanticDiagnostics(consumer);
 
-    expect(mx80001(service, page)).toEqual(messages);
+    expect(mxCompileMessages(service, page)).toEqual(messages);
 
     // The cached old contract still accepts nonce, proving this is a real
     // contract diagnostic rather than an unrelated virtual-module error.
     setFile(page, PAGE_SOURCE.replace("<style>", '<style nonce="abc">'));
     service.getSemanticDiagnostics(consumer);
-    expect(mx80001(service, page)).toEqual([]);
+    expect(mxCompileMessages(service, page)).toEqual([]);
     service.dispose();
   });
 });

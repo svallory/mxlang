@@ -51,6 +51,7 @@
           {
             "severity": 2,
             "source": "mxlang",
+            "code": "MX_UNREADABLE_CALLEE_INPUT",
             "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
             "range": {
               "start": {
@@ -130,7 +131,8 @@
             "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
             "offset": 31,
             "category": "warning",
-            "length": 4
+            "length": 4,
+            "diagnosticCode": "MX_UNREADABLE_CALLEE_INPUT"
           }
         ],
         "hostPolicyDiagnostics": [],
@@ -145,6 +147,6 @@
   },
   "mxTsc": [
     "<root>/alias-react/page.mx(1,18): error TS2307: Cannot find module '~/Card.mx' or its corresponding type declarations.",
-    "<root>/alias-react/page.mx(3,2): warning TS80002: couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call"
+    "<root>/alias-react/page.mx(3,2): warning MX_UNREADABLE_CALLEE_INPUT: couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call"
   ]
 }

@@ -1646,7 +1646,7 @@ describe("a diagnostic's range ends where core says it ends", () => {
     expect(span(diagnostic)).toEqual([0, 5, 0, 12]);
   });
 
-  it("runs a range over several lines when the error does", () => {
+  it("keeps a mismatched closing tag's range on its own line", () => {
     const [diagnostic] = diagnoseDocument(
       "<div>\n  <span>\n</div>\n",
       "/project/page.mx",
@@ -1654,6 +1654,26 @@ describe("a diagnostic's range ends where core says it ends", () => {
     );
     expect(diagnostic?.code).toBe("MX_PARSE_MISMATCHED_CLOSING_TAG");
     expect(span(diagnostic)).toEqual([2, 0, 2, 6]);
+  });
+
+  it("runs a range over several lines when the error does", () => {
+    const [diagnostic] = diagnoseDocument(
+      '<div class="a"\n  id="b">\n',
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_PARSE_MISSING_END_TAG");
+    expect(span(diagnostic)).toEqual([0, 0, 1, 9]);
+  });
+
+  it("runs a warning's range over several lines when it does", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<div a=(\n  1\n) a=2/>\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_DUPLICATE_ATTRIBUTE");
+    expect(span(diagnostic)).toEqual([0, 5, 1, 3]);
   });
 
   it("widens a point parse error to one character", () => {
@@ -1673,6 +1693,7 @@ describe("a diagnostic's range ends where core says it ends", () => {
       policy("html"),
     );
     expect(diagnostic?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostic?.code).toBe("MX_DUPLICATE_ATTRIBUTE");
     expect(diagnostic?.message).toContain("duplicate attribute `a`");
     expect(span(diagnostic)).toEqual([0, 5, 0, 8]);
   });

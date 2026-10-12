@@ -168,6 +168,7 @@ function warningDiagnostics(
     const diagnostic: Diagnostic = {
       severity: DiagnosticSeverity.Warning,
       source: "mxlang",
+      ...(warning.code === undefined ? {} : { code: warning.code }),
       message: warning.message,
       range: {
         start: {

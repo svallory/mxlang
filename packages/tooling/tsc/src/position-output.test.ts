@@ -94,7 +94,7 @@ describe("mx-tsc and mx-angular build agree on the column", () => {
 
       const tsc = tscLines(join(fixtures, "ng-literal-syntax"));
       expect(tsc.lines).toEqual([
-        `src/x.component.ng.mx(5,16): warning TS80002: ${message}`,
+        `src/x.component.ng.mx(5,16): warning mx-angular-literal-syntax: ${message}`,
       ]);
       expect(tsc.status).toBe(0);
 

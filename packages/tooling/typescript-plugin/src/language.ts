@@ -90,12 +90,14 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
   category: "error" | "warning";
   /**
    * What a dialect file's diagnostic shows as its `source`, in place of the
-   * host's: the dialect's name. Only a dialect's file sets it.
+   * host's: the dialect's name. Only a dialect's file sets it (an MX file's
+   * diagnostics keep the host's source).
    */
   diagnosticSource?: string;
   /**
-   * The dialect's own machine-readable code for the diagnostic, shown in
-   * place of `80001`/`80002`. Only a dialect's file sets it.
+   * The machine-readable code for the diagnostic, shown in place of
+   * `80001`/`80002`: the dialect's own for a dialect file, core's `MX_*` for an
+   * MX file (a thrown error's `diagnosticCode`, a warning's `code`).
    */
   diagnosticCode?: string;
   /**
@@ -736,6 +738,7 @@ export function warningDiagnostic(
     source,
     category: "warning",
     ...(length === undefined ? {} : { length }),
+    ...(warning.code === undefined ? {} : { diagnosticCode: warning.code }),
   };
 }
 

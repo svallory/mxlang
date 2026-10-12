@@ -161,8 +161,10 @@ export function startServer(
   function publish(uri: string): void {
     // Two parts can report one problem with different ends: a tag file's own
     // check ends it where core says, while a caller's scan of that file only
-    // knows where it starts. They agree on everything else, so they are one
-    // diagnostic, painted over the wider range.
+    // knows where it starts (`ScanDiagnostic` has no `end`, so the origin
+    // `checkDialectFile` builds from a scan has none either; TODO
+    // `ir-diagnostic-end-gaps`). They agree on everything else, so they are
+    // one diagnostic, painted over the wider range.
     const at = new Map<string, number>();
     const union: Diagnostic[] = [];
     const endsAfter = (a: Diagnostic, b: Diagnostic): boolean =>

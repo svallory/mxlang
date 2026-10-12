@@ -919,6 +919,30 @@ export default () => <div />;
       expect(error.message).toMatch(/`<else>`/);
     });
 
+    it("runs the carets to the end of the line when the error ends on a later line", async () => {
+      // `<div class="a"` opens on line 1 and its open tag ends on line 2, so
+      // the missing-end-tag error spans two lines: the frame shows line 1
+      // only, so the carets cover the whole of it (14 characters), not the
+      // 9 columns the end has on line 2.
+      const dir = mkdtempSync(join(tmpdir(), "mx-multiline-frame-"));
+      try {
+        const file = join(dir, "page.mx");
+        const source = '<div class="a"\n  id="b">\n';
+        writeFileSync(file, source);
+        let caught: unknown;
+        try {
+          await transformOf(mx()).call({}, source, `${file}${MX_SUFFIX}`);
+        } catch (err) {
+          caught = err;
+        }
+        const error = caught as Error & { frame?: string };
+        expect(error).toBeInstanceOf(Error);
+        expect(error.frame).toBe(`1 | <div class="a"\n    ${"^".repeat(14)}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
     it("hoists a discovered tag's import into a .solid.mx module", async () => {
       // The integration layer for B1: a `.solid.mx` region calls a tag it
       // never imported, and the module this plugin hands Vite must carry the
