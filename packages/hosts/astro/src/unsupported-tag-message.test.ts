@@ -29,12 +29,12 @@ describe("Astro: a tag the host does not support", () => {
   it.each([
     [
       "<let/x=1/>",
-      "`<let>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<let>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
       4,
     ],
     [
       "<script>go()</script>",
-      "`<script>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<script>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
       7,
     ],
     [

@@ -21,7 +21,7 @@ The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. A host (e
 
 ## A tag a host does not support
 
-Embedded MX (a `.preact.mx`, `.react.mx`, `.hono.mx`, `.solid.mx` or `.astro.mx` file, a region in a TypeScript module, an Angular template) refuses every tag its host cannot express with one sentence, code `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name:
+Embedded MX (a `.mx` file compiled for a host, a `.solid.mx` or `.astro.mx` file, a region in a `.react.mx`, `.preact.mx` or `.hono.mx` module, an Angular template) refuses every tag its host cannot express with one sentence, code `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name:
 
 > `<let>` is not supported in embedded MX on Preact. Use Preact's `useState` via `<const/x=useState(0)/>` or in the surrounding module.
 

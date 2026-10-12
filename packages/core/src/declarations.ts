@@ -146,7 +146,7 @@ export interface HostDeclarations {
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape), `unsupported` (this target cannot express it; core words the
    * refusal and the host adds a hint) or `error` (a refusal in the host's own
-   * words). Decision 65: never "my code cannot".
+   * words).
    */
   tags: Record<string, Disposition>;
   /**

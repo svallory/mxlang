@@ -167,16 +167,16 @@ function fail(message: string, node: Positioned | Node): never {
 const TAGS: HostDeclarations["tags"] = {
   let: {
     kind: "unsupported",
-    hint: "A `.astro.mx` file renders static markup at build time.",
+    hint: "An `.astro.mx` file renders static markup at build time.",
   },
   effect: { kind: "unsupported" },
   lifecycle: {
     kind: "unsupported",
-    hint: "A `.astro.mx` file renders static markup at build time.",
+    hint: "An `.astro.mx` file renders static markup at build time.",
   },
   script: {
     kind: "unsupported",
-    hint: "A `.astro.mx` file renders static markup at build time.",
+    hint: "An `.astro.mx` file renders static markup at build time.",
   },
   client: {
     kind: "error",
@@ -190,11 +190,11 @@ const TAGS: HostDeclarations["tags"] = {
   },
   id: {
     kind: "unsupported",
-    hint: "A `.astro.mx` file renders static markup at build time.",
+    hint: "An `.astro.mx` file renders static markup at build time.",
   },
   await: {
     kind: "unsupported",
-    hint: "A `.astro.mx` file renders static markup at build time.",
+    hint: "An `.astro.mx` file renders static markup at build time.",
   },
   // `<return>` is **not** listed. A `.astro.mx` file cannot declare one — it is an
   // Astro component, whose output is its markup — but this table is consulted
@@ -972,6 +972,7 @@ export function createEmitter(
     component(node) {
       if (node.target.kind !== "name") {
         if (node.target.kind === "define") {
+          // Unreachable from lowerAstroMx: core raises the TAGS row first. Kept for emitTemplate(ir) callers with IR lowered under other declarations.
           fail(
             "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
             node,
@@ -1140,6 +1141,7 @@ export function createEmitter(
     },
 
     define(node) {
+      // Unreachable from lowerAstroMx: core raises the TAGS row first. Kept for emitTemplate(ir) callers with IR lowered under other declarations.
       fail(
         "`<define>` declares a reusable template block; an Astro template has no local component form — extract it into its own `.astro.mx` file and import it",
         node,
@@ -1147,6 +1149,7 @@ export function createEmitter(
     },
 
     constant(node) {
+      // Unreachable from lowerAstroMx: core raises the TAGS row first. Kept for emitTemplate(ir) callers with IR lowered under other declarations.
       fail(
         "`<const>` declares a binding, which an Astro template expression cannot do; declare it in the `---` fence instead",
         node,

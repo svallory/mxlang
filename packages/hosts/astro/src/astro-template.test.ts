@@ -708,7 +708,7 @@ describe("unsupported constructs", () => {
     [
       "let",
       "<let/count=1/>",
-      "`<let>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<let>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
     ],
     [
       "effect",
@@ -718,17 +718,17 @@ describe("unsupported constructs", () => {
     [
       "lifecycle",
       "<lifecycle onMount=f/>",
-      "`<lifecycle>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<lifecycle>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
     ],
     [
       "id",
       "<id/x/>",
-      "`<id>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<id>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
     ],
     [
       "await",
       "<await=p><p>x</p></await>",
-      "`<await>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+      "`<await>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
     ],
   ])("rejects <%s>", (_name, template, message) => {
     expect(errorFor(template).message).toBe(message);

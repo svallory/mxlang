@@ -292,7 +292,7 @@ describe("mxTemplates()", () => {
           frame?: string;
         };
         expect(wrapped.message).toContain(
-          "`<let>` is not supported in embedded MX on Astro. A `.astro.mx` file renders static markup at build time.",
+          "`<let>` is not supported in embedded MX on Astro. An `.astro.mx` file renders static markup at build time.",
         );
         // The position names the real `.astro.mx` file, past the fence.
         expect(wrapped.id).toBe(path);

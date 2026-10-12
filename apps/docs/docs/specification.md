@@ -3338,9 +3338,9 @@ the S8 silent-wrong-render class the field guard exists to close.
 
 ### A tag a host does not support
 
-Every tag a host cannot express in embedded MX (a `.preact.mx`, `.react.mx`,
-`.hono.mx`, `.solid.mx` or `.astro.mx` file, a region inside a TypeScript module,
-an Angular template) is refused with one message shape, code
+Every tag a host cannot express in embedded MX (a `.mx` file compiled for a host, a
+`.solid.mx` or `.astro.mx` file, a region in a `.react.mx`, `.preact.mx` or
+`.hono.mx` module, an Angular template) is refused with one message shape, code
 `MX_UNSUPPORTED_CONSTRUCT`, positioned at the tag name with its end:
 
 > `<let>` is not supported in embedded MX on Preact. Use Preact's `useState` via `<const/x=useState(0)/>` or in the surrounding module.
