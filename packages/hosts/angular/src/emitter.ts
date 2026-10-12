@@ -183,7 +183,9 @@ export const angularDeclarations: HostDeclarations = {
     context.configured ??
     DEFAULT_TAG,
   scriptletReplacement: (name, keyword) =>
-    keyword === "const" ? `declare a value with \`<const/${name}=…/>\`` : "",
+    keyword === "const"
+      ? `declare a value with \`<const/${name}=…/>\``
+      : "declare it in the component class",
   // `[prop]=`, `#ref`, `*ngIf` are the target's own syntax and pass through.
   acceptsForeignAttrNames: true,
   tags: {

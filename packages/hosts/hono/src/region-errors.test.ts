@@ -116,6 +116,18 @@ describe("region rule", () => {
     });
   });
 
+  it.each(["let", "var"])(
+    "refuses a $ %s scriptlet, pointing at the surrounding component",
+    (keyword) => {
+      expect(errorOf(inRegion(`$ ${keyword} n = 1;`))).toEqual({
+        message:
+          "scriptlets (`$ statement`) are not supported in MX; declare it in the surrounding component",
+        line: 5,
+        column: 6,
+      });
+    },
+  );
+
   it("refuses a <const> nested deeper in the region with the same message", () => {
     expect(
       errorOf(inRegion("<section>\n        <const/n=1/>\n      </section>")),

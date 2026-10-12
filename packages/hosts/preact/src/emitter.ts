@@ -233,13 +233,15 @@ export function createJsxDeclarations(
       context.configured ??
       DEFAULT_TAG,
     // `<let>` is not this host's state model. Never turn a mutable JS
-    // declaration into an immutable `<const>` just to offer a fix.
+    // declaration into an immutable `<const>` just to offer a fix: a `let` or
+    // `var` is moved out of the template (into the surrounding component, in a
+    // region), and only a `const` becomes a `<const>` tag.
     scriptletReplacement: (name, keyword) =>
-      keyword !== "const"
-        ? ""
-        : region
-          ? "declare it in the surrounding component"
-          : `declare a value with \`<const/${name}=…/>\``,
+      region
+        ? "declare it in the surrounding component"
+        : keyword === "const"
+          ? `declare a value with \`<const/${name}=…/>\``
+          : "move the statement out of the template",
     // Element-vs-component follows Marko's own rule — what the taglib lookup
     // and the template's own bindings resolve the name to — not JSX's casing
     // rule, so a `tags/`-discovered `<badge/>` is the component it is in Marko.
