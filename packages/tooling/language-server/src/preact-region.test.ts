@@ -29,9 +29,10 @@ export function Panel() {
     expect(diagnostics[0]).toMatchObject({
       severity: 1,
       source: "mxlang",
+      code: "MX_UNSUPPORTED_CONSTRUCT",
       range: {
         start: { line: 5, character: 6 },
-        end: { line: 5, character: 7 },
+        end: { line: 5, character: 10 },
       },
     });
     expect(
