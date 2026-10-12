@@ -19,6 +19,7 @@ import {
   type ContractCheckContext,
   type ContractFields,
   checkContractFields,
+  forgetClaimedFields,
   registerSyntaxResolver,
 } from "./contract-fields.ts";
 import type { Node } from "./core.ts";
@@ -39,6 +40,7 @@ import {
 } from "./dialect-discovery.ts";
 import {
   checkDialectNodeTypes,
+  forgetNodeTypeRegistry,
   isCallRow,
   isNodeTypeRow,
   type NodeType,
@@ -1268,6 +1270,15 @@ export function explicitSyntaxOf(
   }
   const known = explicitModules.get(value);
   if (known) return known;
+  // A dialect that is not deep-frozen can change between calls: what core
+  // remembers about it (the claimed contract fields, the node type registry,
+  // the contract entries checked under that claim) is dropped, so this call
+  // reads and checks all of it afresh.
+  const cacheable = isDeepFrozen(value);
+  if (!cacheable) {
+    forgetClaimedFields(value);
+    forgetNodeTypeRegistry(value);
+  }
   const invalid = (message: string): never =>
     fail(`the \`dialect\` option is not a valid dialect: ${message}`);
   // SAFETY: `isDialect` narrowed `value` to a plain object with a `table`;
@@ -1292,7 +1303,7 @@ export function explicitSyntaxOf(
   const resolved: ResolvedSyntax = { table, dialect };
   // Only a deep-frozen dialect is remembered: a nested object left unfrozen
   // could change, so a partly frozen one is validated on every call.
-  if (isDeepFrozen(value)) explicitModules.set(value, resolved);
+  if (cacheable) explicitModules.set(value, resolved);
   return resolved;
 }
 

@@ -137,10 +137,16 @@ export function checkDialectContracts(
         refuse(`\`${hook}\` must be a function`);
       }
     }
-    // An entry already checked under this claim (the same object, from an
-    // earlier load or call) is not checked again: an explicit `dialect` that
-    // is not frozen is resolved on every call.
-    if (isValidatedContract(definition as CustomTag, claimed)) continue;
+    // A deep-frozen entry already checked under this claim (the same object,
+    // from an earlier load or call) is not checked again. An entry that is
+    // not deep-frozen can change in place, so it is checked every time; a
+    // routed dialect is checked once per load of its module either way.
+    if (
+      isDeepFrozen(definition) &&
+      isValidatedContract(definition as CustomTag, claimed)
+    ) {
+      continue;
+    }
     try {
       if (definition.parseOptions !== undefined) {
         checkParseOptions(definition.parseOptions, "", "parseOptions");

@@ -1450,36 +1450,54 @@ describe("the merge is memoized per dialect and `customTags` map", () => {
     ]);
   });
 
-  it("an explicit dialect that is not frozen: `checkContract` runs once per contract entry, however often it is lowered", () => {
-    let checks = 0;
-    const box = {
-      attributes: {
-        k: { type: "string" as const, required: true, shape: "square" },
-      },
+  it("an explicit dialect: `checkContract` runs on every lowering when it is not deep-frozen, once in all when it is", () => {
+    const build = () => {
+      const checks = { count: 0 };
+      const own = {
+        id: "lexi",
+        name: "Lexi",
+        table: {},
+        contractFields: { attribute: ["shape"] },
+        checkContract() {
+          checks.count += 1;
+        },
+        contracts: {
+          box: {
+            attributes: {
+              k: { type: "string" as const, required: true, shape: "square" },
+            },
+          },
+        } as ContractMap,
+      };
+      return { own, checks };
     };
-    const own = {
-      id: "lexi",
-      name: "Lexi",
-      table: {},
-      contractFields: { attribute: ["shape"] },
-      checkContract() {
-        checks += 1;
-      },
-      contracts: { box } as ContractMap,
-    };
-    const lower = () =>
+    const lowerWith = (own: object) => () =>
       lowerSource("<box/>\n", join(dir, "p.x"), {
         dialect: own as LowerSourceOptions["dialect"] & object,
         customTags: { other: {} },
       }).diagnostics.map((d) => d.message);
-    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
-    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
-    expect(checks).toBe(1);
-    // A new entry object is a new contract: checked once more.
-    own.contracts = { box: { ...box } };
-    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
-    expect(lower()).toEqual(["`<box>`: missing required attribute `k`"]);
-    expect(checks).toBe(2);
+    const missing = ["`<box>`: missing required attribute `k`"];
+
+    const loose = build();
+    const lowerLoose = lowerWith(loose.own);
+    let seen = 0;
+    for (let i = 0; i < 3; i++) {
+      expect(lowerLoose()).toEqual(missing);
+      expect(loose.checks.count).toBeGreaterThan(seen);
+      seen = loose.checks.count;
+    }
+
+    const deep = build();
+    const frozen = (value: unknown): void => {
+      if (value && typeof value === "object") {
+        for (const field of Object.values(value)) frozen(field);
+        Object.freeze(value);
+      }
+    };
+    frozen(deep.own);
+    const lowerDeep = lowerWith(deep.own);
+    for (let i = 0; i < 3; i++) expect(lowerDeep()).toEqual(missing);
+    expect(deep.checks.count).toBe(1);
   });
 
   it("a dialect without contracts leaves `customTags` alone", () => {

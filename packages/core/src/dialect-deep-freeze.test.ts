@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ContractMap, CustomTag } from "./custom-tags.ts";
 import { isDeepFrozen } from "./deep-frozen.ts";
+import { nodeTypeRegistry } from "./dialect-registry.ts";
 import { type LowerSourceOptions, lowerSource } from "./ir-entry/index.ts";
 import {
   defaultSyntax,
@@ -159,9 +160,24 @@ describe("a deep-frozen dialect stays cached", () => {
     expect(explicitSyntaxOf(own as never, FILE)).toBe(first);
   });
 
-  it("is validated once across N lowerings", () => {
+  it("is validated once across N lowerings: later calls do not even read the dialect", () => {
     const { own, checks } = build();
-    for (let i = 0; i < 5; i++) expect(lower(own)).toEqual(MISSING_K);
+    const reads = { count: 0 };
+    const watched = new Proxy(own, {
+      ownKeys(target) {
+        reads.count += 1;
+        return Reflect.ownKeys(target);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        reads.count += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    });
+    expect(lower(watched)).toEqual(MISSING_K);
+    expect(reads.count).toBeGreaterThan(0);
+    const afterFirst = reads.count;
+    for (let i = 0; i < 4; i++) expect(lower(watched)).toEqual(MISSING_K);
+    expect(reads.count).toBe(afterFirst);
     expect(checks.count).toBe(1);
   });
 
@@ -359,5 +375,116 @@ describe("the dialect option's merged contracts are remembered only for a deep-f
     const tags: Record<string, CustomTag> = { other: {} };
     const first = dialectCustomTags(tags, own as never, false);
     expect(dialectCustomTags(tags, own as never, false)).toBe(first);
+  });
+});
+
+describe("a dialect option that is not deep-frozen is read afresh on every call", () => {
+  const BAD_PARSE_OPTIONS =
+    "the `dialect` option is not a valid dialect: `dialect.contracts.box`: `parseOptions.bogus` is not a parse option; expected `text`, `preserveWhitespace` or `openTagOnly`";
+
+  it("a contract entry changed in place (the same object) is checked again, then accepted again after the undo", () => {
+    const box: Mutable = {
+      attributes: { k: { type: "string", required: true } },
+    };
+    const own = Object.freeze({
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contracts: { box },
+    });
+    expect(lower(own)).toEqual(MISSING_K);
+    box.parseOptions = { bogus: 1 };
+    expect(lower(own)).toEqual([BAD_PARSE_OPTIONS]);
+    delete box.parseOptions;
+    expect(lower(own)).toEqual(MISSING_K);
+  });
+
+  it("a claimed contract field removed from an unfrozen `contractFields` array is refused, then accepted again after the undo", () => {
+    const tag = ["shape"];
+    const own = Object.freeze({
+      id: "lexi",
+      name: "Lexi",
+      table: {},
+      contractFields: { tag },
+      contracts: { box: { shape: 1 } },
+    });
+    expect(lower(own)).toEqual([]);
+    tag.pop();
+    const refused = lower(own);
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatch(
+      /^the `dialect` option is not a valid dialect: `dialect\.contracts\.box`: Unknown key "shape" in the declaration of tag "box"; allowed: /,
+    );
+    tag.push("shape");
+    expect(lower(own)).toEqual([]);
+  });
+
+  it("the node type registry follows an unfrozen `nodeTypes` entry changed in place", () => {
+    const keys = ["path"];
+    const own = Object.freeze({
+      id: "ref",
+      name: "Ref",
+      table: {},
+      nodeTypes: {
+        Ref: { keys, parse: () => null, print: () => "", lower: () => "" },
+      },
+    });
+    const registryKeys = () => {
+      explicitSyntaxOf(own as never, FILE);
+      return nodeTypeRegistry(own as never).get("ref:Ref")?.keys;
+    };
+    expect(registryKeys()).toContain("path");
+    expect(registryKeys()).not.toContain("extra");
+    keys.push("extra");
+    expect(registryKeys()).toContain("extra");
+    keys.pop();
+    expect(registryKeys()).not.toContain("extra");
+  });
+
+  it("a deep-frozen dialect keeps its claim and registry across calls", () => {
+    const own = freezeDeep({
+      id: "ref",
+      name: "Ref",
+      table: {},
+      nodeTypes: {
+        Ref: {
+          keys: ["path"],
+          parse: () => null,
+          print: () => "",
+          lower: () => "",
+        },
+      },
+    });
+    explicitSyntaxOf(own as never, FILE);
+    const first = nodeTypeRegistry(own as never);
+    explicitSyntaxOf(own as never, FILE);
+    expect(nodeTypeRegistry(own as never)).toBe(first);
+  });
+});
+
+describe("isDeepFrozen: the top value", () => {
+  it("a frozen class instance is not walked data: false", () => {
+    class Holder {
+      table = { open: true };
+    }
+    expect(isDeepFrozen(Object.freeze(new Holder()))).toBe(false);
+  });
+
+  it("an object with an inherited field is false, however frozen", () => {
+    const proto = { table: { open: true } };
+    expect(isDeepFrozen(Object.freeze(Object.create(proto)))).toBe(false);
+  });
+
+  it("a non-enumerable own property is walked", () => {
+    const hidden = Object.defineProperty({}, "table", {
+      value: { open: true },
+      enumerable: false,
+    });
+    expect(isDeepFrozen(Object.freeze(hidden))).toBe(false);
+    const frozenHidden = Object.defineProperty({}, "table", {
+      value: Object.freeze({ open: true }),
+      enumerable: false,
+    });
+    expect(isDeepFrozen(Object.freeze(frozenHidden))).toBe(true);
   });
 });

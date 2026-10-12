@@ -77,6 +77,15 @@ const NONE: ClaimedFields = Object.freeze({
 
 const byModule = new WeakMap<object, ClaimedFields>();
 
+/**
+ * Forgets the claim computed for `module`, so the next {@link claimedFields}
+ * reads its fields afresh (and every contract entry is checked again under
+ * the new claim). For a `dialect` option that is not deep-frozen.
+ */
+export function forgetClaimedFields(module: object): void {
+  byModule.delete(module);
+}
+
 /** The keys `module` claims (none without a module), with its `checkContract`. */
 export function claimedFields(module: Dialect | undefined): ClaimedFields {
   const fields = module?.contractFields;

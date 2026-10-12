@@ -15,7 +15,8 @@ function isWalked(value: object): boolean {
  * Whether `value` is frozen all the way down, over what core validates: the
  * plain objects and arrays in it. RegExps, functions, Maps, Sets and class
  * instances are opaque: they are not walked and need not be frozen (a `g` or
- * `y` RegExp cannot be frozen safely). The top `value` itself must be frozen.
+ * `y` RegExp cannot be frozen safely). The top `value` itself must be a frozen
+ * plain object or array. Non-enumerable own properties are walked too.
  * An accessor property counts as not frozen (its result can change).
  *
  * This is the gate of every cache keyed on a table or dialect object:
@@ -31,7 +32,7 @@ export function isDeepFrozen(value: object): boolean {
     if (!isWalked(node)) return true;
     if (!Object.isFrozen(node)) return false;
     seen.add(node);
-    for (const key of Object.keys(node)) {
+    for (const key of Object.getOwnPropertyNames(node)) {
       const descriptor = Object.getOwnPropertyDescriptor(node, key);
       if (!descriptor || !("value" in descriptor)) return false;
       const field: unknown = descriptor.value;
@@ -39,7 +40,12 @@ export function isDeepFrozen(value: object): boolean {
     }
     return true;
   };
-  if (!Object.isFrozen(value) || !walk(value)) return false;
+  // The top value is held to the same shape as what is inside it: a class
+  // instance or an object with an inherited field is not data core can see
+  // all of.
+  if (!isWalked(value) || !Object.isFrozen(value) || !walk(value)) {
+    return false;
+  }
   for (const node of seen) deepFrozen.add(node);
   return true;
 }

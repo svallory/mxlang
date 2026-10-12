@@ -333,6 +333,15 @@ const registries = new WeakMap<
 >();
 
 /**
+ * Forgets the registry built for `dialect`, so the next {@link nodeTypeRegistry}
+ * reads its node types afresh. For a `dialect` option that is not
+ * deep-frozen, whose node types can change between calls.
+ */
+export function forgetNodeTypeRegistry(dialect: object): void {
+  registries.delete(dialect);
+}
+
+/**
  * The registry a file lowers with: core's node types, then the dialect's
  * (none without a dialect). The dialect is assumed valid
  * ({@link checkDialectNodeTypes} ran when it was loaded).
