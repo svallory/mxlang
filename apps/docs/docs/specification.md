@@ -551,7 +551,7 @@ the app.
 
 | Message | When |
 |---|---|
-| `scriptlets (\`$ statement\`) are not supported in MX` | A `MarkoScriptlet` appears in any child list. |
+| `scriptlets (\`$ statement\`) are not supported in MX; a template holds values, not statements: write a value with \`<const/x=…/>\`, or move the statement out of the template` | A `MarkoScriptlet` appears in any child list. A `$ const`, `$ let` or `$ var` declaration gets its host's replacement in place of the generic fix, or none where the host has no immutable one. |
 
 Decision 54's reasoning: Marko 6's reactive compiler cannot assign a bare
 statement re-run, dependency, server/client or serialization semantics.
@@ -4048,15 +4048,15 @@ offending field (at `mx.dialect` itself for a missing one):
 |---|---|
 | Not an object | `` `mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }` `` |
 | An unknown field | `` `mx.dialect.<key>` is not a dialect manifest field (id, name, extensions, module, tagDirs, tagExtensions, sidecars, reservedTags, mxConfigTags) `` |
-| An `id` that is not one | `` `mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`) `` |
+| An `id` that is not one | `` `mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mydsl`) `` |
 | `id` `mx` | `` `mx.dialect.id` cannot be `mx`: that is MX's own dialect `` |
 | No `name`, or a blank one | `` `mx.dialect.name` must be a non-empty string: the name tooling shows the dialect's users `` |
-| No `extensions` | `` `mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`) `` |
-| `.mx` claimed | `` `mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
-| `.mx` in another case | `` `mx.dialect.extensions` cannot claim `<ext>`: it is `.mx` in another case, and `.mx` is MX's own; a dialect claims its own extensions (`.mesh.mx`) `` |
-| A TypeScript, JavaScript or Marko extension | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<segment>` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mesh.mx`) `` |
-| A host's file kind | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<host>.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`) `` |
-| Not an extension | `` `mx.dialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
+| No `extensions` | `` `mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mydsl.mx"]`) `` |
+| `.mx` claimed | `` `mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mydsl.mx`) `` |
+| `.mx` in another case | `` `mx.dialect.extensions` cannot claim `<ext>`: it is `.mx` in another case, and `.mx` is MX's own; a dialect claims its own extensions (`.mydsl.mx`) `` |
+| A TypeScript, JavaScript or Marko extension | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<segment>` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mydsl.mx`) `` |
+| A host's file kind | `` `mx.dialect.extensions` cannot claim `<ext>`: `.<host>.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`) `` |
+| Not an extension | `` `mx.dialect.extensions`: "<value>" is not a file extension; write it with its leading dot (`.mydsl.mx`) `` |
 | An extension twice | `` `mx.dialect.extensions` lists `<ext>` twice `` |
 | No `module` | `` `mx.dialect.module` must be a path, relative to this `package.json`, to the module whose default export is the dialect `` |
 | A `module` outside the package | `` `mx.dialect.module` must stay inside the dialect's package, so the manifest works wherever the package is installed: "<value>" is an absolute path; write a path relative to this `package.json` (`./dialect.js`) `` (`is outside the package` for one that climbs out with `..`) |
@@ -4094,17 +4094,17 @@ naming both: `` two dialects claim `<ext>`: `<a>` (<package a>) and `<b>`
 A clash on an extension the file does not end with is not an error for that file.
 
 **`mx.extensions`** in the project's MX config ([Configuration](/configuration/)) maps an extension to a
-dialect id: `{ ".mesh.mx": "mesh" }`. It settles a clash, and it can route an
+dialect id: `{ ".mydsl.mx": "mydsl" }`. It settles a clash, and it can route an
 extension the dialect does not claim to a dialect the project uses. A value that
 is not an object is an error at the `mx.extensions` key; a problem with an entry
 is an error at that entry's key:
 
 | Problem | Message |
 |---|---|
-| Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`) `` |
+| Not an object | `` `mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mydsl.mx": "mydsl" }`) `` |
 | `.mx` routed | `` `mx.extensions` cannot route `.mx`: it is MX's own `` |
 | Another reserved extension | `` `mx.extensions` cannot route `<ext>`: <reason> ``, with the reason the manifest table gives |
-| A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mesh.mx`) `` |
+| A key that is not an extension | `` `mx.extensions`: "<key>" is not a file extension; write it with its leading dot (`.mydsl.mx`) `` |
 | An id no dependency declares | `` `mx.extensions` routes `<ext>` to "<id>", which is not a dialect this project uses (it uses `<ids>`); a dialect is found among the project's direct dependencies `` |
 
 Core holds no list of hosts: the caller's targets name the host file kinds
