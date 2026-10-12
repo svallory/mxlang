@@ -146,8 +146,8 @@ required; `escape: boolean` default `true`. Read by `lower.ts` `lowerChildList`
 
 `[C]babel.js:8132-8151`; `[C]types.d.ts:3669-3674`. `body: Statement[]`
 required; `static: boolean` default `false`; `target: "server" \| "client"`
-optional. MX reads only the type: `lower.ts` `lowerChildList` rejects every scriptlet
-(decision 54). `static` and `target` are not read; they are never set by the
+optional. MX reads only the type: `lower.ts` `lowerChildList` rejects every scriptlet.
+`static` and `target` are not read; they are never set by the
 front end either (`[C]chunk-src.js:6067` builds `markoScriptlet(block.body)`).
 
 #### `MarkoComment`
@@ -777,8 +777,8 @@ in that change, so the port carries nothing.
 | `code` | `MxStatements` | no | the statements (inside the braces for the block form) |
 
 Spans: from `$` to the end of the statement or `}`. Example: `$ const z = 1;`
-is `[0, 14)`, `code.span` `[2, 14)`. MX rejects scriptlets (decision 54,
-`lower.ts` `lowerChildList`); the node exists so the error is positioned.
+is `[0, 14)`, `code.span` `[2, 14)`. MX rejects scriptlets
+(`lower.ts` `lowerChildList`); the node exists so the error is positioned.
 
 `MxStatements` — the expression container (§4) for statements:
 `MxExpressionContainer<Statement[]> & { type: "MxStatements" }`, carrying the

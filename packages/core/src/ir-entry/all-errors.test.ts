@@ -285,12 +285,7 @@ describe("no input makes lowerSource throw", () => {
   // Main's first diagnostic was a real error (kept first, same text and
   // position) or only the span invariant / nothing (the new error stands).
   it.each([
-    [
-      "$ {a",
-      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
-      1,
-      0,
-    ],
+    ["$ {a", "scriptlets (`$ statement`) are not supported in MX", 1, 0],
     [`script -- \${b`, "EOF reached while parsing placeholder", 1, 12],
     ["div(a", "the input ends inside `(`…`)` opened here", 1, 3],
     ["div|a", "the input ends inside `|`…`|` opened here", 1, 3],

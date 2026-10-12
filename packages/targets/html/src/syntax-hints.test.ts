@@ -88,16 +88,14 @@ describe("scriptlets (html)", () => {
     (keyword) => {
       const source = `$ ${keyword} x = 1;\n<p>\${x}</p>`;
       expect(failure(source).message).toBe(
-        "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<let/x=…/>` (initial value only on this target)",
+        "scriptlets (`$ statement`) are not supported in MX; declare a value with `<let/x=…/>` (initial value only on this target)",
       );
       expect(() =>
         compile(`<let/x=1/><p>\${x}</p>`, "/fixtures/test.mx"),
       ).not.toThrow();
       expect(() =>
         compile(source, "/fixtures/test.mx", { strict: true }),
-      ).toThrow(
-        /^scriptlets \(`\$ statement`\) are not supported in MX \(decision 54\)$/,
-      );
+      ).toThrow(/^scriptlets \(`\$ statement`\) are not supported in MX$/);
       expect(() =>
         compile("<let/x=1/>", "/fixtures/test.mx", { strict: true }),
       ).toThrow("`<let>` is reactive state");
@@ -115,7 +113,7 @@ describe("scriptlets (html)", () => {
 
   it("a valid scriptlet carries the same fix", () => {
     expect(failure(`$ const x = 1;\n<p>\${x}</p>`).message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54); declare a value with `<const/x=…/>`",
+      "scriptlets (`$ statement`) are not supported in MX; declare a value with `<const/x=…/>`",
     );
   });
 
@@ -230,10 +228,10 @@ describe("round 2 (html)", () => {
 
   it("F4: a valid non-declaring scriptlet gets the bare sentence", () => {
     expect(failure("$ doThing();\n<p>1</p>").message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+      "scriptlets (`$ statement`) are not supported in MX",
     );
     expect(failure("$ const { a } = x;\n<p>1</p>").message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
+      "scriptlets (`$ statement`) are not supported in MX",
     );
   });
 

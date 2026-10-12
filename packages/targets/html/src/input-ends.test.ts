@@ -37,12 +37,7 @@ describe("input ending inside a concise open delimiter", () => {
     ],
     ["x<a", "Unable to find entry point for custom tag `<x>`.", 1, 0],
     ["x<a x=`${<a>", "Unable to find entry point for custom tag `<x>`.", 1, 0],
-    [
-      "$ {a",
-      "scriptlets (`$ statement`) are not supported in MX (decision 54)",
-      1,
-      0,
-    ],
+    ["$ {a", "scriptlets (`$ statement`) are not supported in MX", 1, 0],
   ])("%j keeps main's error first", (source, message, line, column) => {
     expect(run(source)).toEqual({ message, line, column });
   });

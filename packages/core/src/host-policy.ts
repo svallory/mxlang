@@ -570,7 +570,7 @@ function registrationVerdict(
     const wrong = (descriptor.host?.fileKinds ?? []).find(
       (kind) => kind.segment !== host,
     );
-    verdict = `file kind segment "${wrong?.segment}" is not the host's name "${host}"; the segment before \`.mx\` is a host name (decision 136)`;
+    verdict = `file kind segment "${wrong?.segment}" is not the host's name "${host}"; the segment before \`.mx\` is a host name, so set the segment to "${host}"`;
   } else {
     try {
       // A tool may mask a target from selection (`targetNames`) while the
@@ -1004,7 +1004,7 @@ export function resolveTargetPolicyDetailed(
         : undefined;
     const dataReserved =
       value === "data"
-        ? ' "data" is reserved for the evaluated tree target (decision 187); a consumer that reads the tree calls lowerSource from @mxlang/core.'
+        ? ' "data" is reserved for the evaluated tree target; a consumer that reads the tree calls lowerSource from @mxlang/core.'
         : "";
     diagnostics.push({
       code: "unknown-target",

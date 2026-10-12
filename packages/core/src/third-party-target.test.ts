@@ -587,7 +587,7 @@ describe("round 2: file kinds of a loaded descriptor", () => {
         severity: "error",
       });
       expect(diagnostics[0]?.message).toContain(
-        `file kind segment "${segment}" is not the host's name "squatter"`,
+        `file kind segment "${segment}" is not the host's name "squatter"; the segment before \`.mx\` is a host name, so set the segment to "squatter"`,
       );
     },
   );
@@ -600,8 +600,9 @@ describe("round 2: file kinds of a loaded descriptor", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.code).toBe("target-invalid-descriptor");
     expect(diagnostics[0]?.message).toContain(
-      'file kind segment "ok" is not the host\'s name "own-fk-host"',
+      'file kind segment "ok" is not the host\'s name "own-fk-host"; the segment before `.mx` is a host name, so set the segment to "own-fk-host"',
     );
+    expect(diagnostics[0]?.message).not.toMatch(/decision/i);
   });
 });
 

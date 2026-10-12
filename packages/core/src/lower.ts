@@ -5023,7 +5023,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         case "MarkoScriptlet":
         case "MxScriptlet":
           fail(
-            `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)} (decision 54)${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
+            `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
             child,
           );
           break;
