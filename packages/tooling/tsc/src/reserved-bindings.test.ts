@@ -30,7 +30,7 @@ it("prints one 1-based position for a reserved binding", () => {
     expect(result.status).toBe(1);
     const output = stripVTControlCharacters(result.stdout + result.stderr);
     expect(output).toContain(
-      'reserved.mx(2,8): error TS80001: Identifiers starting with "__mx" are reserved for generated code; rename "__mxX".',
+      'reserved.mx(2,8): error MX_RESERVED_BINDING: Identifiers starting with "__mx" are reserved for generated code; rename "__mxX".',
     );
     expect(output.match(/Identifiers starting with/g)).toHaveLength(1);
   } finally {

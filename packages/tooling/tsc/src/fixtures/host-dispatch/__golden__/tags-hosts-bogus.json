@@ -51,7 +51,7 @@
               },
               "end": {
                 "line": 0,
-                "character": 1
+                "character": 6
               }
             }
           }
@@ -91,7 +91,8 @@
             "fileName": "<root>/tags-hosts-bogus/page.mx",
             "message": "Unable to find entry point for custom tag `<thing>`.",
             "offset": 0,
-            "category": "error"
+            "category": "error",
+            "length": 6
           }
         ],
         "hostPolicyDiagnostics": [],
@@ -109,7 +110,7 @@
             "line": 1,
             "column": 0
           },
-          "frame": "1 | <thing/>\n    ^"
+          "frame": "1 | <thing/>\n    ^^^^^^"
         },
         "warnings": [
           "@mxlang/vite-plugin: <root>/tags-hosts-bogus/package.json:1:1: MX_IGNORED_CONFIG: `mx.tags` names an unknown host in `hosts`: bogus"

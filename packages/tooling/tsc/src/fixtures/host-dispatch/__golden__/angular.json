@@ -58,6 +58,7 @@
           {
             "severity": 1,
             "source": "mxlang",
+            "code": "MX_PARSE_MISSING_END_TAG",
             "message": "Missing ending \"div\" tag",
             "data": {
               "codeFrame": "  1 | export interface Input {}\n  2 |\n> 3 | <div>\n    | ^^^^^ Missing ending \"div\" tag\n  4 |"
@@ -69,7 +70,7 @@
               },
               "end": {
                 "line": 2,
-                "character": 1
+                "character": 5
               }
             }
           }
@@ -110,6 +111,7 @@
           {
             "severity": 1,
             "source": "mxlang",
+            "code": "MX_UNSUPPORTED_CONSTRUCT",
             "message": "`<let>` is Marko reactive state; use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`",
             "range": {
               "start": {
@@ -118,7 +120,7 @@
               },
               "end": {
                 "line": 2,
-                "character": 1
+                "character": 4
               }
             }
           }

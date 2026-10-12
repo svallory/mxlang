@@ -9,6 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
+            "code": "MX_PARSE_INVALID_REGULAR_EXPRESSION",
             "message": "EOL reached while parsing regular expression",
             "data": {
               "codeFrame": "> 1 | <input x=\"1\" :/>\n    |               ^ EOL reached while parsing regular expression\n  2 |"
@@ -38,7 +39,8 @@
             "fileName": "<root>/colon-bare/after-value.mx",
             "message": "\n    > 1 | <input x=\"1\" :/>\n        |               ^ EOL reached while parsing regular expression\n      2 |",
             "offset": 14,
-            "category": "error"
+            "category": "error",
+            "diagnosticCode": "MX_PARSE_INVALID_REGULAR_EXPRESSION"
           }
         ],
         "hostPolicyDiagnostics": [],
@@ -109,6 +111,6 @@
     }
   },
   "mxTsc": [
-    "<root>/colon-bare/after-value.mx(1,15): error TS80001: \n    > 1 | <input x=\"1\" :/>\n        |               ^ EOL reached while parsing regular expression\n      2 |"
+    "<root>/colon-bare/after-value.mx(1,15): error MX_PARSE_INVALID_REGULAR_EXPRESSION: \n    > 1 | <input x=\"1\" :/>\n        |               ^ EOL reached while parsing regular expression\n      2 |"
   ]
 }

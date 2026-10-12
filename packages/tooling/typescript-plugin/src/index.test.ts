@@ -2847,7 +2847,7 @@ describe("MX language plugin", () => {
         "whole-file .mx",
         "mx",
         `${brokenBody}\n<await=value>oops</await>`,
-        80001,
+        "MX_UNSUPPORTED_CONSTRUCT",
       ],
       [
         "Solid .solid.mx",
@@ -2966,10 +2966,64 @@ describe("MX language plugin", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]).toMatchObject({
       start: source.indexOf("<await"),
+      // The whole `<await`, and MX's own code in place of 80001.
+      length: "<await".length,
       source: "mx",
-      code: 80001,
+      code: "MX_UNSUPPORTED_CONSTRUCT",
       category: ts.DiagnosticCategory.Error,
     });
+  });
+
+  it("paints a parse error to its end, shows its code, and widens a point error to one character", () => {
+    const consumer = "/project/index.ts";
+    const check = (fileName: string, source: string) => {
+      const service = createPluginService(
+        {
+          [fileName]: source,
+          [consumer]: `import "./${fileName.split("/").pop()}";\n`,
+        },
+        [consumer],
+      );
+      service.getSemanticDiagnostics(consumer);
+      return service.getSyntacticDiagnostics(fileName);
+    };
+    // `</span>` closes nothing: the error spans the whole closing tag.
+    const [mismatch] = check("/project/closing.mx", "<div></span>\n");
+    expect(mismatch).toMatchObject({
+      start: 5,
+      length: "</span>".length,
+      code: "MX_PARSE_MISMATCHED_CLOSING_TAG",
+    });
+    // An error at one point (the file ends inside `<div`) is one character.
+    const [point] = check("/project/open.mx", "<div\n");
+    expect(point).toMatchObject({
+      start: 0,
+      length: 1,
+      code: "MX_PARSE_MALFORMED_OPEN_TAG",
+    });
+    // A warning is painted to its end too.
+    const [warning] = check("/project/dup.mx", "<div a=1 a=2/>\n");
+    expect(warning).toMatchObject({
+      start: 5,
+      length: "a=1".length,
+      category: ts.DiagnosticCategory.Warning,
+    });
+  });
+
+  it("paints one character, never past the text, for an error that carries no end", () => {
+    const fileName = "/project/broken.solid.mx";
+    const consumer = "/project/index.ts";
+    const source = "const el = <button>oops;\n";
+    const service = createPluginService(
+      {
+        [fileName]: source,
+        [consumer]: 'import "./broken.solid.mx";\n',
+      },
+      [consumer],
+    );
+    service.getSemanticDiagnostics(consumer);
+    const [diagnostic] = service.getSyntacticDiagnostics(fileName);
+    expect(diagnostic?.length).toBe(1);
   });
 
   it("maps a type error amid other text to its source expression column", () => {

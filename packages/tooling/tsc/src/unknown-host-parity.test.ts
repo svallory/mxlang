@@ -119,7 +119,7 @@ describe("unknown mx.host: language server and mx-tsc agree", () => {
     const tscLine = plainTsc
       .split("\n")
       .find((l) => l.includes(at) || l.includes(atPretty));
-    expect(tscLine, plainTsc).toContain("error TS80001");
+    expect(tscLine, plainTsc).toContain("error MX_PARSE_MISSING_END_TAG");
 
     // Same message: the LS keeps the compact error text in `message` and the
     // compiler's frame in `data.codeFrame`; mx-tsc prints both in one

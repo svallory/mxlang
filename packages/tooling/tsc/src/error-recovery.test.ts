@@ -40,9 +40,13 @@ it(
       writeFileSync(join(dir, "page.mx"), PAGE);
       const result = run(mxTsc, ["--noEmit", "--pretty", "false", "-p", dir]);
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("page.mx(2,1): error TS80001");
-      expect(result.output).toContain("page.mx(4,1): error TS80001");
-      expect(result.output).toContain("page.mx(5,1): error TS80001");
+      expect(result.output).toContain(
+        "page.mx(2,1): error MX_UNSUPPORTED_CONSTRUCT",
+      );
+      expect(result.output).toContain("page.mx(4,1): error MX_INVALID_IF");
+      expect(result.output).toContain(
+        "page.mx(5,1): error MX_UNSUPPORTED_CONSTRUCT",
+      );
       expect(result.output).toContain("scriptlets");
       expect(result.output).toContain("without a condition");
       expect(result.output).toContain("CDATA");

@@ -147,7 +147,7 @@ describe("dialect files through the TypeScript plugin", () => {
     expect(shape(service, file)).toEqual([
       {
         start: 3,
-        length: 1,
+        length: 4,
         category: "Error",
         code: "PROBE_BAD",
         source: "Probe",
@@ -172,7 +172,7 @@ describe("dialect files through the TypeScript plugin", () => {
     expect(shape(service, file)).toEqual([
       {
         start: 3,
-        length: 1,
+        length: 4,
         category: "Error",
         code: "PROBE_BAD",
         source: "Probe",
@@ -207,7 +207,7 @@ describe("dialect files through the TypeScript plugin", () => {
     expect(shape(service, file)).toEqual([
       {
         start: 0,
-        length: 1,
+        length: 8,
         category: "Error",
         code: "MX_MISSING_ATTRIBUTE",
         source: "Probe",
@@ -226,7 +226,7 @@ describe("dialect files through the TypeScript plugin", () => {
     expect(shape(service, file)).toEqual([
       {
         start: 5,
-        length: 1,
+        length: 6,
         category: "Error",
         code: "MX_TAG_FILE_ERROR",
         source: "Probe",
@@ -268,7 +268,7 @@ describe("dialect files through the TypeScript plugin", () => {
       expect(shape(service, file, project.path("consumer.ts"))).toEqual([
         {
           start: 3,
-          length: 1,
+          length: 4,
           category: "Error",
           code: "PROBE_BAD",
           source: "Probe",

@@ -189,7 +189,7 @@ function contractProject(moduleSource: string): {
 function mx80001(service: ts.LanguageService, page: string): string[] {
   return service
     .getSyntacticDiagnostics(page)
-    .filter((diagnostic) => diagnostic.code === 80001)
+    .filter((diagnostic) => diagnostic.source === "mx")
     .map((diagnostic) =>
       ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
     );
@@ -217,8 +217,11 @@ describe("mx.contracts through the TypeScript plugin", () => {
     // offset is the start of the file.
     const [diagnostic] = service
       .getSyntacticDiagnostics(page)
-      .filter((d: ts.Diagnostic) => d.code === 80001);
+      .filter((d: ts.Diagnostic) => d.source === "mx");
     expect(diagnostic?.start).toBe(0);
+    // The whole `<style`, and MX's code in place of 80001.
+    expect(diagnostic?.length).toBe("<style".length);
+    expect(diagnostic?.code).toBe("MX_MISSING_ATTRIBUTE");
 
     // Edit the module and force the plugin to re-create the virtual code.
     // The rescan happens (mtime change), but the process is long-lived and

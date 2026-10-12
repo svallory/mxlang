@@ -9,6 +9,7 @@
           {
             "severity": 1,
             "source": "mxlang",
+            "code": "MX_EXPECTED_SINGLE_EXPRESSION",
             "message": "Expected a single expression, but found `:` after it.",
             "data": {
               "codeFrame": "> 1 | <if=input.x :b>y</if>\n    |             ^ Expected a single expression, but found `:` after it.\n  2 |"
@@ -38,7 +39,8 @@
             "fileName": "<root>/colon-after-value/page.mx",
             "message": "\n    > 1 | <if=input.x :b>y</if>\n        |             ^ Expected a single expression, but found `:` after it.\n      2 |",
             "offset": 12,
-            "category": "error"
+            "category": "error",
+            "diagnosticCode": "MX_EXPECTED_SINGLE_EXPRESSION"
           }
         ],
         "hostPolicyDiagnostics": [],
@@ -61,6 +63,6 @@
     }
   },
   "mxTsc": [
-    "<root>/colon-after-value/page.mx(1,13): error TS80001: \n    > 1 | <if=input.x :b>y</if>\n        |             ^ Expected a single expression, but found `:` after it.\n      2 |"
+    "<root>/colon-after-value/page.mx(1,13): error MX_EXPECTED_SINGLE_EXPRESSION: \n    > 1 | <if=input.x :b>y</if>\n        |             ^ Expected a single expression, but found `:` after it.\n      2 |"
   ]
 }

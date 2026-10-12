@@ -102,7 +102,7 @@ describe("mx-tsc reports mx.contracts module errors", () => {
       // Core reports the call at 1:0; tsc's printed shape is 1-based on both
       // axes. The message is the compiler's, verbatim.
       expect(text).toContain(
-        "src/pages/page.mx(1,1): error TS80001: `<style>`: missing required attribute `nonce`",
+        "src/pages/page.mx(1,1): error MX_MISSING_ATTRIBUTE: `<style>`: missing required attribute `nonce`",
       );
       expect(status).not.toBe(0);
 
@@ -112,7 +112,7 @@ describe("mx-tsc reports mx.contracts module errors", () => {
       const second = check(dir);
 
       expect(second.text).toContain(
-        "src/pages/page.mx(1,1): error TS80001: `<style>`: missing required attribute `media`",
+        "src/pages/page.mx(1,1): error MX_MISSING_ATTRIBUTE: `<style>`: missing required attribute `media`",
       );
       expect(second.text).not.toContain("missing required attribute `nonce`");
       expect(second.status).not.toBe(0);
@@ -133,7 +133,7 @@ describe("mx-tsc on an html package: the wildcard guard (decision 147)", () => {
       const { status, text } = check(dir);
 
       expect(text).toContain(
-        "src/pages/page.mx(2,3): error TS80001: `<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?",
+        "src/pages/page.mx(2,3): error MX_NEAR_EXPLICIT_CHILD: `<titel>` (as `attribute`) matched the wildcard of `<attributes>`; did you mean the explicit child `<title>`?",
       );
       expect(status).not.toBe(0);
     },

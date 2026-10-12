@@ -21,11 +21,12 @@ import {
   hostTarget,
 } from "@mxlang/targets";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DiagnosticSeverity } from "vscode-languageserver/node";
+import { DiagnosticSeverity, type Range } from "vscode-languageserver/node";
 import {
   cleanupProbeProjects,
   PROBE_CONTRACT_MESSAGE,
   PROBE_SOURCES,
+  PROBE_TAG_HOOK_END_MODULE,
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -1306,7 +1307,7 @@ describe("a dialect's files", () => {
           message: "bad probe",
           range: {
             start: { line: 0, character: 3 },
-            end: { line: 0, character: 4 },
+            end: { line: 0, character: 7 },
           },
         },
       ]);
@@ -1382,7 +1383,7 @@ describe("a dialect's files", () => {
         message: PROBE_CONTRACT_MESSAGE,
         range: {
           start: { line: 0, character: 0 },
-          end: { line: 0, character: 1 },
+          end: { line: 0, character: 8 },
         },
       },
     ]);
@@ -1467,7 +1468,7 @@ describe("a dialect's files", () => {
           "`<money>`'s definition has errors (concepts/money.thing.probe:2:5)",
         range: {
           start: { line: 1, character: 0 },
-          end: { line: 1, character: 1 },
+          end: { line: 1, character: 6 },
         },
       },
       {
@@ -1570,7 +1571,7 @@ describe("a dialect's files", () => {
     ]);
   });
 
-  it("a plain .mx file in the same project is diagnosed as before, source mxlang", () => {
+  it("a plain .mx file in the same project keeps source mxlang, and shows MX's own code", () => {
     const project = probeProject();
     const diagnostics = diagnoseDocument(
       "<div>\n",
@@ -1579,6 +1580,147 @@ describe("a dialect's files", () => {
     );
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.source).toBe("mxlang");
-    expect(diagnostics[0]?.code).toBeUndefined();
+    expect(diagnostics[0]?.code).toBe("MX_PARSE_MISSING_END_TAG");
+  });
+});
+
+describe("a diagnostic's range ends where core says it ends", () => {
+  afterEach(() => cleanupProbeProjects());
+
+  const at = (file: string) => pathToFileURL(file).href;
+  const span = (diagnostic: { range: Range } | undefined) => {
+    const { start, end } = diagnostic?.range ?? {};
+    return [start?.line, start?.character, end?.line, end?.character];
+  };
+
+  it("underlines the whole `<name` of a dialect file's tag error", () => {
+    const project = probeProject({}, { contracts: true });
+    const [diagnostic] = diagnoseDocument(
+      "<service/>\n",
+      at(project.path("a.probe")),
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_MISSING_ATTRIBUTE");
+    expect(span(diagnostic)).toEqual([0, 0, 0, 8]);
+  });
+
+  it("widens a dialect file's point error to one character", () => {
+    const project = probeProject();
+    const [diagnostic] = diagnoseDocument(
+      PROBE_SOURCES.noRules,
+      at(project.path("a.probe")),
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_PARSE_MISSING_END_TAG");
+    expect(span(diagnostic)).toEqual([0, 0, 0, 1]);
+  });
+
+  it("underlines the whole attribute of a dialect file's attribute error", () => {
+    const project = probeProject();
+    const [diagnostic] = diagnoseDocument(
+      PROBE_SOURCES.bad,
+      at(project.path("a.probe")),
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("PROBE_BAD");
+    expect(span(diagnostic)).toEqual([0, 3, 0, 7]);
+  });
+
+  it("underlines the `<name` of an MX file's tag error and shows its code", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<for|x|/>\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_INVALID_FOR");
+    expect(span(diagnostic)).toEqual([0, 0, 0, 4]);
+  });
+
+  it("underlines a template parse error to its end, with its code", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<div></span>\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_PARSE_MISMATCHED_CLOSING_TAG");
+    expect(span(diagnostic)).toEqual([0, 5, 0, 12]);
+  });
+
+  it("runs a range over several lines when the error does", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<div>\n  <span>\n</div>\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_PARSE_MISMATCHED_CLOSING_TAG");
+    expect(span(diagnostic)).toEqual([2, 0, 2, 6]);
+  });
+
+  it("widens a point parse error to one character", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<div\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.code).toBe("MX_PARSE_MALFORMED_OPEN_TAG");
+    expect(span(diagnostic)).toEqual([0, 0, 0, 1]);
+  });
+
+  it("underlines a warning to its end", () => {
+    const [diagnostic] = diagnoseDocument(
+      "<div a=1 a=2/>\n",
+      "/project/page.mx",
+      policy("html"),
+    );
+    expect(diagnostic?.severity).toBe(DiagnosticSeverity.Warning);
+    expect(diagnostic?.message).toContain("duplicate attribute `a`");
+    expect(span(diagnostic)).toEqual([0, 5, 0, 8]);
+  });
+
+  it("keeps one character, and no code, for an error that carries no end", () => {
+    // A region's Babel error has neither an end nor a code.
+    const [diagnostic] = diagnoseDocument(
+      "const a = ;\n",
+      "/project/page.solid.mx",
+      policy("solid"),
+    );
+    expect(diagnostic?.message).toBe("Unexpected token");
+    expect(diagnostic?.code).toBeUndefined();
+    expect(span(diagnostic)).toEqual([0, 10, 0, 11]);
+  });
+
+  it("publishes a tag file's own range, ended, on that file", () => {
+    const project = tagDiscoveryProject({
+      // Core rejects `!bad` as an attribute name, at columns 3 to 7 of this file.
+      "concepts/money.thing.probe": "<y !bad/>\n",
+      "dialect.cjs": PROBE_TAG_HOOK_END_MODULE,
+    });
+    const related: RelatedDiagnostics[] = [];
+    const diagnostics = diagnoseDocument(
+      "<p !bad/>\n<money/>\n",
+      at(project.path("a.probe")),
+      policy("html"),
+      undefined,
+      "",
+      undefined,
+      related,
+    );
+    // Own diagnostic: `!bad`; the call is blamed as `<money`.
+    expect(
+      span(diagnostics.find((d) => d.message.startsWith("Invalid attribute"))),
+    ).toEqual([0, 3, 0, 7]);
+    expect(
+      span(diagnostics.find((d) => d.code === "MX_TAG_FILE_ERROR")),
+    ).toEqual([1, 0, 1, 6]);
+    const pointer = diagnostics.find((d) => d.relatedInformation !== undefined);
+    expect(
+      span({
+        range: pointer?.relatedInformation?.[0]?.location.range as Range,
+      }),
+    ).toEqual([0, 3, 0, 7]);
+    const tagFile = related.find(
+      (entry) => entry.uri === at(project.path("concepts/money.thing.probe")),
+    );
+    expect(span(tagFile?.diagnostics[0])).toEqual([0, 3, 0, 7]);
   });
 });

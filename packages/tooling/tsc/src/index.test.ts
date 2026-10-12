@@ -118,15 +118,13 @@ describe("mx-tsc", () => {
       ]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("Broken.mx(4,1): error TS80001");
-      expect(result.output).not.toMatch(/TS2306|TS2305|TS2614|TS7016|TS2307/);
-      expect(result.output.match(/error TS/g)).toHaveLength(1);
-      // The real error comes first.
-      expect(result.output.indexOf("TS80001")).toBeLessThan(
-        result.output.search(/error TS(?!80001)/) === -1
-          ? Number.POSITIVE_INFINITY
-          : result.output.search(/error TS(?!80001)/),
+      expect(result.output).toContain(
+        "Broken.mx(4,1): error MX_PARSE_MISSING_END_TAG",
       );
+      expect(result.output).not.toMatch(/TS2306|TS2305|TS2614|TS7016|TS2307/);
+      // One error, MX's own: no TypeScript error follows it.
+      expect(result.output.match(/error (?:TS|MX_)/g)).toHaveLength(1);
+      expect(result.output).not.toMatch(/error TS/);
     },
     SPAWN_TIMEOUT_MS,
   );
@@ -141,9 +139,13 @@ describe("mx-tsc", () => {
       ]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("Broken.mx(3,1): error TS80001");
+      expect(result.output).toContain(
+        "Broken.mx(3,1): error MX_PARSE_MISSING_END_TAG",
+      );
       expect(result.output).toContain('Missing ending "div" tag');
-      expect(result.output).toContain("Repeated.mx(3,28): error TS80001");
+      expect(result.output).toContain(
+        "Repeated.mx(3,28): error MX_REPEATED_ATTRIBUTE_TAG",
+      );
       expect(result.output).toContain("may appear at most once");
     },
     SPAWN_TIMEOUT_MS,
@@ -163,7 +165,9 @@ describe("mx-tsc", () => {
       ]);
 
       expect(result.status).not.toBe(0);
-      expect(result.output).toContain("Unclosed.mx(3,1): error TS80001");
+      expect(result.output).toContain(
+        "Unclosed.mx(3,1): error MX_PARSE_MISSING_END_TAG",
+      );
       expect(result.output).toContain('Missing ending "div" tag');
     },
     SPAWN_TIMEOUT_MS,
@@ -232,7 +236,7 @@ describe("mx-tsc", () => {
       // against the template file itself — spec §2's third position rule,
       // matching the language server's behavior — not against `page.mx`,
       // which only calls it.
-      expect(result.output).toContain("broken.mx(3,1): error TS80001");
+      expect(result.output).toContain("broken.mx(3,1): error MX_INVALID_IF");
       expect(result.output).toContain(
         // Paths print relative to the process's working directory.
         `\`<else>\` without a preceding \`<if>\`\n${relative(process.cwd(), join(fixtures, "template-error-failing", "src", "page.mx"))}(1,1)`,
@@ -240,7 +244,7 @@ describe("mx-tsc", () => {
       // `page.mx` still gets a pointer diagnostic naming the template *and*
       // its exact position, so a broken template a build's overlay never
       // opened is still findable from the caller's own diagnostic alone.
-      expect(result.output).toMatch(/page\.mx\(1,1\): error TS80001/);
+      expect(result.output).toMatch(/page\.mx\(1,1\): error MX_INVALID_IF/);
       expect(result.output).toContain("(in ");
       expect(result.output).toContain("tags/broken.mx:3:1)");
     },

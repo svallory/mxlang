@@ -4,11 +4,11 @@ import { expect, it } from "vitest";
 import { here, mxTsc, run, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
 it.each([
-  ["<p>ok</p>\n\n<div>\n", 3, 0],
-  ["<div a=(x +)/>\n<span>", 1, 11],
+  ["<p>ok</p>\n\n<div>\n", 3, 0, "MX_PARSE_MISSING_END_TAG"],
+  ["<div a=(x +)/>\n<span>", 1, 11, "MX_PARSE_EXPRESSION"],
 ] as const)(
   "prints a child syntax error at the child's authored line/column",
-  (source, line, column) => {
+  (source, line, column, code) => {
     const dir = mkdtempSync(join(here, ".tmp-callee-parse-"));
     try {
       writeFileSync(
@@ -36,9 +36,9 @@ it.each([
       const result = run(mxTsc, ["--noEmit", "--pretty", "false", "-p", dir]);
       expect(result.status).not.toBe(0);
       expect(result.output).toContain(
-        `tags/broken.mx(${line},${column + 1}): error TS80001`,
+        `tags/broken.mx(${line},${column + 1}): error ${code}`,
       );
-      expect(result.output).toContain("page.mx(1,1): error TS80001");
+      expect(result.output).toContain(`page.mx(1,1): error ${code}`);
       expect(result.output).toContain(`tags/broken.mx:${line}:${column + 1})`);
       expect(result.output).not.toContain("page.mx(2,3)");
     } finally {

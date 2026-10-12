@@ -105,7 +105,7 @@ describe("mx-tsc on a dialect's files", () => {
     const { project, status, output } = run({ "page.mx": "<div>\n" });
     expect(status).toBe(1);
     expect(output).toBe(
-      `${shown(project.path("page.mx"))}(1,1): error TS80001: \n    > 1 | <div>\n        | ^^^^^ Missing ending "div" tag\n      2 |\n`,
+      `${shown(project.path("page.mx"))}(1,1): error MX_PARSE_MISSING_END_TAG: \n    > 1 | <div>\n        | ^^^^^ Missing ending "div" tag\n      2 |\n`,
     );
     expect(output).not.toContain("PROBE_BAD");
   });

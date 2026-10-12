@@ -914,6 +914,8 @@ export default () => <div />;
       // The orphan `<else>` is on line 3 of `tags/broken.mx`.
       expect(error.loc?.line).toBe(3);
       expect(error.frame).toContain("<else/>");
+      // The carets run under the whole `<else`, not one character.
+      expect(error.frame).toMatch(/\n\s+\^{5}$/);
       expect(error.message).toMatch(/`<else>`/);
     });
 
