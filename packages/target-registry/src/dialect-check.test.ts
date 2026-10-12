@@ -350,7 +350,7 @@ describe("checkDialectFile", () => {
       [
         "tagExtensions",
         "oops",
-        '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mesh.mx"]`)',
+        '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mydsl.mx"]`)',
       ],
       [
         "tagExtensions",

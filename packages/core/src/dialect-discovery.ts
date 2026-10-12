@@ -57,7 +57,7 @@ const FOREIGN_SEGMENTS: ReadonlySet<string> = new Set([
  * every host file kind, `.<segment>.mx` for each of `hostSegments` (the
  * caller's targets' `moduleSegments()`: core holds no host list), and a name
  * that ends in one of them; TypeScript, JavaScript and Marko own theirs. A
- * dialect's own `.<id>.mx` (`.mesh.mx`) is not a host file kind and stays
+ * dialect's own `.<id>.mx` (`.mydsl.mx`) is not a host file kind and stays
  * claimable.
  */
 export function reservedExtensionReason(
@@ -108,7 +108,7 @@ export interface DialectManifest {
   readonly id: string;
   /** What tooling shows its users (`Mesh`). */
   readonly name: string;
-  /** The file extensions it claims (`.mesh.mx`), each with its leading dot. */
+  /** The file extensions it claims (`.mydsl.mx`), each with its leading dot. */
   readonly extensions: readonly string[];
   /** Its module, relative to its package directory. */
   readonly module: string;
@@ -121,7 +121,7 @@ export interface DialectManifest {
   readonly tagDirs?: readonly string[];
   /**
    * Extensions claimed for tag files only, appended to `extensions`
-   * (`.component.mesh.mx`): routed to the dialect like `extensions`, and
+   * (`.component.mydsl.mx`): routed to the dialect like `extensions`, and
    * stripped whole from a tag file's name. @unstable
    */
   readonly tagExtensions?: readonly string[];
@@ -176,7 +176,7 @@ function claimRefusal(
   reason: string,
   field: "extensions" | "tagExtensions" = "extensions",
 ): string {
-  return `\`${DIALECT_MANIFEST_KEY}.${field}\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+  return `\`${DIALECT_MANIFEST_KEY}.${field}\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mydsl.mx\`)`;
 }
 
 /**
@@ -197,7 +197,7 @@ function tagDirRefusal(value: unknown): string | undefined {
   return undefined;
 }
 
-/** Is `value` written as a file extension (`.mesh.mx`)? */
+/** Is `value` written as a file extension (`.mydsl.mx`)? */
 function validExtension(value: unknown): value is string {
   return typeof value === "string" && /^(?:\.[^./\\\s]+)+$/.test(value);
 }
@@ -240,7 +240,7 @@ export function readDialectManifest(
   const { id, name, extensions, module } = fields;
   if (typeof id !== "string" || !DIALECT_ID.test(id)) {
     fail(
-      `\`${DIALECT_MANIFEST_KEY}.id\` must be a dialect id: lower-case words joined by \`-\` (\`mesh\`)`,
+      `\`${DIALECT_MANIFEST_KEY}.id\` must be a dialect id: lower-case words joined by \`-\` (\`mydsl\`)`,
       id === undefined ? undefined : "id",
     );
   }
@@ -258,7 +258,7 @@ export function readDialectManifest(
   }
   if (!Array.isArray(extensions) || extensions.length === 0) {
     fail(
-      `\`${DIALECT_MANIFEST_KEY}.extensions\` must be a non-empty array of the file extensions the dialect claims (\`[".mesh.mx"]\`)`,
+      `\`${DIALECT_MANIFEST_KEY}.extensions\` must be a non-empty array of the file extensions the dialect claims (\`[".mydsl.mx"]\`)`,
       extensions === undefined ? undefined : "extensions",
     );
   }
@@ -266,7 +266,7 @@ export function readDialectManifest(
   for (const extension of extensions as unknown[]) {
     if (!validExtension(extension)) {
       fail(
-        `\`${DIALECT_MANIFEST_KEY}.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
+        `\`${DIALECT_MANIFEST_KEY}.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mydsl.mx\`)`,
         "extensions",
       );
     }
@@ -355,7 +355,7 @@ function readTagFields(
   if (tagExtensions !== undefined) {
     if (!Array.isArray(tagExtensions)) {
       fail(
-        `${key("tagExtensions")} must be an array of the extra file extensions the dialect's tag files use (\`[".component.mesh.mx"]\`)`,
+        `${key("tagExtensions")} must be an array of the extra file extensions the dialect's tag files use (\`[".component.mydsl.mx"]\`)`,
         "tagExtensions",
       );
     }
@@ -363,7 +363,7 @@ function readTagFields(
     for (const extension of tagExtensions as unknown[]) {
       if (!validExtension(extension)) {
         fail(
-          `${key("tagExtensions")}: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.component.mesh.mx\`)`,
+          `${key("tagExtensions")}: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.component.mydsl.mx\`)`,
           "tagExtensions",
         );
       }
@@ -647,7 +647,7 @@ function extensionOverrides(
   };
   if (!isRecord(value)) {
     fail(
-      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`)',
+      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mydsl.mx": "mydsl" }`)',
     );
   }
   const ids = dialects.map((dialect) => `\`${dialect.id}\``).join(", ");
@@ -656,7 +656,7 @@ function extensionOverrides(
   )) {
     if (!validExtension(extension)) {
       fail(
-        `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mesh.mx\`)`,
+        `\`mx.extensions\`: ${JSON.stringify(extension)} is not a file extension; write it with its leading dot (\`.mydsl.mx\`)`,
         extension,
       );
     }
@@ -842,7 +842,7 @@ export function dialectRouter(
  * The dialect that handles `filename`, or `undefined` for MX's own files.
  * The project is the nearest `package.json`, so a dependency's files use
  * the dependency's dialects. The longest extension the file name ends with
- * (`extensions` or `tagExtensions`) wins (`.mesh.mx` over `.mx`);
+ * (`extensions` or `tagExtensions`) wins (`.mydsl.mx` over `.mx`);
  * `mx.extensions` settles an extension two dialects claim, and without it
  * the clash is an error naming both, in the project's `package.json` at the
  * second one's dependency entry. MX's config setting a dialect's tag rules

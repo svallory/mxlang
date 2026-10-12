@@ -194,6 +194,14 @@ describe("astroMxPagesMessage wording", () => {
 });
 
 describe("astroMxPagesMessage", () => {
+  it("states the rule in the header, naming no internal document", () => {
+    const text = astroMxPagesMessage(["/p/pages/about.astro.mx"], "/p/pages");
+    expect(text.split("\n")[0]).toBe(
+      "@mxlang/host-astro: 1 `.astro.mx` file under the pages directory (`.astro.mx` is for components and layouts, not pages):",
+    );
+    expect(text).not.toMatch(/decision/i);
+  });
+
   it("uses the singular for one file", () => {
     expect(astroMxPagesMessage(["/p/pages/a.astro.mx"], "/p/pages")).toContain(
       "1 `.astro.mx` file under the pages directory",

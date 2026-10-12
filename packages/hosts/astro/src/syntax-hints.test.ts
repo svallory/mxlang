@@ -48,7 +48,7 @@ describe("scriptlets (astro)", () => {
 
   it("a statement that declares nothing gets the bare sentence", () => {
     expect(message("---\n---\n$ doThing();\n<p>1</p>")).toBe(
-      "scriptlets (`$ statement`) are not supported in MX",
+      "scriptlets (`$ statement`) are not supported in MX; a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template",
     );
   });
 });

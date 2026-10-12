@@ -149,7 +149,7 @@ describe.each([
       file: packageFile,
       line: 7,
       column: 6,
-      message: `\`mx.dialect.extensions\` cannot claim \`.solid.mx\`: ${REASON}; a dialect claims its own extensions (\`.mesh.mx\`)`,
+      message: `\`mx.dialect.extensions\` cannot claim \`.solid.mx\`: ${REASON}; a dialect claims its own extensions (\`.mydsl.mx\`)`,
     };
     expect(caught(join(dir, "page.tst"))).toEqual(expected);
     expect(caught(join(dir, "page.solid.mx"))).toEqual(expected);

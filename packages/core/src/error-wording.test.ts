@@ -12,10 +12,12 @@ import { testTargetLookup } from "./test-targets.ts";
  */
 
 const SCRIPTLET = "scriptlets (`$ statement`) are not supported in MX";
+const GENERIC_FIX =
+  "a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template";
 
 describe("the scriptlet error", () => {
   it.each([
-    ["$ foo()\n", SCRIPTLET, 1, 0, 0],
+    ["$ foo()\n", `${SCRIPTLET}; ${GENERIC_FIX}`, 1, 0, 0],
     [
       "$ const y = 1\n",
       `${SCRIPTLET}; declare a value with \`<const/y=…/>\``,
@@ -64,7 +66,7 @@ describe("the scriptlet error", () => {
     }
     expect(error).toBeInstanceOf(TranslateError);
     expect((error as TranslateError).message).toBe(
-      "scriptlets (`$ statement`) are not supported in Acme",
+      `scriptlets (\`$ statement\`) are not supported in Acme; ${GENERIC_FIX}`,
     );
   });
 });

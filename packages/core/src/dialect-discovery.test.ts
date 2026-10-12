@@ -153,7 +153,7 @@ describe("`package.json#mx.dialect`", () => {
       "an id that is not one",
       { id: "Mesh" },
       [5, 6],
-      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
+      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mydsl`)",
     ],
     [
       "MX's own id",
@@ -165,7 +165,7 @@ describe("`package.json#mx.dialect`", () => {
       "no id",
       { id: null },
       [4, 4],
-      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
+      "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mydsl`)",
     ],
     [
       "no name",
@@ -183,25 +183,25 @@ describe("`package.json#mx.dialect`", () => {
       "no extensions",
       { extensions: [] },
       [7, 6],
-      '`mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mesh.mx"]`)',
+      '`mx.dialect.extensions` must be a non-empty array of the file extensions the dialect claims (`[".mydsl.mx"]`)',
     ],
     [
       "`.mx`",
       { extensions: [".mx"] },
       [7, 6],
-      "`mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`)",
+      "`mx.dialect.extensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mydsl.mx`)",
     ],
     [
       "an extension without its dot",
-      { extensions: ["mesh"] },
+      { extensions: ["mydsl"] },
       [7, 6],
-      '`mx.dialect.extensions`: "mesh" is not a file extension; write it with its leading dot (`.mesh.mx`)',
+      '`mx.dialect.extensions`: "mydsl" is not a file extension; write it with its leading dot (`.mydsl.mx`)',
     ],
     [
       "an extension with a path in it",
       { extensions: [".a/b"] },
       [7, 6],
-      '`mx.dialect.extensions`: ".a/b" is not a file extension; write it with its leading dot (`.mesh.mx`)',
+      '`mx.dialect.extensions`: ".a/b" is not a file extension; write it with its leading dot (`.mydsl.mx`)',
     ],
     [
       "an extension twice",
@@ -292,25 +292,25 @@ describe("`package.json#mx.dialect`", () => {
       "`tagExtensions` not an array",
       { tagExtensions: ".component.tst" },
       [11, 6],
-      '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mesh.mx"]`)',
+      '`mx.dialect.tagExtensions` must be an array of the extra file extensions the dialect\'s tag files use (`[".component.mydsl.mx"]`)',
     ],
     [
       "a `tagExtensions` entry without its dot",
       { tagExtensions: ["component"] },
       [11, 6],
-      '`mx.dialect.tagExtensions`: "component" is not a file extension; write it with its leading dot (`.component.mesh.mx`)',
+      '`mx.dialect.tagExtensions`: "component" is not a file extension; write it with its leading dot (`.component.mydsl.mx`)',
     ],
     [
       "a `tagExtensions` claim on `.mx`",
       { tagExtensions: [".mx"] },
       [11, 6],
-      "`mx.dialect.tagExtensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mesh.mx`)",
+      "`mx.dialect.tagExtensions` cannot claim `.mx`: it is MX's own; a dialect claims its own extensions (`.mydsl.mx`)",
     ],
     [
       "a `tagExtensions` claim on a foreign extension",
       { tagExtensions: [".tag.ts"] },
       [11, 6],
-      "`mx.dialect.tagExtensions` cannot claim `.tag.ts`: `.ts` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mesh.mx`)",
+      "`mx.dialect.tagExtensions` cannot claim `.tag.ts`: `.ts` files belong to TypeScript, JavaScript or Marko, whose tools read them; a dialect claims its own extensions (`.mydsl.mx`)",
     ],
     [
       "a `tagExtensions` entry `extensions` already claims",
@@ -534,7 +534,7 @@ describe("routing a file to its dialect", () => {
       expect(error.file).toBe(packageFile);
       expect([error.line, error.column]).toEqual([11, 6]);
       expect(error.message).toBe(
-        "`mx.dialect.tagExtensions` cannot claim `.solid.mx`: `.solid.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`)",
+        "`mx.dialect.tagExtensions` cannot claim `.solid.mx`: `.solid.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`)",
       );
     });
   });
@@ -643,7 +643,7 @@ describe("routing a file to its dialect", () => {
       "not an object",
       [".tst"],
       [7, 4],
-      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mesh.mx": "mesh" }`)',
+      '`mx.extensions` must be an object mapping a file extension to the id of the dialect that handles it (`{ ".mydsl.mx": "mydsl" }`)',
     ],
     [
       "`.mx`",
@@ -655,7 +655,7 @@ describe("routing a file to its dialect", () => {
       "a key that is not an extension",
       { ".tst": "test", tst: "test" },
       [9, 6],
-      '`mx.extensions`: "tst" is not a file extension; write it with its leading dot (`.mesh.mx`)',
+      '`mx.extensions`: "tst" is not a file extension; write it with its leading dot (`.mydsl.mx`)',
     ],
     [
       "an id no dependency declares",
@@ -837,7 +837,7 @@ describe("discovery follows the dependencies on disk", () => {
 
 describe("extensions a dialect cannot claim", () => {
   const claim = (extension: string, reason: string) =>
-    `\`mx.dialect.extensions\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mesh.mx\`)`;
+    `\`mx.dialect.extensions\` cannot claim \`${extension}\`: ${reason}; a dialect claims its own extensions (\`.mydsl.mx\`)`;
   const foreign = (segment: string) =>
     `\`.${segment}\` files belong to TypeScript, JavaScript or Marko, whose tools read them`;
   const otherCase = "it is `.mx` in another case, and `.mx` is MX's own";

@@ -89,7 +89,7 @@ describe("`lowerAstroMx` hands routing its target's host file kinds", () => {
       line: 7,
       column: 6,
       message:
-        "`mx.dialect.extensions` cannot claim `.astro.mx`: `.astro.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`)",
+        "`mx.dialect.extensions` cannot claim `.astro.mx`: `.astro.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`)",
     });
   });
 });

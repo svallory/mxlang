@@ -469,7 +469,7 @@ describe("a dialect's node types are validated", () => {
     [
       "no `id`",
       { name: "Ref", table: {}, nodeTypes: { Ref: RefType } },
-      "`dialect.id` is required: the dialect's id, lower-case words joined by `-` (`mesh`)",
+      "`dialect.id` is required: the dialect's id, lower-case words joined by `-` (`mydsl`)",
     ],
     [
       "the id `mx`",
@@ -479,7 +479,7 @@ describe("a dialect's node types are validated", () => {
     [
       "an id that is not lower-case words",
       { id: "Ref", name: "Ref", table: {} },
-      "`dialect.id` must be a dialect id: lower-case words joined by `-` (`mesh`)",
+      "`dialect.id` must be a dialect id: lower-case words joined by `-` (`mydsl`)",
     ],
     [
       "no `name`",

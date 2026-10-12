@@ -81,7 +81,7 @@ describe("`compileNgMx` hands routing its target's host file kinds", () => {
       message = (error as Error).message;
     }
     expect(message).toBe(
-      "`mx.dialect.extensions` cannot claim `.ng.mx`: `.ng.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mesh.mx`)",
+      "`mx.dialect.extensions` cannot claim `.ng.mx`: `.ng.mx` is a host's file kind, which MX owns; a dialect claims its own extensions (`.mydsl.mx`)",
     );
   });
 });

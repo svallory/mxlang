@@ -217,7 +217,7 @@ describe("For range", () => {
 
   it("rejects a non-literal bound", () => {
     expect(() => emit("<for|i| to=n>${i}</for>")).toThrow(
-      /non-literal bound cannot be emitted/,
+      "a `<for>` range with a non-literal bound cannot be emitted into an Angular template, because Angular has no range loop and MX ships no runtime. Compute the array in the component and iterate it with `of=`.",
     );
   });
 

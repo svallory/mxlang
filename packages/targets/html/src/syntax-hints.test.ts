@@ -228,10 +228,10 @@ describe("round 2 (html)", () => {
 
   it("F4: a valid non-declaring scriptlet gets the bare sentence", () => {
     expect(failure("$ doThing();\n<p>1</p>").message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX",
+      "scriptlets (`$ statement`) are not supported in MX; a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template",
     );
     expect(failure("$ const { a } = x;\n<p>1</p>").message).toBe(
-      "scriptlets (`$ statement`) are not supported in MX",
+      "scriptlets (`$ statement`) are not supported in MX; a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template",
     );
   });
 

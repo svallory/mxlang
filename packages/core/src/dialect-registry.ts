@@ -555,12 +555,12 @@ export function checkDialectNodeTypes(
   const { id, name, nodeTypes } = value;
   if (typeof id !== "string") {
     fail(
-      `\`${path}id\` is required: the dialect's id, lower-case words joined by \`-\` (\`mesh\`)`,
+      `\`${path}id\` is required: the dialect's id, lower-case words joined by \`-\` (\`mydsl\`)`,
     );
   }
   if (!DIALECT_ID.test(id)) {
     fail(
-      `\`${path}id\` must be a dialect id: lower-case words joined by \`-\` (\`mesh\`)`,
+      `\`${path}id\` must be a dialect id: lower-case words joined by \`-\` (\`mydsl\`)`,
     );
   }
   if (id === CORE_DIALECT) {

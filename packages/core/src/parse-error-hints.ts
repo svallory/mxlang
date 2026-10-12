@@ -29,6 +29,15 @@ type Located = Error & {
 const DEFAULT_REPLACEMENT = (name: string, keyword: "const" | "let" | "var") =>
   `declare a value with \`<${keyword === "const" ? "const" : "let"}/${name}=…/>\``;
 
+/**
+ * What to write when the statement declares no variable (a call, an
+ * assignment, a class, an import, a destructuring): true on every host,
+ * since `<const>` is core's and a module statement can always live outside
+ * the template.
+ */
+const GENERIC_REPLACEMENT =
+  "a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template";
+
 export type ScriptletDeclaration = {
   name: string;
   keyword: "const" | "let" | "var";
@@ -40,15 +49,16 @@ const TAG_VARIABLE_REASON =
 
 /**
  * The scriptlet message tail: the sentence every host shares, plus the host's
- * replacement when the statement declares exactly one variable. A call, an
- * assignment, a class, an import or a destructuring declares no single value,
- * so nothing is advised for them.
+ * replacement when the statement declares exactly one variable (a host may
+ * offer none, as for a mutable `let` on a host with no mutable form). A call,
+ * an assignment, a class, an import or a destructuring declares no single
+ * value, so the generic advice stands in.
  */
 export function scriptletSentence(
   binding: ScriptletDeclaration | undefined,
   declarations?: Pick<HostDeclarations, "scriptletReplacement">,
 ): string {
-  if (!binding) return "";
+  if (!binding) return `; ${GENERIC_REPLACEMENT}`;
   const replacement = (
     declarations?.scriptletReplacement ?? DEFAULT_REPLACEMENT
   )(binding.name, binding.keyword);
