@@ -23,6 +23,7 @@ import {
   type TargetDescriptor,
   type TemplateBackedTag,
 } from "@mxlang/core";
+import { astroTemplateDeclarations } from "@mxlang/host-astro/template";
 import { builtinLookup } from "@mxlang/targets";
 import { print } from "@mxlang/tsx-bridge";
 import ts from "typescript";
@@ -3095,6 +3096,74 @@ describe("MX language plugin", () => {
       expect(undeclared?.diagnosticCode).toBeUndefined();
       expect(undeclared?.message).toContain("A colon belongs to the tag name");
     } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("carries an `<effect>` error's rename fix on the .mx compile diagnostic", () => {
+    const plugin = createMxLanguagePlugin(ts);
+    const fileName = `${here}/fixtures/html-tags/effect.mx`;
+    const source = "<div>\n  <effect>go()</effect>\n</div>\n";
+    plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    const [diagnostic] = plugin.getCompileDiagnostics(fileName);
+    expect(diagnostic?.diagnosticCode).toBe("MX_RESERVED_EFFECT_TAG");
+    expect(diagnostic?.fixes).toHaveLength(1);
+    expect(diagnostic?.fixes?.[0]?.title).toBe("Rename to `<script>`");
+    expect(
+      diagnostic?.fixes?.[0]?.edits.map((edit) =>
+        source.slice(edit.offset, edit.end),
+      ),
+    ).toEqual(["effect", "effect"]);
+
+    // A diagnostic with no fix carries no `fixes` key.
+    plugin.createVirtualCode?.(
+      fileName,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString("<else/>\n"),
+      { getAssociatedScript: () => undefined },
+    );
+    const [plain] = plugin.getCompileDiagnostics(fileName);
+    expect(plain).toBeDefined();
+    expect("fixes" in (plain ?? {})).toBe(false);
+  });
+
+  it("carries a core fix on an .astro.mx compile diagnostic, in the whole file's offsets", () => {
+    // Astro declares `<effect>` unsupported (no fix); the rename is core's
+    // error, which the Astro host re-raises, so the test removes the host's
+    // row to reach it.
+    const dir = mkdtempSync(join(tmpdir(), "mx-amx-fixes-"));
+    const tags = astroTemplateDeclarations.tags as { effect?: unknown };
+    const row = tags.effect;
+    delete tags.effect;
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"a","mx":{"host":"astro"}}',
+      );
+      const page = join(dir, "page.astro.mx");
+      const plugin = createAmxLanguagePlugin(ts);
+      const source =
+        "---\nconst a = '\u{1F600}';\n---\n<effect>go()</effect>\n";
+      plugin.createVirtualCode?.(
+        page,
+        AMX_LANGUAGE_ID,
+        ts.ScriptSnapshot.fromString(source),
+        { getAssociatedScript: () => undefined },
+      );
+      const [diagnostic] = plugin.getCompileDiagnostics(page);
+      expect(diagnostic?.diagnosticCode).toBe("MX_RESERVED_EFFECT_TAG");
+      expect(
+        diagnostic?.fixes?.[0]?.edits.map((edit) =>
+          source.slice(edit.offset, edit.end),
+        ),
+      ).toEqual(["effect", "effect"]);
+    } finally {
+      tags.effect = row;
       rmSync(dir, { recursive: true, force: true });
     }
   });

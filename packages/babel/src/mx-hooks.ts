@@ -335,6 +335,12 @@ export interface MxRegionCompileResult {
  * computes is already file-absolute. The `baseLine`/`baseColumn` on
  * `MxRegionCompileInput` are what you need for this.
  *
+ * A positioned error may also carry `diagnosticCode`, an exclusive `end` and
+ * `fixes` (`TranslateError.fixes`: edits as UTF-16 offsets). The bridge copies
+ * them onto the error it raises, unchanged, so `fixes` offsets are
+ * file-absolute too: `baseOffset` plus the offset in the region, which is what
+ * a padded source (as above) gives for free.
+ *
  * A hook that throws anything else — a plain `Error`, or a non-`Error` value
  * — is reported at the **region's own start**, with its message preserved.
  * That is a deliberate floor rather than a guess: a plain `Error`'s `line`

@@ -4,6 +4,7 @@ import { decode } from "@jridgewell/sourcemap-codec";
 import {
   dropOwnParserPosition,
   type HostFileKind,
+  type IrDiagnosticFix,
   isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
@@ -105,6 +106,13 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
    * reported where the problem ends. Absent means one character.
    */
   length?: number;
+  /**
+   * The quick fixes the compiler offered (`TranslateError.fixes`): UTF-16
+   * offsets into `source`, the same text as `offset`. A tsserver diagnostic
+   * has no place for them, so they stay on this record for a tool reading it.
+   * @unstable
+   */
+  fixes?: readonly IrDiagnosticFix[];
 }
 
 export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
@@ -695,6 +703,14 @@ function endOfError(
     : undefined;
 }
 
+/** The quick fixes a thrown error carries (`TranslateError.fixes`), when it has any. */
+export function fixesOfError(
+  cause: unknown,
+): readonly IrDiagnosticFix[] | undefined {
+  const fixes = (cause as { fixes?: unknown } | null)?.fixes;
+  return Array.isArray(fixes) && fixes.length > 0 ? fixes : undefined;
+}
+
 /** MX's stable code on a thrown error (`MX_PARSE_MISSING_END_TAG`), when it has one. */
 export function codeOfError(cause: unknown): string | undefined {
   const code = (cause as { diagnosticCode?: unknown } | null)?.diagnosticCode;
@@ -711,11 +727,13 @@ export function errorDiagnostic(
 ): MxCompileDiagnostic {
   const length = lengthTo(error.source, error.offset, endOfError(cause));
   const code = codeOfError(cause);
+  const fixes = fixesOfError(cause);
   return {
     ...error,
     category: "error",
     ...(length === undefined ? {} : { length }),
     ...(code === undefined ? {} : { diagnosticCode: code }),
+    ...(fixes === undefined ? {} : { fixes }),
   };
 }
 
@@ -821,6 +839,7 @@ export function foreignTemplateError(
       category: "error",
       ...(templateLength === undefined ? {} : { length: templateLength }),
       ...code,
+      ...(cause.fixes === undefined ? {} : { fixes: cause.fixes }),
     },
     callerDiagnostic: {
       fileName: callerFileName,

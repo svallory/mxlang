@@ -16,6 +16,7 @@ import {
   discoverDialects,
   emitFor,
   findMxConfig,
+  type IrDiagnosticFix,
   isTranslateError,
   lowerSource,
   reservedExtensionReason,
@@ -47,6 +48,12 @@ export interface DialectDiagnostic {
    * no source position. @unstable
    */
   end?: { line: number; column: number; offset: number };
+  /**
+   * The changes that resolve the diagnostic, as `IrDiagnostic.fixes`: the same
+   * rules, with offsets in this file. Absent for a diagnostic measured in
+   * another file (see {@link DialectDiagnostic.origin}). @unstable
+   */
+  fixes?: readonly IrDiagnosticFix[];
   /**
    * Where the problem really is, when it is not in the checked file: a tag
    * file's own error, a dialect manifest's field error, a misplaced tag
@@ -446,6 +453,9 @@ export function checkDialectFile(
           offset: diagnostic.offset,
           ...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
           ...(diagnostic.end === undefined ? {} : { end: diagnostic.end }),
+          ...(diagnostic.fixes === undefined
+            ? {}
+            : { fixes: diagnostic.fixes }),
         };
       }),
     ],

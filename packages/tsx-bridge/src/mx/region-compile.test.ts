@@ -287,6 +287,7 @@ describe("mxRegionCompile", () => {
       return {
         diagnosticCode: error.diagnosticCode,
         end: error.end,
+        fixes: error.fixes,
         locEnd: loc.end,
         keys: Object.keys(error),
       };
@@ -330,6 +331,44 @@ describe("mxRegionCompile", () => {
         }),
       );
       expect(carriedBy(carried).keys).toEqual(carriedBy(plain).keys);
+    });
+
+    const FIXES = [
+      {
+        title: "Rename to `<script>`",
+        edits: [{ offset: 40, end: 46, newText: "script" }],
+      },
+    ];
+
+    it("carries the host error's fixes, untouched, with the code and end", () => {
+      const raised = thrownBy(
+        Object.assign(new FakeTranslateError("x", 5, 2), {
+          diagnosticCode: "MX_RESERVED_EFFECT_TAG",
+          end: { line: 5, column: 9 },
+          fixes: FIXES,
+        }),
+      );
+      expect(carriedBy(raised).fixes).toEqual(FIXES);
+      // Offsets are file-absolute, as the position is: not shifted by the region.
+      expect(carriedBy(raised).fixes).toBe(FIXES);
+    });
+
+    it("adds the fixes without changing the error's enumerable shape", () => {
+      const plain = thrownBy(new FakeTranslateError("x", 5, 2));
+      const carried = thrownBy(
+        Object.assign(new FakeTranslateError("x", 5, 2), { fixes: FIXES }),
+      );
+      expect(carriedBy(carried).keys).toEqual(carriedBy(plain).keys);
+      expect(carriedBy(carried).fixes).toEqual(FIXES);
+    });
+
+    it("carries no fixes for a missing, empty or non-array value", () => {
+      for (const fixes of [undefined, [], "rename", { title: "x" }]) {
+        const raised = thrownBy(
+          Object.assign(new FakeTranslateError("x", 5, 2), { fixes }),
+        );
+        expect(carriedBy(raised).fixes).toBeUndefined();
+      }
     });
 
     it("carries a code with no end, and an end with no code", () => {

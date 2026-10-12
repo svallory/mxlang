@@ -53,6 +53,34 @@ describe("checkDialectFile", () => {
     });
   });
 
+  it("carries a diagnostic's `fixes`, offsets in the checked file", () => {
+    // A dialect with the default tag rules, so core's `<effect>` error (which
+    // offers the rename) is raised; the probe's own `none` rules raise none.
+    const project = probeProject({
+      "dialect.cjs": "module.exports.default = { table: {} };\n",
+    });
+    const text = "<p>\u{1F600}</p>\r\n<effect>go()</effect>\r\n";
+    const [diagnostic] =
+      checkDialectFile(project.path("a.probe"), text)?.diagnostics ?? [];
+    expect(diagnostic?.code).toBe("MX_RESERVED_EFFECT_TAG");
+    expect(diagnostic?.fixes).toHaveLength(1);
+    expect(diagnostic?.fixes?.[0]?.title).toBe("Rename to `<script>`");
+    expect(
+      diagnostic?.fixes?.[0]?.edits.map((edit) =>
+        text.slice(edit.offset, edit.end),
+      ),
+    ).toEqual(["effect", "effect"]);
+  });
+
+  it("a diagnostic with no fix has no `fixes` key", () => {
+    const project = probeProject();
+    const [diagnostic] =
+      checkDialectFile(project.path("a.probe"), PROBE_SOURCES.bad)
+        ?.diagnostics ?? [];
+    expect(diagnostic).toBeDefined();
+    expect("fixes" in (diagnostic ?? {})).toBe(false);
+  });
+
   it("the offset counts UTF-16 units past a CRLF and a surrogate pair", () => {
     const project = probeProject();
     const text = "<a t='😀'/>\r\n<😀 />\r\n<y !bad/>\r\n";

@@ -281,6 +281,7 @@ export function mxParseElementAt(
       code?: unknown;
       diagnosticCode?: unknown;
       end?: { line?: unknown; column?: unknown };
+      fixes?: unknown;
       loc?: { start?: { line?: number; column?: number; index?: number } };
     };
     const line = error.line ?? error.loc?.start?.line;
@@ -696,18 +697,21 @@ function offsetAt(source: string, line: number, column: number): number {
 /**
  * Runs `raise`, which throws the Babel error (or returns it, under
  * `errorRecovery`), and adds what the host's own error carried to it: MX's
- * `diagnosticCode` and the exclusive `end` of the range (1-based line, 0-based
- * column, file-absolute like the start). The tools read the code from
- * `diagnosticCode`, and an end from `end` or `loc.end`; without them a host's
- * lowering error shows no code and a one-character range.
+ * `diagnosticCode`, the exclusive `end` of the range (1-based line, 0-based
+ * column, file-absolute like the start) and `fixes` (offsets file-absolute
+ * too: the same coordinates as the start). The tools read the code from
+ * `diagnosticCode`, an end from `end` or `loc.end`, and offer `fixes` as quick
+ * fixes; without them a host's lowering error shows no code, a one-character
+ * range and no fix.
  *
- * Both are added non-enumerable, so the error keeps the shape it had.
+ * All are added non-enumerable, so the error keeps the shape it had.
  */
 function carryDiagnostic(
   raise: () => unknown,
   from: {
     diagnosticCode?: unknown;
     end?: { line?: unknown; column?: unknown };
+    fixes?: unknown;
   },
 ): unknown {
   let raised: unknown;
@@ -727,6 +731,9 @@ function carryDiagnostic(
   };
   if (typeof from.diagnosticCode === "string") {
     define(raised, "diagnosticCode", from.diagnosticCode);
+  }
+  if (Array.isArray(from.fixes) && from.fixes.length > 0) {
+    define(raised, "fixes", from.fixes);
   }
   const { end } = from;
   if (typeof end?.line === "number" && typeof end.column === "number") {

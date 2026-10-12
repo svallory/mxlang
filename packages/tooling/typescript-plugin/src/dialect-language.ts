@@ -80,6 +80,9 @@ export function createDialectLanguagePlugin(
           ...(diagnostic.code === undefined
             ? {}
             : { diagnosticCode: diagnostic.code }),
+          ...(diagnostic.fixes === undefined
+            ? {}
+            : { fixes: diagnostic.fixes }),
         })),
       );
       return {

@@ -28,6 +28,7 @@ import {
   firstAttributeTag,
   type HostDeclarations,
   type Ir,
+  type IrDiagnosticFix,
   type IrNode,
   isTranslateError,
   lower,
@@ -117,8 +118,10 @@ export const astroTargets = ownTargets;
  * rule, carried through from a `TranslateError`).
  *
  * It carries what the `TranslateError` it was made from carried: the MX
- * `diagnosticCode` and the exclusive `end` of the range (1-based line,
- * 0-based column), so a tool shows the code and underlines the whole range.
+ * `diagnosticCode`, the exclusive `end` of the range (1-based line,
+ * 0-based column) and the `fixes` (UTF-16 offsets in the same file as the
+ * start), so a tool shows the code, underlines the whole range and offers the
+ * quick fixes.
  * `loc` is the same position as Marko's `CompileError` holds it, the shape
  * the TypeScript plugin and `mx-tsc` read an error's end from.
  */
@@ -128,6 +131,7 @@ export class AstroTemplateError extends Error {
   file?: string;
   diagnosticCode?: string;
   end?: { line: number; column: number };
+  fixes?: readonly IrDiagnosticFix[];
   loc: {
     line: number;
     column: number;
@@ -142,6 +146,7 @@ export class AstroTemplateError extends Error {
     carried: {
       diagnosticCode?: string;
       end?: { line: number; column: number };
+      fixes?: readonly IrDiagnosticFix[];
     } = {},
   ) {
     super(message);
@@ -153,6 +158,7 @@ export class AstroTemplateError extends Error {
       this.diagnosticCode = carried.diagnosticCode;
     }
     if (carried.end !== undefined) this.end = carried.end;
+    if (carried.fixes !== undefined) this.fixes = carried.fixes;
     this.loc = { line, column, ...(carried.end ? { end: carried.end } : {}) };
   }
 }
@@ -1585,7 +1591,11 @@ export function lowerAstroMx(
         error.line,
         error.column,
         error.file,
-        { diagnosticCode: error.diagnosticCode, end: error.end },
+        {
+          diagnosticCode: error.diagnosticCode,
+          end: error.end,
+          fixes: error.fixes,
+        },
       );
     }
     throw error;
