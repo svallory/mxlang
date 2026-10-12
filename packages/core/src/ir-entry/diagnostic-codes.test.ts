@@ -98,6 +98,7 @@ describe("MX_TAG_NOT_ALLOWED", () => {
           line: 2,
           column: 2,
           offset: 9,
+          end: { line: 2, column: 6, offset: 13 },
           code: "MX_TAG_NOT_ALLOWED",
         },
       ],
@@ -115,6 +116,7 @@ describe("MX_TAG_NOT_ALLOWED", () => {
         line: 2,
         column: 2,
         offset: 10,
+        end: { line: 2, column: 6, offset: 14 },
         code: "MX_TAG_NOT_ALLOWED",
       },
     ]);
@@ -130,6 +132,7 @@ describe("MX_TAG_NOT_ALLOWED", () => {
           line: 2,
           column: 2,
           offset: 9,
+          end: { line: 2, column: 6, offset: 13 },
           code: "MX_TAG_NOT_ALLOWED",
         },
       ],
@@ -147,6 +150,7 @@ describe("MX_TEXT_NOT_ALLOWED", () => {
         line: 2,
         column: 2,
         offset: 9,
+        end: { line: 2, column: 4, offset: 11 },
         code: "MX_TEXT_NOT_ALLOWED",
       },
     ]);
@@ -163,6 +167,7 @@ describe("MX_TEXT_NOT_ALLOWED", () => {
         line: 2,
         column: 0,
         offset: 8,
+        end: { line: 2, column: 8, offset: 16 },
         code: "MX_TEXT_NOT_ALLOWED",
       },
     ]);

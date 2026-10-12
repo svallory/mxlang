@@ -726,6 +726,7 @@ describe("duplicate attributes", () => {
         line: 1,
         column: 3,
         offset: 3,
+        end: { line: 1, column: 6, offset: 6 },
         // No `file`: the warning is in the parsed file (review 460 F8).
         code: "MX_DUPLICATE_ATTRIBUTE",
       },

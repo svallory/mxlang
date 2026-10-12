@@ -136,6 +136,8 @@ describe("the unnamed tag in a data file resolves to the built-in `object`", () 
         line: 2,
         column: 2,
         offset: 9,
+        // The shorthand has no name: its whole-tag range is the `<`.
+        end: { line: 2, column: 3, offset: 10 },
         code: "MX_TAG_NOT_ALLOWED",
       },
     ]);
