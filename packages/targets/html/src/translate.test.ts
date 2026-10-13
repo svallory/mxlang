@@ -926,6 +926,36 @@ describe("the render sink (decision 155)", () => {
     expect(html).toBe("<b>x</b><p>undefined</p>");
   });
 
+  // Measured with Marko 6.4.4 (stock parser, server render): a falsy dynamic
+  // tag name renders nothing of its own and leaves the `/var` `undefined`.
+  it.each([
+    ["null", "null"],
+    ["false", "false"],
+    ["undefined", "undefined"],
+    ["the empty string", '""'],
+    ["0", "0"],
+  ])(
+    "leaves /var undefined and renders nothing for a dynamic tag that is %s",
+    async (_label, literal) => {
+      const html = await renderModules(
+        {
+          "page.mx": `<const/tag=${literal}/>\n<\${tag}/x/>\n<p>\${String(x)}</p>`,
+        },
+        "page.mx",
+      );
+      expect(html).toBe("<p>undefined</p>");
+    },
+  );
+
+  it("leaves /var undefined for a falsy dynamic tag read from input", async () => {
+    const html = await renderModules(
+      { "page.mx": "<${input.tag}/x/><p>${String(x)}</p>" },
+      "page.mx",
+      { tag: null },
+    );
+    expect(html).toBe("<p>undefined</p>");
+  });
+
   it("keeps a hand-written .ts function tag string-returning", async () => {
     const html = await renderModules(
       {
@@ -1227,7 +1257,9 @@ describe("an imported .mx tag that declares <return>", () => {
         error = caught as Error;
       }
       expect(error?.message).toMatch(/`<Plain>` does not return a value/);
+      // At the tag variable (`n` in `<Plain/n/>`), not at the tag.
       expect(error?.line).toBe(2);
+      expect(error?.column).toBe(7);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

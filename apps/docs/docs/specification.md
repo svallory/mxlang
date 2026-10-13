@@ -2991,13 +2991,22 @@ const value = Counter.render({ start: 1 }, createOut());
 Lifting the restriction means a statement position per callback scope — **MX 2,
 `tag-var-in-callback-scope`**.
 
+A `/var` needs a `<return>` to bind: a call to a discovered tag or an imported
+`.mx` unit whose template declares none is a compile error, reported at the tag
+variable, with Marko 6.4's rule (it reports the same call at the same place).
+The check reads the callee's own declaration, so it holds on every target that
+supports `/var`. An imported unit that cannot be read, a `.ts` module and a
+dynamic tag are not judged here; a `<define>` call refuses `/var` outright.
+Marko's class-API tags have no MX counterpart: `.marko` files are not compiled
+and `class { … }` is refused.
+
 Three positioned diagnostics stand in for what JavaScript would leave as
 `undefined` or a TDZ crash:
 
 | Message | When |
 |---|---|
 | `` `/var` on `<${name}>` is not supported: it has no template, so it has no `<return>` to bind `` | A `/var` on an L2 sidecar with no template. |
-| `` `<${call.name}>` does not return a value; add `<return value=…/>` to ${tag.filename} to bind it with `/var` `` | The unit declares no `<return>`. |
+| `` `<${call.name}>` does not return a value; add `<return value=…/>` to ${tag.filename} to bind it with `/var` `` | The unit declares no `<return>`; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `${name}` is a `/var` bound inside a nested block and is not in scope here; a `/var` binds in the call site's own scope only `` | The read escaped the declaring block. |
 | `` `${name}` is read before the `/var` that binds it; move the read after the call that declares it `` | The read precedes the declaring call. |
 
@@ -4109,7 +4118,7 @@ return value of `render`:
 |---|---|
 | Discovered tag, self-recursive tag, or an imported `.mx` unit known to declare `<return>` | `Name.render(props, out)`; with `/var`, `const n = Name.render(props, out)` |
 | Any other statically named tag (an imported `.mx` unit without `<return>`, a hand-written function, a `.ts` barrel re-export) | Run-time dispatch: `.render(props, out)` when the callee has it, otherwise the callee is called and its string written |
-| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.4.4 does, and `/var` still binds its return value |
+| Dynamic tag `<${x}/>` | The same run-time dispatch; `/var` binds the `render` value (`undefined` for a callee without `.render`, and for a falsy name — `null`, `false`, `undefined`, `""`, `0` — which renders no tag, as in Marko). Called with tag arguments (`<${x}(a)/>`), a callee with `.render` receives `a` (args[0]) as its input, as Marko 6.4.4 does, and `/var` still binds its return value |
 | `<define>` call, `content`, a renderable attribute tag | Unchanged: a block is `(…params) => string`, rendered into its own sink and written |
 
 A hand-written `.ts` function used as a tag keeps returning a string; it never

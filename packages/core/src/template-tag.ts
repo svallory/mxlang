@@ -14,9 +14,9 @@
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { coreBabel } from "./babel.ts";
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
-import { callNameEnd } from "./contract-facts.ts";
+import { callNameEnd, positionAt } from "./contract-facts.ts";
 import type { Ctx, Node } from "./core.ts";
-import { codedError, isTranslateError, warn } from "./core.ts";
+import { codedError, endErrorAt, isTranslateError, warn } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import {
   ATTRIBUTE_TAG_DROPPED_CODE,
@@ -1015,13 +1015,20 @@ export function routeTemplateCall(
   // accused: the same unit's own compile validates its `<return>`, and a
   // self-recursive call that binds its own result is legal.
   if (call.var && !metadata.returnsValue && !metadata.pending) {
-    throw codedError(
+    // Reported at the `/var` itself, as Marko does: it is the binding that
+    // cannot be filled, and on a long call the tag's start is far from it.
+    const at = call.varSpan
+      ? positionAt(ctx, call.varSpan.sourceStart)
+      : call.loc;
+    const error = codedError(
       INVALID_TAG_VAR_CODE,
       `\`<${call.name}>\` does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
-      call.loc.line,
-      call.loc.column,
+      at.line,
+      at.column,
       call.loc.file,
     );
+    endErrorAt(error, call.varSpan?.sourceEnd);
+    throw error;
   }
 
   const attributeTagTree =

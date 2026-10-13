@@ -345,6 +345,13 @@ export interface TagCall {
   params: string[];
   var: string | null;
   /**
+   * UTF-16 span of the whole authored `/var` pattern (`/n`, `/{ a, b }`), so a
+   * diagnostic about the binding points at it. Absent for a call without
+   * `/var` or without source. Filled by `lower.ts`; optional: ignoring it is
+   * safe.
+   */
+  varSpan?: SourceSpan;
+  /**
    * Each identifier `var` declares, with its authored span. Filled by
    * `lower.ts` `varBindingsOf`; `template-tag.ts` carries it onto the routed
    * `Component`. Serves an emitter that lifts bindings into one scope and must

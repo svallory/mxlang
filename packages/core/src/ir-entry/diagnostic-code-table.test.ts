@@ -752,7 +752,7 @@ const ROWS: Row[] = [
     ["MX_BODY_DROPPED", "<panel>\n  hi\n</panel>\n", 1, 0],
     ["MX_ATTRIBUTE_TAG_DROPPED", "<panel>\n  <@x>hi</@x>\n</panel>\n", 1, 0],
     ["MX_RESERVED_INPUT", "<panel content=1/>\n", 1, 7],
-    ["MX_INVALID_TAG_VAR", "<panel/v/>\n", 1, 0],
+    ["MX_INVALID_TAG_VAR", "<panel/v/>\n", 1, 7],
   ].map(([code, source, line, column]) =>
     callRow(
       code as string,

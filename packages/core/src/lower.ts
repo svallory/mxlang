@@ -4433,6 +4433,7 @@ function lowerCustomTag(
     attrTagProps: loweredTags.props,
     params: paramsOf(ctx, node),
     var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
+    ...(tagVarOf(node) ? { varSpan: exprSpan(ctx, tagVarOf(node)) } : {}),
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
   };
   // The binding was pre-registered by `lowerChildList` at its sibling index;
@@ -4492,7 +4493,7 @@ function lowerComponent(
     raise(
       INVALID_TAG_VAR_CODE,
       `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
-      node,
+      tagVarOf(node),
     );
   }
   if (tagVarOf(node) && unreadable) {
