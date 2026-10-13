@@ -1052,9 +1052,9 @@ describe("compileTagModule: module-level names the template reads", () => {
     expect(body).not.toContain("get Types()");
   });
 
-  it("exposes a `var` declared inside a `static { }` block", () => {
+  it("exposes every binding a `static { }` block declares, as module bindings", () => {
     const { code } = compileTag(
-      "static { var q = 1; let hidden = 2; }\n<p>${q}${hidden}</p>\n",
+      "static { var q = 1; let kept = 2; }\n<p>${q}${kept}</p>\n",
       "blockvar.mx",
     );
 
@@ -1063,6 +1063,18 @@ describe("compileTagModule: module-level names the template reads", () => {
     expect(body).toContain(
       "  protected set q(__mxNext: typeof q) { q = __mxNext; }",
     );
+    expect(body).toContain("  protected get kept() { return kept; }");
+  });
+
+  it("exposes only the `var` of a `static` body that is more than one block", () => {
+    const { code } = compileTag(
+      "static { var q = 1; let hidden = 2; } { var z = 3; }\n<p>${q}${z}</p>\n",
+      "twoblocks.mx",
+    );
+
+    const body = classBody(code);
+    expect(body).toContain("  protected get q() { return q; }");
+    expect(body).toContain("  protected get z() { return z; }");
     expect(body).not.toContain("hidden");
   });
 });

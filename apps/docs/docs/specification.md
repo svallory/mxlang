@@ -271,7 +271,7 @@ Portable on every whole-file host.
 | Construct | Meaning |
 |---|---|
 | `import` | Reaches module scope **verbatim**. Bindings register into `ctx.imports` immediately, so a later tag can resolve against them. |
-| `static` | Runs **once at module load**, not per render. The leading `static\s+` is stripped; the rest hoists verbatim. |
+| `static` | Runs **once at module load**, not per render. The leading `static\s+` is stripped; the rest hoists verbatim. The block form `static { … }` hoists its statements with the braces removed, as in Marko, so what the block declares is a module binding the template reads. Only a body that is exactly one block unwraps, one level: `static { a } { b }` keeps its blocks and `static {{ a }}` hoists `{ a }`. An empty block hoists nothing, and `server { … }` unwraps the same way. |
 | `export interface Input` | Hoisted verbatim; becomes the render function's input type. |
 | any other `export` | Hoisted verbatim to real module scope. |
 
@@ -292,7 +292,7 @@ only while the template renders, so module level code (`static`, `server`,
 cannot reference it. Reference it in the template instead, passing it to module
 level functions as an argument." A reference is any read, write or
 update, in the statement's own text or in a function it declares, and the check
-does not depend on the braces of a `static { … }` block. A module level
+reads the statements of a `static { … }` block as module code, braces removed. A module level
 declaration with the spelling of a tag variable declared in the template's top
 level (`static count = 1` beside `<let/count=0/>`, or an `import` of that
 spelling) is the same error, at the declaration: "`count` is a tag variable, which exists only while the template

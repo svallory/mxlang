@@ -1257,7 +1257,7 @@ export function createEmitter(
         // render, so it runs — hoisting to module scope exactly as `static`
         // does. Classifying it as inert would silently drop a binding the rest
         // of the template reads.
-        state.moduleHoisted.push(data.code);
+        if (data.code !== "") state.moduleHoisted.push(data.code);
         return;
       }
       case "html-comment": {

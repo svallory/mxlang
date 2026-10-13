@@ -336,6 +336,7 @@ export {
   reportScanDiagnostics,
   scanCached,
 } from "./scan-cache.ts";
+export { unwrapStatementBlock } from "./statement-block.ts";
 export {
   type CallPosition,
   type ContractCheckContext,

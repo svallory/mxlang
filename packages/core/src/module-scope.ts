@@ -60,6 +60,7 @@ import {
 } from "./core.ts";
 import { RENDER_ONLY_IN_MODULE_CODE } from "./diagnostic-codes.ts";
 import { parseAuthoredSource } from "./reserved-bindings.ts";
+import { statementBlock } from "./statement-block.ts";
 import { hasStaticName, tagNameOf, tagVarOf } from "./tag-fields.ts";
 
 /** The names that exist per render without any tag declaring them. */
@@ -155,10 +156,11 @@ function parseStatement(
     if (keyword) {
       source = " ".repeat(keyword.length) + source.slice(keyword.length);
       // `static { … }`: the braces are blanked, so the block's statements are
-      // the module's own and the positions do not move.
-      const braces = /^(\s*)\{([\s\S]*)\}(\s*)$/.exec(source);
+      // the module's own and the positions do not move. Only a body that is
+      // exactly one block unwraps, as lowering reads it.
+      const braces = statementBlock(source);
       if (braces) {
-        source = `${braces[1]} ${braces[2]} ${braces[3]}`;
+        source = `${source.slice(0, braces.open)} ${source.slice(braces.open + 1, braces.close)} ${source.slice(braces.close + 1)}`;
         block = true;
       }
     }

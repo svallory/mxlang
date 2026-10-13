@@ -324,8 +324,9 @@ function collectModuleBindings(
         }
         break;
       case "BlockStatement":
-        // `static { var q = 1; }`: a `var` hoists out of the block to module
-        // scope. A `let`/`const` in it stays inside the braces.
+        // A block that stayed a block (`static { … } { … }`: the body is more
+        // than one block, so none unwraps): a `var` hoists out of it to
+        // module scope. A `let`/`const` in it stays inside the braces.
         hoistedVars(node);
         break;
       case "TSInterfaceDeclaration":

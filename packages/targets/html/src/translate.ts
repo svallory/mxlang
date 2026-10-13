@@ -46,6 +46,7 @@ import {
   replaceMapped,
   sliceLoc,
   unresolvedCustomTagMessage,
+  unwrapStatementBlock,
 } from "@mxlang/core";
 
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -413,9 +414,12 @@ function resolveDelegatedTag(
   if (name === "server") {
     return {
       kind: "statement",
-      code: sliceLoc(ctx, node.loc)
-        .trim()
-        .replace(/^server\s+/, ""),
+      // `server { … }` hoists its statements, braces gone, like `static`.
+      code: unwrapStatementBlock(
+        sliceLoc(ctx, node.loc)
+          .trim()
+          .replace(/^server\s+/, ""),
+      ),
     };
   }
 

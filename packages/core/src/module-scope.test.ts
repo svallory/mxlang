@@ -745,3 +745,52 @@ describe("`input` and imports", () => {
     },
   );
 });
+
+/**
+ * `static { … }` is module code with the braces gone (Marko unwraps a body
+ * that is exactly one block), so the check and the lowering agree on which
+ * bindings are the module's: the template reads them, and a declaration that
+ * would clash with a tag variable is still refused.
+ */
+describe("a `static { … }` block unwrapped to module scope", () => {
+  it("a template read of a binding the block declares is not flagged", () => {
+    const source =
+      "static { const q = 1; function f() { return q } }\n<let/count=0/>\n<div>${q}${f()}${count}</div>\n";
+    expect(ours(source)).toEqual([]);
+    expect(attempt(source)).toBeUndefined();
+  });
+
+  it("a read of a block binding by a later module statement is not flagged, though a nested tag declares that spelling", () => {
+    const source =
+      "static { const base = 1 }\nstatic const n = base + 1\n<div><let/base=2/>${n}${base}</div>\n";
+    expect(ours(source)).toEqual([]);
+  });
+
+  it("a block declaration beside a tag variable of that spelling is still refused, at the declaration", () => {
+    const source = "<let/count=0/>\nstatic { const count = 1 }\n<div/>\n";
+    expectAt(source, declaration("count"), "count = 1");
+  });
+
+  it("the same refusal holds with a comment after the closing brace", () => {
+    const source = "<let/count=0/>\nstatic { const count = 1 } // c\n<div/>\n";
+    const errors = ours(source);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.message).toBe(declaration("count"));
+    expect([errors[0]?.line, errors[0]?.column]).toEqual([2, 15]);
+  });
+
+  it("a statement of the block that names `input` is refused at the name", () => {
+    const source = "static {\n  const a = input.x;\n}\n<div/>\n";
+    expectAt(source, reference("input"), "input");
+  });
+
+  it.each([
+    ["a second block", "static { a } { const count = 1 }"],
+    ["an empty statement after the block", "static { const count = 1 };"],
+  ])(
+    "a body of more than one statement keeps its block: %s declares no module binding",
+    (_name, statement) => {
+      expect(ours(`<let/count=0/>\n${statement}\n<div/>\n`)).toEqual([]);
+    },
+  );
+});

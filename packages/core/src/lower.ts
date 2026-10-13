@@ -226,6 +226,7 @@ import {
   findStaleRead,
   handlerFunction,
 } from "./stale-derived-read.ts";
+import { unwrapStatementBlock } from "./statement-block.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   fileTagRules,
@@ -3409,10 +3410,11 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
  * provable function/arrow/class (local extension of decision 116). Mirrors
  * `lowerStatement`'s `import` branch, which does the equivalent for an
  * `import` line, except `static` may declare several statements
- * (`static { const A = 1; function B(){} }`-style bodies are not MX's
- * `static` grammar, but `static const A = 1, B = () => {}` and a bare
- * `static function Foo(){}` both are), so every top-level statement in the
- * parsed block is walked rather than assuming one declaration.
+ * (`static { const A = 1; function B(){} }` arrives here with its braces
+ * already removed, and `static const A = 1, B = () => {}` and a bare
+ * `static function Foo(){}` are one statement each), so every top-level
+ * statement in the parsed code is walked rather than assuming one
+ * declaration.
  *
  * A lowercase name joins `staticBindings` only: it is never resolved as a
  * component tag (decision 116's own casing gate, `fileLocalBinding`'s
@@ -3864,7 +3866,11 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     };
   }
   if (name === "static") {
-    const code = line.replace(/^static\s+/, "");
+    // `static { … }` is its statements at module scope, braces gone, as Marko
+    // reads it (`static { let q = 1 }` declares `q` for the template).
+    const code = unwrapStatementBlock(line.replace(/^static\s+/, ""));
+    // An empty block declares and runs nothing.
+    if (code === "") return { kind: "Text", value: "", loc };
     registerStaticBindings(ctx, code);
     return {
       kind: "Static",

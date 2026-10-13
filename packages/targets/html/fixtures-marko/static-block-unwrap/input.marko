@@ -1,0 +1,14 @@
+static {
+  // a comment inside the braces
+  let q = 1;
+  const r = q + 1;
+  function twice(n) { return n * 2 }
+  {
+    let inner = 99;
+  }
+}
+static { const s = "two" } // after the block
+static {}
+
+<div>${q}|${r}|${twice(r)}|${s}</div>
+<p>${typeof inner}</p>

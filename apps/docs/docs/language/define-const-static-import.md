@@ -32,6 +32,19 @@ static
 
 Use `static` for values or helpers that don't depend on the current render's input.
 
+A block groups several statements. Its braces are not kept: what the block declares is declared at module level, so the template reads it.
+
+```html
+static {
+  const GREETING = "Welcome"
+  function shout(text) { return text.toUpperCase() }
+}
+
+<h1>${shout(GREETING)}</h1>
+```
+
+Only a block that is the whole `static` body unwraps, and only one level of it: a block nested inside stays a block, and its declarations stay inside it.
+
 Because it runs once, before any render, `static` code (like `server`, `client` and `export` code) cannot name anything that exists only while the template renders: a tag variable (`<let>`, `<const>`, `<define>`), `input`, `$global` or `$signal`. It is a compile error, positioned at the name (`MX_RENDER_ONLY_IN_MODULE`):
 
 ```html
