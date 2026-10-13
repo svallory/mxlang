@@ -4525,7 +4525,7 @@ function lowerCustomTag(
     raise(
       INVALID_TAG_VAR_CODE,
       `\`/var\` on ${label} is not supported: it has no template, so it has no \`<return>\` to bind`,
-      node,
+      tagVarOf(node),
     );
   }
   validateCustomAttributeTagBodies(
@@ -4655,7 +4655,7 @@ function lowerComponent(
     raise(
       INVALID_TAG_VAR_CODE,
       `\`/${declName(ctx, tagVarOf(node))}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
-      node,
+      tagVarOf(node),
     );
   }
   // A host whose dynamic dispatch reaches a returning unit's render path can

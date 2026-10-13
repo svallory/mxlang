@@ -407,14 +407,14 @@ describe("an error inside an unknown tag is labelled, never dropped (decision 16
   it("keeps an independent error at the root unlabelled", () => {
     expect(list("<foo/>\n<open/z/>\n")).toEqual([
       `1:0 ${UNKNOWN("foo")}`,
-      `2:0 ${VAR}`,
+      `2:6 ${VAR}`,
     ]);
   });
 
   it("keeps a `/var` inside an unknown tag, labelled", () => {
     expect(list("<foo>\n  <open/z/>\n</foo>\n<bar/>\n")).toEqual([
       `1:0 ${UNKNOWN("foo")}`,
-      `2:2 ${VAR}${inside("foo")}`,
+      `2:8 ${VAR}${inside("foo")}`,
       `4:0 ${UNKNOWN("bar")}`,
     ]);
   });
@@ -465,7 +465,7 @@ describe("an error inside an unknown tag is labelled, never dropped (decision 16
       list("<foo>\n  <open/z/>\n</foo>\n", {
         customTags: { ...open, foo: {} },
       }),
-    ).toEqual([`2:2 ${VAR}`]);
+    ).toEqual([`2:8 ${VAR}`]);
   });
 
   it("does not label an error outside the element", () => {

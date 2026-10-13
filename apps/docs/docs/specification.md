@@ -3046,14 +3046,15 @@ module; a `<define>` call refuses `/var` outright.
 Marko's class-API tags have no MX counterpart: `.marko` files are not compiled
 and `class { … }` is refused.
 
-Three positioned diagnostics stand in for what JavaScript would leave as
+These positioned diagnostics stand in for what JavaScript would leave as
 `undefined` or a TDZ crash:
 
 | Message | When |
 |---|---|
-| `` `/var` on `<${name}>` is not supported: it has no template, so it has no `<return>` to bind `` | A `/var` on an L2 sidecar with no template. |
+| `` `/var` on `<${name}>` is not supported: it has no template, so it has no `<return>` to bind `` | A `/var` on an L2 sidecar with no template; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `<${call.name}>` does not return a value; add `<return value=…/>` to ${tag.filename} to bind it with `/var` `` | The unit declares no `<return>`; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `<${name}>` does not return a value; add `<return value=…/>` to the imported file to bind it with `/var` `` | The same rule for an imported `.mx` unit, called by its binding or as `<${name}/…/>`; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
+| `` `/${var}` on `<${name}>` can't bind: ${path} ${reason} `` | A `/var` on an imported `.mx` unit that is missing or does not compile; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `${name}` is a `/var` bound inside a nested block and is not in scope here; a `/var` binds in the call site's own scope only `` | The read escaped the declaring block. |
 | `` `${name}` is read before the `/var` that binds it; move the read after the call that declares it `` | The read precedes the declaring call. |
 

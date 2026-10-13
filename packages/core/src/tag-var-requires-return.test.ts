@@ -237,7 +237,7 @@ describe("/var on a bare-identifier dynamic tag", () => {
 });
 
 describe("the data path (`none` preset) is unchanged", () => {
-  it("still refuses a tag variable on a contract-only tag at the tag, with its own wording", () => {
+  it("still refuses a tag variable on a contract-only tag, with its own wording, at the variable", () => {
     const { diagnostics } = lowerData("<panel/v/>\n", "/t.mx", {
       customTags: { panel: {} },
       tagRules: "none",
@@ -246,7 +246,8 @@ describe("the data path (`none` preset) is unchanged", () => {
     expect(diagnostics[0]).toMatchObject({
       code: "MX_INVALID_TAG_VAR",
       line: 1,
-      column: 0,
+      column: 7,
+      end: { line: 1, column: 8 },
     });
   });
 });

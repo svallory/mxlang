@@ -358,7 +358,8 @@ describe("custom tag transforms", () => {
           "`/var` on `<box>` is not supported: it has no template, so it has no `<return>` to bind",
         ),
         line: 2,
-        column: 0,
+        column: 5,
+        end: { line: 2, column: 6 },
       }),
     );
   });
@@ -373,7 +374,8 @@ describe("custom tag transforms", () => {
           "`/var` on `<icon>` is not supported: it has no template, so it has no `<return>` to bind",
         ),
         line: 2,
-        column: 0,
+        column: 6,
+        end: { line: 2, column: 7 },
       }),
     );
   });

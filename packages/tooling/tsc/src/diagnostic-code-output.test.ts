@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -23,6 +23,7 @@ function lines(
   source: string,
   host = "html",
   flags: string[] = [],
+  extra: Record<string, string> = {},
 ): string[] {
   const dir = mkdtempSync(join(tmpdir(), "mx-code-output-"));
   created.push(dir);
@@ -41,6 +42,10 @@ function lines(
     }),
   );
   writeFileSync(join(dir, file), source);
+  for (const [name, text] of Object.entries(extra)) {
+    mkdirSync(join(dir, name, ".."), { recursive: true });
+    writeFileSync(join(dir, name), text);
+  }
   const run = runInProcess(["--noEmit", ...flags, "-p", "tsconfig.json"], dir);
   return stripVTControlCharacters(run.stdout + run.stderr)
     .split("\n")
@@ -113,5 +118,54 @@ describe("mx-tsc prints MX's code for an .mx file", () => {
       "solid",
     );
     expect(line).toMatch(/^page\.solid\.mx\(1,\d+\): error TS80001: /);
+  });
+});
+
+/**
+ * A `/var` that cannot bind is printed at the variable (1-based column), not at
+ * the start of the tag: `<box/x/>` is `(1,6)`, the `x`.
+ */
+describe("mx-tsc prints a /var that cannot bind at the variable", () => {
+  const SIDECAR = {
+    "tags/box.tag.ts":
+      "export default { transform: (call: { content?: { children: unknown[] } }) => call.content?.children ?? [] };\n",
+  };
+
+  it("a tag with no template (a sidecar): the variable, in an .mx file", () => {
+    const [line] = lines("page.mx", "<box/x/>\n", "html", [], SIDECAR);
+    expect(line).toMatch(
+      /^page\.mx\(1,6\): error MX_INVALID_TAG_VAR: `\/var` on `<box>` is not supported: it has no template/,
+    );
+  });
+
+  it("a tag with no template, in a region of a .preact.mx file", () => {
+    const [line] = lines(
+      "page.preact.mx",
+      "const el = <box/x/>;\n",
+      "preact",
+      [],
+      SIDECAR,
+    );
+    expect(line).toMatch(
+      /^page\.preact\.mx\(1,17\): error MX_INVALID_TAG_VAR: `\/var` on `<box>` is not supported/,
+    );
+  });
+
+  it("an imported unit that cannot be read: the variable, in an .mx file", () => {
+    const [line] = lines("page.mx", 'import M from "./missing.mx"\n<M/n/>\n');
+    expect(line).toMatch(
+      /^page\.mx\(2,4\): error MX_INVALID_TAG_VAR: `\/n` on `<M>` can't bind: /,
+    );
+  });
+
+  it("an imported unit that cannot be read, in a region of a .preact.mx file", () => {
+    const [line] = lines(
+      "page.preact.mx",
+      'import M from "./missing.mx";\nconst el = <M/n/>;\n',
+      "preact",
+    );
+    expect(line).toMatch(
+      /^page\.preact\.mx\(2,15\): error MX_INVALID_TAG_VAR: `\/n` on `<M>` can't bind: /,
+    );
   });
 });
