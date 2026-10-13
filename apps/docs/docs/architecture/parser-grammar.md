@@ -1716,7 +1716,7 @@ of word characters ending at `p`, within the position:
 | 2 | is directly preceded by a `.` | no: `(a.new :b)`; when the `.` is the third dot of a spread (`isSpreadEnd`) the rule does not apply: `[...await :b]` and `[...new :a]` |
 | 3 | is not one of `await` `case` `delete` `do` `else` `extends` `in` `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield` (`operandKeywords`) | no: `(c ? b :c)`; in `(éin :b)` the word is `éin` |
 | 4 | is `of` | yes when the character before it, skipping whitespace, is a word character, `)`, `]` or `}`; otherwise no |
-| 5 | is `yield` or `await` | no when the character before it, skipping whitespace, is `?`, `:`, `,` or `(`; otherwise yes, at the position's start too. After `(` or `,` the word can be a parameter name with a type annotation, and after `?` or `:` a ternary operand |
+| 5 | is `yield` or `await` | no when the character before it, skipping whitespace and comments, is `?` or `:`; otherwise yes, at the position's start too. After `?` or `:` the word is a ternary operand (`c ? await :b`). After `(` or `,` it is the operator: an identifier named `await` there is followed by `)`, `,` or an operator, never by a trigger (`f(await &a)`, `(x, yield :b)`) |
 | 6 | is another word of the list | yes |
 
 **A type argument list's closing `>`** (`closesTypeArguments`), for row 6. It

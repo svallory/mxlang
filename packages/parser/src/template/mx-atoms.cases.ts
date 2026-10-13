@@ -808,7 +808,29 @@ export const ATOMS: [string, string][] = [
   ["<div x=((a)/*c*/ of :b)/>", '<div> @x atom(b@20-22) ="((a)/*c*/ of 0.)"'],
   ["<div x=((a)      of :b)/>", '<div> @x atom(b@20-22) ="((a)      of 0.)"'],
   ["div x=(a /*c*/ of :b)\n", '<div> @x atom(b@18-20) ="(a /*c*/ of 0.)"'],
-  ["div x=(a       of :b)\n", '<div> @x atom(b@18-20) ="(a       of 0.)"'],
+  ["div x=(a       of :b)\n", '<div> @x atom(b@18-20) ="(a       of 0.)"'], // `await` and `yield` after `(` or `,` are the operator, so an atom may
+  // follow (`f(await :b)`); after `?` or `:` they stay identifiers (NOT_ATOMS).
+  // The comment rows sit beside their space twins (`commentTwinMismatches`).
+  ["<div x=f(await :b)/>", '<div> @x atom(b@15-17) ="f(await 0.)"'],
+  ["<div x=(yield :b)/>", '<div> @x atom(b@14-16) ="(yield 0.)"'],
+  ["<div x=f(1, yield :b)/>", '<div> @x atom(b@18-20) ="f(1, yield 0.)"'],
+  ["<div x=(éa, await :b)/>", '<div> @x atom(b@18-20) ="(éa, await 0.)"'],
+  ["<div x=f(/*c*/ await :b)/>", '<div> @x atom(b@21-23) ="f(/*c*/ await 0.)"'],
+  ["<div x=f(     await :b)/>", '<div> @x atom(b@20-22) ="f(     await 0.)"'],
+  [
+    "<div x=f(// c\n await :b)/>",
+    '<div> @x atom(b@21-23) ="f(// c\\n await 0.)"',
+  ],
+  [
+    "<div x=f(    \n await :b)/>",
+    '<div> @x atom(b@21-23) ="f(    \\n await 0.)"',
+  ],
+  ["<div x=(/*c*/ yield :b)/>", '<div> @x atom(b@20-22) ="(/*c*/ yield 0.)"'],
+  ["<div x=(      yield :b)/>", '<div> @x atom(b@20-22) ="(      yield 0.)"'],
+  ["<div x=f(await /*c*/:b)/>", '<div> @x atom(b@20-22) ="f(await /*c*/0.)"'],
+  ["<div x=f(await      :b)/>", '<div> @x atom(b@20-22) ="f(await      0.)"'],
+  ["<p>${f(/*c*/ await :b)}</p>", '<p> atom(b@19-21) ${"f(/*c*/ await 0.)"}'],
+  ["<p>${f(      await :b)}</p>", '<p> atom(b@19-21) ${"f(      await 0.)"}'],
 ];
 
 /**
@@ -918,12 +940,8 @@ export const NOT_ATOMS: [string, string][] = [
   ["<${`a::b`}/>", "<${`a::b`}>"],
   ['<div.${"a::b"}/>', "<div>"],
   ['<div class="a::b" x=`::c`/>', '<div> @class ="\\"a::b\\"" @x ="`::c`"'],
-  // Review round 5 (Q2, decision 156 addendum 3): `await`/`yield` after `(`,
-  // `,`, `?` or `:` are identifiers; awaiting or yielding an atom is
-  // meaningless.
-  ["<div x=f(await :b)/>", '<div> @x ="f(await :b)"'],
-  ["<div x=(yield :b)/>", '<div> @x ="(yield :b)"'],
-  ["<div x=f(1, yield :b)/>", '<div> @x ="f(1, yield :b)"'],
+  // `await`/`yield` after `?` or `:` are identifiers (`c ? await :b`, below);
+  // after `(` or `,` they are the operator, pinned in ATOMS.
   // Decision 156 addendum 4, pinned: `(a<b> :c)` with no open `?` takes
   // TypeScript's reading (type arguments), so no atom; core's hint names the
   // ambiguity.
@@ -1088,7 +1106,6 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(c ? f<é>() :z)/>", '<div> @x ="(c ? f<é>() :z)"'],
   ["<div x=(c ? é?.b :z)/>", '<div> @x ="(c ? é?.b :z)"'],
   ["<div x=(c ? é[0]! :z)/>", '<div> @x ="(c ? é[0]! :z)"'],
-  ["<div x=(éa, await :b)/>", '<div> @x ="(éa, await :b)"'],
   // Decision 156 addendum 10: in the atom look-behind, Unicode whitespace
   // and line terminators behave exactly as ASCII whitespace. These two shapes
   // lexed an atom on main and compiled (a ternary, a comparison); they now
@@ -1226,18 +1243,8 @@ export const NOT_ATOMS: [string, string][] = [
   // followup): a comment before `of`, `yield` or `await`, or between the
   // word and the `:`, is skipped exactly as whitespace is. Each row is beside
   // its twin with the comment replaced by spaces (`commentTwinMismatches`).
-  ["<div x=f(/*c*/ await :b)/>", '<div> @x ="f(/*c*/ await :b)"'],
-  ["<div x=f(     await :b)/>", '<div> @x ="f(     await :b)"'],
-  ["<div x=f(// c\n await :b)/>", '<div> @x ="f(// c\\n await :b)"'],
-  ["<div x=f(    \n await :b)/>", '<div> @x ="f(    \\n await :b)"'],
-  ["<div x=(/*c*/ yield :b)/>", '<div> @x ="(/*c*/ yield :b)"'],
-  ["<div x=(      yield :b)/>", '<div> @x ="(      yield :b)"'],
   ["<div x=(c ?/*c*/ await :b : d)/>", '<div> @x ="(c ?/*c*/ await :b : d)"'],
   ["<div x=(c ?      await :b : d)/>", '<div> @x ="(c ?      await :b : d)"'],
-  ["<div x=f(await /*c*/:b)/>", '<div> @x ="f(await /*c*/:b)"'],
-  ["<div x=f(await      :b)/>", '<div> @x ="f(await      :b)"'],
-  ["<p>${f(/*c*/ await :b)}</p>", '<p> ${"f(/*c*/ await :b)"}'],
-  ["<p>${f(      await :b)}</p>", '<p> ${"f(      await :b)"}'],
 ];
 
 /**

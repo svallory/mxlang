@@ -266,7 +266,7 @@ carry them):
   the same group) and a run of postfix `!` (`a!!`, `a! !`), at every depth
   (groups, placeholders, tag arguments, method bodies). A number before `?`
   is never TypeScript's optional marker. `of` is an operator only after an
-  operand, `yield`/`await` not after `?`, `:`, `,` or `(` (`isOperatorWord`).
+  operand, `yield`/`await` not after `?` or `:` (`isOperatorWord`; after `(` and `,` they are the operator).
   A word after a spread's `...` is an operator, not a member name
   (`isSpreadEnd`: `[...await :b]` under a `:` row).
 - **A trigger that would continue its token declines.** A non-ASCII letter

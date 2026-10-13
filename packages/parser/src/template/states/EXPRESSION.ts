@@ -1083,12 +1083,11 @@ function isOperatorWord(
         before === CODE.CLOSE_CURLY_BRACE
       );
     }
-    return !(
-      before === CODE.QUESTION ||
-      before === CODE.COLON ||
-      before === CODE.COMMA ||
-      before === CODE.OPEN_PAREN
-    );
+    // After a ternary's `?` or `:` the word is an identifier (`c ? await :b`
+    // reads `:b` as the alternate). After `(` or `,` it is the operator: an
+    // identifier named `await` there is followed by `)`, `,` or an operator,
+    // never by a trigger (`f(await &a)`, `(x, yield :b)`).
+    return !(before === CODE.QUESTION || before === CODE.COLON);
   }
   return true;
 }

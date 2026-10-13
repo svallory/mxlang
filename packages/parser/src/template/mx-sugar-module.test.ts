@@ -171,7 +171,7 @@ describe("the default row", () => {
  * `a++ & n`, `&n++`); a pair anywhere else is prefix and an operand follows
  * (`++&n`, `typeof --%.now`, `a + ++&n`).
  */
-describe("expression triggers after `++` and `--`", () => {
+describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
   const MEMBER_ROW = MESH_SYNTAX.expressionTriggers[0];
   const NOW_ROW = {
     id: "now",
@@ -345,5 +345,52 @@ describe("expression triggers after `++` and `--`", () => {
   it("a long run of pairs parses without recursion trouble", () => {
     const source = `<x a=[${"++ ".repeat(50_000)}&n]/>`;
     expect(run(source).triggers).toEqual(["&n"]);
+  });
+  it.each([
+    "(await &a)",
+    "f(await &a)",
+    "f(x, await &a)",
+    "(x, await &a)",
+    "(await %.now)",
+    "f(x, await %.now)",
+    "(yield &a)",
+    "f(yield &a)",
+    "f(x, yield %.now)",
+    "(await :b)",
+    "f(await :b)",
+    "f(x, await :b)",
+    "(yield :b)",
+    "f(1, yield :b)",
+    "f(/* c */ await &a)",
+    "f(// c\n await &a)",
+    "[(await &a), (await :b)]",
+  ])(
+    "an operand is expected after `await` or `yield` after `(` or `,`: %j",
+    (expression) => {
+      const expected = expression.match(/&a|%\.now|:b/g) ?? [];
+      for (const source of contexts(expression)) {
+        expect(run(source).triggers, source).toEqual(expected);
+      }
+    },
+  );
+
+  it.each([
+    "c ? await :b",
+    "c ? yield :b",
+    "c ? await : yield",
+    "x ? y : await :b",
+    "(c ? await :b : d)",
+  ])(
+    "after `?` or `:`, `await` and `yield` stay identifiers: %j",
+    (expression) => {
+      for (const source of contexts(expression)) {
+        expect(run(source).triggers, source).toEqual([]);
+      }
+    },
+  );
+
+  it("`await` and `yield` as a member or key stay names", () => {
+    expect(run("<x a=(a.await &a)/>").triggers).toEqual([]);
+    expect(run("<x a=f(x.yield, 1)/>").triggers).toEqual([]);
   });
 });
