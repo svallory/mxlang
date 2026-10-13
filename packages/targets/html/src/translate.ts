@@ -235,23 +235,27 @@ function clientDeclaredNames(code: string, at: Node): string[] {
         queue.push(node.label);
         break;
       case "ImportDeclaration":
-        queue.push(...node.specifiers);
+        // `import type { T }` is erased, so it binds nothing at run time.
+        if (node.importKind !== "type") queue.push(...node.specifiers);
         break;
       case "ImportSpecifier":
+        if (node.importKind !== "type") queue.push(node.local);
+        break;
       case "ImportDefaultSpecifier":
       case "ImportNamespaceSpecifier":
         queue.push(node.local);
         break;
       case "ExportNamedDeclaration":
+        // `export { y }` has no declaration and adds nothing; any other
+        // declaration is declared (or not) by its own case.
+        queue.push(node.declaration);
+        break;
       case "ExportDefaultDeclaration":
-        // Only a declaration binds a name: `export default foo` and
-        // `export { y }` add nothing.
+        // `export default foo` is an expression and binds nothing; only a
+        // function or class declaration does.
         if (
-          [
-            "FunctionDeclaration",
-            "ClassDeclaration",
-            "VariableDeclaration",
-          ].includes(node.declaration?.type)
+          node.declaration?.type === "FunctionDeclaration" ||
+          node.declaration?.type === "ClassDeclaration"
         ) {
           queue.push(node.declaration);
         }

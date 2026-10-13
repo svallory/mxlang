@@ -1437,11 +1437,9 @@ function inSourceOrder(
   // (`server let x = a` then `static (() => {})()` is one call). A `;` on its
   // own line ends it, and a trailing `// comment` cannot swallow it.
   return entries.flatMap((entry, index) => {
-    const before = entries[index - 1]?.code.trimEnd();
-    const joins =
-      before !== undefined &&
-      !before.endsWith(";") &&
-      /^\s*[([`+\-/]/.test(entry.code);
+    // Always, never "only when the previous text ends in `;`": that text can
+    // end in a `// comment;`, and an empty statement is harmless.
+    const joins = index > 0 && /^\s*[([`+\-/]/.test(entry.code);
     return joins ? [";", entry.code] : [entry.code];
   });
 }

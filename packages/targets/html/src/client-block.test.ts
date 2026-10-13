@@ -202,6 +202,18 @@ describe("html: the non-block `client import` and `client export` declare their 
       "var h;",
     ],
     ["a default-exported class", "client export default class K {}", "var K;"],
+    [
+      "an exported namespace",
+      "client export namespace N { export const a = 1 }",
+      "var N;",
+    ],
+    ["a type-only import", 'client import type { T } from "./t";', ""],
+    [
+      "a type-only specifier beside a value one",
+      'client import { type T, u } from "./t";',
+      "var u;",
+    ],
+    ["a type-only default import", 'client import type D from "./t";', ""],
     ["a default-exported expression", "client export default foo;", ""],
   ])("%s", (_name, statement, expected) => {
     expect(hoisted(`${statement}${TEMPLATE}`)).toBe(expected);
@@ -261,6 +273,20 @@ describe("html: a hoisted statement is not joined to the next one by ASI", () =>
         ].join("\n"),
       ),
     ).toBe("<div>each</div>");
+  });
+
+  it("a trailing comment ending in `;` does not stand in for the terminator", () => {
+    expect(
+      render(
+        [
+          "static let log = [];",
+          'static const a = (x) => { log.push("called"); return () => 0 };',
+          "server let x = a // note;",
+          'static (() => { log.push("iife") })();',
+          '<div>${log.join(",")}</div>',
+        ].join("\n"),
+      ),
+    ).toBe("<div>iife</div>");
   });
 
   it("a trailing comment cannot swallow the terminator", () => {
