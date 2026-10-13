@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
 // A lowercase tag is a native element whatever binding is in scope (Marko
-// 6.3.51 measured: native for an import and for a lowercase `<define>`).
+// 6.4.4 measured: native for an import and for a lowercase `<define>`).
 describe("lowercase tag with a same-named binding in scope", () => {
   // Marko's own message, verbatim (measured on the stock parser,
   // `@marko/compiler` 5.42.11 / `marko` 6.4.4): always at the tag name.

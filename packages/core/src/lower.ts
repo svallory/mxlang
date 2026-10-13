@@ -5180,7 +5180,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // but `fileLocalBinding` already proved it is a capitalized, in-scope local
   // binding, which is exactly what a component call needs to route on.
   // Decision 164: a lowercase tag is a native element whatever `import` or
-  // `<define>` binding of that name is in scope (Marko 6.3.51: only a
+  // `<define>` binding of that name is in scope (Marko 6.4.4: only a
   // PascalCase name, or a dynamic tag `<${name}>`, calls a local binding).
   // Hosts' `isComponent` answers `imports.has || defines.has` with no casing
   // gate, so the lowercase case is cut off here, once, for every host.

@@ -218,7 +218,7 @@ function isElement(name: string, _ctx: Ctx): boolean {
  * tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they
  * are PascalCase. Use
  * `<${layout}/>` or rename to `Layout`.", verified against `@marko/compiler`
- * 5.42.5 / `marko@6.3.51`; see fixture `lowercase-component`) because a
+ * 5.42.11 / `marko@6.4.4`; see fixture `lowercase-component`) because a
  * lowercase tag name is only ever resolved through taglib/`tags/`
  * discovery, never through a local variable — that ambiguity is what the
  * dynamic-tag syntax exists to remove. A taglib-discovered tag has no such
