@@ -335,6 +335,22 @@ describe("an error the table causes that is not a parse error keeps its shape", 
     );
   });
 
+  it.each([
+    ["parseFragment", viaFragment],
+    ["compileSource", viaCompile],
+  ])(
+    "a template error first, with the trigger in the tree: its error (%s)",
+    (_n, run) => {
+      // The open tag never closes, and the parser goes on to the trigger.
+      const error = run("<div>\nx=() => &status\n", MEMBER_TABLE) as Error & {
+        diagnosticCode: string;
+      };
+      expect(error.name).toBe("CompileError");
+      expect(error.diagnosticCode).toBe("MX_PARSE_MISSING_END_TAG");
+      expect(locOf(error).start).toEqual({ line: 1, column: 0, index: 0 });
+    },
+  );
+
   it("a region fragment compares in the fragment's own offsets, base aside", () => {
     const base: Base = { baseOffset: 40, baseLine: 4, baseColumn: 10 };
     const first = viaFragment(
