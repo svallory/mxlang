@@ -297,7 +297,12 @@ declaration with the spelling of a tag variable declared in the template's top
 level (`static count = 1` beside `<let/count=0/>`, or an `import` of that
 spelling) is the same error, at the declaration: "`count` is a tag variable, which exists only while the template
 renders, so module level code (…), cannot declare a name with its spelling.
-Rename the module level binding." What is not a name: a parameter or local of a
+Rename the module level binding." A module level declaration spelled `input`
+(`static const input = 1`, `static function input() {}`, a destructured
+`input`, an ambient `declare const input`) is refused the same way, as Marko
+refuses it, with "`input` is the template's input" for "is a tag variable"; an
+`import` of that spelling is not a declaration, and `$global` and `$signal` may
+be declared, as in Marko. What is not a name: a parameter or local of a
 module function that shadows it, a property name (`o.input`, `{ input: 1 }`),
 anything inside a type (`typeof x` in a type position) or an ambient
 `declare` declaration, a type-only import, a tag param (it is only

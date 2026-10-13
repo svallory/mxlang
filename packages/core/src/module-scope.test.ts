@@ -596,9 +596,109 @@ describe("`input` and imports", () => {
     });
   });
 
-  it("a module declaration of `input` is the reserved-name check's, not a second error", () => {
-    const source = "static const input = 1\nstatic const y = input\n<div/>\n";
-    expect(ours(source)).toEqual([]);
+  const inputDeclaration =
+    "`input` is the template's input, which exists only while the template renders, so module level code (`static`, `server`, `client` and `export` statements), which runs once as the template loads, cannot declare a name with its spelling. Rename the module level binding.";
+
+  it.each([
+    ["a `static const`", "static const input = 1", "input = 1"],
+    ["a `static let`", "static let input = 1", "input = 1"],
+    [
+      "a `static function`",
+      "static function input() {}",
+      "function input() {}",
+    ],
+    ["a `static class`", "static class input {}", "class input {}"],
+    ["an `export const`", "export const input = 1", "input = 1"],
+    ["a destructured name", "static const { input } = o", "{ input } = o"],
+    [
+      "a renamed destructured name",
+      "static const { a: input } = o",
+      "{ a: input } = o",
+    ],
+    ["an array destructured name", "static const [input] = o", "[input] = o"],
+    ["a block declaration", "static { const input = 1 }", "input = 1"],
+    ["an assignment statement", "static input = 1", "input = 1"],
+    [
+      "an ambient declaration",
+      "static declare const input: number",
+      "input: number",
+    ],
+  ])(
+    "a module declaration of `input` is refused: %s",
+    (_name, statement, needle) => {
+      const source = `${statement}\n<div/>\n`;
+      const errors = ours(source);
+      const at = span(source, needle);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        code: CODE,
+        severity: "error",
+        message: inputDeclaration,
+        line: at.start.line,
+        column: at.start.column,
+        end: expect.objectContaining(at.end),
+      });
+    },
+  );
+
+  it("a declaration of `input` and a read of it are one error, at the declaration", () => {
+    const errors = ours(
+      "static const input = 1\nstatic const y = input\n<div/>\n",
+    );
+    expect(errors).toHaveLength(1);
+    expect([errors[0]?.line, errors[0]?.column]).toEqual([1, 13]);
+  });
+
+  it("a declaration of `input` is refused in the multi-line block form", () => {
+    const [error] = ours("static {\n  const input = 1\n}\n<div/>\n");
+    expect(error).toMatchObject({
+      message: inputDeclaration,
+      line: 2,
+      column: 8,
+      end: expect.objectContaining({ line: 2, column: 17 }),
+    });
+  });
+
+  it.each(["$global", "$signal"])(
+    "a module declaration of %s is accepted, as Marko accepts it",
+    (name) => {
+      for (const statement of [
+        `static const ${name} = 1`,
+        `static function ${name}() {}`,
+        `export const ${name} = 1`,
+        `static ${name} = 1`,
+        `static { const ${name} = 1 }`,
+      ]) {
+        expect(ours(`${statement}\n<div/>\n`)).toEqual([]);
+      }
+    },
+  );
+
+  it("a module declaration of $global exempts its own reads, as in Marko", () => {
+    expect(
+      ours("static const $global = 1\nstatic const y = $global\n<div/>\n"),
+    ).toEqual([]);
+  });
+
+  it("an import of `input` is not a declaration of it", () => {
+    for (const statement of [
+      'import { input } from "./a"',
+      'import input from "./a"',
+      'import * as input from "./a"',
+      'import type { input } from "./a"',
+    ]) {
+      expect(ours(`${statement}\n<div/>\n`)).toEqual([]);
+    }
+  });
+
+  it("`export { a as input }` names an export, not a declaration", () => {
+    expect(ours("static const a = 1\nexport { a as input }\n<div/>\n")).toEqual(
+      [],
+    );
+  });
+
+  it("the `none` rules leave a declaration of `input` alone", () => {
+    expect(ours("static const input = 1\n<div/>\n", "none")).toEqual([]);
   });
 
   it("a local `input` still shadows", () => {

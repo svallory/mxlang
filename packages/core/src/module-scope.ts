@@ -26,6 +26,12 @@
  * and anything inside a type (`typeof count`) or an ambient declaration
  * (`static declare const count: number`, `import type { count }`).
  *
+ * A module level declaration spelled `input` is refused too, in every form
+ * (`static const input`, `static function input`, `export const input`, a
+ * destructured name, a `static input = 1`, an ambient `declare const input`),
+ * as Marko refuses it. `$global` and `$signal` can be declared: Marko accepts
+ * that, and a reference to them stays refused unless the module declares them.
+ *
  * An `import` is checked for its declarations only: it spells no reference.
  * An import of `input` does not exempt module code's `input`, which stays the
  * render's own.
@@ -191,9 +197,9 @@ function moduleLevelNames(file: Node, block: boolean): ReadonlySet<string> {
       for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
         if (ambient(binding.path)) continue;
         // `input` is the render's own; an import of that spelling does not
-        // make module code's `input` something else (a declaration of it is
-        // refused as a reserved name).
-        if (name === "input" && binding.kind === "module") continue;
+        // make module code's `input` something else. A declaration of it is
+        // refused (`declaresInput`), so its references need no second error.
+        if (name === "input" && imported(binding)) continue;
         names.add(name);
       }
     },
@@ -252,6 +258,24 @@ function insideType(path: Node): boolean {
   );
 }
 
+/**
+ * Does this module level binding declare `input` (an import does not: it is
+ * only a binding, and a reference to `input` is refused whatever imports it)?
+ */
+function declaresInput(name: string, binding: Node): boolean {
+  return name === "input" && !imported(binding);
+}
+
+/** Is this binding made by an import specifier, type-only or not? */
+function imported(binding: Node): boolean {
+  return (
+    binding.kind === "module" ||
+    binding.path.isImportSpecifier() ||
+    binding.path.isImportDefaultSpecifier() ||
+    binding.path.isImportNamespaceSpecifier()
+  );
+}
+
 /** A name found in module code, and what it is. */
 interface Found {
   readonly node: Node;
@@ -294,7 +318,11 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
   coreBabel().traverse(parsed.file, {
     Program(path: Node) {
       for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
-        if (!scope.topLevel.has(name) || ambient(binding.path)) continue;
+        // A declaration spelled `input` is refused even when ambient: `input`
+        // is a binding of the render, not only a tag variable's name.
+        if (!declaresInput(name, binding) && !scope.topLevel.has(name))
+          continue;
+        if (name !== "input" && ambient(binding.path)) continue;
         found.push({ node: binding.path.node, name, declares: true });
       }
     },
@@ -302,7 +330,7 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
       // A write names its target without making it a reference to Babel.
       if (declaringAssignment(path, parsed.block)) {
         const { name } = path.node.left;
-        if (scope.topLevel.has(name)) {
+        if (scope.topLevel.has(name) || name === "input") {
           found.push({ node: path.node, name, declares: true });
         }
         return;
@@ -323,7 +351,11 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
   raise(
     RENDER_ONLY_IN_MODULE_CODE,
     first.declares
-      ? `\`${first.name}\` is a tag variable, which exists only while the template renders, so module level code ${WHERE}, cannot declare a name with its spelling. Rename the module level binding.`
+      ? `\`${first.name}\` ${
+          first.name === "input"
+            ? "is the template's input"
+            : "is a tag variable"
+        }, which exists only while the template renders, so module level code ${WHERE}, cannot declare a name with its spelling. Rename the module level binding.`
       : `\`${first.name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to module level functions as an argument.`,
     first.node,
   );
