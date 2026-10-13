@@ -267,6 +267,11 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     ["'s' ++&n", []],
     ["`s` ++&n", []],
     ["a /* c */ ++&n", []],
+    // A `!` after a postfix pair is still postfix: no trigger follows it.
+    ["a++! :b", []],
+    ["a++ ! :b", []],
+    ["n--! :a", []],
+    ["a--!&n", []],
     ["a++ + &n", ["&n"]],
     ["&n++ + &n", ["&n", "&n"]],
   ];
