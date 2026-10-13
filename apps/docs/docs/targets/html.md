@@ -66,7 +66,7 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
     if (__mxValue !== "") __mxOut.write(" class=\"" + __mxValue + "\"");
   }
   __mxOut.write(">Hello, ");
-  __mxOut.write(__mxEscape(input.name));
+  __mxOut.write(__mxEscape(__mxTextOf(input.name)));
   __mxOut.write("!</h1>");
 }
 export { __mxRender as render };
@@ -242,12 +242,12 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
   const __mxTry0 = __mxCreateBufferedOut(__mxOut);
   try {
     __mxTry0.write("<p>");
-    __mxTry0.write(__mxEscape(input.risky()));
+    __mxTry0.write(__mxEscape(__mxTextOf(input.risky())));
     __mxTry0.write("</p>");
     __mxTry0.commit();
   } catch (err) {
     __mxOut.write("<p>failed: ");
-    __mxOut.write(__mxEscape(err.message));
+    __mxOut.write(__mxEscape(__mxTextOf(err.message)));
     __mxOut.write("</p>");
   }
 }

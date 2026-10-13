@@ -41,6 +41,7 @@ describe("the IR specification's worked example", () => {
     // and call its default export.
     const js = code
       .replace(/export interface Input \{[\s\S]*?\n\}\n/, "")
+      .replace("(__mxValue: unknown): string", "(__mxValue)")
       .replace("(input: Input): string", "(input)")
       .replace("(input: Input, __mxOut: __MxOut): void", "(input, __mxOut)")
       .replace("export { __mxRender as render };", "")

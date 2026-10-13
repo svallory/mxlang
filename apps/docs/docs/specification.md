@@ -3459,7 +3459,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 
 | Construct | html | Solid | Preact | React | Hono | Astro `.astro.mx` | Angular |
 |---|---|---|---|---|---|---|---|
-| `${}` | `__mxEscape(x)` | `{x}` | `{x}` | `{x}` | `{x}` | `{x}` | `{{ x }}` |
+| `${}` | `__mxEscape(__mxTextOf(x))` | `{x}` | `{x}` | `{x}` | `{x}` | `{x}` | `{{ x }}` |
 | `$!{}` | raw append | sole child → `innerHTML` | `dangerouslySetInnerHTML` | same | same | `<Fragment set:html>` | `<span [innerHTML]>` + warning |
 | `class="a"` | `class` | `class` | `class` | `className` | `class` | `class` | `class` |
 | `class={…}` | inlined `__mxClassValue()` | native `class={{…}}` | `__mxClass(…)` | `__mxClass(…)` | `__mxClass(…)` | `class:list` | `[ngClass]` + warning |
