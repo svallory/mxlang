@@ -1523,7 +1523,7 @@ export function lowerAstroMx(
       ...ir.imports.map((statement) =>
         renameSynthesizedImport(statement, componentNames),
       ),
-      ...ir.hoisted,
+      ...ir.hoisted.filter((statement) => statement.code !== ""),
       ...(ir.inputInterface ? [ir.inputInterface] : []),
       ...ir.prelude,
     ];

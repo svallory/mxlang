@@ -1380,6 +1380,7 @@ export function compileTagModule(
       moduleLines = authoredImports.map((node) => node.code);
 
       for (const node of ir.hoisted) {
+        if (node.code === "") continue;
         // `export const selector = "…"` is the tag author's own selector
         // (design note O9, RULED): the tag owns its element name, so the
         // derived default is overridable. Consumed here rather than passed

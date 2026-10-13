@@ -818,6 +818,7 @@ export type IrNode =
   /** A `static` block, or a host statement block that hoists like one. */
   | ({
       kind: "Static";
+      /** The module code; empty for `static {}`, which hoists nothing but is still a module statement. */
       code: string;
       end: Position;
       /**

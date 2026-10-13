@@ -785,7 +785,8 @@ export function metadataOfIr(
     if (!node.synthesized) aux.push(node.code);
   }
   for (const node of ir.hoisted ?? []) {
-    if (node.kind === "Static" || node.kind === "Export") aux.push(node.code);
+    if ((node.kind === "Static" || node.kind === "Export") && node.code !== "")
+      aux.push(node.code);
   }
   if (aux.length > 0) metadata.inputAuxCode = aux.join("\n");
   const exported = (ir.hoisted ?? [])

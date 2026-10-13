@@ -3869,9 +3869,10 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     // `static { … }` is its statements at module scope, braces gone, as Marko
     // reads it (`static { let q = 1 }` declares `q` for the template).
     const code = unwrapStatementBlock(line.replace(/^static\s+/, ""));
-    // An empty block declares and runs nothing.
-    if (code === "") return { kind: "Text", value: "", loc };
-    registerStaticBindings(ctx, code);
+    // An empty block declares and runs nothing, but it is still a module
+    // statement a host that has no module scope refuses: it stays in
+    // `ir.hoisted` with empty code, which no host prints.
+    if (code !== "") registerStaticBindings(ctx, code);
     return {
       kind: "Static",
       code,

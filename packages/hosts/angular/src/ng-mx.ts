@@ -396,7 +396,9 @@ function lowerRegion(
     }
     moduleStatements.push(node.code);
   }
-  for (const node of ir.hoisted) moduleStatements.push(node.code);
+  for (const node of ir.hoisted) {
+    if (node.code !== "") moduleStatements.push(node.code);
+  }
   if (ir.needsAttrTagImport) {
     moduleStatements.push(
       'import type { AttrTag } from "@mxlang/host-angular";',

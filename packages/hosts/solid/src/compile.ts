@@ -610,8 +610,10 @@ export function compileSolidUnit(
   const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
   for (const node of ir.imports)
     parts.push(mappedStatement(source, node), "\n");
-  for (const node of ir.hoisted)
+  for (const node of ir.hoisted) {
+    if (node.code === "") continue;
     parts.push(mappedStatement(source, node), "\n");
+  }
   // The author's `export interface Input` is emitted and the component
   // parameter is annotated with it, exactly as `@mxlang/host-preact` and
   // `@mxlang/target-html` do, so a caller's `<Card title=1/>` is a JSX props check

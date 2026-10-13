@@ -1438,7 +1438,7 @@ export function emitModuleWithMappings(
   }
   const hoisted = [
     ...ir.imports.map((node) => node.code),
-    ...ir.hoisted.map((node) => node.code),
+    ...ir.hoisted.map((node) => node.code).filter((code) => code !== ""),
     ...emitter.state.moduleHoisted,
   ];
   const inputType = ir.tagMetadata.readsContent

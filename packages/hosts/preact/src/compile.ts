@@ -514,7 +514,7 @@ export function emitModuleWithMappings(
   const importedNames = new Set(ir.imports.flatMap((node) => node.bindings));
   const hoisted = [
     ...ir.imports.map((node) => node.code),
-    ...ir.hoisted.map((node) => node.code),
+    ...ir.hoisted.map((node) => node.code).filter((code) => code !== ""),
     // A component whose Marko name JSX would read as an element is called
     // under a capitalized alias. Where the author imported the name, the
     // alias is a local binding; a tag a host resolves to a module is imported

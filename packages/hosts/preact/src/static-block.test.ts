@@ -5,7 +5,7 @@
  * and Hono lower through this emitter.
  */
 import { describe, expect, it } from "vitest";
-import { compilePreactMx } from "./index.ts";
+import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
 const out = (source: string): string => compilePreactMx(source, "/f/t.mx").code;
 
@@ -71,5 +71,19 @@ describe("preact: a `static { … }` block hoists its statements, not the block"
         message: expect.stringContaining("`input` exists only while"),
       }),
     );
+  });
+});
+
+describe("preact: an empty `static` block is still a module-level statement", () => {
+  it.each([
+    "static {}",
+    "static { /* only a comment */ }",
+    "static { let q = 1 }",
+  ])("%s is refused in a region, like any other", (statement) => {
+    expect(() =>
+      compilePreactRegion(`${statement}\n<div/>`, {
+        filename: "/f/t.preact.mx",
+      }),
+    ).toThrow(/module-level MX statements cannot appear inside a `.preact.mx`/);
   });
 });
