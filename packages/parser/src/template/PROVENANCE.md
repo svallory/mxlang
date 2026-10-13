@@ -124,7 +124,9 @@ only where it holds, apart from the `?` bypass in `lexTrigger`):
   operator, a punctuator, a spread's `...` or one of `operandKeywords`
   (`return`, `typeof`, `in`, …). Never after an expression end (a word, a
   literal, `)`, `]`, `}`, a quote, a regex), after `.` or `?.`, after
-  `as`/`satisfies`, after a postfix `++`/`--`, or, for a `:`, as
+  `as`/`satisfies`, after a postfix `++`/`--` (a pair after an operand end
+  on the same line: `a++`, `n-- :a`; a prefix pair expects an operand, so
+  `++&n`, `a + ++%.now` and `typeof --&n` arm), or, for a `:`, as
   TypeScript's optional/definite marker (`x?:`, `x!:`: a `?` or `!` directly
   after a word, `]`, `-` or `+` and directly before the `:`).
 

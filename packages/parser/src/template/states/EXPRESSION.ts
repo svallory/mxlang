@@ -1175,6 +1175,68 @@ function wordStartOf(data: string, end: number, min: number) {
 }
 
 /**
+ * Whether the `+` or `-` at `i` ends a postfix `++`/`--`, so an operand ends
+ * there. The run of the same character that ends at `i` is read the way
+ * JavaScript tokenises it: a run of exactly two is the update operator, and it
+ * is postfix only when an operand ends right before it and no line terminator
+ * sits between them (`a\n++b` is `a; ++b`); anywhere else (the start of the
+ * expression, after an operator, `(`, `,`, `=`, `?`, `:`, a keyword operator)
+ * it is prefix and an operand follows. A run of one is a unary or binary
+ * operator and a longer run reads `a+++b` as `a++ + b` (maximal munch), so
+ * either way an operand is expected after it.
+ *
+ * `nested` is set while asking what precedes the pair: a pair directly
+ * before a pair (`++ ++`) is not valid JavaScript, so it is read as a prefix
+ * update (an operand is expected) and not looked behind again, which keeps
+ * the walk from recursing through a long run of them.
+ */
+function endsPostfixUpdate(
+  expression: ExpressionMeta,
+  data: string,
+  i: number,
+  nested: boolean,
+): boolean {
+  const code = data.charCodeAt(i);
+  let first = i;
+  while (first > expression.start && data.charCodeAt(first - 1) === code) {
+    first--;
+  }
+  if (i - first !== 1) return false;
+  if (nested) return false;
+
+  // A line terminator before the pair makes it a prefix update, in the gap
+  // itself and in a comment that spans lines.
+  let j = first - 1;
+  for (;;) {
+    while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) {
+      if (isLineTerminatorCode(data.charCodeAt(j))) return false;
+      j--;
+    }
+    const comment = expression.comments?.find((c) => c.end === j + 1);
+    if (!comment) break;
+    if (hasLineTerminator(data, comment.start, comment.end)) return false;
+    j = comment.start - 1;
+  }
+  return !expectsExpression(expression, data, first, true);
+}
+
+function isLineTerminatorCode(code: number) {
+  return (
+    code === CODE.NEWLINE ||
+    code === CODE.CARRIAGE_RETURN ||
+    code === 0x2028 ||
+    code === 0x2029
+  );
+}
+
+function hasLineTerminator(data: string, start: number, end: number) {
+  for (let k = start; k < end; k++) {
+    if (isLineTerminatorCode(data.charCodeAt(k))) return true;
+  }
+  return false;
+}
+
+/**
  * Whether an expression is expected at `pos`: at the start of the
  * expression, or after an operator, punctuator or operator keyword; never
  * after an expression end (a word, literal, `)`, `]`, `}`), `.`, `?.`, a
@@ -1185,6 +1247,7 @@ function expectsExpression(
   expression: ExpressionMeta,
   data: string,
   pos: number,
+  nested = false,
 ): boolean {
   let i = pos - 1;
   for (;;) {
@@ -1264,8 +1327,7 @@ function expectsExpression(
       );
     case CODE.PLUS:
     case CODE.HYPHEN:
-      // A `++`/`--` before a `:` is postfix.
-      return data.charCodeAt(i - 1) !== code;
+      return !endsPostfixUpdate(expression, data, i, nested);
     case CODE.FORWARD_SLASH:
       return i + 1 !== expression.regexEnd;
     default: {

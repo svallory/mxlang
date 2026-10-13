@@ -12,6 +12,7 @@
 import { parseExpression as parseBabelExpression } from "@mxlang/babel";
 import { describe, expect, it } from "vitest";
 import * as template from "./index.ts";
+import { createParser, DEFAULT_SYNTAX, type SyntaxTable } from "./index.ts";
 import {
   ATOMS,
   type AtomParserModule,
@@ -162,4 +163,187 @@ describe("the default row", () => {
     // parseScaling).
     expect(parseScaling(DEFAULT)).toBeLessThan(200);
   }, 60_000);
+});
+
+/**
+ * Where an expression trigger arms after `++`/`--`: decided by what precedes
+ * the pair. A pair right after an operand end is postfix (`a ++&n` is
+ * `a++ & n`, `&n++`); a pair anywhere else is prefix and an operand follows
+ * (`++&n`, `typeof --%.now`, `a + ++&n`).
+ */
+describe("expression triggers after `++` and `--`", () => {
+  const MEMBER_ROW = MESH_SYNTAX.expressionTriggers[0];
+  const NOW_ROW = {
+    id: "now",
+    chars: "%",
+    match: "%\\.[a-z]+",
+    standIn: "identifier",
+    node: "identifier",
+  } as const;
+  const ATOM_ROW = ATOMS_SYNTAX.expressionTriggers[0];
+  const syntax: SyntaxTable = {
+    ...DEFAULT_SYNTAX,
+    expressionTriggers: [MEMBER_ROW, NOW_ROW, ATOM_ROW],
+  };
+
+  /** The expression in an attribute value, a placeholder, tag arguments and attribute arguments. */
+  const contexts = (e: string) => [
+    `<x a=${e}/>`,
+    `<p>\${${e}}</p>`,
+    `<div(${e})/>`,
+    `<x a(${e})/>`,
+  ];
+
+  const run = (source: string) => {
+    const triggers: string[] = [];
+    const errors: string[] = [];
+    const reads: string[] = [];
+    const parser = createParser(
+      {
+        onTrigger: (t) => triggers.push(source.slice(t.text.start, t.text.end)),
+        onError: (e) => errors.push(e.message),
+        onAttrValue: (v) => reads.push(parser.read(v.value)),
+        onPlaceholder: (p) => reads.push(parser.read(p.value)),
+        onTagArgs: (a) => reads.push(parser.read(a.value)),
+        onAttrArgs: (a) => reads.push(parser.read(a.value)),
+      },
+      { syntax },
+    );
+    parser.parse(source);
+    return { triggers, errors, reads };
+  };
+
+  // [expression, the triggers it arms, in order]
+  const armed: [string, string[]][] = [
+    ["++&n", ["&n"]],
+    ["--&n", ["&n"]],
+    ["++%.now", ["%.now"]],
+    ["--%.now", ["%.now"]],
+    ["++ &n", ["&n"]],
+    ["-- %.now", ["%.now"]],
+    ["&n++", ["&n"]],
+    ["&n--", ["&n"]],
+    ["!&n", ["&n"]],
+    ["!++&n", ["&n"]],
+    ["-++&n", ["&n"]],
+    ["+--&n", ["&n"]],
+    ["[++&n, --%.now]", ["&n", "%.now"]],
+    ["(1, ++&n)", ["&n"]],
+    ["a = ++&n", ["&n"]],
+    ["a + ++&n", ["&n"]],
+    ["a - --&n", ["&n"]],
+    ["c ? ++&n : --&n", ["&n", "&n"]],
+    ["f(++&n)", ["&n"]],
+    ["typeof ++&n", ["&n"]],
+    ["void --&n", ["&n"]],
+    ["await ++&n", ["&n"]],
+    ["!(++&n)", ["&n"]],
+    // `a++` then `+`: the third character is the binary operator.
+    ["a+++&n", ["&n"]],
+    ["a---%.now", ["%.now"]],
+    // After an operand end, the pair of a pair is not reached; `++` after
+    // a prefix pair is a syntax error Babel reports, but the trigger arms.
+    ["++ ++&n", ["&n"]],
+  ];
+
+  // [expression, the triggers it arms]: the pair is postfix, so `&n` is the bitwise and.
+  const postfix: [string, string[]][] = [
+    ["a ++&n", []],
+    ["a++&n", []],
+    ["a ++ &n", []],
+    ["a --%.now", []],
+    ["a--%.now", []],
+    ["a.b ++&n", []],
+    ["a[0] ++&n", []],
+    ["f() ++&n", []],
+    ["(a) ++&n", []],
+    ["a! ++&n", []],
+    ["'s' ++&n", []],
+    ["`s` ++&n", []],
+    ["a /* c */ ++&n", []],
+    ["a++ + &n", ["&n"]],
+    ["&n++ + &n", ["&n", "&n"]],
+  ];
+
+  it.each(armed)("%j arms %j", (expression, triggers) => {
+    for (const source of contexts(expression)) {
+      expect(run(source), source).toMatchObject({ triggers, errors: [] });
+    }
+  });
+
+  it.each(postfix)("%j arms %j", (expression, triggers) => {
+    for (const source of contexts(expression)) {
+      expect(run(source), source).toMatchObject({ triggers, errors: [] });
+    }
+  });
+
+  it("the stand-ins of an armed prefix update are a valid expression", () => {
+    for (const [expression] of armed) {
+      // `++ ++&n` is a syntax error, and `await` needs an async function.
+      if (expression === "++ ++&n" || expression === "await ++&n") continue;
+      for (const source of contexts(expression)) {
+        for (const read of run(source).reads) {
+          expect(isValidTs(read), `${source} read as ${read}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("a postfix update before a `:` row stays unarmed (a ternary's colon, not an atom)", () => {
+    for (const expression of [
+      "c ? a++ :b",
+      "c ? a-- :b",
+      "c ? a ++ :b",
+      "c ? &n++ :b",
+      "n++ :a",
+      "n-- :a",
+      "n ++ :a",
+      "(c) ? n++ :a : 1",
+      "a.b++ :a",
+    ]) {
+      for (const source of contexts(expression)) {
+        const { triggers } = run(source);
+        expect(
+          triggers.filter((t) => t.startsWith(":")),
+          source,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it("a prefix update before a `:` row arms the atom", () => {
+    // `++` expects an operand, so `:a` is an atom (Babel rejects `++0.`;
+    // the row decides, the stand-in is the dialect's).
+    expect(run("<x a=++:a/>").triggers).toEqual([":a"]);
+    expect(run("<x a=c ? ++:a : 1/>").triggers).toEqual([":a"]);
+  });
+
+  it("a line break before `++` makes it a prefix update (the postfix form takes no line break)", () => {
+    expect(run("<x a=[a\n++&n]/>").triggers).toEqual(["&n"]);
+    expect(run("<x a=[a /* c\n*/ ++&n]/>").triggers).toEqual(["&n"]);
+    expect(run("<x a=[a /* c */ ++&n]/>").triggers).toEqual([]);
+  });
+
+  it("a keyword operator before the pair is not an operand end", () => {
+    for (const word of [
+      "return",
+      "typeof",
+      "void",
+      "delete",
+      "in",
+      "new",
+      "yield",
+      "await",
+    ]) {
+      expect(run(`<x a=[${word} ++&n]/>`).triggers, word).toEqual(["&n"]);
+    }
+    // A member named like a keyword, and `of` outside a `for`, is an operand.
+    expect(run("<x a=[a.typeof ++&n]/>").triggers).toEqual([]);
+    expect(run("<x a=[of ++&n]/>").triggers).toEqual([]);
+  });
+
+  it("a long run of pairs parses without recursion trouble", () => {
+    const source = `<x a=[${"++ ".repeat(50_000)}&n]/>`;
+    expect(run(source).triggers).toEqual(["&n"]);
+  });
 });
