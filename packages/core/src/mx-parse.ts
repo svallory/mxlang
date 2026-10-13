@@ -51,6 +51,7 @@ import type {
   TriggerFailOptions,
 } from "./syntax-table.ts";
 import type { TagTable } from "./tag-table.ts";
+import { parseErrorEnd } from "./token-span.ts";
 
 /** The six statement keywords of the language (decision 168). */
 const STATEMENT_KEYWORDS = [
@@ -361,11 +362,13 @@ export function compileErrorOf(
   const baseOffset: number = document.base?.offset ?? 0;
   const built = thrown.map((error) => {
     const start = positionAt(source, error.start - baseOffset);
-    // Marko's point error shares one object between `start` and `end`.
+    // Marko's point error shares one object between `start` and `end`; an
+    // expression error ends where its token does (`parseErrorEnd`).
+    const end = parseErrorEnd(error, source, baseOffset);
     const loc =
-      error.end === error.start
+      end === error.start
         ? { start, end: start }
-        : { start, end: positionAt(source, error.end - baseOffset) };
+        : { start, end: positionAt(source, end - baseOffset) };
     return compileError(
       filename,
       source,

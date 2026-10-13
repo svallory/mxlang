@@ -1,0 +1,5 @@
+---
+packages: [core, parser, language-server, typescript-plugin, tsc, vite-plugin, target-registry]
+kind: Fixed
+---
+An expression error in an open tag is now listed before the tag-level error it causes. `<for of=[1]|x|>` reads `|>` as the pipeline operator, which swallows the tag's `>`: the file has a missing end tag, and the cause is the expression error at the `|>`. `lowerSource` listed the "missing end tag" error first because it sorted by position; it now lists the expression error first, as Marko does (`compileSource` and `parseFragment` already did). Only an expression error inside the open tag of the tag reported as never closed moves; every other order is by position. Two parse errors that used to be zero-width now cover what they point at, so an editor underlines it and a build error frame marks it: an expression error spans the offending token (`|>` both characters, an identifier or string whole), and a trigger line that ends after its text ("ends after its text") spans the stray text, trailing whitespace left out. An expression error at the end of its container has no token and stays a point.

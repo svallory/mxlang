@@ -210,10 +210,10 @@ describe("a parse error carries the parser's range", () => {
     });
   });
 
-  it("a point: the end equals the start", () => {
+  it("an expression error spans the offending token", () => {
     expect(range(only("<div x=(1 +)/>\n"))).toEqual({
       start: [1, 11, 11],
-      end: [1, 11, 11],
+      end: [1, 12, 12],
     });
   });
 
@@ -224,10 +224,10 @@ describe("a parse error carries the parser's range", () => {
     });
   });
 
-  it("a second expression keeps its code and ends at its point", () => {
+  it("a second expression keeps its code and ends after its token", () => {
     const d = only("${a b}\n");
     expect(d.code).toBe("MX_EXPECTED_SINGLE_EXPRESSION");
-    expect(range(d)).toEqual({ start: [1, 4, 4], end: [1, 4, 4] });
+    expect(range(d)).toEqual({ start: [1, 4, 4], end: [1, 5, 5] });
   });
 
   it("the front end's own rule: an `<@name>` at the root", () => {
@@ -560,7 +560,7 @@ describe("the two conditions a consumer copying the fields relies on", () => {
     const point = lowerSource("<point/>\n", "/app/page.mx", { customTags });
     expect(point.diagnostics[0]).toMatchObject({
       file: "/tags/point.mx",
-      end: { line: 1, column: 11, offset: -1 },
+      end: { line: 1, column: 12, offset: -1 },
     });
   });
 });

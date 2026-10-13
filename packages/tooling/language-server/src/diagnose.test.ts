@@ -1658,6 +1658,23 @@ describe("a diagnostic's range ends where core says it ends", () => {
     expect(dialect?.message).toBe(mx?.message);
   });
 
+  it("underlines the token of an expression error, in an .mx file and a dialect file", () => {
+    const project = probeProject();
+    // The `|>` operator is two characters; the error covers both.
+    const source = "<div x=(a |> b)/>\n";
+    for (const file of ["a.mx", "a.probe"]) {
+      const diagnostics = diagnoseDocument(
+        source,
+        at(project.path(file)),
+        policy("html"),
+      );
+      expect(
+        diagnostics.map((each) => [each.code, ...span(each)]),
+        file,
+      ).toEqual([["MX_PARSE_EXPRESSION", 0, 10, 0, 12]]);
+    }
+  });
+
   it("underlines the whole attribute of a dialect file's attribute error", () => {
     const project = probeProject();
     const [diagnostic] = diagnoseDocument(

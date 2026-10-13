@@ -40,7 +40,7 @@ describe("every error is reported", () => {
         line: 1,
         column: 6,
         offset: 6,
-        end: { line: 1, column: 6, offset: 6 },
+        end: { line: 1, column: 7, offset: 7 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
       {

@@ -72,6 +72,22 @@ describe("payloadOf", () => {
     ).toEqual({ message: "Missing )", span: { sourceStart: 4, sourceEnd: 4 } });
   });
 
+  it("fails over the token of an expression error that has a container", () => {
+    const container = expression({
+      source: "a |> b",
+      start: 10,
+      end: 16,
+      error: {
+        ...parseError(12),
+        context: { start: 10, end: 16 },
+      },
+    });
+    expect(thrown(() => payloadOf(container)).span).toEqual({
+      sourceStart: 12,
+      sourceEnd: 14,
+    });
+  });
+
   it("fails at the first expression trigger, before a parse error", () => {
     const container = expression({
       triggers: [trigger("a", 2), trigger("b", 6)],

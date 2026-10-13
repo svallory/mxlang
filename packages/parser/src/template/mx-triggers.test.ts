@@ -209,11 +209,11 @@ describe("the & member row (decision 182 addendum 1)", () => {
   it.each([
     [
       "entity\n  &title foo",
-      'ERR(16-16 A "member" trigger line ends after its text; only whitespace may follow it on the line.)',
+      'ERR(16-19 A "member" trigger line ends after its text; only whitespace may follow it on the line.)',
     ],
     [
       "&a=1 2",
-      'ERR(5-5 A "member" trigger line ends after its text and its value; only whitespace may follow it on the line.)',
+      'ERR(5-6 A "member" trigger line ends after its text and its value; only whitespace may follow it on the line.)',
     ],
     ["&a=", "ERR(3-3 Missing value for attribute)"],
     [

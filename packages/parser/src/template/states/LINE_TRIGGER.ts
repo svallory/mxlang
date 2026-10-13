@@ -1,5 +1,6 @@
 import {
   isIndentCode,
+  isWhitespaceCode,
   type Meta,
   type Parser,
   type Range,
@@ -121,8 +122,23 @@ function finish(parser: Parser, line: LineTriggerMeta, value: Range | undefined)
       parser.pos += 2; // skip // or /*
       return;
     }
+    // The stray text: from here to the end of the line, less trailing space.
+    let strayEnd = parser.pos;
+    while (
+      strayEnd < parser.maxPos &&
+      data.charCodeAt(strayEnd) !== CODE.NEWLINE &&
+      data.charCodeAt(strayEnd) !== CODE.CARRIAGE_RETURN
+    ) {
+      strayEnd++;
+    }
+    while (
+      strayEnd > parser.pos + 1 &&
+      isWhitespaceCode(data.charCodeAt(strayEnd - 1))
+    ) {
+      strayEnd--;
+    }
     return parser.emitError(
-      parser.pos,
+      { start: parser.pos, end: strayEnd },
       ErrorCode.INVALID_CHARACTER,
       `A "${trigger.id}" trigger line ends after its text${value ? " and its value" : ""}; only whitespace may follow it on the line.`,
     );

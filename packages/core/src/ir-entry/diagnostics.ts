@@ -6,7 +6,15 @@
 
 import { resolve } from "node:path";
 import { isTranslateError } from "../core.ts";
-import { INTERNAL_ERROR_CODE } from "../diagnostic-codes.ts";
+import {
+  INTERNAL_ERROR_CODE,
+  PARSE_EXPRESSION_CODE,
+  type TemplateParseCode,
+} from "../diagnostic-codes.ts";
+
+/** The cascade of an open tag that never ended. */
+const MISSING_END_TAG_CODE =
+  "MX_PARSE_MISSING_END_TAG" satisfies TemplateParseCode;
 
 /**
  * Where an {@link IrDiagnostic}'s range ends, measured in the same file as its
@@ -347,7 +355,7 @@ export function errorDiagnostics(
   // Stable: errors at one position keep the order they were found in; the
   // unpositioned ones (at 1:0) stay after every positioned error.
   const rank = (d: IrDiagnostic) => (isUnpositionedPrefix(d.message) ? 1 : 0);
-  return out
+  const sorted = out
     .map((d, i) => ({ d, i }))
     .sort(
       (a, b) =>
@@ -358,6 +366,54 @@ export function errorDiagnostics(
         a.i - b.i,
     )
     .map(({ d }) => d);
+  return causesFirst(sorted);
+}
+
+/**
+ * A "Missing ending tag" error is reported at the tag's `<`, so by position it
+ * comes before every error inside the tag. When one of those is an expression
+ * error in the tag's own open tag, it is the cause: the expression read the
+ * tag's `>` as part of itself (`<for of=[1]|x|>` reads `|>` as the pipeline
+ * operator), the open tag never ended, and the missing end tag is what follows.
+ * Stock Marko reports the cause first, and so do we.
+ *
+ * "Inside the open tag" is the cascade's own range: a missing end tag spans
+ * the open tag (all the text it swallowed when the expression ran past the
+ * `>`). Only an `MX_PARSE_EXPRESSION` whose start is inside that range moves,
+ * to just before the cascade, in the order it had. Every other error keeps its
+ * position order, so an unrelated error before or after the tag does not move.
+ */
+function causesFirst(sorted: IrDiagnostic[]): IrDiagnostic[] {
+  const cascades = sorted.filter((d) => d.code === MISSING_END_TAG_CODE);
+  if (cascades.length === 0) return sorted;
+  const causeOf = (d: IrDiagnostic): IrDiagnostic | undefined => {
+    if (d.code !== PARSE_EXPRESSION_CODE) return undefined;
+    // The innermost cascade whose open tag holds the error.
+    let found: IrDiagnostic | undefined;
+    for (const cascade of cascades) {
+      if (
+        cascade.end !== undefined &&
+        (cascade.file ?? "") === (d.file ?? "") &&
+        d.offset >= cascade.offset &&
+        d.offset < cascade.end.offset &&
+        (found === undefined || cascade.offset >= found.offset)
+      ) {
+        found = cascade;
+      }
+    }
+    return found;
+  };
+  const before = new Map<IrDiagnostic, IrDiagnostic[]>();
+  const rest: IrDiagnostic[] = [];
+  for (const d of sorted) {
+    const cascade = causeOf(d);
+    if (cascade === undefined) {
+      rest.push(d);
+      continue;
+    }
+    before.set(cascade, [...(before.get(cascade) ?? []), d]);
+  }
+  return rest.flatMap((d) => [...(before.get(d) ?? []), d]);
 }
 
 /**

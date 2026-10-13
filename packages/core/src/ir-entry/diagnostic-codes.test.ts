@@ -183,7 +183,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 6,
         offset: 6,
-        end: { line: 1, column: 6, offset: 6 },
+        end: { line: 1, column: 7, offset: 7 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);
@@ -197,7 +197,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 5,
         offset: 5,
-        end: { line: 1, column: 5, offset: 5 },
+        end: { line: 1, column: 6, offset: 6 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);
@@ -211,7 +211,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
         line: 1,
         column: 7,
         offset: 7,
-        end: { line: 1, column: 7, offset: 7 },
+        end: { line: 1, column: 8, offset: 8 },
         code: "MX_EXPECTED_SINGLE_EXPRESSION",
       },
     ]);

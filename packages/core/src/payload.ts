@@ -16,6 +16,7 @@ import {
   NO_LOWERING_CODE,
   parseDiagnosticCode,
 } from "./diagnostic-codes.ts";
+import { parseErrorEnd } from "./token-span.ts";
 import { isTriggerLowered } from "./triggers.ts";
 
 /**
@@ -49,7 +50,10 @@ export function payloadOf(container: Node): Node {
     raise(
       parseDiagnosticCode(container.error.code) ?? INTERNAL_ERROR_CODE,
       container.error.message,
-      container.error,
+      {
+        ...container.error,
+        end: parseErrorEnd(container.error, container.source, container.start),
+      },
     );
   }
   if (container.node == null) {
