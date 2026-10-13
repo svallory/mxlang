@@ -297,8 +297,18 @@ describe("a table core cannot lower yet fails the file loudly", () => {
         { ...MEMBER, node: "attribute", value: "refuse" } as Trigger,
       ],
     });
-    const error = caught(() => compile("x &a=1\n", join(dir, "p.mx"), table));
-    expect(error.message).toContain("The `&a` shorthand takes no value.");
+    // A table-caused template error is a parse error: the same `CompileError`
+    // the default row throws, with its `loc` (non-default-table-parse-error-
+    // position; the shape is pinned in non-default-table-parse-error.test.ts).
+    let error: (Error & { loc?: unknown }) | undefined;
+    try {
+      compile("x &a=1\n", join(dir, "p.mx"), table);
+    } catch (caughtError) {
+      error = caughtError as Error;
+    }
+    expect(error?.name).toBe("CompileError");
+    expect(error?.message).toContain("The `&a` shorthand takes no value.");
+    expect(error?.loc).toBeDefined();
   });
 
   it("a file that uses none of the table compiles as with the default row", () => {

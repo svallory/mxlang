@@ -187,11 +187,14 @@ describe("dialect files through the TypeScript plugin", () => {
     const service = createService(project.dir, {
       [file]: PROBE_SOURCES.noRules,
     });
-    // A parse error carries the parser's code in place of the plugin's 80001.
+    // A parse error carries the parser's code in place of the plugin's 80001,
+    // and the range of the tag (`<input>`, 7 characters) as in an `.mx` file:
+    // the table's files used to lose the parse error's `loc`, and with it the
+    // range, which fell back to one character.
     expect(shape(service, file)).toEqual([
       {
         start: 0,
-        length: 1,
+        length: 7,
         category: "Error",
         code: "MX_PARSE_MISSING_END_TAG",
         source: "Probe",

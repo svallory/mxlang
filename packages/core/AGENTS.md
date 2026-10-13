@@ -537,9 +537,13 @@ Five facts worth knowing before editing it:
   every call) as the caller's error at the file
   start, naming `dialect.<field>`. The table is the front end's parse table
   (one parse, PR 5): for a non-default table, `tableParseError` reads the
-  first trigger, block tag, filter or table-caused template error from the
-  compile's document, in source order and with `file` ("`<id>` trigger has
-  no lowering yet"); the seams in
+  first trigger, block tag or filter nothing lowers from the compile's
+  document, with `file` ("`<id>` trigger has no lowering yet"). A template
+  parse error that comes first in the file (table-caused or not) is not its
+  to throw: it returns `undefined` and the caller raises it as the default
+  row does (`compileErrorOf`: a `CompileError` with `loc`, shifted by a
+  fragment's base), so one parse error has one shape under every table
+  (`non-default-table-parse-error.test.ts`); the seams in
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
   document themselves.
   **Dialect hooks (decision 182 addendum 5; `src/triggers.ts`).** `compileSource` and

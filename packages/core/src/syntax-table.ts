@@ -1400,10 +1400,12 @@ function lowersTrigger(
 
 /**
  * The error a table gives a file before lowering (decision 182), or
- * `undefined`: its first table-caused template error, or the first trigger,
- * block tag or filter nothing lowers (a `{ call }` trigger with no
- * `lowerTrigger`, a block tag with no `lowerBlockTag`, a filter with no
- * `lowerFilter`), in order of appearance, positioned, naming the file. The
+ * `undefined`: the first trigger, block tag or filter nothing lowers (a
+ * `{ call }` trigger with no `lowerTrigger`, a block tag with no
+ * `lowerBlockTag`, a filter with no `lowerFilter`), positioned, naming the
+ * file. A template parse error that comes before every such construct is not
+ * returned: it is the parse error of the default row too, so the caller
+ * raises it through `compileErrorOf` (same shape, `loc` included). The
  * compile's own parse carries the table, so this reads its document (one
  * parse per compile). Lowering's seams (`payloadOf`, `lowerChildList`)
  * refuse the same nodes in the same wording for a caller that lowers a
@@ -1420,14 +1422,22 @@ export function tableParseError(
     return undefined;
   }
   let found:
-    | { start: number; message: string; code: MxDiagnosticCode }
+    | {
+        start: number;
+        message: string;
+        code: MxDiagnosticCode;
+        template: boolean;
+      }
     | undefined;
   const consider = (
     start: number,
     message: string,
     code: MxDiagnosticCode = NO_LOWERING_CODE,
+    template = false,
   ) => {
-    if (!found || start < found.start) found = { start, message, code };
+    if (!found || start < found.start) {
+      found = { start, message, code, template };
+    }
   };
   for (const error of document.errors ?? []) {
     // A template parse error keeps the parser's own code.
@@ -1436,6 +1446,7 @@ export function tableParseError(
         error.start,
         error.message,
         parseDiagnosticCode(error.code) ?? NO_LOWERING_CODE,
+        true,
       );
     }
   }
@@ -1467,6 +1478,12 @@ export function tableParseError(
   };
   visit(document.body);
   if (!found) return undefined;
+  // A template parse error comes first in the file: it is the parse error of
+  // the default row too, so the caller raises it the way it raises that one
+  // (`compileErrorOf`: Marko's `CompileError`, with its `loc`, `filename`,
+  // code frame and shifted fragment positions), not as a bare positioned
+  // `TranslateError` that only this table's files would carry.
+  if (found.template) return undefined;
   const { line, column } = filePosition(document, found.start);
   return codedError(found.code, found.message, line, column, site.filename);
 }

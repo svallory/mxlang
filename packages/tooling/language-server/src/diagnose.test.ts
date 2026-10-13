@@ -1368,7 +1368,7 @@ describe("a dialect's files", () => {
         message: 'Missing ending "input" tag',
         range: {
           start: { line: 0, character: 0 },
-          end: { line: 0, character: 1 },
+          end: { line: 0, character: 7 },
         },
       },
     ]);
@@ -1630,7 +1630,7 @@ describe("a diagnostic's range ends where core says it ends", () => {
     expect(span(diagnostic)).toEqual([0, 0, 0, 8]);
   });
 
-  it("widens a dialect file's point error to one character", () => {
+  it("underlines the whole tag of a dialect file's parse error, as it does in an .mx file", () => {
     const project = probeProject();
     const [diagnostic] = diagnoseDocument(
       PROBE_SOURCES.noRules,
@@ -1638,7 +1638,24 @@ describe("a diagnostic's range ends where core says it ends", () => {
       policy("html"),
     );
     expect(diagnostic?.code).toBe("MX_PARSE_MISSING_END_TAG");
-    expect(span(diagnostic)).toEqual([0, 0, 0, 1]);
+    expect(span(diagnostic)).toEqual([0, 0, 0, 7]);
+    // The same error in the project's `.mx` file (default row), where the
+    // dialect's `none` rules do not apply: an unclosed `<div>`.
+    const [mx] = diagnoseDocument(
+      "<div>\n",
+      at(project.path("a.mx")),
+      policy("html"),
+    );
+    const [dialect] = diagnoseDocument(
+      "<div>\n",
+      at(project.path("a.probe")),
+      policy("html"),
+    );
+    expect(span(dialect)).toEqual(span(mx));
+    expect(span(dialect)).toEqual([0, 0, 0, 5]);
+    expect(dialect?.range).toEqual(mx?.range);
+    expect(dialect?.code).toBe(mx?.code);
+    expect(dialect?.message).toBe(mx?.message);
   });
 
   it("underlines the whole attribute of a dialect file's attribute error", () => {

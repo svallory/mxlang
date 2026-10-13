@@ -112,6 +112,9 @@ describe("checkDialectFile", () => {
           line: 1,
           column: 0,
           offset: 0,
+          // The parse error's range is the tag, as in an `.mx` file (the
+          // table's files used to lose it: no `loc`, so no `end`).
+          end: { line: 1, column: 7, offset: 7 },
           code: "MX_PARSE_MISSING_END_TAG",
         },
       ],

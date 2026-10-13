@@ -1,0 +1,5 @@
+---
+packages: [core]
+kind: Fixed
+---
+A parse error in a file that uses a non-default syntax table (a dialect's file, or an explicit `dialect` option on `compileSource` and `parseFragment`) is now the same error the default row throws: a `CompileError` with its `loc` (start and end, file-relative, shifted once for a region fragment), `filename`, `label`, code frame and `diagnosticCode`. It was a bare `TranslateError` with only `line`, `column` and `file`, so a tool reading `loc` found no end for the range: the language server, `mx-tsc` and the TypeScript plugin underlined one character of a dialect file's `<input>` where they underline the whole tag in an `.mx` file. An error the table itself causes (a trigger, block tag or filter with no lowering) keeps its `TranslateError`, and the first error in the file still wins whichever kind it is.
