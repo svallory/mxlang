@@ -28,7 +28,7 @@ describe("html: a <define> carries its attributes as properties", () => {
     return __mxOut.toString();
   }, { a: 1, b: "s", c: true, d: input.x });`,
     );
-    expect(code).toContain("__mxOut.write(__mxEscape(D.a));");
+    expect(code).toContain("__mxOut.write(__mxEscape(__mxTextOf(D.a)));");
   });
 
   it("a define with a body keeps the body as the function", () => {
