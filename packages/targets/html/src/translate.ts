@@ -784,6 +784,14 @@ const TEXTAREA_CONTENT = `function __mxTextareaContent(__mxValue: unknown): stri
   return __mxText[0] === "\\n" ? "\\n" + __mxText : __mxText;
 }`;
 
+// The body of a `<textarea>` that mixes text and placeholders. Marko builds
+// it as one template literal for `_textarea_value`, whose only job beyond
+// escaping is doubling a leading newline (the HTML parser drops the first).
+// The pieces are already escaped.
+const TEXTAREA_BODY = `function __mxTextareaBody(__mxText: string): string {
+  return __mxText[0] === "\\n" ? "\\n" + __mxText : __mxText;
+}`;
+
 // Marko 6.3.51's `_escape_comment` / `_unescaped`: falsy renders nothing except
 // `0`, only `>` is escaped (not at all for `$!{}`), and a value that renders
 // as `[object X]` throws, as Marko's debug build does.
@@ -1026,6 +1034,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxClassValue(") || dynamic, CLASS_VALUE],
     [code.includes("__mxStyleValue(") || dynamic, STYLE_VALUE],
     [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
+    [code.includes("__mxTextareaBody("), TEXTAREA_BODY],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [code.includes("__mxTextOf("), TEXT_OF],
     [dynamic, DYNAMIC_PROPS],

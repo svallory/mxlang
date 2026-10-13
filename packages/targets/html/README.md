@@ -326,7 +326,7 @@ This package is that mode, working, on `.mx` templates written in Marko's
 syntax, without forking the compiler. The seam is `config.translator`: a
 translator that supplies only `translate` and its taglibs injects nothing else, so the emitted module's
 runtime surface is one `escape` import (plus, only when a template calls for
-it, an inlined `classValue`/`styleValue`/`renderDynamic` helper).
+it, an inlined helper such as `textOf` (every placeholder in text position), `classValue`, `styleValue` or `renderDynamic`).
 
 The evidence is `bun run oracle:marko`'s table: every stock `.marko` fixture
 under `fixtures-marko/` rendered both through the real Marko 6 toolchain and

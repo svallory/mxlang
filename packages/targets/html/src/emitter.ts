@@ -886,6 +886,48 @@ export function createEmitter(
    * but a body wins over it. An explicit `value` together with a body is the
    * compile error Marko raises.
    */
+  /**
+   * A textarea body that holds placeholders, rendered as Marko does. Stock
+   * hands the whole body to `_textarea_value`: a lone placeholder passes its
+   * raw value (so `NaN` and `0n` print, `false`, `true`, `null` and
+   * `undefined` do not), and any other body is one template literal, so every
+   * value prints as its string (`anullb`, `afalseb`). Text position's rule
+   * (`__mxTextOf`) does not apply. A raw `$!{…}` is an error there, as in
+   * Marko.
+   */
+  const textareaBody = (children: IrNode[]): void => {
+    if (!children.some((child) => child.kind === "Interpolation")) {
+      drive(emitter, children);
+      return;
+    }
+    const unsupported =
+      "Unexpected content in textarea, only text and placeholders are supported.";
+    const parts: MappedCode[] = [];
+    for (const child of children) {
+      if (child.kind === "Text") parts.push(concatMapped(quote(child.value)));
+      else if (child.kind === "Interpolation") {
+        if (!child.escaped) fail(unsupported, child);
+        parts.push(
+          concatMapped("__mxEscape(`${", mappedExpr(child.expr), "}`)"),
+        );
+      } else if (child.kind !== "Comment") fail(unsupported, child);
+    }
+    const only = children.length === 1 ? children[0] : undefined;
+    if (only?.kind === "Interpolation") {
+      write(concatMapped("__mxTextareaContent(", mappedExpr(only.expr), ")"));
+      return;
+    }
+    write(
+      concatMapped(
+        "__mxTextareaBody(",
+        ...parts.flatMap((part, index) =>
+          index === 0 ? [part] : [" + ", part],
+        ),
+        ")",
+      ),
+    );
+  };
+
   const textarea = (node: Extract<IrNode, { kind: "Element" }>): void => {
     const hasSpread = node.attrs.some((attr) => attr.kind === "spread");
     const explicit = node.attrs.find(
@@ -905,7 +947,7 @@ export function createEmitter(
       literal("<textarea");
       elementAttributes("textarea", node.attrs);
       literal(">");
-      if (node.children.length > 0) drive(emitter, node.children);
+      if (node.children.length > 0) textareaBody(node.children);
       else write("__mxTextareaContent(__mxTa)");
       literal("</textarea>");
       state.indent--;
@@ -922,7 +964,7 @@ export function createEmitter(
       write(
         concatMapped("__mxTextareaContent(", attributeValueCode(explicit), ")"),
       );
-    } else drive(emitter, node.children);
+    } else textareaBody(node.children);
     literal("</textarea>");
   };
 

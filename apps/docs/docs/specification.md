@@ -396,6 +396,12 @@ attribute value follows its own rule (see Native attribute value rendering below
 `escape` serves both, so the text rule is a separate step ahead of it and
 attribute output is unchanged.
 
+A `<textarea>` body is not text position. As in Marko, a lone placeholder
+(`<textarea>${v}</textarea>`) passes its raw value, so `NaN` and `0n` print and
+`false`, `true`, `null` and `undefined` do not; any other body is one string
+(`a${null}b` prints `anullb`). A leading newline is doubled, and `$!{…}` in a
+textarea is a compile error.
+
 `$!{…}` is **not accepted inside an attribute value**; Marko's parser rejects it
 there before any host runs. Host handling of `$!{}` in content position varies
 (§13): the Solid host lowers a lone `$!{html}` child to `innerHTML` and errors on

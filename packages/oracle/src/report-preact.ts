@@ -69,9 +69,9 @@ function skips(targetName: string): Record<string, string> {
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "html-comment-body-markup":
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
-    "text-falsy-values": `a placeholder's value is handed to the ${targetName} renderer unchanged, and its child rule differs from Marko's text rule: it drops \`true\` and prints \`NaN\` (and \`0n\` as \`0\` on some hosts), where Marko prints \`true\` and drops \`NaN\`, \`0n\` and \`false\`. Making the JSX hosts follow Marko's text rule is a host item of its own; the html target is the one this fixture locks`,
+    "text-falsy-values": `a placeholder's value is handed to the ${targetName} renderer unchanged, and its child rule differs from Marko's text rule: it drops \`true\` and prints \`NaN\` (and \`0n\` as \`0\`, except Hono, which prints nothing for \`1n\` and \`0n\`), where Marko prints nothing for \`NaN\` and \`0n\` and \`1\` for \`1n\`. Making the JSX hosts follow Marko's text rule is a host item of its own; the html target is the one this fixture locks`,
     "text-falsy-values-unescaped":
-      "same as `text-falsy-values`, for a raw `$!{…}` placeholder; Hono also prints `null` and `undefined` there",
+      "same as `text-falsy-values`, for a raw `$!{…}` placeholder, which on all three hosts also prints `false`, `NaN` and `0` (for `0n`); Hono also prints `null` and `undefined`",
     "while-loop":
       "`<while>` is an unbounded loop; a JSX expression renders a finite list, and the host has no `.map` form for it",
     "style-object": `${targetName}'s own style serializer appends \`px\` to a numeric value for a dimensional property, so \`style={top: 0}\` renders \`top:0px\` where Marko renders \`top:0\`. Both set the same computed style; the difference is the target renderer's output, not this host's lowering — which passes the object through to the \`style\` prop unchanged (see the \`style-object\` unit test).`,

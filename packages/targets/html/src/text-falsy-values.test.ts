@@ -177,3 +177,95 @@ describe("emitted code", () => {
     expect(emit("<p>static</p>")).not.toContain("__mxTextOf");
   });
 });
+
+describe("<textarea> body (rendered)", () => {
+  // Marko hands the body to `_textarea_value`: a lone placeholder passes its
+  // raw value, any other body is one template literal. The text rule above
+  // does not apply.
+  const lone: Array<[string, unknown, string]> = [
+    ["false", false, ""],
+    ["true", true, ""],
+    ["null", null, ""],
+    ["undefined", undefined, ""],
+    ["empty string", "", ""],
+    ["NaN", Number.NaN, "NaN"],
+    ["0n", 0n, "0"],
+    ["1n", 1n, "1"],
+    ["0", 0, "0"],
+    ["-0", -0, "0"],
+    ["a string", "<&>", "&lt;&amp;&gt;"],
+  ];
+
+  it.each(lone)("%s as the whole body", (_name, value, text) => {
+    expect(render("<textarea>${input.v}</textarea>", { v: value })).toBe(
+      `<textarea>${text}</textarea>`,
+    );
+  });
+
+  it.each([
+    ["false", false, "false"],
+    ["true", true, "true"],
+    ["null", null, "null"],
+    ["undefined", undefined, "undefined"],
+    ["empty string", "", ""],
+    ["NaN", Number.NaN, "NaN"],
+    ["0n", 0n, "0"],
+    ["0", 0, "0"],
+    ["-0", -0, "0"],
+    ["a string", "<&>", "&lt;&amp;&gt;"],
+  ])("%s between text", (_name, value, text) => {
+    expect(render("<textarea>a${input.v}b</textarea>", { v: value })).toBe(
+      `<textarea>a${text}b</textarea>`,
+    );
+  });
+
+  it.each([
+    ["false", false, "falsefalse"],
+    ["NaN", Number.NaN, "NaNNaN"],
+    ["0n", 0n, "00"],
+    ["null", null, "nullnull"],
+  ])("%s twice in a row", (_name, value, text) => {
+    expect(
+      render("<textarea>${input.v}${input.v}</textarea>", { v: value }),
+    ).toBe(`<textarea>${text}</textarea>`);
+  });
+
+  it("doubles a leading newline, lone or mixed", () => {
+    expect(render("<textarea>${input.v}</textarea>", { v: "\nx" })).toBe(
+      "<textarea>\n\nx</textarea>",
+    );
+    expect(
+      render("<textarea>${input.v}${input.w}</textarea>", { v: "\nx", w: "y" }),
+    ).toBe("<textarea>\n\nxy</textarea>");
+    expect(render("<textarea>${input.v}</textarea>", { v: "x\n" })).toBe(
+      "<textarea>x\n</textarea>",
+    );
+  });
+
+  it("renders the same through a spread branch", () => {
+    expect(
+      render("<textarea ...input.attrs>a${input.v}b</textarea>", {
+        attrs: { rows: 2 },
+        v: false,
+      }),
+    ).toBe('<textarea rows="2">afalseb</textarea>');
+    expect(
+      render("<textarea ...input.attrs>${input.v}</textarea>", {
+        attrs: {},
+        v: Number.NaN,
+      }),
+    ).toBe("<textarea>NaN</textarea>");
+  });
+
+  it("keeps a static body as written", () => {
+    expect(render("<textarea>plain &amp; text</textarea>")).toBe(
+      "<textarea>plain &amp; text</textarea>",
+    );
+  });
+
+  it("rejects a raw placeholder, as Marko does", () => {
+    expect(() => render("<textarea>$!{input.v}</textarea>", { v: 1 })).toThrow(
+      "Unexpected content in textarea, only text and placeholders are supported.",
+    );
+  });
+});
