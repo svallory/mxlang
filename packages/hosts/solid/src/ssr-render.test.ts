@@ -557,13 +557,18 @@ describe("Solid <for>: destructured params and nesting", () => {
   });
 });
 
+// Core refuses a write to a `<for>` parameter before the host sees the file
+// (`MX_READONLY_BINDING_WRITE`); the host's own refusal in the emitter is the
+// backstop for what core's walk does not reach.
+const FOR_PARAM_WRITE = /is a `<for>` parameter and cannot be written/;
+
 describe("Solid <for>: accessor-backed params are not assignable", () => {
   it("rejects assigning an accessor-backed row", () => {
     expect(() =>
       compileSolidMx(`<for|p| of=people by="id"><li>\${(p = 1)}</li></for>`, {
         filename: "fixture.solid.mx",
       }),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   it("rejects updating an accessor-backed index", () => {
@@ -571,7 +576,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
       compileSolidMx(`<for|p, i| of=people><li>\${i++}</li></for>`, {
         filename: "fixture.solid.mx",
       }),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   // Round 1 item 3: a pattern target binds the name just as `p = x` does.
@@ -583,7 +588,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
           filename: "fixture.solid.mx",
         },
       ),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   it("rejects an object-pattern assignment to an accessor-backed row", () => {
@@ -594,7 +599,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
           filename: "fixture.solid.mx",
         },
       ),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   // Round 1 item 4: these used to hit a Babel assertion rather than a
@@ -605,7 +610,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
         `<for|p| of=people by="id"><li>\${(() => { for (p of arr) {} })()}</li></for>`,
         { filename: "fixture.solid.mx" },
       ),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   it("rejects a for-in loop assigning to an accessor-backed row", () => {
@@ -614,7 +619,7 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
         `<for|p| of=people by="id"><li>\${(() => { for (p in o) {} })()}</li></for>`,
         { filename: "fixture.solid.mx" },
       ),
-    ).toThrow(/cannot be assigned/);
+    ).toThrow(FOR_PARAM_WRITE);
   });
 
   it("allows a for-of declaring its own binding over the row", () => {

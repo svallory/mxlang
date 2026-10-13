@@ -245,12 +245,13 @@ describe("<for> range bounds are not shadowed by the mapper's own counter", () =
     expect(clean[1]).toBe("<ul><b>4-4</b><b>6-6</b><b>8-8</b></ul>");
   });
 
-  it("rejects assigning a stepped row value with an accurate message", () => {
+  it("rejects assigning a stepped row value", () => {
+    // Core refuses a write to a `<for>` parameter before the host sees it.
     expect(() =>
       compileSolidMx("<for|i| from=0 to=4 step=2>${i = 3}</for>", {
         filename: "fixture.solid.mx",
       }),
-    ).toThrow(/computed from its bounds and cannot be assigned/);
+    ).toThrow(/`i` is a `<for>` parameter and cannot be written/);
   });
 
   it("re-renders a stepped range feeding an attribute tag when a bound changes (client)", () => {
