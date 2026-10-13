@@ -1716,7 +1716,7 @@ of word characters ending at `p`, within the position:
 | 2 | is directly preceded by a `.` | no: `(a.new :b)`; when the `.` is the third dot of a spread (`isSpreadEnd`) the rule does not apply: `[...await :b]` and `[...new :a]` |
 | 3 | is not one of `await` `case` `delete` `do` `else` `extends` `in` `instanceof` `new` `of` `return` `throw` `typeof` `void` `yield` (`operandKeywords`) | no: `(c ? b :c)`; in `(éin :b)` the word is `éin` |
 | 4 | is `of` | yes when the character before it, skipping whitespace, is a word character, `)`, `]` or `}`; otherwise no |
-| 5 | is `yield` or `await` | yes, at the position's start too, and after `?`, `:`, `(` or `,` alike (`c ? await &a : 1`, `{ k: await &a }`, `(c ? await :b : d)`, `f(await &a)`). Both are reserved words in a template (an ES module), so no identifier reading exists to protect; stock Marko rejects `c ? await : b` ("Unexpected token") |
+| 5 | is `yield` or `await` | yes, at the position's start too, and after `?`, `:`, `(` or `,` alike (`c ? await &a : 1`, `{ k: await &a }`, `(c ? await :b : d)`, `f(await &a)`). Both are reserved words in a template (an ES module), so no identifier reading exists to protect; stock Marko rejects `c ? await : b` ("Unexpected token"). One exception, when the trigger is armed on `:` and starts right after the word (asked from the default case, not at a pair): a `yield` whose previous character, skipping whitespace and comments, is `?` or `:` is **no**, because `c ? yield :b` is `c ? (yield) : b` in a generator. `c ? yield &a : 1` and `c ? yield ++%.now : 1` arm |
 | 6 | is another word of the list | yes |
 
 **A type argument list's closing `>`** (`closesTypeArguments`), for row 6. It

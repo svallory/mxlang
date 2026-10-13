@@ -1045,14 +1045,18 @@ function continuesToken(
  * Whether the word ending at `end` (inclusive) is an operator keyword after
  * which an expression is expected. Never a trigger's own text (`:delete :b`,
  * `:foo-new :b`), a member name (`a.new`), or `of` used as an identifier: `of`
- * only after an operand (`for (x of …)`; `c ? of :b`). `await` and `yield`
- * are reserved words in a template (a module), so they are operators wherever
- * they stand: stock Marko rejects `c ? await : b`.
+ * only after an operand (`for (x of …)`; `c ? of :b`). `await` is a reserved
+ * word in a template (a module), so it is an operator wherever it stands:
+ * stock Marko rejects `c ? await : b`. `yield` is too, with one exception:
+ * after a ternary's `?` or `:`, a `:` written right after it (`atColon`) is
+ * the ternary's own colon, since `c ? yield :b` is `c ? (yield) : b` in a
+ * generator.
  */
 function isOperatorWord(
   expression: ExpressionMeta,
   data: string,
   end: number,
+  atColon = false,
 ): boolean {
   if (end + 1 === expression.atomEnd) return false;
   const wordStart = wordStartOf(data, end, expression.start);
@@ -1065,7 +1069,7 @@ function isOperatorWord(
   }
   const word = data.slice(wordStart, end + 1);
   if (!(operandKeywords as readonly string[]).includes(word)) return false;
-  if (word === "of") {
+  if (word === "of" || (word === "yield" && atColon)) {
     // A comment is skipped exactly as whitespace is (decision 156 addendum
     // 8): `for (x /*c*/ of :b)` reads as `for (x  of :b)`.
     let j = wordStart - 1;
@@ -1076,6 +1080,7 @@ function isOperatorWord(
       j = comment.start - 1;
     }
     const before = j < expression.start ? -1 : data.charCodeAt(j);
+    if (word === "yield") return before !== CODE.QUESTION && before !== CODE.COLON;
     return (
       (j >= expression.start && wordWidthBefore(data, j) > 0) ||
       before === CODE.CLOSE_PAREN ||
@@ -1331,7 +1336,12 @@ function expectsExpression(
       // A word directly before the `:` is an object key or a label, keyword
       // or not (`{ new:a }`). Not when asked at a `++`/`--` pair: `typeof++x`.
       if (i === pos - 1 && !beforePair) return false;
-      return isOperatorWord(expression, data, i);
+      return isOperatorWord(
+        expression,
+        data,
+        i,
+        !beforePair && data.charCodeAt(pos) === CODE.COLON,
+      );
     }
   }
 }

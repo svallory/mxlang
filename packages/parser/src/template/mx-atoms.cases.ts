@@ -832,8 +832,7 @@ export const ATOMS: [string, string][] = [
   ["<p>${f(/*c*/ await :b)}</p>", '<p> atom(b@19-21) ${"f(/*c*/ await 0.)"}'],
   ["<p>${f(      await :b)}</p>", '<p> atom(b@19-21) ${"f(      await 0.)"}'],
   // After `?` and `:` too: stock Marko rejects `c ? await : b`, so no
-  // identifier reading is worth keeping.
-  ["<div x=c ? yield :b/>", '<div> @x atom(b@17-19) ="c ? yield 0."'],
+  // identifier reading is worth keeping. (Not `yield :b`: see NOT_ATOMS.)
   [
     "<div x=(c ? await :b : d)/>",
     '<div> @x atom(b@18-20) ="(c ? await 0. : d)"',
@@ -955,8 +954,12 @@ export const NOT_ATOMS: [string, string][] = [
   ["<${`a::b`}/>", "<${`a::b`}>"],
   ['<div.${"a::b"}/>', "<div>"],
   ['<div class="a::b" x=`::c`/>', '<div> @class ="\\"a::b\\"" @x ="`::c`"'],
-  // `await` and `yield` are operators after `?` and `:` as everywhere else
-  // (reserved words in a template), pinned in ATOMS.
+  // `await` is an operator after `?` and `:` as everywhere else (pinned in
+  // ATOMS). `yield` is too, except before a `:`: `c ? yield :b` is
+  // `c ? (yield) : b` in a generator, so the `:` is the ternary's.
+  ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
+  ["<div x=(c ? yield :b : d)/>", '<div> @x ="(c ? yield :b : d)"'],
+  ["<div x={ k: yield :b }/>", '<div> @x ="{ k: yield :b }"'],
   // Decision 156 addendum 4, pinned: `(a<b> :c)` with no open `?` takes
   // TypeScript's reading (type arguments), so no atom; core's hint names the
   // ambiguity.
@@ -1396,7 +1399,7 @@ export function tagNameReads(mod: AtomParserModule): {
  * an operand TypeScript can end with a marker or a type (`a!!`,
  * `y as Array<T>`, `x satisfies Foo<T>`, …) before ` :z` in a ternary, in
  * every wrapper an atom is lexed in, with three tails (plain, a later `:name`
- * sugar, a later real atom). 22 × 4 × 4 × 10 × 3 = 10,560 inputs. Inputs
+ * sugar, a later real atom). 23 × 4 × 4 × 10 × 3 = 11,040 inputs. Inputs
  * whose atom-free expression `isValidTs` rejects are skipped. Returns the
  * inputs that lex `:z` as an atom (none expected) and how many ran.
  */
@@ -1419,6 +1422,7 @@ export function tsMarkerViolations(
     "y as (T)",
     "y as T",
     "of",
+    "yield",
     "1",
     '"s"',
     "a?.b",

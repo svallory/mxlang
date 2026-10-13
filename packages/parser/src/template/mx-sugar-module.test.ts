@@ -106,7 +106,7 @@ describe("the atom corpora through the atom row", () => {
 
   it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
     const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
-    expect(total).toBe(10_560);
+    expect(total).toBe(11_040);
     expect(ran).toBeGreaterThan(9_000);
     expect(bad).toEqual([]);
   });
@@ -250,7 +250,10 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     ["c ? 1 : await &a", ["&a"]],
     ["(c ? x : yield %.now)", ["%.now"]],
     ["(c ? await :b : d)", [":b"]],
-    ["(c ? yield :b : d)", [":b"]],
+    ["(c ? yield ++%.now : 1)", ["%.now"]],
+    ["(c ? yield &a : yield %.now)", ["&a", "%.now"]],
+    ["a ?? await &x", ["&x"]],
+    ["switch (x) { case 1: await &a }", ["&a"]],
     // Spaced keyword operators over every row.
     ["typeof &n", ["&n"]],
     ["void &n", ["&n"]],
@@ -309,14 +312,13 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
 
   it("the stand-ins of an armed prefix update are a valid expression", () => {
     for (const [expression] of armed) {
-      // `++ ++&n` is a syntax error, and `await` and `yield` need an async
-      // or generator function.
-      if (expression === "++ ++&n" || /\b(?:await|yield)\b/.test(expression)) {
-        continue;
-      }
+      // `++ ++&n` is a syntax error, and a `switch` is a statement.
+      if (expression === "++ ++&n" || expression.startsWith("switch")) continue;
       for (const source of contexts(expression)) {
         for (const read of run(source).reads) {
-          expect(isValidTs(read), `${source} read as ${read}`).toBe(true);
+          // `await` and `yield` need an async generator function.
+          const wrapped = `(async function* () { return (${read}) })`;
+          expect(isValidTs(wrapped), `${source} read as ${read}`).toBe(true);
         }
       }
     }
@@ -489,6 +491,30 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
       }
     }
     expect(run("<x a=(for (x of :b) {})/>").triggers).toEqual([":b"]);
+  });
+
+  it.each([
+    "(c ? yield :b)",
+    "(c ? yield :b : d)",
+    "(c ? x : yield :b)",
+    "(c ? yield /* c */ :b : d)",
+    "({ k: yield :b })",
+  ])(
+    "a `:` right after `yield` after `?` or `:` is the ternary's colon: %j",
+    (expression) => {
+      // `c ? yield :b` is `c ? (yield) : b` in a generator.
+      for (const source of contexts(expression)) {
+        expect(run(source).triggers, source).toEqual([]);
+      }
+    },
+  );
+
+  it("`yield` before a `:` stays the operator after `(` and `,`, and before other rows", () => {
+    expect(run("<x a=(yield :b)/>").triggers).toEqual([":b"]);
+    expect(run("<x a=f(1, yield :b)/>").triggers).toEqual([":b"]);
+    expect(run("<x a=(c ? yield &a : 1)/>").triggers).toEqual(["&a"]);
+    expect(run("<x a=(c ? yield ++&n : 1)/>").triggers).toEqual(["&n"]);
+    expect(run("<x a=(c ? yield !:b : 1)/>").triggers).toEqual([":b"]);
   });
 
   it("`await` and `yield` as a member or key stay names", () => {

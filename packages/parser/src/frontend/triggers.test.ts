@@ -781,6 +781,15 @@ describe("`await`, `yield` and keyword operators before a trigger, through the f
     expect(errorsOf("x={ k: await :b }", ATOMS_SYNTAX)).toEqual([]);
   });
 
+  it("`c ? yield :b` in a generator is the ternary `c ? (yield) : b`", () => {
+    expect(
+      errorsOf("x=function* () { return c ? yield :b }", ATOMS_SYNTAX),
+    ).toEqual([]);
+    expect(
+      errorsOf("x=function* () { return c ? yield : b }", ATOMS_SYNTAX),
+    ).toEqual([]);
+  });
+
   it.each(["typeof&n", "f(a, typeof&n)", "(void&n)"])(
     "a keyword glued to a trigger is loud, never a merged identifier: %j",
     (expression) => {
