@@ -116,3 +116,25 @@ describe("Define", () => {
     );
   });
 });
+
+describe("Define scope", () => {
+  const FOO = "<define/Foo><p>inner</p></define>";
+
+  it("keeps a define inside the block that declares it", () => {
+    const out = emit(`<if=input.a>${FOO}<Foo()/></if>`);
+    expect(out).toContain("<ng-template #Foo>");
+    expect(out).toContain('[ngTemplateOutlet]="Foo"');
+    assertAngularParses(out);
+  });
+
+  it("does not call a define from outside its block", () => {
+    // Marko 6.4.4 declares the define inside the `<if>`, so `<Foo()/>` after
+    // it is an unresolved tag, not a call to the define.
+    expect(() => emit(`<if=input.a>${FOO}</if><Foo()/>`)).toThrow(
+      "Unable to find entry point for custom tag `<Foo>`.",
+    );
+    expect(() => emit(`<div>${FOO}</div><Foo()/>`)).toThrow(
+      "Unable to find entry point for custom tag `<Foo>`.",
+    );
+  });
+});

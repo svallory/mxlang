@@ -99,6 +99,7 @@ import {
   rejectUnsupportedFields,
   relatedErrorsOf,
   scopeBindings,
+  scopeDefines,
   shadowBindings,
   sliceLoc,
   sliceNode,
@@ -5402,14 +5403,21 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const contentChildren = body.filter(
     (child: Node) => !isMxAttributeTag(child),
   );
+  const attrs = lowerAttrs(ctx, node, name, "element", true);
+  // An element's body is its own scope for a `<define>` (Marko 6.4.4: the
+  // define is `const`-declared inside the body), so a `<Foo/>` after the
+  // element never reaches a `<define/Foo>` written in it.
+  const unscopeDefines = scopeDefines(ctx);
+  const children = isVoid ? [] : lowerChildren(ctx, contentChildren);
+  unscopeDefines();
   return {
     kind: "Element",
     name,
     ...triggerOf(node),
     nameSpan: exprSpan(ctx, tagNameSpanOf(node)),
     span: exprSpan(ctx, node),
-    attrs: lowerAttrs(ctx, node, name, "element", true),
-    children: isVoid ? [] : lowerChildren(ctx, contentChildren),
+    attrs,
+    children,
     void: isVoid,
     loc: posOf(ctx, node),
   };

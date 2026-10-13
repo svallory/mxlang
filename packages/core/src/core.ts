@@ -759,7 +759,10 @@ export function warn(ctx: Ctx, warning: MxWarning): void {
  */
 export function recover<T>(ctx: Ctx, run: () => T): T | undefined {
   if (!ctx.errors) return run();
-  const restore = scopeBindings(ctx);
+  // Not a block of the template: the tag that fails is a sibling of the ones
+  // after it, so a name it binds stays bound (a `<define>` whose head failed
+  // still names its define, and a later call to it is not a second error).
+  const restore = scopeBindings(ctx, { defines: false });
   try {
     return run();
   } catch (error) {
@@ -1318,23 +1321,65 @@ export function declName(ctx: Ctx, node: Node): string {
  * branches, `<for>`, `<define>`, attribute-tag blocks, `<try>`) gets this for
  * free, so the revert is structural rather than a per-construct fix.
  */
-export function scopeBindings(ctx: Ctx): () => void {
+export function scopeBindings(
+  ctx: Ctx,
+  { defines = true }: { defines?: boolean } = {},
+): () => void {
   const saved = ctx.bindings.snapshot();
   const savedShadowed = ctx.tagVarShadowed;
   const savedLets = ctx.renderLets;
   const savedDerived = ctx.derivedConsts;
   const savedSites = new Map(ctx.bindingSites);
+  const unscopeDefines = defines ? scopeDefines(ctx) : () => {};
   return () => {
     ctx.bindings.restore(saved);
     ctx.tagVarShadowed = savedShadowed;
     ctx.renderLets = savedLets;
     ctx.derivedConsts = savedDerived;
-    // A `<define>` is in scope only inside the block that declares it, so the
-    // positions decision 164's diagnostic reads revert with the block.
+    // The positions the lowercase-binding diagnostic reads revert with the
+    // block too.
     for (const name of [...ctx.bindingSites.keys()]) {
       if (!savedSites.has(name)) ctx.bindingSites.delete(name);
     }
     for (const [name, site] of savedSites) ctx.bindingSites.set(name, site);
+    unscopeDefines();
+  };
+}
+
+/**
+ * Confines the `<define>`s written from here on to the body being lowered.
+ *
+ * A `<define/Foo>` binds `Foo` in the block that declares it and nowhere after
+ * it (Marko 6.4.4 emits `const Foo = …` inside that branch, loop or tag
+ * body), so a `<Foo/>` outside resolves to whatever is in scope there: an
+ * import of the same name, or nothing. `ctx.defines` is one flat map for the
+ * whole file, so the scope is a snapshot restored on the way out: a name the
+ * block added is forgotten, a name it re-declared is the outer declaration
+ * again. A native element's body is such a block too (Marko gives every tag
+ * body its own scope), but it does not go through `scopeBindings`, which also
+ * undoes `<const>` shadows; it calls this alone.
+ */
+export function scopeDefines(ctx: Ctx): () => void {
+  const saved = new Map(ctx.defines);
+  const savedSites = new Map(ctx.bindingSites);
+  return () => {
+    for (const name of [...ctx.defines.keys()]) {
+      if (saved.has(name)) continue;
+      ctx.defines.delete(name);
+      // Only a define's own position goes with it; an import or `<const>` of
+      // the same name keeps the site it had.
+      const site = savedSites.get(name);
+      if (site) ctx.bindingSites.set(name, site);
+      else if (ctx.bindingSites.get(name)?.kind === "defined") {
+        ctx.bindingSites.delete(name);
+      }
+    }
+    for (const [name, params] of saved) {
+      if (ctx.defines.get(name) === params) continue;
+      ctx.defines.set(name, params);
+      const site = savedSites.get(name);
+      if (site) ctx.bindingSites.set(name, site);
+    }
   };
 }
 
