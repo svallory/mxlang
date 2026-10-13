@@ -3,6 +3,8 @@
 <define/C name="nm" ...input.rest k=2/>
 <define/D content="c"/>
 <define/F ...input.rest/>
+<define/G caller="c" arguments=2/>
+<define/H ...input.fn/>
 
 <p>${A.a} ${A.b} ${A["data-x"]} ${typeof A.c}</p>
 <p>${B.n}</p>
@@ -10,3 +12,5 @@
 <p>${C.name} ${C.z} ${C.k}</p>
 <p>${D.content}</p>
 <p>${F.z}</p>
+<p>${G.caller} ${G.arguments}</p>
+<p>${H.caller} ${H.arguments} ${H.length}</p>

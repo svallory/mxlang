@@ -59,7 +59,10 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("an attribute named name or a spread makes name/length writable first", () => {
     expect(whole('<define/F name="email"/>\n<p>${F.name}</p>')).toContain(
-      'const F = Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true } }), { "name": "email" });',
+      'const F = Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "email" });',
+    );
+    expect(whole('<define/F caller="c"/>\n<p>${F.caller}</p>')).toContain(
+      '{ "caller": "c" });',
     );
     expect(whole("<define/F ...input.rest/>\n<p>${F.a}</p>")).toContain(
       "Object.defineProperties(",

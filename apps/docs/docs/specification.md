@@ -3861,9 +3861,10 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   literal is `static`; nothing is evaluated.
 - **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
   shape: it goes up by one with every change a reader can observe (a node kind
-  or field added, removed, renamed or given a new meaning). It is `3`: `2` added
-  a static `Attr`'s `node` (a dialect's node, §13.9.9), and `3` added a
-  `DelegatedTag`'s `tag.definedIn` (§9.2).
+  or field added, removed, renamed or given a new meaning). It is `4`: `2` added
+  a static `Attr`'s `node` (a dialect's node, §13.9.9), `3` added a
+  `DelegatedTag`'s `tag.definedIn` (§9.2), and `4` added a `Define`'s `attrs`
+  (§5.4).
 
 #### 13.7.3 Tag rules presets
 

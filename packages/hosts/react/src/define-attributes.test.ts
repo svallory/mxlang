@@ -21,7 +21,7 @@ describe("react: a <define> carries its attributes as properties", () => {
 
   it("makes name and length writable first when they could be set", () => {
     expect(emit('<define/D name="n"/>\n<p>${D.name}</p>')).toContain(
-      'Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true } }), { "name": "n" });',
+      'Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "n" });',
     );
   });
 });

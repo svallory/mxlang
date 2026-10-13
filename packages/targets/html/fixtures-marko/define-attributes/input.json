@@ -1,1 +1,1 @@
-{ "n": 5, "rest": { "name": "n2", "z": 7, "k": 0 } }
+{ "n": 5, "rest": { "name": "n2", "z": 7, "k": 0 }, "fn": { "caller": "x", "arguments": "y", "length": 9 } }

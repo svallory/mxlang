@@ -2087,30 +2087,39 @@ export function propKey(name: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : quote(name);
 }
 
+/** The names a function carries that `Object.assign` cannot write by default. */
+const FUNCTION_OWN_NAMES: ReadonlySet<string> = new Set([
+  "name",
+  "length",
+  "caller",
+  "arguments",
+]);
+
 /**
  * The text a host writes around a `<define>`'s function to give it the tag's
  * attributes as properties: `Object.assign(<function>, { a: 1 })`, in the
  * shape `{ open, between }` so the host keeps its own mapped function and
  * property text between them (`open + function + between + "{ ... })"`).
  *
- * A function's own `name` and `length` are read-only, and `Object.assign`
- * throws on them in strict code, so a define with an attribute of either name
- * (or a spread, whose keys are unknown) first makes them writable. Marko's
- * define value is a plain object, where `<define/D name="x"/>` is fine.
+ * A function's own `name` and `length` are read-only, and `caller` and
+ * `arguments` are inherited accessors whose setter throws in strict code, so
+ * `Object.assign` throws on all four. A define with an attribute of any of
+ * those names (or a spread, whose keys are unknown) first makes them
+ * writable. Marko's define value is a plain object, where
+ * `<define/D name="x"/>` is fine.
  */
 export function defineValueWrapper(attrs: readonly Attr[]): {
   open: string;
   between: string;
 } {
   const risky = attrs.some(
-    (attr) =>
-      attr.kind === "spread" || attr.name === "name" || attr.name === "length",
+    (attr) => attr.kind === "spread" || FUNCTION_OWN_NAMES.has(attr.name),
   );
   return risky
     ? {
         open: "Object.assign(Object.defineProperties(",
         between:
-          ", { name: { writable: true }, length: { writable: true } }), ",
+          ", { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), ",
       }
     : { open: "Object.assign(", between: ", " };
 }

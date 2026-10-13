@@ -73,9 +73,10 @@ describe("html: a <define> carries its attributes as properties", () => {
     );
   });
 
-  describe("name and length are read-only on a function", () => {
+  describe("name, length, caller and arguments are not writable on a function", () => {
     const WRITABLE = "Object.assign(Object.defineProperties(() => {";
-    const KEEP = "{ name: { writable: true }, length: { writable: true } }), ";
+    const KEEP =
+      "{ name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), ";
 
     it("an attribute named name makes the properties writable first", () => {
       const code = emit('<define/Field name="email"/>\n<p>${Field.name}</p>');
@@ -85,6 +86,15 @@ describe("html: a <define> carries its attributes as properties", () => {
 
     it("an attribute named length does too", () => {
       expect(emit("<define/D length=3/>\n<p>${D.length}</p>")).toContain(KEEP);
+    });
+
+    it("an attribute named caller or arguments does too: they are inherited accessors", () => {
+      expect(emit('<define/D caller="c"/>\n<p>${D.caller}</p>')).toContain(
+        `${KEEP}{ caller: "c" });`,
+      );
+      expect(emit("<define/D arguments=2/>\n<p>${D.arguments}</p>")).toContain(
+        `${KEEP}{ arguments: 2 });`,
+      );
     });
 
     it("a spread does too: its keys are known only at run time", () => {
