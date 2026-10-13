@@ -22,23 +22,6 @@
               0
             ],
             "lengths": [
-              50
-            ],
-            "data": {
-              "verification": true,
-              "completion": true,
-              "semantic": true,
-              "navigation": true
-            }
-          },
-          {
-            "sourceOffsets": [
-              0
-            ],
-            "generatedOffsets": [
-              0
-            ],
-            "lengths": [
               49
             ],
             "data": {
@@ -213,23 +196,6 @@
         "languageId": "typescript",
         "generated": "import Card from \"./Card.mx\"\nexport interface Input {}\nexport default function Plain(input: Input) { return <><Card tab={undefined} /><p>plain</p></>; }",
         "mappings": [
-          {
-            "sourceOffsets": [
-              0
-            ],
-            "generatedOffsets": [
-              0
-            ],
-            "lengths": [
-              29
-            ],
-            "data": {
-              "verification": true,
-              "completion": true,
-              "semantic": true,
-              "navigation": true
-            }
-          },
           {
             "sourceOffsets": [
               0
