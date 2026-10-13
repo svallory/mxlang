@@ -180,9 +180,14 @@ describe("a dynamic tag whose callee declares <return>, rendered on Hono", () =>
     );
   });
 
+  // `<${Plain}/n/>` naming the unit directly is a compile error (the unit
+  // declares no `<return>`); an expression the compiler does not resolve to a
+  // callee is bound at run time, `undefined` for a callee with no render.
   it("binds undefined for a callee without <return>, and renders its body", async () => {
     expect(
-      await renderCaller("<div><${Plain}/n/><p>${String(n)}</p></div>"),
+      await renderCaller(
+        "<div><${1 ? Plain : null}/n/><p>${String(n)}</p></div>",
+      ),
     ).toBe("<div><b>x</b><p>undefined</p></div>");
   });
 
