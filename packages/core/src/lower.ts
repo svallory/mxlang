@@ -3059,6 +3059,40 @@ function rejectMarkoImportTag(
 }
 
 /**
+ * `<${Child}/x/>` with a bare identifier is a call of that binding, so its
+ * `/var` needs a `<return>` to bind just as `<Child/x/>` does (Marko 6.4
+ * refuses both). Judged only where the callee is known by name: a default
+ * import of a `.mx` unit that declares none (the imported-unit error, at the
+ * tag variable), or a `<define>`, which cannot declare a `<return>` here (the
+ * `/var` is refused outright, as on `<Foo/x/>`). Any other expression, an alias
+ * through `<const>`, a `.ts` module or an unreadable unit carries no claim.
+ */
+function rejectDynamicTagVarWithoutReturn(
+  ctx: Ctx,
+  binding: string,
+  node: Node,
+): void {
+  if (!tagVarOf(node) || ctx.tagVarShadowed?.has(binding)) return;
+  if (ctx.defines.has(binding)) {
+    rejectUnsupportedFields(ctx, node, `\`<${binding}>\``, {
+      attributeTags: true,
+      args: true,
+      params: true,
+    });
+    return;
+  }
+  if (!ctx.importDefaultFromMarkoOrMx.has(binding)) return;
+  if (calleeReturn({ kind: "name", name: binding }, ctx).shape !== "none") {
+    return;
+  }
+  raise(
+    INVALID_TAG_VAR_CODE,
+    `\`<${binding}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+    tagVarOf(node),
+  );
+}
+
+/**
  * Whether `name` is one of Marko's core taglib tags (`<debug>`, `<log>`, ...):
  * by the tag table's id when it registered the full core taglib (only the
  * html target's table does), else by the core taglib's own name set - so
@@ -4817,6 +4851,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     if (/^[A-Za-z_$][\w$]*$/.test(dynamicExpr.code.trim())) {
       const binding = dynamicExpr.code.trim();
       rejectMarkoImportTag(ctx, binding, `\${${binding}}`, node);
+      rejectDynamicTagVarWithoutReturn(ctx, binding, node);
     }
     const read = declaredAttributeTagRead(ctx, dynamicExpr.code);
     if (read) {

@@ -195,6 +195,47 @@ describe("/var on an imported .mx unit that declares no <return>", () => {
   });
 });
 
+describe("/var on a bare-identifier dynamic tag", () => {
+  it("refuses a default import of a unit that declares no <return>, at the variable", () => {
+    expect(
+      compile('import P from "./plain.mx"\n<${P}/x/>\n<div>${x}</div>\n'),
+    ).toEqual({
+      message: IMPORTED("P"),
+      code: "MX_INVALID_TAG_VAR",
+      line: 2,
+      column: 6,
+      end: { line: 2, column: 7 },
+    });
+  });
+
+  it("covers a destructuring pattern whole", () => {
+    expect(
+      compile('import P from "./plain.mx"\n<${P}/{ a }/>\n'),
+    ).toMatchObject({
+      code: "MX_INVALID_TAG_VAR",
+      line: 2,
+      column: 6,
+      end: { line: 2, column: 11 },
+    });
+  });
+
+  it("refuses a <define> callee at the variable, as it does a named call", () => {
+    const named = compile("<define/Foo><b>x</b></define>\n<Foo/x/>\n");
+    const dynamic = compile("<define/Foo><b>x</b></define>\n<${Foo}/x/>\n");
+    expect(named).toMatchObject({ line: 2, column: 5 });
+    expect(dynamic).toMatchObject({
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    });
+    expect(dynamic?.code).toBe(named?.code);
+  });
+
+  it("compiles a call with no tag variable (control)", () => {
+    expect(compile('import P from "./plain.mx"\n<${P}/>\n')).toBeUndefined();
+  });
+});
+
 describe("the data path (`none` preset) is unchanged", () => {
   it("still refuses a tag variable on a contract-only tag at the tag, with its own wording", () => {
     const { diagnostics } = lowerData("<panel/v/>\n", "/t.mx", {

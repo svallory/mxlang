@@ -1265,6 +1265,66 @@ describe("an imported .mx tag that declares <return>", () => {
     }
   });
 
+  it.each([
+    [
+      "an imported unit that declares no <return>",
+      'import Plain from "./plain.mx"\n<${Plain}/n/>',
+      /`<Plain>` does not return a value/,
+      10,
+    ],
+    [
+      "a <define>",
+      "<define/Foo><b>x</b></define>\n<${Foo}/n/>",
+      /tag variable `\/n` on `<Foo>`/,
+      8,
+    ],
+  ])(
+    "rejects /var on a bare-identifier dynamic tag naming %s, at the variable",
+    (_what, source, message, column) => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-html-dynamic-var-none-"));
+      try {
+        writeFileSync(join(dir, "plain.mx"), src("<b>x</b>"));
+        let error:
+          | (Error & {
+              line?: number;
+              column?: number;
+              end?: { line: number; column: number };
+            })
+          | undefined;
+        try {
+          compile(src(source), join(dir, "page.mx"));
+        } catch (caught) {
+          error = caught as Error;
+        }
+        expect(error?.message).toMatch(message);
+        expect(error?.line).toBe(2);
+        expect(error?.column).toBe(column);
+        expect(error?.end).toEqual({ line: 2, column: column + 1 });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("still compiles /var on a dynamic tag naming a returning unit or an unknown expression", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-html-dynamic-var-ok-"));
+    try {
+      writeFileSync(
+        join(dir, "returns.mx"),
+        src("<b>x</b>\n<return value=1/>"),
+      );
+      for (const source of [
+        'import R from "./returns.mx"\n<${R}/n/>',
+        "<${input.tag}/n/>",
+        "<${null}/n/>",
+      ]) {
+        expect(() => compile(src(source), join(dir, "page.mx"))).not.toThrow();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("still rejects /var on an imported .ts component", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-ts-"));
     try {

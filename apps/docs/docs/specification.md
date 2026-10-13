@@ -2995,8 +2995,13 @@ A `/var` needs a `<return>` to bind: a call to a discovered tag or an imported
 `.mx` unit whose template declares none is a compile error, reported at the tag
 variable, with Marko 6.4's rule (it reports the same call at the same place).
 The check reads the callee's own declaration, so it holds on every target that
-supports `/var`. An imported unit that cannot be read, a `.ts` module and a
-dynamic tag are not judged here; a `<define>` call refuses `/var` outright.
+supports `/var`. A dynamic tag whose name is a bare identifier is judged as the
+call it is: `<${Child}/x/>` with `Child` a default import of a `.mx` unit that
+declares no `<return>` is the same error at the same place, and with `Child` a
+`<define>` the `/var` is refused outright, as on `<Child/x/>`. Any other dynamic
+tag name (`input.tag`, a ternary, a `<const>` alias of an import, a literal) is
+not judged, and neither is an imported unit that cannot be read or a `.ts`
+module; a `<define>` call refuses `/var` outright.
 Marko's class-API tags have no MX counterpart: `.marko` files are not compiled
 and `class { … }` is refused.
 
@@ -3007,6 +3012,7 @@ Three positioned diagnostics stand in for what JavaScript would leave as
 |---|---|
 | `` `/var` on `<${name}>` is not supported: it has no template, so it has no `<return>` to bind `` | A `/var` on an L2 sidecar with no template. |
 | `` `<${call.name}>` does not return a value; add `<return value=…/>` to ${tag.filename} to bind it with `/var` `` | The unit declares no `<return>`; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
+| `` `<${name}>` does not return a value; add `<return value=…/>` to the imported file to bind it with `/var` `` | The same rule for an imported `.mx` unit, called by its binding or as `<${name}/…/>`; reported at the tag variable (`MX_INVALID_TAG_VAR`). |
 | `` `${name}` is a `/var` bound inside a nested block and is not in scope here; a `/var` binds in the call site's own scope only `` | The read escaped the declaring block. |
 | `` `${name}` is read before the `/var` that binds it; move the read after the call that declares it `` | The read precedes the declaring call. |
 
