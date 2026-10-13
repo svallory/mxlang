@@ -1468,13 +1468,13 @@ as an expression (`${row(...)}` where the host allows it) and `<row>` stays a
 native element (§4, decision 164).
 
 **A `<define>` is block-scoped.** `<define/Foo>` binds `Foo` inside the body
-that declares it (an `<if>` or `<else>` branch, a `<for>` body, a component or
-attribute-tag body, a native element's body, another `<define>`) and nowhere
-after it, as Marko 6.4.4 declares it with `const` in that block. A `<Foo/>`
-outside that body does not call the define: it calls an `import` of the same
-name, and with no such binding it is an unresolved tag. Inside the body the
-define wins over an import of the same name. A top-level `<define>` is visible
-in every body after it.
+that declares it (an `<if>` or `<else>` branch, a `<for>` body, a `<try>`,
+component or attribute-tag body, a native element's body, another `<define>`)
+and nowhere after it, for the lookup of a tag name: Marko 6.4.4 resolves
+`<Foo/>` the same way. A `<Foo/>` outside that body does not call the define:
+it calls an `import` of the same name, and with no such binding it is an
+unresolved tag. Inside the body the define wins over an import of the same
+name. A top-level `<define>` is visible in every body after it.
 
 | Message | When |
 |---|---|

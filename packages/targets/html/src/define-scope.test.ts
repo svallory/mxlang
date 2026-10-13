@@ -20,6 +20,7 @@ describe("html: a <define> is scoped to the body that declares it", () => {
     ["<else>", `<if=input.a><p>a</p></if><else>${FOO}</else>`],
     ["<for>", `<for|i| of=[1]>${FOO}</for>`],
     ["a native element", `<div>${FOO}</div>`],
+    ["<try>", `<try>${FOO}<@catch|e|>x</@catch></try>`],
   ];
 
   for (const [label, block] of BLOCKS) {

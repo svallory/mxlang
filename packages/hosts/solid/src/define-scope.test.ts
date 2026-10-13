@@ -55,4 +55,42 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
     const code = compile(`${FOO}\n<div><Foo/></div>\n<Foo/>\n`, false);
     expect(code.match(/__mx_DefineFoo1\(\)/g)).toHaveLength(2);
   });
+
+  describe("a top-level define of the same name keeps the outer call", () => {
+    const OUTER = "<define/Foo><p>outer</p></define>";
+    const calls = (code: string) => code.match(/__mx_DefineFoo\d+\(\)/g);
+
+    it("<try> body: the call inside is the inner define, the one after is the outer", () => {
+      const code = compile(
+        `${OUTER}<try>${FOO}<Foo/><@catch|e|>x</@catch></try>\n<Foo/>\n`,
+        false,
+      );
+      expect(calls(code)).toEqual(["__mx_DefineFoo2()", "__mx_DefineFoo1()"]);
+    });
+
+    it("an attribute tag body: the call inside is the inner define, the one after is the outer", () => {
+      const code = compileSolidMx(
+        `${OUTER}<Bar><@item>${FOO}<Foo/></@item></Bar>\n<Foo/>\n`,
+        {
+          filename: "/f/t.solid.mx",
+          importSpecifiers: new Map([["Bar", "./bar.js"]]),
+          moduleBindings: new Set(["Bar"]),
+        },
+      ).code;
+      expect(calls(code)).toEqual(["__mx_DefineFoo2()", "__mx_DefineFoo1()"]);
+    });
+
+    it("a define after the <try> gets a name no hoisted define already uses", () => {
+      const code = compile(
+        `<try>${FOO}<Foo/><@catch|e|>x</@catch></try>\n${FOO}<Foo/>\n`,
+        false,
+      );
+      expect(calls(code)).toEqual(["__mx_DefineFoo1()", "__mx_DefineFoo2()"]);
+      const hoisted = compileSolidMx(
+        `<try>${FOO}<Foo/><@catch|e|>x</@catch></try>\n${FOO}<Foo/>\n`,
+        { filename: "/f/t.solid.mx" },
+      ).hoistedDefines.map((define) => define.binding);
+      expect(hoisted).toEqual(["__mx_DefineFoo1", "__mx_DefineFoo2"]);
+    });
+  });
 });

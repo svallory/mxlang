@@ -539,6 +539,24 @@ function paramBindingNames(params: readonly string[]): string[] {
   }
 }
 
+/**
+ * Runs `emit` in a body that scopes `<define>` names, as core's lowering does
+ * (an element, `<try>` or attribute-tag body): a name defined inside it is
+ * the inner function there and the outer one again afterwards. The table is
+ * copied, then put back; the hoisted functions stay, and `defineBinding`
+ * mints names against all of them, so a later define cannot reuse an inner
+ * define's generated name.
+ */
+function inDefineScope<T>(emit: () => T): T {
+  const outer = defineBindings;
+  if (outer) defineBindings = new Map(outer);
+  try {
+    return emit();
+  } finally {
+    defineBindings = outer;
+  }
+}
+
 /** Runs `emit` with `/var` refused, for a body that is lazy or per-row. */
 function inLazyScope<T>(emit: () => T): T {
   const outer = lazyScope;
@@ -1461,6 +1479,10 @@ function escapedBlockValue(expr: Expr): MappedCode {
 }
 
 function blockExpression(nodes: IrNode[]): MappedCode {
+  return inDefineScope(() => blockExpressionIn(nodes));
+}
+
+function blockExpressionIn(nodes: IrNode[]): MappedCode {
   const content = meaningful(nodes);
   if (content.length === 1) {
     const only = content[0] as IrNode;
@@ -2098,7 +2120,7 @@ export class SolidEmitter implements Emitter<string> {
       ? concatMapped()
       : textarea?.content
         ? concatMapped("{", textarea.content, "}")
-        : renderWithNewEmitter(node.children, "template");
+        : inDefineScope(() => renderWithNewEmitter(node.children, "template"));
     this.#out.push(
       concatMapped(
         `<${node.name}`,
@@ -2874,7 +2896,10 @@ export class SolidEmitter implements Emitter<string> {
     // never collide with one still to come.
     const binding = generatedDefineBinding(
       node.name,
-      new Set(defineBindings.values()),
+      new Set([
+        ...defineBindings.values(),
+        ...hoistedDefines.map((hoisted) => hoisted.binding),
+      ]),
     );
     defineBindings.set(node.name, binding);
     hoistedDefines.push({
@@ -2912,7 +2937,7 @@ export class SolidEmitter implements Emitter<string> {
       "<Loading",
       fallback,
       ">",
-      renderWithNewEmitter(node.tag.children),
+      inDefineScope(() => renderWithNewEmitter(node.tag.children)),
       "</Loading>",
     );
     if (!catchTag) {
