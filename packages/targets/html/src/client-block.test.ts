@@ -238,10 +238,13 @@ describe("html: the statement text parses the way Marko's does", () => {
     ).toBe("<div>[]</div>");
   });
 
-  it("a decorated class still declares its name", () => {
-    expect(hoisted(`client { let q = 1; @dec class K {} }${TEMPLATE}`)).toBe(
+  it("a class declares its name; a decorated one is refused, as Marko does", () => {
+    expect(hoisted(`client { let q = 1; class K {} }${TEMPLATE}`)).toBe(
       "var K, q;",
     );
+    expect(() =>
+      hoisted(`client { let q = 1; @dec class K {} }${TEMPLATE}`),
+    ).toThrow(/^Decorators are not read inside a `client` statement/);
   });
 });
 
