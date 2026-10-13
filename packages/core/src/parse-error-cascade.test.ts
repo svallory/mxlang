@@ -122,6 +122,35 @@ describe.each(TABLES)(
       ]);
     });
 
+    it.each([
+      [
+        "<if=input.x :b>y\n",
+        "MX_EXPECTED_SINGLE_EXPRESSION 1:12-1:13",
+        "MX_PARSE_MISSING_END_TAG 1:0-1:15",
+      ],
+      [
+        "<div x=1 :b>\n",
+        "MX_EXPECTED_SINGLE_EXPRESSION 1:9-1:10",
+        "MX_PARSE_MISSING_END_TAG 1:0-1:12",
+      ],
+    ])(
+      "a second expression in the open tag is the cause too, in the same order for every caller: %s",
+      (source, cause, cascade) => {
+        expect(thrownRanges(viaFragment(source, table))).toEqual([
+          cause,
+          cascade,
+        ]);
+        expect(thrownRanges(viaCompile(source, table))).toEqual([
+          cause,
+          cascade,
+        ]);
+        expect(diagnosticRanges(diagnosticsOf(source, table))).toEqual([
+          cause,
+          cascade,
+        ]);
+      },
+    );
+
     it("lowerSource keeps the cause first when the tag is nested", () => {
       expect(
         diagnosticRanges(
@@ -189,6 +218,28 @@ describe.each(TABLES)(
       ["an identifier", "<div x=(a bcd)/>", "MX_PARSE_EXPRESSION 1:10-1:13"],
       ["a string", '<div x=(a "str")/>', "MX_PARSE_EXPRESSION 1:10-1:15"],
       ["a number", "<div x=(a 12.5)/>", "MX_PARSE_EXPRESSION 1:10-1:14"],
+      // The expression stopped at a delimiter outside its container: the
+      // error is on that character.
+      [
+        "a placeholder's closing brace",
+        "${1+}\n",
+        "MX_PARSE_EXPRESSION 1:4-1:5",
+      ],
+      [
+        "a tag argument's closing paren",
+        "<if(x.)>\n</if>",
+        "MX_PARSE_EXPRESSION 1:6-1:7",
+      ],
+      [
+        "an attribute value's closing angle",
+        "<div x=a.>\n</div>",
+        "MX_PARSE_EXPRESSION 1:9-1:10",
+      ],
+      [
+        "a regular expression's flags",
+        "<div x=/re/x/>",
+        "MX_PARSE_EXPRESSION 1:12-1:13",
+      ],
     ];
     it.each(CASES)("compileSource: %s", (_c, source, range) => {
       expect(thrownRanges(viaCompile(source, table))[0]).toBe(range);

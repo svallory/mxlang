@@ -7,6 +7,7 @@
 import { resolve } from "node:path";
 import { isTranslateError } from "../core.ts";
 import {
+  EXPECTED_SINGLE_EXPRESSION_CODE,
   INTERNAL_ERROR_CODE,
   PARSE_EXPRESSION_CODE,
   type TemplateParseCode,
@@ -379,15 +380,21 @@ export function errorDiagnostics(
  *
  * "Inside the open tag" is the cascade's own range: a missing end tag spans
  * the open tag (all the text it swallowed when the expression ran past the
- * `>`). Only an `MX_PARSE_EXPRESSION` whose start is inside that range moves,
+ * `>`). Only an `MX_PARSE_EXPRESSION` or `MX_EXPECTED_SINGLE_EXPRESSION` whose start is inside that range moves,
  * to just before the cascade, in the order it had. Every other error keeps its
  * position order, so an unrelated error before or after the tag does not move.
  */
+function isExpressionCode(code: string | undefined): boolean {
+  return (
+    code === PARSE_EXPRESSION_CODE || code === EXPECTED_SINGLE_EXPRESSION_CODE
+  );
+}
+
 function causesFirst(sorted: IrDiagnostic[]): IrDiagnostic[] {
   const cascades = sorted.filter((d) => d.code === MISSING_END_TAG_CODE);
   if (cascades.length === 0) return sorted;
   const causeOf = (d: IrDiagnostic): IrDiagnostic | undefined => {
-    if (d.code !== PARSE_EXPRESSION_CODE) return undefined;
+    if (!isExpressionCode(d.code)) return undefined;
     // The innermost cascade whose open tag holds the error.
     let found: IrDiagnostic | undefined;
     for (const cascade of cascades) {

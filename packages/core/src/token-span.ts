@@ -81,8 +81,9 @@ export function tokenLengthAt(text: string, at: number): number {
  * The end of a parse error, in the offsets it was given in. A point error of
  * an expression container (`origin: "expression"`, `start === end`, inside
  * the container) ends where its token does, no later than the container's
- * end. Any other error keeps its own `end`; so does one at the very end of
- * its container, where there is no token to cover.
+ * end; one at or past the container's end ends after the character it is on.
+ * Any other error keeps its own `end`, and so does one at the very end of the
+ * source, where there is no character to cover.
  *
  * `text` is the source and `base` the offset its first character has in the
  * error's offsets (`0` when they agree).
@@ -93,11 +94,23 @@ export function parseErrorEnd(error: Node, text: string, base: number): number {
     error.origin !== "expression" ||
     error.end !== error.start ||
     container == null ||
-    error.start < container.start ||
-    error.start >= container.end
+    error.start < container.start
   ) {
     return error.end;
   }
+  // Inside the container the token stops at the container's end. At or past
+  // it, the error is on the character the expression stopped at (the `}` of
+  // `${1+}`, the `>` of `<div x=a.>`), which is not in the container but is
+  // in the source: one code point. At the end of the source there is none,
+  // and the token length is 0.
+  if (error.start >= container.end) {
+    return error.start + codePointLengthAt(text, error.start - base);
+  }
   const token = tokenLengthAt(text, error.start - base);
   return Math.min(error.start + token, container.end);
+}
+
+function codePointLengthAt(text: string, at: number): number {
+  const code = text.codePointAt(at);
+  return code === undefined ? 0 : String.fromCodePoint(code).length;
 }
