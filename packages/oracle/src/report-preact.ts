@@ -52,6 +52,7 @@ function skips(targetName: string): Record<string, string> {
     "let-tag": `\`<let>\` is Marko reactive state; the ${targetName} host rejects it and directs the author to \`useState\``,
     "server-block": `a \`server\` block is Marko's server/client split; a ${targetName} component is one function with no server half`,
     "server-block-unwrap": `a \`server\` block is Marko's server/client split; a ${targetName} component is one function with no server half`,
+    "client-block-hoisted": `a \`client\` block is Marko's client-runtime split; a ${targetName} component is already client code, so the host refuses the block`,
     "dynamic-tag":
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX dynamic-tag syntax
       "a dynamic tag name (`<${expr}>`) cannot sit in JSX tag position, which requires a capitalized identifier",
