@@ -1,7 +1,7 @@
 /**
  * Module level code cannot name what exists only while the template renders.
  *
- * `static`, `server` and `client` blocks and `export` statements run once, as
+ * `static`, `server`, `client` and `export` statements run once, as
  * the template's module loads. A tag variable (`<let/x>`, `<const/x>`,
  * `<define/Foo>`, any `/var`), `input`, `$global` and `$signal` come into
  * being per render, so module code that names one has nothing to read.
@@ -23,7 +23,12 @@
  * What does not: a parameter or local of a module function (`static function
  * f(input) { return input }`), a module binding that shares the spelling of a
  * name only a nested tag declares, a property name (`o.input`, `{ input: 1 }`),
- * and anything inside a type (`typeof count`).
+ * and anything inside a type (`typeof count`) or an ambient declaration
+ * (`static declare const count: number`, `import type { count }`).
+ *
+ * An `import` is checked for its declarations only: it spells no reference.
+ * An import of `input` does not exempt module code's `input`, which stays the
+ * render's own.
  *
  * `static { … }` is module code with the braces removed: its top-level
  * declarations are module bindings, and a declaration nested in an inner block
@@ -183,7 +188,14 @@ function moduleLevelNames(file: Node, block: boolean): ReadonlySet<string> {
   const names = new Set<string>();
   coreBabel().traverse(file, {
     Program(path: Node) {
-      for (const name of Object.keys(path.scope.bindings)) names.add(name);
+      for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
+        if (ambient(binding.path)) continue;
+        // `input` is the render's own; an import of that spelling does not
+        // make module code's `input` something else (a declaration of it is
+        // refused as a reserved name).
+        if (name === "input" && binding.kind === "module") continue;
+        names.add(name);
+      }
     },
     AssignmentExpression(path: Node) {
       if (declaringAssignment(path, block)) names.add(path.node.left.name);
@@ -205,18 +217,38 @@ function moduleBindings(ctx: Ctx, scope: ModuleScope): ReadonlySet<string> {
   return all;
 }
 
-/** Is `path` inside a type? A type names no value. */
-function insideType(path: Node): boolean {
+/**
+ * Is `path` an ambient declaration (`declare const x: number`, `declare
+ * function f(): void`) or a type-only import? It declares a type-level name,
+ * not a value that exists at load.
+ */
+function ambient(path: Node): boolean {
   return Boolean(
-    path.findParent(
-      (parent: Node) =>
-        parent.isTSType() ||
-        parent.isTSTypeAnnotation() ||
-        parent.isTSTypeParameterInstantiation() ||
-        parent.isTSTypeParameterDeclaration() ||
-        parent.isTSInterfaceDeclaration() ||
-        parent.isTSTypeAliasDeclaration(),
+    path.find(
+      (p: Node) =>
+        p.node.declare === true ||
+        p.node.importKind === "type" ||
+        p.node.importKind === "typeof" ||
+        p.isTSDeclareFunction(),
     ),
+  );
+}
+
+/** Is `path` inside a type or an ambient declaration? Neither names a value. */
+function insideType(path: Node): boolean {
+  return (
+    ambient(path) ||
+    Boolean(
+      path.findParent(
+        (parent: Node) =>
+          parent.isTSType() ||
+          parent.isTSTypeAnnotation() ||
+          parent.isTSTypeParameterInstantiation() ||
+          parent.isTSTypeParameterDeclaration() ||
+          parent.isTSInterfaceDeclaration() ||
+          parent.isTSTypeAliasDeclaration(),
+      ),
+    )
   );
 }
 
@@ -228,7 +260,7 @@ interface Found {
 }
 
 const WHERE =
-  "(`static`, `server` and `client` blocks and `export` statements), which runs once as the template loads";
+  "(`static`, `server`, `client` and `export` statements), which runs once as the template loads";
 
 /**
  * Refuses a module statement that names something which exists only while the
@@ -262,7 +294,7 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
   coreBabel().traverse(parsed.file, {
     Program(path: Node) {
       for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
-        if (!scope.topLevel.has(name)) continue;
+        if (!scope.topLevel.has(name) || ambient(binding.path)) continue;
         found.push({ node: binding.path.node, name, declares: true });
       }
     },
@@ -292,7 +324,7 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
     RENDER_ONLY_IN_MODULE_CODE,
     first.declares
       ? `\`${first.name}\` is a tag variable, which exists only while the template renders, so module level code ${WHERE}, cannot declare a name with its spelling. Rename the module level binding.`
-      : `\`${first.name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to a module level function as an argument.`,
+      : `\`${first.name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to module level functions as an argument.`,
     first.node,
   );
 }

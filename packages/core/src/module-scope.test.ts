@@ -1,5 +1,5 @@
 /**
- * Module level code (`static`, `server` and `client` blocks, `export`
+ * Module level code (`static`, `server` and `client` code, `export`
  * statements) runs once as the template loads, so it cannot name what exists
  * only while the template renders: a tag variable, `input`, `$global`,
  * `$signal`. Core refuses it with one error positioned at the name, on
@@ -21,10 +21,10 @@ import { lookup } from "./test-targets.ts";
 const CODE = "MX_RENDER_ONLY_IN_MODULE";
 
 const WHERE =
-  "(`static`, `server` and `client` blocks and `export` statements), which runs once as the template loads";
+  "(`static`, `server`, `client` and `export` statements), which runs once as the template loads";
 
 const reference = (name: string) =>
-  `\`${name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to a module level function as an argument.`;
+  `\`${name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to module level functions as an argument.`;
 
 const declaration = (name: string) =>
   `\`${name}\` is a tag variable, which exists only while the template renders, so module level code ${WHERE}, cannot declare a name with its spelling. Rename the module level binding.`;
@@ -471,6 +471,17 @@ describe("what is not a render-only name", () => {
     ],
     ["a name the template does not declare", "static const a = other"],
     ["a `server` import", 'server import { a } from "b"'],
+    ["an ambient `static declare const`", "static declare const x: number"],
+    ["an ambient `export declare const`", "export declare const x: number"],
+    [
+      "an ambient `static declare function`",
+      "static declare function x(): void",
+    ],
+    [
+      "an ambient `export declare function`",
+      "export declare function x(): void",
+    ],
+    ["an ambient `declare class`", "static declare class x {}"],
   ])("%s", (_name, statement) => {
     const source = `${LET}${statement}\n<div/>\n`;
     expect(ours(source)).toEqual([]);
@@ -570,4 +581,67 @@ describe("a host that refuses `server` or `client` refuses it first", () => {
     );
     expect(error?.diagnosticCode).not.toBe(CODE);
   });
+});
+
+describe("`input` and imports", () => {
+  it("an import of `input` does not make module code's `input` its own", () => {
+    const source =
+      'import { input } from "./a"\nstatic const y = input\n<div/>\n';
+    const at = wordAt(source, "static const y = input", "input");
+    const [error] = ours(source);
+    expect(error).toMatchObject({
+      message: reference("input"),
+      line: at.line,
+      column: at.column,
+    });
+  });
+
+  it("a module declaration of `input` is the reserved-name check's, not a second error", () => {
+    const source = "static const input = 1\nstatic const y = input\n<div/>\n";
+    expect(ours(source)).toEqual([]);
+  });
+
+  it("a local `input` still shadows", () => {
+    expect(ours("static function f(input) { return input }\n<div/>\n")).toEqual(
+      [],
+    );
+  });
+
+  it.each([
+    ["a named import", 'import { x } from "./a"', "x"],
+    ["a default import", 'import x from "./a"', "x"],
+    ["a namespace import", 'import * as x from "./a"', "x"],
+    ["an aliased import", 'import { a as x } from "./a"', "x"],
+  ])(
+    "%s with the spelling of a top-level tag variable is refused at the import",
+    (_name, statement, name) => {
+      for (const source of [
+        `${statement}\n<const/x=1/>\n<div/>\n`,
+        `<const/x=1/>\n${statement}\n<div/>\n`,
+      ]) {
+        const errors = ours(source);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.message).toBe(declaration(name));
+        expect(errors[0]?.line).toBe(source.startsWith("<") ? 2 : 1);
+      }
+    },
+  );
+
+  it("an import that shares the spelling of a nested tag variable only is fine", () => {
+    expect(
+      ours('import { x } from "./a"\n<if=true>\n  <const/x=1/>\n</if>\n'),
+    ).toEqual([]);
+  });
+
+  it.each([
+    'import type { x } from "./a"',
+    'import { type x } from "./a"',
+    "static type x = number",
+    "static interface x { a: 1 }",
+  ])(
+    "%s beside a tag variable of that spelling is fine: it names a type",
+    (statement) => {
+      expect(ours(`${statement}\n<const/x=1/>\n<div/>\n`)).toEqual([]);
+    },
+  );
 });

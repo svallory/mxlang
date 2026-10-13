@@ -287,19 +287,20 @@ variable (`<let/x>`, `<const/x>`, `<define/Foo>`, any `/var`, declared anywhere
 in the file, before or after the statement, nested or not), `input`, `$global`
 and `$signal`. Naming one is a compile error on every host and on `lowerSource`,
 `MX_RENDER_ONLY_IN_MODULE`, positioned at the name with its end: "`x` exists
-only while the template renders, so module level code (`static`, `server` and
-`client` blocks and `export` statements), which runs once as the template
-loads, cannot reference it. Reference it in the template instead, passing it to
-a module level function as an argument." A reference is any read, write or
+only while the template renders, so module level code (`static`, `server`,
+`client` and `export` statements), which runs once as the template loads,
+cannot reference it. Reference it in the template instead, passing it to module
+level functions as an argument." A reference is any read, write or
 update, in the statement's own text or in a function it declares, and the check
 does not depend on the braces of a `static { … }` block. A module level
 declaration with the spelling of a tag variable declared in the template's top
-level (`static count = 1` beside `<let/count=0/>`) is the same error, at the
-declaration: "`count` is a tag variable, which exists only while the template
+level (`static count = 1` beside `<let/count=0/>`, or an `import` of that
+spelling) is the same error, at the declaration: "`count` is a tag variable, which exists only while the template
 renders, so module level code (…), cannot declare a name with its spelling.
 Rename the module level binding." What is not a name: a parameter or local of a
 module function that shadows it, a property name (`o.input`, `{ input: 1 }`),
-anything inside a type (`typeof x` in a type position), a tag param (it is only
+anything inside a type (`typeof x` in a type position) or an ambient
+`declare` declaration, a type-only import, a tag param (it is only
 in scope inside its own tag, so module code that spells it reads a global, as in
 Marko), and a module binding with the spelling of a tag variable that only a
 nested tag declares (the module binding shadows it). A host that refuses

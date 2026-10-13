@@ -39,7 +39,7 @@ Because it runs once, before any render, `static` code (like `server`, `client` 
 static const tax = rate * 100
 ```
 
-> `rate` exists only while the template renders, so module level code (`static`, `server` and `client` blocks and `export` statements), which runs once as the template loads, cannot reference it. Reference it in the template instead, passing it to a module level function as an argument.
+> `rate` exists only while the template renders, so module level code (`static`, `server`, `client` and `export` statements), which runs once as the template loads, cannot reference it. Reference it in the template instead, passing it to module level functions as an argument.
 
 Write `static function tax(rate) { return rate * 100 }` and call `${tax(rate)}` in the template. A function parameter that shadows the name is fine, and so is a tag param (`<for|item|>`), which module code cannot see.
 

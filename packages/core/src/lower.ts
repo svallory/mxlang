@@ -4944,7 +4944,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (
     ctx.moduleScope &&
     isStatementNode(node) &&
-    ["static", "server", "client", "export"].includes(name)
+    ["import", "static", "server", "client", "export"].includes(name)
   ) {
     checkModuleScope(ctx, node);
   }
