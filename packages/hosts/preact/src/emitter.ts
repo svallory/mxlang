@@ -448,6 +448,23 @@ function staticTemplateValue(expr: Expr): string | null {
   return value;
 }
 
+/**
+ * Whether a branch body can come out as a bare scalar: a lone placeholder, or
+ * an `<if>` chain one of whose branches is such a body. An element, a call or
+ * a `.map` is an object or an array, which no fragment drops, and `null` is
+ * what a fragment renders as nothing anyway; only a scalar that is falsy yet
+ * visible (`0`, `NaN`) needs `closeFragmentBody`'s second child.
+ */
+function holdsScalar(nodes: IrNode[]): boolean {
+  const content = meaningful(nodes);
+  const only = content.length === 1 ? content[0] : undefined;
+  if (only?.kind === "Interpolation") return only.escaped;
+  if (only?.kind === "IfChain") {
+    return only.branches.some((branch) => holdsScalar(branch.children));
+  }
+  return false;
+}
+
 function meaningful(nodes: IrNode[]): IrNode[] {
   return nodes.filter(
     (node) =>
@@ -519,9 +536,37 @@ const RANGE_MAPPER_UNUSED = "__mxUnused";
 const rangeCounter = (params: string[], body: string): string =>
   hygienicName("__mxIndex", params, body);
 
+/**
+ * Bodies that are exactly one value-holding expression container, `{x}` or
+ * `{c ? x : null}`: what a fragment would receive as its sole child.
+ *
+ * Hono's `Fragment` drops a sole falsy child, `0` and `NaN` included
+ * (`Array.isArray(children) ? children : children ? [children] : []`), so
+ * `<>{x}</>` renders nothing for `x = 0` while Preact and React render the
+ * zero. A second child makes the children an array, which is kept whole.
+ * `closeFragmentBody` adds that second child, `{null}`, which is invisible on
+ * every JSX host, the way `#attributeTagRenderable` already does.
+ */
+const LONE_VALUE_BODIES = new WeakSet<MappedCode>();
+
+/**
+ * A fragment's body, closed so that a lone value child survives a falsy `0`.
+ * Every place that writes `<>`, `<__mxFragment key={k}>` or a content arrow's
+ * `<>` around emitted children goes through here.
+ */
+export function closeFragmentBody(body: MappedCode): MappedCode {
+  return LONE_VALUE_BODIES.has(body) ? concatMapped(body, "{null}") : body;
+}
+
 /** Preact JSX text emitter over the shared core IR. */
 export class PreactEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
+  /**
+   * How many of `#out`'s entries are value-holding expression containers (a
+   * placeholder or an `<if>` chain), so `result()` can tell a lone value body
+   * from a body that has a sibling. See `LONE_VALUE_BODIES`.
+   */
+  #valueChildren = 0;
   readonly #dialect: JsxDialect;
   /**
    * Runtime names this emitter's output needs an import for.
@@ -741,9 +786,10 @@ export class PreactEmitter implements Emitter<string> {
     if (content.length === 1) {
       const only = content[0] as IrNode;
       if (only.kind === "Interpolation" && only.escaped) {
-        return slot
-          ? mappedExpr(only.expr)
-          : concatMapped("{", mappedExpr(only.expr), "}");
+        if (slot) return mappedExpr(only.expr);
+        const lone = concatMapped("{", mappedExpr(only.expr), "}");
+        LONE_VALUE_BODIES.add(lone);
+        return lone;
       }
       if (
         only.kind === "Element" ||
@@ -755,7 +801,11 @@ export class PreactEmitter implements Emitter<string> {
         return this.#render(content, callbackScope, true, slot);
       }
     }
-    return concatMapped("<>", this.#render(content, callbackScope), "</>");
+    return concatMapped(
+      "<>",
+      closeFragmentBody(this.#render(content, callbackScope)),
+      "</>",
+    );
   }
 
   /**
@@ -1669,6 +1719,7 @@ export class PreactEmitter implements Emitter<string> {
       fail("raw placeholder (`$!{…}`) must be the only child", node);
     }
     this.#out.push(concatMapped("{", mappedExpr(node.expr), "}"));
+    this.#valueChildren++;
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
@@ -2052,10 +2103,10 @@ export class PreactEmitter implements Emitter<string> {
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     const rendered = this.#expression(node.content?.children ?? []);
     if (!node.content?.hasParams)
-      return concatMapped("() => <>", rendered, "</>");
+      return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
       `((${node.content.params.join(", ")}) => <>`,
-      rendered,
+      closeFragmentBody(rendered),
       "</>) as (...args: any[]) => any",
     );
   }
@@ -2084,6 +2135,12 @@ export class PreactEmitter implements Emitter<string> {
     }
     if (node.branches.at(-1)?.condition) parts.push("null");
     this.#out.push(this.#slot(...parts));
+    if (
+      !this.#bare &&
+      node.branches.some((branch) => holdsScalar(branch.children))
+    ) {
+      this.#valueChildren++;
+    }
   }
 
   /**
@@ -2128,7 +2185,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(
         this.#slot(
           `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
-          body,
+          closeFragmentBody(body),
           "</__mxFragment>)",
         ),
       );
@@ -2148,7 +2205,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(
         this.#slot(
           `Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
-          body,
+          closeFragmentBody(body),
           "</__mxFragment>)",
         ),
       );
@@ -2179,7 +2236,7 @@ export class PreactEmitter implements Emitter<string> {
     this.#out.push(
       this.#slot(
         `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
-        body,
+        closeFragmentBody(body),
         "</__mxFragment>)",
       ),
     );
@@ -2207,7 +2264,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#region.defines.push(
         concatMapped(
           `const ${node.name} = (${node.params.join(", ")}) => (<>`,
-          this.#render(node.children, true),
+          closeFragmentBody(this.#render(node.children, true)),
           "</>);",
         ),
       );
@@ -2271,6 +2328,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     if (!catchTag) {
       this.#out.push(inner);
+      if (LONE_VALUE_BODIES.has(inner)) this.#valueChildren++;
       return;
     }
 
@@ -2292,7 +2350,7 @@ export class PreactEmitter implements Emitter<string> {
         "<__mxErrorBoundary fallback={",
         fallback,
         "}>{() => (<>",
-        inner,
+        closeFragmentBody(inner),
         "</>)}</__mxErrorBoundary>",
       ),
     );
@@ -2316,7 +2374,13 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   result(): MappedCode {
-    return concatMapped(...this.#out);
+    const body = concatMapped(...this.#out);
+    // A node that writes nothing (a `<return>`) is still an `#out` entry.
+    const written = this.#out.filter((entry) => entry.code !== "");
+    if (!this.#bare && written.length === 1 && this.#valueChildren === 1) {
+      LONE_VALUE_BODIES.add(body);
+    }
+    return body;
   }
 }
 

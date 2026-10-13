@@ -188,7 +188,7 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a lone placeholder as the only child of an <if>",
     "<if=input.a>${input.x}</if>",
-    "return (<>{input.a ? input.x : null}</>);",
+    "return (<>{input.a ? input.x : null}{null}</>);",
   ],
   [
     "a repeated <@item> keeps the call as the child of its keyed fragment",

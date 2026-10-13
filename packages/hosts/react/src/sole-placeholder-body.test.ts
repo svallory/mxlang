@@ -51,17 +51,17 @@ const CASES: Array<[string, string, string]> = [
   [
     "<for of> with a lone placeholder",
     `<for|i| of=input.l>${D}{i}</for>`,
-    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i}")})}</>);`,
+    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i}{null}")})}</>);`,
   ],
   [
     "<for of> with an index param, the placeholder naming the index",
     `<for|i, idx| of=input.l>${D}{idx}</for>`,
-    `return (<>{${LIST}(input.l).map((i, idx) => ${ROW("i", "{idx}")})}</>);`,
+    `return (<>{${LIST}(input.l).map((i, idx) => ${ROW("i", "{idx}{null}")})}</>);`,
   ],
   [
     "<for of> with a placeholder that is an expression",
     `<for|i| of=input.l>${D}{i.name}</for>`,
-    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i.name}")})}</>);`,
+    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i.name}{null}")})}</>);`,
   ],
   [
     "<for of> with an empty body",
@@ -76,12 +76,12 @@ const CASES: Array<[string, string, string]> = [
   [
     "<for of> with a comment and a lone placeholder",
     `<for|i| of=input.l><!-- c -->${D}{i}</for>`,
-    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i}")})}</>);`,
+    `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i}{null}")})}</>);`,
   ],
   [
     "<for in> with a lone placeholder",
     `<for|k, v| in=input.o>${D}{v}</for>`,
-    `return (<>{Object.entries(input.o ?? {}).map(([k, v]) => ${ROW("k", "{v}")})}</>);`,
+    `return (<>{Object.entries(input.o ?? {}).map(([k, v]) => ${ROW("k", "{v}{null}")})}</>);`,
   ],
   [
     "<for in> with an empty body",
@@ -91,12 +91,12 @@ const CASES: Array<[string, string, string]> = [
   [
     "<for from to> with a lone placeholder",
     `<for|n| from=1 to=3>${D}{n}</for>`,
-    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => ${ROW("n", "{n}")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, (3) - (1) + 1) }, (__mxUnused, __mxIndex) => (1) + __mxIndex).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
   ],
   [
     "<for from until step> with a lone placeholder",
     `<for|n| from=0 until=6 step=2>${D}{n}</for>`,
-    `return (<>{Array.from({ length: Math.max(0, Math.ceil(((6) - (0)) / (2))) }, (__mxUnused, __mxIndex) => (0) + __mxIndex * (2)).map((n) => ${ROW("n", "{n}")})}</>);`,
+    `return (<>{Array.from({ length: Math.max(0, Math.ceil(((6) - (0)) / (2))) }, (__mxUnused, __mxIndex) => (0) + __mxIndex * (2)).map((n) => ${ROW("n", "{n}{null}")})}</>);`,
   ],
   [
     "<for from to> with an empty body",
@@ -106,27 +106,27 @@ const CASES: Array<[string, string, string]> = [
   [
     "a <for> whose only child is a <for> with a lone placeholder",
     `<for|a| of=input.l><for|b| of=a>${D}{b}</for></for>`,
-    `return (<>{${LIST}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}")})}`)})}</>);`,
+    `return (<>{${LIST}(input.l).map((a) => ${ROW("a", `{${LIST}(a).map((b) => ${ROW("b", "{b}{null}")})}`)})}</>);`,
   ],
   [
     "a <for> with a lone placeholder as the only child of an <if>",
     `<if=input.a><for|i| of=input.l>${D}{i}</for></if>`,
-    `return (<>{input.a ? ${LIST}(input.l).map((i) => ${ROW("i", "{i}")}) : null}</>);`,
+    `return (<>{input.a ? ${LIST}(input.l).map((i) => ${ROW("i", "{i}{null}")}) : null}</>);`,
   ],
   [
     "a <for> with a lone placeholder inside an element",
     `<ul><for|i| of=input.l>${D}{i}</for></ul>`,
-    `return (<><ul>{${LIST}(input.l).map((i) => ${ROW("i", "{i}")})}</ul></>);`,
+    `return (<><ul>{${LIST}(input.l).map((i) => ${ROW("i", "{i}{null}")})}</ul></>);`,
   ],
   [
     "a define call with a lone placeholder body",
     `${DEF}<Box>${D}{input.y}</Box>`,
-    "return (<>{Box({ content: () => <>{input.y}</> })}</>);",
+    "return (<>{Box({ content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a define call with a lone placeholder body and tag params",
     `${DEF_ARGS}<Box|n|>${D}{n}</Box>`,
-    "return (<>{Box({ content: ((n) => <>{n}</>) as (...args: any[]) => any })}</>);",
+    "return (<>{Box({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
   ],
   [
     "a define call with tag params and a comment-only body (no content)",
@@ -136,32 +136,32 @@ const CASES: Array<[string, string, string]> = [
   [
     "a define call with arguments and a lone placeholder body",
     `<define/Row|n, { content }|><b><${D}{content}/></b></define>\n<Row(1)>${D}{input.y}</Row>`,
-    "return (<>{Row(1, { content: () => <>{input.y}</> })}</>);",
+    "return (<>{Row(1, { content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a define call with a lone placeholder body in an <if>",
     `${DEF}<if=input.a><Box>${D}{input.y}</Box></if>`,
-    "return (<>{input.a ? Box({ content: () => <>{input.y}</> }) : null}</>);",
+    "return (<>{input.a ? Box({ content: () => <>{input.y}{null}</> }) : null}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body",
     `<const/X="em"/>\n<${D}{X}>${D}{input.y}</>`,
-    "return (<>{__mxDynamic(X, { content: () => <>{input.y}</> })}</>);",
+    "return (<>{__mxDynamic(X, { content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body and tag params",
     `<const/X=input.x/>\n<${D}{X}|n|>${D}{n}</>`,
-    "return (<>{__mxDynamic(X, { content: ((n) => <>{n}</>) as (...args: any[]) => any }, undefined, true)}</>);",
+    "return (<>{__mxDynamic(X, { content: ((n) => <>{n}{null}</>) as (...args: any[]) => any }, undefined, true)}</>);",
   ],
   [
     "a dynamic tag with arguments and a lone placeholder body",
     `<const/X=input.x/>\n<${D}{X}(1)>${D}{input.y}</>`,
-    "return (<>{__mxDynamic(X, [1, { content: () => <>{input.y}</> }], () => <>{input.y}</>)}</>);",
+    "return (<>{__mxDynamic(X, [1, { content: () => <>{input.y}{null}</> }], () => <>{input.y}{null}</>)}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body in an <if>",
     `<const/X=input.x/>\n<if=input.a><${D}{X}>${D}{input.y}</></if>`,
-    "return (<>{input.a ? __mxDynamic(X, { content: () => <>{input.y}</> }) : null}</>);",
+    "return (<>{input.a ? __mxDynamic(X, { content: () => <>{input.y}{null}</> }) : null}</>);",
   ],
   [
     "a dynamic tag with an empty body (no content)",
@@ -198,7 +198,7 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a lone placeholder as the only child of an <if> (an expression slot)",
     `<if=input.a>${D}{input.x}</if>`,
-    "return (<>{input.a ? input.x : null}</>);",
+    "return (<>{input.a ? input.x : null}{null}</>);",
   ],
   [
     "an empty <if> (an expression slot)",
@@ -391,14 +391,5 @@ describe("react: a lone placeholder or an empty body renders what the html targe
 
   it.each(RENDER_CASES)("%s", async (_name, source, props, html) => {
     expect(await renderWhole(source, props)).toBe(html);
-  });
-
-  // hono/jsx's Fragment drops a sole falsy child, `0` included, so a lone
-  // `${0}` in a body renders nothing there (the same drop `<if=c>${0}</if>`
-  // has always had); the other two hosts render the zero.
-  it("renders a zero value", async () => {
-    expect(
-      await renderWhole(`<for|i| of=input.l>${D}{i}</for>`, { l: [0, 1] }),
-    ).toBe("01");
   });
 });

@@ -43,6 +43,7 @@ import {
 } from "./attribute-normalize.ts";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 import {
+  closeFragmentBody,
   componentAlias,
   createEmitter,
   preactDeclarations,
@@ -467,7 +468,7 @@ export function emitModuleWithMappings(
       statements.push(
         concatMapped(
           `const ${node.name} = (${node.params.join(", ")}) => (<>`,
-          rendered,
+          closeFragmentBody(rendered),
           "</>);",
         ),
       );
@@ -605,7 +606,7 @@ export function emitModuleWithMappings(
       ),
       statementCode,
       `  return { value: ${ir.returnValue.code}, output: (<>`,
-      body,
+      closeFragmentBody(body),
       `</>) };\n}\n\nfunction ${componentName}(props: Input) {\n  return ${unit}(props).output;\n}\n${componentName}.render = ${unit};\n\nexport default ${componentName};\n`,
     );
   }
@@ -614,7 +615,7 @@ export function emitModuleWithMappings(
     prefix,
     statementCode,
     "  return (<>",
-    body,
+    closeFragmentBody(body),
     "</>);\n}\n",
   );
 }
