@@ -58,6 +58,7 @@ import {
 import {
   compileErrorOf,
   filePosition,
+  firstErrorAt,
   parseMx,
   registerDocument,
 } from "./mx-parse.ts";
@@ -501,7 +502,6 @@ export function parseFragment(
     { filename: resolved.filename },
     resolvedSyntax.dialect,
   );
-  if (tableError) throw tableError;
   // Marko's parse-only output never threw on expression errors alone: those
   // stayed in the tree for lowering, as the containers' `error` do now.
   const parseError = compileErrorOf(document, resolved.filename, {
@@ -510,7 +510,22 @@ export function parseFragment(
   // Marko crashed on a nameless tag the moment it closed its open tag, so a
   // bare `,` before the error Marko's parse threw wins over it.
   const comma = bareCommaOf(document);
-  if (comma && (!parseError || comma.local < thrownAt(parseError))) {
+  const commaWins =
+    comma && (!parseError || comma.local < thrownAt(parseError));
+  const error =
+    parseError ??
+    (methodTypeParamsFail(document.body)
+      ? compileErrorOf(document, resolved.filename, { expressionErrors: true })
+      : undefined);
+  // The first error in the file wins, whichever kind it is: the table's
+  // (nothing lowers a construct) when it starts before the default row's.
+  if (tableError) {
+    const defaultAt = commaWins ? comma.local : error && firstErrorAt(error);
+    if (defaultAt === undefined || tableError.offset < defaultAt) {
+      throw tableError.error;
+    }
+  }
+  if (comma && commaWins) {
     const at = filePosition(document, comma.offset);
     throw codedError(
       TAG_NAME_MISSING_CODE,
@@ -519,11 +534,6 @@ export function parseFragment(
       at.column,
     );
   }
-  const error =
-    parseError ??
-    (methodTypeParamsFail(document.body)
-      ? compileErrorOf(document, resolved.filename, { expressionErrors: true })
-      : undefined);
   if (error) {
     // A thrown error's position is on the exception, never in a tree, so the
     // walk below can never reach it (spike 1, limit 2).

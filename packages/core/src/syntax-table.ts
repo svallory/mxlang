@@ -31,9 +31,7 @@ import {
   INVALID_DIALECT_CONTRACT_CODE,
   INVALID_DIALECT_MODULE_CODE,
   MODULE_LOAD_FAILED_CODE,
-  type MxDiagnosticCode,
   NO_LOWERING_CODE,
-  parseDiagnosticCode,
   RESERVED_TAG_CODE,
 } from "./diagnostic-codes.ts";
 import {
@@ -1403,9 +1401,11 @@ function lowersTrigger(
  * `undefined`: the first trigger, block tag or filter nothing lowers (a
  * `{ call }` trigger with no `lowerTrigger`, a block tag with no
  * `lowerBlockTag`, a filter with no `lowerFilter`), positioned, naming the
- * file. A template parse error that comes before every such construct is not
- * returned: it is the parse error of the default row too, so the caller
- * raises it through `compileErrorOf` (same shape, `loc` included). The
+ * file, with `offset`, where it starts (the document's own offsets, less the
+ * fragment base, as a `CompileError`'s `loc.start.index`). It is not a parse
+ * error: a parse error is the default row's too, so the caller raises it
+ * through `compileErrorOf` (same shape, `loc` included) and throws this one
+ * only when it starts before the first error that parse reports. The
  * compile's own parse carries the table, so this reads its document (one
  * parse per compile). Lowering's seams (`payloadOf`, `lowerChildList`)
  * refuse the same nodes in the same wording for a caller that lowers a
@@ -1416,40 +1416,15 @@ export function tableParseError(
   table: SyntaxTable,
   site: SyntaxSite,
   dialect?: Dialect,
-): TranslateError | undefined {
+): { error: TranslateError; offset: number } | undefined {
   // The default row by identity first: a plain project pays one comparison.
   if (table === DEFAULT_ROW || syntaxHash(table) === defaultSyntaxHash()) {
     return undefined;
   }
-  let found:
-    | {
-        start: number;
-        message: string;
-        code: MxDiagnosticCode;
-        template: boolean;
-      }
-    | undefined;
-  const consider = (
-    start: number,
-    message: string,
-    code: MxDiagnosticCode = NO_LOWERING_CODE,
-    template = false,
-  ) => {
-    if (!found || start < found.start) {
-      found = { start, message, code, template };
-    }
+  let found: { start: number; message: string } | undefined;
+  const consider = (start: number, message: string) => {
+    if (!found || start < found.start) found = { start, message };
   };
-  for (const error of document.errors ?? []) {
-    // A template parse error keeps the parser's own code.
-    if (error.origin === "template") {
-      consider(
-        error.start,
-        error.message,
-        parseDiagnosticCode(error.code) ?? NO_LOWERING_CODE,
-        true,
-      );
-    }
-  }
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
     if (value === null || typeof value !== "object" || seen.has(value)) return;
@@ -1478,12 +1453,15 @@ export function tableParseError(
   };
   visit(document.body);
   if (!found) return undefined;
-  // A template parse error comes first in the file: it is the parse error of
-  // the default row too, so the caller raises it the way it raises that one
-  // (`compileErrorOf`: Marko's `CompileError`, with its `loc`, `filename`,
-  // code frame and shifted fragment positions), not as a bare positioned
-  // `TranslateError` that only this table's files would carry.
-  if (found.template) return undefined;
   const { line, column } = filePosition(document, found.start);
-  return codedError(found.code, found.message, line, column, site.filename);
+  return {
+    error: codedError(
+      NO_LOWERING_CODE,
+      found.message,
+      line,
+      column,
+      site.filename,
+    ),
+    offset: found.start - (document.base?.offset ?? 0),
+  };
 }

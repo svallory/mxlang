@@ -9,7 +9,9 @@
  * non-default table and compares the two error objects field by field, then
  * pins the numbers, so the comparison cannot pass on two equally wrong
  * errors. A table-caused error that is not a parse error ("has no lowering
- * yet") keeps its own shape, and the first error in the file still wins.
+ * yet") keeps its own shape, and the first error in the file wins, whichever
+ * kind it is (a parse error, a front-end rule error, an expression error, or
+ * the table's).
  */
 import { describe, expect, it } from "vitest";
 import { compileSource } from "./compile.ts";
@@ -280,5 +282,73 @@ describe("an error the table causes that is not a parse error keeps its shape", 
     );
     expect(parse.name).toBe("CompileError");
     expect(locOf(parse).start).toEqual({ line: 2, column: 0, index: 6 });
+  });
+
+  // Errors the parser reports that are not template parse errors: a front-end
+  // rule error and a shorthand error (both ways), an expression error (a
+  // compile only: a fragment keeps expression errors in the tree).
+  const TRIGGER = "x=() => &status\n";
+  const NO_LOWERING = "`member` trigger has no lowering yet";
+  describe.each([
+    {
+      name: "a shorthand that repeats an id",
+      error: '<div#a id="b"/>\n',
+      code: "MX_INVALID_SHORTHAND",
+      at: { line: 1, column: 7, index: 7 },
+      runs: [viaFragment, viaCompile],
+    },
+    {
+      name: "an attribute tag at the root",
+      error: "<@a/>\n",
+      code: "MX_ATTRIBUTE_TAG_AT_ROOT",
+      at: { line: 1, column: 1, index: 1 },
+      runs: [viaFragment, viaCompile],
+    },
+    {
+      name: "an expression error",
+      error: "<div x=(1+)/>\n",
+      code: "MX_PARSE_EXPRESSION",
+      at: { line: 1, column: 10, index: 10 },
+      runs: [viaCompile],
+    },
+  ])("$name", ({ error, code, at, runs }) => {
+    it.each(runs.map((run) => [run.name, run] as const))(
+      "comes first: its error, not the trigger's (%s)",
+      (_n, run) => {
+        const thrownError = run(error + TRIGGER, MEMBER_TABLE) as Error & {
+          diagnosticCode: string;
+        };
+        expect(thrownError.name).toBe("CompileError");
+        expect(thrownError.diagnosticCode).toBe(code);
+        expect(locOf(thrownError).start).toEqual(at);
+      },
+    );
+
+    it.each(runs.map((run) => [run.name, run] as const))(
+      "comes after the trigger: the trigger's error (%s)",
+      (_n, run) => {
+        const thrownError = run(TRIGGER + error, MEMBER_TABLE);
+        expect(isTranslateError(thrownError)).toBe(true);
+        expect(thrownError.message).toBe(NO_LOWERING);
+        expect(thrownError).toMatchObject({ line: 1, column: 8, file: FILE });
+      },
+    );
+  });
+
+  it("a region fragment compares in the fragment's own offsets, base aside", () => {
+    const base: Base = { baseOffset: 40, baseLine: 4, baseColumn: 10 };
+    const first = viaFragment(
+      `<div#a id="b"/>\n${TRIGGER}`,
+      MEMBER_TABLE,
+      base,
+    );
+    expect(first.name).toBe("CompileError");
+    expect(locOf(first).start).toEqual({ line: 5, column: 17, index: 47 });
+    const later = viaFragment(
+      `${TRIGGER}<div#a id="b"/>\n`,
+      MEMBER_TABLE,
+      base,
+    );
+    expect(later.message).toBe(NO_LOWERING);
   });
 });

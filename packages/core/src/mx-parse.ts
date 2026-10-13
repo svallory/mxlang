@@ -291,6 +291,22 @@ const MARKO_PARSER_RULES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Where the first error `compileErrorOf` returned starts: the least
+ * `loc.start.index` of the error, or of the `errors` an aggregate carries
+ * (the fragment's own offsets). `undefined` when none is positioned.
+ */
+export function firstErrorAt(error: Error): number | undefined {
+  const all = (error as { errors?: Error[] }).errors ?? [error];
+  let least: number | undefined;
+  for (const each of all) {
+    const at = (each as { loc?: { start?: { index?: number } } }).loc?.start
+      ?.index;
+    if (at !== undefined && (least === undefined || at < least)) least = at;
+  }
+  return least;
+}
+
+/**
  * The error `@marko/compiler` threw for the document's parse errors, or
  * `undefined`. Marko's parse threw at the first template error (a
  * `CompileErrors` aggregate of the expression errors before it and the

@@ -48,6 +48,7 @@ import type { Ir } from "./ir.ts";
 import { lower } from "./lower.ts";
 import {
   compileErrorOf,
+  firstErrorAt,
   parseMx,
   registerDocument,
   stripMxTypes,
@@ -575,10 +576,15 @@ export function compileSource(
       { filename },
       resolvedSyntax.dialect,
     );
-    if (tableError) throw tableError;
     const parseError = compileErrorOf(document, filename, {
       expressionErrors: true,
     });
+    // The first error in the file wins, whichever kind it is: the table's
+    // (nothing lowers a construct) when it starts before the parse error.
+    const parseAt = parseError ? firstErrorAt(parseError) : undefined;
+    if (tableError && (parseAt === undefined || tableError.offset < parseAt)) {
+      throw tableError.error;
+    }
     if (parseError) throw parseError;
     if (host.stripTypes !== false) stripMxTypes(document);
     registerDocument(document);
