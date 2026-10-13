@@ -465,13 +465,7 @@ export function emitModuleWithMappings(
       for (const name of body.runtimeImports) {
         emitter.runtimeImports.add(name);
       }
-      statements.push(
-        concatMapped(
-          `const ${node.name} = (${node.params.join(", ")}) => (<>`,
-          closeFragmentBody(rendered),
-          "</>);",
-        ),
-      );
+      statements.push(emitter.defineStatement(node, rendered));
     } else {
       markup.push(node);
     }

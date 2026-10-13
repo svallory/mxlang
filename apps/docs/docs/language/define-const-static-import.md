@@ -83,6 +83,16 @@ A named, reusable template fragment, callable like any other tag:
 
 `<define>` fragments take the same tag params and attribute tags as any other tag call. A call with attributes passes one attribute object to the first parameter (decision 160), so destructure it as `|{ label, color }|`; a second parameter never receives an attribute.
 
+A `<define>` tag's own attributes are properties of its value, so `${Badge.color}` below reads `"green"`:
+
+```html
+<define/Badge color="green"/>
+
+<p>${Badge.color}</p>
+```
+
+They are evaluated where the `<define>` is written, outside its params, and a spread (`<define/Badge ...input.theme/>`) keeps its place. `content` is the body, so it is not available as an attribute on a `<define>` that has one. Solid and Angular refuse a `<define>` with attributes, and Astro has no `<define>`; see the [specification](/specification/).
+
 ## A name that shadows `input`
 
 A `<const>` (or `<let>`) binding named `input` at the top level of a template is rejected: it would shadow the parameter every compiled render function already has. A *tag param* named `input` — `<for|input|>`, `<define/Row|input|>` — is fine, because it opens a genuinely nested scope. See [Errors](/language/errors/).

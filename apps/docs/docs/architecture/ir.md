@@ -25,7 +25,7 @@ Every kind carries a source position (`loc`, the start of the construct), which 
 | `Component` | A component call: attributes, children, attribute tags, tag params |
 | `IfChain` | The whole `<if>` / `<else-if>` / `<else>` chain as a list of branches |
 | `For` | Any `<for>` form — its source is `of`, `in`, or a `range` (with an optional `step`) — plus the resolved `key` |
-| `Define` | A `<define>`, with its name and params |
+| `Define` | A `<define>`, with its name, params and `attrs` (the tag's own attributes, properties of its value) |
 | `Const` | A `<const>` binding: name and initializer |
 | `DelegatedTag` | A tag this host claimed, with whatever `resolveDelegatedTag` recorded in its `data` slot |
 | `DocumentType` | `<!doctype html>` |

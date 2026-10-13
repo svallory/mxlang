@@ -16,6 +16,7 @@ import {
   type Ctx,
   contractDefaultTag,
   DYNAMIC_TAG,
+  defineAttrRead,
   type Emitter,
   type Expr,
   exportNameFor,
@@ -2614,6 +2615,17 @@ class AngularEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
+    // Marko makes a `<define>`'s attributes properties of its value (`${D.a}`),
+    // but this host's define is a template reference (`#D`), which is not an
+    // object a template expression can read a property from. Dropping them
+    // would compile and read `undefined`.
+    if (node.attrs.length > 0) {
+      fail(
+        `attributes on \`<define/${node.name}>\` are not supported in an Angular template: \`#${node.name}\` is a template reference, so ${defineAttrRead(node.name, node.attrs)} cannot be read. Pass the value as a param (\`<define/${node.name}|value|>\`) or declare it in the component class`,
+        node.attrs[0] ?? node,
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
+    }
     // A bare `let-x` binds `$implicit`, so emitting one per param gives every
     // param the *first* outlet argument — `${v}` reads the key, silently, with
     // `ng build` green because a `let-` variable is implicitly `any`. The

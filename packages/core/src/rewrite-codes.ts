@@ -61,7 +61,10 @@ export function rewriteCodes(
       bound.length === 0 ? shadowed : new Set([...shadowed, ...bound]);
     for (const [key, child] of Object.entries(record)) {
       if (key === "node") continue;
-      visit(child, here, key === "source" ? shadowed : inner);
+      // A `<define>`'s attributes are written outside its params' scope.
+      const outside =
+        key === "source" || (key === "attrs" && record.kind === "Define");
+      visit(child, here, outside ? shadowed : inner);
     }
   };
   visit(nodes, { line: 0, column: 0 }, new Set());

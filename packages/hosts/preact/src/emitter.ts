@@ -27,6 +27,7 @@ import {
   type AttrTagProp,
   concatMapped,
   contractDefaultTag,
+  defineValueWrapper,
   drive,
   type Emitter,
   type Expr,
@@ -1653,6 +1654,47 @@ export class PreactEmitter implements Emitter<string> {
     );
   }
 
+  /** The object-literal entries of a tag's attributes, spreads included. */
+  #propParts(attrs: readonly Attr[]): string[] {
+    return attrs.map((attr) =>
+      attr.kind === "spread"
+        ? `...${attr.value.code}`
+        : // A component's props are its author's `Input` contract, so names
+          // are never renamed here — the same rule `#attrName(name, true)`
+          // applies.
+          `${JSON.stringify(attr.name)}: ${this.#attrValue(attr)}`,
+    );
+  }
+
+  /**
+   * A `<define>` as the statement that declares it: a local function
+   * returning `rendered` (its body, already emitted as JSX children).
+   *
+   * Marko makes the tag's attributes properties of the define's value
+   * (`<define/D a=1/>` is `const D = { a: 1 }`, and `${D.a}` reads `1`), so
+   * they ride on the function as own properties.
+   */
+  defineStatement(
+    node: Extract<IrNode, { kind: "Define" }>,
+    rendered: MappedCode,
+  ): MappedCode {
+    const fn = concatMapped(
+      `(${node.params.join(", ")}) => (<>`,
+      closeFragmentBody(rendered),
+      "</>)",
+    );
+    if (node.attrs.length === 0) {
+      return concatMapped(`const ${node.name} = `, fn, ";");
+    }
+    const { open, between } = defineValueWrapper(node.attrs);
+    return concatMapped(
+      `const ${node.name} = ${open}`,
+      fn,
+      between,
+      `{ ${this.#propParts(node.attrs).join(", ")} });`,
+    );
+  }
+
   /**
    * One call's props as an object literal, for a call that is *invoked*.
    *
@@ -1684,15 +1726,7 @@ export class PreactEmitter implements Emitter<string> {
         : node.target.kind === "define"
           ? undefined
           : (node.target.binding ?? componentAlias(node.target.name));
-    for (const attr of node.attrs) {
-      if (attr.kind === "spread") {
-        parts.push(`...${attr.value.code}`);
-        continue;
-      }
-      // A component's props are its author's `Input` contract, so names are
-      // never renamed here — the same rule `#attrName(name, true)` applies.
-      parts.push(`${JSON.stringify(attr.name)}: ${this.#attrValue(attr)}`);
-    }
+    parts.push(...this.#propParts(node.attrs));
 
     for (const prop of node.attrTagProps) {
       parts.push(
@@ -2262,11 +2296,7 @@ export class PreactEmitter implements Emitter<string> {
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
       this.#region.defines.push(
-        concatMapped(
-          `const ${node.name} = (${node.params.join(", ")}) => (<>`,
-          closeFragmentBody(this.#render(node.children, true)),
-          "</>);",
-        ),
+        this.defineStatement(node, this.#render(node.children, true)),
       );
       return;
     }

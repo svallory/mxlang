@@ -42,6 +42,7 @@ import {
   type ComponentTarget,
   concatMapped,
   type DelegatedTag,
+  defineValueWrapper,
   drive,
   type Emitter,
   type Expr,
@@ -1206,7 +1207,24 @@ export function createEmitter(
 
     define(node) {
       const fn = blockFunction(node.children, node.params.join(", "));
-      push(concatMapped(`const ${node.name} = `, fn, ";"));
+      if (node.attrs.length === 0) {
+        push(concatMapped(`const ${node.name} = `, fn, ";"));
+        return;
+      }
+      // Marko: the tag's attributes are properties of the define's value
+      // (`const D = { a: 1, content }`), so `${D.a}` reads them. The value here
+      // is the function a call runs, which carries them as own properties.
+      const { open, between } = defineValueWrapper(node.attrs);
+      push(
+        concatMapped(
+          `const ${node.name} = ${open}`,
+          fn,
+          between,
+          "{ ",
+          joinParts(propPartsOfAttrs(node.attrs)),
+          " });",
+        ),
+      );
     },
 
     constant(node) {

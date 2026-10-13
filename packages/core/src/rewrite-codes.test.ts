@@ -71,6 +71,22 @@ describe("rewriteCodes scopes (E11)", () => {
     expect(shadowedAt(body).inside).toEqual(["x", "y"]);
   });
 
+  it("does not shadow Define.params in the define's own attributes", () => {
+    const body = [
+      {
+        kind: "Define",
+        name: "Row",
+        params: ["x"],
+        attrs: [{ kind: "dynamic", name: "a", value: expr("outside"), loc }],
+        children: [{ kind: "Interpolation", expr: expr("inside"), loc }],
+        loc,
+      },
+    ] as unknown as IrNode[];
+    const seen = shadowedAt(body);
+    expect(seen.outside).toEqual([]);
+    expect(seen.inside).toEqual(["x"]);
+  });
+
   it("a Const shadows its own name for the siblings after it, not before", () => {
     const body = [
       { kind: "Interpolation", expr: expr("before"), loc },

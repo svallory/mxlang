@@ -63,6 +63,8 @@ export {
   type Disposition,
   DYNAMIC_TAG,
   declName,
+  defineAttrRead,
+  defineValueWrapper,
   expr,
   type FailOptions,
   fail,

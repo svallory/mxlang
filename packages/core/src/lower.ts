@@ -3359,6 +3359,12 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   const name = declName(ctx, tagVarOf(node));
   const params = paramsOf(ctx, node);
 
+  // The attributes are properties of the define's value, evaluated where the
+  // `<define>` is written: the params are the body's, so they are lowered
+  // before the params shadow anything (Marko: `<define/D|x| a=x>` reads the
+  // `x` outside).
+  const attrs = lowerAttrs(ctx, node, "define", "component");
+
   // The params shadow the host's bindings inside the body only, and a
   // statement hoisted from inside belongs to *this* function's head — it may
   // read the define's own params.
@@ -3376,6 +3382,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   );
   restore();
   unscope();
+  rejectContentAttrWithBody(node, attrs, children.length > 0);
 
   ctx.defines.set(name, params);
   ctx.bindingSites.set(name, {
@@ -3397,9 +3404,36 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
+    attrs,
     children: [...hoisted, ...children],
     loc,
   };
+}
+
+/**
+ * A `<define>` with a body also has a `content` property: the body. Marko
+ * writes the body last, so `<define/D content="x">body</define>` compiles and
+ * silently discards the attribute. The same would-be silent drop is refused
+ * here, at the attribute; `content` with no body is an ordinary property.
+ */
+function rejectContentAttrWithBody(
+  node: Node,
+  attrs: readonly Attr[],
+  hasBody: boolean,
+): void {
+  if (!hasBody) return;
+  const lowered = attrs.find(
+    (attr) => attr.kind !== "spread" && attr.name === "content",
+  );
+  if (!lowered) return;
+  raise(
+    INVALID_DEFINE_CODE,
+    "`content` is the body of a `<define>` that has one; rename the attribute, or remove the body",
+    tagAttributesOf(node).find(
+      (authored: Node) =>
+        !isSpreadAttributeNode(authored) && attrNameOf(authored) === "content",
+    ) ?? node,
+  );
 }
 
 /**

@@ -757,6 +757,12 @@ describe("unsupported constructs", () => {
     );
   });
 
+  it("rejects <define> with attributes the same way, not by dropping them", () => {
+    expect(errorFor('<define/Row n=1 label="x"/>').message).toBe(
+      "`<define>` is not supported in embedded MX on Astro. Extract it into its own `.astro.mx` file and import it: an Astro template has no local component form.",
+    );
+  });
+
   it("rejects <try>, which Astro has no error boundary for", () => {
     expect(errorFor("<try><p>x</p></try>").message).toBe(
       "`<try>` is not supported in embedded MX on Astro. Astro renders components statically at build time and has no error boundary.",

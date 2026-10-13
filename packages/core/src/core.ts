@@ -48,7 +48,7 @@ import {
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import { handleNode } from "./host-handle.ts";
-import type { Atom, Expr, IrNode, Position } from "./ir.ts";
+import type { Atom, Attr, Expr, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
@@ -2085,6 +2085,44 @@ export function attrByName(node: Node, name: string): Node | undefined {
 
 export function propKey(name: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : quote(name);
+}
+
+/**
+ * The text a host writes around a `<define>`'s function to give it the tag's
+ * attributes as properties: `Object.assign(<function>, { a: 1 })`, in the
+ * shape `{ open, between }` so the host keeps its own mapped function and
+ * property text between them (`open + function + between + "{ ... })"`).
+ *
+ * A function's own `name` and `length` are read-only, and `Object.assign`
+ * throws on them in strict code, so a define with an attribute of either name
+ * (or a spread, whose keys are unknown) first makes them writable. Marko's
+ * define value is a plain object, where `<define/D name="x"/>` is fine.
+ */
+export function defineValueWrapper(attrs: readonly Attr[]): {
+  open: string;
+  between: string;
+} {
+  const risky = attrs.some(
+    (attr) =>
+      attr.kind === "spread" || attr.name === "name" || attr.name === "length",
+  );
+  return risky
+    ? {
+        open: "Object.assign(Object.defineProperties(",
+        between:
+          ", { name: { writable: true }, length: { writable: true } }), ",
+      }
+    : { open: "Object.assign(", between: ", " };
+}
+
+/**
+ * What a host that cannot give a `<define>` properties names in its refusal:
+ * the first attribute read (`` `D.a` ``), or the properties in general when
+ * the attributes are all spreads.
+ */
+export function defineAttrRead(name: string, attrs: readonly Attr[]): string {
+  const first = attrs.find((attr) => attr.kind !== "spread");
+  return first ? `\`${name}.${first.name}\`` : "its properties";
 }
 
 /**

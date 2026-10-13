@@ -48,6 +48,35 @@ describe("Define", () => {
     ]);
   });
 
+  it("rejects attributes on a `<define>` instead of silently dropping them", () => {
+    // Marko makes them properties of the define's value (`${Row.n}`); here the
+    // value is a template reference, which a template expression cannot read a
+    // property from, so the compile used to succeed and `{{ Row.n }}` read
+    // `undefined`. A positioned error at the first attribute.
+    const source = '<define/Row n=1 label="x"><b>${label}</b></define>';
+    try {
+      emit(source);
+      throw new Error("expected compile to fail");
+    } catch (error) {
+      const thrown = error as Error & {
+        line: number;
+        column: number;
+        diagnosticCode?: string;
+      };
+      expect(thrown.message).toBe(
+        "attributes on `<define/Row>` are not supported in an Angular template: `#Row` is a template reference, so `Row.n` cannot be read. Pass the value as a param (`<define/Row|value|>`) or declare it in the component class",
+      );
+      expect(thrown.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect([thrown.line, thrown.column]).toEqual([1, source.indexOf("n=1")]);
+    }
+  });
+
+  it("rejects a spread on a `<define>` too, naming its properties", () => {
+    expect(() => emit("<define/Row ...input.rest>x</define>")).toThrow(
+      "so its properties cannot be read",
+    );
+  });
+
   it("invokes a define with no args", () => {
     const out = emit("<define/Empty>hi</define><Empty()/>");
     expect(out).toBe(

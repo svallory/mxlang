@@ -1485,9 +1485,25 @@ it calls an `import` of the same name, and with no such binding it is an
 unresolved tag. Inside the body the define wins over an import of the same
 name. A top-level `<define>` is visible in every body after it.
 
+**A `<define>` tag's own attributes are properties of its value.**
+`<define/D a=1 b="s"/>` makes `${D.a}` read `1` and `${D.b}` read `"s"`, as
+Marko 6.4.4 does (`const D = { a: 1, b: "s" }`). The attributes follow the
+rules of any tag's attributes (a spread keeps its place, a repeated name is
+last-wins, `a:=x` is its initial value) and are evaluated where the `<define>`
+is written, outside its params: in `<define/D|x| a=x>` the `x` is the one
+outside. A `<let>` written in one is refused like in any attribute
+(`MX_LET_WRITE_IN_RENDER`). A body is the define's `content`, so `content` as
+an attribute is refused when the define has a body and is an ordinary property
+when it has none. On html, preact, react and hono the attributes are own
+properties of the function a call runs. Solid and Angular refuse a `<define>`
+with attributes (`MX_UNSUPPORTED_CONSTRUCT` on Angular): their define is a
+hoisted function or a template reference, which a template expression cannot
+read a property from, and Astro has no `<define>` at all.
+
 | Message | When |
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
+| `` `content` is the body of a `<define>` that has one; rename the attribute, or remove the body `` | A `content` attribute and a body on one `<define>` (`MX_INVALID_DEFINE`). |
 
 **On html, preact, react, hono and Solid, a `<define>` called with attributes and no
 arguments passes one attribute object to its first parameter (decision 160),**

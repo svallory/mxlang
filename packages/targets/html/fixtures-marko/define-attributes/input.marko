@@ -1,0 +1,12 @@
+<define/A a=1 b="s" data-x=(input.n + 1) c/>
+<define/B n=input.n><i>b</i></define>
+<define/C name="nm" ...input.rest k=2/>
+<define/D content="c"/>
+<define/F ...input.rest/>
+
+<p>${A.a} ${A.b} ${A["data-x"]} ${typeof A.c}</p>
+<p>${B.n}</p>
+<B/>
+<p>${C.name} ${C.z} ${C.k}</p>
+<p>${D.content}</p>
+<p>${F.z}</p>

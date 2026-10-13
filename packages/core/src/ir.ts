@@ -806,6 +806,15 @@ export type IrNode =
        * node carries no `loc`.
        */
       paramSpans?: Array<SourceSpan | undefined>;
+      /**
+       * The tag's own attributes, resolved like a component call's: Marko
+       * lowers `<define/D a=1 b="s"/>` to `const D = { a: 1, b: "s" }`, so
+       * they are properties of the define's value (`${D.a}` reads `1`).
+       * Evaluated where the `<define>` is written, outside the params' scope.
+       * A `content` attribute never rides along with a body: core refuses it,
+       * since the body is `content`.
+       */
+      attrs: Attr[];
       children: IrNode[];
     } & IrBase)
   | ({

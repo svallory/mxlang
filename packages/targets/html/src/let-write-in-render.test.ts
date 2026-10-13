@@ -62,6 +62,16 @@ describe("the html target's default policy", () => {
       "count++",
     ],
     [
+      "a `<define>` attribute",
+      "<let/count=0/>\n<define/D a=(count++)/>\n<p>${D.a}</p>\n",
+      "count++",
+    ],
+    [
+      "a `<define>` spread",
+      "<let/count=0/>\n<define/D ...(count = {})/>\n",
+      "count = {}",
+    ],
+    [
       "a class method",
       "<let/count=0/>\n<p>${class { bump() { count++ } }}</p>\n",
       "count++",
@@ -83,6 +93,10 @@ describe("the html target's default policy", () => {
     ["a function called in a placeholder", "<p>${(() => { count++ })()}</p>"],
     ["a `<script>` body", "<script>count++</script>"],
     ["a shadowing parameter", "<p>${((count) => count++)(1)}</p>"],
+    [
+      "a function in a `<define>` attribute",
+      "<define/D bump=(() => count++)/>",
+    ],
     ["a read", "<p>${count}</p>"],
     ["a `<log>` read", "<log=(count)/>"],
     ["a function in a `<lifecycle>`", "<lifecycle onMount=(() => count++)/>"],

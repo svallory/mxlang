@@ -9,6 +9,7 @@ import {
   cloneIr,
   concatMapped,
   contractDefaultTag,
+  defineAttrRead,
   destructuredNames,
   drive,
   type Emitter,
@@ -2842,6 +2843,16 @@ export class SolidEmitter implements Emitter<string> {
       fail(
         "`<define>` cannot declare a function inside a JSX expression; declare it in the surrounding TypeScript module",
         node,
+      );
+    }
+    // Marko makes a `<define>`'s attributes properties of its value (`${D.a}`),
+    // but this host hoists the define to a module-level function under a
+    // generated name, and a template expression's `D` is not rewritten to it.
+    // Dropping them would compile and read `undefined`.
+    if (node.attrs.length > 0) {
+      fail(
+        `attributes on \`<define/${node.name}>\` are not supported in embedded MX on Solid: the define is hoisted to a function, so ${defineAttrRead(node.name, node.attrs)} cannot be read. Pass the value as a param (\`<define/${node.name}|value|>\`) or declare it in the surrounding TypeScript module`,
+        node.attrs[0] ?? node,
       );
     }
     if (lazyScope) {
