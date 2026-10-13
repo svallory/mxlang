@@ -3,7 +3,7 @@
  * `/var` binds what the called unit returns with `<return>`; a unit that
  * declares none leaves the binding `undefined` forever. Marko 6.4 refuses the
  * call at compile time, at the tag variable, and so does MX: on a discovered
- * tag, on an imported `.mx` unit, with the `ir-entry` data path unchanged.
+ * tag, on an imported `.mx` unit, and on a contract-only tag in the `ir-entry` data path.
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -236,8 +236,8 @@ describe("/var on a bare-identifier dynamic tag", () => {
   });
 });
 
-describe("the data path (`none` preset) is unchanged", () => {
-  it("still refuses a tag variable on a contract-only tag, with its own wording, at the variable", () => {
+describe("the data path (`none` preset) blames the variable too", () => {
+  it("refuses a tag variable on a contract-only tag, with its own wording, at the variable", () => {
     const { diagnostics } = lowerData("<panel/v/>\n", "/t.mx", {
       customTags: { panel: {} },
       tagRules: "none",
@@ -245,6 +245,8 @@ describe("the data path (`none` preset) is unchanged", () => {
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]).toMatchObject({
       code: "MX_INVALID_TAG_VAR",
+      message:
+        "`/var` on `<panel>` is not supported: it has no template, so it has no `<return>` to bind",
       line: 1,
       column: 7,
       end: { line: 1, column: 8 },
