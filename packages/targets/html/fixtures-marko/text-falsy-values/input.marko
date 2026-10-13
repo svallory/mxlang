@@ -5,11 +5,9 @@
 <const/vals=[input.f, nan, zeroBig, oneBig, input.t, input.z, input.nz, negZero, input.n, input.u, input.e, input.s]/>
 
 <div>[${input.f}][${nan}][${zeroBig}][${oneBig}][${input.t}][${input.z}][${input.nz}][${negZero}][${input.n}][${input.u}][${input.e}][${input.s}]</div>
-<p>[$!{input.f}][$!{nan}][$!{zeroBig}][$!{oneBig}][$!{input.t}][$!{input.z}][$!{input.nz}][$!{negZero}][$!{input.n}][$!{input.u}][$!{input.e}][$!{input.s}]</p>
 <ul><for|v| of=vals><li>[${v}]</li></for></ul>
-<ol><for|v| of=vals><li>[$!{v}]</li></for></ol>
 <if=true><b>[${nan}][${zeroBig}][${input.f}]</b></if>
 <else><i>never</i></else>
 <span class=["a", input.f && "b"] data-x=nan data-y=zeroBig data-z=input.f data-w=input.z>attrs</span>
 -- [${input.f}][${nan}][${zeroBig}]
--- [${input.z}][${oneBig}][$!{input.f}][$!{input.n}]
+-- [${input.z}][${oneBig}]

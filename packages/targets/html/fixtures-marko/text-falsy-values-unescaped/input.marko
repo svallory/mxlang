@@ -1,0 +1,12 @@
+<const/nan=(input.z / input.z)/>
+<const/zeroBig=BigInt(input.z)/>
+<const/oneBig=BigInt(input.one)/>
+<const/negZero=-input.z/>
+<const/vals=[input.f, nan, zeroBig, oneBig, input.t, input.z, input.nz, negZero, input.n, input.u, input.e, input.s]/>
+
+<p>$!{input.f}</p>
+<p>$!{nan}</p>
+<p>$!{input.n}</p>
+<p>$!{input.u}</p>
+<p>$!{negZero}</p>
+<ol><for|v| of=vals><li>$!{v}</li></for></ol>
