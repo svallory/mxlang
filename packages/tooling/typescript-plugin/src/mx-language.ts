@@ -407,13 +407,21 @@ export function createMxLanguagePlugin(
     const recordedOnly =
       descriptor.mappings === "merge-recorded" ||
       (hostPolicy.descriptor !== undefined && !descriptor.declarations);
+    const recorded = recordedOnly
+      ? recordedMappings(compiled.mappings ?? [])
+      : [];
     const mappings = recordedOnly
       ? mergeMappings(
           [
+            // The decoded map pairs text by equality; where the host recorded
+            // a mapping itself, that one is authoritative and the guess goes.
             ...(compiled.map
-              ? decodeMappings(compiled.map, generated, source)
+              ? withoutOverlaps(
+                  decodeMappings(compiled.map, generated, source),
+                  recorded,
+                )
               : []),
-            ...recordedMappings(compiled.mappings ?? []),
+            ...recorded,
           ].sort(
             (left, right) =>
               (left.generatedOffsets[0] ?? 0) -
@@ -580,6 +588,49 @@ export function createHtmlMappings(
         (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
     ),
   );
+}
+
+/**
+ * The mappings of `guesses` whose generated range overlaps no mapping of
+ * `authoritative`. A sweep over the authoritative mappings sorted by start,
+ * with a running maximum end, so it costs O((n + m) log n).
+ */
+function withoutOverlaps(
+  guesses: readonly CodeMapping[],
+  authoritative: readonly CodeMapping[],
+): CodeMapping[] {
+  if (authoritative.length === 0) return [...guesses];
+  const spans = authoritative
+    .map((mapping) => {
+      const from = mapping.generatedOffsets[0] ?? 0;
+      return {
+        from,
+        to: from + (mapping.generatedLengths?.[0] ?? mapping.lengths[0] ?? 0),
+      };
+    })
+    .sort((left, right) => left.from - right.from);
+  const furthestEnd: number[] = [];
+  let furthest = Number.NEGATIVE_INFINITY;
+  for (const span of spans) {
+    furthest = Math.max(furthest, span.to);
+    furthestEnd.push(furthest);
+  }
+  return guesses.filter((guess) => {
+    const start = guess.generatedOffsets[0] ?? 0;
+    const end = start + (guess.generatedLengths?.[0] ?? guess.lengths[0] ?? 0);
+    // The spans starting before `end` are a prefix; one of them overlaps when
+    // the furthest of their ends is past `start`.
+    let low = 0;
+    let high = spans.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if ((spans[middle]?.from ?? 0) < end) low = middle + 1;
+      else high = middle;
+    }
+    return (
+      low === 0 || (furthestEnd[low - 1] ?? Number.NEGATIVE_INFINITY) <= start
+    );
+  });
 }
 
 function recordedMappings(

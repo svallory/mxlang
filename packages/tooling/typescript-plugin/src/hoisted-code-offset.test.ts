@@ -36,6 +36,7 @@ describe.each(HOSTS)("static statement offsets on %s", (dir) => {
     ["static i\n<div/>", "i", 7],
     ["static c\n<div/>", "c", 7],
     ["static a = 1\n<div/>", "a = 1", 7],
+    ["static styles = 1\n<div/>", "styles = 1", 7],
     ["static   a\n<div/>", "a", 9],
     ["static\ta\n<div/>", "a", 7],
     ["static { a }\n<div/>", "a", 9],
@@ -48,15 +49,7 @@ describe.each(HOSTS)("static statement offsets on %s", (dir) => {
     ["static const a = 1\n<div/>", "const a = 1", 7],
   ];
 
-  // A Solid page also merges the text-equality decode of its whole-file source
-  // map, which pairs the generated `s` at offset 0 with the `s` that starts
-  // `static`. That is a different mechanism from the statement mapping this
-  // file pins, so the `s` case is left out for Solid.
-  const applicable = cases.filter(
-    ([source]) => !(dir === "solid-policy" && source === "static s\n<div/>"),
-  );
-
-  it.each(applicable)("maps %j after the keyword", (source, code, offset) => {
+  it.each(cases)("maps %j after the keyword", (source, code, offset) => {
     const { generated, mappings, toSource } = virtual(dir, source);
     const mapping = mappings.find(
       (candidate) => candidate.sourceOffsets[0] === offset,
@@ -77,15 +70,18 @@ describe.each(HOSTS)("static statement offsets on %s", (dir) => {
   });
 });
 
-describe("static statement offsets after a leading statement", () => {
-  it("maps the second static block, not the first one's text", () => {
-    const source = "static a\nstatic s\n<div/>";
-    const { generated, mappings } = virtual("html-tags", source);
-    const offsets = mappings.map((mapping) => mapping.sourceOffsets[0]);
-    expect(offsets).toEqual([7, 16]);
-    expect(generated).toContain("a\ns");
-  });
-});
+describe.each(HOSTS)(
+  "static statement offsets after a leading statement on %s",
+  (dir) => {
+    it("maps the second static block, not the first one's text", () => {
+      const source = "static a\nstatic s\n<div/>";
+      const { generated, mappings } = virtual(dir, source);
+      const offsets = mappings.map((mapping) => mapping.sourceOffsets[0]);
+      expect(offsets).toEqual([7, 16]);
+      expect(generated).toContain("a\ns");
+    });
+  },
+);
 
 describe("server and client statements never map into their keyword", () => {
   const sources = [
