@@ -727,15 +727,19 @@ describe("what is not a stale read", () => {
       "  items = [];\n  log(class { m() { return total } });",
     ],
     [
-      "a `<const>` write is not a write of a `<let>`",
-      "  total = 1;\n  log(total);",
-    ],
-    [
       "a read after a write that sits only in an earlier loop iteration's sibling function",
       "  const reset = () => { items = [] };\n  log(total);",
     ],
   ])("%s", (_name, statements) => {
     expect(attempt(handler(statements))).toBeUndefined();
+  });
+
+  it("a `<const>` write is a write to a `<const>`, not to a `<let>`", () => {
+    const error = attempt(handler("  total = 1;\n  log(total);"));
+    expect(error?.diagnosticCode).toBe("MX_READONLY_BINDING_WRITE");
+    expect(error?.message).toMatch(
+      /^`total` is a `<const>` and cannot be written/,
+    );
   });
 
   it.each([

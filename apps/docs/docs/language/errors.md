@@ -32,6 +32,24 @@ is rejected on the html default policy:
 
 The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, the attributes and arguments of `<log>`, `<debug>`, `<id>`, `<lifecycle>` and `<script>` (not a `<script>` body), the attributes of the `<let>` itself, a `<const>` value, the default of a tag param, and an `<if>` or `<for>` header. A write inside a function, arrow or object method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. `lowerSource` refuses every `<let>` tag variable (a data file has no state) and reports a render write first. See [Stateful tags](/language/stateful-tags/).
 
+## A write to a binding that is not written
+
+```html
+<const/total=1/>
+<button onClick() { total = 2 }>Add</button>
+```
+
+is rejected on the html default policy:
+
+> `total` is a `<const>` and cannot be written. Keep a value that changes in a `<let>` and write that in an event handler or a `<script>` body, or derive a new value with another `<const>`.
+
+The code is `MX_READONLY_BINDING_WRITE`, at the assignment or update with its end. It covers a `<const>` (everywhere: while the template renders, in a handler, in a callback and in a `<script>` body), a `<for>` parameter (value, index and key; everywhere) and a `<define>` parameter (while the template renders only: an event handler or a `<script>` body writes it). A name bound through an object pattern is written through its object and is not refused in a handler or a `<script>` body. A parameter or local that shadows the name is not a write to it.
+
+Two more writes to a `<let>` fail wherever they are:
+
+- `MX_LET_WRITE_BEFORE_DECLARATION`: a `<let>` is written only below its declaration. "`count` is a `<let>` declared below this write, and a `<let>` can only be written below its declaration. Move the `<let>` above this code." A `<let>` in a sibling block is not tracked.
+- `MX_LET_LOOP_ASSIGNMENT`: a `for...of` or `for...in` cannot assign to a `<let>`. "`count` is a `<let>`, so a `for...of` cannot assign to it. Loop into a local variable and assign `count` from it instead." It is positioned at the loop's left side.
+
 ## Module level code that names a render-only name
 
 ```html

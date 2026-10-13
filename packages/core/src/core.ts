@@ -335,6 +335,21 @@ export interface BindingRegistry {
   restore(saved: Array<[string, BindingRewrite]>): void;
 }
 
+/**
+ * A binding that is never written the way a `<let>` is, and where a write to
+ * it is refused (`ctx.writeGuards`, `findBindingWrite`).
+ *
+ * A write while the template renders is refused for every kind. `inFunction`
+ * adds the code that runs later: a handler, a callback, a `<script>` body.
+ * It is set for a `<const>` and a `<for>` parameter bound as a plain name (a
+ * name from an object pattern is written through its object, which Marko
+ * allows) and clear for a `<define>` parameter, which a handler may write.
+ */
+export interface WriteGuard {
+  readonly kind: "const" | "for" | "define";
+  readonly inFunction: boolean;
+}
+
 export interface Ctx {
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
@@ -615,6 +630,24 @@ export interface Ctx {
    * tag rules, where `let` is an ordinary tag.
    */
   renderLets?: ReadonlySet<string>;
+  /**
+   * The bindings in scope that are not a `<let>` and are never written the
+   * way a `<let>` is: a `<const>`, a `<for>` parameter and a `<define>`
+   * parameter, each with where a write to it is refused (`WriteGuard`).
+   * Replaced, never mutated; `scopeBindings` reverts it and `shadowBindings`
+   * drops the names a parameter, a `<const>` or a loop variable rebinds, then
+   * adds the ones it guards. Absent when the file has none.
+   */
+  writeGuards?: ReadonlyMap<string, WriteGuard>;
+  /**
+   * The names of the `<let>` tags declared *below* the node being lowered, in
+   * its own block and in the blocks around it: a `<let>` is written only
+   * below its declaration, so a write to one of these names is refused in
+   * every position. Set per child by `lowerChildList`, which restores it on
+   * the way out; `shadowBindings` drops the names a parameter, a `<const>` or
+   * a loop variable rebinds. Absent when no `<let>` is declared below.
+   */
+  laterLets?: ReadonlySet<string>;
   /**
    * The `<const>`s in scope whose value depends on a `<let>`, each with the
    * `<let>`s it depends on (resolved through other derived `<const>`s when it
@@ -1328,6 +1361,8 @@ export function scopeBindings(
   const saved = ctx.bindings.snapshot();
   const savedShadowed = ctx.tagVarShadowed;
   const savedLets = ctx.renderLets;
+  const savedGuards = ctx.writeGuards;
+  const savedLater = ctx.laterLets;
   const savedDerived = ctx.derivedConsts;
   const savedSites = new Map(ctx.bindingSites);
   const unscopeDefines = defines ? scopeDefines(ctx) : () => {};
@@ -1335,6 +1370,8 @@ export function scopeBindings(
     ctx.bindings.restore(saved);
     ctx.tagVarShadowed = savedShadowed;
     ctx.renderLets = savedLets;
+    ctx.writeGuards = savedGuards;
+    ctx.laterLets = savedLater;
     ctx.derivedConsts = savedDerived;
     // The positions the lowercase-binding diagnostic reads revert with the
     // block too.
@@ -1383,7 +1420,11 @@ export function scopeDefines(ctx: Ctx): () => void {
   };
 }
 
-export function shadowBindings(ctx: Ctx, names: string[]): () => void {
+export function shadowBindings(
+  ctx: Ctx,
+  names: string[],
+  guards?: ReadonlyMap<string, WriteGuard>,
+): () => void {
   const saved: Array<[string, BindingRewrite]> = [];
   for (const name of names) {
     const rewrite = ctx.bindings.get(name);
@@ -1405,6 +1446,19 @@ export function shadowBindings(ctx: Ctx, names: string[]): () => void {
   if (outerLets && names.some((name) => outerLets.has(name))) {
     ctx.renderLets = new Set([...outerLets].filter((n) => !names.includes(n)));
   }
+  // Nor is a `<let>` declared below, or a guarded binding, of that spelling;
+  // the names this site binds that are guarded replace them.
+  const outerGuards = ctx.writeGuards;
+  const outerLater = ctx.laterLets;
+  if (outerLater && names.some((name) => outerLater.has(name))) {
+    ctx.laterLets = new Set([...outerLater].filter((n) => !names.includes(n)));
+  }
+  if (outerGuards?.size || guards?.size) {
+    ctx.writeGuards = new Map([
+      ...[...(outerGuards ?? [])].filter(([name]) => !names.includes(name)),
+      ...(guards ?? []),
+    ]);
+  }
   // Nor is a `<const>` of the same spelling the derived one.
   const outerDerived = ctx.derivedConsts;
   if (outerDerived && names.some((name) => outerDerived.has(name))) {
@@ -1416,6 +1470,8 @@ export function shadowBindings(ctx: Ctx, names: string[]): () => void {
     for (const [name, rewrite] of saved) ctx.bindings.register(name, rewrite);
     ctx.tagVarShadowed = outerShadowed;
     ctx.renderLets = outerLets;
+    ctx.writeGuards = outerGuards;
+    ctx.laterLets = outerLater;
     ctx.derivedConsts = outerDerived;
   };
 }

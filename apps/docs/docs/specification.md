@@ -1622,6 +1622,47 @@ renders is not detected. Hosts and the html `strict` policy refuse `<let>`
 itself, so they never reach this check, and under the `none` tag-rules preset
 `let` is an ordinary tag name.
 
+**Bindings that are never written, and `<let>` writes that fail anywhere.** The
+same walk refuses three more kinds of write, each with the rule and the fix in
+the message and each positioned at the assignment or update with its end (for a
+`for...of` or `for...in`, at the loop's left side):
+
+- A `<const>` is never written (`MX_READONLY_BINDING_WRITE`): while the
+  template renders, in an event handler, in a callback and in a `<script>`
+  body. "`x` is a `<const>` and cannot be written. Keep a value that changes in
+  a `<let>` and write that in an event handler or a `<script>` body, or derive
+  a new value with another `<const>`." The same holds for a `<for>` parameter
+  (value, index and key; "`item` is a `<for>` parameter and cannot be written.
+  Keep a value that changes in a `<let>`, or derive a new value with a
+  `<const>`.").
+- A `<define>` parameter is not written while the template renders (same code;
+  "`a` is a `<define>` parameter and cannot be written while the template
+  renders. Write it in an event handler or a `<script>` body, or derive a value
+  with `<const>`."), but it is written in an event handler or a `<script>`
+  body. A name bound through an object pattern (`<const/{ a, b }=…/>`,
+  `<for|{ a }|…>`) is not refused in a handler or `<script>` body either: the
+  write goes to the object, as in Marko. A name bound through an array pattern
+  is not guarded yet.
+- A `<let>` is written only below its declaration (`MX_LET_WRITE_BEFORE_DECLARATION`),
+  in a placeholder, an event handler or a `<script>` body alike. "`count` is a
+  `<let>` declared below this write, and a `<let>` can only be written below its
+  declaration. Move the `<let>` above this code." A `<let>` declared later in
+  the same block, or later after the block in an enclosing one, counts. A
+  `<let>` declared in a sibling block is not tracked: a handler in one `<div>`
+  that writes a `<let>` declared in another `<div>` compiles (the probe line
+  `let-sibling-block-handler / let-sibling-if ... compiles`).
+- A `for...of` or `for...in` whose left side is a `<let>` is refused
+  (`MX_LET_LOOP_ASSIGNMENT`), also inside a handler: "`count` is a `<let>`, so a
+  `for...of` cannot assign to it. Loop into a local variable and assign `count`
+  from it instead."
+
+A parameter or local of the same spelling shadows the template binding wherever
+it is declared (a handler parameter, a local `let`, `const` or `var`, a catch
+parameter, a function name, a `for (const x of …)` head), a `<for>`, `<define>`
+or `<let>` that declares the name again inside takes over from the outer
+binding, and writing a member (`o.a = 1`) is not a write to the binding. A
+`<script>` body that does not parse is skipped by this check.
+
 **A handler, a `<script>` body or a `<lifecycle>` hook does not read a stale
 `<const>`.** Targets disagree on what a `<const>` shows inside the body that just
 wrote a `<let>` it derives from:

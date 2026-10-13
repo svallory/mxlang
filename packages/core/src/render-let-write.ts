@@ -1,20 +1,32 @@
 /**
- * A write to a `<let>` while the template renders.
+ * A write to a binding that the code at hand may not write.
  *
  * A `<let>` is state: a render reads it, and an event handler or a `<script>`
  * body writes it. A render that writes its own input would need a second
  * render to show the write, which would write again, so no target can run
- * it. Core refuses it before any target sees the file.
+ * it. Core refuses it before any target sees the file. The same walk refuses
+ * the other writes Marko refuses at compile time and a runtime would take
+ * silently:
+ *
+ * - while the template renders: a `<const>`, a `<for>` parameter (value,
+ *   index, key) and a `<define>` parameter;
+ * - in a handler, a callback or a `<script>` body too: a `<const>` and a
+ *   `<for>` parameter, which are never written (a `<define>` parameter is
+ *   written there, and so is a name bound through an object pattern, which is
+ *   written through its object);
+ * - anywhere: a `<let>` above its declaration, and a `for…of` or `for…in`
+ *   whose left side is a `<let>` (a `<let>` is written by assignment, and a
+ *   loop head is not a place a target can route one through).
  *
  * "While the template renders" is the code that runs as the template does,
  * read off the expression and not off how the file is used: a placeholder, an
  * attribute or tag argument, a `<const>` value, an `<if>` or `<for>` header.
  * The code inside a function (an event handler, an arrow passed as an
  * attribute, an object method, a `<let>`'s own `valueChange`) runs when
- * that function is called, so a write there is the way a `<let>` is written
- * and is never refused. A function called while the template renders is not
- * followed: there is no flow analysis, so a write inside `${bump()}`'s
- * callee is not detected.
+ * that function is called, so a write to a `<let>` there is the way a `<let>`
+ * is written and is never refused. A function called while the template
+ * renders is not followed: there is no flow analysis, so a write inside
+ * `${bump()}`'s callee is not detected.
  *
  * What counts as a function is Marko's own list: a function declaration, a
  * function expression, an arrow and an object method. A class member is not
@@ -23,21 +35,52 @@
  * initializer or static block of a class in an expression is render position,
  * unless a function of the list encloses the write.
  *
- * A parameter or a local of the same spelling as the `<let>` can only be
- * declared inside a function, so skipping the code inside functions also
- * settles shadowing within one expression; the scopes of the template itself
- * (a loop variable, a `<const>`) are tracked by the lowerer.
+ * A parameter or a local of the same spelling as a guarded name shadows it
+ * wherever it is declared, inside a function or not, and a write to it is
+ * never refused (read off the expression's own scopes); the scopes of the
+ * template itself (a loop variable, a `<const>`) are tracked by the lowerer,
+ * which hands this module only the names in effect.
  */
 
 import { coreBabel } from "./babel.ts";
-import type { Node } from "./core.ts";
+import type { Node, WriteGuard } from "./core.ts";
+import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
+import {
+  LET_LOOP_ASSIGNMENT_CODE,
+  LET_WRITE_BEFORE_DECLARATION_CODE,
+  LET_WRITE_IN_RENDER_CODE,
+  READONLY_BINDING_WRITE_CODE,
+} from "./diagnostic-codes.ts";
 
-/** The first write to one of `lets` that runs during render, if any. */
-export type LetWrite = {
-  /** The assignment or update expression. */
+/** Why a write is refused. */
+export type WriteReason =
+  /** A `<let>` written while the template renders. */
+  | "let-render"
+  /** A `<let>` written above its declaration. */
+  | "let-below"
+  /** A `<let>` assigned by a `for…of` or `for…in` head. */
+  | "let-loop"
+  | WriteGuard["kind"];
+
+/** The first refused write found, with the name it writes. */
+export type BindingWrite = {
+  /** What is reported: the assignment or update, or a loop's left side. */
   readonly node: Node;
-  /** The `<let>` it writes. */
+  /** The binding it writes. */
   readonly name: string;
+  readonly reason: WriteReason;
+  /** `of` or `in` for a `"let-loop"`. */
+  readonly loop?: "of" | "in";
+};
+
+/** The names in effect, by what a write to each is refused for. */
+export type WriteRules = {
+  /** `<let>`s declared above: refused while rendering, and in a loop head. */
+  readonly lets?: ReadonlySet<string>;
+  /** `<let>`s declared below: refused everywhere. */
+  readonly later?: ReadonlySet<string>;
+  /** `<const>` and parameters. */
+  readonly guards?: ReadonlyMap<string, WriteGuard>;
 };
 
 /** Is `path` inside a function that runs later than the render? */
@@ -91,41 +134,125 @@ export function assignedNames(target: Node, out: string[]): void {
 }
 
 /**
- * Finds the first write, in source order, to a name in `lets` made outside
- * every function in `expression`.
+ * Finds the first refused write, in source order, in `expression`.
+ *
+ * `inFunction` says the whole expression runs later than the render (a
+ * `<script>` body), so no write in it is in render position.
  */
-export function findLetWrite(
+export function findBindingWrite(
   expression: Node,
-  lets: ReadonlySet<string>,
-): LetWrite | undefined {
-  if (lets.size === 0 || !expression) return undefined;
+  rules: WriteRules,
+  inFunction = false,
+): BindingWrite | undefined {
+  const { lets, later, guards } = rules;
+  if (!expression || !(lets?.size || later?.size || guards?.size)) {
+    return undefined;
+  }
   const { traverse, types } = coreBabel();
   // A tag param (`x = count++`) is a pattern, which `expressionStatement`
   // would refuse; the walk validates nothing, so the node is wrapped as is.
   const file = types.file(
-    types.program([{ type: "ExpressionStatement", expression } as Node]),
+    types.program(
+      expression.type === "Program"
+        ? expression.body
+        : [{ type: "ExpressionStatement", expression } as Node],
+    ),
   );
-  let found: LetWrite | undefined;
+  let found: BindingWrite | undefined;
 
-  const check = (path: Node, target: Node): void => {
-    if (found || insideFunction(path)) return;
+  const reasonFor = (
+    path: Node,
+    name: string,
+    loop: boolean,
+  ): WriteReason | undefined => {
+    // A name the expression declares itself is not the template's.
+    if (path.scope.getBinding(name)) return undefined;
+    const runsLater = inFunction || insideFunction(path);
+    const guard = guards?.get(name);
+    if (guard) return runsLater && !guard.inFunction ? undefined : guard.kind;
+    if (later?.has(name)) return "let-below";
+    if (lets?.has(name)) {
+      if (loop) return "let-loop";
+      return runsLater ? undefined : "let-render";
+    }
+    return undefined;
+  };
+
+  const check = (
+    path: Node,
+    target: Node,
+    report: Node,
+    loop?: "of" | "in",
+  ) => {
+    if (found) return;
     const names: string[] = [];
     assignedNames(target, names);
     for (const name of names) {
-      if (!lets.has(name)) continue;
-      found = { node: path.node, name };
+      const reason = reasonFor(path, name, loop !== undefined);
+      if (!reason) continue;
+      found = {
+        node: report,
+        name,
+        reason,
+        ...(reason === "let-loop" ? { loop } : {}),
+      };
       path.stop();
       return;
     }
   };
 
+  const loopHead = (path: Node, loop: "of" | "in"): void => {
+    // `for (const x of xs)` declares; only a bare target assigns.
+    const { left } = path.node;
+    if (left?.type !== "VariableDeclaration") check(path, left, left, loop);
+  };
+
   traverse(file, {
     AssignmentExpression(path: Node) {
-      check(path, path.node.left);
+      check(path, path.node.left, path.node);
     },
     UpdateExpression(path: Node) {
-      check(path, path.node.argument);
+      check(path, path.node.argument, path.node);
+    },
+    ForOfStatement(path: Node) {
+      loopHead(path, "of");
+    },
+    ForInStatement(path: Node) {
+      loopHead(path, "in");
     },
   });
   return found;
+}
+
+/** The diagnostic code of a refused write. */
+export function bindingWriteCode(write: BindingWrite): MxDiagnosticCode {
+  switch (write.reason) {
+    case "let-render":
+      return LET_WRITE_IN_RENDER_CODE;
+    case "let-below":
+      return LET_WRITE_BEFORE_DECLARATION_CODE;
+    case "let-loop":
+      return LET_LOOP_ASSIGNMENT_CODE;
+    default:
+      return READONLY_BINDING_WRITE_CODE;
+  }
+}
+
+/** The message of a refused write: the rule and the fix. */
+export function bindingWriteMessage(write: BindingWrite): string {
+  const name = `\`${write.name}\``;
+  switch (write.reason) {
+    case "let-render":
+      return `${name} is a \`<let>\` and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+    case "let-below":
+      return `${name} is a \`<let>\` declared below this write, and a \`<let>\` can only be written below its declaration. Move the \`<let>\` above this code.`;
+    case "let-loop":
+      return `${name} is a \`<let>\`, so a \`for...${write.loop}\` cannot assign to it. Loop into a local variable and assign ${name} from it instead.`;
+    case "const":
+      return `${name} is a \`<const>\` and cannot be written. Keep a value that changes in a \`<let>\` and write that in an event handler or a \`<script>\` body, or derive a new value with another \`<const>\`.`;
+    case "for":
+      return `${name} is a \`<for>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
+    case "define":
+      return `${name} is a \`<define>\` parameter and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+  }
 }

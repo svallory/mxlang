@@ -660,6 +660,27 @@ const ROWS: Row[] = [
     tagRules: "html",
   }),
   lowerRow(
+    "MX_LET_WRITE_BEFORE_DECLARATION",
+    "<p>${n++}</p>\n<let/n=0/>\n",
+    1,
+    5,
+    { tagRules: "html" },
+  ),
+  lowerRow(
+    "MX_LET_LOOP_ASSIGNMENT",
+    "<let/n=0/>\n<p>${(() => { for (n of xs) {} })()}</p>\n",
+    2,
+    19,
+    { tagRules: "html" },
+  ),
+  lowerRow(
+    "MX_READONLY_BINDING_WRITE",
+    "<const/x=1/>\n<p>${x = 2}</p>\n",
+    2,
+    5,
+    { tagRules: "html" },
+  ),
+  lowerRow(
     "MX_RENDER_ONLY_IN_MODULE",
     "<const/x=1/>\nstatic const y = x\n<div>${y}</div>\n",
     2,

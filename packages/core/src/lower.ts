@@ -105,6 +105,7 @@ import {
   sliceNode,
   type TranslateError,
   unsupportedTagMessage,
+  type WriteGuard,
   warn,
 } from "./core.ts";
 import { CORE_TAG_NAMES, CORE_TAGLIB_ID } from "./core-taglib.ts";
@@ -156,7 +157,6 @@ import {
   INVALID_TAG_CALL_CODE,
   INVALID_TAG_NAME_CODE,
   INVALID_TAG_VAR_CODE,
-  LET_WRITE_IN_RENDER_CODE,
   LOWERCASE_BINDING_NOT_CALLED_CODE,
   MISSING_ATTRIBUTE_TAG_CODE,
   NEAR_EXPLICIT_CHILD_CODE,
@@ -217,7 +217,12 @@ import {
   scriptletSentence,
 } from "./parse-error-hints.ts";
 import { payloadOf } from "./payload.ts";
-import { findLetWrite } from "./render-let-write.ts";
+import {
+  bindingWriteCode,
+  bindingWriteMessage,
+  findBindingWrite,
+  type WriteRules,
+} from "./render-let-write.ts";
 import {
   checkReservedTemplate,
   parseAuthoredSource,
@@ -585,7 +590,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
   }
   const code = expr(ctx, node);
   checkTagVarReads(ctx, code, node);
-  checkLetWrites(ctx, code, node);
+  checkBindingWrites(ctx, code, node);
   const span = exprSpan(ctx, node);
   const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   const bodySpan =
@@ -640,32 +645,49 @@ function methodBodySpan(
   return undefined;
 }
 
+/** The names a write is checked against: empty in a file with nothing to check. */
+function writeRulesOf(ctx: Ctx): WriteRules | undefined {
+  const { renderLets: lets, laterLets: later, writeGuards: guards } = ctx;
+  return lets?.size || later?.size || guards?.size
+    ? { lets, later, guards }
+    : undefined;
+}
+
 /**
- * Rejects a write to a `<let>` made while the template renders.
+ * Rejects a write to a binding that the code at hand may not write: a
+ * `<let>` while the template renders, a `<let>` above its declaration or as
+ * the left side of a `for…of`, a `<const>` or `<for>` parameter anywhere, a
+ * `<define>` parameter while the template renders (`findBindingWrite`).
  *
  * Every expression of the template goes through `exprOf`, so one check here
  * covers placeholders, attribute and argument values, spreads, `<const>`
- * values and the `<if>` and `<for>` headers; a write inside a function in the
- * expression is the way a `<let>` is written and passes. The set of names is
- * `ctx.renderLets`, empty in a file with no `<let>`, which skips the parse.
+ * values and the `<if>` and `<for>` headers, and the functions inside them.
+ * The names are `ctx.renderLets`, `ctx.laterLets` and `ctx.writeGuards`,
+ * empty in a file with no such binding, which skips the parse.
  */
-function checkLetWrites(ctx: Ctx, code: string | undefined, node: Node): void {
-  const lets = ctx.renderLets;
-  if (!lets?.size) return;
+function checkBindingWrites(
+  ctx: Ctx,
+  code: string | undefined,
+  node: Node,
+  inFunction = false,
+): void {
+  const rules = writeRulesOf(ctx);
+  if (!rules) return;
   if (code !== undefined) {
     // A name that is not in the text cannot be written, and most expressions
     // mention none of them.
-    if (![...lets].some((name) => code.includes(name))) return;
-    // And a write needs an assignment or an update operator in the text.
-    if (!/=|\+\+|--/.test(code)) return;
+    const names = [
+      ...(rules.lets ?? []),
+      ...(rules.later ?? []),
+      ...(rules.guards?.keys() ?? []),
+    ];
+    if (!names.some((name) => code.includes(name))) return;
+    // And a write needs an assignment, an update operator or a loop head.
+    if (!/=|\+\+|--|\bfor\b/.test(code)) return;
   }
-  const write = findLetWrite(node, lets);
+  const write = findBindingWrite(node, rules, inFunction);
   if (!write) return;
-  raise(
-    LET_WRITE_IN_RENDER_CODE,
-    `\`${write.name}\` is a \`<let>\` and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`,
-    write.node,
-  );
+  raise(bindingWriteCode(write), bindingWriteMessage(write), write.node);
 }
 
 /**
@@ -675,14 +697,40 @@ function checkLetWrites(ctx: Ctx, code: string | undefined, node: Node): void {
  * text body of a `<script>` is not looked at; it is a `<script>` body.
  */
 function checkTagValueWrites(ctx: Ctx, node: Node): void {
-  if (!ctx.renderLets?.size) return;
-  for (const arg of tagArgsOf(node) ?? []) checkLetWrites(ctx, undefined, arg);
+  if (!writeRulesOf(ctx)) return;
+  for (const arg of tagArgsOf(node) ?? []) {
+    checkBindingWrites(ctx, undefined, arg);
+  }
   for (const attr of tagAttributesOf(node)) {
     for (const arg of attrArgsOf(attr) ?? []) {
-      checkLetWrites(ctx, undefined, arg);
+      checkBindingWrites(ctx, undefined, arg);
     }
-    checkLetWrites(ctx, undefined, attrValueOf(ctx, attr));
+    checkBindingWrites(ctx, undefined, attrValueOf(ctx, attr));
   }
+}
+
+/**
+ * The same check over the text of a `<script>`, which is all function
+ * position: a `<const>` or a `<for>` parameter written there, a `<let>`
+ * written above its declaration, or a `<let>` as the left side of a
+ * `for…of`. A body that is not one plain text run, or does not parse, is
+ * skipped (`scriptProgramOf`).
+ */
+function checkScriptBodyWrites(ctx: Ctx, tag: Node): void {
+  const name = tagNameOf(tag);
+  if (
+    name !== "script" ||
+    (ctx.customTags && Object.hasOwn(ctx.customTags, name))
+  ) {
+    return;
+  }
+  const rules = writeRulesOf(ctx);
+  if (!rules) return;
+  const program = scriptProgramOf(ctx, tag);
+  if (!program) return;
+  const write = findBindingWrite(program, rules, true);
+  if (!write) return;
+  raise(bindingWriteCode(write), bindingWriteMessage(write), write.node);
 }
 
 /** Where a stale read can sit: what runs the body decides what the fix is. */
@@ -785,18 +833,36 @@ function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
 }
 
 /**
+ * The names a child declares as a `<let>`: none under the `none` tag rules,
+ * where `let` is an ordinary tag, and none when a caller registered `let` as
+ * a custom tag.
+ */
+function letNamesOf(ctx: Ctx, child: Node): string[] {
+  if (ctx.tagRules === "none") return [];
+  if (!isTagNode(child) || tagNameOf(child) !== "let" || !tagVarOf(child)) {
+    return [];
+  }
+  if (ctx.customTags && Object.hasOwn(ctx.customTags, "let")) return [];
+  return bindingIdentifiers(tagVarOf(child));
+}
+
+/**
  * Records the `<let>` a lowered child tag declares, for the writes after it
  * in the same block and the blocks below. Under the `none` tag rules
  * `let` is an ordinary tag, and a name a caller registered as a custom tag
  * is that tag, so neither declares anything.
  */
 function declareRenderLet(ctx: Ctx, child: Node): void {
-  if (ctx.tagRules === "none") return;
-  if (tagNameOf(child) !== "let" || !tagVarOf(child)) return;
-  if (ctx.customTags && Object.hasOwn(ctx.customTags, "let")) return;
-  const names = bindingIdentifiers(tagVarOf(child));
+  const names = letNamesOf(ctx, child);
   if (names.length === 0) return;
   ctx.renderLets = new Set([...(ctx.renderLets ?? []), ...names]);
+  // And no `<const>` or parameter of that spelling is what a write reaches.
+  const guards = ctx.writeGuards;
+  if (guards && names.some((name) => guards.has(name))) {
+    ctx.writeGuards = new Map(
+      [...guards].filter(([name]) => !names.includes(name)),
+    );
+  }
   // A `<const>` that depended on an outer `<let>` of this spelling does not
   // depend on the new one.
   const derived = ctx.derivedConsts;
@@ -1725,7 +1791,9 @@ function rejectUnreadableParams(ctx: Ctx, node: Node): void {
 function paramsOf(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
   // A default (`|x = count++|`) runs while the template renders.
-  for (const param of tagParamsOf(node)) checkLetWrites(ctx, undefined, param);
+  for (const param of tagParamsOf(node)) {
+    checkBindingWrites(ctx, undefined, param);
+  }
   return tagParamsOf(node).map((p: Node) => {
     // Babel's generator omits a TypeScript annotation when an Identifier is
     // printed outside its parameter-list context. The Marko node's location
@@ -2406,7 +2474,7 @@ function lowerAttributeFor(
   requireAttrTagsV2(ctx, "attribute tags inside `<for>`", "aren't", node);
   const loop = lowerForHead(ctx, node, true);
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, loop.bindings);
+  const restore = shadowBindings(ctx, loop.bindings, paramGuards(node, "for"));
   const lowered = lowerAttributeTags(ctx, node, schema, true, false);
   restore();
   unscope();
@@ -2996,7 +3064,7 @@ function lowerFor(ctx: Ctx, node: Node): IrNode {
   const head = lowerForHead(ctx, node);
   // The loop body is a JS block, so a `<const>` inside it is confined to it.
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, head.bindings);
+  const restore = shadowBindings(ctx, head.bindings, paramGuards(node, "for"));
   const children = lowerChildren(ctx, bodyChildren(node));
   restore();
   unscope();
@@ -3049,7 +3117,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   const from = ctx.renderLets?.size
     ? derivedFrom(valueNode, ctx.renderLets, ctx.derivedConsts)
     : undefined;
-  shadowBindings(ctx, constNames);
+  shadowBindings(ctx, constNames, constGuards(node, constNames));
   if (from?.size) {
     ctx.derivedConsts = new Map([
       ...(ctx.derivedConsts ?? []),
@@ -3064,6 +3132,47 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
     span: exprSpan(ctx, node),
     loc: posOf(ctx, node),
   };
+}
+
+/**
+ * What a write to the names of a `<const>` is refused for. A plain name is
+ * written nowhere; a name inside an object pattern is written through its
+ * object, which Marko allows outside the render, as for a `<for>` parameter.
+ */
+function constGuards(
+  node: Node,
+  names: readonly string[],
+): ReadonlyMap<string, WriteGuard> {
+  const plain = tagVarOf(node)?.type === "Identifier";
+  return new Map(
+    names.map((name): [string, WriteGuard] => [
+      name,
+      { kind: "const", inFunction: plain },
+    ]),
+  );
+}
+
+/**
+ * What a write to the parameters of `<for|…|>` or `<define/D|…|>` is
+ * refused for: a `<for>` parameter bound as a plain name (`|item|`,
+ * `|item = 0|`) is written nowhere; one inside a pattern is written through
+ * its object, and a `<define>` parameter is written by a handler.
+ */
+function paramGuards(
+  node: Node,
+  kind: "for" | "define",
+): ReadonlyMap<string, WriteGuard> {
+  const guards = new Map<string, WriteGuard>();
+  for (const param of tagParamsOf(node)) {
+    const plain =
+      param?.type === "Identifier" ||
+      (param?.type === "AssignmentPattern" &&
+        param.left?.type === "Identifier");
+    for (const name of bindingIdentifiers(param)) {
+      guards.set(name, { kind, inFunction: kind === "for" && plain });
+    }
+  }
+  return guards;
 }
 
 /** One filesystem probe per tag name per compile, not per occurrence. */
@@ -3377,7 +3486,11 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // design (it shadows for the rest of *its* enclosing scope, which here is
   // the define body, not the caller's).
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(ctx, node));
+  const restore = shadowBindings(
+    ctx,
+    paramBindings(ctx, node),
+    paramGuards(node, "define"),
+  );
   const [children, prelude] = withPrelude(ctx, () =>
     lowerChildren(ctx, bodyChildren(node)),
   );
@@ -5727,202 +5840,223 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   const out: IrNode[] = [];
   let index = 0;
 
-  while (index < children.length) {
-    // Hybrid until PR 5: the arms below still name Marko's kinds, which the
-    // MX type cannot hold.
-    const child: Node = children[index];
+  // A `<let>` is written only below its declaration, so the ones declared
+  // below the child being lowered (here and in the blocks around) are the
+  // names a write inside it is refused on.
+  const outerLater = ctx.laterLets;
+  const declared = children.map((child, at): [number, string[]] => [
+    at,
+    letNamesOf(ctx, child),
+  ]);
+  const letsBelow = (at: number): ReadonlySet<string> | undefined => {
+    const names = declared.filter(([i]) => i > at).flatMap(([, n]) => n);
+    if (names.length === 0) return outerLater;
+    return new Set([...(outerLater ?? []), ...names]);
+  };
+  const hasLets = declared.some(([, names]) => names.length > 0);
 
-    if (isTagNode(child) && tagNameOf(child) === "if") {
-      const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
-      if (lowered) {
-        out.push(lowered[0]);
-        index = lowered[1];
-      } else {
-        // The chain's head failed: skip it whole, its `else` branches with it.
-        index = ifChainEnd(children, index);
+  try {
+    while (index < children.length) {
+      if (hasLets) ctx.laterLets = letsBelow(index);
+      // Hybrid until PR 5: the arms below still name Marko's kinds, which the
+      // MX type cannot hold.
+      const child: Node = children[index];
+
+      if (isTagNode(child) && tagNameOf(child) === "if") {
+        const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
+        if (lowered) {
+          out.push(lowered[0]);
+          index = lowered[1];
+        } else {
+          // The chain's head failed: skip it whole, its `else` branches with it.
+          index = ifChainEnd(children, index);
+        }
+        continue;
       }
-      continue;
-    }
 
-    // A hoist from this child belongs to the enclosing function, so the
-    // prelude it appends is drained by whichever scope owns it — the template,
-    // or the nearest `<define>`.
-    // Decision 162: one child's failure is recorded and the child skipped, with
-    // its subtree; the walk goes on to the next sibling.
-    recover(ctx, () => {
-      switch (child.type) {
-        case "MarkoText":
-        case "MxText":
-          // Already decision 33: Marko's own `onText` dropped newline-bearing
-          // whitespace runs and collapsed the rest before we saw them. `value`
-          // carries that normalized text; `span` covers the authored range.
-          out.push({
-            kind: "Text",
-            value: child.value,
-            span: exprSpan(ctx, child),
-            loc: posOf(ctx, child),
-          });
-          break;
-        case "MarkoPlaceholder":
-        case "MxPlaceholder": {
-          const value =
-            child.type === "MxPlaceholder"
-              ? payloadOf(child.expression)
-              : child.value;
-          const interpolation = exprOf(ctx, value);
-          rejectUncalledParameterizedAttributeTag(
-            ctx,
-            interpolation.code,
-            value,
-          );
-          out.push({
-            kind: "Interpolation",
-            expr: interpolation,
-            escaped: child.escape,
-            span: exprSpan(ctx, child),
-            loc: posOf(ctx, child),
-          });
-          break;
-        }
-        case "MarkoTag":
-        case "MxTag":
-        case "MxReturn":
-        // A module statement lowers where Marko's statement tag did: the
-        // tag path, by its keyword (`tagNameOf`).
-        case "MxModuleStatement": {
-          // A statement the host hoisted stays on `ctx.prelude` and is drained
-          // by the enclosing *function* — `lowerDefine`, or `lower` for the
-          // render function — never here. Draining it at every child list would
-          // trap a hoist from inside an `<if>` in that branch, which is the one
-          // thing decision 70's hoist hook exists to prevent: the declaration
-          // has to outlive the block it was written in.
-          // Before the tag's own lowering: a host with no runtime for the
-          // handler refuses it there, and the stale read is the first thing
-          // wrong with it.
-          checkStaleDerivedReads(ctx, child);
-          const lowered = lowerTag(ctx, child);
-          if (Array.isArray(lowered)) out.push(...lowered);
-          else out.push(lowered);
-          declareRenderLet(ctx, child);
-          break;
-        }
-        // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
-        case "MxAttributeTag":
-          raise(
-            INVALID_ATTRIBUTE_TAG_CODE,
-            strayAttributeTagMessage(`@${child.name.value}`),
-            child,
-          );
-          break;
-        case "MarkoDocumentType":
-        case "MxDoctype":
-          out.push({
-            kind: "DocumentType",
-            value: child.value,
-            loc: posOf(ctx, child),
-          });
-          break;
-        case "MarkoComment":
-        case "MxComment":
-          // Marko strips the delimiters, so an HTML comment and a `//` line
-          // comment are indistinguishable by value alone; the source decides.
-          // MX records which one it read.
-          out.push({
-            kind: "Comment",
-            value: child.value,
-            html:
-              child.type === "MxComment"
-                ? child.kind === "html"
-                : sliceNode(ctx, child).startsWith("<!--"),
-            span: exprSpan(ctx, child),
-            loc: posOf(ctx, child),
-          });
-          break;
-        case "MarkoScriptlet":
-        case "MxScriptlet":
-          raise(
-            UNSUPPORTED_CONSTRUCT_CODE,
-            `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
-            child,
-          );
-          break;
-        // Decision 139. The IR has no node for either construct, so before this
-        // arm existed both fell off the end of this switch: wrong output and a
-        // green build, on every target. `fail` reports `node.loc.start`, which
-        // is the `<` — the same place Marko's code frame underlines.
-        //
-        // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
-        // never reaches here: Marko's parser reads those as one `MarkoText`, so
-        // the construct there is text and stays text. That is the parser's call,
-        // not this switch's, which is why nothing here has to special-case them.
-        case "MarkoCDATA":
-        case "MxCDATA":
-          raise(UNSUPPORTED_CONSTRUCT_CODE, CDATA_MESSAGE, child);
-          break;
-        case "MarkoDeclaration":
-        case "MxDeclaration":
-          raise(UNSUPPORTED_CONSTRUCT_CODE, DECLARATION_MESSAGE, child);
-          break;
-        // Decision 182 seam: a line trigger the trigger pass did not lower
-        // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
-        // refused in the table check's wording; a block tag or filter goes
-        // to the dialect's hook (addendum 5), or is refused likewise.
-        case "MxTrigger":
-          raise(
-            NO_LOWERING_CODE,
-            `\`${child.id}\` trigger has no lowering yet`,
-            child,
-          );
-          break;
-        case "MxBlockTag": {
-          const hook = ctx.dialect?.lowerBlockTag;
-          if (!hook)
-            raise(NO_LOWERING_CODE, "a block tag has no lowering yet", child);
-          out.push(
-            ...syntaxHookIr(ctx, child, "lowerBlockTag", (build) =>
-              (hook as NonNullable<typeof hook>)(
-                child.value,
-                { sourceStart: child.start, sourceEnd: child.end },
-                build,
-              ),
-            ),
-          );
-          break;
-        }
-        case "MxFilter": {
-          const hook = ctx.dialect?.lowerFilter;
-          if (!hook) {
+      // A hoist from this child belongs to the enclosing function, so the
+      // prelude it appends is drained by whichever scope owns it — the template,
+      // or the nearest `<define>`.
+      // Decision 162: one child's failure is recorded and the child skipped, with
+      // its subtree; the walk goes on to the next sibling.
+      recover(ctx, () => {
+        switch (child.type) {
+          case "MarkoText":
+          case "MxText":
+            // Already decision 33: Marko's own `onText` dropped newline-bearing
+            // whitespace runs and collapsed the rest before we saw them. `value`
+            // carries that normalized text; `span` covers the authored range.
+            out.push({
+              kind: "Text",
+              value: child.value,
+              span: exprSpan(ctx, child),
+              loc: posOf(ctx, child),
+            });
+            break;
+          case "MarkoPlaceholder":
+          case "MxPlaceholder": {
+            const value =
+              child.type === "MxPlaceholder"
+                ? payloadOf(child.expression)
+                : child.value;
+            const interpolation = exprOf(ctx, value);
+            rejectUncalledParameterizedAttributeTag(
+              ctx,
+              interpolation.code,
+              value,
+            );
+            out.push({
+              kind: "Interpolation",
+              expr: interpolation,
+              escaped: child.escape,
+              span: exprSpan(ctx, child),
+              loc: posOf(ctx, child),
+            });
+            break;
+          }
+          case "MarkoTag":
+          case "MxTag":
+          case "MxReturn":
+          // A module statement lowers where Marko's statement tag did: the
+          // tag path, by its keyword (`tagNameOf`).
+          case "MxModuleStatement": {
+            // A statement the host hoisted stays on `ctx.prelude` and is drained
+            // by the enclosing *function* — `lowerDefine`, or `lower` for the
+            // render function — never here. Draining it at every child list would
+            // trap a hoist from inside an `<if>` in that branch, which is the one
+            // thing decision 70's hoist hook exists to prevent: the declaration
+            // has to outlive the block it was written in.
+            // Before the tag's own lowering: a host with no runtime for the
+            // handler refuses it there, and the stale read is the first thing
+            // wrong with it.
+            checkStaleDerivedReads(ctx, child);
+            checkScriptBodyWrites(ctx, child);
+            const lowered = lowerTag(ctx, child);
+            if (Array.isArray(lowered)) out.push(...lowered);
+            else out.push(lowered);
+            declareRenderLet(ctx, child);
+            break;
+          }
+          // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
+          case "MxAttributeTag":
+            raise(
+              INVALID_ATTRIBUTE_TAG_CODE,
+              strayAttributeTagMessage(`@${child.name.value}`),
+              child,
+            );
+            break;
+          case "MarkoDocumentType":
+          case "MxDoctype":
+            out.push({
+              kind: "DocumentType",
+              value: child.value,
+              loc: posOf(ctx, child),
+            });
+            break;
+          case "MarkoComment":
+          case "MxComment":
+            // Marko strips the delimiters, so an HTML comment and a `//` line
+            // comment are indistinguishable by value alone; the source decides.
+            // MX records which one it read.
+            out.push({
+              kind: "Comment",
+              value: child.value,
+              html:
+                child.type === "MxComment"
+                  ? child.kind === "html"
+                  : sliceNode(ctx, child).startsWith("<!--"),
+              span: exprSpan(ctx, child),
+              loc: posOf(ctx, child),
+            });
+            break;
+          case "MarkoScriptlet":
+          case "MxScriptlet":
+            raise(
+              UNSUPPORTED_CONSTRUCT_CODE,
+              `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
+              child,
+            );
+            break;
+          // Decision 139. The IR has no node for either construct, so before this
+          // arm existed both fell off the end of this switch: wrong output and a
+          // green build, on every target. `fail` reports `node.loc.start`, which
+          // is the `<` — the same place Marko's code frame underlines.
+          //
+          // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
+          // never reaches here: Marko's parser reads those as one `MarkoText`, so
+          // the construct there is text and stays text. That is the parser's call,
+          // not this switch's, which is why nothing here has to special-case them.
+          case "MarkoCDATA":
+          case "MxCDATA":
+            raise(UNSUPPORTED_CONSTRUCT_CODE, CDATA_MESSAGE, child);
+            break;
+          case "MarkoDeclaration":
+          case "MxDeclaration":
+            raise(UNSUPPORTED_CONSTRUCT_CODE, DECLARATION_MESSAGE, child);
+            break;
+          // Decision 182 seam: a line trigger the trigger pass did not lower
+          // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
+          // refused in the table check's wording; a block tag or filter goes
+          // to the dialect's hook (addendum 5), or is refused likewise.
+          case "MxTrigger":
             raise(
               NO_LOWERING_CODE,
-              `the \`${child.name}\` filter has no lowering yet`,
+              `\`${child.id}\` trigger has no lowering yet`,
               child,
             );
-          }
-          out.push(
-            ...syntaxHookIr(ctx, child, "lowerFilter", (build) =>
-              (hook as NonNullable<typeof hook>)(
-                child.name,
-                child.value,
-                { sourceStart: child.start, sourceEnd: child.end },
-                build,
+            break;
+          case "MxBlockTag": {
+            const hook = ctx.dialect?.lowerBlockTag;
+            if (!hook)
+              raise(NO_LOWERING_CODE, "a block tag has no lowering yet", child);
+            out.push(
+              ...syntaxHookIr(ctx, child, "lowerBlockTag", (build) =>
+                (hook as NonNullable<typeof hook>)(
+                  child.value,
+                  { sourceStart: child.start, sourceEnd: child.end },
+                  build,
+                ),
               ),
-            ),
-          );
-          break;
-        }
-        default:
-          // An MX node kind with no lowering is never dropped silently; a
-          // Marko kind this switch has no arm for keeps today's behaviour.
-          if (String(child.type).startsWith("Mx")) {
-            raise(
-              INTERNAL_ERROR_CODE,
-              `\`${child.type}\` has no lowering yet (not yours: an internal bug)`,
-              child,
             );
+            break;
           }
-      }
-    });
-    index++;
+          case "MxFilter": {
+            const hook = ctx.dialect?.lowerFilter;
+            if (!hook) {
+              raise(
+                NO_LOWERING_CODE,
+                `the \`${child.name}\` filter has no lowering yet`,
+                child,
+              );
+            }
+            out.push(
+              ...syntaxHookIr(ctx, child, "lowerFilter", (build) =>
+                (hook as NonNullable<typeof hook>)(
+                  child.name,
+                  child.value,
+                  { sourceStart: child.start, sourceEnd: child.end },
+                  build,
+                ),
+              ),
+            );
+            break;
+          }
+          default:
+            // An MX node kind with no lowering is never dropped silently; a
+            // Marko kind this switch has no arm for keeps today's behaviour.
+            if (String(child.type).startsWith("Mx")) {
+              raise(
+                INTERNAL_ERROR_CODE,
+                `\`${child.type}\` has no lowering yet (not yours: an internal bug)`,
+                child,
+              );
+            }
+        }
+      });
+      index++;
+    }
+  } finally {
+    ctx.laterLets = outerLater;
   }
 
   return out;
@@ -6088,6 +6222,8 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.tagVarBlock = [];
   ctx.tagVars = undefined;
   ctx.renderLets = undefined;
+  ctx.writeGuards = undefined;
+  ctx.laterLets = undefined;
   ctx.derivedConsts = undefined;
   ctx.moduleScope = scanModuleScope(ctx, body);
 
