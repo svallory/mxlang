@@ -6,7 +6,10 @@ Page compilation selects `lookupFor(policy).target(policy.target)` (a descriptor
 `load(core).compileModule` with the full lookup and `typeCheck: true` (decision
 140). Strictness, type surface, pending text, declarations and mapping mode
 come from the descriptor. A merge-recorded target may omit both map and
-mappings; those contribute no mappings. The second lowering still uses the
+mappings; those contribute no mappings. A target that returns both a source
+map and its own recorded mappings keeps the recorded ones wherever the two
+overlap in the generated text (the map is decoded by text equality, so it can
+pair a line start with the wrong source offset; Solid's placeholder map does). The second lowering still uses the
 default target's translator (D3), regardless of the selected target, except
 for a loaded descriptor with no `declarations`: it has no lowering policy of its
 own, so the plugin maps from what it recorded and never re-lowers under html.
