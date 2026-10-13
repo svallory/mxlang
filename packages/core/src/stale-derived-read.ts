@@ -1,13 +1,16 @@
 /**
  * Reading a derived `<const>` after writing a `<let>` it depends on, inside
- * one event handler.
+ * one event handler, one `<script>` body or one `<lifecycle>` hook.
  *
  * Targets disagree on what the read returns. Marko, React and Solid 2 apply a
  * write when the turn ends, so the read still shows the value from before the
  * write; Svelte, Vue, Angular and Lit recompute on read and show the new one.
  * One source has to mean the same on every target, so core refuses the read
- * and names the two ways out: compute from the written value, or move the
- * check into a `<script>`, which runs after the write has settled.
+ * and names the ways out. In a handler: compute from the written value, or
+ * move the check into a `<script>`, which runs after the write has settled.
+ * In a `<script>` body or a `<lifecycle>` hook, which are where the write
+ * settles, a body that writes is not the place to move the read to: compute
+ * from the written value.
  *
  * Scope, as implemented:
  *
@@ -16,9 +19,11 @@
  *   on (the value still depends on it). Transitive: the set of `<let>`s is
  *   resolved when the `<const>` is declared (`derivedFrom`).
  * - A handler is the function given to an `on…` attribute, whatever the tag.
- *   The walk looks at the handler's own body: a nested function (a
- *   `setTimeout` or `.then` callback) runs after the flush and is skipped,
- *   for reads and for writes alike.
+ *   A `<script>` body is one function body of its own (`bodyFunction`), and a
+ *   `<lifecycle>` hook is any function the tag is given. The walk looks at
+ *   that function's own body: a nested function (a `setTimeout` or `.then`
+ *   callback) runs after the flush and is skipped, for reads and for writes
+ *   alike.
  * - "After" is source order in that body, with a write counted from the end
  *   of its own expression (`items = [...items, total]` reads `total` first).
  *   A write in an earlier branch counts, and so does one after an `await`.
@@ -29,8 +34,9 @@
  *
  * Not detected: a handler held in a variable or built by a call
  * (`onClick=makeHandler()`), a function value declared with `<const>` and
- * called from a handler, a write made inside a nested function, a `for (x of
- * …)` head used as a write, and any flow through a called function.
+ * called from a handler, script body or hook, a write made inside a nested
+ * function, a `for (x of …)` head used as a write, a `<script>` body that
+ * holds a `${…}` placeholder, and any flow through a called function.
  */
 
 import { coreBabel } from "./babel.ts";
@@ -46,7 +52,7 @@ export type StaleRead = {
   readonly read: Node;
   /** The `<const>` it reads. */
   readonly name: string;
-  /** The `<let>` the handler wrote that the `<const>` depends on. */
+  /** The `<let>` the body wrote that the `<const>` depends on. */
   readonly written: string;
   /** The assignment or update that writes it. */
   readonly write: Node;
@@ -116,6 +122,25 @@ export function handlerFunction(value: Node): Node | undefined {
     node?.type === "ArrowFunctionExpression"
     ? node
     : undefined;
+}
+
+/**
+ * A `<script>` body as the function it runs in: an async arrow holding the
+ * parsed statements, so `findStaleRead` walks it as it walks a handler (the
+ * body may `await`, and its locals shadow like a function's).
+ */
+export function bodyFunction(program: Node): Node {
+  return {
+    type: "ArrowFunctionExpression",
+    async: true,
+    expression: false,
+    params: [],
+    body: {
+      type: "BlockStatement",
+      body: program.body,
+      directives: program.directives ?? [],
+    },
+  };
 }
 
 type Access = {

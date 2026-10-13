@@ -17,7 +17,7 @@ A template using `<let>` means something different depending on which host compi
 
 A `<let>` is written in an event handler or a `<script>` body, never while the template renders: `${count++}`, `<p class=(count = 1)/>` or `<const/next=(count += 1)/>` is a compile error (`MX_LET_WRITE_IN_RENDER`), on the html default policy, with the fix in the message. Derive a value with `<const>` instead. A write inside a function that the template calls while it renders is not detected. See [Errors](/language/errors/).
 
-Inside a handler, a `<const>` that derives from a `<let>` the handler already wrote is stale on some targets and fresh on others, so reading it there is a compile error too (`MX_STALE_DERIVED_READ`): `items = [...items, x]; if (total > 100) …` with `<const/total=…items…/>`. Compute from `items` directly, or move the check into a `<script>`, which runs after the write settles on every target. A read before the write is fine, and so is a read in a nested callback. See [Errors](/language/errors/).
+Inside a handler, a `<const>` that derives from a `<let>` the handler already wrote is stale on some targets and fresh on others, so reading it there is a compile error too (`MX_STALE_DERIVED_READ`): `items = [...items, x]; if (total > 100) …` with `<const/total=…items…/>`. Compute from `items` directly, or move the check into a `<script>`, which runs after the write settles on every target. The same holds inside a `<script>` body or a `<lifecycle>` hook that writes the `<let>` and then reads the `<const>`; there the fix is to compute from `items`. A read before the write is fine, and so is a read in a nested callback, or a read in a `<script>` of a `<const>` that a handler wrote. See [Errors](/language/errors/).
 
 ## The html target's policy
 

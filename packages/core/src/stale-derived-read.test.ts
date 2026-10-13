@@ -860,10 +860,6 @@ describe("what is not a handler", () => {
       `${CART}<button onClick() { items = []; }>x</button>\n<script>\n  if (total > 100) applyDiscount();\n</script>\n`,
     ],
     [
-      "a `<script>` that writes and reads",
-      `${CART}<script>\n  items = [];\n  log(total);\n</script>\n`,
-    ],
-    [
       "a function attribute that is not an event",
       `${CART}<widget render=(() => { items = []; return total })/>\n`,
     ],
@@ -897,8 +893,8 @@ describe("what is not a handler", () => {
     ],
     ["a spread of handlers", `${CART}<button ...handlers>x</button>\n`],
     [
-      "a `<lifecycle>` hook (not an event handler; not detected)",
-      `${CART}<lifecycle onMount() { items = []; log(total) } onUpdate() { items = []; log(total) }/>\n`,
+      "a `<script>` body that holds a `${...}` placeholder (not detected)",
+      `${CART}<script>\n  items = [];\n  log(\${total});\n</script>\n`,
     ],
     [
       "a `<let>`'s `valueChange`",
@@ -1025,5 +1021,399 @@ describe("lowerSource keeps going after the error", () => {
       tagRules: "html",
     });
     expect(diagnostics.filter((d) => d.code === CODE)).toHaveLength(2);
+  });
+});
+
+/*
+ * A `<script>` body and a `<lifecycle>` hook are bodies of their own: the same
+ * error, the same scope rules, and a message whose only fix is to compute from
+ * the written value (a body that writes is not the place to move the read to).
+ */
+describe("a `<script>` body and a `<lifecycle>` hook", () => {
+  type Kind = {
+    name: string;
+    /** The tag around the statements, which start on line `at`. */
+    wrap: (statements: string, async?: boolean) => string;
+    /** Who wrote it, as the message says. */
+    writer: string;
+  };
+
+  const bodyMessage = (
+    kind: Kind,
+    name: string,
+    written: string,
+    line: number,
+  ) =>
+    `\`${name}\` is stale here: it derives from \`${written}\`, which ${kind.writer} wrote on line ${line}. Compute from \`${written}\` directly.`;
+
+  const hook = (
+    attribute: string,
+    writer = "this `<lifecycle>` hook",
+  ): Kind => ({
+    name: `<lifecycle ${attribute}>`,
+    wrap: (statements, async) =>
+      `<lifecycle ${async ? "async " : ""}${attribute}() {\n${statements}\n}/>`,
+    writer,
+  });
+
+  const kinds: Kind[] = [
+    {
+      name: "<script>",
+      wrap: (statements) => `<script>\n${statements}\n</script>`,
+      writer: "this `<script>`",
+    },
+    hook("onMount"),
+    hook("onUpdate"),
+    hook("onDestroy"),
+    {
+      name: "<lifecycle onMount=arrow>",
+      wrap: (statements, async) =>
+        `<lifecycle onMount=${async ? "async " : ""}() => {\n${statements}\n}/>`,
+      writer: "this `<lifecycle>` hook",
+    },
+    {
+      name: "<lifecycle onMount=function>",
+      wrap: (statements, async) =>
+        `<lifecycle onMount=${async ? "async " : ""}function () {\n${statements}\n}/>`,
+      writer: "this `<lifecycle>` hook",
+    },
+    {
+      name: "<lifecycle onUpdate=(parenthesized arrow)>",
+      wrap: (statements, async) =>
+        `<lifecycle onUpdate=(${async ? "async " : ""}() => {\n${statements}\n})/>`,
+      writer: "this `<lifecycle>` hook",
+    },
+    hook("setup"),
+  ];
+
+  /** The statement that writes, found in the source: its 1-based line. */
+  const lineOf = (source: string, text: string) =>
+    where(source, source.indexOf(text)).line;
+
+  /** Source with the declarations, `statements` in `kind`'s tag. */
+  const sourceOf = (
+    kind: Kind,
+    statements: string,
+    head = CART,
+    async = false,
+  ) => `${head}${kind.wrap(statements, async)}\n`;
+
+  /** Asserts the exact error: text, code, position of the read, end. */
+  function expectStale(
+    kind: Kind,
+    source: string,
+    around: string,
+    read: string,
+    written: string,
+    writeText: string,
+  ) {
+    const error = attempt(source);
+    const at = readAt(source, around, read);
+    expect(error?.message).toBe(
+      bodyMessage(kind, read, written, lineOf(source, writeText)),
+    );
+    expect(error?.diagnosticCode).toBe(CODE);
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+    expect(error?.end).toEqual(at.end);
+    expect(error?.fixes).toBeUndefined();
+  }
+
+  describe.each(kinds.map((kind) => [kind.name, kind] as const))(
+    "%s",
+    (_name, kind) => {
+      const stale = (
+        statements: string,
+        around: string,
+        options: { head?: string; read?: string; written?: string } = {},
+        async = false,
+      ) => {
+        const source = sourceOf(kind, statements, options.head, async);
+        expectStale(
+          kind,
+          source,
+          around,
+          options.read ?? "total",
+          options.written ?? "items",
+          "items = ",
+        );
+        return source;
+      };
+
+      it("a write, then a read: text, code, line, column, end", () => {
+        stale("  items = [];\n  log(total);", "log(total)");
+      });
+
+      it("the text names the real names and the line of the write, and one fix", () => {
+        const source = `${CART}${kind.wrap("  log(1);\n  items = [];\n  log(2);\n  log(total);")}\n`;
+        const error = attempt(source);
+        expect(error?.message).toBe(bodyMessage(kind, "total", "items", 5));
+        expect(error?.message).not.toContain("<script>`, which runs");
+        expect(error?.message).not.toMatch(/decision|\d{3}/i);
+        expect(error?.message.match(/Compute from/g)).toHaveLength(1);
+        expect(error?.line).toBe(7);
+      });
+
+      it("a transitive dependency names the `<let>` that was written", () => {
+        stale("  items = [];\n  log(total);", "log(total)", {
+          head: "<let/items=[]/>\n<const/a=items.length/>\n<const/total=a * 2/>\n",
+        });
+      });
+
+      it("a `<const>` of a `<const>` read in the middle", () => {
+        stale("  items = [];\n  log(a);", "log(a)", {
+          head: "<let/items=[]/>\n<const/a=items.length/>\n<const/total=a * 2/>\n",
+          read: "a",
+        });
+      });
+
+      it("a write in an earlier branch, a read after the block", () => {
+        stale("  if (ok) {\n    items = [];\n  }\n  log(total);", "log(total)");
+      });
+
+      it("a write in an `if` branch, a read in the `else`", () => {
+        stale(
+          "  if (ok) {\n    items = [];\n  } else {\n    log(total);\n  }",
+          "log(total)",
+        );
+      });
+
+      it("a loop that writes and reads: the read before the write counts", () => {
+        stale(
+          "  for (const x of xs) {\n    log(total);\n    items = [...items, x];\n  }",
+          "log(total)",
+        );
+      });
+
+      it("a loop condition that reads, a write in the body", () => {
+        stale(
+          "  while (total < 10) {\n    items = [...items, 1];\n  }",
+          "total < 10",
+        );
+      });
+
+      it("a read after `await` is flagged", () => {
+        stale(
+          "  items = [];\n  await sleep();\n  log(total);",
+          "log(total)",
+          {},
+          true,
+        );
+      });
+
+      it("a read in the same statement, after the write", () => {
+        stale("  (items = [], log(total));", "log(total)");
+      });
+
+      const writes: Array<[string, string, string, string]> = [
+        ["assignment", "items = []", "<const/total=items.length/>", "items"],
+        ["addition", "n += 1", "<const/total=n * 2/>", "n"],
+        ["exponent", "n **= 2", "<const/total=n * 2/>", "n"],
+        ["logical and", "n &&= 2", "<const/total=n * 2/>", "n"],
+        ["logical or", "n ||= 2", "<const/total=n * 2/>", "n"],
+        ["nullish", "n ??= 2", "<const/total=n * 2/>", "n"],
+        ["postfix increment", "n++", "<const/total=n * 2/>", "n"],
+        ["prefix decrement", "--n", "<const/total=n * 2/>", "n"],
+        ["array destructuring", "[n] = [1]", "<const/total=n * 2/>", "n"],
+        ["array rest", "[, , ...n] = xs", "<const/total=n * 2/>", "n"],
+        ["object destructuring", "({ n } = o)", "<const/total=n * 2/>", "n"],
+        ["object rename", "({ value: n } = o)", "<const/total=n * 2/>", "n"],
+        ["nested default", "({ a: [n = 3] } = o)", "<const/total=n * 2/>", "n"],
+        ["parenthesized target", "(n) = 1", "<const/total=n * 2/>", "n"],
+        ["chained", "x = n = 1", "<const/total=n * 2/>", "n"],
+      ];
+
+      it.each(writes)("the write form: %s", (_form, write, derived, name) => {
+        const head = `<let/${name}=0/>\n${derived}\n`;
+        const source = `${head}${kind.wrap(`  ${write};\n  log(total);`)}\n`;
+        const error = attempt(source);
+        const at = readAt(source, "log(total)", "total");
+        expect(error?.diagnosticCode).toBe(CODE);
+        expect(error?.message).toBe(
+          bodyMessage(kind, "total", name, lineOf(source, write)),
+        );
+        expect([error?.line, error?.column]).toEqual([
+          at.start.line,
+          at.start.column,
+        ]);
+        expect(error?.end).toEqual(at.end);
+      });
+
+      it.each([
+        ["a read before the write", "  log(total);\n  items = [];"],
+        ["a read in the value of the write", "  items = [...items, total];"],
+        ["a write with no read", "  items = [];"],
+        ["a read with no write", "  log(total);"],
+        [
+          "a write to a member of the `<let>`",
+          "  items.push(1);\n  log(total);",
+        ],
+        [
+          "a read in a `setTimeout` callback",
+          "  items = [];\n  setTimeout(() => log(total), 0);",
+        ],
+        [
+          "a read in a `.then` function",
+          "  items = [];\n  p.then(function () { log(total) });",
+        ],
+        [
+          "a write in a callback, a read after it",
+          "  run(() => { items = [] });\n  log(total);",
+        ],
+        [
+          "a parameter-free local that shadows the `<const>`",
+          "  items = [];\n  { const total = 1; log(total); }",
+        ],
+        [
+          "a local `<let>`-named variable that shadows the `<let>`",
+          "  let items = [];\n  items = [1];\n  log(total);",
+        ],
+        [
+          "a function parameter that shadows the `<const>`",
+          "  items = [];\n  run((total) => log(total));",
+        ],
+        [
+          "a loop whose iterable reads, run once before the writes",
+          "  for (const x of total.toString()) {\n    items = [...items, x];\n  }",
+        ],
+      ])("accepts %s", (_what, statements) => {
+        expect(attempt(sourceOf(kind, statements))).toBeUndefined();
+      });
+
+      it("accepts a read of a `<const>` that does not depend on the written `<let>`", () => {
+        const source = `<let/items=[]/>\n<let/other=0/>\n<const/doubled=other * 2/>\n${kind.wrap("  items = [];\n  log(doubled);")}\n`;
+        expect(attempt(source)).toBeUndefined();
+      });
+
+      it("accepts a read of the `<const>` after a write made by a handler", () => {
+        const source = `${CART}<button onClick() { items = []; }>x</button>\n${kind.wrap("  log(total);")}\n`;
+        expect(attempt(source)).toBeUndefined();
+      });
+
+      it("a body that does not parse is another check's to report", () => {
+        const error = attempt(sourceOf(kind, "  items = ;\n  log(total);"));
+        expect(error?.diagnosticCode).not.toBe(CODE);
+      });
+
+      it("lowerSource raises the same error once, at the read", () => {
+        const source = sourceOf(kind, "  items = [];\n  log(total);");
+        const { diagnostics } = lowerSource(source, "/page.mx", {
+          tagRules: "html",
+        });
+        const found = diagnostics.filter((d) => d.code === CODE);
+        const at = readAt(source, "log(total)", "total");
+        expect(found).toHaveLength(1);
+        expect(found[0]).toMatchObject({
+          severity: "error",
+          message: bodyMessage(
+            kind,
+            "total",
+            "items",
+            lineOf(source, "items = []"),
+          ),
+          line: at.start.line,
+          column: at.start.column,
+          end: at.end,
+        });
+        expect(found[0]?.fixes).toBeUndefined();
+      });
+
+      it("the `none` tag-rules preset: nothing fires", () => {
+        const { diagnostics } = lowerSource(
+          sourceOf(kind, "  items = [];\n  log(total);"),
+          "/work/none-page.mx",
+          { tagRules: "none" },
+        );
+        expect(diagnostics.filter((d) => d.code === CODE)).toEqual([]);
+      });
+
+      it("a host that refuses `<let>`: the refusal is the only error", () => {
+        const refusing: HostDeclarations = {
+          ...withLet,
+          isDelegatedTag: () => false,
+          tags: { let: { kind: "error", reason: "no state here" } },
+        };
+        const error = attempt(
+          sourceOf(kind, "  items = [];\n  log(total);"),
+          refusing,
+        );
+        expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+        expect([error?.line, error?.column]).toEqual([1, 0]);
+        expect(error?.message).not.toContain("is stale here");
+      });
+    },
+  );
+
+  it("the handler's text is untouched: it still offers the move into a `<script>`", () => {
+    const source = `${CART}<button onClick() {\n  items = [];\n  log(total);\n}>x</button>\n`;
+    expect(attempt(source)?.message).toBe(message("total", "items", 4));
+  });
+
+  it("a script body shadowed by its own declaration of the `<const>`", () => {
+    const source = `${CART}<script>\n  items = [];\n  const total = 1;\n  log(total);\n</script>\n`;
+    expect(attempt(source)).toBeUndefined();
+  });
+
+  it("a `<script>` with a comment before the code is still read", () => {
+    const source = `${CART}<script>\n  // keep the cart in sync\n  items = [];\n  log(total);\n</script>\n`;
+    const error = attempt(source);
+    expect(error?.message).toBe(
+      `\`total\` is stale here: it derives from \`items\`, which this \`<script>\` wrote on line 5. Compute from \`items\` directly.`,
+    );
+    expect(error?.line).toBe(6);
+  });
+
+  it("a `<script>` on one line", () => {
+    const source = `${CART}<script>items = []; log(total)</script>\n`;
+    const error = attempt(source);
+    expect(error?.message).toBe(
+      `\`total\` is stale here: it derives from \`items\`, which this \`<script>\` wrote on line 3. Compute from \`items\` directly.`,
+    );
+    expect([error?.line, error?.column]).toEqual([3, 24]);
+    expect(error?.end).toEqual({ line: 3, column: 29 });
+  });
+
+  it("a `<script>` inside an `<if>` and a `<for>`, and a `<lifecycle>` in a custom tag body", () => {
+    for (const source of [
+      `${CART}<if=ok>\n  <script>\n    items = [];\n    log(total);\n  </script>\n</if>\n`,
+      `${CART}<for|x| of=xs>\n  <script>\n    items = [];\n    log(total);\n  </script>\n</for>\n`,
+      `${CART}<widget>\n  <lifecycle onMount() {\n    items = [];\n    log(total);\n  }/>\n</widget>\n`,
+    ]) {
+      expect(attempt(source)?.diagnosticCode).toBe(CODE);
+    }
+  });
+
+  it("the first body of a `<lifecycle>` with two stale hooks is the one reported", () => {
+    const source = `${CART}<lifecycle onMount() {\n  items = [];\n  log(total);\n} onUpdate() {\n  items = [];\n  log(total);\n}/>\n`;
+    expect(attempt(source)?.line).toBe(5);
+  });
+
+  it("a `<lifecycle>` function attribute that is not a function is not looked into", () => {
+    const source = `${CART}<lifecycle onMount=(ok ? 1 : 2) name="x"/>\n`;
+    expect(attempt(source)).toBeUndefined();
+  });
+
+  it("a `<script>` or a `<lifecycle>` registered as a custom tag is that tag", () => {
+    for (const name of ["script", "lifecycle"]) {
+      let error: TranslateError | undefined;
+      try {
+        compileSource(
+          `${CART}<${name} onMount() { items = []; log(total) }/>\n`,
+          "/page.mx",
+          withLet,
+          {
+            targets: lookup,
+            emitIr: () => "",
+            customTags: { [name]: { attributes: { "*": {} } } },
+          } as never,
+        );
+      } catch (caught) {
+        error = caught as TranslateError;
+      }
+      // An ordinary tag: its `onMount` is an `on…` attribute, a handler.
+      expect(error?.message).toBe(message("total", "items", 3));
+    }
   });
 });

@@ -216,8 +216,12 @@ import {
 } from "./parse-error-hints.ts";
 import { payloadOf } from "./payload.ts";
 import { findLetWrite } from "./render-let-write.ts";
-import { checkReservedTemplate } from "./reserved-bindings.ts";
 import {
+  checkReservedTemplate,
+  parseAuthoredSource,
+} from "./reserved-bindings.ts";
+import {
+  bodyFunction,
   derivedFrom,
   findStaleRead,
   handlerFunction,
@@ -678,12 +682,77 @@ function checkTagValueWrites(ctx: Ctx, node: Node): void {
   }
 }
 
+/** Where a stale read can sit: what runs the body decides what the fix is. */
+type StaleBodyKind = "handler" | "script" | "hook";
+
 /**
- * Rejects a handler that reads a derived `<const>` after writing a `<let>` the
- * `<const>` depends on (`findStaleRead`). A handler is the function given to
- * an `on…` attribute of any tag; `<lifecycle>`'s `onMount` and `onUpdate` are
- * not event handlers and are out of scope (a write and a read inside one hook
- * is not detected).
+ * The function bodies of `tag` that `checkStaleDerivedReads` walks: the
+ * `<script>` body, the functions a `<lifecycle>` is given, and the function
+ * given to an `on…` attribute of any other tag. A name a caller registered
+ * as a custom tag is that tag, not `<script>` or `<lifecycle>`.
+ */
+function staleBodiesOf(
+  ctx: Ctx,
+  tag: Node,
+): { kind: StaleBodyKind; body: Node }[] {
+  const name = tagNameOf(tag);
+  const builtin =
+    (name === "script" || name === "lifecycle") &&
+    !(ctx.customTags && Object.hasOwn(ctx.customTags, name));
+  const bodies: { kind: StaleBodyKind; body: Node }[] = [];
+  if (builtin && name === "script") {
+    const program = scriptProgramOf(ctx, tag);
+    if (program) bodies.push({ kind: "script", body: bodyFunction(program) });
+  }
+  for (const attr of tagAttributesOf(tag)) {
+    if (isSpreadAttributeNode(attr)) continue;
+    if (builtin && name === "lifecycle") {
+      const hook = handlerFunction(attrValueOf(ctx, attr));
+      if (hook) bodies.push({ kind: "hook", body: hook });
+    } else if (/^on[A-Z-]/.test(attrNameOf(attr))) {
+      const handler = handlerFunction(attrValueOf(ctx, attr));
+      if (handler) bodies.push({ kind: "handler", body: handler });
+    }
+  }
+  return bodies;
+}
+
+/**
+ * The parsed statements of a `<script>` body, with the positions of the
+ * file; `undefined` when the body is not one plain text run (a `${…}`
+ * placeholder splits it) or does not parse, which other checks own.
+ */
+function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
+  const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
+  const [text] = children;
+  if (children.length !== 1 || !isTextNode(text)) return undefined;
+  try {
+    const at = text.loc?.start ?? positionAtOffset(ctx, text.start);
+    return parseAuthoredSource(text.value, at.line, at.column).program;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What names the writer and the fix, per body: a handler can also move the
+ * read into a `<script>`; a body that writes is not the place to move it to.
+ */
+const STALE_WRITER: Record<StaleBodyKind, string> = {
+  handler: "this handler",
+  script: "this `<script>`",
+  hook: "this `<lifecycle>` hook",
+};
+const STALE_MOVE =
+  ", or move the check into a `<script>`, which runs after the write settles on every target";
+
+/**
+ * Rejects a body that reads a derived `<const>` after writing a `<let>` the
+ * `<const>` depends on (`findStaleRead`). The body is the function given to
+ * an `on…` attribute of any tag (the fix: compute from the written value, or
+ * read in a `<script>`), a `<script>` body, or a function given to a
+ * `<lifecycle>` (the fix: compute from the written value; a body that writes
+ * is not the place to move the read to).
  *
  * When the walk collects errors the stale read is recorded and the tag keeps
  * lowering, so its other errors are still reported; otherwise it throws.
@@ -691,18 +760,14 @@ function checkTagValueWrites(ctx: Ctx, node: Node): void {
 function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
   const derived = ctx.derivedConsts;
   const lets = ctx.renderLets;
-  if (!derived?.size || !lets?.size || tagNameOf(tag) === "lifecycle") return;
-  for (const attr of tagAttributesOf(tag)) {
-    if (isSpreadAttributeNode(attr) || !/^on[A-Z-]/.test(attrNameOf(attr))) {
-      continue;
-    }
-    const handler = handlerFunction(attrValueOf(ctx, attr));
-    const stale = handler ? findStaleRead(handler, lets, derived) : undefined;
+  if (!derived?.size || !lets?.size) return;
+  for (const { kind, body } of staleBodiesOf(ctx, tag)) {
+    const stale = findStaleRead(body, lets, derived);
     if (!stale) continue;
     try {
       raise(
         STALE_DERIVED_READ_CODE,
-        `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which this handler wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly, or move the check into a \`<script>\`, which runs after the write settles on every target.`,
+        `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which ${STALE_WRITER[kind]} wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly${kind === "handler" ? STALE_MOVE : ""}.`,
         stale.read,
       );
     } catch (error) {

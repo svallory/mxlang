@@ -62,7 +62,22 @@ is rejected on the html default policy and in `lowerSource`:
 
 Marko, React and Solid 2 return the value from before the write there; Svelte, Vue, Angular and Lit return the new one, so one source cannot mean the same thing everywhere. The code is `MX_STALE_DERIVED_READ` and the position is the read, with its end. Compute the value from `items` directly (`const next = [...items, input.candidate]`), or check it in a `<script>` body, which runs after the write has settled.
 
-What counts: the function given to an `on…` attribute of any tag (an attribute method, an arrow or a function expression, on a native element, a custom tag or an attribute tag), a `<const>` that reaches the written `<let>` through other `<const>`s, and any read that follows a write in source order in the handler's own body: a write in an earlier branch or block, a read after an `await`, and a read in a loop that also writes. Compound, logical and destructuring assignments and `++`/`--` all write. What does not: a read before the write, a read in a nested function or callback, a `<script>` body, a `<const>` that does not depend on the written `<let>`, and a parameter or local that shadows either name. A `for` initializer or a `for…of` / `for…in` subject runs once before the loop's writes, so a read there is fine; the test and update of a `for` repeat and are flagged. Not detected: a handler held in a variable or built by a call, a function declared with `<const>` and called from a handler, a write made inside a nested function, a `for (items of …)` head used as a write, a `<const>` declared below the handler's tag, and a write followed by a read inside one `<lifecycle>` hook (a hook is not an event handler). Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+The same read inside a `<script>` body or a `<lifecycle>` hook is the same error, with the same code and position, and a message that names only the first fix, because a body that writes is not the place to move the read to:
+
+```html
+<let/items=[]/>
+<const/total=items.length/>
+<script>
+  items = [...items, 1];
+  if (total > 100) applyDiscount();
+</script>
+```
+
+> `total` is stale here: it derives from `items`, which this `<script>` wrote on line 4. Compute from `items` directly.
+
+For a hook the text says "which this `<lifecycle>` hook wrote". Reading the `<const>` in a `<script>` body that a handler wrote is the sanctioned place and is not flagged.
+
+What counts: the function given to an `on…` attribute of any tag (an attribute method, an arrow or a function expression, on a native element, a custom tag or an attribute tag), a `<script>` body, any function given to a `<lifecycle>` (`onMount`, `onUpdate`, `onDestroy`), a `<const>` that reaches the written `<let>` through other `<const>`s, and any read that follows a write in source order in that body: a write in an earlier branch or block, a read after an `await`, and a read in a loop that also writes. Compound, logical and destructuring assignments and `++`/`--` all write. What does not: a read before the write, a read in a nested function or callback, a read in a `<script>` body or hook of a `<const>` that a handler wrote, a `<const>` that does not depend on the written `<let>`, and a parameter or local that shadows either name. A `for` initializer or a `for…of` / `for…in` subject runs once before the loop's writes, so a read there is fine; the test and update of a `for` repeat and are flagged. Not detected: a handler held in a variable or built by a call, a function declared with `<const>` and called from a handler, a write made inside a nested function, a `for (items of …)` head used as a write, a `<const>` declared below the handler's tag, a `<script>` body that holds a `${…}` placeholder, and a write in one body with the read in another. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
 
 ## A tag a host does not support
 
