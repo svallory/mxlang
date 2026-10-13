@@ -28,6 +28,7 @@
     "hono": "4.6.20"
   },
   "devDependencies": {
+    "@babel/parser": "7.29.8",
     "@mxlang/tsx-bridge": "workspace:*",
     "@types/bun": "1.4.2",
     "hono": "4.6.20",

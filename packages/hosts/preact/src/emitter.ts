@@ -579,6 +579,15 @@ export class PreactEmitter implements Emitter<string> {
    * name.
    */
   readonly #decodeText: boolean;
+  /**
+   * This emitter fills an *expression slot* (a ternary arm, an arrow body, an
+   * attribute's expression container) rather than a JSX child list. A node
+   * that is a JS expression (a `<define>` call, a dynamic tag, an `<if>`
+   * chain, a `<for>`) is then written bare: `{Foo()}` is a JSX child, and in
+   * a slot it is an object literal (`cond ? {Foo()} : null` does not parse,
+   * and `(e) => {Foo()}` is a block body that returns nothing).
+   */
+  readonly #bare: boolean;
 
   /**
    * Tooling-only (decision 140): the name of the preamble's handler-type
@@ -609,6 +618,7 @@ export class PreactEmitter implements Emitter<string> {
     typeCheck?: string,
     decodeText = true,
     region?: RegionSink,
+    bare = false,
   ) {
     this.#dialect = dialect;
     this.#region = region;
@@ -619,6 +629,7 @@ export class PreactEmitter implements Emitter<string> {
     this.#varSerial = varSerial ?? { n: 0 };
     this.#callbackScope = callbackScope;
     this.#decodeText = decodeText;
+    this.#bare = bare;
   }
 
   /** Statements a `/var` call site needs above the component's `return`. */
@@ -645,6 +656,7 @@ export class PreactEmitter implements Emitter<string> {
   #child(
     callbackScope = this.#callbackScope,
     decodeText = true,
+    bare = false,
   ): PreactEmitter {
     return new PreactEmitter(
       this.#dialect,
@@ -656,7 +668,18 @@ export class PreactEmitter implements Emitter<string> {
       this.#typeCheck,
       decodeText,
       this.#region,
+      bare,
     );
+  }
+
+  /**
+   * An expression node's code: a JSX child (`{expr}`) in a child list, the
+   * bare expression where this emitter fills an expression slot.
+   */
+  #slot(...parts: Array<string | MappedCode>): MappedCode {
+    return this.#bare
+      ? concatMapped(...parts)
+      : concatMapped("{", ...parts, "}");
   }
 
   /**
@@ -685,8 +708,9 @@ export class PreactEmitter implements Emitter<string> {
     nodes: IrNode[],
     callbackScope?: boolean,
     decodeText = true,
+    bare = false,
   ): MappedCode {
-    const child = this.#child(callbackScope, decodeText);
+    const child = this.#child(callbackScope, decodeText, bare);
     drive(child, nodes);
     return child.result();
   }
@@ -698,8 +722,17 @@ export class PreactEmitter implements Emitter<string> {
    * a ternary branch and a `.map` callback each have exactly one expression
    * slot to fill. A lone escaped placeholder becomes its bare expression,
    * which keeps `<if=c>${x}</if>` from emitting `<>{x}</>`.
+   *
+   * `slot` says the result is placed in a JS expression position (a ternary
+   * arm, an arrow body, an attribute value), where a lone expression node is
+   * emitted without the braces a JSX child needs. A caller that puts the
+   * result between JSX tags leaves it unset.
    */
-  #expression(nodes: IrNode[], callbackScope?: boolean): MappedCode {
+  #expression(
+    nodes: IrNode[],
+    callbackScope?: boolean,
+    slot = false,
+  ): MappedCode {
     const content = meaningful(nodes);
     if (content.length === 0) return concatMapped("null");
     if (content.length === 1) {
@@ -714,7 +747,7 @@ export class PreactEmitter implements Emitter<string> {
         only.kind === "For" ||
         only.kind === "DelegatedTag"
       ) {
-        return this.#render(content, callbackScope);
+        return this.#render(content, callbackScope, true, slot);
       }
     }
     return concatMapped("<>", this.#render(content, callbackScope), "</>");
@@ -1806,19 +1839,19 @@ export class PreactEmitter implements Emitter<string> {
           `const ${temp} = __mxDynamicPair(${node.target.expr.code}, ${payloadCode}${contentCode}${takesParams});`,
         );
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
-        this.#out.push(concatMapped(`{${temp}.output}`));
+        this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
       this.#runtimeImports.add("__mxDynamic");
       this.#out.push(
-        concatMapped(
-          "{__mxDynamic(",
+        this.#slot(
+          "__mxDynamic(",
           node.target.expr.code,
           ", ",
           payload,
           content,
           takesParams,
-          ")}",
+          ")",
         ),
       );
       return;
@@ -1877,11 +1910,7 @@ export class PreactEmitter implements Emitter<string> {
             ? this.#propsObject(node)
             : "";
       this.#out.push(
-        concatMapped(
-          "{",
-          mapped(node.target.name, node.nameSpan),
-          `(${args})}`,
-        ),
+        this.#slot(mapped(node.target.name, node.nameSpan), `(${args})`),
       );
       return;
     }
@@ -1942,12 +1971,12 @@ export class PreactEmitter implements Emitter<string> {
         // default export returns only the output.
         this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
-        this.#out.push(concatMapped(`{${temp}.output}`));
+        this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
       // No `/var`: only the output is wanted, and the default export already
       // returns it, so the call stays an expression.
-      this.#out.push(concatMapped("{", `${name}(${props})`, "}"));
+      this.#out.push(this.#slot(`${name}(${props})`));
       return;
     }
     const rawHtml = raw
@@ -1972,7 +2001,7 @@ export class PreactEmitter implements Emitter<string> {
     const children = node.content.hasParams
       ? concatMapped(
           `{(${node.content.params.join(", ")}) => `,
-          this.#expression(contentNodes, true),
+          this.#expression(contentNodes, true, true),
           "}",
         )
       : this.#render(contentNodes, true);
@@ -2038,15 +2067,15 @@ export class PreactEmitter implements Emitter<string> {
           branch.condition.code,
           " ? ",
           // A branch is a ternary arm: an expression, evaluated lazily.
-          this.#expression(branch.children, true),
+          this.#expression(branch.children, true, true),
           " : ",
         );
       } else {
-        parts.push(this.#expression(branch.children, true));
+        parts.push(this.#expression(branch.children, true, true));
       }
     }
     if (node.branches.at(-1)?.condition) parts.push("null");
-    this.#out.push(concatMapped("{", ...parts, "}"));
+    this.#out.push(this.#slot(...parts));
   }
 
   /**
@@ -2089,10 +2118,10 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       const listVar = hygienicName("mxList", node.params, source.list.code);
       this.#out.push(
-        concatMapped(
-          `{((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
+        this.#slot(
+          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
           body,
-          "</__mxFragment>)}",
+          "</__mxFragment>)",
         ),
       );
       this.#runtimeImports.add("__mxFragment");
@@ -2109,10 +2138,10 @@ export class PreactEmitter implements Emitter<string> {
         );
       const key = keyFrom(first);
       this.#out.push(
-        concatMapped(
-          `{Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
+        this.#slot(
+          `Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
           body,
-          "</__mxFragment>)}",
+          "</__mxFragment>)",
         ),
       );
       this.#runtimeImports.add("__mxFragment");
@@ -2140,10 +2169,10 @@ export class PreactEmitter implements Emitter<string> {
     // author's param already names.
     const key = keyFrom(first);
     this.#out.push(
-      concatMapped(
-        `{Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
+      this.#slot(
+        `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
         body,
-        "</__mxFragment>)}",
+        "</__mxFragment>)",
       ),
     );
     this.#runtimeImports.add("__mxFragment");
@@ -2219,7 +2248,11 @@ export class PreactEmitter implements Emitter<string> {
       // gives that through `Suspense`; the package re-exports it under one
       // name so the emitted text is dialect-independent.
       this.#runtimeImports.add(this.#dialect.suspenseName);
-      const fallback = this.#expression(placeholder.block.children);
+      const fallback = this.#expression(
+        placeholder.block.children,
+        undefined,
+        true,
+      );
       inner = concatMapped(
         "<__mxSuspense fallback={",
         fallback,
@@ -2244,7 +2277,7 @@ export class PreactEmitter implements Emitter<string> {
     // function component, under the boundary.
     this.#runtimeImports.add(this.#dialect.errorBoundaryName);
     const params = catchTag.block.params.join(", ");
-    const caught = this.#expression(catchTag.block.children);
+    const caught = this.#expression(catchTag.block.children, undefined, true);
     const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(

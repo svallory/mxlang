@@ -36,6 +36,10 @@ describe("preact: a <define> is scoped to the body that declares it", () => {
     const code = emit(
       `${FOO}\n<if=input.a><Foo/></if>\n<div><Foo/></div>\n<Foo/>\n`,
     );
-    expect(code.match(/\{Foo\(\)\}/g)).toHaveLength(3);
+    // One call per block: bare in the `<if>` arm (an expression slot), a JSX
+    // child in the element and at the top level.
+    expect(code).toContain("{input.a ? Foo() : null}");
+    expect(code).toContain("<div>{Foo()}</div>");
+    expect(code.match(/Foo\(\)/g)).toHaveLength(3);
   });
 });
