@@ -768,6 +768,14 @@ const RENDER_ATTR = `function __mxRenderAttr(__mxName: string, __mxValue: unknow
   return " " + __mxName + '="' + __mxEscape(__mxAttrValue(__mxName, __mxValue, __mxTag)) + '"';
 }`;
 
+// Marko 6.4.4's html `_escape` / `_unescaped` in text position: a truthy value
+// prints as its string, `0` (and `-0`) prints `0`, and every other falsy value
+// (`false`, `NaN`, `0n`, `""`, `null`, `undefined`) prints nothing. An
+// attribute value follows a different rule, so `escape` itself stays as it is.
+const TEXT_OF = `function __mxTextOf(__mxValue: unknown): string {
+  return __mxValue || __mxValue === 0 ? __mxValue + "" : "";
+}`;
+
 // Marko 6.3.51's html `_textarea_value`: `normalizeStrAttrValue` (nothing for
 // null/undefined/false/true), escaped as text, and a leading newline doubled
 // because the HTML parser drops the first one.
@@ -1019,6 +1027,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxStyleValue(") || dynamic, STYLE_VALUE],
     [code.includes("__mxTextareaContent(") || dynamic, TEXTAREA_CONTENT],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
+    [code.includes("__mxTextOf("), TEXT_OF],
     [dynamic, DYNAMIC_PROPS],
     [dynamic, RENDER_DYNAMIC],
     [code.includes("__mxRenderTag("), RENDER_CALL],

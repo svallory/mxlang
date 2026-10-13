@@ -605,7 +605,7 @@ export default () => <div />;
 
       expect(result).not.toBeNull();
       expect(result?.code).toContain("export default Greeting as ");
-      expect(result?.code).toContain("__mxEscape(input.name)");
+      expect(result?.code).toContain("__mxEscape(__mxTextOf(input.name))");
       // No real map yet for this path (see the plugin's own doc comment).
       expect(result?.map).toBeNull();
     }, 20_000);

@@ -737,7 +737,7 @@ describe("statement blocks", () => {
     expect(code.indexOf("const S = 41 + 1")).toBeLessThan(
       code.indexOf("function Probe(input: Input): string {"),
     );
-    expect(code).toContain("__mxEscape(S)");
+    expect(code).toContain("__mxEscape(__mxTextOf(S))");
   });
 
   // This host used to reject `<return>` outright, on the grounds that "a
@@ -760,7 +760,7 @@ describe("evaluate-initial-value constructs (decision 65)", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const { code } = compile(src("<let/count=5/>\n<p>${count}</p>"), file);
     expect(code).toContain("const count = 5;");
-    expect(code).toContain("__mxEscape(count)");
+    expect(code).toContain("__mxEscape(__mxTextOf(count))");
   });
 
   it("<const> binds its value", () => {
@@ -2856,7 +2856,7 @@ describe("a tag template compiles as its own module", () => {
     expect(statementLine).toBeGreaterThan(-1);
     // Module scope means *before* the render function, not hoisted into it.
     expect(statementLine).toBeLessThan(renderLine);
-    expect(code).toContain("__mxEscape(LABEL)");
+    expect(code).toContain("__mxEscape(__mxTextOf(LABEL))");
   });
 
   // A8. A self-recursive tag: the unit imports itself, which is legal ESM.
@@ -2933,7 +2933,7 @@ describe("a unit that returns a value", () => {
       /const n = \$mx_\w+\.render\(\{ start: 1 \}, __mxOut\);/,
     );
     // And the binding is readable after the call.
-    expect(code).toContain("__mxEscape(n)");
+    expect(code).toContain("__mxEscape(__mxTextOf(n))");
   });
 
   it("renders into the sink and drops the value when the call binds no /var", () => {
@@ -3021,7 +3021,7 @@ describe("a unit that returns a value", () => {
       { customTags: { counter } },
     );
 
-    expect(code).toContain("__mxEscape(n)");
+    expect(code).toContain("__mxEscape(__mxTextOf(n))");
   });
 
   it("allows a read from a block nested inside the declaring one", () => {
@@ -3032,7 +3032,7 @@ describe("a unit that returns a value", () => {
     );
 
     // Ordinary JS closure scoping: the binding is in scope for the block.
-    expect(code).toContain("__mxEscape(n)");
+    expect(code).toContain("__mxEscape(__mxTextOf(n))");
   });
 });
 

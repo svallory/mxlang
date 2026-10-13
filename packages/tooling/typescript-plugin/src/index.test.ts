@@ -727,7 +727,9 @@ describe("MX language plugin", () => {
     expect(virtual.languageId).toBe("typescript");
     expect(generated).toContain("export interface Input { title: string }");
     expect(generated).toContain("function Card(input: Input): string");
-    expect(generated).toContain("__mxOut.write(__mxEscape(input.title));");
+    expect(generated).toContain(
+      "__mxOut.write(__mxEscape(__mxTextOf(input.title)));",
+    );
     expect(virtual.mappings.length).toBeGreaterThan(0);
     // TSX, not TS, for every host. The Preact host emits a component module
     // whose body is JSX; parsed as plain TS its `return (<>…)` is a syntax

@@ -184,14 +184,32 @@ export function createEmitter(
     write(quote(text));
   };
 
-  // A raw `$!{…}` is written as `"" + (…)`: the same string coercion the
+  // A raw expression is written as `"" + (…)`: the same string coercion the
   // former `out += (…)` applied, now spelled out because `write` takes a
-  // string.
+  // string. Only the attribute writers use it; their value is already text.
   const expression = (code: string | MappedCode, escaped: boolean): void => {
     write(
       escaped
         ? concatMapped("__mxEscape(", code, ")")
         : concatMapped('"" + (', code, ")"),
+    );
+  };
+
+  /**
+   * An `${…}` / `$!{…}` in text position, rendered the way Marko's html
+   * runtime renders it (`_escape` / `_unescaped`): `__mxTextOf` prints a
+   * truthy value as its string, `0` as `0`, and every other falsy value
+   * (`false`, `NaN`, `0n`, `""`, `null`, `undefined`) as nothing.
+   *
+   * This is separate from `expression` on purpose. An attribute value follows
+   * a different rule (`false` and `null` drop the attribute, `NaN` and `0n`
+   * print), and `escape` serves both positions.
+   */
+  const interpolation = (code: string | MappedCode, escaped: boolean): void => {
+    write(
+      escaped
+        ? concatMapped("__mxEscape(__mxTextOf(", code, "))")
+        : concatMapped("__mxTextOf(", code, ")"),
     );
   };
 
@@ -918,7 +936,7 @@ export function createEmitter(
     },
 
     interpolation(node) {
-      expression(mappedExpr(node.expr), node.escaped);
+      interpolation(mappedExpr(node.expr), node.escaped);
     },
 
     element(node) {
@@ -1326,7 +1344,7 @@ export function createEmitter(
         for (const child of tag.children) {
           if (child.kind === "Text") write(quote(child.value));
           else if (child.kind === "Interpolation") {
-            expression(mappedExpr(child.expr), child.escaped);
+            interpolation(mappedExpr(child.expr), child.escaped);
           }
         }
         write(quote(`</${data.tag}>`));

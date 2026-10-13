@@ -22,6 +22,11 @@
  * `null` and `undefined` render as the empty string rather than the words
  * "null"/"undefined", which is what a template author means by a missing
  * value; every other non-string is `String()`-coerced.
+ *
+ * This is the rule for an attribute value (`NaN` prints `NaN`, `0n` prints
+ * `0`). Text position follows Marko's other rule, where `false`, `NaN`, `0n`
+ * and `""` print nothing; the html target applies that rule before calling this
+ * function, which is why this one is unchanged.
  */
 // biome-ignore lint/suspicious/noShadowRestrictedNames: the name is part of the emitted module's contract — every compiled template imports `escape` by this name, and the global it shadows is deprecated and never used here
 export function escape(value: unknown): string {

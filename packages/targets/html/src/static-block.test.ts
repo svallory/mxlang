@@ -112,7 +112,7 @@ describe("html: a `static { … }` block hoists its statements, not the block", 
   it("the template reads a binding the block declares", () => {
     const { code } = compile(`static { const q = 1 }${TEMPLATE}`, "/f/t.mx");
     expect(code).toContain("const q = 1\n");
-    expect(code).toContain("__mxOut.write(__mxEscape(q));");
+    expect(code).toContain("__mxOut.write(__mxEscape(__mxTextOf(q)));");
     expect(code).not.toContain("{ const q = 1 }");
     // The binding is declared before the render function that reads it.
     expect(code.indexOf("const q = 1")).toBeLessThan(

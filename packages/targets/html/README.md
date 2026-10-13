@@ -56,7 +56,7 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
     if (__mxValue !== "") __mxOut.write(" class=\"" + __mxValue + "\"");
   }
   __mxOut.write(">Hello, ");
-  __mxOut.write(__mxEscape(input.name));
+  __mxOut.write(__mxEscape(__mxTextOf(input.name)));
   __mxOut.write("!</h1>");
 }
 export { __mxRender as render };

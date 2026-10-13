@@ -389,6 +389,13 @@ an error (§14).
 string, not their names. It treats its input as **literal text**, so `&` becomes
 `&amp;` and `&amp;` becomes `&amp;amp;` — pinned by test (decision 45).
 
+On the html target a `${expr}` or `$!{expr}` in text position prints a truthy
+value as its string, `0` (and `-0`) as `0`, and every other falsy value (`false`,
+`NaN`, `0n`, `""`, `null`, `undefined`) as nothing, as Marko 6.4.4 does. An
+attribute value follows its own rule (see Native attribute value rendering below):
+`escape` serves both, so the text rule is a separate step ahead of it and
+attribute output is unchanged.
+
 `$!{…}` is **not accepted inside an attribute value**; Marko's parser rejects it
 there before any host runs. Host handling of `$!{}` in content position varies
 (§13): the Solid host lowers a lone `$!{html}` child to `innerHTML` and errors on

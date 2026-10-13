@@ -10,6 +10,11 @@ It contains:
   type; also published as `@mxlang/target-html/runtime`, `src/runtime.ts`) — the
   *entire* runtime. `escape` escapes `& < > " '`; `null` and
   `undefined` render as `""`, not their names.
+  Text position (`${…}`, `$!{…}`) goes through an inlined `__mxTextOf` first
+  (`translate.ts`'s `TEXT_OF`): a truthy value prints as its string, `0` as
+  `0`, every other falsy value (`false`, `NaN`, `0n`, `""`) as nothing, as
+  Marko 6.4.4's `_escape`/`_unescaped` do. `escape` itself also serves
+  attribute values, which follow Marko's other rule, so it stays unchanged.
 - `compile(source, filename, options?)` -> `{ code, map }`, driving the
   translator under `@marko/compiler`. `options.strict` swaps in `strictPolicy`
   (see the translator section below). The map is currently an identity
