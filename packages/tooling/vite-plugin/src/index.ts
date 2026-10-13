@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import * as core from "@mxlang/core";
@@ -13,6 +13,13 @@ import type { MxRegionCompile } from "@mxlang/tsx-bridge";
 import { print } from "@mxlang/tsx-bridge";
 import type { Plugin } from "vite";
 
+/** A warning positioned at a file other than the one being compiled. */
+type LocatedWarning = {
+  message: string;
+  id: string;
+  loc: { file: string; line: number; column: number };
+};
+
 /** The part of a policy or scan diagnostic a build error is made from. */
 type LocatedDiagnostic = Pick<
   TargetPolicyDiagnostic,
@@ -25,6 +32,10 @@ type LocatedDiagnostic = Pick<
  * only descriptor load()/compileRegion() reaches the heavy compile leaves.
  */
 type RegistryModule = typeof import("@mxlang/targets");
+/** What a tag scan reports about a tag file. */
+type ScanDiagnostic = ReturnType<
+  RegistryModule["scanCached"]
+>["diagnostics"][number];
 let registryModule: Promise<RegistryModule> | undefined;
 
 function loadRegistry(): Promise<RegistryModule> {
@@ -905,17 +916,49 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    * directory per change, not one per file.
    */
   /**
-   * Scan diagnostics already reported, so a rebuild does not repeat them.
+   * Scan and policy diagnostics already reported as warnings. Cleared when a
+   * build starts (`buildStart`), so each build reports its own.
    *
-   * Keyed by the offending file plus its message: the same misconfigured
-   * `package.json` is re-read on every transform in that package, and warning
-   * once per compiled file would bury the build log in one typo.
+   * A scan diagnostic is keyed by the offending file, its version (mtime), its
+   * position, its code and its message. Every compiled caller of a project
+   * re-reads the same tag files, so keying on the diagnostic rather than on
+   * the caller is what makes one broken tag file one warning instead of one
+   * per caller. The version is in the key so `vite serve` warns again when
+   * the file is edited, deleted and recreated, or fixed and broken again: a
+   * long-lived dev server would otherwise stay silent about a file the author
+   * just touched.
    */
   const reported = new Set<string>();
 
+  /**
+   * Scan errors a build already failed with, keyed like `reported`. A build
+   * fails on the first caller that sees a broken tag file; the callers that
+   * follow would only repeat the same error, one per caller, in the build
+   * output. Cleared by `buildStart` alongside `reported`.
+   */
+  const raised = new Set<string>();
+
+  /** The key one scan diagnostic is deduplicated by (see `reported`). */
+  const scanKey = (diagnostic: ScanDiagnostic): string => {
+    let version = 0;
+    try {
+      version = statSync(diagnostic.file).mtimeMs;
+    } catch {
+      // A diagnostic about a file that is gone keeps version 0.
+    }
+    return [
+      diagnostic.file,
+      version,
+      diagnostic.line,
+      diagnostic.column,
+      diagnostic.code ?? "",
+      diagnostic.message,
+    ].join("\u0000");
+  };
+
   const tagsFor = async (
     file: string,
-    warn: (message: string) => void,
+    warn: (message: string, at?: LocatedDiagnostic) => void,
     error: (diagnostic: LocatedDiagnostic) => never,
   ): Promise<Record<string, CustomTag> | undefined> => {
     const { resolveTargetPolicyDetailed, lookupFor, scanCached } =
@@ -943,7 +986,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       );
     }
 
-    const scanLine = (diagnostic: (typeof scan.diagnostics)[number]): string =>
+    const scanLine = (diagnostic: ScanDiagnostic): string =>
       `${diagnostic.file}:${diagnostic.line}:${diagnostic.column + 1}: ${diagnostic.code === undefined ? "" : `${diagnostic.code}: `}${diagnostic.message}`;
     // A scan error is a tag file the scan skipped. A build fails on it;
     // `vite serve` keeps it a positioned warning like the rest.
@@ -954,20 +997,30 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // A misconfigured `mx.tags` is not fatal — the local `tags/` directories
     // still work — but it is silent without this, which is worse: an author
     // sees a tag simply not resolve, with nothing saying why. The warnings go
-    // out before the build fails, so the failure does not hide them.
+    // out before the build fails, so the failure does not hide them. The
+    // warning is positioned at the tag file itself, so Vite prints that file
+    // and its real position rather than the caller being compiled.
     for (const diagnostic of scan.diagnostics) {
       if (failing.includes(diagnostic)) continue;
-      const key = `${diagnostic.file}\u0000${diagnostic.message}`;
+      const key = scanKey(diagnostic);
       if (reported.has(key)) continue;
       reported.add(key);
-      warn(scanLine(diagnostic));
+      warn(scanLine(diagnostic), diagnostic);
     }
 
     // One error is thrown, positioned at the first scan error, and the others
     // ride in its message (decision 162, the plugin's rule for compile
-    // errors). It is raised past the dedupe: repeating a transform cannot make
-    // a broken project pass.
-    const [first, ...others] = failing;
+    // errors). A build fails on the first caller that meets a broken tag file,
+    // so a scan error already raised in this build is not raised again by the
+    // next caller: that would print one identical error per caller of a single
+    // tag file. A new error, in another file or at another position, still is.
+    const fresh = failing.filter((diagnostic) => {
+      const key = scanKey(diagnostic);
+      if (raised.has(key)) return false;
+      raised.add(key);
+      return true;
+    });
+    const [first, ...others] = fresh;
     if (first !== undefined) {
       const rest =
         others.length === 0
@@ -1198,6 +1251,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     },
 
     async buildStart() {
+      reported.clear();
+      raised.clear();
       dialectExtensionsAt.clear();
       rootDialectExtensions = undefined;
       await ensureExtensions();
@@ -1401,12 +1456,23 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
       // SAFETY: Rollup invokes transform with its PluginContext; direct test
       // callers may omit warn, which is checked before it is invoked.
       const context = this as unknown as {
-        warn?: (message: string) => void;
+        warn?: (message: string | LocatedWarning) => void;
         error?: (error: LocatedError) => never;
       };
-      const warn = (message: string): void => {
-        if (context.warn) context.warn(`@mxlang/vite-plugin: ${message}`);
-        else console.warn(`@mxlang/vite-plugin: ${message}`);
+      // `at` names the file and position the warning is about when that is
+      // not the file being compiled (a tag file the scan skipped). Vite prints
+      // an `id` and a `loc` as the `File:` line under the message, and its
+      // default is the file being compiled, with a position that means nothing.
+      const warn = (message: string, at?: LocatedDiagnostic): void => {
+        const text = `@mxlang/vite-plugin: ${message}`;
+        if (!context.warn) console.warn(text);
+        else if (at === undefined) context.warn(text);
+        else
+          context.warn({
+            message: text,
+            id: at.file,
+            loc: { file: at.file, line: at.line, column: at.column },
+          });
       };
 
       let policyErrorRaised = false;

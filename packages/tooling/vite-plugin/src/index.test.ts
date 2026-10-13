@@ -20,6 +20,18 @@ import {
 import mx, { MX_SUFFIX, readTemplateSource } from "./index";
 
 /**
+ * The warning text of a `this.warn` argument: a string, or the located form the
+ * plugin passes for a diagnostic about another file (`{ message, id, loc }`).
+ */
+const warningText = (warning: string | { message: string }): string =>
+  typeof warning === "string" ? warning : warning.message;
+const collectWarnings =
+  (into: string[]) =>
+  (warning: string | { message: string }): void => {
+    into.push(warningText(warning));
+  };
+
+/**
  * The temp directories `writeMx` makes, removed when this file is done.
  *
  * TODO `test-tmpdir-leak`: `writeMx` runs once per test across this file and
@@ -1043,7 +1055,7 @@ export default () => <div />;
         code: string,
         id: string,
       ) => Promise<{ code: string } | null>;
-      const context = { warn: (message: string) => warnings.push(message) };
+      const context = { warn: collectWarnings(warnings) };
 
       const first = await transform.call(
         context,
@@ -1072,19 +1084,26 @@ export default () => <div />;
         "caller.mx": "<p>x</p>\n",
       });
       try {
-        const warnings: string[] = [];
+        const warnings: unknown[] = [];
         const transform = mx().transform as unknown as (
           this: unknown,
           code: string,
           id: string,
         ) => Promise<unknown>;
         await transform.call(
-          { warn: (message: string) => warnings.push(message) },
+          { warn: (message: unknown) => warnings.push(message) },
           "<p>x</p>\n",
           `${project.path("caller.mx")}${MX_SUFFIX}`,
         );
+        // Positioned at the tag file, so Vite prints that file and position
+        // under the message rather than the caller being compiled.
+        const stray = project.path("tags/stray.thing.probe");
         expect(warnings).toEqual([
-          `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+          {
+            message: `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+            id: stray,
+            loc: { file: stray, line: 1, column: 0 },
+          },
         ]);
       } finally {
         cleanupProbeProjects();
@@ -1110,7 +1129,10 @@ export default () => <div />;
           root: process.cwd(),
           resolve: { alias: [] },
         });
-        return plugin.transform as unknown as Transform;
+        return Object.assign(plugin.transform as unknown as Transform, {
+          buildStart: () =>
+            (plugin.buildStart as unknown as () => Promise<void>)(),
+        });
       };
 
       it("fails vite build with the diagnostic's file, position and code", async () => {
@@ -1129,11 +1151,16 @@ export default () => <div />;
               id,
             );
           const expected = expectedText(project);
-          // Every transform of the broken project fails, not only the first.
+          // The first transform of the broken project fails the build...
           await expect(run()).rejects.toMatchObject({
             message: expected,
             loc: { file: badFile(project), line: 1, column: 0 },
           });
+          // ...and the next one, in the same build, does not raise the same
+          // error again: a build prints it once, not once per caller.
+          await expect(run()).resolves.toBeDefined();
+          // A new build (`buildStart`) fails on it again.
+          await transform.buildStart();
           await expect(run()).rejects.toMatchObject({ message: expected });
           expect(warnings).toEqual([]);
         } finally {
@@ -1149,12 +1176,12 @@ export default () => <div />;
           "caller.mx": "<p>x</p>\n",
         });
         try {
-          const warnings: string[] = [];
+          const warnings: unknown[] = [];
           const transform = pluginFor("build");
           const id = `${project.path("caller.mx")}${MX_SUFFIX}`;
           const run = () =>
             transform.call(
-              { warn: (message: string) => warnings.push(message) },
+              { warn: (message: unknown) => warnings.push(message) },
               "<p>x</p>\n",
               id,
             );
@@ -1166,10 +1193,20 @@ export default () => <div />;
             loc: { file: project.path("tags/if.mx"), line: 1, column: 0 },
           });
           // The warning is printed, once, even though the build fails.
-          const stray = `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`;
+          const strayFile = project.path("tags/stray.thing.probe");
+          const stray = {
+            message: `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+            id: strayFile,
+            loc: { file: strayFile, line: 1, column: 0 },
+          };
           expect(warnings).toEqual([stray]);
+          // The next caller of the same build repeats neither the warning nor
+          // the errors; a new build reports both again.
+          await expect(run()).resolves.toBeDefined();
+          expect(warnings).toEqual([stray]);
+          await transform.buildStart();
           await expect(run()).rejects.toMatchObject({ message: expected });
-          expect(warnings).toEqual([stray]);
+          expect(warnings).toEqual([stray, stray]);
         } finally {
           cleanupProbeProjects();
         }
@@ -1200,16 +1237,20 @@ export default () => <div />;
           "caller.mx": "<p>x</p>\n",
         });
         try {
-          const warnings: string[] = [];
+          const warnings: unknown[] = [];
           const transform = pluginFor("serve");
           const result = (await transform.call(
-            { warn: (message: string) => warnings.push(message) },
+            { warn: (message: unknown) => warnings.push(message) },
             "<p>x</p>\n",
             `${project.path("caller.mx")}${MX_SUFFIX}`,
           )) as { code: string } | null;
           expect(result?.code).toBeTypeOf("string");
           expect(warnings).toEqual([
-            `@mxlang/vite-plugin: ${expectedText(project)}`,
+            {
+              message: `@mxlang/vite-plugin: ${expectedText(project)}`,
+              id: badFile(project),
+              loc: { file: badFile(project), line: 1, column: 0 },
+            },
           ]);
         } finally {
           cleanupProbeProjects();
@@ -1222,16 +1263,21 @@ export default () => <div />;
           "caller.mx": "<p>x</p>\n",
         });
         try {
-          const warnings: string[] = [];
+          const warnings: unknown[] = [];
           const transform = pluginFor("build");
           const result = (await transform.call(
-            { warn: (message: string) => warnings.push(message) },
+            { warn: (message: unknown) => warnings.push(message) },
             "<p>x</p>\n",
             `${project.path("caller.mx")}${MX_SUFFIX}`,
           )) as { code: string } | null;
           expect(result?.code).toBeTypeOf("string");
+          const strayFile = project.path("tags/stray.thing.probe");
           expect(warnings).toEqual([
-            `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+            {
+              message: `@mxlang/vite-plugin: ${project.path("tags/stray.thing.probe")}:1:1: MX_MISPLACED_TAG_FILE: \`tags/stray.thing.probe\` is a Probe file in \`tags/\`; Probe discovers tags in \`concepts/\` or \`kinds/\`.`,
+              id: strayFile,
+              loc: { file: strayFile, line: 1, column: 0 },
+            },
           ]);
         } finally {
           cleanupProbeProjects();
@@ -1257,7 +1303,7 @@ export default () => <div />;
         code: string,
         id: string,
       ) => Promise<{ code: string } | null>;
-      const context = { warn: (message: string) => warnings.push(message) };
+      const context = { warn: collectWarnings(warnings) };
 
       for (const dir of [broken, typo]) {
         const caller = join(dir, "caller.mx");
