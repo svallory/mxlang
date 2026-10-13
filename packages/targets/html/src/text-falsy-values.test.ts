@@ -242,6 +242,49 @@ describe("<textarea> body (rendered)", () => {
     );
   });
 
+  describe("the newline right after <textarea> is dropped", () => {
+    // Marko drops it at compile time, before it picks the lone or the mixed
+    // form, so `\n${v}` follows the lone rule.
+    it.each(lone)(
+      "%s after a newline is still the whole body",
+      (_n, v, text) => {
+        expect(render("<textarea>\n${input.v}</textarea>", { v })).toBe(
+          `<textarea>${text}</textarea>`,
+        );
+      },
+    );
+
+    it("keeps the newlines inside a multi-line body", () => {
+      expect(render("<textarea>\n  ${input.v}\n</textarea>", { v: "v" })).toBe(
+        "<textarea>  v\n</textarea>",
+      );
+      expect(
+        render("<textarea>\n  ${input.v}\n</textarea>", { v: false }),
+      ).toBe("<textarea>  false\n</textarea>");
+    });
+
+    it("drops one newline only, then doubles the next", () => {
+      expect(render("<textarea>\n\n${input.v}</textarea>", { v: "x" })).toBe(
+        "<textarea>\n\nx</textarea>",
+      );
+    });
+
+    it("drops a CRLF as one newline", () => {
+      expect(render("<textarea>\r\n${input.v}</textarea>", { v: "x" })).toBe(
+        "<textarea>x</textarea>",
+      );
+    });
+
+    it("drops it through a spread branch too", () => {
+      expect(
+        render("<textarea ...input.attrs>\n${input.v}</textarea>", {
+          attrs: {},
+          v: Number.NaN,
+        }),
+      ).toBe("<textarea>NaN</textarea>");
+    });
+  });
+
   it("renders the same through a spread branch", () => {
     expect(
       render("<textarea ...input.attrs>a${input.v}b</textarea>", {

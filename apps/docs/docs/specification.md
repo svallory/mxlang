@@ -399,8 +399,10 @@ attribute output is unchanged.
 A `<textarea>` body is not text position. As in Marko, a lone placeholder
 (`<textarea>${v}</textarea>`) passes its raw value, so `NaN` and `0n` print and
 `false`, `true`, `null` and `undefined` do not; any other body is one string
-(`a${null}b` prints `anullb`). A leading newline is doubled, and `$!{…}` in a
-textarea is a compile error.
+(`a${null}b` prints `anullb`). The newline right after `<textarea>` is dropped,
+as in Marko and the HTML parser, so `<textarea>⏎${v}</textarea>` is a lone
+placeholder; a newline that starts the value is doubled. `$!{…}` in a textarea
+is a compile error.
 
 `$!{…}` is **not accepted inside an attribute value**; Marko's parser rejects it
 there before any host runs. Host handling of `$!{}` in content position varies

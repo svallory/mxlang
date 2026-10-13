@@ -895,13 +895,27 @@ export function createEmitter(
    * (`__mxTextOf`) does not apply. A raw `$!{…}` is an error there, as in
    * Marko.
    */
-  const textareaBody = (children: IrNode[]): void => {
-    if (!children.some((child) => child.kind === "Interpolation")) {
-      drive(emitter, children);
+  const textareaBody = (body: IrNode[]): void => {
+    if (!body.some((child) => child.kind === "Interpolation")) {
+      drive(emitter, body);
       return;
     }
     const unsupported =
       "Unexpected content in textarea, only text and placeholders are supported.";
+    // The newline right after `<textarea>` is dropped at compile time, as in
+    // Marko and the HTML parser; `__mxTextareaBody` then doubles a leading
+    // newline that is part of the value.
+    let children = body;
+    const first = body[0];
+    if (first?.kind === "Text") {
+      const rest = first.value.replace(/^\r?\n/, "");
+      if (rest !== first.value) {
+        children =
+          rest === ""
+            ? body.slice(1)
+            : [{ ...first, value: rest }, ...body.slice(1)];
+      }
+    }
     const parts: MappedCode[] = [];
     for (const child of children) {
       if (child.kind === "Text") parts.push(concatMapped(quote(child.value)));
