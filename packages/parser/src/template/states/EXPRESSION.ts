@@ -1184,16 +1184,19 @@ function wordStartOf(data: string, end: number, min: number) {
  * operator and a longer run reads `a+++b` as `a++ + b` (maximal munch), so
  * either way an operand is expected after it.
  *
- * `nested` is set while asking what precedes the pair: a pair directly
- * before a pair (`++ ++`) is not valid JavaScript, so it is read as a prefix
- * update (an operand is expected) and not looked behind again, which keeps
- * the walk from recursing through a long run of them.
+ * `beforePair` is set while `expectsExpression` is asked what precedes a
+ * pair. A pair directly before a pair (`++ ++`) is not valid JavaScript, so
+ * it is read as a prefix update (an operand is expected) and not looked
+ * behind again, which keeps the walk from recursing through a long run of
+ * them. The same flag lifts the key/label rule of the word case, which is
+ * about a `:` written right against a word: a keyword operator glued to the
+ * pair (`typeof++&n`, `return--&n`) is still an operator.
  */
 function endsPostfixUpdate(
   expression: ExpressionMeta,
   data: string,
   i: number,
-  nested: boolean,
+  beforePair: boolean,
 ): boolean {
   const code = data.charCodeAt(i);
   let first = i;
@@ -1201,7 +1204,7 @@ function endsPostfixUpdate(
     first--;
   }
   if (i - first !== 1) return false;
-  if (nested) return false;
+  if (beforePair) return false;
 
   // A line terminator before the pair makes it a prefix update, in the gap
   // itself and in a comment that spans lines.
@@ -1246,7 +1249,7 @@ function expectsExpression(
   expression: ExpressionMeta,
   data: string,
   pos: number,
-  nested = false,
+  beforePair = false,
 ): boolean {
   let i = pos - 1;
   for (;;) {
@@ -1305,13 +1308,13 @@ function expectsExpression(
       }
       if (j < expression.start) return true;
       const owner = data.charCodeAt(j);
-      if (
-        owner === CODE.CLOSE_PAREN ||
-        owner === CODE.CLOSE_SQUARE_BRACKET ||
-        owner === CODE.HYPHEN ||
-        owner === CODE.PLUS
-      ) {
+      if (owner === CODE.CLOSE_PAREN || owner === CODE.CLOSE_SQUARE_BRACKET) {
         return false;
+      }
+      // A `!` after `++`/`--` follows a postfix update; after a single `+`
+      // or `-` it is a unary `!` (`a + !:b`, `a - !--&n`).
+      if (owner === CODE.HYPHEN || owner === CODE.PLUS) {
+        return !endsPostfixUpdate(expression, data, j, false);
       }
       if (wordWidthBefore(data, j) === 0) return true;
       return isOperatorWord(expression, data, j);
@@ -1326,14 +1329,14 @@ function expectsExpression(
       );
     case CODE.PLUS:
     case CODE.HYPHEN:
-      return !endsPostfixUpdate(expression, data, i, nested);
+      return !endsPostfixUpdate(expression, data, i, beforePair);
     case CODE.FORWARD_SLASH:
       return i + 1 !== expression.regexEnd;
     default: {
       if (wordWidthBefore(data, i) === 0) return true;
       // A word directly before the `:` is an object key or a label, keyword
-      // or not (`{ new:a }`).
-      if (i === pos - 1) return false;
+      // or not (`{ new:a }`). Not when asked at a `++`/`--` pair: `typeof++x`.
+      if (i === pos - 1 && !beforePair) return false;
       return isOperatorWord(expression, data, i);
     }
   }

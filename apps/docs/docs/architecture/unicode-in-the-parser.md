@@ -110,7 +110,7 @@ A trailing U+00A0 on a value does not reach emitted code (the expression is pars
 
 A trigger after `await` or `yield` is not lexed when the keyword follows `?` or `:` (`c ? await :b` reads `:b` as the ternary's alternate), and is lexed otherwise, after `(` and `,` included (`f(await :b)`); `of` is an operator only after an operand. Whitespace and word characters are read as above: a Unicode whitespace character between the keyword and what precedes it is skipped, and a word character glued to the keyword makes it an ordinary identifier.
 
-Standard: MX's own, derived from the TypeScript grammar; `await` and `yield` are ordinary identifiers outside async and generator code. The default syntax table has no trigger, so both rows read as one value as written; the right column is the reference atom dialect.
+Standard: MX's own, derived from the TypeScript grammar; in a template (an ES module) `await` and `yield` are reserved words; MX still reads them as identifiers after `?` or `:` (`c ? await :b`). The default syntax table has no trigger, so both rows read as one value as written; the right column is the reference atom dialect.
 
 | Input | default (stock and MX) | reference atom dialect | Probe |
 | --- | --- | --- | --- |

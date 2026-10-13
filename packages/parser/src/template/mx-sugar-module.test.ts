@@ -238,6 +238,12 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     ["void --&n", ["&n"]],
     ["await ++&n", ["&n"]],
     ["!(++&n)", ["&n"]],
+    // A unary `!` after a single `+`/`-` expects an operand.
+    ["a + !&n", ["&n"]],
+    ["a + !++&n", ["&n"]],
+    ["a - !--&n", ["&n"]],
+    ["x = -!++&n", ["&n"]],
+    ["a + !:b", [":b"]],
     // `a++` then `+`: the third character is the binary operator.
     ["a+++&n", ["&n"]],
     ["a---%.now", ["%.now"]],
@@ -337,7 +343,20 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     ]) {
       expect(run(`<x a=[${word} ++&n]/>`).triggers, word).toEqual(["&n"]);
     }
+    // Glued to the pair, a keyword operator is still an operator.
+    for (const source of [
+      "<x a=[typeof++&n]/>",
+      "<x a=[return++&n]/>",
+      "<x a=[void--%.now]/>",
+      "<x a=(await++&n)/>",
+      "<x a=(yield--&n)/>",
+      "<x a=[delete++&n]/>",
+      "<x a=[typeof++ &n]/>",
+    ]) {
+      expect(run(source).triggers, source).toHaveLength(1);
+    }
     // A member named like a keyword, and `of` outside a `for`, is an operand.
+    expect(run("<x a=[a.typeof++&n]/>").triggers).toEqual([]);
     expect(run("<x a=[a.typeof ++&n]/>").triggers).toEqual([]);
     expect(run("<x a=[of ++&n]/>").triggers).toEqual([]);
   });
