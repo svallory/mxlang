@@ -809,7 +809,7 @@ export const ATOMS: [string, string][] = [
   ["<div x=((a)      of :b)/>", '<div> @x atom(b@20-22) ="((a)      of 0.)"'],
   ["div x=(a /*c*/ of :b)\n", '<div> @x atom(b@18-20) ="(a /*c*/ of 0.)"'],
   ["div x=(a       of :b)\n", '<div> @x atom(b@18-20) ="(a       of 0.)"'], // `await` and `yield` after `(` or `,` are the operator, so an atom may
-  // follow (`f(await :b)`); after `?` or `:` they stay identifiers (NOT_ATOMS).
+  // follow (`f(await :b)`), after `?` and `:` too (`c ? await :b : d`).
   // The comment rows sit beside their space twins (`commentTwinMismatches`).
   ["<div x=f(await :b)/>", '<div> @x atom(b@15-17) ="f(await 0.)"'],
   ["<div x=(yield :b)/>", '<div> @x atom(b@14-16) ="(yield 0.)"'],
@@ -831,6 +831,22 @@ export const ATOMS: [string, string][] = [
   ["<div x=f(await      :b)/>", '<div> @x atom(b@20-22) ="f(await      0.)"'],
   ["<p>${f(/*c*/ await :b)}</p>", '<p> atom(b@19-21) ${"f(/*c*/ await 0.)"}'],
   ["<p>${f(      await :b)}</p>", '<p> atom(b@19-21) ${"f(      await 0.)"}'],
+  // After `?` and `:` too: stock Marko rejects `c ? await : b`, so no
+  // identifier reading is worth keeping.
+  ["<div x=c ? yield :b/>", '<div> @x atom(b@17-19) ="c ? yield 0."'],
+  [
+    "<div x=(c ? await :b : d)/>",
+    '<div> @x atom(b@18-20) ="(c ? await 0. : d)"',
+  ],
+  [
+    "<div x=(c ?/*c*/ await :b : d)/>",
+    '<div> @x atom(b@23-25) ="(c ?/*c*/ await 0. : d)"',
+  ],
+  [
+    "<div x=(c ?      await :b : d)/>",
+    '<div> @x atom(b@23-25) ="(c ?      await 0. : d)"',
+  ],
+  ["<div x={ k: await :b }/>", '<div> @x atom(b@18-20) ="{ k: await 0. }"'],
 ];
 
 /**
@@ -917,7 +933,6 @@ export const NOT_ATOMS: [string, string][] = [
     '<div> @x ="c ? x satisfies Foo<T> :d"',
   ],
   ["<div x=c ? of :b/>", '<div> @x ="c ? of :b"'],
-  ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
   ["<div x=c ? a! :b :name/>", '<div> @x ="c ? a! :b :name"'],
   // A non-ASCII letter right after a name: no atom, so no stand-in can
   // reach Babel's message (N5). A touching keyword is never an operator
@@ -940,8 +955,8 @@ export const NOT_ATOMS: [string, string][] = [
   ["<${`a::b`}/>", "<${`a::b`}>"],
   ['<div.${"a::b"}/>', "<div>"],
   ['<div class="a::b" x=`::c`/>', '<div> @class ="\\"a::b\\"" @x ="`::c`"'],
-  // `await`/`yield` after `?` or `:` are identifiers (`c ? await :b`, below);
-  // after `(` or `,` they are the operator, pinned in ATOMS.
+  // `await` and `yield` are operators after `?` and `:` as everywhere else
+  // (reserved words in a template), pinned in ATOMS.
   // Decision 156 addendum 4, pinned: `(a<b> :c)` with no open `?` takes
   // TypeScript's reading (type arguments), so no atom; core's hint names the
   // ambiguity.
@@ -1243,8 +1258,6 @@ export const NOT_ATOMS: [string, string][] = [
   // followup): a comment before `of`, `yield` or `await`, or between the
   // word and the `:`, is skipped exactly as whitespace is. Each row is beside
   // its twin with the comment replaced by spaces (`commentTwinMismatches`).
-  ["<div x=(c ?/*c*/ await :b : d)/>", '<div> @x ="(c ?/*c*/ await :b : d)"'],
-  ["<div x=(c ?      await :b : d)/>", '<div> @x ="(c ?      await :b : d)"'],
 ];
 
 /**
@@ -1383,7 +1396,7 @@ export function tagNameReads(mod: AtomParserModule): {
  * an operand TypeScript can end with a marker or a type (`a!!`,
  * `y as Array<T>`, `x satisfies Foo<T>`, …) before ` :z` in a ternary, in
  * every wrapper an atom is lexed in, with three tails (plain, a later `:name`
- * sugar, a later real atom). 24 × 4 × 4 × 10 × 3 = 11,520 inputs. Inputs
+ * sugar, a later real atom). 22 × 4 × 4 × 10 × 3 = 10,560 inputs. Inputs
  * whose atom-free expression `isValidTs` rejects are skipped. Returns the
  * inputs that lex `:z` as an atom (none expected) and how many ran.
  */
@@ -1406,8 +1419,6 @@ export function tsMarkerViolations(
     "y as (T)",
     "y as T",
     "of",
-    "yield",
-    "await",
     "1",
     '"s"',
     "a?.b",

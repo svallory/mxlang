@@ -106,7 +106,7 @@ describe("the atom corpora through the atom row", () => {
 
   it("no TypeScript marker or type end is followed by an atom, at any depth", () => {
     const { total, ran, bad } = tsMarkerViolations(mod, isValidTs);
-    expect(total).toBe(11_520);
+    expect(total).toBe(10_560);
     expect(ran).toBeGreaterThan(9_000);
     expect(bad).toEqual([]);
   });
@@ -237,6 +237,25 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     ["typeof ++&n", ["&n"]],
     ["void --&n", ["&n"]],
     ["await ++&n", ["&n"]],
+    // `await` and `yield` are operators wherever they stand: reserved words
+    // in a template, so no identifier reading hides after `?`, `:` or `{ k:`.
+    ["{ k: await &a }", ["&a"]],
+    ["{ k: await %.now }", ["%.now"]],
+    ["{ k: (yield &a) }", ["&a"]],
+    ["{ k: await :b }", [":b"]],
+    ["c ? await &a : 1", ["&a"]],
+    ["c ? await %.now : 1", ["%.now"]],
+    ["(c ? yield &a : 1)", ["&a"]],
+    ["c ? await ++&n : 1", ["&n"]],
+    ["c ? 1 : await &a", ["&a"]],
+    ["(c ? x : yield %.now)", ["%.now"]],
+    ["(c ? await :b : d)", [":b"]],
+    ["(c ? yield :b : d)", [":b"]],
+    // Spaced keyword operators over every row.
+    ["typeof &n", ["&n"]],
+    ["void &n", ["&n"]],
+    ["typeof %.now", ["%.now"]],
+    ["void :b", [":b"]],
     ["!(++&n)", ["&n"]],
     // A unary `!` after a single `+`/`-` expects an operand.
     ["a + !&n", ["&n"]],
@@ -290,8 +309,11 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
 
   it("the stand-ins of an armed prefix update are a valid expression", () => {
     for (const [expression] of armed) {
-      // `++ ++&n` is a syntax error, and `await` needs an async function.
-      if (expression === "++ ++&n" || expression === "await ++&n") continue;
+      // `++ ++&n` is a syntax error, and `await` and `yield` need an async
+      // or generator function.
+      if (expression === "++ ++&n" || /\b(?:await|yield)\b/.test(expression)) {
+        continue;
+      }
       for (const source of contexts(expression)) {
         for (const read of run(source).reads) {
           expect(isValidTs(read), `${source} read as ${read}`).toBe(true);
@@ -333,6 +355,27 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
     expect(run("<x a=[a\n++&n]/>").triggers).toEqual(["&n"]);
     expect(run("<x a=[a /* c\n*/ ++&n]/>").triggers).toEqual(["&n"]);
     expect(run("<x a=[a /* c */ ++&n]/>").triggers).toEqual([]);
+  });
+
+  it("a keyword operator, spaced from the trigger, expects an operand over every row", () => {
+    for (const word of [
+      "return",
+      "typeof",
+      "void",
+      "delete",
+      "new",
+      "throw",
+      "in",
+      "instanceof",
+      "await",
+      "yield",
+    ]) {
+      for (const trigger of ["&n", "%.now", ":b"]) {
+        expect(run(`<x a=[${word} ${trigger}]/>`).triggers, word).toEqual([
+          trigger,
+        ]);
+      }
+    }
   });
 
   it("a keyword operator before the pair is not an operand end", () => {
@@ -399,19 +442,54 @@ describe("expression triggers after `++`, `--`, `await` and `yield`", () => {
   );
 
   it.each([
-    "c ? await :b",
-    "c ? yield :b",
-    "c ? await : yield",
-    "x ? y : await :b",
-    "(c ? await :b : d)",
+    "a.return &n",
+    "a.typeof &n",
+    "a.typeof&n",
+    "a.return%.now",
+    "obj.await &x",
+    "obj.yield &x",
+    "a?.await &x",
+    "a.await :b",
+    "x.of &a",
   ])(
-    "after `?` or `:`, `await` and `yield` stay identifiers: %j",
+    "a keyword written as a member name is an operand end: %j",
     (expression) => {
+      // `a.return &n` is a member access, then the binary `&`.
       for (const source of contexts(expression)) {
         expect(run(source).triggers, source).toEqual([]);
       }
     },
   );
+
+  it.each([
+    "typeof&n",
+    "return&n",
+    "void&n",
+    "delete&n",
+    "f(await&a)",
+    "(await&a)",
+    "(yield%.now)",
+    "typeof%.now",
+  ])(
+    "a keyword glued to a trigger arms nothing (its stand-in would join the keyword): %j",
+    (expression) => {
+      // A stand-in is an identifier or a number, so `typeof&n` would read
+      // `typeof_n`, one identifier. The trigger stays unarmed and the
+      // front end reports Babel's "Unexpected token" (triggers.test.ts).
+      for (const source of contexts(expression)) {
+        expect(run(source).triggers, source).toEqual([]);
+      }
+    },
+  );
+
+  it("`of` outside a `for` head stays an identifier", () => {
+    for (const expression of ["c ? of :b : 1", "(of &a)", "x = of %.now"]) {
+      for (const source of contexts(expression)) {
+        expect(run(source).triggers, source).toEqual([]);
+      }
+    }
+    expect(run("<x a=(for (x of :b) {})/>").triggers).toEqual([":b"]);
+  });
 
   it("`await` and `yield` as a member or key stay names", () => {
     expect(run("<x a=(a.await &a)/>").triggers).toEqual([]);

@@ -1044,9 +1044,10 @@ function continuesToken(
 /**
  * Whether the word ending at `end` (inclusive) is an operator keyword after
  * which an expression is expected. Never a trigger's own text (`:delete :b`,
- * `:foo-new :b`), a member name (`a.new`), or a contextual keyword used as an
- * identifier: `of` only after an operand (`for (x of …)`), `yield`/`await`
- * not after `?`, `:`, `,` or `(` (`c ? of :b`, `c ? yield :b`).
+ * `:foo-new :b`), a member name (`a.new`), or `of` used as an identifier: `of`
+ * only after an operand (`for (x of …)`; `c ? of :b`). `await` and `yield`
+ * are reserved words in a template (a module), so they are operators wherever
+ * they stand: stock Marko rejects `c ? await : b`.
  */
 function isOperatorWord(
   expression: ExpressionMeta,
@@ -1064,9 +1065,9 @@ function isOperatorWord(
   }
   const word = data.slice(wordStart, end + 1);
   if (!(operandKeywords as readonly string[]).includes(word)) return false;
-  if (word === "of" || word === "yield" || word === "await") {
+  if (word === "of") {
     // A comment is skipped exactly as whitespace is (decision 156 addendum
-    // 8): `f(/*c*/ await :b)` reads as `f( await :b)`.
+    // 8): `for (x /*c*/ of :b)` reads as `for (x  of :b)`.
     let j = wordStart - 1;
     for (;;) {
       while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
@@ -1075,19 +1076,12 @@ function isOperatorWord(
       j = comment.start - 1;
     }
     const before = j < expression.start ? -1 : data.charCodeAt(j);
-    if (word === "of") {
-      return (
-        (j >= expression.start && wordWidthBefore(data, j) > 0) ||
-        before === CODE.CLOSE_PAREN ||
-        before === CODE.CLOSE_SQUARE_BRACKET ||
-        before === CODE.CLOSE_CURLY_BRACE
-      );
-    }
-    // After a ternary's `?` or `:` the word is an identifier (`c ? await :b`
-    // reads `:b` as the alternate). After `(` or `,` it is the operator: an
-    // identifier named `await` there is followed by `)`, `,` or an operator,
-    // never by a trigger (`f(await &a)`, `(x, yield :b)`).
-    return !(before === CODE.QUESTION || before === CODE.COLON);
+    return (
+      (j >= expression.start && wordWidthBefore(data, j) > 0) ||
+      before === CODE.CLOSE_PAREN ||
+      before === CODE.CLOSE_SQUARE_BRACKET ||
+      before === CODE.CLOSE_CURLY_BRACE
+    );
   }
   return true;
 }

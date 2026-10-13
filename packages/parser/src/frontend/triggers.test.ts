@@ -12,7 +12,10 @@ import {
   TagType,
   type Trigger,
 } from "../template/index.ts";
-import { SUGARS_SYNTAX } from "../template/test-support/sugar-rows.ts";
+import {
+  ATOMS_SYNTAX,
+  SUGARS_SYNTAX,
+} from "../template/test-support/sugar-rows.ts";
 import { parse } from "./parse.ts";
 import { characters, expressionHeavy, tokens } from "./test-support/fuzz.ts";
 import { checkInvariants } from "./test-support/invariants.ts";
@@ -745,5 +748,55 @@ describe("the `claim` option (a node type's claim at a trigger)", () => {
         },
       }),
     ).toThrow(thrown);
+  });
+});
+
+describe("`await`, `yield` and keyword operators before a trigger, through the front end", () => {
+  const errorsOf = (source: string, syntax: SyntaxTable) =>
+    parse(source, { ...OPTIONS, syntax }).errors.map((e) => [
+      e.code,
+      e.message,
+    ]);
+
+  it.each([
+    ["the default row", DEFAULT_SYNTAX],
+    ["the atom row", ATOMS_SYNTAX],
+  ])(
+    "`c ? await : b` is a parse error, as Marko has it: %s",
+    (_name, syntax) => {
+      // Stock Marko 6.4.4: "Unexpected token" at the `:`. `await` is reserved
+      // in a module, so MX keeps no identifier reading of it.
+      expect(errorsOf("x=(c ? await : b)", syntax)).toEqual([
+        ["BABEL_UnexpectedToken", "Unexpected token"],
+      ]);
+    },
+  );
+
+  it("`c ? await :b` is no longer a ternary with an atom-free reading", () => {
+    // The row arms `:b` after `await`, so the ternary lacks its `:`.
+    expect(errorsOf("x=(c ? await :b)", ATOMS_SYNTAX)).toEqual([
+      ["BABEL_UnexpectedToken", 'Unexpected token, expected ":"'],
+    ]);
+    expect(errorsOf("x=(c ? await :b : d)", ATOMS_SYNTAX)).toEqual([]);
+    expect(errorsOf("x={ k: await :b }", ATOMS_SYNTAX)).toEqual([]);
+  });
+
+  it.each(["typeof&n", "f(a, typeof&n)", "(void&n)"])(
+    "a keyword glued to a trigger is loud, never a merged identifier: %j",
+    (expression) => {
+      // Armed, `typeof&n` would read `typeof_n`, one identifier, and compile
+      // silently. Unarmed, Babel rejects the raw `&n`.
+      const document = meshParse(`x=${expression}`);
+      expect(document.errors.map((e) => e.code)).toEqual([
+        "BABEL_UnexpectedToken",
+      ]);
+    },
+  );
+
+  it("a spaced keyword operator arms, and its stand-in is its own identifier", () => {
+    const document = meshParse("x=typeof &n");
+    expect(document.errors).toEqual([]);
+    const value = (document.body[0] as Node).attributes[0].value;
+    expect(value.node.argument.name).toBe("_n");
   });
 });

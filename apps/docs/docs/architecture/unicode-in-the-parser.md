@@ -108,9 +108,9 @@ A trailing U+00A0 on a value does not reach emitted code (the expression is pars
 
 ### `await`, `yield` and `of` before a dialect trigger
 
-A trigger after `await` or `yield` is not lexed when the keyword follows `?` or `:` (`c ? await :b` reads `:b` as the ternary's alternate), and is lexed otherwise, after `(` and `,` included (`f(await :b)`); `of` is an operator only after an operand. Whitespace and word characters are read as above: a Unicode whitespace character between the keyword and what precedes it is skipped, and a word character glued to the keyword makes it an ordinary identifier.
+A trigger after `await` or `yield` is lexed wherever the keyword stands: after `(` and `,` (`f(await :b)`), after `?` and `:` (`c ? await &a : 1`, `{ k: await &a }`), and at the start of an expression; `of` is an operator only after an operand. A keyword written right against the trigger (`typeof&n`, `f(await&a)`) arms nothing, because the stand-in would join the keyword into one identifier (`typeof_n`); the raw trigger text then reaches Babel, which rejects it. Whitespace and word characters are read as above: a Unicode whitespace character between the keyword and what precedes it is skipped, and a word character glued to the keyword makes it an ordinary identifier.
 
-Standard: MX's own, derived from the TypeScript grammar; in a template (an ES module) `await` and `yield` are reserved words; MX still reads them as identifiers after `?` or `:` (`c ? await :b`). The default syntax table has no trigger, so both rows read as one value as written; the right column is the reference atom dialect.
+Standard: MX's own, derived from the TypeScript grammar; in a template (an ES module) `await` and `yield` are reserved words, so MX reads them as operators everywhere; stock Marko rejects `c ? await : b` ("Unexpected token"), and so does MX. The default syntax table has no trigger, so both rows read as one value as written; the right column is the reference atom dialect.
 
 | Input | default (stock and MX) | reference atom dialect | Probe |
 | --- | --- | --- | --- |
