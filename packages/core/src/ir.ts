@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 3;
+export const IR_VERSION = 4;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
