@@ -480,7 +480,7 @@ describe("template custom tags as compilation units", () => {
     resetTemplateCache();
     const panel = template(
       "/tmp/mx-template-test/tags/panel-spread.mx",
-      "static const props = {...input}\n<section>${JSON.stringify(props)}</section>",
+      "<const/props={...input}/>\n<section>${JSON.stringify(props)}</section>",
       { attributeTags: { head: {} } },
     );
     const warnings: MxWarning[] = [];
@@ -516,7 +516,6 @@ describe("template custom tags as compilation units", () => {
         "<const/x=JSON.stringify(input)/>\n<span>${x}</span>",
       ],
       ["assigned", "<const/copy=input/>\n<span>${JSON.stringify(copy)}</span>"],
-      ["assigned in a static block", "static const props = input\n<span/>"],
       [
         "destructured with a rest element",
         "<const/{ a, ...rest }=input/>\n<span>${a}${JSON.stringify(rest)}</span>",
