@@ -938,6 +938,17 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    */
   const raised = new Set<string>();
 
+  /**
+   * The scan warnings each caller's last scan carried, by key. When a caller's
+   * next scan no longer carries one, the problem is gone as far as that caller
+   * can see, so its key leaves `reported` and the problem warns again if it
+   * returns. The file's mtime alone cannot do this: a diagnostic positioned at
+   * an `mx.tags` entry names `package.json`, whose mtime does not change when
+   * the tag file in that directory is deleted and recreated. Per caller, so a
+   * caller whose scan never reached the problem cannot clear it for the others.
+   */
+  const lastScanKeys = new Map<string, Set<string>>();
+
   /** The key one scan diagnostic is deduplicated by (see `reported`). */
   const scanKey = (diagnostic: ScanDiagnostic): string => {
     let version = 0;
@@ -1000,11 +1011,21 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // out before the build fails, so the failure does not hide them. The
     // warning is positioned at the tag file itself, so Vite prints that file
     // and its real position rather than the caller being compiled.
+    const scanKeys = new Map<string, ScanDiagnostic>();
     for (const diagnostic of scan.diagnostics) {
       if (failing.includes(diagnostic)) continue;
-      const key = scanKey(diagnostic);
+      scanKeys.set(scanKey(diagnostic), diagnostic);
+    }
+    for (const gone of lastScanKeys.get(file) ?? []) {
+      if (!scanKeys.has(gone)) reported.delete(gone);
+    }
+    lastScanKeys.set(file, new Set(scanKeys.keys()));
+    for (const [key, diagnostic] of scanKeys) {
       if (reported.has(key)) continue;
       reported.add(key);
+      // `scanLine` writes the 1-based column an editor shows; `loc` carries
+      // the 0-based one Vite expects, which its code-frame caret needs. The
+      // `File:` line Vite prints from `loc` is therefore one column lower.
       warn(scanLine(diagnostic), diagnostic);
     }
 
@@ -1253,6 +1274,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     async buildStart() {
       reported.clear();
       raised.clear();
+      lastScanKeys.clear();
       dialectExtensionsAt.clear();
       rootDialectExtensions = undefined;
       await ensureExtensions();

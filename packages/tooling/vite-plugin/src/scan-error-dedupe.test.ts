@@ -112,9 +112,13 @@ async function serve(
   const after: string[][] = [];
   try {
     for (const step of steps) {
-      await step((caller) =>
-        server.environments.ssr.transformRequest(join(dir, `${caller}.mx`)),
-      );
+      await step(async (caller) => {
+        // Vite serves a module from its cache; the plugin only runs on a miss.
+        server.environments.ssr.moduleGraph.invalidateAll();
+        return server.environments.ssr.transformRequest(
+          join(dir, `${caller}.mx`),
+        );
+      });
       after.push([...printed]);
     }
   } finally {
@@ -197,5 +201,40 @@ describe("a scan error under vite serve", () => {
     // (the error is the same), warns again; d: the file is gone, nothing to
     // say; e: the file is back and broken again, warns again.
     expect(counts).toEqual([1, 1, 2, 2, 3]);
+  });
+});
+
+describe("a scan error positioned at an mx.tags entry", () => {
+  it("warns again when the tag file is deleted and recreated, though package.json is untouched", async () => {
+    const name = "serve-entry";
+    write(
+      name,
+      "package.json",
+      JSON.stringify({
+        name,
+        type: "module",
+        mx: { host: "html", tags: ["./lib"] },
+      }),
+    );
+    write(name, "lib/try.mx", "<p>x</p>\n");
+    write(name, "a.mx", "<p>page</p>\n");
+    const dir = join(root, name);
+    const counts = (
+      await serve(dir, [
+        (transform) => transform("a"),
+        (transform) => transform("a"),
+        (transform) => {
+          rmSync(join(dir, "lib/try.mx"));
+          return transform("a");
+        },
+        (transform) => {
+          write(name, "lib/try.mx", "<p>x</p>\n");
+          return transform("a");
+        },
+      ])
+    ).map((printed) => printed.length);
+    // Broken: warns; unchanged: nothing; fixed (deleted): nothing; broken
+    // again: warns again.
+    expect(counts).toEqual([1, 1, 1, 2]);
   });
 });
