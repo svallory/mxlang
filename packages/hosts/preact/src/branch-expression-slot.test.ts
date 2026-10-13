@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
 const DEFINE = "<define/Foo><p>inner</p></define>\n";
+const IMP = 'import Bar from "./bar.mx"\n';
 const CALL_ROW = "<define/Row|p|><li>${p.n}</li></define>\n";
 
 const compile = (source: string): string =>
@@ -129,6 +130,36 @@ const CASES: Array<[string, string, string]> = [
     `${DEFINE}import Bar from "./bar.mx"\n<Bar|i|><Foo/></Bar>`,
     "return (<><Bar>{(i) => Foo()}</Bar></>);",
   ],
+  [
+    "an <@item> body that is a define call (a prop value)",
+    `${DEFINE}${IMP}<Bar><@item><Foo/></@item></Bar>`,
+    "return (<><Bar item={Foo()} /></>);",
+  ],
+  [
+    "an <@item> body that is a dynamic tag",
+    `${IMP}<const/X=input.x/>\n<Bar><@item><${"$"}{X}/></@item></Bar>`,
+    "return (<><Bar item={__mxDynamic(X, {  })} /></>);",
+  ],
+  [
+    "an <@item> body that is a define call, inside an <if>",
+    `${DEFINE}${IMP}<Bar><if=input.a><@item><Foo/></@item></if></Bar>`,
+    "return (<><Bar item={input.a ? Foo() : undefined} /></>);",
+  ],
+  [
+    "an <@item> body that is a define call, passed to a define (an object property)",
+    `${DEFINE}<define/Box|{ item }|><${"$"}{item}/></define>\n<Box><@item><Foo/></@item></Box>`,
+    'return (<>{Box({ "item": Foo() })}</>);',
+  ],
+  [
+    "an <@item> body that is a define call, passed to a dynamic tag",
+    `${DEFINE}<const/X=input.x/>\n<${"$"}{X}><@item><Foo/></@item></>`,
+    'return (<>{__mxDynamic(X, { "item": Foo() })}</>);',
+  ],
+  [
+    "an <@item|x|> body that is a define call (an arrow body, not a block)",
+    `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item></Bar>`,
+    "return (<><Bar item={(x) => Foo()} /></>);",
+  ],
 ];
 
 // Shapes that were already valid TSX and stay as they are: a fragment child
@@ -158,6 +189,21 @@ const UNCHANGED: Array<[string, string, string]> = [
     "a lone placeholder as the only child of an <if>",
     "<if=input.a>${input.x}</if>",
     "return (<>{input.a ? input.x : null}</>);",
+  ],
+  [
+    "a repeated <@item> keeps the call as the child of its keyed fragment",
+    `${DEFINE}${IMP}<Bar><@item><Foo/></@item><@item><Foo/></@item></Bar>`,
+    'return (<><Bar item={[<__mxFragment key={"0"}>{Foo()}</__mxFragment>, <__mxFragment key={"1"}>{Foo()}</__mxFragment>]} /></>);',
+  ],
+  [
+    "a repeated <@item|x|> keeps the call as the child of its keyed fragment",
+    `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item><@item|x|><Foo/></@item></Bar>`,
+    'return (<><Bar item={[(x) => <__mxFragment key={"0"}>{Foo()}</__mxFragment>, (x) => <__mxFragment key={"1"}>{Foo()}</__mxFragment>]} /></>);',
+  ],
+  [
+    "an <@item> body that is an imported component",
+    `${IMP}import Baz from "./baz.mx"\n<Bar><@item><Baz/></@item></Bar>`,
+    "return (<><Bar item={<Baz />} /></>);",
   ],
 ];
 
@@ -224,7 +270,7 @@ async function renderWhole(
   }
 }
 
-describe("preact: the bare define call renders what the HTML target renders", () => {
+describe("preact: the bare define call renders the HTML the HTML target renders for the same source", () => {
   const RENDER_CASES: Array<[string, string, Record<string, unknown>, string]> =
     [
       [
@@ -262,6 +308,34 @@ describe("preact: the bare define call renders what the HTML target renders", ()
         `${CALL_ROW}<ul><if=input.a><Row n=3/></if></ul>`,
         { a: true },
         "<ul><li>3</li></ul>",
+      ],
+      [
+        "an <@item|x|> body that is a define call (an arrow, not a block)",
+        `${DEFINE}<define/Bar|{ item }|><section><${"$"}{item}(1)/></section></define>\n<Bar><@item|x|><Foo/></@item></Bar>`,
+        {},
+        "<section><p>inner</p></section>",
+      ],
+      [
+        "an <@item> body that is a define call",
+        `${DEFINE}<define/Bar|{ item }|><section><${"$"}{item}/></section></define>\n<Bar><@item><Foo/></@item></Bar>`,
+        {},
+        "<section><p>inner</p></section>",
+      ],
+      [
+        "a <@catch|e|> body that is a define call",
+        `${DEFINE}<try><b>${"$"}{input.f()}</b><@catch|e|><Foo/></@catch></try>`,
+        {
+          f: () => {
+            throw new Error("boom");
+          },
+        },
+        "<p>inner</p>",
+      ],
+      [
+        "a render-prop body that is a define call",
+        `${DEFINE}<define/Bar|{ content }|><div><${"$"}{content}(7)/></div></define>\n<Bar|i|><Foo/></Bar>`,
+        {},
+        "<div><p>inner</p></div>",
       ],
     ];
 

@@ -1242,7 +1242,10 @@ export class PreactEmitter implements Emitter<string> {
       only?.kind === "Element" ||
       only?.kind === "Component" ||
       only?.kind === "DelegatedTag"
-        ? this.#render(children, true)
+        ? // Unkeyed, the value is a prop value, an object property or an arrow
+          // body, an expression slot: a define call or dynamic tag is written
+          // bare. A key wraps it in a fragment, where `{expr}` is the child.
+          this.#render(children, true, true, key === undefined)
         : concatMapped("<>", this.#render(children, true), "{null}</>");
     // The renderable nested inside every array entry needs a key even when
     // the outer entry is data-shaped: consumers commonly render
