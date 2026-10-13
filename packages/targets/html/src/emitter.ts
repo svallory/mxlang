@@ -96,13 +96,17 @@ interface State {
    * Statements this host lifts to **module** scope, beside the template's own
    * `static` blocks.
    *
-   * A `server` block is the only one: it is server-side code and this *is* the
-   * server render, so it runs once per module and its bindings are readable
-   * from the template. Putting it in `prelude` instead would place it inside
-   * the render function, where `static`'s own siblings are not — verified by
-   * the suite, which asserts the binding appears *above* `function render`.
+   * A `server` block is server-side code and this *is* the server render, so
+   * it runs once per module and its bindings are readable from the template.
+   * A `client` block leaves only a `var` for the names it declares. Putting
+   * either in `prelude` instead would place it inside the render function,
+   * where `static`'s own siblings are not — verified by the suite, which
+   * asserts the binding appears *above* `function render`.
+   *
+   * `start` is the statement's source offset, so the module interleaves these
+   * with the `static` blocks in the order they were written.
    */
-  moduleHoisted: string[];
+  moduleHoisted: Array<{ code: string; start: number | undefined }>;
   indent: number;
   /** Serial for local arrays and source temporaries in attribute-tag loops. */
   attrTagTemp: number;
@@ -1257,7 +1261,9 @@ export function createEmitter(
         // render, so it runs — hoisting to module scope exactly as `static`
         // does. Classifying it as inert would silently drop a binding the rest
         // of the template reads.
-        if (data.code !== "") state.moduleHoisted.push(data.code);
+        if (data.code !== "") {
+          state.moduleHoisted.push({ code: data.code, start: data.start });
+        }
         return;
       }
       case "html-comment": {
@@ -1404,6 +1410,32 @@ export function createEmitter(
 }
 
 /**
+ * The `static`/`export` statements and the host's own hoisted statements
+ * (`server`, `client`) in the order the author wrote them, as Marko emits
+ * them. A host statement with no known position follows the rest.
+ */
+function inSourceOrder(
+  authored: Ir["hoisted"],
+  own: Array<{ code: string; start: number | undefined }>,
+): string[] {
+  const entries = authored
+    .filter((node) => node.code !== "")
+    .map((node) => ({ code: node.code, start: node.span?.sourceStart }));
+  for (const statement of own) {
+    const { start } = statement;
+    const before =
+      start === undefined
+        ? -1
+        : entries.findIndex(
+            (entry) => entry.start !== undefined && entry.start > start,
+          );
+    if (before === -1) entries.push(statement);
+    else entries.splice(before, 0, statement);
+  }
+  return entries.map((entry) => entry.code);
+}
+
+/**
  * Builds the emitted TypeScript module for one resolved template.
  *
  * The module shape is fixed (S3): the runtime import, the author's hoisted
@@ -1438,8 +1470,7 @@ export function emitModuleWithMappings(
   }
   const hoisted = [
     ...ir.imports.map((node) => node.code),
-    ...ir.hoisted.map((node) => node.code).filter((code) => code !== ""),
-    ...emitter.state.moduleHoisted,
+    ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
   ];
   const inputType = ir.tagMetadata.readsContent
     ? "Input & { content?: () => string }"

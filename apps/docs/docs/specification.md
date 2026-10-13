@@ -228,7 +228,7 @@ continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one val
 statement, and `static const ok = 2 >⏎<div>…` is the joined expression's own
 error ("Missing semicolon.", at the next line), never a silent drop of that
 line. The same check runs on a `server` or `client` statement before a target
-runs it (html's `server`), drops it (html's `client`) or refuses it. A top-level
+runs it (html's `server`), reduces it to its declared names (html's `client`) or refuses it. A top-level
 `return` in a statement is accepted, as Marko accepts it, and left to
 TypeScript. A translator that does not declare the statement tags is refused with a
 positioned error naming `createTranslator`; core adds the tags to every
@@ -237,13 +237,18 @@ translator it builds a lookup from.
 | Statement | html | Preact / React / Hono | Solid (whole file) | Solid / Preact region | Angular | Astro |
 |---|---|---|---|---|---|---|
 | `import`, `static`, `export` | hoisted | hoisted | hoisted | positioned error: module-level statement in a region | positioned error: no module scope | hoisted into the fence |
-| `client` | dropped | positioned error | positioned error | positioned error | positioned error | positioned error |
+| `client` | declares its names, runs nothing | positioned error | positioned error | positioned error | positioned error | positioned error |
 | `server` | runs the statement | positioned error | positioned error | positioned error | positioned error | positioned error |
 | `class` | one positioned "`class { … }` is not supported in MX" error, the same text on every target |||||| 
 
 A `client` or `server` statement is never dropped or emitted as an element on a
 target that cannot honour the split; the error names the statement and the
-target.
+target. On html, a `client` statement runs nothing, but the names it declares
+at its own top level (`let`, `const`, `var`, `function`, `class`, including the
+names a destructuring pattern binds) are declared as `var name;` with no
+initializer, in the order the statements were written, so a template that reads
+one renders `undefined` instead of failing; declarations inside nested blocks
+are not.
 
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
@@ -360,8 +365,11 @@ Core-owned:
 A `server` block is **not** inert on the html target — that target *is* the server
 render, so it runs and hoists like `static`, and its bindings are readable from
 the template (decision 67a; verified: `server const S = 41 + 1` then `${S}`
-renders `42`). A `client` block is client-only and is inert or an error per host
-(§14).
+renders `42`). A `client` block never runs on the server, but html still
+declares the names it declares at its own top level (`client { let q = 1 }`
+leaves `var q;`, with no initializer), exactly as Marko's server render does, so
+`${typeof q}` renders `undefined` rather than failing; on every other host it is
+an error (§14).
 
 **Decisions:** 65, 67a, 68, 70, 71, 72, 95(3), 97(d), 97(j).
 
@@ -3442,7 +3450,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `<script>` | inert (body `text`) | error | error | error | error | error — fixed, was **literal element** |
 | `<id>` | inert | error | field-guard error | error | error | error — fixed, was field-guard-only |
 | `<log>` / `<debug>` | inert | error — fixed 2026-09-28 (decision 111), was **inert** (bug 5) | **literal element** | **literal element** | **literal element** | error — fixed, was **literal element** |
-| `client` block | inert | error | **literal element** | error | error | error — fixed, was **literal element** |
+| `client` block | declares its names (`var q;`), runs nothing | error | **literal element** | error | error | error — fixed, was **literal element** |
 | `server` block | **runs**, hoists like `static` | **runs** | **literal element**, binding undefined | **literal element** | **literal element** | error — fixed, was **literal element** |
 | `<await>` | error | error | field-guard error | error | error | error — fixed, was field-guard-only |
 

@@ -27,6 +27,7 @@
  * synchronous string render genuinely cannot express is an error.
  */
 
+import * as babelParser from "@babel/parser";
 import {
   ATTRIBUTE_VALUE_EXPRESSION,
   attrByName,
@@ -48,7 +49,6 @@ import {
   unresolvedCustomTagMessage,
   unwrapStatementBlock,
 } from "@mxlang/core";
-
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 
 export { TranslateError } from "@mxlang/core";
@@ -111,14 +111,8 @@ const TAGS: Record<string, Disposition> = {
     body: "none",
     attributes: "none",
   },
-  client: {
-    kind: "inert",
-    reason:
-      "a `client` block is evaluated only on the client; a server render emits nothing for it",
-    // A statement tag: its "attributes" are the statement's own words.
-    body: "none",
-    attributes: "any",
-  },
+  // `client` has no row: it is a claimed statement (`resolveDelegatedTag`),
+  // because a server render still declares the names its block declares.
 
   // ---- error: this target genuinely cannot express it ----
   await: {
@@ -150,6 +144,79 @@ function rejectInputShadowing(target: Node, what: string): void {
     `\`input\` on ${what} collides with the template input parameter: the emitted render function takes \`input\`, so this binding would shadow it and make the template's own input unreachable`,
     target,
   );
+}
+
+/**
+ * The names a `client` block declares at its own top level, in the order
+ * Marko emits them.
+ *
+ * Marko collects them with Babel's `getBindingIdentifiers` (outer scope only),
+ * a breadth-first walk: a statement list yields its function and class names
+ * before its variable declarators, and a destructuring pattern's names after
+ * the declarators' own. Nested blocks (`if`, `try`, a bare `{}`) are not
+ * entered, so nothing inside them counts, `var` included. A `for (… of …)` or
+ * `for (… in …)` loop contributes its left-hand binding and a labelled
+ * statement its label, as Babel's table says. `declare` forms and types
+ * declare nothing at run time. (`import` and `export` inside a statement are
+ * refused by core before this runs.)
+ */
+function clientDeclaredNames(code: string): string[] {
+  let program: { body: Node[] };
+  try {
+    program = babelParser.parse(code, {
+      sourceType: "module",
+      plugins: ["typescript", "explicitResourceManagement"],
+    }).program;
+  } catch {
+    // Core has already rejected statement text that does not parse; text this
+    // parser reads differently simply declares nothing.
+    return [];
+  }
+  const names = new Set<string>();
+  const queue: Array<Node | null | undefined> = [...program.body];
+  for (let index = 0; index < queue.length; index++) {
+    const node = queue[index];
+    if (!node || typeof node !== "object" || node.declare) continue;
+    switch (node.type) {
+      case "Identifier":
+        names.add(node.name);
+        break;
+      case "FunctionDeclaration":
+      case "ClassDeclaration":
+      case "TSModuleDeclaration":
+        queue.push(node.id);
+        break;
+      case "VariableDeclaration":
+        queue.push(...node.declarations);
+        break;
+      case "VariableDeclarator":
+        queue.push(node.id);
+        break;
+      case "ObjectPattern":
+        queue.push(...node.properties);
+        break;
+      case "ArrayPattern":
+        queue.push(...node.elements);
+        break;
+      case "ObjectProperty":
+        queue.push(node.value);
+        break;
+      case "RestElement":
+        queue.push(node.argument);
+        break;
+      case "AssignmentPattern":
+        queue.push(node.left);
+        break;
+      case "ForInStatement":
+      case "ForOfStatement":
+        queue.push(node.left);
+        break;
+      case "LabeledStatement":
+        queue.push(node.label);
+        break;
+    }
+  }
+  return [...names];
 }
 
 /** Every identifier a binding pattern introduces. */
@@ -330,8 +397,13 @@ export const DYNAMIC = DYNAMIC_TAG;
 export type DelegatedTagData =
   /** `<let>`/`<const>`: bind the initial value at render scope. */
   | { kind: "binding"; init: string }
-  /** A `server` block: hoists and runs, exactly as `static` does. */
-  | { kind: "statement"; code: string }
+  /**
+   * A module statement this host hoists: a `server` block, which runs exactly
+   * as `static` does, or the `var` a `client` block leaves behind (names only).
+   * `start` is the statement's offset in the source, so the module keeps the
+   * authored order of its statements.
+   */
+  | { kind: "statement"; code: string; start: number | undefined }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
   | { kind: "raw-element"; tag: string }
@@ -352,6 +424,7 @@ const CLAIMED = new Set([
   // would be dead code that reads as though this host owned the tag.
   "let",
   "server",
+  "client",
   "html-comment",
   "html-script",
   "html-style",
@@ -420,6 +493,26 @@ function resolveDelegatedTag(
           .trim()
           .replace(/^server\s+/, ""),
       ),
+      start: node.start,
+    };
+  }
+
+  if (name === "client") {
+    // A `client` block never runs on the server, but Marko still declares the
+    // names it declares there (`var q;`, no initializer), so a template that
+    // reads one sees `undefined` instead of a ReferenceError. Probed against
+    // stock Marko 6.4.4: only the block's own top-level declarations count.
+    const names = clientDeclaredNames(
+      unwrapStatementBlock(
+        sliceLoc(ctx, node.loc)
+          .trim()
+          .replace(/^client\s*/, ""),
+      ),
+    );
+    return {
+      kind: "statement",
+      code: names.length > 0 ? `var ${names.join(", ")};` : "",
+      start: node.start,
     };
   }
 

@@ -287,7 +287,7 @@ construct that only MX has (see `divergences.md`) is not understood by it:
 Decision 68's policy fold: `.mx`'s reactive-constructs-are-errors stance is
 folded in as an opt-in `strict` policy, rather than the default. The default
 `policy` renders what Marko's own server render would emit (`<let>`'s initial
-value, `<lifecycle>`/`<script>`/`client`/`<id>` as inert) — see the
+value, `<lifecycle>`/`<script>`/`<id>` as inert, a `client` block as only the `var` declarations of its names) — see the
 policy table below. `strictPolicy` instead rejects those same constructs by
 name, for an author who wants "this needs a reactive runtime" to be a compile
 error rather than silently accepted:
@@ -375,7 +375,6 @@ byte-identical with and without the construct.
 | `<script>` (the core tag) | Client behaviour, not markup. `<html-script>` emits a literal `<script>` element. |
 | `<id>` | Allocates an identifier for the reactive runtime. |
 | `<log>`, `<debug>` | Write to the console / attach a debugger hook. |
-| `client` blocks | Evaluated only on the client. |
 | `by=` on `<for>` | Reconciler input: which item a DOM node belongs to across re-renders. A one-shot render performs no reconciliation. |
 | `key=` on `<for>` | An error, not a silent drop: Marko's translator refuses it before it reaches any taglib ("The `<for>` tag keys items with the `by=` attribute, not `key=`…"), so MX refuses it the same way, at the attribute, with the fix-it for that loop's form. It is the **translator** that rejects it, not the parser — the front end hands lowering both spellings. |
 
@@ -387,7 +386,7 @@ byte-identical with and without the construct.
 | `<const/x=expr/>` | `const x = expr` |
 | `attr:=expr` | The initial value renders; there is no write-back path. |
 | `<define>`, `static`, `import`, `export interface Input` | Bound / hoisted to module scope. |
-| a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. (Its counterpart, a `client` block, is inert.) |
+| a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. Its counterpart, a `client` block, never runs, but the names it declares at its own top level are declared as `var name;` (no initializer), so a template that reads one renders `undefined` instead of failing, as Marko's server render does. |
 | `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's `render(input, out)` writes into the caller's sink and returns the value (decision 155). `/var` is supported in any scope, dynamic tags included. |
 
 ### Lowered — everything with output bytes

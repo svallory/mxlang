@@ -1530,7 +1530,7 @@ never appear in it.
 | `MxAttribute`, `MxShorthand`, `MxSpreadAttribute`, `MxMethod` | Attr |
 | `MxText` | Text |
 | `MxPlaceholder` | Interpolation |
-| `MxModuleStatement` | Import, Export, Static, InputInterface; DelegatedTag (`server` on html); nothing (an `inert` disposition) or an error (`client`, `class`) |
+| `MxModuleStatement` | Import, Export, Static, InputInterface; DelegatedTag (`server` and `client` on html); nothing (an `inert` disposition) or an error (`class`; `client` on every other host) |
 | `MxComment` | Comment (body); none (open-tag position) |
 | `MxDoctype` | DocumentType |
 | `MxScriptlet`, `MxCDATA`, `MxDeclaration` | none: errors (`lower.ts` `lowerChildList`) |
@@ -1685,11 +1685,12 @@ as option (a) by the lead under decision 163's frame.)
 statement set includes them (§3.10), and route through the same machinery as
 tags (ruling Q5/P5): first the host's `declarations.tags` disposition
 (`inert`/`unsupported`/`error`, with `rejectInertShape`, `lower.ts` `lowerAuthoredTag`,
-which is how html's `client` disposition, `targets/html/src/translate.ts`
-`TAGS`, applies), then `isDelegatedTag` / `resolveDelegatedTag`
+which is how a host's `client` error, e.g. `targets/html/src/translate.ts`
+`STRICT_TAGS`, applies), then `isDelegatedTag` / `resolveDelegatedTag`
 (`lower.ts` `lowerAuthoredTag`) with the statement's view, so html's `server`
-stays a `DelegatedTag` `{ kind: "statement" }` whose code html slices from the
-view's `span` (today from `node.loc`, `translate.ts` `resolveDelegatedTag`).
+and `client` stay `DelegatedTag`s `{ kind: "statement" }` whose code html slices from the
+view's `span` (today from `node.loc`, `translate.ts` `resolveDelegatedTag`); a
+`client` one carries only the `var` of its declared names.
 The view's fields are the decision text; its TypeScript names are the port's.
 
 The `HostDeclarations` hooks (`packages/core/src/declarations.ts`

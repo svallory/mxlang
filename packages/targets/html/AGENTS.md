@@ -78,10 +78,16 @@ unchanged. The `./core` export is **gone** (breaking): importers take
 Policy table (decision 65): the target renders what Marko's server render
 emits, minus resume markers. **Inert** (accepted, no output, each verified
 byte-identical against Marko): `<lifecycle>`, `<script>`, `<id>`,
-`<log>`, `<debug>`, `client` blocks (client-only), and `by=` on `<for>`.
+`<log>`, `<debug>`, and `by=` on `<for>`.
 `<effect>` is not a row at all: core refuses it in every form on a target
 (`MX_RESERVED_EFFECT_TAG`). The strict policy does have an `effect` row, an
 error worded like its `<let>`/`<script>` rows, and core yields to it. A
+`client` block runs nothing, but it is not inert either: html declares the names
+the block declares at its own top level as `var name;` (no initializer, one `var`
+per statement, in source order with the `static` blocks), as stock Marko 6.4.4's
+server module does, so a template read of one renders `undefined` instead of
+throwing (`clientDeclaredNames` in `translate.ts` follows Babel's
+`getBindingIdentifiers` order, outer scope only). A
 `server` block is **not** inert — this is the server render, so it runs and
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is

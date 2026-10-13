@@ -163,7 +163,7 @@ const html = render({ name: "World" });
 
 ## Strict mode
 
-By default this target renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<lifecycle>`/`<script>`/`client` blocks/`<id>` as inert — contributing no output). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
+By default this target renders what Marko's own server render would emit for the stateful tags (`<let>`'s initial value, `<lifecycle>`/`<script>`/`<id>` as inert — contributing no output — and a `client` block as nothing but the `var` declarations of its own top-level names). Passing `{ strict: true }` switches to a stricter policy that rejects those same constructs as compile errors instead, for a template that has no business needing a reactive runtime:
 
 ```typescript
 const { code } = compile(source, "greeting.mx", { strict: true });
@@ -183,7 +183,6 @@ The target is Marko's own server render, minus resume markers. That is the whole
 | `<script>` | Component script, not a rendered `<script>` element |
 | `<id>` | Identity for hydration |
 | `<log>`, `<debug>` | Developer output |
-| `client` blocks | Client-only by definition |
 | `by=` on `<for>` | Reconciliation key; a string render reconciles nothing |
 
 Inert is a *shape*, not permission to drop content. Each inert tag still declares the body and attributes its own Marko definition allows, and anything else is an error naming the tag and what was found — otherwise `<log=1 foo="bar"/>` would compile clean with `foo` silently deleted. The declarations are per tag, because Marko's are: `<log=1 foo="bar"/>` is refused, `<lifecycle foo="bar"/>` compiles (its attributes are its configuration), and `<script>` is the one inert tag that takes a body.
@@ -196,6 +195,7 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 | `<const/x=expr/>` | A `const` binding in the render function |
 | `:=` | The initial value, same as `<let>` |
 | `server` blocks | **Not** inert — this *is* the server render, so it runs and hoists like `static`, and its bindings are readable from the template |
+| `client` blocks | Never run on the server, but the names the block declares at its own top level (`let`, `const`, `var`, `function`, `class`, destructured names; not names inside nested blocks) are declared as `var name;` with no initializer, in source order beside the `static` statements. A template that reads `q` after `client { let q = 1 }` renders `undefined`, as Marko's server render does, instead of failing |
 
 **Errors** — only what the target genuinely cannot express:
 

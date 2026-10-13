@@ -25,7 +25,8 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 | Tag | Default behavior |
 |---|---|
-| `<lifecycle>`, `<script>`, `<id>`, `<log>`, `<debug>`, `client` blocks | Inert — accepted, no output |
+| `<lifecycle>`, `<script>`, `<id>`, `<log>`, `<debug>` | Inert — accepted, no output |
+| `client` block | Runs nothing, but declares the names it declares at its own top level as `var name;`, so a template that reads one sees `undefined` |
 | `<let>`, `<const>`, `:=` | Evaluated for their initial value only |
 | `server` block | **Not** inert — this is the server render, so it runs like `static` and its bindings are readable in the template |
 | `<await>` | Error — the host genuinely can't render a pending value to a string |

@@ -1,0 +1,12 @@
+client {
+  let q = 1;
+  const { r, s: [t] } = { r: 2, s: [3] };
+  function f() { return 4 }
+  class C {}
+  if (q) { var inner = 5 }
+}
+static const s = "static";
+client let late = 6;
+
+<div>[${q}][${r}][${t}][${typeof f}][${typeof C}][${late}]</div>
+<p>[${s}][${typeof inner}]</p>
