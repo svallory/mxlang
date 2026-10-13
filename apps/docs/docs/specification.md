@@ -1600,7 +1600,7 @@ or local that shadows the `<const>` or the `<let>` is neither a read nor a write
 Not detected: a handler held in a variable or built by a call, a function
 declared with `<const>` and called from a handler, a write made inside a nested
 function, a `for (items of …)` head used as a write, a `<const>` declared below
-the handler's tag, a `<script>` body that holds a `${…}` placeholder, a write in
+the body's tag, a `<script>` body that holds a `${…}` placeholder or does not parse, a write in
 one body and a read in another, and any other flow through a called function. Hosts and the html
 `strict` policy refuse `<let>` itself, so they never reach this check, and under
 the `none` tag-rules preset nothing fires.

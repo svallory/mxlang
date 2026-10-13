@@ -8,9 +8,8 @@
  * One source has to mean the same on every target, so core refuses the read
  * and names the ways out. In a handler: compute from the written value, or
  * move the check into a `<script>`, which runs after the write has settled.
- * In a `<script>` body or a `<lifecycle>` hook, which are where the write
- * settles, a body that writes is not the place to move the read to: compute
- * from the written value.
+ * A `<script>` body or a `<lifecycle>` hook that writes is not the place to
+ * move the read to: compute from the written value.
  *
  * Scope, as implemented:
  *

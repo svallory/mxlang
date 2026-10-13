@@ -1365,6 +1365,22 @@ describe("a `<script>` body and a `<lifecycle>` hook", () => {
     expect(error?.line).toBe(6);
   });
 
+  it("a `<script>` with a guard that returns is still read", () => {
+    const source = `${CART}<script>\n  if (!ok) return;\n  items = [2];\n  log(total);\n</script>\n`;
+    const error = attempt(source);
+    expect(error?.message).toBe(
+      `\`total\` is stale here: it derives from \`items\`, which this \`<script>\` wrote on line 5. Compute from \`items\` directly.`,
+    );
+    expect(error?.diagnosticCode).toBe(CODE);
+    expect([error?.line, error?.column]).toEqual([6, 6]);
+    expect(error?.end).toEqual({ line: 6, column: 11 });
+  });
+
+  it("a guarded `<script>` that reads and never writes is fine", () => {
+    const source = `${CART}<script>\n  if (!ok) return;\n  log(total);\n</script>\n`;
+    expect(attempt(source)).toBeUndefined();
+  });
+
   it("a `<script>` on one line", () => {
     const source = `${CART}<script>items = []; log(total)</script>\n`;
     const error = attempt(source);

@@ -720,7 +720,7 @@ function staleBodiesOf(
 /**
  * The parsed statements of a `<script>` body, with the positions of the
  * file; `undefined` when the body is not one plain text run (a `${…}`
- * placeholder splits it) or does not parse, which other checks own.
+ * placeholder splits it) or does not parse; such a body is skipped.
  */
 function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
   const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
@@ -728,7 +728,9 @@ function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
   if (children.length !== 1 || !isTextNode(text)) return undefined;
   try {
     const at = text.loc?.start ?? positionAtOffset(ctx, text.start);
-    return parseAuthoredSource(text.value, at.line, at.column).program;
+    return parseAuthoredSource(text.value, at.line, at.column, {
+      allowReturnOutsideFunction: true,
+    }).program;
   } catch {
     return undefined;
   }
