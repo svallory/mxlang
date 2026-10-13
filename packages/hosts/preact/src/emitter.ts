@@ -725,8 +725,11 @@ export class PreactEmitter implements Emitter<string> {
    *
    * `slot` says the result is placed in a JS expression position (a ternary
    * arm, an arrow body, an attribute value), where a lone expression node is
-   * emitted without the braces a JSX child needs. A caller that puts the
-   * result between JSX tags leaves it unset.
+   * emitted without the braces a JSX child needs, and an empty list is `null`.
+   * A caller that puts the result between JSX tags leaves it unset: there a
+   * bare expression would be read as JSX text (`<i>x</i>` for `${x}`) and
+   * `null` as the word "null", so a lone placeholder is `{expr}` and an empty
+   * list is nothing.
    */
   #expression(
     nodes: IrNode[],
@@ -734,11 +737,13 @@ export class PreactEmitter implements Emitter<string> {
     slot = false,
   ): MappedCode {
     const content = meaningful(nodes);
-    if (content.length === 0) return concatMapped("null");
+    if (content.length === 0) return concatMapped(slot ? "null" : "");
     if (content.length === 1) {
       const only = content[0] as IrNode;
       if (only.kind === "Interpolation" && only.escaped) {
-        return mappedExpr(only.expr);
+        return slot
+          ? mappedExpr(only.expr)
+          : concatMapped("{", mappedExpr(only.expr), "}");
       }
       if (
         only.kind === "Element" ||
