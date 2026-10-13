@@ -71,6 +71,8 @@ export const RESERVED_EFFECT_TAG_CODE = "MX_RESERVED_EFFECT_TAG";
 export const LET_WRITE_IN_RENDER_CODE = "MX_LET_WRITE_IN_RENDER";
 /** A handler reads a derived `<const>` after writing a `<let>` it depends on. */
 export const STALE_DERIVED_READ_CODE = "MX_STALE_DERIVED_READ";
+/** Module level code (`static`, `server`, `client`, `export`) names something that exists only while the template renders. */
+export const RENDER_ONLY_IN_MODULE_CODE = "MX_RENDER_ONLY_IN_MODULE";
 /** A `.marko` file used as a tag or an import. */
 export const UNSUPPORTED_MARKO_FILE_CODE = "MX_UNSUPPORTED_MARKO_FILE";
 /** A bad `#id`/`.class` shorthand, or one with no default tag. */
@@ -438,6 +440,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a handler reads a derived `<const>` after writing a `<let>` it depends on",
         ],
         [
+          RENDER_ONLY_IN_MODULE_CODE,
+          "module level code names a tag variable, `input`, `$global` or `$signal`, which exist only while the template renders",
+        ],
+        [
           UNSUPPORTED_MARKO_FILE_CODE,
           "a `.marko` file used as a tag or an import",
         ],
@@ -654,6 +660,7 @@ export type MxDiagnosticCode =
   | typeof RESERVED_EFFECT_TAG_CODE
   | typeof LET_WRITE_IN_RENDER_CODE
   | typeof STALE_DERIVED_READ_CODE
+  | typeof RENDER_ONLY_IN_MODULE_CODE
   | typeof UNSUPPORTED_MARKO_FILE_CODE
   | typeof INVALID_SHORTHAND_CODE
   | typeof RESERVED_BINDING_CODE

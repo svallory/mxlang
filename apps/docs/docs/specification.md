@@ -280,6 +280,32 @@ to be allowed to export *only* `interface Input`, and any other top-level
 `export` was a hard error. Lifting it is what lets an `.mx` **page** export
 `getStaticPaths` and `prerender` as real named exports for Astro's router.
 
+**Module level code cannot name a render-only name.** `static`, `server`
+and `client` code and `export` statements run once, as the template loads, so
+what exists only while the template renders is not there to read: a tag
+variable (`<let/x>`, `<const/x>`, `<define/Foo>`, any `/var`, declared anywhere
+in the file, before or after the statement, nested or not), `input`, `$global`
+and `$signal`. Naming one is a compile error on every host and on `lowerSource`,
+`MX_RENDER_ONLY_IN_MODULE`, positioned at the name with its end: "`x` exists
+only while the template renders, so module level code (`static`, `server` and
+`client` blocks and `export` statements), which runs once as the template
+loads, cannot reference it. Reference it in the template instead, passing it to
+a module level function as an argument." A reference is any read, write or
+update, in the statement's own text or in a function it declares, and the check
+does not depend on the braces of a `static { … }` block. A module level
+declaration with the spelling of a tag variable declared in the template's top
+level (`static count = 1` beside `<let/count=0/>`) is the same error, at the
+declaration: "`count` is a tag variable, which exists only while the template
+renders, so module level code (…), cannot declare a name with its spelling.
+Rename the module level binding." What is not a name: a parameter or local of a
+module function that shadows it, a property name (`o.input`, `{ input: 1 }`),
+anything inside a type (`typeof x` in a type position), a tag param (it is only
+in scope inside its own tag, so module code that spells it reads a global, as in
+Marko), and a module binding with the spelling of a tag variable that only a
+nested tag declares (the module binding shadows it). A host that refuses
+`server` or `client` reports that refusal first. The check is skipped under the
+`none` tag-rules preset.
+
 Import binding names are recovered by **parsing** the hoisted line with Babel —
 default, namespace, named, aliased and combined forms — never by regex.
 
@@ -1525,7 +1551,8 @@ of the `<let>` itself, a `<const>` value, the default of a tag param
 (`<for|x = …|>`, `<define/D|a = …|>`), and an `<if>` or `<for>` header. The
 body of a function, arrow or object method (an event handler, a callback, a
 `<let>`'s own `valueChange`) is not render position, nor is a `<script>` body
-or `static`, `server` and `client` code; a class member (method, getter,
+or `static`, `server` and `client` code (which cannot name the `<let>` at
+all: §2); a class member (method, getter,
 computed key, field initializer, static block) is render position, as in Marko.
 A parameter or local that shadows the `<let>` is not a write to it, and writing
 a member of the value (`count.total = 1`) is not a write to the binding. There

@@ -660,6 +660,13 @@ const ROWS: Row[] = [
     tagRules: "html",
   }),
   lowerRow(
+    "MX_RENDER_ONLY_IN_MODULE",
+    "<const/x=1/>\nstatic const y = x\n<div>${y}</div>\n",
+    2,
+    17,
+    { tagRules: "html" },
+  ),
+  lowerRow(
     "MX_STALE_DERIVED_READ",
     "<let/n=0/>\n<const/d=n * 2/>\n<button onClick() {\n  n = 1;\n  log(d);\n}>x</button>\n",
     5,

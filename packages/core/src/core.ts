@@ -52,6 +52,7 @@ import type { Atom, Expr, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import type { ModuleScope } from "./module-scope.ts";
 import type { Dialect } from "./syntax-table.ts";
 import {
   hasTypeArguments,
@@ -624,6 +625,13 @@ export interface Ctx {
    * and under the `none` tag rules.
    */
   derivedConsts?: ReadonlyMap<string, ReadonlySet<string>>;
+  /**
+   * What the file's module statements are checked against: its tag variable
+   * names and the statements themselves (`checkModuleScope`). Set by `lower`
+   * for each template; absent when the file has no module statement and under
+   * the `none` tag rules.
+   */
+  moduleScope?: ModuleScope;
   /** Serial for block ids, so two sibling blocks are never confused. */
   tagVarBlockSeq?: number;
   /**

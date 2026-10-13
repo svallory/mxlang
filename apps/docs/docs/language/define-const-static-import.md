@@ -32,6 +32,17 @@ static
 
 Use `static` for values or helpers that don't depend on the current render's input.
 
+Because it runs once, before any render, `static` code (like `server`, `client` and `export` code) cannot name anything that exists only while the template renders: a tag variable (`<let>`, `<const>`, `<define>`), `input`, `$global` or `$signal`. It is a compile error, positioned at the name (`MX_RENDER_ONLY_IN_MODULE`):
+
+```html
+<const/rate=0.2/>
+static const tax = rate * 100
+```
+
+> `rate` exists only while the template renders, so module level code (`static`, `server` and `client` blocks and `export` statements), which runs once as the template loads, cannot reference it. Reference it in the template instead, passing it to a module level function as an argument.
+
+Write `static function tax(rate) { return rate * 100 }` and call `${tax(rate)}` in the template. A function parameter that shadows the name is fine, and so is a tag param (`<for|item|>`), which module code cannot see.
+
 ## `<const>`
 
 A non-reactive local binding, computed fresh on each render:

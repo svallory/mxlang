@@ -202,6 +202,7 @@ import type {
 } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
 import {
   endOfInputError,
   isTypeofImport,
@@ -4931,10 +4932,23 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const disposition = Object.hasOwn(ctx.declarations.tags, name)
     ? ctx.declarations.tags[name]
     : undefined;
+  if (
+    disposition &&
+    (disposition.kind === "error" || disposition.kind === "unsupported")
+  ) {
+    raiseDisposition(ctx, name, disposition, node);
+  }
+  // Module code is checked after a host's refusal of the statement, so a host
+  // that has no `server` or `client` block says so first, and before the
+  // statement is dropped or lowered.
+  if (
+    ctx.moduleScope &&
+    isStatementNode(node) &&
+    ["static", "server", "client", "export"].includes(name)
+  ) {
+    checkModuleScope(ctx, node);
+  }
   if (disposition) {
-    if (disposition.kind === "error" || disposition.kind === "unsupported") {
-      raiseDisposition(ctx, name, disposition, node);
-    }
     rejectInertShape(ctx, node, name, disposition);
     checkTagValueWrites(ctx, node);
     // Inert: accepted, contributes nothing to the IR.
@@ -5830,6 +5844,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.tagVars = undefined;
   ctx.renderLets = undefined;
   ctx.derivedConsts = undefined;
+  ctx.moduleScope = scanModuleScope(ctx, body);
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
   // Decision 162: the walk recorded errors instead of throwing the first. The

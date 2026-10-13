@@ -134,11 +134,15 @@ const MARKO_PLUGINS = [
 
 // TS permits angle assertions that TSX does not. Check either valid grammar,
 // rather than silently skipping a TS statement because the JSX parse failed.
-function parseAuthoredSource(
+export function parseAuthoredSource(
   source: string,
   line: number,
   column: number,
-  options: { allowReturnOutsideFunction?: boolean } = {},
+  options: {
+    allowReturnOutsideFunction?: boolean;
+    /** Keep going past an error the parser can recover from (`export { x }` with no `x`). */
+    errorRecovery?: boolean;
+  } = {},
 ) {
   const position = {
     sourceType: "module" as const,
@@ -147,6 +151,7 @@ function parseAuthoredSource(
     ...(options.allowReturnOutsideFunction
       ? { allowReturnOutsideFunction: true }
       : {}),
+    ...(options.errorRecovery ? { errorRecovery: true } : {}),
   };
   try {
     return coreParser().parse(source, {

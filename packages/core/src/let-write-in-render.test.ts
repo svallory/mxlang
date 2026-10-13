@@ -458,6 +458,8 @@ describe("what is not render position", () => {
   });
 
   it("static, server and client code cannot see a `<let>`", () => {
+    // Module code that names the `<let>` is refused for that, not for the
+    // write (see module-scope.test.ts).
     for (const statement of [
       "static count = 1",
       "static function bump() { count++ }",
@@ -465,7 +467,7 @@ describe("what is not render position", () => {
       "server count = 2",
     ]) {
       const error = attempt(`${LET}${statement}\n<p/>\n`);
-      expect(error).toBeUndefined();
+      expect(error?.diagnosticCode).toBe("MX_RENDER_ONLY_IN_MODULE");
     }
   });
 

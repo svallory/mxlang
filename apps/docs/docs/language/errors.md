@@ -32,6 +32,19 @@ is rejected on the html default policy:
 
 The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or update, with its end. Render position is a placeholder, an attribute, tag-argument, spread or attribute-tag value, the attributes and arguments of `<log>`, `<debug>`, `<id>`, `<lifecycle>` and `<script>` (not a `<script>` body), the attributes of the `<let>` itself, a `<const>` value, the default of a tag param, and an `<if>` or `<for>` header. A write inside a function, arrow or object method (an event handler), in a `<script>` body or in a `<let>`'s own `valueChange` is fine, and so is a parameter or local that shadows the `<let>`. A write inside a function the template calls while it renders is not detected. Hosts and the html `strict` policy refuse `<let>` itself, and under the `none` tag rules `let` is an ordinary tag name. `lowerSource` refuses every `<let>` tag variable (a data file has no state) and reports a render write first. See [Stateful tags](/language/stateful-tags/).
 
+## Module level code that names a render-only name
+
+```html
+<let/count=0/>
+static const first = count
+```
+
+is rejected on the html default policy and in `lowerSource`:
+
+> `count` exists only while the template renders, so module level code (`static`, `server` and `client` blocks and `export` statements), which runs once as the template loads, cannot reference it. Reference it in the template instead, passing it to a module level function as an argument.
+
+The code is `MX_RENDER_ONLY_IN_MODULE` and the position is the name, with its end. The names are every tag variable in the file (a `<let>`, a `<const>`, a `<define>`, before or after the statement, nested in a tag body or not), `input`, `$global` and `$signal`. A read, a write and an update all count, in the statement itself or in a function it declares, and so do the statements inside a `static { … }` block. A module level declaration with the spelling of a tag variable in the template's top level (`static count = 1`) is refused at the declaration, with "cannot declare a name with its spelling. Rename the module level binding." What does not count: a parameter or local of a module function that shadows the name, a property name, a name inside a type, a tag param (module code that spells it reads a global), and a module binding that shares the spelling of a tag variable only a nested tag declares. A host that refuses `server` or `client` says so first, and the check is skipped under the `none` tag rules. See [Define, const, static, import](/language/define-const-static-import/).
+
 ## A derived `<const>` read after its `<let>` was written
 
 ```html
