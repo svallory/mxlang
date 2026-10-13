@@ -8,6 +8,7 @@ import { newCtx } from "./core.ts";
 import { withStatementTags } from "./core-taglib.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
+import { lowerSource as lowerIrSource } from "./ir-entry/index.ts";
 import { lower } from "./lower.ts";
 import { markoCompiler } from "./marko-frontend.ts";
 import { tagTable } from "./tag-table.ts";
@@ -244,10 +245,46 @@ describe("a decorator in a module statement is refused", () => {
     expect(ir.hoisted.map((s) => s.code)).toContain("class K { m() {} }");
   });
 
-  it("keeps a plain syntax error that is not a decorator as Babel's own", () => {
-    expect(() => lowerSource("static class K { @ }\n<div/>\n")).toThrow();
+  it.each([
+    ["a pipeline", "static const x = a |> b\n<div/>\n", "pipelineOperator"],
+    ["a do expression", "static const x = do { 1 }\n<div/>\n", "doExpressions"],
+  ])(
+    "keeps Babel's own message for %s: only a missing decorators plugin is a decorator error",
+    (_label, source, plugin) => {
+      const e = failure(() => lowerSource(source));
+      expect(e.diagnosticCode).toBe("MX_INVALID_STATEMENT");
+      expect(e.message).toContain(`"${plugin}"`);
+      expect(e.message).not.toMatch(/^Decorators/);
+    },
+  );
+
+  it("keeps Babel's own message for a join that is not valid", () => {
     expect(
-      failure(() => lowerSource("static const a = 1 +\n")).diagnosticCode,
-    ).toBe("MX_INVALID_STATEMENT");
+      failure(() => lowerSource("static const a = 1 +\n")).message,
+    ).not.toMatch(/^Decorators/);
+  });
+
+  it("puts a bare `@` with no decorator after it on the `@` alone", () => {
+    // `@ }` is a decorator failure whose second parse finds no decorator, so
+    // the span falls back to the `@`.
+    const e = failure(() => lowerSource("static class K { @ }\n<div/>\n"));
+    expect(e.message).toMatch(/^Decorators are not read inside a `static`/);
+    expect([e.line, e.column]).toEqual([1, 17]);
+    expect(e.end).toEqual({ line: 1, column: 18 });
+  });
+
+  it("reports the refusal as a diagnostic through the public lowerSource", () => {
+    const { ir, diagnostics } = lowerIrSource(
+      "static class C { @d m() {} }\n<div/>\n",
+      "/f/t.mx",
+    );
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "MX_INVALID_STATEMENT",
+      line: 1,
+      column: 17,
+      end: { line: 1, column: 19 },
+    });
   });
 });

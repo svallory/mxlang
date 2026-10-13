@@ -124,7 +124,11 @@ export function checkReservedBindings(tree: unknown): void {
  * `decorators` plugin, as in Marko: `static @d() class C {}` and `@d m() {}`
  * are a syntax error there, and lowering refuses them (`rejectInvalidStatement`)
  * before a host sees the statement. Without the plugin here the reparse
- * throws and the tag is skipped, which is the statement checks' to report.
+ * throws and the tag is skipped. For a statement tag that refusal is the
+ * statement checks' to report; for a `<script>` body (`scriptProgramOf`, which
+ * reads with the same plugins) nothing reports it, so a body with a decorator
+ * is skipped silently, and its stale-read check (`MX_STALE_DERIVED_READ`) does
+ * not run. Marko refuses such a body itself.
  */
 const MARKO_PLUGINS = [
   "objectRestSpread",
