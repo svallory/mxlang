@@ -118,10 +118,14 @@ describe("statement text is checked like Marko checks it", () => {
     });
   }
 
-  it("keeps a decorated class intact (decorators are read in a statement)", () => {
-    expect(out("static class K { @d m() {} }\n<div/>")).toContain(
-      "class K { @d m() {} }",
-    );
+  it("refuses a decorated class (no decorators plugin, as stock Marko)", () => {
+    const error = fail("static class K { @d m() {} }\n<div/>") as {
+      message: string;
+      line: number;
+      column?: number;
+    };
+    expect(error.message).toMatch(/^Decorators are not read inside a `static`/);
+    expect([error.line, error.column]).toEqual([1, 17]);
   });
   if (!ANGULAR) {
     it("joins a line ending in an operator when the result is valid", () => {

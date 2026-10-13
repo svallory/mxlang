@@ -3598,9 +3598,9 @@ function rejectInvalidStatement(
 ): void {
   const options = {
     sourceType: "module",
-    // `decorators-legacy` reads `@d m() {}` and `@d() m() {}`, the form a
-    // `static class` carried before decision 168 (#395 follow-up).
-    plugins: ["typescript", "decorators-legacy"],
+    // No decorators plugin: stock Marko (compiler 5.42.11) has none either, so
+    // `static @d() class C {}` and `@d m() {}` are refused below, as it does.
+    plugins: ["typescript"],
     // A top-level `return` is TypeScript's TS1108 to report, with its mapping,
     // in an Astro fence and a template `static` alike; stock Marko 6.3.51
     // compiles a template `static return` too.
@@ -3617,6 +3617,21 @@ function rejectInvalidStatement(
   try {
     coreBabel().parse(code, options);
   } catch (error) {
+    // A decorator is not read in a statement. The failure is Babel's
+    // "missing plugin" one for decorators, positioned at the first `@` as
+    // stock Marko reports it; the span runs over that decorator.
+    const decorator = decoratorFailure(code, error);
+    if (decorator) {
+      const at = place(decorator.start);
+      const failure = codedError(
+        INVALID_STATEMENT_CODE,
+        `Decorators are not read inside ${/^[aeiou]/.test(keyword) ? "an" : "a"} \`${keyword}\` statement: its text is TypeScript without decorator syntax. Move the decorated class to a \`.ts\` module and import it, or apply the decorator as a plain function call`,
+        at.line,
+        at.column,
+      );
+      failure.end = place(decorator.end);
+      throw failure;
+    }
     // JSX is not read in a statement. Detected by what the failure is: the
     // text parses once the JSX syntax is on, so the error is the markup's, and
     // it is reported at the first element's `<` instead of wherever Babel's
@@ -3650,6 +3665,72 @@ function rejectInvalidStatement(
     failure.end = { line: at.line, column: at.column };
     throw failure;
   }
+}
+
+/**
+ * Where the decorator that made `code` unparsable starts and ends (statement-
+ * relative line/column), or `undefined` when `error` is not Babel's "this
+ * syntax needs the decorators plugin" failure. The end comes from a second
+ * parse with the plugin on; when that finds no decorator at the failure, the
+ * span is the `@` alone.
+ */
+function decoratorFailure(
+  code: string,
+  error: unknown,
+):
+  | {
+      start: { line: number; column: number };
+      end: { line: number; column: number };
+    }
+  | undefined {
+  const failure = error as {
+    missingPlugin?: unknown;
+    pos?: number;
+    loc?: { line: number; column: number };
+  };
+  if (
+    !Array.isArray(failure.missingPlugin) ||
+    !failure.missingPlugin.includes("decorators") ||
+    typeof failure.pos !== "number" ||
+    !failure.loc
+  ) {
+    return undefined;
+  }
+  const start = { line: failure.loc.line, column: failure.loc.column };
+  let end = { line: start.line, column: start.column + 1 };
+  try {
+    const file = coreParser().parse(code, {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      errorRecovery: true,
+      // The proposal's own grammar reads every form: `export @d class` and
+      // `@d accessor x` do not parse under `decorators-legacy`.
+      plugins: ["typescript", "decorators", "decoratorAutoAccessors"],
+    });
+    let found: Node | undefined;
+    const visit = (value: unknown): void => {
+      if (found || !value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item);
+        return;
+      }
+      const node = value as Node;
+      if (node.type === "Decorator" && node.start === failure.pos) {
+        found = node;
+        return;
+      }
+      for (const key of Object.keys(node)) {
+        if (key === "loc" || key === "extra") continue;
+        visit(node[key]);
+      }
+    };
+    visit(file.program);
+    const stop = (found as Node | undefined)?.loc?.end;
+    if (stop) end = { line: stop.line, column: stop.column };
+  } catch {
+    // The span stays the `@`.
+  }
+  return { start, end };
 }
 
 /** Whether the last non-blank character before `at` in `code` is `>`. */

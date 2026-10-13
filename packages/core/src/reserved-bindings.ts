@@ -118,17 +118,17 @@ export function checkReservedBindings(tree: unknown): void {
 }
 
 /**
- * Marko 6.3.51's own `parserOpts.plugins` (`babel-plugin/index.js`'s
- * `manipulateOptions`), so a statement this host's parser accepts is a
- * statement this checker can also read. `decorators` is what a decorated
- * `static @d() class C {}` or `@d() m() {}` needs: Marko accepts both through
- * its own Babel 8 build, and without the plugin here the reparse threw and
- * the tag was skipped — a silent false negative, never a false reject.
+ * Marko 6.4.4's own `parserOpts.plugins` (`@marko/compiler` 5.42.11,
+ * `babel-plugin/index.js`'s `manipulateOptions`), so a statement this host's
+ * parser accepts is a statement this checker can also read. There is no
+ * `decorators` plugin, as in Marko: `static @d() class C {}` and `@d m() {}`
+ * are a syntax error there, and lowering refuses them (`rejectInvalidStatement`)
+ * before a host sees the statement. Without the plugin here the reparse
+ * throws and the tag is skipped, which is the statement checks' to report.
  */
 const MARKO_PLUGINS = [
   "objectRestSpread",
   "classProperties",
-  "decorators",
   ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
 ] as const satisfies NonNullable<ParserOptions["plugins"]>;
 

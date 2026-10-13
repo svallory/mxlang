@@ -83,8 +83,8 @@ describe("server and client statement text is checked like Marko", () => {
   });
 });
 
-it("keeps a decorated class intact (decorators are read in a statement)", () => {
-  const { code } = compile("static class K { @d m() {} }\n<div/>", "/f/t.mx");
-  expect(code).toContain("class K { @d m() {} }");
-  expect(code).toContain("<div></div>");
+it("refuses a decorated class (no decorators plugin, as stock Marko)", () => {
+  expect(() =>
+    compile("static class K { @d m() {} }\n<div/>", "/f/t.mx"),
+  ).toThrow(/^Decorators are not read inside a `static`/);
 });

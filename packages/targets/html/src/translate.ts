@@ -167,8 +167,8 @@ function clientDeclaredNames(code: string, at: Node): string[] {
       sourceType: "module",
       // Marko's own sub-parse options, so any statement text Marko reads
       // parses here too (a top-level `return`, `super`, `new.target`,
-      // `await`, an `import` or `export`), plus the decorators core's
-      // statement check accepts.
+      // `await`, an `import` or `export`). No decorators plugin: core's
+      // statement check refuses a decorator before this runs.
       allowAwaitOutsideFunction: true,
       allowImportExportEverywhere: true,
       allowReturnOutsideFunction: true,
@@ -178,7 +178,6 @@ function clientDeclaredNames(code: string, at: Node): string[] {
       plugins: [
         "objectRestSpread",
         "classProperties",
-        "decorators-legacy",
         "explicitResourceManagement",
         ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
       ],

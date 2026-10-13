@@ -222,8 +222,14 @@ tag rules preset declares three of the six, `import`, `static` and `export`;
 
 A statement's text is parsed as a TypeScript module body and a syntax error is a
 positioned error on every target, exactly as in Marko 6.4.4 (measured, html and
-DOM output): JSX in a statement (`static const el = <b>hi</b>`) and a decorator
-are errors, as is a stray `:` (`{ k: :name }`). A line ending in an operator or `>`
+DOM output): JSX in a statement (`static const el = <b>hi</b>`) is an error, as
+is a stray `:` (`{ k: :name }`). So is a decorator, in all four places one can
+be written: `static @d() class C {}`, `server @d() class C {}`,
+`client @d() class C {}` and a class member, `static class C { @d m() {} }`
+(`MX_INVALID_STATEMENT`, at the first `@`, the span covering that decorator).
+Marko's parser has no decorators plugin; the fix is to move the decorated class
+to a `.ts` module and import it, or to apply the decorator as a plain function
+call. A line ending in an operator or `>`
 continues onto the next line, as in Marko: `static const t = 1 +⏎2` is one valid
 statement, and `static const ok = 2 >⏎<div>…` is the joined expression's own
 error ("Missing semicolon.", at the next line), never a silent drop of that

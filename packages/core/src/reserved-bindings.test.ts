@@ -76,33 +76,42 @@ describe("reserved generated-code bindings", () => {
       "legacy decorator",
       "static function d(){ return (x:any)=>x }\nstatic class A { @d m(__mxX){} }",
     ],
-  ])("checks a %s in a statement tag", (_label, source) => {
-    const statement = source.split("\n").slice(1).join("\n");
-    let failure: unknown;
-    try {
-      compile(`\n${source}\n`);
-    } catch (error) {
-      failure = error;
-    }
-    expect(isTranslateError(failure)).toBe(true);
-    if (!isTranslateError(failure)) return;
-    expect(failure.message).toBe(reservedBindingMessage("__mxX"));
-    expect(failure.line).toBe(3);
-    expect(failure.column).toBe(statement.indexOf("__mxX"));
+  ])(
+    "refuses a %s in a statement tag as a decorator, not as a reserved binding",
+    (_label, source) => {
+      // Stock Marko has no decorators plugin, so the statement never reaches
+      // the reserved-binding check: lowering refuses the decorator first.
+      let failure: unknown;
+      try {
+        compile(`\n${source}\n`);
+      } catch (error) {
+        failure = error;
+      }
+      expect(isTranslateError(failure)).toBe(true);
+      if (!isTranslateError(failure)) return;
+      expect(failure.diagnosticCode).toBe("MX_INVALID_STATEMENT");
+      expect(failure.message).toMatch(/^Decorators are not read inside/);
+      expect(failure.message).not.toBe(reservedBindingMessage("__mxX"));
+      expect(failure.line).toBe(3);
+    },
+  );
+
+  it("checks a plain class method parameter in a statement tag", () => {
+    expect(() => compile("\nstatic class A { m(__mxX){} }\n")).toThrow(
+      reservedBindingMessage("__mxX"),
+    );
   });
 
-  it("does not treat a decorated method's own name as a binding", () => {
+  it("does not read decorator syntax in a checked source, as Marko's own parser", () => {
+    expect(() => checkReservedSource("@d class A {}")).toThrow(
+      /requires enabling one of the following parser plugin/,
+    );
+  });
+
+  it("does not treat a class method's own name as a binding", () => {
     // A class method name is a property key, not a declaration, so the same
     // check that allows `m(__mxX) {}` allows `__mxX() {}`.
-    // Through the source check directly: a decorator in a statement tag is
-    // Marko's own syntax error since #395 r2, so it never reaches this check
-    // by way of a whole compile.
-    expect(() =>
-      checkReservedSource(
-        "function d(){ return (x:any)=>x }\nclass A { @d __mxX(){} }",
-        4,
-      ),
-    ).not.toThrow();
+    expect(() => checkReservedSource("class A { __mxX(){} }", 4)).not.toThrow();
   });
 
   it("reports malformed statement text as a syntax error, not a reserved binding", () => {

@@ -116,9 +116,13 @@ describe("statement text is checked like Marko checks it", () => {
     });
   }
 
-  it("reads a decorated class as a statement (decorators are read)", () => {
-    expect(fail("static class K { @d m() {} }\n<div/>").message).toMatch(
-      /a `<Static>` cannot be emitted into an Angular template/,
-    );
+  it("refuses a decorated class (no decorators plugin, as stock Marko)", () => {
+    const error = fail("static class K { @d m() {} }\n<div/>") as {
+      message: string;
+      line: number;
+      column?: number;
+    };
+    expect(error.message).toMatch(/^Decorators are not read inside a `static`/);
+    expect([error.line, error.column]).toEqual([1, 17]);
   });
 });
