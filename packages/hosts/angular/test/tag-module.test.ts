@@ -947,15 +947,17 @@ describe("compileTagModule: module-level names the template reads", () => {
     expect(classBody(code)).not.toContain("get ");
   });
 
-  it("a `<const>` hides the module name only for the siblings after it", () => {
-    const { code } = compileTag(
-      "export interface Input { n: number }\nstatic const n = 1;\n<p>${n}</p>\n<const/n=2/>\n<p>${n}</p>\n",
-      "constvar.mx",
+  it("a `<const>` and a module binding cannot share a name", () => {
+    // The tag variable is a name of the template's render; the module binding
+    // would be a second name with its spelling (Marko refuses it too).
+    expect(() =>
+      compileTag(
+        "export interface Input { n: number }\nstatic const n = 1;\n<p>${n}</p>\n<const/n=2/>\n<p>${n}</p>\n",
+        "constvar.mx",
+      ),
+    ).toThrow(
+      "`n` is a tag variable, which exists only while the template renders",
     );
-
-    expect(templateOf(code)).toContain("{{ __mxModule_n }}");
-    expect(classBody(code).match(/get __mxModule_n\(\)/g)).toHaveLength(1);
-    expect(templateOf(code).match(/__mxModule_n/g)).toHaveLength(1);
   });
 
   it("a `<define>` parameter hides the module name inside the define", () => {
