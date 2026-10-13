@@ -2318,17 +2318,19 @@ export class PreactEmitter implements Emitter<string> {
         undefined,
         true,
       );
+      // Hono's `Suspense` returns the fallback when its children are falsy,
+      // so a lone `0` body would show the placeholder: close it like a
+      // fragment body.
       inner = concatMapped(
         "<__mxSuspense fallback={",
         fallback,
         `}>`,
-        inner,
+        closeFragmentBody(inner),
         "</__mxSuspense>",
       );
     }
     if (!catchTag) {
       this.#out.push(inner);
-      if (LONE_VALUE_BODIES.has(inner)) this.#valueChildren++;
       return;
     }
 
@@ -2343,7 +2345,15 @@ export class PreactEmitter implements Emitter<string> {
     // function component, under the boundary.
     this.#runtimeImports.add(this.#dialect.errorBoundaryName);
     const params = catchTag.block.params.join(", ");
-    const caught = this.#expression(catchTag.block.children, undefined, true);
+    // A lone value in the catch body would be the arrow's bare result, which
+    // Hono drops when it is `0` or `NaN`: write it as a closed fragment.
+    const caught = holdsScalar(catchTag.block.children)
+      ? concatMapped(
+          "<>",
+          closeFragmentBody(this.#expression(catchTag.block.children)),
+          "</>",
+        )
+      : this.#expression(catchTag.block.children, undefined, true);
     const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(

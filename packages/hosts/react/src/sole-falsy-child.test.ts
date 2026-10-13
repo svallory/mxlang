@@ -130,7 +130,22 @@ const CASES: Array<[string, string, string]> = [
   [
     "a <try> with a lone placeholder body",
     `<try>${D}{input.x}<@catch|e|>${D}{e.message}</@catch></try>`,
-    "return (<><__mxErrorBoundary fallback={(e) => e.message}>{() => (<>{input.x}{null}</>)}</__mxErrorBoundary></>);",
+    "return (<><__mxErrorBoundary fallback={(e) => <>{e.message}{null}</>}>{() => (<>{input.x}{null}</>)}</__mxErrorBoundary></>);",
+  ],
+  [
+    "a <try> with a placeholder and a lone placeholder body",
+    `<try><@placeholder>wait</@placeholder>${D}{input.x}</try>`,
+    "return (<><__mxSuspense fallback={<>wait</>}>{input.x}{null}</__mxSuspense></>);",
+  ],
+  [
+    "a <try> whose <@catch> body is a lone placeholder",
+    `<try><div>ok</div><@catch|e|>${D}{input.x}</@catch></try>`,
+    "return (<><__mxErrorBoundary fallback={(e) => <>{input.x}{null}</>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
+  ],
+  [
+    "a <try> whose <@catch> body is an <if> with a lone placeholder",
+    `<try><div>ok</div><@catch|e|><if=input.a>${D}{input.x}</if></@catch></try>`,
+    "return (<><__mxErrorBoundary fallback={(e) => <>{input.a ? input.x : null}{null}</>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
   ],
 ];
 
@@ -176,6 +191,11 @@ const UNCHANGED: Array<[string, string, string]> = [
     "an <if> with an empty body",
     "<if=input.a></if>",
     "return (<>{input.a ? null : null}</>);",
+  ],
+  [
+    "a <try> whose <@catch> body is an element",
+    `<try><div>ok</div><@catch|e|><b>${D}{input.x}</b></@catch></try>`,
+    "return (<><__mxErrorBoundary fallback={(e) => <b>{input.x}</b>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
   ],
 ];
 
@@ -387,6 +407,12 @@ const RENDER_CASES: Array<[string, string, Record<string, unknown>, string]> = [
   [
     "a <try> with a 0 body",
     `<try>${D}{input.x}<@catch|e|>${D}{e.message}</@catch></try>`,
+    { x: 0 },
+    "0",
+  ],
+  [
+    "a <try> with a placeholder and a 0 body",
+    `<try><@placeholder>wait</@placeholder>${D}{input.x}</try>`,
     { x: 0 },
     "0",
   ],

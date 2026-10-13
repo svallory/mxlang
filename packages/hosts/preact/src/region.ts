@@ -49,7 +49,11 @@ import {
   runtimeImports,
 } from "./compile.ts";
 import type { JsxDialect } from "./dialect.ts";
-import { componentAlias, createRegionEmitter } from "./emitter.ts";
+import {
+  closeFragmentBody,
+  componentAlias,
+  createRegionEmitter,
+} from "./emitter.ts";
 
 export interface CompileJsxRegionOptions {
   filename: string;
@@ -324,7 +328,7 @@ export function compileJsxRegion(
   // and only a JSX element reads the same in both (a bare `{…}` or call in a
   // child position would print as text). The statements' arrow is called
   // inside it for the same reason.
-  const jsx = `<>${markupCode.code}</>`;
+  const jsx = `<>${closeFragmentBody(markupCode).code}</>`;
   const code =
     statements.length === 0
       ? jsx
