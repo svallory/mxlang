@@ -36,6 +36,7 @@ type Hooks = {
   configResolved(config: unknown): void;
   buildStart(): Promise<void>;
   transform(this: unknown, code: string, id: string): Promise<unknown>;
+  handleHotUpdate(ctx: unknown): unknown;
 };
 
 const dirs: string[] = [];
@@ -163,6 +164,25 @@ describe("a scan error under serve is a warning positioned at the tag file", () 
     utimesSync(t.tagA, later, later);
     await t.transform("three");
     expect(t.warnings).toHaveLength(4);
+  });
+
+  it("a change to a scan input re-warns the problems still present, once, on any caller", async () => {
+    const t = setup("serve");
+    state.diagnostics = [t.diagnostic(t.tagA)];
+    await t.transform("one");
+    // The tag file is deleted and recreated with no request in between; the
+    // next request goes to a different caller.
+    t.hooks.handleHotUpdate({
+      file: t.tagA,
+      modules: [],
+      server: {
+        moduleGraph: { getModuleById: () => undefined, invalidateModule() {} },
+      },
+    });
+    await t.transform("two");
+    expect(t.warnings).toHaveLength(2);
+    await t.transform("three");
+    expect(t.warnings).toHaveLength(2);
   });
 
   it("a buildStart starts the warnings over", async () => {

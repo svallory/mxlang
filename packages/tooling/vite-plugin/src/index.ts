@@ -1439,6 +1439,16 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         ...(dependencySources.get(file) ?? []),
         ...(dependencySources.get(dirname(file)) ?? []),
       ]);
+      // A scan input changed, so what its callers were told about it may no
+      // longer hold: let the problems still present warn once more on the next
+      // transform of any caller, which the per-caller memory alone only does
+      // for a caller transformed while the problem was gone.
+      for (const dependent of dependents) {
+        for (const key of lastScanKeys.get(dependent) ?? []) {
+          reported.delete(key);
+        }
+        lastScanKeys.delete(dependent);
+      }
       if (dependents.size > 0) {
         const stale = [...dependents]
           .map((dependent) => {
