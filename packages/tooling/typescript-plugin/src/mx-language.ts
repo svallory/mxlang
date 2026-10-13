@@ -707,6 +707,9 @@ function isForeignFile(item: PositionedCode): boolean {
   return typeof item.loc.file === "string";
 }
 
+/** The `static` keyword and the whitespace after it, at a statement's start. */
+const STATIC_KEYWORD = /^\s*static\s+/;
+
 function locateSourceCode(
   item: PositionedCode,
   source: string,
@@ -725,7 +728,13 @@ function locateSourceCode(
 
   const blockStart = offsetAt(sourceLines, source.length, item.loc);
   const blockEnd = offsetAt(sourceLines, source.length, item.end);
-  const withinBlock = source.slice(blockStart, blockEnd).indexOf(item.code);
+  const block = source.slice(blockStart, blockEnd);
+  // A `static` statement's code is the text after its keyword, so the search
+  // starts there: from the statement start, `static a` would find the `a`
+  // inside `static` itself.
+  const afterKeyword =
+    item.kind === "Static" ? (STATIC_KEYWORD.exec(block)?.[0].length ?? 0) : 0;
+  const withinBlock = block.indexOf(item.code, afterKeyword);
   if (withinBlock >= 0) {
     return { offset: blockStart + withinBlock, length: item.code.length };
   }
