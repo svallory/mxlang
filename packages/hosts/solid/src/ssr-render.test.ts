@@ -622,6 +622,24 @@ describe("Solid <for>: accessor-backed params are not assignable", () => {
     ).toThrow(FOR_PARAM_WRITE);
   });
 
+  it("keeps its own refusal for a destructured row name written in a handler", () => {
+    // Core allows this write (a name from an object pattern is written
+    // through its object); an accessor-backed name still cannot be assigned.
+    let thrown: { diagnosticCode?: string; message?: string } | undefined;
+    try {
+      compileSolidMx(
+        `<for|{ name }| of=people by="id"><button onClick() { name = 2 }/></for>`,
+        { filename: "fixture.solid.mx" },
+      );
+    } catch (error) {
+      thrown = error as { diagnosticCode?: string; message?: string };
+    }
+    expect(thrown?.diagnosticCode).toBe("MX_INVALID_ACCESSOR_ASSIGNMENT");
+    expect(thrown?.message).toMatch(
+      /bound by Solid as an accessor and cannot be assigned/,
+    );
+  });
+
   it("allows a for-of declaring its own binding over the row", () => {
     expect(() =>
       compileSolidMx(

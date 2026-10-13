@@ -341,9 +341,9 @@ export interface BindingRegistry {
  *
  * A write while the template renders is refused for every kind. `inFunction`
  * adds the code that runs later: a handler, a callback, a `<script>` body.
- * It is set for a `<const>` and a `<for>` parameter bound as a plain name (a
- * name from an object pattern is written through its object, which Marko
- * allows) and clear for a `<define>` parameter, which a handler may write.
+ * It is set for a `<const>`, a `<for>` parameter and a `<define>` parameter
+ * bound as a plain name, and clear for a name from an object pattern, which is
+ * written through its object (Marko allows that outside the render).
  */
 export interface WriteGuard {
   readonly kind: "const" | "for" | "define";

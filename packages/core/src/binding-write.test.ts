@@ -29,6 +29,8 @@ const forMessage = (name: string) =>
   `\`${name}\` is a \`<for>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
 const defineMessage = (name: string) =>
   `\`${name}\` is a \`<define>\` parameter and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+const definePlainMessage = (name: string) =>
+  `\`${name}\` is a \`<define>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
 const belowMessage = (name: string) =>
   `\`${name}\` is a \`<let>\` declared below this write, and a \`<let>\` can only be written below its declaration. Move the \`<let>\` above this code.`;
 const loopMessage = (name: string, loop: "of" | "in") =>
@@ -297,7 +299,7 @@ const REFUSED: Row[] = [
     READONLY,
     forMessage("item"),
   ),
-  // --- a <define> parameter, in render only ------------------------------
+  // --- a <define> parameter: a destructured name in render only, a plain name anywhere ------------------------------
   row(
     "define parameter written in render",
     "<define/D|{ a }|>\n  ${a = 2}\n</define>\n<D a=1/>\n",
@@ -311,7 +313,31 @@ const REFUSED: Row[] = [
     "<define/D|a|>\n  ${a++}\n</define>\n<D a=1/>\n",
     "a++",
     READONLY,
-    defineMessage("a"),
+    definePlainMessage("a"),
+    { skipLower: true },
+  ),
+  row(
+    "define plain parameter written in a handler",
+    "<define/D|a|>\n  <button onClick() { a = 2 }/>\n</define>\n<D a=1/>\n",
+    "a = 2",
+    READONLY,
+    definePlainMessage("a"),
+    { skipLower: true },
+  ),
+  row(
+    "define plain parameter with a default, written in a handler",
+    "<define/D|a = 1|>\n  <button onClick() { a = 2 }/>\n</define>\n<D/>\n",
+    "a = 2",
+    READONLY,
+    definePlainMessage("a"),
+    { skipLower: true },
+  ),
+  row(
+    "define plain parameter written in a script",
+    "<define/D|a|>\n  <script>a = 2</script>\n</define>\n<D a=1/>\n",
+    "a = 2",
+    READONLY,
+    definePlainMessage("a"),
     { skipLower: true },
   ),
   // --- a <let> above its declaration -------------------------------------
@@ -487,16 +513,12 @@ describe("a write core used to take silently is one error", () => {
 const COMPILES: [name: string, source: string][] = [
   // --- stock Marko compiles these (controls) -----------------------------
   [
-    "a define parameter written in a handler",
+    "a destructured define parameter written in a handler",
     "<define/D|{ a }|>\n  <button onClick() { a = 2 }/>\n</define>\n<D a=1/>\n",
   ],
   [
-    "a plain define parameter written in a handler",
-    "<define/D|a|>\n  <button onClick() { a = 2 }/>\n</define>\n<D a=1/>\n",
-  ],
-  [
-    "a define parameter written in a script",
-    "<define/D|a|>\n  <script>a = 2</script>\n</define>\n<D a=1/>\n",
+    "a destructured define parameter written in a script",
+    "<define/D|{ a }|>\n  <script>a = 2</script>\n</define>\n<D a=1/>\n",
   ],
   [
     "a name from a const's object pattern, written in a handler",
@@ -643,11 +665,11 @@ const COMPILES: [name: string, source: string][] = [
   ],
   [
     "a define parameter shadows a let declared below",
-    "<define/D|count|>\n  <button onClick() { count = 1 }/>\n</define>\n<let/count=0/>\n<D count=1/>\n",
+    "<define/D|{ count }|>\n  <button onClick() { count = 1 }/>\n</define>\n<let/count=0/>\n<D count=1/>\n",
   ],
   [
     "a define parameter shadows a for parameter",
-    "<for|item| of=xs>\n  <define/D|item|>\n    <button onClick() { item = 2 }/>\n  </define>\n  <D item=1/>\n</for>\n",
+    "<for|item| of=xs>\n  <define/D|{ item }|>\n    <button onClick() { item = 2 }/>\n  </define>\n  <D item=1/>\n</for>\n",
   ],
   [
     "a for parameter shadows a define parameter in render",

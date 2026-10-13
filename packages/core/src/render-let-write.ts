@@ -10,10 +10,10 @@
  *
  * - while the template renders: a `<const>`, a `<for>` parameter (value,
  *   index, key) and a `<define>` parameter;
- * - in a handler, a callback or a `<script>` body too: a `<const>` and a
- *   `<for>` parameter, which are never written (a `<define>` parameter is
- *   written there, and so is a name bound through an object pattern, which is
- *   written through its object);
+ * - in a handler, a callback or a `<script>` body too: a `<const>`, a `<for>`
+ *   parameter and a `<define>` parameter bound as a plain name, which are
+ *   never written (a name bound through an object pattern is written there,
+ *   through its object);
  * - anywhere: a `<let>` above its declaration, and a `for…of` or `for…in`
  *   whose left side is a `<let>` (a `<let>` is written by assignment, and a
  *   loop head is not a place a target can route one through).
@@ -60,6 +60,8 @@ export type WriteReason =
   | "let-below"
   /** A `<let>` assigned by a `for…of` or `for…in` head. */
   | "let-loop"
+  /** A `<define>` parameter bound as a plain name, written anywhere. */
+  | "define-plain"
   | WriteGuard["kind"];
 
 /** The first refused write found, with the name it writes. */
@@ -169,7 +171,12 @@ export function findBindingWrite(
     if (path.scope.getBinding(name)) return undefined;
     const runsLater = inFunction || insideFunction(path);
     const guard = guards?.get(name);
-    if (guard) return runsLater && !guard.inFunction ? undefined : guard.kind;
+    if (guard) {
+      if (runsLater && !guard.inFunction) return undefined;
+      return guard.kind === "define" && guard.inFunction
+        ? "define-plain"
+        : guard.kind;
+    }
     if (later?.has(name)) return "let-below";
     if (lets?.has(name)) {
       if (loop) return "let-loop";
@@ -254,5 +261,7 @@ export function bindingWriteMessage(write: BindingWrite): string {
       return `${name} is a \`<for>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
     case "define":
       return `${name} is a \`<define>\` parameter and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+    case "define-plain":
+      return `${name} is a \`<define>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
   }
 }

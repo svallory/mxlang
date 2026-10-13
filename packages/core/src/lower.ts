@@ -3154,9 +3154,9 @@ function constGuards(
 
 /**
  * What a write to the parameters of `<for|…|>` or `<define/D|…|>` is
- * refused for: a `<for>` parameter bound as a plain name (`|item|`,
- * `|item = 0|`) is written nowhere; one inside a pattern is written through
- * its object, and a `<define>` parameter is written by a handler.
+ * refused for: a parameter bound as a plain name (`|item|`, `|item = 0|`) is
+ * written nowhere; one inside a pattern is written through its object, which
+ * is refused in the render only.
  */
 function paramGuards(
   node: Node,
@@ -3169,7 +3169,7 @@ function paramGuards(
       (param?.type === "AssignmentPattern" &&
         param.left?.type === "Identifier");
     for (const name of bindingIdentifiers(param)) {
-      guards.set(name, { kind, inFunction: kind === "for" && plain });
+      guards.set(name, { kind, inFunction: plain });
     }
   }
   return guards;

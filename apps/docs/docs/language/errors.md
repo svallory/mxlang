@@ -36,14 +36,14 @@ The code is `MX_LET_WRITE_IN_RENDER` and the position is the assignment or updat
 
 ```html
 <const/total=1/>
-<button onClick() { total = 2 }>Add</button>
+<p>${total = 2}</p>
 ```
 
-is rejected on the html default policy:
+is rejected:
 
 > `total` is a `<const>` and cannot be written. Keep a value that changes in a `<let>` and write that in an event handler or a `<script>` body, or derive a new value with another `<const>`.
 
-The code is `MX_READONLY_BINDING_WRITE`, at the assignment or update with its end. It covers a `<const>` (everywhere: while the template renders, in a handler, in a callback and in a `<script>` body), a `<for>` parameter (value, index and key; everywhere) and a `<define>` parameter (while the template renders only: an event handler or a `<script>` body writes it). A name bound through an object pattern is written through its object and is not refused in a handler or a `<script>` body. A parameter or local that shadows the name is not a write to it.
+The code is `MX_READONLY_BINDING_WRITE`, at the assignment or update with its end, on every target. A `<const>`, a `<for>` parameter (value, index and key) and a `<define>` parameter, each bound as a plain name, are refused everywhere: while the template renders, in an event handler or callback, and in a `<script>` body. A name bound through an object pattern (`<const/{ a }=…/>`, `<for|{ a }|…>`, `<define/D|{ a }|>`) is written through its object and is refused only while the template renders. A parameter or local that shadows the name is not a write to it. A target that has no event handlers or `<script>` reports its own error for those forms instead.
 
 Two more writes to a `<let>` fail wherever they are:
 
