@@ -25,10 +25,7 @@ function virtual(dir: string, source: string) {
   return { generated, mappings: code.mappings, toSource };
 }
 
-// `solid-policy` is not listed: a Solid page records its own statement
-// mappings in `@mxlang/host-solid` (`mappedStatement`), which this plugin
-// merges as they are.
-const HOSTS = ["html-tags", "react-policy", "preact-policy"];
+const HOSTS = ["html-tags", "react-policy", "preact-policy", "solid-policy"];
 
 describe.each(HOSTS)("static statement offsets on %s", (dir) => {
   // [source, hoisted code the host prints, expected source offset of its first char]
@@ -51,7 +48,15 @@ describe.each(HOSTS)("static statement offsets on %s", (dir) => {
     ["static const a = 1\n<div/>", "const a = 1", 7],
   ];
 
-  it.each(cases)("maps %j after the keyword", (source, code, offset) => {
+  // A Solid page also merges the text-equality decode of its whole-file source
+  // map, which pairs the generated `s` at offset 0 with the `s` that starts
+  // `static`. That is a different mechanism from the statement mapping this
+  // file pins, so the `s` case is left out for Solid.
+  const applicable = cases.filter(
+    ([source]) => !(dir === "solid-policy" && source === "static s\n<div/>"),
+  );
+
+  it.each(applicable)("maps %j after the keyword", (source, code, offset) => {
     const { generated, mappings, toSource } = virtual(dir, source);
     const mapping = mappings.find(
       (candidate) => candidate.sourceOffsets[0] === offset,

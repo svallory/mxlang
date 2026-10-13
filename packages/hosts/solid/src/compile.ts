@@ -540,12 +540,20 @@ export function compileSolidMx(
  */
 function mappedStatement(
   source: string,
-  node: { code: string; span?: { sourceStart: number; sourceEnd: number } },
+  node: {
+    kind?: string;
+    code: string;
+    span?: { sourceStart: number; sourceEnd: number };
+  },
 ): MappedCode {
   const { span } = node;
-  const at = span
-    ? source.slice(span.sourceStart, span.sourceEnd).indexOf(node.code)
-    : -1;
+  // A `static` statement's code is the text after its keyword, so the search
+  // starts there: from the statement start, `static a` would find the `a`
+  // inside `static` itself.
+  const block = span ? source.slice(span.sourceStart, span.sourceEnd) : "";
+  const afterKeyword =
+    node.kind === "Static" ? (/^\s*static\s+/.exec(block)?.[0].length ?? 0) : 0;
+  const at = span ? block.indexOf(node.code, afterKeyword) : -1;
   if (!span || at < 0 || node.code.length === 0) return mapped(node.code, null);
   const sourceStart = span.sourceStart + at;
   return mapped(node.code, {
