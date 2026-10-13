@@ -203,9 +203,17 @@ describe("hook contract additions", () => {
     const module = probe((_id, _text, _span, ctx) => ctx.attribute("x", true), {
       value: "refuse",
     });
-    const error = caught(() => irOf("<div !a=1/>", module));
-    expect(error.message).toContain("The `!a` shorthand takes no value.");
-    expect([error.line, error.column]).toEqual([1, 7]);
+    // A parser error is the default row's `CompileError` under any table,
+    // positioned by its `loc` (1-based line, 0-based column).
+    let error: (Error & { loc?: { start: object } }) | undefined;
+    try {
+      irOf("<div !a=1/>", module);
+    } catch (thrown) {
+      error = thrown as Error;
+    }
+    expect(error?.name).toBe("CompileError");
+    expect(error?.message).toContain("The `!a` shorthand takes no value.");
+    expect(error?.loc?.start).toMatchObject({ line: 1, column: 7 });
   });
 
   it.each<[string, TriggerUse, string | null]>([
