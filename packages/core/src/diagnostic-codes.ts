@@ -198,6 +198,8 @@ export const INTERNAL_ERROR_CODE = "MX_INTERNAL_ERROR";
 export const DUPLICATE_ATTRIBUTE_CODE = "MX_DUPLICATE_ATTRIBUTE";
 /** An event attribute whose lowercase name is not a DOM event. */
 export const NOT_A_DOM_EVENT_CODE = "MX_NOT_A_DOM_EVENT";
+/** A `content` attribute on a `<define>` that has a body, which is the `content`. */
+export const DEFINE_CONTENT_DROPPED_CODE = "MX_DEFINE_CONTENT_DROPPED";
 /** A `<define>` called with more params than the first, which the call ignores. */
 export const DEFINE_EXTRA_PARAMS_CODE = "MX_DEFINE_EXTRA_PARAMS";
 /** A lowercase tag that names a binding: the native element renders and the binding is not called. */
@@ -615,6 +617,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "an event attribute whose lowercase name is not a DOM event",
         ],
         [
+          DEFINE_CONTENT_DROPPED_CODE,
+          "a `content` attribute on a `<define>` that has a body, which is the `content`",
+        ],
+        [
           DEFINE_EXTRA_PARAMS_CODE,
           "a `<define>` param past the first, which the call ignores",
         ],
@@ -709,6 +715,7 @@ export type MxDiagnosticCode =
   | typeof INTERNAL_ERROR_CODE
   | typeof DUPLICATE_ATTRIBUTE_CODE
   | typeof NOT_A_DOM_EVENT_CODE
+  | typeof DEFINE_CONTENT_DROPPED_CODE
   | typeof DEFINE_EXTRA_PARAMS_CODE
   | typeof LOWERCASE_BINDING_NOT_CALLED_CODE
   | typeof UNREADABLE_CALLEE_INPUT_CODE

@@ -1492,9 +1492,10 @@ rules of any tag's attributes (a spread keeps its place, a repeated name is
 last-wins, `a:=x` is its initial value) and are evaluated where the `<define>`
 is written, outside its params: in `<define/D|x| a=x>` the `x` is the one
 outside. A `<let>` written in one is refused like in any attribute
-(`MX_LET_WRITE_IN_RENDER`). A body is the define's `content`, so `content` as
-an attribute is refused when the define has a body and is an ordinary property
-when it has none. On html, preact, react and hono the attributes are own
+(`MX_LET_WRITE_IN_RENDER`). A body is the define's `content`, so a `content`
+attribute beside a body is dropped, as Marko does, with a warning at the
+attribute (`MX_DEFINE_CONTENT_DROPPED`; never an error, `mx.strict` included);
+with no body it is an ordinary property. On html, preact, react and hono the attributes are own
 properties of the function a call runs. Solid and Angular refuse a `<define>`
 with attributes (`MX_UNSUPPORTED_CONSTRUCT` on Angular): their define is a
 hoisted function or a template reference, which a template expression cannot
@@ -1503,7 +1504,6 @@ read a property from, and Astro has no `<define>` at all.
 | Message | When |
 |---|---|
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
-| `` `content` is the body of a `<define>` that has one; rename the attribute, or remove the body `` | A `content` attribute and a body on one `<define>` (`MX_INVALID_DEFINE`). |
 
 **On html, preact, react, hono and Solid, a `<define>` called with attributes and no
 arguments passes one attribute object to its first parameter (decision 160),**
@@ -4095,6 +4095,7 @@ host, a target or a dialect.
 |---|---|---|
 | `MX_DUPLICATE_ATTRIBUTE` | warning | a later attribute of the same name wins |
 | `MX_NOT_A_DOM_EVENT` | warning | an event attribute whose lowercase name is not a DOM event |
+| `MX_DEFINE_CONTENT_DROPPED` | warning | a `content` attribute on a `<define>` that has a body, which is the `content` |
 | `MX_DEFINE_EXTRA_PARAMS` | warning | a `<define>` param past the first, which the call ignores |
 | `MX_LOWERCASE_BINDING_NOT_CALLED` | warning | a lowercase tag naming a binding, which is not called |
 | `MX_UNREADABLE_CALLEE_INPUT` | warning | a callee whose `Input` cannot be read |

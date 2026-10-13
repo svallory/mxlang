@@ -681,6 +681,12 @@ const ROWS: Row[] = [
     8,
   ),
   compileRow(
+    "MX_DEFINE_CONTENT_DROPPED",
+    '<define/D content="x"><p>b</p></define>\n<D/>\n',
+    1,
+    10,
+  ),
+  compileRow(
     "MX_DEFINE_EXTRA_PARAMS",
     '<define/Card|title, head|><div>${title}</div></define>\n<Card title="a"/>\n',
     2,

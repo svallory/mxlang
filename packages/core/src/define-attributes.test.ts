@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { printExpression } from "./compile.ts";
-import { newCtx } from "./core.ts";
+import { type MxWarning, newCtx } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { IrNode } from "./ir.ts";
@@ -111,18 +111,55 @@ describe("a <define> carries its attributes", () => {
 });
 
 describe("`content` on a <define>", () => {
+  /** Lowers with a warnings sink attached. */
+  function withWarnings(source: string) {
+    const { body } = parseFragment(source, { filename: "/f/t.mx" });
+    const ctx = newCtx(
+      source,
+      printExpression,
+      policy(),
+      tagTable(bare(), undefined),
+      "/f/t.mx",
+      targets,
+    );
+    const warnings: MxWarning[] = [];
+    ctx.warnings = warnings;
+    const ir = lower(ctx, body);
+    const define = ir.body.find(
+      (node): node is Define => node.kind === "Define",
+    );
+    return { define, warnings };
+  }
+
   it("is an ordinary property when the define has no body", () => {
     expect(defineOf('<define/D content="x"/>').attrs).toHaveLength(1);
     expect(defineOf('<define/D content="x"></define>').attrs).toHaveLength(1);
+    expect(withWarnings('<define/D content="x"/>').warnings).toEqual([]);
   });
 
-  it("is refused when the define has a body, at the attribute", () => {
-    const source = '<define/D content="x">body</define>';
-    const error = thrown(source);
-    expect(error.message).toBe(
-      "`content` is the body of a `<define>` that has one; rename the attribute, or remove the body",
+  it("beside a body the body wins: the attribute is dropped, with a warning at it", () => {
+    const source = '<define/D a=1 content="x">body</define>';
+    const { define, warnings } = withWarnings(source);
+    expect(
+      define?.attrs.map((attr) => attr.kind !== "spread" && attr.name),
+    ).toEqual(["a"]);
+    expect(warnings).toHaveLength(1);
+    const warning = warnings[0] as MxWarning;
+    expect(warning.message).toBe(
+      "`content` is the body of a `<define>` that has one, so this attribute is dropped; rename it, or remove the body",
     );
-    expect(error.diagnosticCode).toBe("MX_INVALID_DEFINE");
-    expect([error.line, error.column]).toEqual([1, source.indexOf("content")]);
+    expect(warning.code).toBe("MX_DEFINE_CONTENT_DROPPED");
+    expect([warning.line, warning.column]).toEqual([
+      1,
+      source.indexOf("content"),
+    ]);
+    expect(warning.end).toEqual({
+      line: 1,
+      column: source.indexOf("content") + 'content="x"'.length,
+    });
+  });
+
+  it("is never an error", () => {
+    expect(thrown('<define/D content="x">body</define>')).toBeUndefined();
   });
 });

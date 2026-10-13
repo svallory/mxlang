@@ -66,11 +66,12 @@ describe("html: a <define> carries its attributes as properties", () => {
     );
   });
 
-  it("an attribute named content next to a body is refused, at the attribute", () => {
-    const source = '<define/D content="x">body</define>';
-    expect(() => emit(source)).toThrow(
-      "`content` is the body of a `<define>` that has one; rename the attribute, or remove the body",
+  it("an attribute named content next to a body is dropped: the body wins", () => {
+    const code = emit(
+      '<define/D a=1 content="x"><p>x</p></define>\n<p>${D.a}</p>',
     );
+    expect(code).toContain("}, { a: 1 });");
+    expect(code).not.toContain("content");
   });
 
   describe("name, length, caller and arguments are not writable on a function", () => {

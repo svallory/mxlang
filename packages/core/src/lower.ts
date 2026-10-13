@@ -134,6 +134,7 @@ import {
   resolveUnnamedTags,
 } from "./default-tag.ts";
 import {
+  DEFINE_CONTENT_DROPPED_CODE,
   DEFINE_EXTRA_PARAMS_CODE,
   DIALECT_HOOK_ERROR_CODE,
   DUPLICATE_ATTRIBUTE_CODE,
@@ -3382,7 +3383,6 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   );
   restore();
   unscope();
-  rejectContentAttrWithBody(node, attrs, children.length > 0);
 
   ctx.defines.set(name, params);
   ctx.bindingSites.set(name, {
@@ -3404,7 +3404,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
-    attrs,
+    attrs: dropContentAttrBesideBody(ctx, attrs, children.length > 0),
     children: [...hoisted, ...children],
     loc,
   };
@@ -3413,27 +3413,39 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
 /**
  * A `<define>` with a body also has a `content` property: the body. Marko
  * writes the body last, so `<define/D content="x">body</define>` compiles and
- * silently discards the attribute. The same would-be silent drop is refused
- * here, at the attribute; `content` with no body is an ordinary property.
+ * the attribute is discarded. MX does the same and says so: the attribute is
+ * dropped from the IR and `MX_DEFINE_CONTENT_DROPPED` is a warning at it, never
+ * an error (`mx.strict` included). `content` with no body is an ordinary
+ * property.
  */
-function rejectContentAttrWithBody(
-  node: Node,
-  attrs: readonly Attr[],
+function dropContentAttrBesideBody(
+  ctx: Ctx,
+  attrs: Attr[],
   hasBody: boolean,
-): void {
-  if (!hasBody) return;
-  const lowered = attrs.find(
+): Attr[] {
+  if (!hasBody) return attrs;
+  const dropped = attrs.find(
     (attr) => attr.kind !== "spread" && attr.name === "content",
   );
-  if (!lowered) return;
-  raise(
-    INVALID_DEFINE_CODE,
-    "`content` is the body of a `<define>` that has one; rename the attribute, or remove the body",
-    tagAttributesOf(node).find(
-      (authored: Node) =>
-        !isSpreadAttributeNode(authored) && attrNameOf(authored) === "content",
-    ) ?? node,
+  if (!dropped || dropped.kind === "spread") return attrs;
+  const at = positionAtOffset(ctx, dropped.nameSpan.sourceStart);
+  const end = positionAtOffset(
+    ctx,
+    Math.max(
+      dropped.span?.sourceEnd ?? dropped.nameSpan.sourceEnd,
+      dropped.nameSpan.sourceStart,
+    ),
   );
+  warn(ctx, {
+    message:
+      "`content` is the body of a `<define>` that has one, so this attribute is dropped; rename it, or remove the body",
+    line: at.line,
+    column: at.column,
+    end: { line: end.line, column: end.column },
+    file: ctx.filename,
+    code: DEFINE_CONTENT_DROPPED_CODE,
+  });
+  return attrs.filter((attr) => attr !== dropped);
 }
 
 /**

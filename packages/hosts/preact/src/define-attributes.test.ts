@@ -75,10 +75,10 @@ describe("preact: a <define> carries its attributes as properties", () => {
     expect(code).not.toContain("Object.assign");
   });
 
-  it("an attribute named content next to a body is refused", () => {
-    expect(() => whole('<define/D content="x">body</define>')).toThrow(
-      "`content` is the body of a `<define>` that has one; rename the attribute, or remove the body",
-    );
+  it("an attribute named content next to a body is dropped: the body wins", () => {
+    const code = whole('<define/D a=1 content="x">body</define>');
+    expect(code).toContain('{ "a": 1 });');
+    expect(code).not.toContain('"content"');
   });
 
   it("a define lifted out of a region carries them too", () => {
