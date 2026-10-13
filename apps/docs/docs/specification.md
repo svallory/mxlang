@@ -367,7 +367,8 @@ render, so it runs and hoists like `static`, and its bindings are readable from
 the template (decision 67a; verified: `server const S = 41 + 1` then `${S}`
 renders `42`). A `client` block never runs on the server, but html still
 declares the names it declares at its own top level (`client { let q = 1 }`
-leaves `var q;`, with no initializer), exactly as Marko's server render does, so
+leaves `var q;`, with no initializer; an `import` declares its local names, and
+`client export const y = 1` declares `y`), exactly as Marko's server render does, so
 `${typeof q}` renders `undefined` rather than failing; on every other host it is
 an error (§14).
 

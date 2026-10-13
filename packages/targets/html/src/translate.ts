@@ -157,20 +157,40 @@ function rejectInputShadowing(target: Node, what: string): void {
  * entered, so nothing inside them counts, `var` included. A `for (… of …)` or
  * `for (… in …)` loop contributes its left-hand binding and a labelled
  * statement its label, as Babel's table says. `declare` forms and types
- * declare nothing at run time. (`import` and `export` inside a statement are
- * refused by core before this runs.)
+ * declare nothing at run time. An `import` declares its local names and an
+ * `export` of a declaration the declaration's (`client export const y = 1`).
  */
-function clientDeclaredNames(code: string): string[] {
+function clientDeclaredNames(code: string, at: Node): string[] {
   let program: { body: Node[] };
   try {
     program = babelParser.parse(code, {
       sourceType: "module",
-      plugins: ["typescript", "explicitResourceManagement"],
+      // Marko's own sub-parse options, so any statement text Marko reads
+      // parses here too (a top-level `return`, `super`, `new.target`,
+      // `await`, an `import` or `export`), plus the decorators core's
+      // statement check accepts.
+      allowAwaitOutsideFunction: true,
+      allowImportExportEverywhere: true,
+      allowReturnOutsideFunction: true,
+      allowSuperOutsideMethod: true,
+      allowUndeclaredExports: true,
+      allowNewTargetOutsideFunction: true,
+      plugins: [
+        "objectRestSpread",
+        "classProperties",
+        "decorators-legacy",
+        "explicitResourceManagement",
+        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+      ],
     }).program;
-  } catch {
-    // Core has already rejected statement text that does not parse; text this
-    // parser reads differently simply declares nothing.
-    return [];
+  } catch (error) {
+    // Core has already checked this text, so a failure here is a gap between
+    // that check and this parse. Say so: declaring nothing would turn the
+    // template's own read of the name into a ReferenceError.
+    fail(
+      `the names this \`client\` statement declares could not be read: ${(error as Error).message}`,
+      at,
+    );
   }
   const names = new Set<string>();
   const queue: Array<Node | null | undefined> = [...program.body];
@@ -213,6 +233,28 @@ function clientDeclaredNames(code: string): string[] {
         break;
       case "LabeledStatement":
         queue.push(node.label);
+        break;
+      case "ImportDeclaration":
+        queue.push(...node.specifiers);
+        break;
+      case "ImportSpecifier":
+      case "ImportDefaultSpecifier":
+      case "ImportNamespaceSpecifier":
+        queue.push(node.local);
+        break;
+      case "ExportNamedDeclaration":
+      case "ExportDefaultDeclaration":
+        // Only a declaration binds a name: `export default foo` and
+        // `export { y }` add nothing.
+        if (
+          [
+            "FunctionDeclaration",
+            "ClassDeclaration",
+            "VariableDeclaration",
+          ].includes(node.declaration?.type)
+        ) {
+          queue.push(node.declaration);
+        }
         break;
     }
   }
@@ -508,6 +550,7 @@ function resolveDelegatedTag(
           .trim()
           .replace(/^client\s*/, ""),
       ),
+      node,
     );
     return {
       kind: "statement",

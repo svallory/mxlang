@@ -386,7 +386,7 @@ byte-identical with and without the construct.
 | `<const/x=expr/>` | `const x = expr` |
 | `attr:=expr` | The initial value renders; there is no write-back path. |
 | `<define>`, `static`, `import`, `export interface Input` | Bound / hoisted to module scope. |
-| a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. Its counterpart, a `client` block, never runs, but the names it declares at its own top level are declared as `var name;` (no initializer), so a template that reads one renders `undefined` instead of failing, as Marko's server render does. |
+| a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. Its counterpart, a `client` block, never runs, but the names it declares at its own top level (including a non-block `client import` or `client export` declaration's) are declared as `var name;` (no initializer), so a template that reads one renders `undefined` instead of failing, as Marko's server render does. |
 | `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's `render(input, out)` writes into the caller's sink and returns the value (decision 155). `/var` is supported in any scope, dynamic tags included. |
 
 ### Lowered — everything with output bytes

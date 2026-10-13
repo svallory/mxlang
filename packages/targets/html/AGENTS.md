@@ -83,7 +83,8 @@ byte-identical against Marko): `<lifecycle>`, `<script>`, `<id>`,
 (`MX_RESERVED_EFFECT_TAG`). The strict policy does have an `effect` row, an
 error worded like its `<let>`/`<script>` rows, and core yields to it. A
 `client` block runs nothing, but it is not inert either: html declares the names
-the block declares at its own top level as `var name;` (no initializer, one `var`
+the block declares at its own top level (and the names a non-block `client import`
+or `client export` declaration binds) as `var name;` (no initializer, one `var`
 per statement, in source order with the `static` blocks), as stock Marko 6.4.4's
 server module does, so a template read of one renders `undefined` instead of
 throwing (`clientDeclaredNames` in `translate.ts` follows Babel's

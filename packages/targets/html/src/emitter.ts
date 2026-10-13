@@ -1432,7 +1432,18 @@ function inSourceOrder(
     if (before === -1) entries.push(statement);
     else entries.splice(before, 0, statement);
   }
-  return entries.map((entry) => entry.code);
+  // A statement without a closing `;` ends at the newline only when the next
+  // line cannot continue it, and `(`, `[`, a template, `+`, `-` and `/` can
+  // (`server let x = a` then `static (() => {})()` is one call). A `;` on its
+  // own line ends it, and a trailing `// comment` cannot swallow it.
+  return entries.flatMap((entry, index) => {
+    const before = entries[index - 1]?.code.trimEnd();
+    const joins =
+      before !== undefined &&
+      !before.endsWith(";") &&
+      /^\s*[([`+\-/]/.test(entry.code);
+    return joins ? [";", entry.code] : [entry.code];
+  });
 }
 
 /**

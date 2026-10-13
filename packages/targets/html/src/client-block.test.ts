@@ -185,6 +185,98 @@ describe("html: a template reads a name a `client` block declares", () => {
   });
 });
 
+describe("html: the non-block `client import` and `client export` declare their names", () => {
+  it.each([
+    ["a default import", 'client import x from "./x";', "var x;"],
+    [
+      "default and named imports, renamed",
+      'client import x, { y as z } from "./x";',
+      "var x, z;",
+    ],
+    ["a namespace import", 'client import * as ns from "./x";', "var ns;"],
+    ["an exported const", "client export const y = 1;", "var y;"],
+    ["an exported function", "client export function g() {}", "var g;"],
+    [
+      "a default-exported function",
+      "client export default function h() {}",
+      "var h;",
+    ],
+    ["a default-exported class", "client export default class K {}", "var K;"],
+    ["a default-exported expression", "client export default foo;", ""],
+  ])("%s", (_name, statement, expected) => {
+    expect(hoisted(`${statement}${TEMPLATE}`)).toBe(expected);
+  });
+
+  it("a template reads the imported and exported names as undefined", () => {
+    expect(
+      String(
+        mx(
+          'client import x from "./x";\nclient export const y = 1;\n<div>[${x}][${y}]</div>\n',
+        )({}),
+      ),
+    ).toBe("<div>[][]</div>");
+  });
+});
+
+describe("html: the statement text parses the way Marko's does", () => {
+  it("a top-level `return` still declares the names", () => {
+    expect(hoisted(`client { let q = 1; return }${TEMPLATE}`)).toBe("var q;");
+    expect(
+      String(mx("client { let q = 1; return }\n<div>[${q}]</div>\n")({})),
+    ).toBe("<div>[]</div>");
+  });
+
+  it("a decorated class still declares its name", () => {
+    expect(hoisted(`client { let q = 1; @dec class K {} }${TEMPLATE}`)).toBe(
+      "var K, q;",
+    );
+  });
+});
+
+describe("html: a hoisted statement is not joined to the next one by ASI", () => {
+  const render = (source: string) => String(mx(source)({}));
+
+  it("a `server` statement before a `static` starting with `(`", () => {
+    expect(
+      render(
+        [
+          "static let log = [];",
+          'static const a = (x) => { log.push("called"); return () => 0 };',
+          "server { let x = a }",
+          'static (() => { log.push("iife") })();',
+          '<div>${log.join(",")}</div>',
+        ].join("\n"),
+      ),
+    ).toBe("<div>iife</div>");
+  });
+
+  it("a `server` statement before a `static` starting with `[`", () => {
+    expect(
+      render(
+        [
+          "static let log = [];",
+          "server let x = 1",
+          'static [1].forEach(() => log.push("each"));',
+          '<div>${log.join(",")}</div>',
+        ].join("\n"),
+      ),
+    ).toBe("<div>each</div>");
+  });
+
+  it("a trailing comment cannot swallow the terminator", () => {
+    expect(
+      render(
+        [
+          "static let log = [];",
+          "server let x = 1 // note",
+          'static (() => { log.push("iife") })();',
+          '<div>${log.join(",")}</div>',
+        ].join("\n"),
+      ),
+    ).toBe("<div>iife</div>");
+  });
+});
+
 describe("html: the strict policy still refuses a `client` block", () => {
   it("names the construct", () => {
     expect(() =>

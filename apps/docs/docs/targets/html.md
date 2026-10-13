@@ -195,7 +195,7 @@ Inert is a *shape*, not permission to drop content. Each inert tag still declare
 | `<const/x=expr/>` | A `const` binding in the render function |
 | `:=` | The initial value, same as `<let>` |
 | `server` blocks | **Not** inert — this *is* the server render, so it runs and hoists like `static`, and its bindings are readable from the template |
-| `client` blocks | Never run on the server, but the names the block declares at its own top level (`let`, `const`, `var`, `function`, `class`, destructured names; not names inside nested blocks) are declared as `var name;` with no initializer, in source order beside the `static` statements. A template that reads `q` after `client { let q = 1 }` renders `undefined`, as Marko's server render does, instead of failing |
+| `client` blocks | Never run on the server, but the names the block declares at its own top level (`let`, `const`, `var`, `function`, `class`, destructured names, and the local names of a non-block `client import` or `client export` declaration; not names inside nested blocks) are declared as `var name;` with no initializer, in source order beside the `static` statements. A template that reads `q` after `client { let q = 1 }` renders `undefined`, as Marko's server render does, instead of failing |
 
 **Errors** — only what the target genuinely cannot express:
 
