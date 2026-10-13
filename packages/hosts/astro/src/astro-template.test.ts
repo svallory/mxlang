@@ -954,7 +954,7 @@ describe("event error positions", () => {
   });
 });
 
-describe("<html-comment> (Marko 6.3.51 parity)", () => {
+describe("<html-comment> (Marko 6.4.4 parity)", () => {
   it("lowers a static comment to a real comment, escaping only `>`", () => {
     expect(lower("<html-comment>a > b &amp; c</html-comment>")).toBe(
       "<!--a &gt; b &amp; c-->",
@@ -995,7 +995,7 @@ describe("<html-comment> (Marko 6.3.51 parity)", () => {
   });
 });
 
-describe("<textarea value> (Marko 6.3.51 parity)", () => {
+describe("<textarea value> (Marko 6.4.4 parity)", () => {
   it("lifts a static value into escaped content", () => {
     expect(lower('<textarea value="a<b" class="c"/>')).toBe(
       '<textarea class="c">a&lt;b</textarea>',

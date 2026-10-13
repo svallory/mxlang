@@ -97,7 +97,7 @@ describe("class shorthand", () => {
 
   it("resolves a repeated `class` last-wins, emitting class once", () => {
     // `<div.card class="x" class={c: on()}>`: core resolves the repeated name
-    // to its last occurrence (decision 135), as Marko 6.3.51 does: the earlier
+    // to its last occurrence (decision 135), as Marko 6.4.4 does: the earlier
     // `class="x"` is dropped (with a warning) and so is the `.card` shorthand
     // that merged into it, leaving `class={c: on()}` alone. Marko compiles it to
     // `_attr_class({c: on()})`. Nothing is folded into an array.

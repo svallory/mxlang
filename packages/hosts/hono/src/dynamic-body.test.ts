@@ -5,7 +5,7 @@
  * body renders as text; this host's `content` is JSX children, where a
  * text-only body is a bare string that `mxDynamic` read as a tag name
  * (`<wrap>hello</wrap>` rendered `<hello></hello>`). Expected HTML is what
- * stock Marko 6.3.51 renders for the same templates (scratch/squad-liuna/
+ * stock Marko 6.4.4 renders for the same templates (scratch/squad-liuna/
  * jsx-dynamic-body-text.md, parity table).
  */
 

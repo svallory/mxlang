@@ -964,7 +964,7 @@ function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
  * or `_`, then `[a-z0-9._:-]`. `userAttrNameReg` lets a leading `$` through
  * its first alternative, but its second (`[^a-z0-9._:-]` anywhere) rejects that
  * same `$`, so custom tags follow the element rule (`<foo $foo=1/>` errors in
- * 6.3.51).
+ * 6.4.4).
  */
 const ATTR_NAME = /^[a-z_][a-z0-9._:-]*$/i;
 
@@ -1651,7 +1651,7 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
 
 /**
  * Resolves a repeated attribute name to its last occurrence (decision 135).
- * Stock Marko 6.3.51 is last-wins (`class` and `style` are not merged, and the
+ * Stock Marko 6.4.4 is last-wins (`class` and `style` are not merged, and the
  * dropped value is never evaluated), and `<div class="a" id="x" class="b">`
  * compiles to `<div id=x class=b>`: the survivor keeps its own position. MX
  * does the same once, here, so the IR carries one attribute per resolved name
@@ -1909,7 +1909,7 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
 /**
  * A `<define>` call without tag arguments hands the define ONE object (its
  * attributes, attribute tags and `content`) as its first param; every later
- * param is `undefined` (Marko 6.3.51). Before that was fixed, MX looked each
+ * param is `undefined` (Marko 6.4.4). Before that was fixed, MX looked each
  * param up by name in the call, so `<define/Card|title, head|>` called as
  * `<Card title="a"/>` bound `title` to `"a"`. The source still compiles and now
  * binds `title` to the whole object, so the call is flagged at its tag name.

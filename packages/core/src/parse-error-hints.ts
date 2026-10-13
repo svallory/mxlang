@@ -8,7 +8,7 @@
  * place: same message, same position, nothing else changes. An error it does
  * not recognise is left untouched.
  *
- * Marko 6.3.51 is the authority for every suggestion (`<div id>` and
+ * Marko 6.4.4 is the authority for every suggestion (`<div id>` and
  * `<const/x=1/>` compile; a `$` scriptlet is rejected outright with
  * "Scriptlets are not supported when using the tags api.").
  */

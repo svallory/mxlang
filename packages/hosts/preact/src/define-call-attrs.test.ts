@@ -8,7 +8,7 @@ import { type FunctionComponent, h } from "preact";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
-// Expected HTML is what stock Marko 6.3.51 renders for the same templates
+// Expected HTML is what stock Marko 6.4.4 renders for the same templates
 // (probe: scratch/reports/squad-jsx/define-call-attrs.md).
 const CASES: Array<[string, string, string]> = [
   [

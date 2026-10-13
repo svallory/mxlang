@@ -3,7 +3,7 @@ import { compile } from "./index.ts";
 
 /**
  * Decision 139: `<![CDATA[…]]>` and `<?…?>` are positioned errors on every
- * target, as they are in Marko 6.3.51. Before it, core's IR had no node for
+ * target, as they are in Marko 6.4.4. Before it, core's IR had no node for
  * either, so both were dropped in lowering — `<a><![CDATA[ x ]]></a>`
  * compiled to `"<a></a>"` with no diagnostic at all.
  *

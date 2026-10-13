@@ -9,7 +9,7 @@ import { lowerAstroMx } from "./astro-template.ts";
 
 /**
  * `<textarea value>` and `<html-comment>` on Astro, by RENDERING through
- * Astro's own compiler and container. Every expectation is what Marko 6.3.51
+ * Astro's own compiler and container. Every expectation is what Marko 6.4.4
  * renders (measured with a real `@marko/compiler` + `marko/translator` render;
  * `packages/oracle/src/textarea-value.test.ts` compares the textarea table
  * against a live Marko render too).
@@ -190,7 +190,7 @@ describe("<textarea value> (astro, rendered)", () => {
 });
 
 describe("<html-comment> (astro, rendered)", () => {
-  // Marko 6.3.51: text and placeholders only; `>` is the one escaped
+  // Marko 6.4.4: text and placeholders only; `>` is the one escaped
   // character (`_escape_comment`); falsy renders nothing except `0`.
   it("renders a static comment", async () => {
     expect(await render("<html-comment>hi</html-comment>")).toBe("<!--hi-->");

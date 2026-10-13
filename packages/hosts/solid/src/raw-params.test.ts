@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 /**
- * Marko 6.3.51 accepts a raw `$!{}` as the sole body of a tag with params and
+ * Marko 6.4.4 accepts a raw `$!{}` as the sole body of a tag with params and
  * emits the raw HTML inside the children callback. Solid has no wrapper-free
  * raw-HTML form, and hoisting the child onto `innerHTML` left the params
  * unbound (`ReferenceError: item is not defined` at render), so it is a

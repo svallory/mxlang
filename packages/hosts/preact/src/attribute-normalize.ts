@@ -1,6 +1,6 @@
 /**
  * Primitive attribute values on native elements, normalized to what Marko
- * 6.3.51's html output renders (decision 149). One source shared by the three
+ * 6.4.4's html output renders (decision 149). One source shared by the three
  * JSX hosts; hoisted into the emitted module like core's validation helpers,
  * never a runtime dependency. Component props do not pass through it.
  *
@@ -124,7 +124,7 @@ export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | unde
 })`;
 
 /**
- * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.3.51
+ * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
  * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
  * and a leading newline doubled because the HTML parser drops a textarea's
  * first one. `newline` says where the doubling applies (`JsxDialect`).

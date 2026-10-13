@@ -5,7 +5,7 @@
  * Marko reads an attribute value greedily: after `class="a"`, the text
  * ` *ngIf` continues the value as a multiplication, and the `=` that follows
  * makes the whole thing an assignment to a non-assignable target. Marko
- * 5.42.5 (the compiler mx embeds, with the 6.3.51 runtime translator) throws
+ * 5.42.11 (the compiler mx embeds, with the 6.4.4 runtime translator) throws
  * `Invalid left-hand side in assignment expression.` at the *value*, which
  * says nothing about the real cause. The parse is Marko's and stays exactly
  * that; only the message gains the diagnosis and the two fixes.

@@ -20,7 +20,7 @@ import renderer from "./server.ts";
  * An imported `.mx` tag that declares `<return>`, called without `/var` from
  * an `.astro.mx` page, rendered through Astro's real compiler and container
  * with the MX server renderer. Astro, not the call site, invokes the callee,
- * so the renderer is what drops the value and keeps the markup. Marko 6.3.51
+ * so the renderer is what drops the value and keeps the markup. Marko 6.4.4
  * renders the body and drops the value.
  */
 const dir = mkdtempSync(join(tmpdir(), "mx-astro-imported-return-"));

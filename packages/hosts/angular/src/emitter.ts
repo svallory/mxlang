@@ -215,7 +215,7 @@ export const angularDeclarations: HostDeclarations = {
   // Decision 114: routing by PascalCase alone made `<TotallyUndefined/>` —
   // no import, binding, or taglib entry — a "component" that emitted
   // `<mx-totally-undefined>` plus a step-1 import warning, where Marko
-  // 6.3.51 fails at compile time. A name is a component here only when
+  // 6.4.4 fails at compile time. A name is a component here only when
   // something resolves it: a file-local binding (an import, a `<define>`),
   // or a taglib entry — and no HTML element is ever capitalized, so any
   // taglib hit for a capitalized name is a component, not an element.
@@ -248,7 +248,7 @@ export const angularDeclarations: HostDeclarations = {
       // the delegated path's emitter only sees the IR, whose `var` carries a
       // name but no span. `ngComponentOutlet` renders the component but has
       // no position to hand a returned value to, so letting the binding
-      // through was a silent drop (Marko 6.3.51 binds the dynamic tag's
+      // through was a silent drop (Marko 6.4.4 binds the dynamic tag's
       // return value; this host cannot).
       if (node.var) {
         const name = expr(ctx, node.var);

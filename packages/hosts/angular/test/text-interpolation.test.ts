@@ -41,7 +41,7 @@ describe("Text", () => {
   });
 
   it("escapes braces in a static attribute value like in text (angular-attr-interpolation-literal)", () => {
-    // Marko 6.3.51 renders `title="{{ x }}"` as the literal text `{{ x }}`
+    // Marko 6.4.4 renders `title="{{ x }}"` as the literal text `{{ x }}`
     // (probed: the whole tag compiles to one `_html(...)` string, braces
     // untouched), so a static value must be brace-escaped like static text.
     // The native-render proof lives in attr-interpolation-literal-render.test.ts.

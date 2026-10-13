@@ -471,7 +471,7 @@ describe("Marko core tags are no valid default on any target (round 3)", () => {
     });
   });
 
-  // 194, not 193 as with @marko/compiler 5.42.5: 5.42.10's native-tag taglib
+  // 194, not 193 as with @marko/compiler 5.42.5: 5.42.11's native-tag taglib
   // adds the HTML `<search>` element, a plain element, so it is accepted.
   it("re-enumerating html's tag table still gives 194 accepted and 43 rejected", () => {
     const descriptor = builtinLookup().target("html");

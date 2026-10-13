@@ -4,7 +4,7 @@
  * host is the reference shape (its `content` is a renderer, never a string),
  * so a text-only body already renders as text. Regression guard for the same
  * matrix the JSX hosts' `dynamic-body.test.ts` pin, with the expected HTML
- * stock Marko 6.3.51 renders (scratch/squad-liuna/jsx-dynamic-body-text.md).
+ * stock Marko 6.4.4 renders (scratch/squad-liuna/jsx-dynamic-body-text.md).
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

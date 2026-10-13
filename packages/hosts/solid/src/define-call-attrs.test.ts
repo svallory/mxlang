@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
  * Decision 160 on Solid: `<Row n=1/>` against a `<define>` hands the define's
- * first param ONE attribute object, as Marko 6.3.51 does. It used to emit
+ * first param ONE attribute object, as Marko 6.4.4 does. It used to emit
  * `__mx_DefineRow1(undefined)`, and `|{ n }|` failed compile ("cannot close
  * over `n`"). Every case here EXECUTES the output (Solid SSR in a Bun
  * subprocess), because the old defect compiled clean and crashed at render.
@@ -62,7 +62,7 @@ function render(region: string, setup = ""): string {
   }
 }
 
-// Expected HTML is what stock Marko 6.3.51 renders for the same templates
+// Expected HTML is what stock Marko 6.4.4 renders for the same templates
 // (the same cases as preact's `define-call-attrs.test.ts`).
 const CASES: Array<[string, string, string, string]> = [
   [

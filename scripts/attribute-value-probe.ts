@@ -185,7 +185,7 @@ async function probe(
 
 try {
   if (process.argv[3] === "--textarea") {
-    // `<textarea value=x/>` renders the value as content in Marko 6.3.51.
+    // `<textarea value=x/>` renders the value as content in Marko 6.4.4.
     const textareaValues: Record<string, unknown> = {
       zero: 0,
       empty: "",

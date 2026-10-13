@@ -170,7 +170,7 @@ describe("region rule", () => {
 
   it("refuses a second <define> of the same name, at its name (Marko: Duplicate declaration)", () => {
     // Both lift into the region's one arrow, so this would be a second
-    // `const Row`; Marko 6.3.51 reports `Duplicate declaration "Row"` at the
+    // `const Row`; Marko 6.4.4 reports `Duplicate declaration "Row"` at the
     // second define's name.
     expect(
       errorOf(

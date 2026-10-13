@@ -3,7 +3,7 @@ import { createParser, TagType } from "@mxlang/parser/lexer";
 /**
  * The template parser reports a mismatched closing tag at the closer and
  * names both tags, but never says where the opener is, so an author has to
- * hunt for the unclosed `<p>`. Marko 6.3.51's error carries no second
+ * hunt for the unclosed `<p>`. Marko 6.4.4's error carries no second
  * location either, so MX finds it by replaying the source with its own
  * template lexer (`@mxlang/parser/lexer`).
  */

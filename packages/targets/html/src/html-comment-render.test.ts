@@ -3,7 +3,7 @@ import { mx } from "./index.ts";
 
 /**
  * `<html-comment>` placeholders by real render. Expectations are what Marko
- * 6.3.51 renders (`fixtures-marko/html-comment-falsy` is the live-Marko lock);
+ * 6.4.4 renders (`fixtures-marko/html-comment-falsy` is the live-Marko lock);
  * the object guard follows Marko's debug build, which throws where
  * `optimize: true` renders `[object Object]`.
  */

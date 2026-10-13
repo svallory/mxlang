@@ -34,7 +34,7 @@ const ssr = (code: string, filename: string): string => {
  * through the real Solid SSR pipeline. Solid hands the value back through a
  * callback prop instead of a `{ value, output }` pair, so the call site has
  * nothing to unwrap: the markup renders and the value is dropped, as in Marko
- * 6.3.51.
+ * 6.4.4.
  */
 function renderImported(fragment: string): string {
   const dir = mkdtempSync(join(packageRoot, ".ssr-imported-return-"));

@@ -17,7 +17,7 @@
  *
  * Rendered through `preact-render-to-string`, not asserted as emitted text:
  * the bug was invisible in the emitted source and only showed in the DOM.
- * Marko 6.3.51 renders the expected values for all of these.
+ * Marko 6.4.4 renders the expected values for all of these.
  */
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

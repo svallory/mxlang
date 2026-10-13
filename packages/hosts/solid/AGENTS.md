@@ -278,7 +278,7 @@ Three facts worth knowing before touching it:
   the define's first param** (`{__mx_DefineRowN({ "n": 1 })}`: attributes in
   source order, spreads, attribute tags by name, the body as `content`; `{}`
   when the call carries none; a define with no params ignores them), as
-  Marko 6.3.51 does, and `HostDeclarations.defineCallPassesAttrs` is set so
+  Marko 6.4.4 does, and `HostDeclarations.defineCallPassesAttrs` is set so
   core warns on a multi-param define. With tag arguments the args fill the
   declared params positionally and, when the call has attribute tags or a
   body and a param is left unfilled, ONE trailing object

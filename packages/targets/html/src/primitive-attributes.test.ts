@@ -57,9 +57,9 @@ function result(form: string, value: string): Result {
   return row;
 }
 
-// Measured with real Marko 6.3.51 renders. HTML's quoted attributes are
+// Measured with real Marko 6.4.4 renders. HTML's quoted attributes are
 // semantically identical to Marko's minimized quotes and empty valueless attrs.
-describe("native primitive attribute presence (Marko 6.3.51)", () => {
+describe("native primitive attribute presence (Marko 6.4.4)", () => {
   for (const name of names) {
     it(`${name}: direct, merged, computed-name, dynamic and bound paths`, () => {
       for (const form of forms)

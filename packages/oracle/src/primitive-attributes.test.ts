@@ -1,5 +1,5 @@
 /**
- * Primitive attribute values on native elements render as Marko 6.3.51's html
+ * Primitive attribute values on native elements render as Marko 6.4.4's html
  * output does, on preact, react, hono, solid and astro (decision 149). Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 8 attributes x 4 forms x 7 values.
@@ -126,7 +126,7 @@ const find = (list: Row[], form: string, value: string) =>
   list.find((row) => row.form === form && row.value === value);
 
 describe.each(HOSTS)(
-  "%s primitive attribute values (real renders, Marko 6.3.51)",
+  "%s primitive attribute values (real renders, Marko 6.4.4)",
   (host) => {
     for (const attribute of attributes)
       for (const form of forms)

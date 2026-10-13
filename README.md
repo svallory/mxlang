@@ -41,7 +41,7 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `@babel/traverse` | 7.29.8 |
 | `@babel/types` | 7.29.8 |
 | `htmljs-parser` | 5.18.0 |
-| `@marko/compiler` | 5.42.10 |
+| `@marko/compiler` | 5.42.11 |
 | `solid-js` | 2.0.0-rc.7 |
 | `@solidjs/web` | 2.0.0-rc.7 |
 | `@solidjs/babel-plugin` | 2.0.0-rc.7 |
@@ -60,15 +60,15 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `@types/babel__generator` | 7.27.0 |
 | `vite` | 8.2.2 |
 | `playwright` | 1.63.0 |
-| `marko` | 6.3.51 |
-| `@marko/compiler` | 5.42.10 |
-| `@marko/runtime-tags` | 6.3.51 |
+| `marko` | 6.4.4 |
+| `@marko/compiler` | 5.42.11 |
+| `@marko/runtime-tags` | 6.4.4 |
 | `parse5` | 7.3.0 |
 | `react` / `react-dom` | 19.3.0 |
 | `@vitejs/plugin-react` | 6.1.1 |
 | `hono` | 4.6.20 |
 
-`marko`/`@marko/compiler`/`@marko/runtime-tags`/`parse5` are pinned in `packages/oracle/package.json`, not the root — they are only a dev dependency of the `oracle:marko` parity check (decision 51), not of the language itself. `@marko/compiler`'s own version numbering is decoupled from the Marko language version; 5.42.5 is the compiler release that ships Marko 6's translator (`marko/translator`) and is what `marko@6.3.51` itself depends on. `parse5` is `oracle:marko`'s HTML parser for semantic (decoded-content) comparison rather than raw-string comparison, pinned to the version already resolved transitively through `@solidjs/babel-plugin`'s own dependency on it.
+`marko`/`@marko/compiler`/`@marko/runtime-tags`/`parse5` are pinned in `packages/oracle/package.json`, not the root — they are only a dev dependency of the `oracle:marko` parity check (decision 51), not of the language itself. `@marko/compiler`'s own version numbering is decoupled from the Marko language version; 5.42.11 is the compiler release that `marko@6.4.4` itself depends on (`^5.42.11`); the Marko 6 translator ships as `marko/translator`. `parse5` is `oracle:marko`'s HTML parser for semantic (decoded-content) comparison rather than raw-string comparison, pinned to the version already resolved transitively through `@solidjs/babel-plugin`'s own dependency on it.
 
 The last four entries are build-only dependencies of `packages/babel`'s
 vendored `@babel/parser` source (`@babel/parser`'s own runtime deps, which

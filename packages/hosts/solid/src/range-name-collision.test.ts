@@ -219,7 +219,7 @@ describe("<for> range bounds are not shadowed by the mapper's own counter", () =
   });
 
   it("evaluates `from` and `step` once per render and keeps rows consistent (SSR)", () => {
-    // Marko 6.3.51 compiles this to `_for_to(20, nxt(), 2, …)` and renders
+    // Marko 6.4.4 compiles this to `_for_to(20, nxt(), 2, …)` and renders
     // `0-0, 2-2, …` with one call each.
     expect(
       renderSsr(

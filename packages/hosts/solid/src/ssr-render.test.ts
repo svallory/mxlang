@@ -928,7 +928,7 @@ describe("Solid SSR render: JSX-significant text characters", () => {
   });
 });
 
-// Stock Marko 6.3.51 renders the body for every falsy dynamic tag name
+// Stock Marko 6.4.4 renders the body for every falsy dynamic tag name
 // (false, 0, "", null, undefined) and nothing for a self-closing dynamic
 // tag — measured on the stock toolchain. The emitter's no-content fallback
 // previously passed the falsy value through, so `<${0}/>` rendered "0" as

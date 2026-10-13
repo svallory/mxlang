@@ -847,7 +847,7 @@ describe("the render sink (decision 155)", () => {
   ].join("\n");
 
   // TODO dynamic-tag-return-unit-object-object: this rendered
-  // `<div>[object Object]</div>`. Marko 6.3.51 renders the body and drops the
+  // `<div>[object Object]</div>`. Marko 6.4.4 renders the body and drops the
   // value.
   it("renders a returning unit reached through a dynamic tag", async () => {
     const html = await renderModules(
@@ -996,7 +996,7 @@ describe("the render sink (decision 155)", () => {
     ]);
   });
 
-  // Measured with Marko 6.3.51: the body throws after writing `<b>before</b>`
+  // Measured with Marko 6.4.4: the body throws after writing `<b>before</b>`
   // and Marko renders `<div>caught</div>`. The body renders into a buffered
   // sub-sink that is dropped on a throw; before decision 155 this host kept
   // the partial body (`<div><b>before</b>caught</div>`).
@@ -1021,7 +1021,7 @@ describe("the render sink (decision 155)", () => {
     ).toThrowError("needs a `<@catch>`");
   });
 
-  // Measured with Marko 6.3.51: `<${Counter}/n({start:2})/>` renders
+  // Measured with Marko 6.4.4: `<${Counter}/n({start:2})/>` renders
   // `<span>2</span>` and binds `n` to 3. A template called with tag args
   // receives args[0] as its input.
   it("binds /var on a dynamic tag called with args", async () => {
@@ -1055,7 +1055,7 @@ describe("an imported .mx tag that declares <return>", () => {
     "<return value=input.start + 1/>",
   ].join("\n");
 
-  // Marko 6.3.51 renders the body and drops the value when the call binds no
+  // Marko 6.4.4 renders the body and drops the value when the call binds no
   // `/var`. The call once concatenated the callee's former `{ value, output }`
   // pair as "[object Object]"; since decision 155 it renders into the sink.
   it("renders its body and drops the value without /var", async () => {
@@ -1103,7 +1103,7 @@ describe("an imported .mx tag that declares <return>", () => {
     }
   });
 
-  // Marko 6.3.51: `<Counter/n start=1/>` renders the body and `n` holds the
+  // Marko 6.4.4: `<Counter/n start=1/>` renders the body and `n` holds the
   // return value (`<div><span>1</span><p>2</p></div>`).
   it("binds /var to the returned value and renders the body", async () => {
     const html = await renderModules(
@@ -1844,9 +1844,9 @@ describe("dynamic tags", () => {
     ["menuitem", "<menuitem title></menuitem>"],
     ["INPUT", "<INPUT title></INPUT>"],
   ])(
-    "uses Marko 6.3.51's exact dynamic void list for %s",
+    "uses Marko 6.4.4's exact dynamic void list for %s",
     async (tag, expected) => {
-      // Measured with Marko 6.3.51: deprecated keygen/menuitem and uppercase
+      // Measured with Marko 6.4.4: deprecated keygen/menuitem and uppercase
       // names are not matched by its case-sensitive voidElementsReg.
       const html = await renderModules(
         { "entry.mx": `<\${input.tag} title=input.v/>` },
@@ -1857,7 +1857,7 @@ describe("dynamic tags", () => {
     },
   );
 
-  // Stock Marko 6.3.51 renders the body for every falsy tag name (false,
+  // Stock Marko 6.4.4 renders the body for every falsy tag name (false,
   // 0, "", null, undefined) and nothing for a self-closing dynamic tag —
   // measured on the stock toolchain, not from memory. MX previously threw
   // `__mxTarget is not a function` for false/0 and emitted `<>body</>` for "".
@@ -1909,7 +1909,7 @@ describe("dynamic tags", () => {
 
   // attribute-tag-silent-drops B2: `renderDynamic` used to receive `{}` for
   // every attribute tag on a dynamic tag, silently dropping it (measured
-  // against `marko` 6.3.51: attribute tags ARE forwarded to a dynamic tag's
+  // against `marko` 6.4.4: attribute tags ARE forwarded to a dynamic tag's
   // resolved target). `apps/docs/docs/language/errors.md`'s claim that this
   // case "is reported as such" was also wrong — it compiled clean and lost
   // the content.

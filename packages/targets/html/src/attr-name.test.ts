@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compile, mx } from "./index.ts";
 
 /**
- * Marko 6.3.51 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
+ * Marko 6.4.4 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
  * ("Invalid attribute name.", `runtime-tags/.../pre-analyze.ts` `normalizeTag`).
  * Angular template syntax (`[prop]=`, `#ref`, `*ngIf`) is not Marko, so every
  * non-Angular host must fail at the authored name, not pass it through.
@@ -265,7 +265,7 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
 });
 
 /**
- * Marko 6.3.51 refuses a string `by=` outside `of` and refuses `key=` on a
+ * Marko 6.4.4 refuses a string `by=` outside `of` and refuses `key=` on a
  * `<for>` at all (`runtime-tags/src/translator/core/for.ts`); MX was silent on
  * both, which is the S8 silent-drop class — the loop key the author wrote was
  * read by nothing. Reported through this host's own surface, at the position

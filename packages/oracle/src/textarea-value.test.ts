@@ -1,5 +1,5 @@
 /**
- * `<textarea value=x/>` renders the value as escaped content, as Marko 6.3.51
+ * `<textarea value=x/>` renders the value as escaped content, as Marko 6.4.4
  * does (decision 149). Real renders of both sides in separate Bun processes
  * (scripts/attribute-value-probe.ts --textarea), compared as parsed DOM: the
  * html target's text escaping is broader than Marko's (`&gt;`, `&quot;`), and
@@ -82,8 +82,8 @@ beforeAll(() => {
 const find = (list: Row[], form: string, value: string) =>
   list.find((r) => r.form === form && r.value === value);
 
-describe("html target <textarea value> (real renders, Marko 6.3.51)", () => {
-  // Marko 6.3.51, measured: value as escaped content, nothing for
+describe("html target <textarea value> (real renders, Marko 6.4.4)", () => {
+  // Marko 6.4.4, measured: value as escaped content, nothing for
   // null/undefined/false/true, `0` kept, a leading newline doubled.
   it.each([
     ["dynamic", "zero", "0"],
@@ -141,7 +141,7 @@ describe("html target <textarea value> (real renders, Marko 6.3.51)", () => {
   });
 });
 
-describe("astro <textarea value> (real renders, Marko 6.3.51)", () => {
+describe("astro <textarea value> (real renders, Marko 6.4.4)", () => {
   // A dynamic tag (`<${"textarea"} …>`) is unsupported by this host.
   const supported = (m: Row) => !m.form.startsWith("dynamicTag");
 
@@ -181,7 +181,7 @@ describe("astro <textarea value> (real renders, Marko 6.3.51)", () => {
 });
 
 describe.each(JSX_HOSTS)(
-  "%s <textarea value> (real renders, Marko 6.3.51)",
+  "%s <textarea value> (real renders, Marko 6.4.4)",
   (host) => {
     const cell = (m: Row) => `${m.form}/${m.value}`;
 

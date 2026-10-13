@@ -662,7 +662,7 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * Claims `name` in a region's shared arrow. A second claim would be a second
    * `const` in the one IIFE, which Babel reports at a generated position, so it
-   * is refused here at the authored name, with Marko 6.3.51's text.
+   * is refused here at the authored name, with Marko 6.4.4's text.
    */
   #claimRegionName(
     region: RegionSink,
@@ -1845,7 +1845,7 @@ export class PreactEmitter implements Emitter<string> {
       //
       // Without args the call is Marko's: the attributes (spreads included),
       // attribute tags and `content` travel as ONE object bound to the first
-      // param, `{}` when the call carries none (measured on 6.3.51; `|p|` and
+      // param, `{}` when the call carries none (measured on 6.4.4; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
       const argList = node.args.map((arg: Expr) => arg.code);
       // A rest param is never padded: Marko leaves it `[]` when nothing

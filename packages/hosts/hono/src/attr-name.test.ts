@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
 /**
- * Marko 6.3.51 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
+ * Marko 6.4.4 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
  * ("Invalid attribute name.", `runtime-tags/.../pre-analyze.ts` `normalizeTag`).
  * Angular template syntax (`[prop]=`, `#ref`, `*ngIf`) is not Marko, so every
  * non-Angular host must fail at the authored name, not pass it through.

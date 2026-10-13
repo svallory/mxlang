@@ -125,14 +125,14 @@ export interface HostDeclarations {
    * Whether attribute names outside Marko's grammar pass through to the
    * target. Only a host whose output language has its own attribute syntax
    * (Angular's `[prop]=`, `(event)=`, `#ref`, `*ngIf`) sets this; every other
-   * host rejects such a name the way Marko 6.3.51 does ("Invalid attribute
+   * host rejects such a name the way Marko 6.4.4 does ("Invalid attribute
    * name."), positioned at the authored name.
    */
   acceptsForeignAttrNames?: boolean;
   /**
    * Whether this host implements decision 160: a `<define>` called with
    * attributes, spreads, attribute tags or a body passes ONE object of them to
-   * the define's first param (Marko 6.3.51's shape), so `|p|` and `|{ n }|`
+   * the define's first param (Marko 6.4.4's shape), so `|p|` and `|{ n }|`
    * both read it. Decision 160 is a language rule for every target; this flag
    * only marks the hosts that already implement it, and is removed when every
    * host implements decision 160 (tracked by TODOs `define-call-attrs-solid`

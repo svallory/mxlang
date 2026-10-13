@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
-// Expected HTML is what stock Marko 6.3.51 renders for the same templates
+// Expected HTML is what stock Marko 6.4.4 renders for the same templates
 // (probe: scratch/reports/squad-jsx/define-call-attrs.md).
 const CASES: Array<[string, string, string]> = [
   [

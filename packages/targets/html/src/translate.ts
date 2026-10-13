@@ -621,7 +621,7 @@ const STYLE_VALUE = `function __mxStyleValue(__mxValue: unknown): string {
 
 // Capture the authored expression once, then decide presence before coercion.
 // `checked` is presence-only on a direct <input>, but generic on spread and
-// dynamic native paths, matching Marko 6.3.51's controlled-input writer.
+// dynamic native paths, matching Marko 6.4.4's controlled-input writer.
 const RENDER_ATTR = `function __mxRenderAttr(__mxName: string, __mxValue: unknown, __mxTag = "", __mxChecked = false): string {
   if (__mxValue === false || __mxValue === null || __mxValue === undefined) return "";
   if (__mxChecked || __mxValue === true) return " " + __mxName;
@@ -686,7 +686,7 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
       if (__mxProps.content) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
       __mxOut += __mxTextareaContent(__mxAttrs.value);
     } else if (__mxProps.content) __mxOut += __mxProps.content();
-    // Marko 6.3.51's html/dynamic-tag.ts voidElementsReg, case-sensitive.
+    // Marko 6.4.4's html/dynamic-tag.ts voidElementsReg, case-sensitive.
     __mxSink.write(/^(?:area|b(?:ase|r)|col|embed|hr|i(?:mg|nput)|link|meta|param|source|track|wbr)$/.test(__mxTarget) ? __mxOut : __mxOut + "</" + __mxTarget + ">");
     return;
   }

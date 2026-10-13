@@ -71,7 +71,7 @@ export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
 export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
 
 /**
- * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.3.51
+ * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
  * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
  * and a leading newline doubled because the HTML parser drops a textarea's
  * first one. Only the server renderer writes markup, so the doubling is keyed

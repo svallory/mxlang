@@ -5,7 +5,7 @@
  * body renders as text; this host's `content` is JSX children, where a
  * text-only body is a bare string that `mxDynamic` read as a tag name
  * (`<wrap>hello</wrap>` rendered `<hello></hello>`). Expected HTML is what
- * stock Marko 6.3.51 renders for the same templates (scratch/squad-liuna/
+ * stock Marko 6.4.4 renders for the same templates (scratch/squad-liuna/
  * jsx-dynamic-body-text.md, parity table).
  */
 
@@ -208,7 +208,7 @@ describe("a body forwarded through <${input.content}/> (preact, Marko parity)", 
   );
 });
 
-// Stock Marko 6.3.51 renders the body for every falsy dynamic tag name
+// Stock Marko 6.4.4 renders the body for every falsy dynamic tag name
 // (false, 0, "", null, undefined) and nothing for a self-closing dynamic
 // tag — measured on the stock toolchain. `__mxDynamic` previously returned
 // the raw falsy target on its fallback path, so `<${0}/>` rendered "0" as

@@ -3486,7 +3486,7 @@ describe("<for by=> loop-param scope", () => {
  * Decision 135: a repeated attribute name on one tag resolves to its LAST
  * occurrence, in core, so the IR carries one attribute per resolved name and no
  * host or delegated-tag consumer ever sees a duplicate. The earlier ones get a
- * decision-133 warning each. Marko 6.3.51 is the reference: `class="a" id="x"
+ * decision-133 warning each. Marko 6.4.4 is the reference: `class="a" id="x"
  * class="b"` compiles to `<div id=x class=b>` (the survivor keeps its own
  * position), the dropped value is never evaluated, and `class`/`style` do not
  * merge.

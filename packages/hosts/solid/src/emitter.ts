@@ -679,7 +679,7 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  * `rejectUnknownTag` hook (below) then reports Marko's wording, positioned
  * on the real node.
  *
- * Verified against `@marko/compiler` 5.42.5 / `marko@6.3.51`: an unresolved
+ * Verified against `@marko/compiler` 5.42.11 / `marko@6.4.4`: an unresolved
  * `<TotallyUndefined/>` (no import, binding, or taglib entry) is a
  * compile-time error, "Unable to find entry point for [custom
  * tag](https://markojs.com/docs/reference/custom-tag#relative-custom-tags)
@@ -1234,7 +1234,7 @@ function renderAttr(
 }
 
 /**
- * A native `<textarea>`'s `value` is its content (Marko 6.3.51), never an
+ * A native `<textarea>`'s `value` is its content (Marko 6.4.4), never an
  * attribute. Returns the attributes to render (the explicit `value` removed,
  * each spread viewed without its `value`) and the content expression: the
  * last `value` in source order across explicit attributes and spreads, or
@@ -2303,7 +2303,7 @@ export class SolidEmitter implements Emitter<string> {
     if (node.args.length === 0) {
       // Decision 160: without tag arguments the attributes (spreads
       // included), attribute tags and `content` travel as ONE object bound
-      // to the first param, `{}` when the call carries none (Marko 6.3.51). A
+      // to the first param, `{}` when the call carries none (Marko 6.4.4). A
       // define with no params ignores them.
       if (target.params.length === 0) {
         args = [];

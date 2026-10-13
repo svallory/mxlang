@@ -1324,7 +1324,7 @@ export function createEmitter(
         // A `<try>` without a `<@placeholder>` is a plain try/catch: the body
         // renders into a buffered sub-sink that is committed only when it
         // finishes, so a throw drops the half-rendered body and `<@catch>`
-        // renders in its place, as in Marko 6.3.51.
+        // renders in its place, as in Marko 6.4.4.
         const katch = tag.attributeTags.find((t) => t.name === "catch");
         if (!katch) {
           // Without `<@catch>` Marko rethrows: the error propagates out of the
@@ -1385,9 +1385,9 @@ export function createEmitter(
           // `tag.attributeTags` is what the core already resolved for this
           // `DelegatedTag` — forwarding it is what keeps `<${expr}><@header>…</@header></>`
           // from silently dropping the attribute tag (measured against Marko
-          // 6.3.51: attribute tags on a dynamic tag ARE forwarded).
+          // 6.4.4: attribute tags on a dynamic tag ARE forwarded).
           attributeTags: tag.attributeTags,
-          // `<${Tag}/n/>` binds the callee's `render` value, as Marko 6.3.51
+          // `<${Tag}/n/>` binds the callee's `render` value, as Marko 6.4.4
           // does; dropping it here was `dynamic-tag-var-silent-drop`.
           var: tag.var,
           attributeTagTree: tag.attributeTagTree,

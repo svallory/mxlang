@@ -4,7 +4,7 @@
  * rendered for real. The callee's default export returns `{ value, output }`;
  * before core marked an imported call as `returnsValue`, the caller rendered
  * the pair itself (`{Counter({ start: 1 })}`) and Hono dropped the object
- * instead of the markup. Marko 6.3.51 renders the body and drops the value.
+ * instead of the markup. Marko 6.4.4 renders the body and drops the value.
  */
 
 import {

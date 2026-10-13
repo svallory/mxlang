@@ -25,7 +25,7 @@ function check(source: string, vocabulary = false): void {
 const onlyValue = (tag: string) =>
   `The \`<${tag}>\` tag only supports the \`value=\` attribute.`;
 
-describe("builtin duplicate value validation (Marko 6.3.51)", () => {
+describe("builtin duplicate value validation (Marko 6.4.4)", () => {
   it("does not impose compiler-builtin rules on delegated vocabulary", () => {
     expect(() => check('<id value="one" label="two"/>', true)).not.toThrow();
     expect(() => check('<let value="one" value="two"/>', true)).not.toThrow();

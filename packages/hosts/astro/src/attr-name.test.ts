@@ -6,7 +6,7 @@ const OUT = (guarded: string, name: string): string =>
 import { describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
-// Marko 6.3.51 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
+// Marko 6.4.4 rejects an attribute name outside `[a-z_$][a-z0-9._:-]*`
 // ("Invalid attribute name."); Angular syntax is not Marko, so `.astro.mx` fails
 // at the authored name too.
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour

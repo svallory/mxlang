@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
 import { type LowerSourceOptions, lowerSource } from "./index.ts";
 
-// Tag names that collide with an `Object.prototype` member. Stock Marko 6.3.51
+// Tag names that collide with an `Object.prototype` member. Stock Marko 6.4.4
 // crashes on all of them (`taglib.getTag` indexes a plain object); MX treats
 // them as ordinary tag names (divergences.md). Core's `tag-table.test.ts`
 // pins the lookup layer for these names; none of its cases runs one through

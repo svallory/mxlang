@@ -250,7 +250,7 @@ describe("Component dynamic target (via DelegatedTag routing)", () => {
 
   // dynamic-tag-var-silent-drop: a `/var` on a dynamic tag used to compile
   // clean and silently drop the binding (`ngComponentOutlet` has no position
-  // to hand a returned value to). Marko 6.3.51 binds the dynamic tag's return
+  // to hand a returned value to). Marko 6.4.4 binds the dynamic tag's return
   // value; this host cannot, so it must refuse — never a silent drop.
   it("rejects a /var on a dynamic component, positioned at the /var", () => {
     const fail = (source: string) => {

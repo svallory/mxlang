@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Primitive attribute values on native elements render as Marko 6.3.51's html
+ * Primitive attribute values on native elements render as Marko 6.4.4's html
  * output does (decision 149), compared as parsed DOM against a live Marko
  * render of the same source (`scripts/attribute-value-probe.ts marko
  * --parity`, direct form: Angular rejects spreads). Real Angular renders in
@@ -131,7 +131,7 @@ const forms = [
   "checked@div",
 ];
 
-describe("angular primitive attribute values (real renders, Marko 6.3.51)", () => {
+describe("angular primitive attribute values (real renders, Marko 6.4.4)", () => {
   for (const name of forms)
     it.each(Object.keys(values))(`${name} direct %s`, (key) => {
       const form = `${name}/direct`;

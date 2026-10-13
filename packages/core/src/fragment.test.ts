@@ -130,7 +130,7 @@ describe("parseFragment shifts positions by the base", () => {
 });
 
 describe("parseFragment parses an <html-comment> body as text", () => {
-  // Stock Marko 6.3.51 renders `<!--x <i&gt;z-->` (measured through
+  // Stock Marko 6.4.4 renders `<!--x <i&gt;z-->` (measured through
   // packages/stock-marko): the body is parsed-text, markup inside is text.
   // The fragment path registers only the statement slice of core's taglib,
   // so `<html-comment>`'s `parseOptions.text: true` must still reach the

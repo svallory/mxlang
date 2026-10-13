@@ -2,7 +2,7 @@
  * Host-neutral native-attribute value validation, hoisted by emitters rather
  * than introducing a runtime dependency. Components' props do not use it.
  *
- * Marko 6.3.51 tests coercion, not prototypes: a null-prototype object (or a
+ * Marko 6.4.4 tests coercion, not prototypes: a null-prototype object (or a
  * failed coercion) is unrenderable, but Dates and meaningful toString values
  * are attributes. Class/style have their separate structured-value writers.
  */
