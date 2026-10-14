@@ -2434,7 +2434,7 @@ static declare const x: Foo<
   2
 >;
 
-static const x: Foo<
+static const y: Foo<
   1,
   2
 > = baz;
