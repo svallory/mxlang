@@ -513,7 +513,7 @@ optional hooks (`lowerTrigger`, `lowerBlockTag`, `lowerFilter`, `afterLower`,
 the contract hooks below), a `tagRules` preset (`html` when it states none; `lowerSource` parses under
 it when its call states no `tagRules`), the defaults `structural`, `imports` and
 `unknownTags` for the `lowerSource` options of the same name (`@unstable`; a call
-that states one wins, and a `.mx` file has no dialect to read them from)
+that states one wins, and a `.mx` file has no dialect to read them from),
 `bindingsCallTags` (`false` stops a file-local binding from making a tag of its name a call) and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
 may leave them out (`DialectModule`).
 
