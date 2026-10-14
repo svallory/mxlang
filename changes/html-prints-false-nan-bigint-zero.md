@@ -1,5 +1,0 @@
----
-packages: [html]
-kind: Fixed
----
-`${…}` and `$!{…}` in text position now print what Marko's html runtime prints. A truthy value prints as its string, `0` (and `-0`) prints `0`, and every other falsy value (`false`, `NaN`, `0n`, `""`, `null`, `undefined`) prints nothing. The html target used to print `false`, `NaN` and `0` (for `0n`), and `$!{…}` printed `null` and `undefined`. Attribute values are unchanged: `false`, `null` and `undefined` still drop the attribute, and `NaN` and `0n` still print. The compiled module now carries a small inlined `__mxTextOf` helper wherever a template prints a placeholder; the runtime import is still `escape`, `createOut` and the sink types. A `<textarea>` body is not text position: as in Marko, a lone placeholder passes its raw value (`NaN` and `0n` print, `false`, `true`, `null` and `undefined` do not) and any other body is one string, so `a${null}b` prints `anullb`; the newline right after `<textarea>` is dropped and a leading newline in the value is doubled as for `value=`, and a raw `$!{…}` in a textarea is now the compile error Marko raises.
