@@ -259,6 +259,15 @@ describe("checkDialectFile renames the codes of the project scan", () => {
     ]);
   });
 
+  it("MX_DIALECT_WARNING loads in the map and is ignored: MX keeps it", () => {
+    const project = probeProject({
+      "dialect.cjs": `module.exports.default = { tagRules: "none", table: {}, afterLower: (unit) => { unit.warn("careful"); }, diagnosticCodes: { MX_DIALECT_WARNING: "PROBE_WARN" } };\n`,
+    });
+    expect(codesOf(project.path("a.probe"), "<x/>\n")).toEqual([
+      "MX_DIALECT_WARNING",
+    ]);
+  });
+
   it("MX_DIALECT_ERROR loads in the map and is ignored: MX keeps it", () => {
     const project = probeProject({
       "dialect.cjs": `module.exports.default = { tagRules: "none", table: {}, unknownTags: "reject", explainUnknownTag: () => ({ message: "no" }), diagnosticCodes: { MX_DIALECT_ERROR: "PROBE_ERR" } };\n`,

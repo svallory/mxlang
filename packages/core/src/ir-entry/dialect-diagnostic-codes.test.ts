@@ -18,6 +18,7 @@ const MAP = {
   MX_MISSING_ATTRIBUTE: "FX_MISSING",
   MX_RESERVED_TAG: "FX_RESERVED",
   MX_DIALECT_ERROR: "FX_DIALECT",
+  MX_DIALECT_WARNING: "FX_DIALECT_WARN",
 } as const;
 
 function dialectOf(more: Partial<Dialect> = {}): Dialect {
@@ -224,6 +225,19 @@ describe("a code the dialect raises is not renamed", () => {
       { unknownTags: "reject" },
     );
     expect(codes(mapped.diagnostics)).toEqual(["MX_DIALECT_ERROR"]);
+  });
+
+  it("a dialect warning with no code is `MX_DIALECT_WARNING`, which MX keeps whatever the map says", () => {
+    const afterLower: Dialect["afterLower"] = (unit) => {
+      unit.warn("careful");
+    };
+    const without = lower("<p/>\n", dialectOf({ afterLower }));
+    expect(codes(without.diagnostics)).toEqual(["MX_DIALECT_WARNING"]);
+    const mapped = lower(
+      "<p/>\n",
+      dialectOf({ afterLower, diagnosticCodes: MAP }),
+    );
+    expect(codes(mapped.diagnostics)).toEqual(["MX_DIALECT_WARNING"]);
   });
 
   it("`MX_DIALECT_HOOK_ERROR` and `MX_INTERNAL_ERROR` are never renamed", () => {

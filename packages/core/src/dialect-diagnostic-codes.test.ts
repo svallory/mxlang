@@ -154,10 +154,10 @@ describe("a bad map in a routed dialect module", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("diagnosticCodesOf returns a routed map without the MX_DIALECT_ERROR entry", () => {
+  it("diagnosticCodesOf returns a routed map without the MX_DIALECT_ERROR and MX_DIALECT_WARNING entries", () => {
     dialectProject(dir, {
       module:
-        'export default { table: {}, diagnosticCodes: { MX_DIALECT_ERROR: "K_DERR", MX_UNKNOWN_TAG: "K_TAG" } };',
+        'export default { table: {}, diagnosticCodes: { MX_DIALECT_ERROR: "K_DERR", MX_DIALECT_WARNING: "K_DWARN", MX_UNKNOWN_TAG: "K_TAG" } };',
     });
     expect(diagnosticCodesOf(join(dir, "page.tst"))).toEqual({
       MX_UNKNOWN_TAG: "K_TAG",

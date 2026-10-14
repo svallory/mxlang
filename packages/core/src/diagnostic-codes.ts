@@ -371,15 +371,20 @@ const effective = new WeakMap<object, Readonly<Record<string, string>>>();
 
 /**
  * The renames of a dialect's `diagnosticCodes` that apply: the map without its
- * `MX_DIALECT_ERROR` entry. That code reports the dialect's own defect (an
- * error it gave no code to), so MX keeps it: the entry loads, and is ignored.
+ * `MX_DIALECT_ERROR` and `MX_DIALECT_WARNING` entries. Those codes report the
+ * dialect itself (an error or warning it gave no code to), so MX keeps them:
+ * the entries load, and are ignored.
  */
 export function effectiveDiagnosticCodes(
   map: Readonly<Record<string, string>>,
 ): Readonly<Record<string, string>> {
   let kept = effective.get(map);
   if (kept === undefined) {
-    const { [DIALECT_ERROR_CODE]: _ignored, ...rest } = map;
+    const {
+      [DIALECT_ERROR_CODE]: _error,
+      [DIALECT_WARNING_CODE]: _warning,
+      ...rest
+    } = map;
     kept = rest;
     effective.set(map, kept);
   }
@@ -389,7 +394,7 @@ export function effectiveDiagnosticCodes(
 /**
  * `diagnostics` with each core code the dialect's `diagnosticCodes` map names
  * replaced by its value; nothing else changes. A code the map does not name
- * (a hook's own code, an unlisted core code), `MX_DIALECT_ERROR` and a
+ * (a hook's own code, an unlisted core code), `MX_DIALECT_ERROR`, `MX_DIALECT_WARNING` and a
  * diagnostic with no code stay as they are. Returns `diagnostics` itself when
  * there is nothing to rename. Call it once, on the final list.
  */

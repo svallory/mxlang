@@ -607,8 +607,8 @@ export interface Dialect {
    * ordered, so message, position, range, severity and fixes are unchanged.
    * A code the dialect itself raises (`ctx.fail`'s `code`, `explainUnknownTag`'s
    * `code`) is never renamed. `MX_INTERNAL_ERROR` and `MX_DIALECT_HOOK_ERROR`
-   * stay MX's and cannot be keys; `MX_DIALECT_ERROR`, the dialect's own defect
-   * (an error it gave no code), loads but is ignored: MX keeps that code. A
+   * stay MX's and cannot be keys; `MX_DIALECT_ERROR` and `MX_DIALECT_WARNING` load
+   * but are ignored: a code that reports the dialect itself stays MX's. A
    * value is a non-empty string that does not
    * start with `MX_`; two keys may share one value. A bad map fails the dialect
    * at load. @unstable
@@ -1214,8 +1214,9 @@ export function resolveSyntaxOf(
  * The renames the dialect of `filename` states in `diagnosticCodes` (core code
  * to the dialect's code), or `undefined` when the file's dialect states none,
  * the file has no dialect, or the dialect does not load (the diagnostics say
- * why). The map is the one `lowerSource` applies: `MX_DIALECT_ERROR` is not in
- * it, since MX keeps that code whatever the dialect says.
+ * why). The map is the one `lowerSource` applies: `MX_DIALECT_ERROR` and
+ * `MX_DIALECT_WARNING` are not in it: a code that reports the dialect itself
+ * stays MX's, whatever the dialect says.
  *
  * A tool that reports diagnostics it did not get from `lowerSource` (the
  * project scan's: tag files, `mx.tags`, `mx.contracts`) renames their codes
