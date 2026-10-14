@@ -930,7 +930,7 @@ export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
 }
 
 /** How many of `diagnostics` are errors; a warning is printed and not counted. */
-export function countCompileErrors(
+function countCompileErrors(
   diagnostics: readonly MxCompileDiagnostic[],
 ): number {
   return diagnostics.filter((diagnostic) => diagnostic.category === "error")
@@ -978,7 +978,7 @@ function watchForCountLine(): { seen(): boolean; stop(): void } {
  * count line (no `--pretty`) has nothing to be misread against and prints none.
  * A watch run rewrites tsc's count instead (see `watch-templates.ts`).
  */
-export function reportCompileSummary(
+function reportCompileSummary(
   diagnostics: readonly MxCompileDiagnostic[],
 ): void {
   const errors = countCompileErrors(diagnostics);
