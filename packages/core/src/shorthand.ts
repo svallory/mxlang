@@ -516,20 +516,40 @@ function partValue(ctx: Ctx, value: Node): Node {
     );
   }
   // A payload's offsets: the front end's container, whatever the node holds.
-  ranges.set(node, { start: template.start, end: template.end });
+  const range = { start: template.start, end: template.end };
+  // A template literal over a word with a placeholder (`a${y}`) is built
+  // here and has no position of its own: it takes the authored word, so the
+  // IR value carries a span over the source it was made from. A node the
+  // payload already positioned (`${y}` alone is the expression `y`) keeps its
+  // own range.
+  if (!node.loc) return located(ctx, node, range);
+  ranges.set(node, range);
   return node;
 }
 
-/** The tag head's class parts and id part, as Marko's parser read them. */
+/**
+ * The tag head's class parts and id part, as Marko's parser read them, and
+ * the range the class parts were written over: the word after the first class
+ * sigil through the end of the last class word (an id between them is inside
+ * it, as in the class attribute's name span).
+ */
 function headParts(ctx: Ctx, tag: Node) {
   let classParts: Node[] = [];
+  let classRange: Located | undefined;
   let idPart: Node | undefined;
   for (const shorthand of tag.shorthands ?? []) {
     const part = partValue(ctx, shorthand.value);
-    if (shorthand.sigil === "#") idPart = part;
-    else classParts = [...classParts, part];
+    if (shorthand.sigil === "#") {
+      idPart = part;
+      continue;
+    }
+    classParts = [...classParts, part];
+    const word = shorthand.value.span;
+    if (typeof word?.start === "number" && typeof word?.end === "number") {
+      classRange = { start: classRange?.start ?? word.start, end: word.end };
+    }
   }
-  return { classParts, idPart };
+  return { classParts, classRange, idPart };
 }
 
 /** Marko's attribute for an authored MX attribute, value cloned. */
@@ -570,7 +590,12 @@ function markoAttribute(ctx: Ctx, attr: Node): Node {
  * (string with string: `${shorthand} ${class}`; otherwise an array, head
  * first).
  */
-function mergeHeadClass(ctx: Ctx, attributes: Node[], parts: Node[]): void {
+function mergeHeadClass(
+  ctx: Ctx,
+  attributes: Node[],
+  parts: Node[],
+  range: Located | undefined,
+): void {
   if (parts.length === 0) return;
   const first = parts[0] as Node;
   const last = parts[parts.length - 1] as Node;
@@ -582,7 +607,12 @@ function mergeHeadClass(ctx: Ctx, attributes: Node[], parts: Node[]): void {
             start: rangeOf(ctx, first).start,
             end: rangeOf(ctx, last).end,
           })
-        : { type: "ArrayExpression", elements: parts };
+        : // The array is the class value of a shorthand alone. Beside an
+          // authored `class` its elements are spread into a value no single
+          // source range covers, which stays without a span.
+          range
+          ? located(ctx, { type: "ArrayExpression", elements: parts }, range)
+          : { type: "ArrayExpression", elements: parts };
   const authored = attributes.find((attr) => attr.name === "class");
   if (!authored) {
     attributes.push({
@@ -765,7 +795,7 @@ export function rewriteShorthands(ctx: Ctx, tag: Node): void {
   ) {
     return;
   }
-  const { classParts, idPart } = headParts(ctx, tag);
+  const { classParts, classRange, idPart } = headParts(ctx, tag);
   // The authored attribute and its shaped record as built, before the rewrite.
   const origin = new Map<Node, { attr: Node; shaped: string }>();
   const runs = new Map<Node, Node[]>();
@@ -799,7 +829,7 @@ export function rewriteShorthands(ctx: Ctx, tag: Node): void {
     runs.set(record, run);
     attributes.push(record);
   }
-  mergeHeadClass(ctx, attributes, classParts);
+  mergeHeadClass(ctx, attributes, classParts, classRange);
   if (idPart)
     attributes.push({ type: "MarkoAttribute", name: "id", value: idPart });
   checkHead(ctx, attributes);

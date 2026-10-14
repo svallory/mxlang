@@ -107,6 +107,12 @@ export interface Expr {
    * `packages/core` sets `Expr.file` today, so no live construct exercises
    * this yet — see `file`'s own comment).
    *
+   * A shorthand `id` or `class` value with a placeholder (`#a${x}`,
+   * `.a${x}.b`) has the span of the authored word run after the sigil, and
+   * its `code` is the template literal (or array) core built over it, so
+   * `code` need not equal the source sliced by `span`; a static `.a.b` is
+   * the same (its value is `"a b"`).
+   *
    * `node`'s position objects are shared between a parent expression and the
    * child at its coincident boundary (both hold the same offset, which is
    * correct to read), never between sibling expressions — each sibling gets

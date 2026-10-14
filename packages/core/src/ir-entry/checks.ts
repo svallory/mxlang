@@ -301,23 +301,15 @@ function checkTagName(
 const MERGED_SHORTHAND_CLASS =
   "a shorthand class (`.a`) together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
 
-const SYNTHESIZED_SHORTHAND_ID =
-  "a shorthand id with a placeholder (`#a${x}`) is not supported in a data file: write `id=...`";
-
-const SYNTHESIZED_SHORTHAND_CLASS =
-  "a shorthand class with a placeholder (`.a${x}`) is not supported in a data file: write `class=...`";
-
 /**
- * The two rejects for a shorthand `id`/`class` whose value has no source span.
+ * The reject for a shorthand `class` whose value has no source span.
  *
- * Core builds the value of a shorthand with a placeholder (`#a${x}`,
- * `.${x}-b`) as a synthesized template literal with no authored source: a
- * positioned reject, at the `#`/`.` when the attribute's name span starts
- * there, instead of the invariant error. The same spanless value arises when
- * a shorthand class and an authored `class` attribute merge (`<x.a
- * class="b"/>`; the name span then starts at the authored `class`): a
- * different mistake, so a different message. Only `class` merges silently;
- * core rejects a shorthand `#id` beside an authored `id` itself.
+ * A shorthand with a placeholder (`#a${x}`, `.${x}-b`) is a template literal
+ * Core builds over the authored word, and the value's span covers that word.
+ * The one spanless shorthand value left is the merged one (`<x.a
+ * class="b"/>`; the name span then starts at the authored `class`), which
+ * only `class` produces: core rejects a shorthand `#id` beside an authored
+ * `id` itself.
  */
 function rejectSpanlessShorthand(
   attrs: Attr[],
@@ -325,8 +317,7 @@ function rejectSpanlessShorthand(
 ): void {
   const at = tag.loc;
   for (const attr of attrs) {
-    if (attr.kind === "spread") continue;
-    if (attr.name !== "id" && attr.name !== "class") continue;
+    if (attr.kind === "spread" || attr.name !== "class") continue;
     const span =
       attr.kind === "static"
         ? attr.valueSpan
@@ -334,26 +325,7 @@ function rejectSpanlessShorthand(
           ? undefined
           : attr.value.span;
     if (span) continue;
-    const nameSpan = optionalNameSpan(attr);
-    const sigil = nameSpan ? activeSource[nameSpan.sourceStart] : undefined;
-    const where = nameSpan
-      ? { ...at, ...positionOfOffset(nameSpan.sourceStart) }
-      : at;
-    // The sigil's own attribute (`#a${x}`, `.a${x}`): its name through its end.
-    const attrEnd = nameSpan ? positionOfOffset(nameSpan.sourceEnd) : undefined;
-    if (attr.name === "id" && sigil === "#") {
-      fail(DIALECT_HOOK_ERROR_CODE, SYNTHESIZED_SHORTHAND_ID, where, attrEnd);
-    }
-    if (attr.name === "class" && sigil === ".") {
-      fail(
-        DIALECT_HOOK_ERROR_CODE,
-        SYNTHESIZED_SHORTHAND_CLASS,
-        where,
-        attrEnd,
-      );
-    }
-    if (attr.name === "class")
-      fail(DIALECT_HOOK_ERROR_CODE, MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
+    fail(DIALECT_HOOK_ERROR_CODE, MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
   }
 }
 

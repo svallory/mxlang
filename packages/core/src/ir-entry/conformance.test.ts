@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -217,21 +218,36 @@ const INTENDED: Record<
     pattern: /Unterminated string constant/,
     cases: ["attr-multi-line-string", "placeholder-within-string-newlines"],
   },
+  // Marko refuses these too. The tree-sitter grammar reads a TypeScript-ish tag
+  // head (type arguments and parameters, params after a tag var, an argument
+  // on an attribute tag) and a scriptlet block, but each case below holds a
+  // form that stock Marko 6.4.4 rejects with "Unexpected token" at the same
+  // position the IR entry does. The valid variants of the same constructs
+  // lower (see "valid TypeScript in a tag head" below). Probe:
+  // scratch/reports/probes/ts-syntax-in-tag-head-7cfaa606/ (each corpus case
+  // split into single forms, stock against `lowerSource`, default and `none`).
+  markoRefusesToo: {
+    pattern: /Unexpected token/,
+    cases: [
+      // `<for(var i = 0; i < 10; i++) if(x > y)>`
+      "argument-tag-attr",
+      // type parameters with a default: `<foo<A, B = string>(event: A & B){…}/>`
+      "attr-method-shorthand-with-type-parameters",
+      // `<for|x, y, { destrucure=default }| of=array>`
+      "param-tag",
+      // a missing comma between the entries of an object literal (`a:1` newline `b:2`)
+      "scriptlet-block-nested",
+      // type parameters with a default before params: `<foo<A, B = string>|data: A & B|>`
+      "tag-params-with-type-parameters",
+      // `<foo/var|param|>`
+      "tag-var-with-params",
+      // type arguments with a default: `<foo<A, B = string>>`
+      "tag-with-type-arguments",
+    ],
+  },
 };
 
 const KNOWN_GAPS: Record<string, string[]> = {
-  // TypeScript syntax in a tag head (type parameters and arguments, params
-  // after a tag var, an argument on an attribute tag) and a nested scriptlet
-  // block: "Unexpected token". Marko accepts these; decision 172.
-  "ts-syntax-in-tag-head": [
-    "argument-tag-attr",
-    "attr-method-shorthand-with-type-parameters",
-    "param-tag",
-    "scriptlet-block-nested",
-    "tag-params-with-type-parameters",
-    "tag-var-with-params",
-    "tag-with-type-arguments",
-  ],
   // Operators beside an attribute value across spaces or newlines, and
   // non-literal or undelimited values: "Expected a single expression".
   // htmljs-parser keeps one expression; decision 146 covers only `x .y`.
@@ -243,16 +259,6 @@ const KNOWN_GAPS: Record<string, string[]> = {
     "attr-operators-space-before",
     "attr-operators-space-between",
     "attr-without-delimiters",
-  ],
-  // `#a${x}` and `.a${x}`: core builds the value with no authored span. Stock
-  // Marko compiles them. Rejected positioned at the sigil (build.ts); the id
-  // case used to be an `internal error`, the class case a wrong "class
-  // attribute" message.
-  "shorthand-placeholder": [
-    "shorthand-class-dynamic-literal-prefix",
-    "shorthand-class-dynamic-literal-suffix",
-    "shorthand-id-dynamic-literal-prefix",
-    "shorthand-id-dynamic-literal-suffix",
   ],
 };
 
@@ -386,26 +392,73 @@ for (const { label, tagRules, gapBy } of PRESETS) {
   });
 }
 
-describe("a shorthand with a placeholder", () => {
-  it.each([
-    ["<x#a${y}/>\n", /shorthand id with a placeholder/, 2],
-    ["<x.a${y}/>\n", /shorthand class with a placeholder/, 2],
-    ["<x.${y}-b/>\n", /shorthand class with a placeholder/, 2],
-    ["\n<x.a${y}.b/>\n", /shorthand class with a placeholder/, 2],
-  ])("%j is one positioned reject at the sigil", (source, message, column) => {
-    const { ir, diagnostics } = run(source);
-    expect(ir).toBeUndefined();
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toMatch(message);
-    expect(diagnostics[0]?.line).toBe(source.startsWith("\n") ? 2 : 1);
-    expect(diagnostics[0]?.column).toBe(column);
-  });
+describe("valid TypeScript in a tag head", () => {
+  // The variants of the `markoRefusesToo` cases that stock Marko compiles
+  // (probe `tsv.json`, 6.4.4): each lowers, default and `none` alike.
+  const VALID: [string, string][] = [
+    ["type arguments", "<foo<string> value=1/>\n"],
+    ["type arguments on a tag with a body", "<foo<A>>\n  hi\n</>\n"],
+    ["type arguments before a space", "<foo<A> >\n  hi\n</>\n"],
+    ["type arguments and an argument", "<foo<A>(bar)>\n  hi\n</>\n"],
+    ["type parameters before |params|", "<foo<A>|data: A|>\n  hi\n</>\n"],
+    ["type parameters, a space, |params|", "<foo<A> |data: A|>\n  hi\n</>\n"],
+    ["a space, type parameters, |params|", "<foo <A>|data: A|>\n  hi\n</>\n"],
+    [
+      "two type parameters before |params|",
+      "<foo<A, B>|data: A & B|>\n  hi\n</>\n",
+    ],
+    ["type parameters after an argument", "<foo()<A> |data: A|>\n  hi\n</>\n"],
+    [
+      "type arguments, then type parameters and |params|",
+      "<foo<string><A> |data: A|>\n  hi\n</>\n",
+    ],
+    [
+      "method type parameters",
+      "<foo onClick<A>(event: A) {\n  console.log(event)\n}/>\n",
+    ],
+    [
+      "method type parameters after a space",
+      "<foo onClick <A>(event: A) {\n  console.log(event)\n}/>\n",
+    ],
+    [
+      "method type parameters on the tag",
+      "<foo<A>(event: A){\n  console.log(event.type)\n}/>\n",
+    ],
+    [
+      "typed <for> params",
+      "<for|x: number, i: number| of=[1]>\n  ${x}\n</for>\n",
+    ],
+    [
+      "<for> params with a destructured default",
+      "<for|x, { d = 1 }| of=[{}]>\n  ${x}\n</for>\n",
+    ],
+  ];
 
-  it("keeps the merged-class message for a shorthand beside a class attribute", () => {
-    const { diagnostics } = run('<x.a class="b"/>\n');
-    expect(diagnostics).toHaveLength(1);
-    expect(diagnostics[0]?.message).toMatch(
-      /together with a `class` attribute/,
+  for (const [label, tagRules] of [
+    ["default (strict) tag rules", undefined],
+    ['`tagRules: "none"`', "none" as const],
+  ] as const) {
+    it.each(VALID)(`%s lowers, ${label}`, (_name, source) => {
+      expect(run(source, tagRules).diagnostics).toEqual([]);
+    });
+
+    // The IR entry point has no tag variable (a binding means nothing without
+    // evaluation), so `<foo/v|param|>` is read, params and all, and then
+    // refused for the variable alone: never as a syntax error.
+    it.each([
+      "<foo/v|param|>\n  Hello ${param}\n</foo>\n",
+      "<foo/v|param: string|>\n  Hello ${param}\n</foo>\n",
+      "<foo/x<A> |data: A|>\n  hi\n</>\n",
+    ])(
+      `a tag variable before |params| is refused for the variable, %j, ${label}`,
+      (source) => {
+        const errors = run(source, tagRules).diagnostics.filter(
+          (d) => d.severity === "error",
+        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0]?.code).toBe("MX_NOT_IN_DATA_FILE");
+        expect(errors[0]?.message).toMatch(/^tag variable `\/(v|x)`/);
+      },
     );
-  });
+  }
 });

@@ -1141,7 +1141,12 @@ Five facts worth knowing before editing it:
   `InputInterface`, `Hoisted`, `DocumentType` and a synthesized (`synthesized:
   true`) `Import` carry none. Slicing the source with a span yields the
   authored text; tests in `src/spans.test.ts` assert exactly that, including
-  under emoji (UTF-16) and CRLF.
+  under emoji (UTF-16) and CRLF. A shorthand `id`/`class` value with a
+  placeholder (`#a${x}`, `.a${x}.b`) carries the span of the authored word run
+  after the sigil while its `code` is the template literal (or array) core
+  built over it, so `code` is not the slice of its span (a static `.a.b` is
+  the same: value `"a b"`, span over `a.b`). Only a shorthand class beside an
+  authored `class` attribute stays spanless; `lowerSource` rejects that one.
 - **Lowering reads both ASTs until PR 6 (parser port PR 4, decision 158).**
   Node kinds are tested through `isTagNode`/`isTextNode`/`isCommentNode`/
   `isAttributeNode`/`isSpreadAttributeNode`/`isMxAttributeTag` (core.ts),

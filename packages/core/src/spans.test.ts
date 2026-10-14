@@ -550,13 +550,21 @@ describe("a whole attribute's span", () => {
 
   it.each([
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
-    ["a shorthand id with a placeholder", "<t#a${x}/>\n", "id"],
+    ["a shorthand id with a placeholder", "<t#a${x}/>\n", "id", "#a${x}"],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
-    ["a shorthand class with a placeholder", "<t.a${x}/>\n", "class"],
-    ["a shorthand class merged into `class`", '<t.a class="b"/>\n', "class"],
-  ])("is absent for %s, whose value was synthesized", (_, source, name) => {
+    ["a shorthand class with a placeholder", "<t.a${x}/>\n", "class", ".a${x}"],
+  ])(
+    "covers the token of %s, whose value is built over it",
+    (_, source, name, token) => {
+      const tag = delegatedTag(irOf(source, claimAll).body[0]);
+      expect(slice(source, attr(tag.attrs, name).span)).toBe(token);
+    },
+  );
+
+  it("is absent for a shorthand class merged into `class`, whose value was synthesized", () => {
+    const source = '<t.a class="b"/>\n';
     const tag = delegatedTag(irOf(source, claimAll).body[0]);
-    expect(attr(tag.attrs, name).span).toBeUndefined();
+    expect(attr(tag.attrs, "class").span).toBeUndefined();
   });
 
   it("is a UTF-16 range under emoji and CRLF", () => {
