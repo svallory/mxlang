@@ -824,7 +824,10 @@ describe("stdio server (e2e)", () => {
         text: "<p/>\n<money/>\n",
       },
     });
-    await until(() => latest.get(tagUri)?.length === 1);
+    await until(
+      () =>
+        latest.get(tagUri)?.length === 1 && latest.get(pageUri)?.length === 2,
+    );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
     expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
 
@@ -883,7 +886,10 @@ describe("stdio server (e2e)", () => {
         text: "<x/>\n<!-- BAD -->\n",
       },
     });
-    await until(() => latest.get(pageUri)?.length === 2);
+    await until(
+      () =>
+        latest.get(pageUri)?.length === 2 && latest.get(tagUri)?.length === 1,
+    );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
     expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
 
@@ -892,7 +898,10 @@ describe("stdio server (e2e)", () => {
       textDocument: { uri: tagUri, version: 2 },
       contentChanges: [{ text: "<x/>\n" }],
     });
-    await until(() => latest.get(pageUri)?.length === 0);
+    await until(
+      () =>
+        latest.get(pageUri)?.length === 0 && latest.get(tagUri)?.length === 0,
+    );
     expect(latest.get(tagUri)).toEqual([]);
     expect(latest.get(pageUri)).toEqual([]);
 
@@ -1312,7 +1321,11 @@ describe("stdio server (e2e)", () => {
         textDocument: { uri: uris.tag, version: 4 },
         contentChanges: [{ text: "<y/>\n" }],
       });
-      await until(() => latest.get(uris.tag)?.length === 0);
+      await until(
+        () =>
+          latest.get(uris.tag)?.length === 0 &&
+          latest.get(uris.b)?.length === 0,
+      );
       expect(latest.get(uris.tag)).toEqual([]);
       expect(latest.get(uris.b)).toEqual([]);
     }, 30000);
@@ -1514,7 +1527,10 @@ describe("stdio server (e2e)", () => {
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: configUri, type: 1 }],
       });
-      await until(() => latest.get(configUri)?.length === 1);
+      await until(
+        () =>
+          latest.get(uri)?.length === 1 && latest.get(configUri)?.length === 1,
+      );
       expect(latest.get(uri)).toHaveLength(1);
       expect(latest.get(configUri)?.[0]).toContain('"htmll"');
 
