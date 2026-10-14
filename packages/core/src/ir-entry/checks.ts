@@ -88,15 +88,19 @@ export interface CheckOptions {
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
 const DYNAMIC_TAG_MESSAGE = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
 
-/** The fixed structural-reject message (the 131 addendum's item 1). */
 /**
  * The dynamic-tag reject for a capitalized tag a file-local binding names
- * (`<Task>` with `import { Task }`): it names the tag and the two ways out.
+ * (`<Task>` with `import { Task }`): it names the tag and the way out. The
+ * dialect's flag is offered only when the file has a dialect to set it on.
  */
-function boundDynamicTagMessage(name: string): string {
-  return `\`<${name}>\` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`) or set \`bindingsCallTags: false\` in the dialect`;
+function boundDynamicTagMessage(name: string, dialectId?: string): string {
+  const base = `\`<${name}>\` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`)`;
+  return dialectId === undefined
+    ? base
+    : `${base} or set \`bindingsCallTags: false\` in the dialect`;
 }
 
+/** The fixed structural-reject message (the 131 addendum's item 1). */
 function structuralMessage(construct: string): string {
   return `the data tree is static; this file's consumer does not evaluate ${construct}`;
 }
@@ -553,6 +557,8 @@ let activeLineStarts: number[] = [0];
 let activeSourceLength = 0;
 /** The source itself, for the checks that need its text. */
 let activeSource = "";
+/** The id of the file's dialect, when it has one. */
+let activeDialectId: string | undefined;
 
 function positionOfOffset(offset: number): { line: number; column: number } {
   let low = 0;
@@ -633,7 +639,10 @@ function checkNode(node: IrNode): void {
         fail(
           NOT_IN_DATA_FILE_CODE,
           node.target.valueImportBinding
-            ? boundDynamicTagMessage(node.target.valueImportBinding)
+            ? boundDynamicTagMessage(
+                node.target.valueImportBinding,
+                activeDialectId,
+              )
             : DYNAMIC_TAG_MESSAGE,
           node.loc,
           dynamicTagEnd(node.target.expr),
@@ -1124,6 +1133,7 @@ export function checkIr(
 function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   activeLineStarts = lineStartsOf(source);
   activeSource = source;
+  activeDialectId = options.dialectId;
   activeSourceLength = source.length;
   const stmts = attempt(() => statements(ir)) ?? [];
   checkNodes(ir.body);

@@ -1844,7 +1844,7 @@ host's own disposition (step 1) claims the name:
 3. `@`-prefixed names → attribute-tag error
 4. **Built-in custom tags (`try`)** — wins unconditionally
 5. **A file-local binding**, **gated on PascalCase**: an `import`, a `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag param —
-   each in effect only within its own lexical scope
+   each in effect only within its own lexical scope. A dialect that sets `bindingsCallTags: false` (§13.9.3) turns this step off in its files: the name is then read as unbound, so the contract, the wildcard and the unknown-tag rules apply
 6. A registered custom tag
 7. A host claim (`isDelegatedTag`)
 8. `declarations.isComponent` — skipped for a lowercase name bound by an
@@ -1887,6 +1887,7 @@ path.
 | Message | When |
 |---|---|
 | `` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call `` | PascalCase, nothing matched, and the host supplies no `rejectUnknownTag` (the fallback wording). |
+| `` `<${name}>` is bound in this file, but <Dialect> files never call a binding as a tag (`bindingsCallTags: false`), and no `<name>` tag is registered: register one, or call the binding as `<${name}>` `` | PascalCase, bound in the file, in a dialect with `bindingsCallTags: false`, and nothing else resolved it. |
 | `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope` | Lowercase, the host's `isElement` rejected it, and the host supplies no `rejectUnknownTag`. |
 
 An unresolved **hyphenated** tag refuses to compile, matching Marko
@@ -2466,7 +2467,9 @@ sees them. For a tag `<x>` in a file of dialect D, highest first:
    is `MX_RESERVED_TAG` and is dropped; in `D.contracts` it fails the dialect at
    load.
 2. **A file-local PascalCase binding** (an import, a `<define>`, a `<const>`, a
-   tag parameter), as for any registered custom tag.
+   tag parameter), as for any registered custom tag, unless D sets
+   `bindingsCallTags: false`: then no binding wins and the name is read as
+   unbound.
 3. **D's reserved contracts**: the `contracts` entries whose name D's manifest
    lists in `reservedTags`. A tag file, an `mx.tags` entry, an `mx.contracts`
    entry or a `customTags` entry passed to `lowerSource` that defines the name is
@@ -2972,7 +2975,7 @@ Core checks authored children before lowering them, so a child's transform outpu
 
 **Wildcard children (MX addition, decisions 147 and 147 addendum 1).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The IR `lowerSource` returns (§13.7.2) is the same: a consumer that dispatches on the contract reads `name`, and the authored spelling is in `alias.authored`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
 
-*Check order.* For each authored child: an explicit `children` entry first; then the `"*"` entries in order, the first whose pattern matches the whole name; then the closed record's own error. A name that matches no entry is the E2 error with the patterns and the explicit names listed. A tag declared in `customTags` that is absent from the parent's explicit `children` is rejected even when it matches a pattern: a wildcard never applies to a declared name. A file-local binding of a PascalCase name (import, `<define>`, `<const>`, parameter) beats a match. Unnamed tags (`<.x>`) and dynamic tags never match.
+*Check order.* For each authored child: an explicit `children` entry first; then the `"*"` entries in order, the first whose pattern matches the whole name; then the closed record's own error. A name that matches no entry is the E2 error with the patterns and the explicit names listed. A tag declared in `customTags` that is absent from the parent's explicit `children` is rejected even when it matches a pattern: a wildcard never applies to a declared name. A file-local binding of a PascalCase name (import, `<define>`, `<const>`, parameter) beats a match, unless the file's dialect sets `bindingsCallTags: false`: then the wildcard reads the name as unbound and claims it. Unnamed tags (`<.x>`) and dynamic tags never match.
 
 *"Unknown".* A wildcard claims a name only when nothing else resolves it, and this is target-neutral: no core structural name, no core-owned or registered custom tag, no entry in the parent's explicit `children`, and no built-in of the target. A name is a built-in on every target when it is an entry of core's own taglib (`let`, `const`, `effect`, `id`, `lifecycle`, `log`, `debug`, `await`, `script`, `style`, `html-comment`, `html-script`, `html-style`, `client`, `server`, `class`, ...), when the host declares a disposition for it, when the target's taglib lookup holds it as a non-element, or when the target's declarations list it in `builtinTags` (names the target provides without a taglib entry; the IR entry point's anonymous `object`; the same list the `defaultTag` check reads, so a built-in means one thing in core). The IR entry point is no exception: its non-wildcard handling of `<let>` is unchanged, but a wildcard never claims `let` or `object`; a vocabulary that wants a child named `let` lists it explicitly in `children`. A native element name (`title`, `div`) is not a built-in: inside a contract parent the contract decides, and `children["*"]` matches a lowercase child on the JSX hosts, Solid and Angular exactly as on html and under `lowerSource`, so one `.mx` file validates the same way everywhere. Outside a contract parent every target keeps its behaviour (decision 151 ruling 7): an unknown tag that matches no wildcard entry is an error on html, astro-html and (under `unknownTags: "reject"`) `lowerSource`, and a native element on the JSX hosts, Solid and Angular. `unknownTags: "reject"` counts a wildcard-matched child as known.
 
@@ -4692,6 +4695,7 @@ interface Dialect {
   explainUnknownTag?(tag: UnknownTag): UnknownTagExplanation | undefined;
   tagFile?(file: TagFileInput, ctx: TagFileContext): TagFileResult;  // §9.2
   contracts?: ContractMap;                        // @unstable; the dialect's own tags
+  bindingsCallTags?: boolean;                     // @unstable; default true
 }
 
 // @unstable, exported from @mxlang/core
@@ -4780,6 +4784,8 @@ and `parseFragment` parse a dialect's file (the `dialect` option's, else the one
 the file routes to) under the dialect's preset in place of the host's tag rules,
 with no native elements under `none`; `lowerSource` does the same when its call
 states no `tagRules` option, and a `tagRules` option it states wins.
+
+**`bindingsCallTags`** (`@unstable`, default `true`) says whether a file-local binding of a PascalCase name (an `import`, `<define>`, `<const>`, tag parameter) makes that tag a call of the binding. With `false`, no binding does: the contract, a parent's wildcard and the unknown-tag rules read the name as unbound, and the import stays in the file's imports. A data dialect whose files import a value named like a tag sets it; otherwise the tag is a dynamic tag, which a data file refuses. A value other than a boolean fails the dialect at load.
 
 **`structural`, `imports` and `unknownTags`** are the dialect's defaults for the
 `lowerSource` options of the same name (§13.7.1), with the same values; each is

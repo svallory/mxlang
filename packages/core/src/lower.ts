@@ -5866,7 +5866,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     raise(
       UNBOUND_COMPONENT_CODE,
       capitalBinding(ctx, name)
-        ? `\`<${name}>\` is bound in this file, but ${ctx.dialect?.name ?? "this dialect"} never reads a binding as a tag, and no tag named \`${name}\` is defined: define that tag, or rename the binding`
+        ? `\`<${name}>\` is bound in this file, but ${ctx.dialect?.name} files never call a binding as a tag (\`bindingsCallTags: false\`), and no \`${name}\` tag is registered: register one, or call the binding as \`<\${${name}}>\``
         : `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
     );

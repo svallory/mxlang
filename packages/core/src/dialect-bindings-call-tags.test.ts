@@ -200,6 +200,17 @@ describe("the refusal names the tag", () => {
     ]);
   });
 
+  it("without a dialect the text offers the rename only", () => {
+    const result = lowerSource(
+      'import { Task } from "./t";\n<Task k="a"/>\n',
+      "/v/p.mx",
+      {},
+    );
+    expect(result.diagnostics.map((d) => d.message)).toEqual([
+      "`<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`)",
+    ]);
+  });
+
   it("a `<const>` binding names the tag as well", () => {
     const result = brief(
       '<const/Task=1/>\n<Task k="a"/>\n',
@@ -291,9 +302,7 @@ describe("a host that routes imports as components", () => {
 
   it("with the flag the tag is unbound: a capitalized tag no one defines", () => {
     expect(bodyKinds(lexi({ bindingsCallTags: false }))).toEqual([
-      expect.stringContaining(
-        "`<Task>` is bound in this file, but Lexi never reads a binding as a tag",
-      ),
+      "throws: `<Task>` is bound in this file, but Lexi files never call a binding as a tag (`bindingsCallTags: false`), and no `Task` tag is registered: register one, or call the binding as `<${Task}>`",
     ]);
   });
 });
