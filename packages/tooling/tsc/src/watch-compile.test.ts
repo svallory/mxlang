@@ -122,6 +122,23 @@ describe("currentCompileDiagnostics", () => {
     expect(generations).toHaveLength(1);
   });
 
+  it("keeps the newest generation while it has compiled nothing, and reads its later compile", () => {
+    const [a] = files as [string];
+    const older = generation({ [a]: [diagnostic(a, "a broke")] });
+    // The live plugin set after a rebuild that only removed a root file.
+    const fake = fakePlugin();
+    const newest = trackGeneration([fake.plugin]);
+    const generations: PluginGeneration[] = [older, newest];
+    expect(messages(currentCompileDiagnostics(generations))).toEqual([
+      "a broke",
+    ]);
+    expect(generations).toHaveLength(2);
+
+    fake.stored.set(a, []);
+    fake.plugin.createVirtualCode?.(a, "mx", {} as never, {} as never);
+    expect(currentCompileDiagnostics(generations)).toEqual([]);
+  });
+
   it("reports an entry a compile stored under another file (a template's)", () => {
     const [a, b] = files as [string, string];
     const fake = fakePlugin();

@@ -108,8 +108,7 @@ referencing project does. Compile diagnostics from the extra programs are
 de-duplicated against the main run's. `--clean`
 checks nothing; `--dry` builds nothing and prints, per project, that a build would check its
 `.ng.mx` files; `-b --help` and a `-b` command line tsc
-rejects run nothing; `--watch` runs the pass once, after the
-initial build, and does not re-run it on later changes.
+rejects run nothing; `--watch` re-runs the pass after every rebuild.
 The cost on every `-b` run, up to date or not, is one program creation plus one
 Angular checker per project; caching it is not done. See
 [Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
@@ -162,6 +161,10 @@ printed. Each is printed once per run, however many `.mx`, `.solid.mx`,
 
 ## Known limitations
 
+- **Watch: a file dropped from the program keeps its last MX error.** A file
+  that leaves the program but stays on disk (for example when it no longer
+  matches `include`) keeps printing its last MX error until the watcher is
+  restarted.
 - **Watch, Linux: a module installed after `-w -p` started is not noticed.** If
   an import fails with `TS2307` because the package is not installed yet, then you
   install it, `mx-tsc -w -p` keeps the error until you restart it. This is

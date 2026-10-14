@@ -963,16 +963,17 @@ function watchForCountLine(): { seen(): boolean; stop(): void } {
   return {
     seen: () => seen,
     stop: () => {
-      // Only if nothing wrapped it since (a nested run restores in order).
+      // Restored unconditionally: runs nest and stop in order.
       stdout.write = original;
     },
   };
 }
 
 /**
- * The count line of a one-shot run that printed a count of its own. tsc's
- * "Found N errors" line is written before the MX errors exist and cannot
- * include them, so a run with MX errors ends with their own count, saying so;
+ * The count line of a one-shot run that printed a count of its own. tsc
+ * counts only its own diagnostics, and under `--pretty` its count is a
+ * per-file table `mx-tsc` does not rewrite, so a run with MX errors ends with
+ * their own count, saying so;
  * without it an agent reading "Found 0 errors" or "Found 1 error" above the MX
  * errors would take the project for cleaner than it is. A run without tsc's
  * count line (no `--pretty`) has nothing to be misread against and prints none.

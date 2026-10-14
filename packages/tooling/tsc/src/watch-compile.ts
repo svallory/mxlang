@@ -88,7 +88,12 @@ export function currentCompileDiagnostics(
     for (const [fileName, diagnostics] of stored) {
       settle(fileName, diagnostics);
     }
-    if (!contributed) generations.splice(at, 1);
+    // A generation that settled nothing is dropped, except the newest: it is
+    // the live plugin set, and its next compile (a rebuild that only removed a
+    // root file compiles nothing) must still be read.
+    if (!contributed && at !== generations.length - 1) {
+      generations.splice(at, 1);
+    }
   }
   return current
     .filter((diagnostic) => existsSync(diagnostic.fileName))

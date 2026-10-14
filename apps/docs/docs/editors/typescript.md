@@ -186,9 +186,9 @@ not a TypeScript diagnostic, and tsc counts only its own.
   error. An MX error you fix is gone from the next rebuild, and one in a file
   the rebuild did not touch is printed again.
 - **One run.** The exit code is 1 when there is an MX error. tsc prints its
-  `Found N errors` line only with `--pretty`, and it cannot include errors that
-  do not exist yet when it prints, so with that line present the MX errors
-  follow it and end with a count of their own:
+  `Found N errors` line only with `--pretty`, counts only its own diagnostics,
+  and does not rewrite that count for MX errors, so with that line present the
+  MX errors follow it and end with a count of their own:
   `mx-tsc: Found 1 MX error (tsc's own error count does not include MX errors).`
   Without `--pretty` tsc prints no count, and neither does `mx-tsc`.
 

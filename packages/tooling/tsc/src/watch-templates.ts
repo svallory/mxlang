@@ -217,10 +217,13 @@ export function installWatchTemplatePass(
     // not decided here — see `rebuildActivity`, which decides in the next tick.
     if (!summary || text === undefined || busy) return passThrough();
     busy = true;
+    let compileErrors = 0;
     try {
+      // First: the MX errors are printed even if the Angular pass throws.
+      compileErrors = compileErrorsOf(options);
       const errors = options.report(
         checkWatchTemplates(options),
-        compileErrorsOf(options),
+        compileErrors,
       );
       pass.ran = true;
       rebuilding = false;
@@ -235,7 +238,13 @@ export function installWatchTemplatePass(
       process.stderr.write(
         `error mxlang: the Angular template pass failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
       );
-      return passThrough();
+      const recounted =
+        compileErrors === 0
+          ? undefined
+          : recountWatchSummary(text, compileErrors);
+      return recounted === undefined
+        ? passThrough()
+        : write(recounted, ...writeArgs);
     } finally {
       busy = false;
     }

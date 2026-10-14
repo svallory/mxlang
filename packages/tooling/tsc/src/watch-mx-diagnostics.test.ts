@@ -295,6 +295,44 @@ it(
 );
 
 it(
+  "mx-tsc -w still reports MX errors after a rebuild that only removed a root file",
+  async () => {
+    const dir = htmlProject();
+    let watcher: Watcher | undefined;
+    try {
+      const page = join(dir, "src", "page.mx");
+      const removed = join(dir, "src", "b.ts");
+      writeFileSync(page, CLEAN);
+      writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
+      writeFileSync(removed, "export const b = 2;\n");
+      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+      expect(await watcher.untilSummary()).toContain("Found 0 errors.");
+
+      // The rebuild compiles nothing: only the root set shrinks. tsc may write
+      // a TS6053 summary first, then the settled one.
+      rmSync(removed);
+      let settled = await watcher.untilSummary();
+      if (!settled.includes("Found 0 errors.")) {
+        settled = await watcher.untilSummary();
+      }
+      expect(settled).toContain("Found 0 errors. Watching for file changes.");
+
+      writeFileSync(page, EFFECT);
+      expectEffectOnly(await watcher.untilSummary(page), "src/page.mx");
+
+      writeFileSync(page, CLEAN);
+      const fixed = await watcher.untilSummary(page);
+      expect(errorLines(fixed)).toEqual([]);
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    } finally {
+      await watcher?.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  CASE_MS,
+);
+
+it(
   "mx-tsc -w reports an MX error introduced into a .ng.mx file by a rebuild",
   async () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-mx-ng-"));
@@ -354,8 +392,8 @@ it(
         `mx-tsc: Found ${n} MX ${n === 1 ? "error" : "errors"} (tsc's own error count does not include MX errors).\n`;
       const effect = `${EFFECT_LINE("src/page.mx")}\n${EFFECT_FIX}\n`;
 
-      // tsc's own "Found 1 error" is written before the MX errors exist and
-      // cannot include them: the MX count follows them, and says so.
+      // tsc counts only its own diagnostics and its --pretty count is a
+      // per-file table mx-tsc does not rewrite: the MX count follows, and says so.
       writeFileSync(page, EFFECT);
       writeFileSync(other, "export const n: number = 'x';\n");
       const mixed = run("true");
