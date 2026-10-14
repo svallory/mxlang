@@ -80,6 +80,26 @@ describe("mx-tsc", () => {
   );
 
   it(
+    "reports a type error inside a static block that holds an import and an export, at its source position",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "block-import-export-failing"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      // Line 4, column 16 is `bogus` inside the block: the block's statements
+      // are the module's, so the import beside it is no TS1232 and the
+      // position is the author's own.
+      expect(result.output).toContain("BlockError.mx(4,16): error TS2322");
+      expect(result.output).not.toContain("TS1232");
+      expect(result.output.match(/error TS/g)).toHaveLength(1);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
     "reports a wrong prop passed to a component at the attribute, and a missing required prop at the tag name",
     () => {
       const result = run(mxTsc, [

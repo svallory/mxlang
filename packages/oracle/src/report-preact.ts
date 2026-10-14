@@ -38,7 +38,7 @@ import { renderPreact } from "./preact-render";
  * gate must assert it did work, not merely that nothing failed.
  */
 
-const MIN_FIXTURES = 43;
+const MIN_FIXTURES = 45; // was 43; +2 for static-block-import and static-block-export
 
 /**
  * Fixtures this host cannot render, each naming the construct.

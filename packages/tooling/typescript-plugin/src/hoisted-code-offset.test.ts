@@ -41,6 +41,13 @@ describe.each(HOSTS)("static statement offsets on %s", (dir) => {
     ["static\ta\n<div/>", "a", 7],
     ["static { a }\n<div/>", "a", 9],
     ["static { let a = 1 }\n<div/>", "let a = 1", 9],
+    ['static { import x from "./x" }\n<div/>', 'import x from "./x"', 9],
+    ["static { export const z = 1 }\n<div/>", "export const z = 1", 9],
+    [
+      'static {\n  import x from "./x";\n  export const y = x;\n}\n<div/>',
+      'import x from "./x";\n  export const y = x;',
+      11,
+    ],
     [
       "static {\n  let a = 1;\n  let t = 2;\n}\n<div/>",
       "let a = 1;\n  let t = 2;",

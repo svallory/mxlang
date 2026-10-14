@@ -1,0 +1,6 @@
+export interface Input { title: string }
+static {
+  import { n } from "./lib.ts";
+  export const bogus: number = "not a number";
+}
+<h1>${input.title}</h1>

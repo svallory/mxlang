@@ -26,7 +26,7 @@ import { renderTranslator } from "./translator-render";
  * processed — a gate must assert it did work, not merely that nothing failed.
  */
 
-const MIN_FIXTURES = 42; // was 41; +1 for spread-between-props (round-3 code review, source-order prop/spread precedence)
+const MIN_FIXTURES = 44; // was 42; +2 for static-block-import and static-block-export (import/export inside a static block)
 
 interface FixtureMeta {
   /**
