@@ -27,7 +27,11 @@ const EXPORT_EQUALS =
   "`export = <value>;` is only supported when compiling modules to CommonJS. Use a named export instead (`export const x = …`, or `export { x }`).";
 
 const importRequire = (name: string, source: string, type = "") =>
-  `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`import ${type}${name} from "${source}"\``;
+  `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`import ${type}${name} from "${source}"\`.`;
+
+/** The `export import x = require(...)` form also re-exports the binding. */
+const exportImportRequire = (name: string, source: string) =>
+  `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`export { default as ${name} } from "${source}"\`.`;
 
 const KEYWORDS = ["static", "server", "client"] as const;
 
@@ -62,7 +66,7 @@ const REFUSED: [string, (k: string) => [string, string, string]][] = [
     (k) => [
       `${k} export import T = require("x");\n<div/>`,
       'export import T = require("x");',
-      importRequire("T", "x"),
+      exportImportRequire("T", "x"),
     ],
   ],
   [
@@ -134,13 +138,90 @@ describe("a CommonJS form in a static, server or client statement is refused", (
   }
 });
 
+/**
+ * A CommonJS form anywhere in the statement is refused, except directly in a
+ * namespace or `declare module` body (which the strip leaves alone).
+ * [statement, the refused form's text, message]
+ */
+const NESTED: [string, string, string][] = [
+  [
+    'static if (x) { import T = require("x"); }',
+    'import T = require("x");',
+    importRequire("T", "x"),
+  ],
+  [
+    'static function f() { import T = require("x"); }',
+    'import T = require("x");',
+    importRequire("T", "x"),
+  ],
+  ["static { { export = foo; } }", "export = foo;", EXPORT_EQUALS],
+  ["static class C { m() { export = 1; } }", "export = 1;", EXPORT_EQUALS],
+  ["static try { export = 1 } catch {}", "export = 1", EXPORT_EQUALS],
+  [
+    'client const f = () => { import T = require("x"); };',
+    'import T = require("x");',
+    importRequire("T", "x"),
+  ],
+  [
+    'export function f() { import T = require("x"); }',
+    'import T = require("x");',
+    importRequire("T", "x"),
+  ],
+  [
+    "static namespace N { if (a) { export = foo; } }",
+    "export = foo;",
+    EXPORT_EQUALS,
+  ],
+  [
+    'static namespace N { function g() { import T = require("x"); } }',
+    'import T = require("x");',
+    importRequire("T", "x"),
+  ],
+];
+
+describe("a CommonJS form nested in a statement is refused at the form", () => {
+  it.each(NESTED)("%s", (statement, text, message) => {
+    const source = `${statement}\n<div/>`;
+    const at = source.indexOf(text);
+    const { ir, diagnostics } = lower(source);
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    const [line, column] = positionOf(source, at);
+    const [endLine, endColumn] = positionOf(source, at + text.length);
+    expect(diagnostics[0]).toMatchObject({
+      severity: "error",
+      code: "MX_INVALID_STATEMENT",
+      message,
+      line,
+      column,
+      end: { line: endLine, column: endColumn },
+    });
+  });
+});
+
+describe("a CommonJS form directly in a namespace or ambient module body compiles", () => {
+  it.each([
+    'static namespace N { import T = require("x"); }',
+    "static namespace N { export = foo; }",
+    'static namespace N { export import T = require("x"); }',
+    "static namespace N { namespace M { export = foo; } }",
+    'static declare module "x" { export = foo; }',
+    'static declare module "x" { import T = require("y"); }',
+    "static declare namespace N { namespace M { export = foo; } }",
+  ])("%s", (statement) => {
+    const { ir, diagnostics } = lower(`${statement}\n<div/>`);
+    expect(diagnostics).toEqual([]);
+    expect(ir).toBeDefined();
+  });
+});
+
 describe("a top-level `export` statement holding a CommonJS form is refused", () => {
   it.each([
     ["export =", "export = foo;", EXPORT_EQUALS],
     [
       "export import = require",
       'export import T = require("x");',
-      importRequire("T", "x"),
+      exportImportRequire("T", "x"),
     ],
   ])("%s", (_name, text, message) => {
     const source = `${text}\n<div/>`;

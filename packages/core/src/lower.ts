@@ -210,6 +210,7 @@ import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
 import {
   commonJsFormOf,
   endOfInputError,
+  findCommonJsForm,
   isTypeofImport,
   parsedImportDeclarations,
   pendingFrontEndError,
@@ -4052,6 +4053,20 @@ function rejectInvalidStatement(
     }
     return undefined;
   };
+  const refuseCommonJs = (): void => {
+    if (!BLOCK_STATEMENT_KEYWORDS.has(keyword) && keyword !== "export") return;
+    const statement = findCommonJsForm(parsed?.program?.body);
+    const form = commonJsFormOf(statement);
+    if (!statement || !form || !statement.loc) return;
+    const failure = codedError(
+      INVALID_STATEMENT_CODE,
+      commonJsStatementMessage(form, statement),
+      place(statement.loc.start).line,
+      place(statement.loc.start).column,
+    );
+    failure.end = place(statement.loc.end);
+    throw failure;
+  };
   let parseFailure = attempt(options);
   // An `import` or `export` the text places below the module is Babel's first
   // error whatever else is wrong, and the block read above only unwraps a
@@ -4066,6 +4081,11 @@ function rejectInvalidStatement(
       options = relaxed;
     }
   }
+  // A CommonJS form below the module's own level is stock's error ahead of
+  // the placement one: the strip refuses it, whatever `import` or `export`
+  // placement says. (Read with placement allowed, the text parses.)
+  if (parseFailure && isImportExportPlacement(parseFailure) && parsed)
+    refuseCommonJs();
   if (parseFailure) {
     const error = parseFailure;
     // A decorator is not read in a statement. The failure is Babel's
@@ -4120,20 +4140,7 @@ function rejectInvalidStatement(
     failure.end = { line: at.line, column: at.column };
     throw failure;
   }
-  if (BLOCK_STATEMENT_KEYWORDS.has(keyword) || keyword === "export") {
-    for (const statement of parsed?.program?.body ?? []) {
-      const form = commonJsFormOf(statement);
-      if (!form || !statement.loc) continue;
-      const failure = codedError(
-        INVALID_STATEMENT_CODE,
-        commonJsStatementMessage(form, statement),
-        place(statement.loc.start).line,
-        place(statement.loc.start).column,
-      );
-      failure.end = place(statement.loc.end);
-      throw failure;
-    }
-  }
+  refuseCommonJs();
   if (BLOCK_STATEMENT_KEYWORDS.has(keyword)) {
     const second = secondDefaultExportIn(parsed);
     if (second?.loc) {
@@ -4164,7 +4171,11 @@ function commonJsStatementMessage(
   const name = statement.id?.name ?? "x";
   const source = statement.moduleReference?.expression?.value ?? "...";
   const type = statement.importKind === "type" ? "type " : "";
-  return `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`import ${type}${name} from "${source}"\``;
+  // `export import x = require(...)` also re-exports the binding.
+  const fix = statement.isExport
+    ? `export ${type}{ default as ${name} } from "${source}"`
+    : `import ${type}${name} from "${source}"`;
+  return `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`${fix}\`.`;
 }
 
 /** The statements whose text is module code the template module takes in as its own. */

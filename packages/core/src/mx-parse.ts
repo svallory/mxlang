@@ -978,21 +978,51 @@ export function commonJsFormOf(
   return undefined;
 }
 
+/** Babel node fields that hold no child statement. */
+const NON_CHILD_FIELDS = new Set([
+  "loc",
+  "extra",
+  "leadingComments",
+  "trailingComments",
+  "innerComments",
+]);
+
+/**
+ * The first CommonJS form (`commonJsFormOf`) anywhere in `root`, a node or a
+ * list of them, in source order, except one directly in a namespace or
+ * `declare module` body (`TSModuleBlock`): the strip leaves those alone, and
+ * stock Marko compiles them. Deeper in a namespace (inside an `if` or a
+ * function) the strip refuses the form like any other.
+ */
+export function findCommonJsForm(root: unknown): Node | undefined {
+  let first: Node | undefined;
+  const visit = (value: unknown, parentType: string | undefined): void => {
+    if (value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, parentType);
+      return;
+    }
+    const node = value as Node;
+    if (typeof node.type !== "string") return;
+    if (commonJsFormOf(node) && parentType !== "TSModuleBlock") {
+      if (!first || (node.start ?? 0) < (first.start ?? 0)) first = node;
+    }
+    for (const [key, field] of Object.entries(node)) {
+      if (!NON_CHILD_FIELDS.has(key)) visit(field, node.type);
+    }
+  };
+  visit(root, undefined);
+  return first;
+}
+
 /**
  * Whether a `static`, `server`, `client` or `export` payload holds a CommonJS
- * form, as one of its statements or inside its one block. Its strip is skipped so
- * lowering refuses the statement (`rejectInvalidStatement`) at its position
- * with a coded error; the strip would throw an uncoded one from the
- * generated code.
+ * form anywhere in it. Its strip is skipped so lowering refuses the statement
+ * (`rejectInvalidStatement`) at its position with a coded error; the strip
+ * would throw an uncoded one from the generated code.
  */
 function holdsCommonJsStatement(statement: Node): boolean {
-  const body = statement.code?.node;
-  if (!Array.isArray(body)) return false;
-  return body.some((node: Node) =>
-    node?.type === "BlockStatement"
-      ? (node.body ?? []).some((inner: Node) => commonJsFormOf(inner))
-      : commonJsFormOf(node),
-  );
+  return findCommonJsForm(statement.code?.node) !== undefined;
 }
 
 /** Flow's `import typeof T from "m"` / `import { typeof T } from "m"`. */

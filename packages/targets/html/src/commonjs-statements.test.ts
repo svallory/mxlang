@@ -14,9 +14,9 @@ import { compile } from "./index.ts";
 const EXPORT_EQUALS =
   "`export = <value>;` is only supported when compiling modules to CommonJS. Use a named export instead (`export const x = …`, or `export { x }`).";
 const IMPORT_REQUIRE =
-  '`import T = require(...);` is only supported when compiling modules to CommonJS. Write `import T from "x"`';
+  '`import T = require(...);` is only supported when compiling modules to CommonJS. Write `import T from "x"`.';
 const IMPORT_TYPE_REQUIRE =
-  '`import T = require(...);` is only supported when compiling modules to CommonJS. Write `import type T from "x"`';
+  '`import T = require(...);` is only supported when compiling modules to CommonJS. Write `import type T from "x"`.';
 
 const TEMPLATE = "\n<div/>\n";
 
@@ -105,6 +105,22 @@ describe("html: a CommonJS form in a module statement is refused with a position
       2,
       11,
     ],
+    [
+      "a function body",
+      'static function f() { import T = require("x"); }',
+      IMPORT_REQUIRE,
+      1,
+      22,
+      24,
+    ],
+    [
+      "a nested block",
+      "static { { export = foo; } }",
+      EXPORT_EQUALS,
+      1,
+      11,
+      13,
+    ],
     ["a top-level export =", "export = foo;", EXPORT_EQUALS, 1, 0, 13],
   ])("%s", (_name, statement, message, line, column, length) => {
     const error = thrownBy(statement);
@@ -131,6 +147,8 @@ describe("html: a CommonJS form in a module statement is refused with a position
     "static import A = B.C;",
     "static export import A = B.C;",
     "static { import A = B.C; }",
+    'static namespace N { import T = require("x"); }',
+    'static declare module "x" { export = foo; }',
     "static export const a = 1;",
   ])("compiles %s", (statement) => {
     expect(() => compile(`${statement}${TEMPLATE}`, "/f/t.mx")).not.toThrow();
