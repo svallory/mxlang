@@ -512,9 +512,9 @@ through `..`), to the module whose default export is the dialect:
 optional hooks (`lowerTrigger`, `lowerBlockTag`, `lowerFilter`, `afterLower`,
 the contract hooks below), a `tagRules` preset (`html` when it states none; `lowerSource` parses under
 it when its call states no `tagRules`), the defaults `structural`, `imports` and
-`unknownTags` (and `bindingsCallTags`, which turns off bindings calling tags) for the `lowerSource` options of the same name (`@unstable`; a call
+`unknownTags` for the `lowerSource` options of the same name (`@unstable`; a call
 that states one wins, and a `.mx` file has no dialect to read them from)
-and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
+`bindingsCallTags` (`false` stops a file-local binding from making a tag of its name a call) and `nodeTypes`. Core stamps the manifest's `id` and `name` on it; the module
 may leave them out (`DialectModule`).
 
 `mx.dialect` is an identity block, never project configuration: the project's

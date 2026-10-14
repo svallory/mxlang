@@ -1887,7 +1887,7 @@ path.
 | Message | When |
 |---|---|
 | `` `<${name}>` has no matching import or `<define>` in scope; a capitalized tag is always a component call `` | PascalCase, nothing matched, and the host supplies no `rejectUnknownTag` (the fallback wording). |
-| `` `<${name}>` is bound in this file, but <Dialect> files never call a binding as a tag (`bindingsCallTags: false`), and no `<name>` tag is registered: register one, or call the binding as `<${name}>` `` | PascalCase, bound in the file, in a dialect with `bindingsCallTags: false`, and nothing else resolved it. |
+| `` `<${name}>` is bound in this file, but <Dialect> files never call a binding as a tag (`bindingsCallTags: false`), and no `${name}` tag is registered: register one, or call the binding as the dynamic tag `<${binding}>` `` | PascalCase, bound in the file, in a dialect with `bindingsCallTags: false`, and nothing else resolved it. |
 | `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope` | Lowercase, the host's `isElement` rejected it, and the host supplies no `rejectUnknownTag`. |
 
 An unresolved **hyphenated** tag refuses to compile, matching Marko
@@ -4001,7 +4001,7 @@ An unknown preset name is an error diagnostic, not a throw.
 | `<return>` | ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` |
 | Tag variable `/v` | ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` |
 | Dynamic tag `<${x}>` | ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` |
-| Capitalized tag bound in the file (`import { Task }`, `<const/Task>`) | ``` `<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect ``` |
+| Capitalized tag bound in the file (`import { Task }`, `<const/Task>`) | ``` `<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect (the last clause only in a dialect's file) ``` |
 | Call of a tag with a template (`<Foo/>` with `import Foo`, or a `customTags` entry with a template) | ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` |
 | `<!doctype>` | ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` |
 | `<![CDATA[…]]>`, `<?xml …?>` | from core on every target (decision 139) |
