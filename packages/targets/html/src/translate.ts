@@ -45,6 +45,7 @@ import {
   type Policy,
   rejectUnsupportedFields,
   replaceMapped,
+  type SourceSpan,
   sliceLoc,
   unresolvedCustomTagMessage,
   unwrapStatementBlock,
@@ -152,6 +153,43 @@ function enumAsVar(node: Node): Node {
     type: "VariableDeclaration",
     declarations: [{ type: "VariableDeclarator", id: node.id }],
   };
+}
+
+/** The offset of a 1-based line, 0-based column position in `ctx.source`. */
+function offsetOfPosition(
+  ctx: Ctx,
+  position: { line: number; column: number },
+): number {
+  let offset = 0;
+  for (let line = 0; line < position.line - 1; line++) {
+    offset += (ctx.lines[line] ?? "").length + 1;
+  }
+  return offset + position.column;
+}
+
+/**
+ * Where a `server`/`client` statement's `code` stands in the source, or
+ * `undefined` when it cannot be found. `code` is the statement's text after
+ * its keyword with a lone block's braces removed, otherwise verbatim, so it is
+ * a slice of the statement and the search starts past the keyword (`server a`
+ * must not find the `a` inside `server`).
+ */
+function statementCodeSpan(
+  ctx: Ctx,
+  node: Node,
+  text: string,
+  keyword: string,
+  code: string,
+): SourceSpan | undefined {
+  if (code === "") return undefined;
+  const keywordEnd = text.search(/\S/) + keyword.length;
+  const at = text.indexOf(code, keywordEnd);
+  if (at < 0) return undefined;
+  const sourceStart = offsetOfPosition(ctx, node.loc.start) + at;
+  if (ctx.source.slice(sourceStart, sourceStart + code.length) !== code) {
+    return undefined;
+  }
+  return { sourceStart, sourceEnd: sourceStart + code.length };
 }
 
 /**
@@ -480,8 +518,20 @@ export type DelegatedTagData =
    * as `static` does, or the `var` a `client` block leaves behind (names only).
    * `start` is the statement's offset in the source, so the module keeps the
    * authored order of its statements.
+   *
+   * `span` is where `code` stands in the source: `code` is a verbatim slice of
+   * it, so the emitter maps the hoisted text onto it. `typeCheck`, set on a
+   * `client` statement only, is what the tooling projection (`typeCheck`,
+   * never the module that runs) emits in place of `code`: the statement's own
+   * code, so its declarations have real types and its errors have a position.
    */
-  | { kind: "statement"; code: string; start: number | undefined }
+  | {
+      kind: "statement";
+      code: string;
+      start: number | undefined;
+      span: SourceSpan | undefined;
+      typeCheck?: { code: string; span: SourceSpan | undefined };
+    }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
   | { kind: "raw-element"; tag: string }
@@ -563,15 +613,14 @@ function resolveDelegatedTag(
   }
 
   if (name === "server") {
+    // `server { … }` hoists its statements, braces gone, like `static`.
+    const text = sliceLoc(ctx, node.loc);
+    const code = unwrapStatementBlock(text.trim().replace(/^server\s+/, ""));
     return {
       kind: "statement",
-      // `server { … }` hoists its statements, braces gone, like `static`.
-      code: unwrapStatementBlock(
-        sliceLoc(ctx, node.loc)
-          .trim()
-          .replace(/^server\s+/, ""),
-      ),
+      code,
       start: node.start,
+      span: statementCodeSpan(ctx, node, text, "server", code),
     };
   }
 
@@ -580,18 +629,20 @@ function resolveDelegatedTag(
     // names it declares there (`var q;`, no initializer), so a template that
     // reads one sees `undefined` instead of a ReferenceError. Probed against
     // stock Marko 6.4.4: only the block's own top-level declarations count.
-    const names = clientDeclaredNames(
-      unwrapStatementBlock(
-        sliceLoc(ctx, node.loc)
-          .trim()
-          .replace(/^client\s*/, ""),
-      ),
-      node,
-    );
+    const text = sliceLoc(ctx, node.loc);
+    const own = unwrapStatementBlock(text.trim().replace(/^client\s*/, ""));
+    const names = clientDeclaredNames(own, node);
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
       start: node.start,
+      span: undefined,
+      // The projection keeps the statement itself: a declaration with its real
+      // type, an error at the author's token.
+      typeCheck: {
+        code: own,
+        span: statementCodeSpan(ctx, node, text, "client", own),
+      },
     };
   }
 

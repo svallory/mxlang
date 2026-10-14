@@ -93,7 +93,14 @@ or `client export` declaration binds) as `var name;` (no initializer, one `var`
 per statement, in source order with the `static` blocks), as stock Marko 6.4.4's
 server module does, so a template read of one renders `undefined` instead of
 throwing (`clientDeclaredNames` in `translate.ts` follows Babel's
-`getBindingIdentifiers` order, outer scope only). A
+`getBindingIdentifiers` order, outer scope only). Under `typeCheck` (the
+tooling projection, never the module that runs) a `client` statement emits its
+own code instead of the `var`, so its declarations have their declared types
+and an error in it has a position; the runtime module and its bytes are
+unchanged. Both statements carry the span of their code
+(`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
+recorded mapping, so `mx-tsc` and the editor report an error inside one at the
+authored token, not at 1:1. A
 `server` block is **not** inert — this is the server render, so it runs and
 hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is

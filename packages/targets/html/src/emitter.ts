@@ -107,7 +107,7 @@ interface State {
    * `start` is the statement's source offset, so the module interleaves these
    * with the `static` blocks in the order they were written.
    */
-  moduleHoisted: Array<{ code: string; start: number | undefined }>;
+  moduleHoisted: Array<{ code: MappedCode; start: number | undefined }>;
   indent: number;
   /** Serial for local arrays and source temporaries in attribute-tag loops. */
   attrTagTemp: number;
@@ -1353,8 +1353,16 @@ export function createEmitter(
         // render, so it runs — hoisting to module scope exactly as `static`
         // does. Classifying it as inert would silently drop a binding the rest
         // of the template reads.
-        if (data.code !== "") {
-          state.moduleHoisted.push({ code: data.code, start: data.start });
+        // The tooling projection emits a `client` statement's own code (its
+        // declarations typed, its errors positioned); the module that runs
+        // keeps the `var` of its names.
+        const emitted =
+          options.typeCheck && data.typeCheck ? data.typeCheck : data;
+        if (emitted.code !== "") {
+          state.moduleHoisted.push({
+            code: mapped(emitted.code, emitted.span ?? null),
+            start: data.start,
+          });
         }
         return;
       }
@@ -1508,11 +1516,15 @@ export function createEmitter(
  */
 function inSourceOrder(
   authored: Ir["hoisted"],
-  own: Array<{ code: string; start: number | undefined }>,
-): string[] {
-  const entries = authored
-    .filter((node) => node.code !== "")
-    .map((node) => ({ code: node.code, start: node.span?.sourceStart }));
+  own: Array<{ code: MappedCode; start: number | undefined }>,
+): Array<string | MappedCode> {
+  const entries: Array<{ code: MappedCode; start: number | undefined }> =
+    authored
+      .filter((node) => node.code !== "")
+      .map((node) => ({
+        code: { code: node.code, mappings: [] },
+        start: node.span?.sourceStart,
+      }));
   for (const statement of own) {
     const { start } = statement;
     const before =
@@ -1531,7 +1543,7 @@ function inSourceOrder(
   return entries.flatMap((entry, index) => {
     // Always, never "only when the previous text ends in `;`": that text can
     // end in a `// comment;`, and an empty statement is harmless.
-    const joins = index > 0 && /^\s*[([`+\-/]/.test(entry.code);
+    const joins = index > 0 && /^\s*[([`+\-/]/.test(entry.code.code);
     return joins ? [";", entry.code] : [entry.code];
   });
 }

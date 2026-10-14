@@ -221,7 +221,12 @@ Four facts worth knowing before editing either:
   when the code is found in both texts, the generated search running forward
   and keyed per code string so repeated text cannot cross-map; when either
   lookup fails nothing is emitted, since a plausible-but-wrong column is worse
-  than none. A diagnostic outside every mapping is reported on the nearest
+  than none. The html target's own `server` and `client` statements are not IR
+  statements: the target records their mapping itself when it emits them
+  (`compiled.mappings`, the whole code of the statement from its source span),
+  and under `typeCheck` projects a `client` statement's own code in place of
+  the `var <names>;` it leaves at run time, so its errors are reported at the
+  authored token. A diagnostic outside every mapping is reported on the nearest
   enclosing tag or attribute (else 1:1) with a position marker appended, never
   dropped (decision 161; see the section below).
 - **`preventLeadingOffset` must stay unset for both whole-file `.mx` and

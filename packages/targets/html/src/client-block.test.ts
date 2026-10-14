@@ -416,3 +416,71 @@ describe("html: the strict policy still refuses a `client` block", () => {
     ).toThrow(/`client` block is client-only/);
   });
 });
+
+describe("html: the type-check projection of a `client` or `server` statement", () => {
+  const spanOf = (
+    result: ReturnType<typeof compile>,
+    source: string,
+    text: string,
+  ) => {
+    const sourceStart = source.indexOf(text);
+    const generatedStart = result.code.indexOf(text);
+    return {
+      sourceStart,
+      sourceEnd: sourceStart + text.length,
+      generatedStart,
+      generatedEnd: generatedStart + text.length,
+    };
+  };
+
+  it("keeps the `client` statement's own code, mapped, under typeCheck", () => {
+    const source = 'client const a: number = "x";\n<div/>\n';
+    const checked = compile(source, "/f/t.mx", { typeCheck: true });
+    const code = 'const a: number = "x";';
+    expect(checked.code).toContain(code);
+    expect(checked.code).not.toContain("var a;");
+    expect(checked.mappings).toContainEqual(spanOf(checked, source, code));
+  });
+
+  it("leaves the module that runs alone: `var <names>;`, no initializer", () => {
+    const source = 'client const a: number = "x";\n<div/>\n';
+    const { code, mappings } = compile(source, "/f/t.mx");
+    expect(code).toContain("var a;");
+    expect(code).not.toContain('"x"');
+    expect(mappings).toEqual([]);
+  });
+
+  it("maps a `server` statement's code in both modes, and runs it the same", () => {
+    const source = "server const a: number = 1;\n<div>${a}</div>\n";
+    const code = "const a: number = 1;";
+    for (const typeCheck of [false, true]) {
+      const result = compile(source, "/f/t.mx", { typeCheck });
+      expect(result.mappings).toContainEqual(spanOf(result, source, code));
+    }
+    expect(compile(source, "/f/t.mx").code).toBe(
+      compile(source, "/f/t.mx", { typeCheck: true }).code,
+    );
+  });
+
+  it("maps a block's statements, braces left out, and keeps the statement order", () => {
+    const source =
+      "server {\n  const a = 1;\n}\nstatic const b = 2;\nclient const c = 3;\n<div/>\n";
+    const checked = compile(source, "/f/t.mx", { typeCheck: true });
+    expect(checked.mappings).toContainEqual(
+      spanOf(checked, source, "const a = 1;"),
+    );
+    const order = ["const a = 1;", "const b = 2;", "const c = 3;"].map((text) =>
+      checked.code.indexOf(text),
+    );
+    expect(order).toEqual([...order].sort((x, y) => x - y));
+    expect(order.every((at) => at >= 0)).toBe(true);
+  });
+
+  it("a `client` statement with no declared name adds nothing at run time and is projected under typeCheck", () => {
+    const source = "client console.log(1)\n<div/>\n";
+    expect(compile(source, "/f/t.mx").code).not.toContain("console.log");
+    expect(compile(source, "/f/t.mx", { typeCheck: true }).code).toContain(
+      "console.log(1)",
+    );
+  });
+});
