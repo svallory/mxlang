@@ -119,16 +119,6 @@ const REFUSED: [string, string, Refusal][] = [
     },
   ],
   [
-    "a syntax error in a module script",
-    page("const = 1;", '<script type="module">'),
-    {
-      message: "Unexpected token",
-      line: 3,
-      column: 6,
-      end: { line: 3, column: 6 },
-    },
-  ],
-  [
     "an import attribute written with assert",
     page('import j from "./x.json" assert { type: "json" };'),
     { message: ASSERT, line: 3, column: 25, end: { line: 3, column: 25 } },
@@ -207,7 +197,7 @@ const REFUSED: [string, string, Refusal][] = [
   ],
   [
     "a JSON body (it is read as JavaScript)",
-    page('{"a": 1}', '<script type="application/json">'),
+    page('{"a": 1}'),
     {
       message: "Missing semicolon.",
       line: 3,
@@ -283,12 +273,15 @@ describe("a <script> body that parses is accepted", () => {
     expect(lower("<div/>\n<script></script>").diagnostics).toEqual([]);
   });
 
-  it("leaves a body with a ${…} placeholder unread (it is not one text run)", () => {
-    // Stock refuses it as unexpected content; that is the tag's shape rule, not
-    // a parse of the text, and MX does not read the pieces.
+  it("does not read a body with a ${…} placeholder (it is not one text run)", () => {
+    // The placeholder is refused as the tag's shape (`script-tag-shape.test.ts`);
+    // the pieces around it are not parsed, so a syntax error beside it is not
+    // reported on top.
     expect(
-      lower("<div/>\n<script>\nconst a = ${1};\n</script>").diagnostics,
-    ).toEqual([]);
+      lower("<div/>\n<script>\nconst = ${1};\n</script>").diagnostics.map(
+        (d) => d.code,
+      ),
+    ).toEqual(["MX_INERT_TAG_SHAPE"]);
   });
 });
 

@@ -140,6 +140,7 @@ import {
   DIALECT_HOOK_ERROR_CODE,
   DUPLICATE_ATTRIBUTE_CODE,
   DUPLICATE_VALUE_ATTRIBUTE_CODE,
+  INERT_TAG_SHAPE_CODE,
   INTERNAL_ERROR_CODE,
   INVALID_ATTRIBUTE_CODE,
   INVALID_ATTRIBUTE_TAG_CODE,
@@ -697,7 +698,7 @@ function checkBindingWrites(
 /**
  * The same check over the values a tag carries that `exprOf` never reads: the
  * attributes and arguments of an inert tag (`<log=…/>`, `<id/x=…/>`,
- * `<lifecycle onMount=…/>`, `<script async=…>`) and of a `<let>` itself. The
+ * `<lifecycle onMount=…/>`, `<script value=…>`) and of a `<let>` itself. The
  * text body of a `<script>` is not looked at; it is a `<script>` body.
  */
 function checkTagValueWrites(ctx: Ctx, node: Node): void {
@@ -773,6 +774,74 @@ function isBuiltinScript(ctx: Ctx, tag: Node): boolean {
     name === "script" &&
     !(ctx.customTags && Object.hasOwn(ctx.customTags, name))
   );
+}
+
+/**
+ * Is `tag` the built-in `<script>` with a raw-text body? Only a raw-text body
+ * is the authored text. Under the `none` preset a `<script>` is an ordinary
+ * tag whose body is parsed as tags and text, and its text is
+ * whitespace-normalized: it is not code to check, and the tag keeps the
+ * attributes of any tag.
+ */
+function isRawTextScript(ctx: Ctx, tag: Node): boolean {
+  return (
+    isBuiltinScript(ctx, tag) &&
+    (!ctx.tagTable ||
+      ctx.tagTable.getTag("script")?.parseOptions?.text === true)
+  );
+}
+
+/**
+ * Refuses what stock Marko 6.4.4 refuses in the shape of a built-in
+ * `<script>`, which MX read past without a word:
+ *
+ * - an attribute other than the tag's own value (`value=…`, `=…`, or the
+ *   method form `async() { … }`). The tag is client code that html does not
+ *   emit, so `async`, `src`, `type`, `id` and the rest were discarded. A spread
+ *   is refused with the tag's other inert-shape rules.
+ * - a `${…}` placeholder in the body, in code or inside a quoted string. The
+ *   body is script text, and a placeholder in it was never read. Inside a
+ *   template literal the `${…}` is the script's own and is not a placeholder.
+ *
+ * Both name `<html-script>`, the tag for a native html `<script>` element. The
+ * first of each is reported, as stock reports it. When the walk collects errors
+ * they are recorded and the tag keeps lowering; otherwise the first throws.
+ */
+function checkScriptShape(ctx: Ctx, tag: Node): void {
+  if (!isRawTextScript(ctx, tag)) return;
+  const refuse = (message: string, at: Node) => {
+    try {
+      raise(INERT_TAG_SHAPE_CODE, message, at);
+    } catch (error) {
+      if (!ctx.errors || !isTranslateError(error)) throw error;
+      positionError(ctx, error);
+      ctx.errors.push(error);
+    }
+  };
+  const attr = tagAttributesOf(tag).find(
+    (candidate: Node) =>
+      !isSpreadAttributeNode(candidate) &&
+      attrNameOf(candidate) !== "value" &&
+      !isDefaultAttr(candidate) &&
+      !attrArgsOf(candidate) &&
+      !isMethodAttr(candidate),
+  );
+  if (attr) {
+    refuse(
+      `\`<script>\` does not support the \`${attrNameOf(attr)}\` attribute: the tag is client code, not an html element, so the attribute would be silently discarded. For a native html \`<script>\` element use \`<html-script>\``,
+      attr,
+    );
+  }
+  const placeholder = bodyChildren(tag).find(
+    (child: Node) =>
+      child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
+  );
+  if (placeholder) {
+    const message =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
+      "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Write the value in a template literal, or for a native html `<script>` element use `<html-script>`";
+    refuse(message, placeholder);
+  }
 }
 
 /** What reading one `<script>` body came to: its statements, or why they are not. */
@@ -885,15 +954,7 @@ function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
  * script text to check.
  */
 function checkScriptBodySyntax(ctx: Ctx, tag: Node): void {
-  if (!isBuiltinScript(ctx, tag)) return;
-  // Only a raw-text body is the authored text. Under the `none` preset a
-  // `<script>` is an ordinary tag whose body is parsed as tags and text, and
-  // its text is whitespace-normalized: it is not code to check.
-  if (
-    ctx.tagTable &&
-    ctx.tagTable.getTag("script")?.parseOptions?.text !== true
-  )
-    return;
+  if (!isRawTextScript(ctx, tag)) return;
   const body = scriptBodyOf(ctx, tag);
   if (!body || !("failure" in body)) return;
   if (!ctx.errors) throw body.failure;
@@ -6316,6 +6377,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             // Before the tag's own lowering: a host with no runtime for the
             // handler refuses it there, and the stale read is the first thing
             // wrong with it.
+            checkScriptShape(ctx, child);
             checkScriptBodySyntax(ctx, child);
             checkStaleDerivedReads(ctx, child);
             checkScriptBodyWrites(ctx, child);

@@ -42,7 +42,7 @@ describe("the html target's default policy", () => {
     ],
     [
       "`<script>`",
-      "<let/count=0/>\n<script async=(count++)></script>\n",
+      "<let/count=0/>\n<script value=(count++)></script>\n",
       "count++",
     ],
     ["a `<let>`'s own value", "<let/count=(count = 1)/>\n", "count = 1"],

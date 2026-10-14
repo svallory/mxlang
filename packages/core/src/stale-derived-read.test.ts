@@ -897,10 +897,6 @@ describe("what is not a handler", () => {
     ],
     ["a spread of handlers", `${CART}<button ...handlers>x</button>\n`],
     [
-      "a `<script>` body that holds a `${...}` placeholder (not detected)",
-      `${CART}<script>\n  items = [];\n  log(\${total});\n</script>\n`,
-    ],
-    [
       "a `<let>`'s `valueChange`",
       `${CART}<let/count=0 valueChange(v) { items = []; log(total); count = v }/>\n`,
     ],

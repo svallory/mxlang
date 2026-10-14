@@ -691,6 +691,21 @@ the CommonJS forms `import x = require(…)` and `export = value`, which say wha
 to write instead. In a concise-mode body (`--` lines, or two `--` blocks) the
 lines are read together as one body, and a position is the position in the file.
 
+A built-in `<script>` has one attribute of its own, its value (`value=…`, `=…` or the
+method form `async() { … }`), and no `${…}` placeholder in its body. Any other attribute
+(`async`, `src`, `type`, `defer`, `id`, `class`, …) and any placeholder, whether in
+code, in a quoted string, in a regular expression or in an HTML comment, is a compile
+error, `MX_INERT_TAG_SHAPE`, on every target: the tag is client code, not an html
+element, so the attribute would be discarded and the placeholder was never read. The error
+is positioned at the attribute or at the `${…}` (its whole range), and its text says to
+use `<html-script>`, the tag for a native html `<script>` element, which keeps its
+attributes and interpolates its body. A `${…}` inside a template literal in the body
+(`` `${x}` ``) is the script's own and is not a placeholder. The first attribute and the
+first placeholder of a tag are reported. A spread on `<script>` is refused with the other
+inert-shape rules ("Inert is a shape, not a licence to drop"). Only the built-in `<script>` is checked: not
+`<html-script>`, not a `<script>` a caller registered as a custom tag, and not a
+`<script>` under the `none` tag-rules preset, where it is an ordinary tag.
+
 **Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
 
 ---
@@ -1745,7 +1760,7 @@ or local that shadows the `<const>` or the `<let>` is neither a read nor a write
 Not detected: a handler held in a variable or built by a call, a function
 declared with `<const>` and called from a handler, a write made inside a nested
 function, a `for (items of …)` head used as a write, a `<const>` declared below
-the body's tag, a `<script>` body that holds a `${…}` placeholder, a write in
+the body's tag, a write in
 one body and a read in another, and any other flow through a called function. Hosts and the html
 `strict` policy refuse `<let>` itself, so they never reach this check, and under
 the `none` tag-rules preset nothing fires.
@@ -3278,7 +3293,9 @@ Declarations are **per tag**, because Marko is: `<log=1 foo="bar"/>` is
 refused (a body on `<log>`, `<debug>`, `<id>` or `<lifecycle>` is already a
 parse error, as in Marko), while `<lifecycle foo="bar"/>` compiles (a
 lifecycle tag's attributes are its configuration) and `<script>` is the one inert
-tag taking a body (raw text).
+tag taking a body (raw text). Its attributes are refused whatever the host declares,
+as Marko refuses them (only its value is accepted), and so is a `${…}` placeholder in
+its body; `<html-script>` is the tag for those.
 
 ### The three hooks
 
@@ -4123,7 +4140,7 @@ host, a target or a dialect.
 | `MX_REPEATED_ATTRIBUTE_TAG` | error | a single attribute tag given twice, or inside `<for>` |
 | `MX_INVALID_CALLEE_INPUT` | error | a callee's `Input` that cannot be read |
 | `MX_UNSUPPORTED_CONSTRUCT` | error | a construct the target or the product cannot express |
-| `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing |
+| `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing; an attribute (other than its value) or a `${…}` placeholder on a built-in `<script>` |
 | `MX_RESERVED_EFFECT_TAG` | error | `<effect>` on a target, which is not a tag; `<script>` runs a body after render |
 | `MX_UNSUPPORTED_MARKO_FILE` | error | a `.marko` file used as a tag or an import |
 | `MX_INVALID_SHORTHAND` | error | a bad `#id`/`.class` shorthand |

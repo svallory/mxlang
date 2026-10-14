@@ -36,6 +36,8 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 "Inert" is a shape, not a license to silently drop content: an inert tag's own attributes and body are validated against what Marko's own tag definition allows, and anything unexpected is a compile error naming the tag — not silently discarded.
 
+For `<script>` that means its body is script text and its only attribute is its value: `<script async>` and `<script src="/x.js">` are compile errors (`MX_INERT_TAG_SHAPE`), as is a `${…}` placeholder in its body (a `${…}` inside a template literal is the script's own). Both say to use `<html-script>`, the tag for a native html `<script>` element.
+
 ### Opting into `strict`
 
 Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).
