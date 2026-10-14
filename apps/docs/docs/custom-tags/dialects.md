@@ -103,6 +103,28 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 - **`.mx` files are unaffected.** They route to no dialect.
 - **A wrong value** is an error in your module, like a wrong `tagRules`: `` `structural` must be "pass" or "reject" ``.
 
+## Names an import may share with a tag: `bindingsCallTags`
+
+In a `.mx` file, a capitalized tag whose name is bound in the file (an `import`, a `<const>`, a `<define>`, a loop or define parameter) is always a call of that binding. It wins over a contract of the same name and over a wildcard `children["*"]` entry. In a data file that call is a dynamic tag, which a static tree refuses, so a dialect whose files import a value and also name a tag after it (`import { Task } from "./task"` beside `<Task k="a"/>`) fails with `MX_NOT_IN_DATA_FILE`.
+
+Set `bindingsCallTags: false` on the dialect's module and no binding makes a tag a call in its files:
+
+```ts
+export default {
+  table: {},
+  contracts: {
+    Task: { attributes: { k: { type: "string", required: true } } },
+    entities: { children: { "*": { attributes: {} } } },
+  },
+  bindingsCallTags: false,
+} satisfies Partial<Dialect>;
+```
+
+- **The tag is read as if unbound.** Its contract applies (a missing required attribute is reported), a parent's wildcard claims it, and with neither the unknown-tag rules judge it. This holds for every binding kind, not only imports.
+- **The import stays.** It is still in the file's imports, with its specifiers, so the file can use the value.
+- **Default `true`.** Leave it out for a dialect whose files are templates, where a bound capitalized name is a component call. A value other than a boolean is an error in your module: `` `bindingsCallTags` must be a boolean ``.
+- **Without it,** rename the import (`import { Task as TaskRef }`) so the tag name is free.
+
 ## Passing your dialect to a call
 
 A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a deep-frozen object. Core validates the object it is given and remembers the result only when the object is deep-frozen, that is, it and every plain object and array inside it (`table`, its rows, `contracts`) are frozen: a deep-frozen dialect is validated once, any other again on every call, because a mutable object can change between calls. A dialect frozen only at the top, with an unfrozen `table` or `contracts` inside, is validated again on every call, so a change to those is seen. RegExps and functions inside it need not be frozen. Freeze the nested objects and arrays too (a deep freeze) to have the dialect validated once. The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.

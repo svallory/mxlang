@@ -577,6 +577,19 @@ export interface Dialect {
    * ...) cannot be defined. @unstable
    */
   readonly contracts?: ContractMap;
+  /**
+   * Whether a PascalCase tag bound in the file (an `import`, a `<const>`,
+   * a `<define>`, a loop or define parameter) is a component call. Default
+   * `true`: the binding wins over a contract, a wildcard `children["*"]`
+   * entry and every registered tag of that name. Set `false` for a dialect
+   * whose files are data, where a named import is only a value the file
+   * uses: no binding then makes a tag a call, so the tag reads as if
+   * unbound (the wildcard claims it, its contract applies, the unknown-tag
+   * rules judge it) and the import stays in the file's imports. Use it when
+   * an import's name can also be a tag name; without it the tag is a
+   * dynamic tag, which a data file refuses. @unstable
+   */
+  readonly bindingsCallTags?: boolean;
 }
 
 /**
@@ -740,6 +753,7 @@ const MODULE_FIELDS = new Set([
   "describeAttribute",
   "tagFile",
   "contracts",
+  "bindingsCallTags",
 ]);
 
 /** The lowering options a dialect states a default for, with the values each accepts. */
@@ -895,6 +909,12 @@ function checkModuleShape(
     if (value[hook] !== undefined && typeof value[hook] !== "function") {
       fail(`\`${path}${hook}\` must be a function`);
     }
+  }
+  if (
+    value.bindingsCallTags !== undefined &&
+    typeof value.bindingsCallTags !== "boolean"
+  ) {
+    fail(`\`${path}bindingsCallTags\` must be a boolean`);
   }
   checkContractFields(value.contractFields, path, fail);
   checkDialectContracts(value, path, failContract);

@@ -89,6 +89,14 @@ export interface CheckOptions {
 const DYNAMIC_TAG_MESSAGE = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
 
 /** The fixed structural-reject message (the 131 addendum's item 1). */
+/**
+ * The dynamic-tag reject for a capitalized tag a file-local binding names
+ * (`<Task>` with `import { Task }`): it names the tag and the two ways out.
+ */
+function boundDynamicTagMessage(name: string): string {
+  return `\`<${name}>\` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`) or set \`bindingsCallTags: false\` in the dialect`;
+}
+
 function structuralMessage(construct: string): string {
   return `the data tree is static; this file's consumer does not evaluate ${construct}`;
 }
@@ -624,7 +632,9 @@ function checkNode(node: IrNode): void {
       if (node.target.kind === "dynamic") {
         fail(
           NOT_IN_DATA_FILE_CODE,
-          DYNAMIC_TAG_MESSAGE,
+          node.target.valueImportBinding
+            ? boundDynamicTagMessage(node.target.valueImportBinding)
+            : DYNAMIC_TAG_MESSAGE,
           node.loc,
           dynamicTagEnd(node.target.expr),
         );

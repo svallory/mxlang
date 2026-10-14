@@ -3028,7 +3028,7 @@ The other call-site diagnostics carry the `` `<tag>`:  `` prefix:
 | `` a dynamic tag `<${…}>` cannot be checked against the declared children `` | Dynamic child, positioned at its `<`. |
 | `` `<${name}>` may not be repeated `` | Maximum occurrence count exceeds 1 without `repeatable: true`; positioned at the second occurrence, or the sole loop occurrence. |
 | `` missing required child `<${name}>` `` | Minimum occurrence count is 0 for a required child; positioned at the parent call. |
-| `` `<${name}>` is not allowed here; allowed children: `<a>`; other names must match `p1` or `p2` `` | No explicit entry and no `"*"` entry matched (`names must match` with no explicit child; `, or be a name that is not already a tag` after a catch-all; ``(`<x>` is a built-in tag, so the wildcard does not apply to it)`` or ``… is a registered tag …`` when such a name matches a pattern). |
+| `` `<${name}>` is not allowed here; allowed children: `<a>`; other names must match `p1` or `p2` `` | No explicit entry and no `"*"` entry matched (`names must match` with no explicit child; `, or not already be a tag` after a catch-all; ``(`<x>` is a built-in tag, so the wildcard does not apply to it)``, ``… is a registered tag …`` or ``(`<X>` is bound in this file, so the wildcard does not apply to it; rename the binding)`` when such a name matches a pattern). |
 | `` `<${alias}>` (as `${canonical}`) matched the wildcard of ${parent}; did you mean the explicit child `<${near}>`? `` | Error, on every target and tool. |
 
 Transform-time:
@@ -3998,6 +3998,7 @@ An unknown preset name is an error diagnostic, not a throw.
 | `<return>` | ``` `<return>` needs the evaluated mode: the data tree is static and has no value to return ``` |
 | Tag variable `/v` | ``tag variable `/v` on `<a>`: the data tree is static; a binding without evaluation means nothing`` |
 | Dynamic tag `<${x}>` | ``a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one`` |
+| Capitalized tag bound in the file (`import { Task }`, `<const/Task>`) | ``` `<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect ``` |
 | Call of a tag with a template (`<Foo/>` with `import Foo`, or a `customTags` entry with a template) | ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` |
 | `<!doctype>` | ``` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page ``` |
 | `<![CDATA[…]]>`, `<?xml …?>` | from core on every target (decision 139) |

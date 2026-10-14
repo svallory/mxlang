@@ -4660,12 +4660,29 @@ function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
   const match = wildcardMatchOf(node);
   if (!match) return undefined;
   const name = match.authored;
-  const bound =
+  return bindingCallsTag(ctx, name) ? undefined : match;
+}
+
+/**
+ * Is `name` a PascalCase name a file-local binding (an import, a `<const>`, a
+ * `<define>`, a loop or define parameter) has in scope? Such a binding is
+ * always a component call, unless the file's dialect sets
+ * `bindingsCallTags: false`: then no binding makes a tag a call, and the
+ * wildcard, the contract and the unknown-tag rules read the name as if it
+ * were unbound.
+ */
+function capitalBinding(ctx: Ctx, name: string): boolean {
+  return (
     /^[A-Z]/.test(name) &&
     (ctx.defines.has(name) ||
       ctx.imports.has(name) ||
-      (ctx.tagVarShadowed?.has(name) ?? false));
-  return bound ? undefined : match;
+      (ctx.tagVarShadowed?.has(name) ?? false))
+  );
+}
+
+/** Does a file-local binding make a PascalCase tag a call in this file? */
+function bindingCallsTag(ctx: Ctx, name: string): boolean {
+  return ctx.dialect?.bindingsCallTags !== false && capitalBinding(ctx, name);
 }
 
 /** `{ trigger }` for a tag a dialect's `ctx.child` built, else nothing. */
@@ -4811,7 +4828,10 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
-        const known = wildcard ? undefined : wildcardIneligibility(name, ctx);
+        const known = wildcard
+          ? undefined
+          : (wildcardIneligibility(name, ctx) ??
+            (bindingCallsTag(ctx, name) ? ("bound" as const) : undefined));
         const child: ChildNode = {
           kind: "ChildTag",
           name: wildcard?.canonical ?? name,
@@ -5472,11 +5492,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       wildcard,
     );
   }
-  const fileLocalBinding =
-    /^[A-Z]/.test(name) &&
-    (ctx.defines.has(name) ||
-      ctx.imports.has(name) ||
-      (ctx.tagVarShadowed?.has(name) ?? false));
+  const fileLocalBinding = bindingCallsTag(ctx, name);
 
   // Only a call actually routed through a registered custom-tag contract is
   // exempt (decision 138, E1). Built-ins and shadowing local bindings are not.
@@ -5754,7 +5770,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   }
   if (
     fileLocalBinding ||
-    (!lowercaseBinding && ctx.declarations.isComponent(name, ctx))
+    (!lowercaseBinding &&
+      !capitalBinding(ctx, name) &&
+      ctx.declarations.isComponent(name, ctx))
   ) {
     rejectMarkoImportTag(ctx, name, name, node);
     const params = ctx.defines.get(name);
@@ -5847,7 +5865,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     ctx.declarations.rejectUnknownTag?.(name, markoViewOf(ctx, node), ctx);
     raise(
       UNBOUND_COMPONENT_CODE,
-      `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
+      capitalBinding(ctx, name)
+        ? `\`<${name}>\` is bound in this file, but ${ctx.dialect?.name ?? "this dialect"} never reads a binding as a tag, and no tag named \`${name}\` is defined: define that tag, or rename the binding`
+        : `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
     );
   }

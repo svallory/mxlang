@@ -72,6 +72,27 @@ describe("checkDialectFile", () => {
     ).toEqual(["effect", "effect"]);
   });
 
+  it("`bindingsCallTags: false` reads an imported tag name as the contract's tag", () => {
+    const module = (flag: string) =>
+      `module.exports.default = { table: {}, ${flag} contracts: { Task: { attributes: { k: { type: "string", required: true } } } } };\n`;
+    const text = 'import { Task } from "./t";\n<Task/>\n';
+    const flagged = probeProject({
+      "dialect.cjs": module("bindingsCallTags: false,"),
+    });
+    expect(
+      checkDialectFile(flagged.path("a.probe"), text)?.diagnostics.map((d) => [
+        d.code,
+        d.line,
+      ]),
+    ).toEqual([["MX_MISSING_ATTRIBUTE", 2]]);
+    const plain = probeProject({ "dialect.cjs": module("") });
+    expect(
+      checkDialectFile(plain.path("a.probe"), text)?.diagnostics.map(
+        (d) => d.code,
+      ),
+    ).toEqual(["MX_NOT_IN_DATA_FILE"]);
+  });
+
   it("a diagnostic with no fix has no `fixes` key", () => {
     const project = probeProject();
     const [diagnostic] =

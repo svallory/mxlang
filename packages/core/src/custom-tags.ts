@@ -240,8 +240,8 @@ export type ChildNode =
       hint?: string;
       /** How a wildcard child was written (decision 147). */
       alias?: TagAlias;
-      /** Why no wildcard entry may claim this name: a built-in or a registered tag. */
-      known?: "built-in" | "registered";
+      /** Why no wildcard entry may claim this name: a built-in or a registered tag, or a binding in the file. */
+      known?: "built-in" | "registered" | "bound";
     }
   | { kind: "ChildText"; loc: Position }
   | { kind: "ChildDynamic"; loc: Position }
@@ -1738,11 +1738,13 @@ export function validateCustomTagChildren(
     const names = explicit.filter(([name]) => name !== "#text");
     const others = names.length > 0 ? "other names" : "names";
     const rule = patterns
-      ? `${others} must match ${patterns}${catchAll ? ", or be a name that is not already a tag" : ""}`
-      : `${others} must be a name that is not already a tag`;
+      ? `${others} must match ${patterns}${catchAll ? ", or not already be a tag" : ""}`
+      : `${others} must not already be a tag`;
     const known = node.known
       ? matchWildcardEntry(declarations, node.name)
-        ? ` (${label} is ${node.known === "built-in" ? "a built-in tag" : "a registered tag"}, so the wildcard does not apply to it)`
+        ? node.known === "bound"
+          ? ` (${label} is bound in this file, so the wildcard does not apply to it; rename the binding)`
+          : ` (${label} is ${node.known === "built-in" ? "a built-in tag" : "a registered tag"}, so the wildcard does not apply to it)`
         : ""
       : "";
     const listed =

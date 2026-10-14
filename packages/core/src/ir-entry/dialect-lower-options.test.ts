@@ -270,6 +270,8 @@ describe("R5: a value outside the option's set", () => {
     ["structural", '"strict"', '`structural` must be "pass" or "reject"'],
     ["imports", "true", '`imports` must be "pass" or "reject"'],
     ["unknownTags", '"deny"', '`unknownTags` must be "allow" or "reject"'],
+    ["bindingsCallTags", '"no"', "`bindingsCallTags` must be a boolean"],
+    ["bindingsCallTags", "0", "`bindingsCallTags` must be a boolean"],
   ])("a module's `%s: %s` is an error in the module", (_, value, message) => {
     const { packageDir } = dialectProject(dir, {
       manifest: { id: "test", name: "Test", extensions: [".member.mx"] },
@@ -290,6 +292,12 @@ describe("R5: a value outside the option's set", () => {
       "deny",
       '`dialect.unknownTags` must be "allow" or "reject"',
     ],
+    [
+      "bindingsCallTags",
+      "false",
+      "`dialect.bindingsCallTags` must be a boolean",
+    ],
+    ["bindingsCallTags", 1, "`dialect.bindingsCallTags` must be a boolean"],
   ])("the `dialect` option's `%s: %j`", (field, value, message) => {
     const result = lowerWith(explicit({ [field]: value }));
     expect(result.ir).toBeUndefined();
