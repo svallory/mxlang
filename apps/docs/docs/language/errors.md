@@ -63,6 +63,21 @@ is rejected on the html default policy and in `lowerSource`:
 
 The code is `MX_RENDER_ONLY_IN_MODULE` and the position is the name, with its end. The names are every tag variable in the file (a `<let>`, a `<const>`, a `<define>`, before or after the statement, nested in a tag body or not), `input`, `$global` and `$signal`. A read, a write and an update all count, in the statement itself or in a function it declares, and so do the statements inside a `static { … }` block. A module level declaration with the spelling of a tag variable in the template's top level (`static count = 1`, or an `import` of that spelling) is refused at the declaration, with "cannot declare a name with its spelling. Rename the module level binding." A module level declaration spelled `input` is refused the same way ("`input` is the template's input, which exists only while the template renders, …"); `$global` and `$signal` may be declared. What does not count: a parameter or local of a module function that shadows the name, a property name, a name inside a type or an ambient `declare` declaration, a type-only import, a tag param (module code that spells it reads a global), and a module binding that shares the spelling of a tag variable only a nested tag declares. A host that refuses `server` or `client` says so first, and the check is skipped under the `none` tag rules. See [Define, const, static, import](/language/define-const-static-import/).
 
+## A module name declared twice, or exported without a declaration
+
+```html
+import label from "./label.ts"
+static const label = "x"
+```
+
+is refused on every host and in `lowerSource`:
+
+> Duplicate declaration "label": it is already declared at 1:8. The `import`, `static`, `server`, `client` and `export` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two `var`s, TypeScript's overloads, enums and namespaces merge).
+
+The code is `MX_DUPLICATE_DECLARATION`, positioned at the second declaration's name. The rule is JavaScript's, applied after the TypeScript strip, so two `var`s of a name and the merges TypeScript accepts (enum with enum, overloads, namespace merges, `declare` merges) still compile; a `function` declared twice, or a `function` beside a `var` or `const`, is refused although stock Marko compiles it, because the module does not load.
+
+An export list that names something no module statement declares (`static export { q }` with no `q`) is `MX_UNDECLARED_EXPORT`, at the name: "Export 'q' is not defined in module: …". A declaration in a later statement, an `import`, a type and an `export { q } from "…"` all count as fine.
+
 ## A derived `<const>` read after its `<let>` was written
 
 ```html

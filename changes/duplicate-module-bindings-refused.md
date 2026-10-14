@@ -1,0 +1,5 @@
+---
+packages: [core]
+kind: Fixed
+---
+A module name declared twice across the `import`, `static`, `server`, `client` and `export` statements (in a block or without one) is a compile error, `MX_DUPLICATE_DECLARATION`, at the second declaration's name, in source order, with a message that begins `Duplicate declaration "x"` and says where the first declaration is. The rule is JavaScript's, applied after the TypeScript strip: `var` with `var` and the merges TypeScript accepts (enum with enum, overload signatures, namespace merges, `declare` merges) still compile. Five forms stock Marko compiles but whose module does not load are refused too (`function` twice, `function` with `var`, `var` with `import`, `function` with `const`, `export function` with `const`); before this, `import x` with `static const x` and similar reached the host, which emitted a module that could not load. An export list that names a binding no module statement declares (`static export { q }`) is refused at the name, `MX_UNDECLARED_EXPORT`; re-exports and type exports are not checked. Both codes can be renamed through a dialect's `diagnosticCodes`.

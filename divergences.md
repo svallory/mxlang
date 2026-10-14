@@ -192,6 +192,19 @@ Probed on stock Marko 6.4.4 / `@marko/compiler` 5.42.11 (`packages/stock-marko`)
 
 Not divergences, only a different error: `import x = require("y")` (Marko refuses it with Babel's CommonJS-transform advice; MX refuses it at the statement without that advice) and several statements in one `import` (Marko: "The `<import>` tag takes a single import statement."; MX: the decision 193 message).
 
+## Module syntax: a module name is declared once, and an export names a declared binding
+
+Probed on stock Marko 6.4.4 / `@marko/compiler` 5.42.11 (`packages/stock-marko`); the probe tables are in `scratch/reports/probes/duplicate-module-bindings-7cfaa606/`.
+
+The `import`, `static`, `server`, `client` and `export` statements of a file are one module scope. MX refuses a name declared twice there (`MX_DUPLICATE_DECLARATION`, at the second declaration's name, naming where the first is) with JavaScript's rule applied after the TypeScript strip: `var` with `var` and the merges TypeScript accepts (enum with enum, overload signatures, namespace merges, `declare` merges) stay legal. Stock refuses most of these too, with `Duplicate declaration "x"`. The first column is the part where stock and MX differ.
+
+| Construct | Why it was wanted | Marko verdict | Test |
+|---|---|---|---|
+| `static function f() {}` twice; `function f` then `var f`; `var x` then `import x`; `function f` then `const f`; `export function f` then `const f` | Nobody wanted them: each is a `SyntaxError` when the compiled module loads (a duplicate binding in one module scope), so MX reports it at the compile instead. | Accepted: compiles, and the module does not load. | `packages/core/src/duplicate-module-bindings.test.ts` (`the five forms`), `packages/targets/html/src/duplicate-module-bindings.test.ts` |
+| `static export { q }` (or `export { q }`, `export { q as r }`, in a block or not) when no `import`, `static`, `server`, `client` or `export` statement declares `q` | Same: the module does not load ("Export 'q' is not defined in module"). MX refuses it at the name (`MX_UNDECLARED_EXPORT`). A name any module statement declares, at any position, types and `declare` included, counts as declared; re-exports (`export { q } from "…"`) and type exports are not checked, and a template-scope name (`<const/q>`) is not a module binding. | Accepted: compiles, and the module does not load. | `packages/core/src/duplicate-module-bindings.test.ts` (`an export list names a declared binding`) |
+
+Not a divergence: a name declared twice that stock also refuses. MX's message begins with stock's text and says where the first declaration is.
+
 ## File conventions: `marko.json` is not read (decision 197)
 
 MX resolves tag names with its own tag table: the target's taglibs over its

@@ -304,6 +304,27 @@ TypeScript's own check reports it.
 `import x = M.N`, a TypeScript alias, is not a CommonJS form and compiles in
 these statements.
 
+**A module name is declared once.** The `import`, `static`, `server`, `client`
+and `export` statements of a file, in a block or without one, share one module
+scope, so a name they declare twice is a compile error on every host,
+`MX_DUPLICATE_DECLARATION`, positioned at the second declaration's name in
+source order: "Duplicate declaration "x": it is already declared at 1:8. …".
+The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
+merges, and so do the merges TypeScript accepts: an enum with an enum (of the
+same constness) or after a namespace, overload signatures followed by one more
+function, a namespace after a function, class, enum or namespace, and the same
+with `declare`. A type-only name (`type`, `interface`, an `import type`, a
+namespace holding only types) shares only the value space it does not occupy.
+Five forms stock Marko compiles are refused too, because the module they
+produce does not load (`function` twice, `function` with `var`, `var` with
+`import`, `function` with `const`, `export function` with `const`); that is one
+row of `divergences.md`. An export list name that no module statement declares,
+at any position, is refused at the name, `MX_UNDECLARED_EXPORT`: "Export 'q' is
+not defined in module: …". Re-exports (`export { q } from "…"`) and type
+exports are not checked, and a template-scope name (`<const/q>`) is not a
+module binding. Both checks are skipped under the `none` tag rules, and a
+render-only name (above) is reported first.
+
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one
@@ -4158,6 +4179,8 @@ host, a target or a dialect.
 | `MX_INVALID_RETURN` | error | the shape rules of `<return>` |
 | `MX_INVALID_TRY` | error | the shape rules of `<try>` |
 | `MX_INVALID_STATEMENT` | error | an `import`, `export` or `static` statement core cannot take, or a `<script>` body that does not parse |
+| `MX_DUPLICATE_DECLARATION` | error | a module name declared twice across the `import`, `static`, `server`, `client` and `export` statements |
+| `MX_UNDECLARED_EXPORT` | error | an export list names a binding no module statement declares |
 | `MX_INVALID_TAG_NAME` | error | a tag name the language refuses |
 | `MX_UNBOUND_COMPONENT` | error | a capitalized tag with no import or `<define>` in scope |
 | `MX_INVALID_TAG_CALL` | error | a tag that cannot be called here |
