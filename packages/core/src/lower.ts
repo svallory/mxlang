@@ -273,6 +273,7 @@ import {
   memberOf,
   valueNodeOf,
 } from "./triggers.ts";
+import { withoutTsWrappers } from "./ts-unwrap.ts";
 import {
   findUncalledTagFile,
   markoFileTagMessage,
@@ -1391,7 +1392,11 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
         attr.value,
       );
     }
-    const value = attrValueOf(ctx, attr);
+    const written = attrValueOf(ctx, attr);
+    // Look through TypeScript wrappers (kept under `stripTypes: false`), so
+    // the check, and where its error lands (the operand, as the default path
+    // reports it), do not depend on the option.
+    const value = withoutTsWrappers(written);
     if (
       value?.type !== "Identifier" &&
       !(

@@ -174,12 +174,12 @@ export interface LowerSourceOptions {
    * dialect whose `nodeType.lower`, contract hooks or `afterLower` read
    * types.
    *
-   * With `false`, core's own checks see the assertion too, so a few results
-   * differ from the default: a bound attribute over an assertion
-   * (`v:=(y as any)`) is `MX_INVALID_BOUND_ATTRIBUTE`; an attribute whose
-   * value is an assertion over a literal (`a=("s" as const)`) is `dynamic`
-   * with shape `other` rather than `static`, `boolean`, `object`, `array` or
-   * `string`; and a contract's `type` is not checked against such a value.
+   * With `false`, a top-level assertion stays around the value, so an
+   * attribute whose value is an assertion over a literal
+   * (`a=("s" as const)`) is `dynamic` with shape `other` rather than
+   * `static`, `boolean`, `object`, `array` or `string`. Core's own checks
+   * look through the assertion, so a bound attribute (`v:=(y as any)`) and a
+   * contract's `type` check give the same result as the default.
    * A tag-file hook's `ctx.lower` takes the option but does not inherit this
    * call's value.
    */

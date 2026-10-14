@@ -73,6 +73,7 @@ import {
   routeTemplateCall,
   type TemplateBackedTag,
 } from "./template-tag.ts";
+import { withoutTsWrappers } from "./ts-unwrap.ts";
 import {
   attributeTagWildcardEntries,
   entryRegExp,
@@ -1316,16 +1317,18 @@ function literalValue(attr: Attr): LiteralValue | null {
   if (attr.kind === "boolean") return { type: "boolean", value: true };
   if (attr.kind !== "dynamic") return null;
 
-  switch (attr.value.node?.type) {
+  // Under `stripTypes: false` an assertion stays around the literal.
+  const node = withoutTsWrappers(attr.value.node);
+  switch (node?.type) {
     case "StringLiteral":
       return {
-        type: attr.value.node.extra?.mxAtom ? "atom" : "string",
-        value: attr.value.node.value,
+        type: node.extra?.mxAtom ? "atom" : "string",
+        value: node.value,
       };
     case "NumericLiteral":
-      return { type: "number", value: attr.value.node.value };
+      return { type: "number", value: node.value };
     case "BooleanLiteral":
-      return { type: "boolean", value: attr.value.node.value };
+      return { type: "boolean", value: node.value };
     default:
       return null;
   }

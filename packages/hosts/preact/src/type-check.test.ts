@@ -1,4 +1,6 @@
+import { type CustomTag, createTargetLookup } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import descriptor from "./descriptor.ts";
 import { compilePreactMx } from "./index.ts";
 
 /**
@@ -158,5 +160,26 @@ describe("typeCheck helper names never collide with the template (decision 140)"
     const { code } = compile(handler, true);
     expect(code).toContain("type __MxH<");
     expect(code).not.toContain("__MxH1");
+  });
+});
+
+describe("a contract's literal checks under typeCheck", () => {
+  const customTags: Record<string, CustomTag> = {
+    X: {
+      attributes: { a: { type: "string" } },
+      transform: (call) => call.content?.children ?? [],
+    },
+  };
+  const targets = createTargetLookup([descriptor]);
+  const compileWith = (typeCheck: boolean) =>
+    compilePreactMx("<X a=(1 as number)/>", "/tmp/a.mx", {
+      customTags,
+      targets,
+      typeCheck,
+    });
+
+  it("refuses a wrapped literal of the wrong type, as the build does", () => {
+    expect(() => compileWith(false)).toThrow(/must be string, got number/);
+    expect(() => compileWith(true)).toThrow(/must be string, got number/);
   });
 });

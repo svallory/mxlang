@@ -329,12 +329,21 @@ describe("the passes over the IR take typed nodes", () => {
 });
 
 /**
- * What `stripTypes: false` changes in core's own results. These pin today's
- * behaviour; they are not a claim that it is wanted.
+ * Core's own checks look through a top-level assertion, so they give the same
+ * result with `stripTypes: false`. What does differ is the kind and shape of an
+ * attribute whose value is an assertion over a literal (`dynamic`, shape
+ * `other`), pinned below as documented.
  */
 describe("`stripTypes: false` and core's own checks", () => {
   const codes = (source: string, options: LowerSourceOptions) =>
     lowerSource(source, "/f.mx", options).diagnostics.map((d) => d.code);
+
+  const places = (source: string, options: LowerSourceOptions) =>
+    lowerSource(source, "/f.mx", options).diagnostics.map((d) => [
+      d.code,
+      d.line,
+      d.column,
+    ]);
 
   it.each([
     "<x v:=(y as any)/>",
@@ -342,21 +351,23 @@ describe("`stripTypes: false` and core's own checks", () => {
     "<x v:=(y satisfies any)/>",
     "<x v:=(<any>y)/>",
     "<x v:=(a.b as any)/>",
-  ])(
-    "%s: a clean bound attribute by default, MX_INVALID_BOUND_ATTRIBUTE with `false`",
-    (source) => {
-      expect(codes(source, {})).toEqual([]);
-      expect(codes(source, { stripTypes: true })).toEqual([]);
-      expect(codes(source, { stripTypes: false })).toEqual([
-        "MX_INVALID_BOUND_ATTRIBUTE",
-      ]);
-    },
-  );
+    "<x v:=((y as any)!)/>",
+    "<x v:=(((a.b as any) satisfies unknown)!)/>",
+    "<x v:=(a as any).b/>",
+  ])("%s: a clean bound attribute with and without `stripTypes`", (source) => {
+    expect(codes(source, {})).toEqual([]);
+    expect(codes(source, { stripTypes: true })).toEqual([]);
+    expect(codes(source, { stripTypes: false })).toEqual([]);
+  });
 
-  it("a wrapper inside the bound member is fine either way", () => {
-    for (const stripTypes of [true, false]) {
-      expect(codes("<x v:=(a as any).b/>", { stripTypes })).toEqual([]);
-    }
+  it.each([
+    "<x v:=(1 as any)/>",
+    "<x v:=(f() as any)/>",
+    "<x v:=((1 as any)!)/>",
+  ])("%s: the same bound error at the same position either way", (source) => {
+    const byDefault = places(source, {});
+    expect(byDefault.map((d) => d[0])).toEqual(["MX_INVALID_BOUND_ATTRIBUTE"]);
+    expect(places(source, { stripTypes: false })).toEqual(byDefault);
   });
 
   interface Lowered {
@@ -413,7 +424,7 @@ describe("`stripTypes: false` and core's own checks", () => {
     },
   );
 
-  it("a contract's `type` is checked against a wrapped literal by default, not with `false`", () => {
+  it("a contract's `type` is checked against a wrapped literal either way", () => {
     const customTags: Record<string, CustomTag> = {
       x: { attributes: { a: { type: "string" } } },
     };
@@ -421,6 +432,8 @@ describe("`stripTypes: false` and core's own checks", () => {
     expect(codes(source, { customTags })).toEqual([
       "MX_INVALID_ATTRIBUTE_VALUE",
     ]);
-    expect(codes(source, { customTags, stripTypes: false })).toEqual([]);
+    expect(codes(source, { customTags, stripTypes: false })).toEqual([
+      "MX_INVALID_ATTRIBUTE_VALUE",
+    ]);
   });
 });
