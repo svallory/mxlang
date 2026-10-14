@@ -18,6 +18,8 @@ const CODE = "MX_INVALID_STATEMENT";
 
 const DECORATOR =
   "Decorators are not read inside a `<script>` body: its text is TypeScript without decorator syntax. Move the decorated class to a `.ts` module and import it, or apply the decorator as a plain function call";
+const IMPORT_EXPORT =
+  "An `import` or `export` in a `<script>` body must be one of the body's own statements, not inside a block, an `if` or a function; move it out to the top of the `<script>` body.";
 const ASSERT =
   'Import attributes are written with `with`, not `assert`: `import j from "./x.json" with { type: "json" }`';
 const IMPORT_EQUALS =
@@ -187,7 +189,7 @@ const REFUSED: [string, string, Refusal][] = [
     "an import inside a block",
     page('if (x) { import a from "b"; }'),
     {
-      message: "'import' and 'export' may only appear at the top level.",
+      message: IMPORT_EXPORT,
       line: 3,
       column: 9,
       end: { line: 3, column: 9 },
@@ -197,7 +199,7 @@ const REFUSED: [string, string, Refusal][] = [
     "an export inside a function",
     page("function f() { export const a = 1; }"),
     {
-      message: "'import' and 'export' may only appear at the top level.",
+      message: IMPORT_EXPORT,
       line: 3,
       column: 15,
       end: { line: 3, column: 15 },

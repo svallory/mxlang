@@ -942,6 +942,9 @@ function scriptBodyFailure(
   const start = babel.loc
     ? { line: babel.loc.line, column: babel.loc.column }
     : at;
+  if (isImportExportPlacement(error)) {
+    return fail(SCRIPT_IMPORT_EXPORT_PLACEMENT_MESSAGE, start);
+  }
   if (babel.reasonCode === "ImportAttributesUseAssert") {
     return fail(
       'Import attributes are written with `with`, not `assert`: `import j from "./x.json" with { type: "json" }`',
@@ -4010,6 +4013,10 @@ function rejectInvalidStatement(
  */
 const IMPORT_EXPORT_PLACEMENT_MESSAGE =
   "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
+
+/** The same refusal in a `<script>` body, where the body's own statements are the module's. */
+const SCRIPT_IMPORT_EXPORT_PLACEMENT_MESSAGE =
+  "An `import` or `export` in a `<script>` body must be one of the body's own statements, not inside a block, an `if` or a function; move it out to the top of the `<script>` body.";
 
 /** Is `error` Babel's refusal of an `import` or `export` below the module's top level? */
 function isImportExportPlacement(error: unknown): boolean {
