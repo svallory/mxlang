@@ -421,6 +421,10 @@ describe("a type-only default export is erased, so it is not a second default", 
       'static { import type { T } from "./m"; export { T as default } }',
     ],
     [
+      "export default of an import type in the same statement",
+      'static { import type { T } from "./m"; export default T }',
+    ],
+    [
       "a type specifier import in the same statement",
       'static { import { type T } from "./m"; export { T as default } }',
     ],

@@ -4093,6 +4093,8 @@ function secondDefaultExportIn(program: Node | undefined): Node | undefined {
     if (statement.type === "ExportDefaultDeclaration") {
       const declaration = statement.declaration;
       if (
+        (declaration?.type === "Identifier" &&
+          typeOnly.has(declaration.name)) ||
         declaration?.type === "TSInterfaceDeclaration" ||
         (declaration?.type === "TSDeclareFunction" && !declaration.body)
       )
