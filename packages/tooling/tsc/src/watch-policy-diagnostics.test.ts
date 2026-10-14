@@ -238,8 +238,73 @@ describe("mx-tsc -w host-policy diagnostics", () => {
   );
 });
 
+describe("mx-tsc -w host-policy diagnostics: more cases", () => {
+  it(
+    "stops reporting a nested package.json's error once the only file under it is deleted",
+    async () => {
+      const dir = project(VALID);
+      let watcher: Watcher | undefined;
+      try {
+        const sub = join(dir, "src", "sub");
+        mkdirSync(sub);
+        writeFileSync(join(sub, "package.json"), MISMATCH);
+        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+        expect(await watcher.untilSummary()).toContain("Found 0 errors.");
+
+        const added = join(sub, "x.mx");
+        writeFileSync(added, "<p>ok</p>\n");
+        const broken = await watcher.untilSummary(added);
+        expect(policyLines(broken)).toHaveLength(1);
+        expect(policyLines(broken)[0]).toContain("src/sub/package.json");
+        expect(count(broken)).toBe(errorLines(broken).length);
+
+        // The rebuild that only removes a root file: tsc may write a TS6053
+        // summary first, then the settled one.
+        rmSync(added);
+        let settled = await watcher.untilSummary();
+        if (policyLines(settled).length > 0 || count(settled) > 0) {
+          settled = await watcher.untilSummary();
+        }
+        expect(policyLines(settled)).toEqual([]);
+        expect(settled).toContain("Found 0 errors. Watching for file changes.");
+      } finally {
+        await watcher?.stop();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    CASE_MS,
+  );
+
+  it(
+    "counts a policy error that has no TS80001 pointer (an invalid defaultTag) on every build",
+    async () => {
+      const dir = project(
+        pretty({
+          private: true,
+          mx: { host: "html", html: { defaultTag: "input" } },
+        }),
+      );
+      let watcher: Watcher | undefined;
+      try {
+        const page = join(dir, "src", "page.mx");
+        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+        for (const edited of [undefined, page, page]) {
+          const cycle = await watcher.untilSummary(edited);
+          expect(policyLines(cycle)).toHaveLength(1);
+          expect(cycle.indexOf("TS80003")).toBeLessThan(cycle.search(SUMMARY));
+          expect(cycle).toContain("Found 1 error. Watching for file changes.");
+        }
+      } finally {
+        await watcher?.stop();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    CASE_MS,
+  );
+});
+
 describe("reportWatchPass", () => {
-  it("fails the exit code on a build with policy errors and clears it on a clean one", () => {
+  it("fails the exit code on a build with errors and clears it on a clean one", () => {
     const before = process.exitCode;
     const empty = { reports: [], errors: [], warnings: [] };
     try {

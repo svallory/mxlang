@@ -155,12 +155,19 @@ The path is the location only, never repeated in the message; the language
 server and the tsserver plugin print the same text as
 `package.json:line:col: <message>`.
 
-Both are warnings: the exit code is exactly what it was before they were
-printed. Each is printed once per run, however many `.mx`, `.solid.mx`,
-`.ng.mx` or `.astro.mx` files sit under that `package.json`.
+A warning leaves the exit code alone; a target that belongs to another host or
+an invalid target is an error and fails the run. Each is printed once per run,
+however many `.mx`, `.solid.mx`, `.ng.mx` or `.astro.mx` files sit under that
+`package.json`; under `--watch` they are printed on every build, and the errors
+are counted in the summary.
 
 ## Known limitations
 
+- **Watch: a `package.json` change is picked up per `.mx` file.** Under
+  `-w -p` each `.mx` file re-resolves its host policy only when it compiles, so
+  after you fix a `package.json` the TS80003 line stays until every `.mx` file
+  under it has compiled again (restart the watcher to re-read them all), and a
+  change that breaks one is not reported until a `.mx` file under it compiles.
 - **Watch: a file dropped from the program keeps its last MX error.** A file
   that leaves the program but stays on disk (for example when it no longer
   matches `include`) keeps printing its last MX error until the watcher is

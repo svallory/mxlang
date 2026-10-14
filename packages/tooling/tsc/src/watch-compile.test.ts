@@ -4,10 +4,12 @@ import { join } from "node:path";
 import type {
   MxCompileDiagnostic,
   MxDiagnosticLanguagePlugin,
+  TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   currentCompileDiagnostics,
+  currentPolicyDiagnostics,
   type PluginGeneration,
   trackGeneration,
 } from "./watch-compile.ts";
@@ -18,7 +20,12 @@ import {
  */
 function fakePlugin() {
   const stored = new Map<string, MxCompileDiagnostic[]>();
+  const policies = new Map<string, TargetPolicyDiagnostic[]>();
   const plugin = {
+    getTargetPolicyDiagnostics: (fileName?: string) =>
+      fileName === undefined
+        ? [...policies.values()].flat()
+        : (policies.get(fileName) ?? []),
     createVirtualCode: (fileName: string) => {
       void fileName;
       return undefined;
@@ -28,7 +35,7 @@ function fakePlugin() {
         ? [...stored.values()].flat()
         : (stored.get(fileName) ?? []),
   } as unknown as MxDiagnosticLanguagePlugin;
-  return { plugin, stored };
+  return { plugin, stored, policies };
 }
 
 let dir: string;
@@ -198,5 +205,66 @@ describe("trackGeneration", () => {
       getCompileDiagnostics: () => [],
     } as unknown as MxDiagnosticLanguagePlugin;
     expect(() => trackGeneration([plugin])).not.toThrow();
+  });
+});
+
+const policy = (message: string): TargetPolicyDiagnostic =>
+  ({
+    file: "package.json",
+    message,
+    severity: "error",
+    code: "target-host-mismatch",
+    line: 1,
+    column: 0,
+  }) as TargetPolicyDiagnostic;
+
+/** A generation whose plugin compiled `compiled`, file to its policy diagnostics. */
+function policyGeneration(compiled: Record<string, TargetPolicyDiagnostic[]>) {
+  const fake = fakePlugin();
+  const tracked = trackGeneration([fake.plugin]);
+  for (const [file, diagnostics] of Object.entries(compiled)) {
+    fake.policies.set(file, diagnostics);
+    fake.plugin.createVirtualCode?.(file, "mx", {} as never, {} as never);
+  }
+  return tracked;
+}
+
+const policyMessages = (list: readonly TargetPolicyDiagnostic[]) =>
+  list.map((d) => d.message);
+
+describe("currentPolicyDiagnostics", () => {
+  it("does not read an older generation for a file a newer one compiled", () => {
+    const [a] = files as [string];
+    const older = policyGeneration({ [a]: [policy("old")] });
+    const newer = policyGeneration({ [a]: [] });
+    expect(currentPolicyDiagnostics([older, newer])).toEqual([]);
+  });
+
+  it("still reads an older generation for a file no newer one touched", () => {
+    const [a, b] = files as [string, string];
+    const older = policyGeneration({ [a]: [policy("a-old")] });
+    const newer = policyGeneration({ [b]: [policy("b-new")] });
+    expect(
+      policyMessages(currentPolicyDiagnostics([older, newer])).sort(),
+    ).toEqual(["a-old", "b-new"]);
+  });
+
+  it("drops the policy of a file that no longer exists", () => {
+    const [a, b] = files as [string, string];
+    const only = policyGeneration({
+      [a]: [policy("gone")],
+      [b]: [policy("kept")],
+    });
+    rmSync(a);
+    expect(policyMessages(currentPolicyDiagnostics([only]))).toEqual(["kept"]);
+  });
+
+  it("reports one diagnostic that two files share once", () => {
+    const [a, b] = files as [string, string];
+    const shared = policy("shared");
+    const only = policyGeneration({ [a]: [shared], [b]: [{ ...shared }] });
+    expect(policyMessages(currentPolicyDiagnostics([only]))).toEqual([
+      "shared",
+    ]);
   });
 });
