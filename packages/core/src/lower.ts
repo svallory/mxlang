@@ -1470,7 +1470,22 @@ function lowerAttr(
       typeof outer?.start === "number" && typeof outer?.end === "number"
         ? { sourceStart: outer.start, sourceEnd: outer.end }
         : undefined;
-    const span = wholeAttrSpan(lowered, argsSpan);
+    // With `stripTypes: false` the value is still wrapped in its assertion
+    // (`(x as T)`), whose span runs on to the `T`. The default ends the
+    // attribute at the operand, and a check's error `end` reads this span, so
+    // the end is the operand's either way.
+    const written =
+      lowered.kind === "dynamic" || lowered.kind === "bound"
+        ? lowered.value.node
+        : undefined;
+    const operand = withoutTsWrappers(written);
+    const span = wholeAttrSpan(
+      lowered,
+      argsSpan,
+      operand && operand !== written
+        ? nodeSpan(ctx, operand).sourceEnd
+        : undefined,
+    );
     if (span) {
       span.sourceEnd = closeValueParens(ctx.source, lowered, span, argsSpan);
       lowered.span = span;
@@ -1552,6 +1567,7 @@ function skipTrivia(source: string, at: number): number {
 function wholeAttrSpan(
   attr: Exclude<Attr, { kind: "spread" }>,
   argsSpan?: SourceSpan,
+  valueEnd?: number,
 ): SourceSpan | undefined {
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;
@@ -1571,7 +1587,11 @@ function wholeAttrSpan(
         ? attr.nameSpan
         : attr.value.span;
   if (!valueSpan) return undefined;
-  add(valueSpan);
+  add(
+    valueEnd === undefined
+      ? valueSpan
+      : { sourceStart: valueSpan.sourceStart, sourceEnd: valueEnd },
+  );
   if (attr.kind === "bound") add(attr.refinement?.span);
   for (const arg of attr.args ?? []) add(arg.span);
   add(argsSpan);

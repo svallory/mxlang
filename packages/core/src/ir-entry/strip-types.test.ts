@@ -17,7 +17,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { CustomTag } from "../custom-tags.ts";
+import type { CustomTag, CustomTagAttribute } from "../custom-tags.ts";
 import { clearScanCache, scanCached } from "../scan-cache.ts";
 import type { Dialect, Trigger } from "../syntax-table.ts";
 import { clearTagFileCache } from "../tag-file.ts";
@@ -329,21 +329,21 @@ describe("the passes over the IR take typed nodes", () => {
 });
 
 /**
- * Core's own checks look through a top-level assertion, so they give the same
- * result with `stripTypes: false`. What does differ is the kind and shape of an
- * attribute whose value is an assertion over a literal (`dynamic`, shape
- * `other`), pinned below as documented.
+ * Core's own checks look through TypeScript assertions, so they give the same
+ * diagnostics with `stripTypes: false`: the bound-attribute check and each
+ * contract check (`string`, `number`, `boolean`, `enum`, `literalOnly`,
+ * `array`, `items`, `function`, `atom`), one row each. What differs is the
+ * kind and shape of an attribute whose value is an assertion over a literal
+ * (`dynamic`, shape `other`) and, with it, the contract `expression` check;
+ * both are pinned below as documented.
  */
 describe("`stripTypes: false` and core's own checks", () => {
   const codes = (source: string, options: LowerSourceOptions) =>
     lowerSource(source, "/f.mx", options).diagnostics.map((d) => d.code);
 
-  const places = (source: string, options: LowerSourceOptions) =>
-    lowerSource(source, "/f.mx", options).diagnostics.map((d) => [
-      d.code,
-      d.line,
-      d.column,
-    ]);
+  /** The whole diagnostics, so a message, a start or an end that moves shows. */
+  const diagnosticsOf = (source: string, options: LowerSourceOptions) =>
+    lowerSource(source, "/f.mx", options).diagnostics;
 
   it.each([
     "<x v:=(y as any)/>",
@@ -352,6 +352,7 @@ describe("`stripTypes: false` and core's own checks", () => {
     "<x v:=(<any>y)/>",
     "<x v:=(a.b as any)/>",
     "<x v:=((y as any)!)/>",
+    "<x v:=(y<string>)/>",
     "<x v:=(((a.b as any) satisfies unknown)!)/>",
     "<x v:=(a as any).b/>",
   ])("%s: a clean bound attribute with and without `stripTypes`", (source) => {
@@ -365,9 +366,11 @@ describe("`stripTypes: false` and core's own checks", () => {
     "<x v:=(f() as any)/>",
     "<x v:=((1 as any)!)/>",
   ])("%s: the same bound error at the same position either way", (source) => {
-    const byDefault = places(source, {});
-    expect(byDefault.map((d) => d[0])).toEqual(["MX_INVALID_BOUND_ATTRIBUTE"]);
-    expect(places(source, { stripTypes: false })).toEqual(byDefault);
+    const byDefault = diagnosticsOf(source, {});
+    expect(byDefault.map((d) => d.code)).toEqual([
+      "MX_INVALID_BOUND_ATTRIBUTE",
+    ]);
+    expect(diagnosticsOf(source, { stripTypes: false })).toEqual(byDefault);
   });
 
   interface Lowered {
@@ -424,16 +427,94 @@ describe("`stripTypes: false` and core's own checks", () => {
     },
   );
 
-  it("a contract's `type` is checked against a wrapped literal either way", () => {
+  // One row per contract check. `bad` is refused by default, `good` is
+  // accepted; with `stripTypes: false` both give the very same diagnostics
+  // (message, start and end included).
+  const contractRows: [string, CustomTagAttribute, string, string][] = [
+    ["string", { type: "string" }, "a=(1 as number)", "a=('s' as string)"],
+    ["number", { type: "number" }, "a=('s' as string)", "a=(1 as number)"],
+    ["boolean", { type: "boolean" }, "a=(1 as number)", "a=(true as boolean)"],
+    [
+      "enum",
+      { type: "string", enum: ["p", "q"] },
+      "a=('z' as string)",
+      "a=('p' as string)",
+    ],
+    ["literalOnly", { literalOnly: true }, "a=(x as any)", "a=(1 as number)"],
+    [
+      "literalOnly, nested",
+      { literalOnly: true },
+      "a=([x as any])",
+      "a=([-1 as number, 's' as string])",
+    ],
+    ["array", { type: "array" }, "a=(1 as number)", "a=([1] as number[])"],
+    [
+      "array, negative",
+      { type: "array" },
+      "a=-(1 as number)",
+      "a=([] as never)",
+    ],
+    [
+      "items",
+      { type: "array", items: "string" },
+      "a=([1] as number[])",
+      "a=(['s'] as string[])",
+    ],
+    [
+      "items, nested",
+      { type: "array", items: "string" },
+      "a=[(1 as number)]",
+      "a=[('s' as string)]",
+    ],
+    [
+      "function",
+      { type: "function" },
+      "a=(1 as number)",
+      "a=((() => 1) as unknown)",
+    ],
+    ["atom", { type: "atom" }, "a=(1 as number)", "a=([] as string[])"],
+    [
+      "atom, array element",
+      { type: "atom" },
+      "a=([1] as number[])",
+      "a=([] as string[])",
+    ],
+  ];
+
+  it.each(contractRows)(
+    "contract `%s`: the same diagnostics with and without `stripTypes`",
+    (_name, attribute, bad, good) => {
+      const customTags: Record<string, CustomTag> = {
+        x: { attributes: { a: attribute } },
+      };
+      const byDefault = diagnosticsOf(`<x ${bad}/>\n`, { customTags });
+      expect(byDefault.map((d) => d.code)).toEqual([
+        "MX_INVALID_ATTRIBUTE_VALUE",
+      ]);
+      expect(
+        diagnosticsOf(`<x ${bad}/>\n`, { customTags, stripTypes: false }),
+      ).toEqual(byDefault);
+      for (const options of [{}, { stripTypes: false }]) {
+        expect(
+          diagnosticsOf(`<x ${good}/>\n`, { customTags, ...options }),
+        ).toEqual([]);
+      }
+    },
+  );
+
+  it("contract `expression` follows the attribute kind: the one check that differs", () => {
+    // `a="s"` is refused (a string is not an expression). `a=("s" as const)`
+    // is `static` by default, so the same error; with `false` it is
+    // `dynamic`, so it passes.
     const customTags: Record<string, CustomTag> = {
-      x: { attributes: { a: { type: "string" } } },
+      x: { attributes: { a: { type: "expression" } } },
     };
-    const source = "<x a=(1 as number)/>\n";
-    expect(codes(source, { customTags })).toEqual([
+    const source = '<x a=("s" as const)/>\n';
+    expect(diagnosticsOf(source, { customTags }).map((d) => d.code)).toEqual([
       "MX_INVALID_ATTRIBUTE_VALUE",
     ]);
-    expect(codes(source, { customTags, stripTypes: false })).toEqual([
-      "MX_INVALID_ATTRIBUTE_VALUE",
-    ]);
+    expect(diagnosticsOf(source, { customTags, stripTypes: false })).toEqual(
+      [],
+    );
   });
 });

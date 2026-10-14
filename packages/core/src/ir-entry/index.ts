@@ -174,12 +174,16 @@ export interface LowerSourceOptions {
    * dialect whose `nodeType.lower`, contract hooks or `afterLower` read
    * types.
    *
-   * With `false`, a top-level assertion stays around the value, so an
-   * attribute whose value is an assertion over a literal
-   * (`a=("s" as const)`) is `dynamic` with shape `other` rather than
-   * `static`, `boolean`, `object`, `array` or `string`. Core's own checks
-   * look through the assertion, so a bound attribute (`v:=(y as any)`) and a
-   * contract's `type` check give the same result as the default.
+   * With `false`, an assertion stays around the value, so an attribute
+   * whose value is an assertion over a literal (`a=("s" as const)`) is
+   * `dynamic` with shape `other` rather than `static`, `boolean`, `object`,
+   * `array` or `string`, and a contract's `type: "expression"` check follows
+   * that kind (`a=("s" as const)` is refused by default, accepted with
+   * `false`). Every other check of core looks through TypeScript assertions
+   * (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's
+   * diagnostics, positions included: the bound-attribute check
+   * (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`,
+   * `literalOnly`, `array`, `items`, `function` and `atom` checks.
    * A tag-file hook's `ctx.lower` takes the option but does not inherit this
    * call's value.
    */

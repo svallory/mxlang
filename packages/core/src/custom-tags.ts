@@ -1346,7 +1346,8 @@ function literalValue(attr: Attr): LiteralValue | null {
  * are themselves literals. Composite values are still not `literalValue`s, so
  * declaring a `type` or an `enum` alongside keeps its scalar meaning.
  */
-function isLiteralNode(node: Node | null | undefined): boolean {
+function isLiteralNode(written: Node | null | undefined): boolean {
+  const node = withoutTsWrappers(written);
   switch (node?.type) {
     case "StringLiteral":
     case "NumericLiteral":
@@ -1376,7 +1377,8 @@ function isLiteralNode(node: Node | null | undefined): boolean {
 }
 
 /** The written type of an expression node, or `null` when it cannot be known. */
-function nodeShape(node: Node | null | undefined): string | null {
+function nodeShape(written: Node | null | undefined): string | null {
+  const node = withoutTsWrappers(written);
   switch (node?.type) {
     case "StringLiteral":
       return node.extra?.mxAtom ? "atom" : "string";
@@ -1396,7 +1398,8 @@ function nodeShape(node: Node | null | undefined): string | null {
       return "function";
     case "UnaryExpression":
       // `-1` is a `UnaryExpression` over a `NumericLiteral`.
-      return node.operator === "-" && node.argument.type === "NumericLiteral"
+      return node.operator === "-" &&
+        withoutTsWrappers(node.argument).type === "NumericLiteral"
         ? "number"
         : null;
     default:
@@ -1444,11 +1447,12 @@ function checkCompositeAttr(
     declaration.type !== "array" ||
     !declaration.items ||
     (attr.kind !== "dynamic" && attr.kind !== "bound") ||
-    attr.value.node?.type !== "ArrayExpression"
+    withoutTsWrappers(attr.value.node)?.type !== "ArrayExpression"
   ) {
     return;
   }
-  const elements = attr.value.node.elements as Array<Node | null>;
+  const elements = withoutTsWrappers(attr.value.node)
+    .elements as Array<Node | null>;
   for (const [index, element] of elements.entries()) {
     const got = nodeShape(element);
     if (!element || !got || got === declaration.items) continue;
@@ -1529,11 +1533,12 @@ function checkAtomAttr(
   }
   if (
     (attr.kind !== "dynamic" && attr.kind !== "bound") ||
-    attr.value.node?.type !== "ArrayExpression"
+    withoutTsWrappers(attr.value.node)?.type !== "ArrayExpression"
   ) {
     return;
   }
-  for (const element of attr.value.node.elements as Array<Node | null>) {
+  for (const element of withoutTsWrappers(attr.value.node)
+    .elements as Array<Node | null>) {
     const got = nodeShape(element);
     if (!element || !got || got === "atom") continue;
     const start = element.loc?.start;
