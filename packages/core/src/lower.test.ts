@@ -1772,18 +1772,10 @@ describe("one fixture per IR kind", () => {
         false,
       ],
       ["interface heritage", "export interface Input extends AttrTag {}", true],
-      // A decorator in a `static` is Marko's own syntax error since #395 r2, so the
-      // old "decorated static parse failure" row can no longer reach this derivation.
-      [
-        "duplicate static const parse failure",
-        "static const x = 1\nstatic const x = 2\nexport interface Input { head?: AttrTag }",
-        true,
-      ],
-      [
-        "duplicate static declarations parse failure",
-        "static let y = 1\nstatic var y = 2\nexport interface Input { head?: AttrTag }",
-        true,
-      ],
+      // A decorator in a `static` is Marko's own syntax error since #395 r2, and a
+      // name declared twice across the module statements is a compile error, so
+      // the old "decorated static" and "duplicate static" parse-failure rows can
+      // no longer reach this derivation.
     ])(
       "derives AttrTag imports from parsed type references: %s",
       (_case, source, expected) => {
