@@ -315,16 +315,17 @@ describe("no input makes lowerSource throw", () => {
     },
   );
 
-  it("under the strict default, a `script` body's open `${` is the new error", () => {
-    // `script` is raw text there (decision 212 item 8), so the `${` opens in
-    // its body text rather than in a tag head.
+  it("under the strict default, a `script` body's open `${` is the placeholder refusal", () => {
+    // `script` is raw text there, so the `${` opens in its body text rather
+    // than in a tag head; the body is then refused for the placeholder.
     const { ir, diagnostics } = lowerSource(`script -- \${b`, "/t.mx");
     expect(ir).toBeUndefined();
     expect(diagnostics[0]).toMatchObject({
-      message: `the input ends inside \`\${\`…\`}\` opened here`,
+      code: "MX_INERT_TAG_SHAPE",
       line: 1,
       column: 10,
     });
+    expect(diagnostics[0]?.message).toContain("placeholder");
   });
 
   it("reports an internal invariant at the file start under a distinct prefix", () => {

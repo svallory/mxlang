@@ -60,7 +60,6 @@ describe("input ending inside a concise open delimiter", () => {
     ["div<A", "the input ends inside `<`…`>` opened here", 1, 3],
     ["div x=`${a", "the input ends inside `` ` ``…`` ` `` opened here", 1, 6],
     ["div.a${b", "the input ends inside `${`…`}` opened here", 1, 5],
-    ["script -- ${b", "the input ends inside `${`…`}` opened here", 1, 10],
     ["${x", "the input ends inside `${`…`}` opened here", 1, 0],
   ])(
     "%j, which main compiled, reports the new error",
@@ -68,4 +67,15 @@ describe("input ending inside a concise open delimiter", () => {
       expect(run(source)).toEqual({ message, line, column });
     },
   );
+});
+
+describe("input ending inside a `<script>` body placeholder", () => {
+  it("is refused for the placeholder, which a `<script>` body never takes", () => {
+    // Main compiled this; the `${` opens in the raw text body, and the body
+    // is refused for holding a placeholder before the input's end matters.
+    const result = run("script -- ${b");
+    expect(result?.line).toBe(1);
+    expect(result?.column).toBe(10);
+    expect(result?.message).toContain("placeholder");
+  });
 });

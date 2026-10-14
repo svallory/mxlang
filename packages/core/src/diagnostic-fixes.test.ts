@@ -63,7 +63,13 @@ const FORMS: Array<[string, string, string[], string[]]> = [
   ["self-closing", "<effect/>", ["effect"], []],
   ["self-closing method", "<effect() { go() }/>", ["effect"], []],
   ["self-closing value", "<effect=go()/>", ["effect"], []],
-  ["an attribute", '<effect foo="bar"/>', ["effect"], []],
+  [
+    "an attribute",
+    '<effect foo="bar"/>',
+    ["effect"],
+    // `<script foo="bar"/>`: `script` takes no attribute but its own value.
+    ["MX_INERT_TAG_SHAPE"],
+  ],
   ["concise with a body", "effect\n  -- go()", ["effect"], []],
   [
     "concise with a child tag",
@@ -77,8 +83,9 @@ const FORMS: Array<[string, string, string[], string[]]> = [
     "concise block",
     "effect {\n  go()\n}",
     ["effect"],
-    // `script { … }`: the block is an attribute `script` does not take.
-    ["MX_INVALID_ATTRIBUTE"],
+    // `script { … }`: the block is an attribute `script` does not take, and
+    // not a valid attribute name either.
+    ["MX_INERT_TAG_SHAPE", "MX_INVALID_ATTRIBUTE"],
   ],
 ];
 

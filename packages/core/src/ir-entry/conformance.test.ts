@@ -64,7 +64,10 @@ function readCorpus(): CorpusCase[] {
   return cases;
 }
 
-const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
+const INTENDED: Record<
+  string,
+  { pattern: RegExp; cases: string[]; strictOnly?: boolean }
+> = {
   // decision 54: MX has no scriptlets (`$ stmt` is refused)
   scriptlets: {
     pattern: /scriptlets \(/,
@@ -91,6 +94,23 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
       "scriptlet-line-template-literal",
       "scriptlet-line-trailing-line-comment",
       "scriptlet-terminated-by-semi-colon",
+    ],
+  },
+  // a built-in `<script>` takes no attribute but its own value and no `${…}`
+  // placeholder in its body; stock Marko refuses each of these too. Only the
+  // default rules: under `none` a `script` is an ordinary tag, unchanged.
+  scriptShape: {
+    strictOnly: true,
+    pattern:
+      /`<script>` does not support the|A `<script>` body is JavaScript or TypeScript text/,
+    cases: [
+      "placeholder-within-script-tag",
+      "placeholder-within-script-within-string",
+      "script-empty-concise",
+      "script-escaped-placeholder",
+      "script-self-closed",
+      "script-tag-entities",
+      "script-with-strings",
     ],
   },
   // decision 139: non-tag prologue syntax (CDATA) is refused at the construct
@@ -258,9 +278,15 @@ const NONE_GAPS: Record<string, string[]> = {
 
 const cases = readCorpus();
 
-const intendedBy = new Map<string, { group: string; pattern: RegExp }>();
-for (const [group, { pattern, cases: names }] of Object.entries(INTENDED)) {
-  for (const name of names) intendedBy.set(name, { group, pattern });
+const intendedBy = new Map<
+  string,
+  { group: string; pattern: RegExp; strictOnly: boolean }
+>();
+for (const [group, { pattern, cases: names, strictOnly }] of Object.entries(
+  INTENDED,
+)) {
+  for (const name of names)
+    intendedBy.set(name, { group, pattern, strictOnly: strictOnly ?? false });
 }
 function gapsOf(...groups: Record<string, string[]>[]): Map<string, string> {
   const gapBy = new Map<string, string>();
@@ -311,7 +337,10 @@ for (const { label, tagRules, gapBy } of PRESETS) {
     });
 
     for (const c of cases) {
-      const intended = intendedBy.get(c.name);
+      const found = intendedBy.get(c.name);
+      // A strict-only refusal is not one under `none`: the case parses there.
+      const intended =
+        found?.strictOnly && tagRules === "none" ? undefined : found;
       const gap = gapBy.get(c.name);
 
       if (intended) {

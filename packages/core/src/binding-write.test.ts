@@ -704,10 +704,10 @@ describe("what must keep compiling", () => {
     });
   });
 
-  it("a `<script>` split by a placeholder is skipped, as it was", () => {
-    expect(
-      attempt("<const/x=1/>\n<script>x = ${1}</script>\n"),
-    ).toBeUndefined();
+  it("a `<script>` split by a placeholder is refused for the placeholder, not the write", () => {
+    const error = attempt("<const/x=1/>\n<script>x = ${1}</script>\n");
+    expect(error?.diagnosticCode).toBe("MX_INERT_TAG_SHAPE");
+    expect(error?.message).toMatch(/placeholder/);
   });
 });
 
