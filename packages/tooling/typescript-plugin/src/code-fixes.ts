@@ -38,11 +38,15 @@ export function applicableFixes(
   fixes: readonly IrDiagnosticFix[] | undefined,
   length: number,
 ): IrDiagnosticFix[] {
-  return (fixes ?? []).filter((fix) => {
-    if (typeof fix.title !== "string" || !Array.isArray(fix.edits)) {
-      return false;
-    }
-    if (fix.edits.length === 0) return false;
+  // `fixes` of a third-party dialect hook is whatever the hook threw, so each
+  // level is checked before it is read: a malformed fix is dropped, never thrown on.
+  if (!Array.isArray(fixes)) return [];
+  const isObject = (value: unknown): boolean =>
+    typeof value === "object" && value !== null;
+  return fixes.filter((fix) => {
+    if (!isObject(fix) || typeof fix.title !== "string") return false;
+    if (!Array.isArray(fix.edits) || fix.edits.length === 0) return false;
+    if (!fix.edits.every(isObject)) return false;
     let previousEnd = -1;
     const edits = [...fix.edits].sort((a, b) => a.offset - b.offset);
     for (const edit of edits) {

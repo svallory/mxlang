@@ -65,6 +65,39 @@ export const PROBE_FIX_DIALECT_MODULE = `module.exports.default = {
 };
 `;
 
+/**
+ * A dialect module whose `!fix` error carries `fixes` exactly as the
+ * JavaScript expression `fixes` says, however wrong. A third-party hook can
+ * attach anything, so a carrier must not trust the shape.
+ */
+export function probeFixDialectModule(fixes: string): string {
+  return `module.exports.default = {
+  tagRules: "none",
+  table: {
+    attributeTriggers: [
+      { id: "probe", chars: "!", match: "![a-z]+", standIn: "keep", node: { call: "probe" } },
+    ],
+  },
+  lowerTrigger(id, text, span, ctx) {
+    if (text !== "!fix") return ctx.attribute("a", true);
+    try {
+      ctx.fail("fixable probe", { code: "PROBE_FIXABLE" });
+    } catch (error) {
+      error.fixes = ${fixes};
+      throw error;
+    }
+  },
+};
+`;
+}
+
+/** Malformed `fixes` a hook can attach: a list holding null, a string, an edit that is null. */
+export const PROBE_MALFORMED_FIXES = {
+  nullFix: "[null]",
+  notAnArray: '"oops"',
+  nullEdit: '[{ title: "t", edits: [null] }]',
+} as const;
+
 /** The source {@link PROBE_FIX_DIALECT_MODULE} fails on: `!fix` at offset 3, 4 characters. */
 export const PROBE_FIX_SOURCE = "<y !fix/>\n";
 

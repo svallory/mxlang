@@ -153,11 +153,15 @@ src/index.ts(1,23): error TS2307: Cannot find module './Widget.solid.mx' or
 ## Quick fixes
 
 A diagnostic that knows the exact repair carries it as a *fix*: a title and the
-edits that make it. Both packages show it. In an editor the plugin answers
-tsserver's code-fix request, so the lightbulb (or `Ctrl+.`) on the squiggle
-offers the fix like any TypeScript quick fix. `mx-tsc` prints each fix on a
-`fix:` line under the diagnostic, with 1-based `line:column` positions (the end
-of a range is exclusive) and the new text in quotes:
+edits that make it. The plugin answers tsserver's `getCodeFixes` request for an
+MX diagnostic's range, so a client that asks tsserver for the fixes of an MX
+diagnostic gets them. VS Code's TypeScript extension and `vtsls` (Zed) only ask
+for the codes TypeScript itself supports, which no plugin can extend, so in
+VS Code and Zed the lightbulb for an MX fix comes from the
+[MX language server](/editors/language-server/), which both register for `.mx`.
+`mx-tsc` prints each fix on a `fix:` line under the diagnostic, with 1-based
+`line:column` positions (the end of a range is exclusive) and the new text in
+quotes:
 
 ```
 $ mx-tsc --noEmit -p .

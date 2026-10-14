@@ -8,8 +8,10 @@ import {
   PROBE_DIALECT_MODULE,
   PROBE_FIX_DIALECT_MODULE,
   PROBE_FIX_SOURCE,
+  PROBE_MALFORMED_FIXES,
   PROBE_MANIFEST,
   PROBE_SOURCES,
+  probeFixDialectModule,
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
@@ -194,6 +196,29 @@ describe("dialect files through the TypeScript plugin", () => {
       [],
     );
   });
+
+  it.each(Object.entries(PROBE_MALFORMED_FIXES))(
+    "malformed `fixes` (%s) from a dialect hook offer no fix and throw nothing",
+    (_name, fixes) => {
+      const project = probeProject({
+        "dialect.cjs": probeFixDialectModule(fixes),
+      });
+      const file = project.path("page.probe");
+      const service = createService(project.dir, { [file]: PROBE_FIX_SOURCE });
+      const [diagnostic] = service.getSyntacticDiagnostics(file);
+      expect(diagnostic?.code).toBe("PROBE_FIXABLE");
+      expect(
+        service.getCodeFixesAtPosition(
+          file,
+          3,
+          3,
+          ["PROBE_FIXABLE" as unknown as number],
+          {},
+          {},
+        ),
+      ).toEqual([]);
+    },
+  );
 
   it("a valid dialect file has no diagnostics of any kind", () => {
     const project = probeProject();

@@ -342,6 +342,11 @@ describe("applicableFixes", () => {
     const good = fix(edit(0, 2), edit(2, 4), edit(10, 10));
     expect(applicableFixes([good], 10)).toEqual([good]);
     expect(applicableFixes(undefined, 10)).toEqual([]);
+    for (const notAList of [null, "oops", 3, {}, { length: 1 }]) {
+      expect(applicableFixes(notAList as never, 10)).toEqual([]);
+    }
+    // One bad fix does not take a good one down.
+    expect(applicableFixes([null, good, "x"] as never, 10)).toEqual([good]);
     for (const bad of [
       fix(),
       fix(edit(-1, 2)),
@@ -351,6 +356,11 @@ describe("applicableFixes", () => {
       fix(edit(0.5, 2)),
       { title: "t", edits: [{ offset: 0, end: 1 }] },
       { edits: [edit(0, 1)] },
+      null,
+      "oops",
+      { title: "t", edits: [null] },
+      { title: "t", edits: [edit(0, 1), null] },
+      { title: "t", edits: "oops" },
     ]) {
       expect(applicableFixes([bad as never], 10)).toEqual([]);
     }

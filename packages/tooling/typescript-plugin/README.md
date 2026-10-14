@@ -53,9 +53,9 @@ list rather than as a silent empty file.
 
 A compile diagnostic that carries fixes (`IrDiagnostic.fixes`, such as the
 "Rename to `<script>`" fix of `MX_RESERVED_EFFECT_TAG`, or a dialect's) also
-reaches tsserver as a quick fix: the plugin answers `getCodeFixesAtPosition`
+reaches tsserver as a code fix: the plugin answers `getCodeFixesAtPosition`
 for the diagnostic's range, with one code fix per fix and the fix's edits
-against the `.mx` file. Requests for TypeScript's own codes, and for any file
+against the `.mx` file. A client that only asks for the codes TypeScript supports (VS Code's TypeScript extension, `vtsls` in Zed) never asks for these, so there the fix comes from `@mxlang/language-server`. Requests for TypeScript's own codes, and for any file
 with no such diagnostic, go to TypeScript unchanged. `mx-tsc` prints the same
 fixes under the diagnostic, on `fix:` lines.
 

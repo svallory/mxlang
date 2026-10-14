@@ -7,6 +7,8 @@ import {
   cleanupProbeProjects,
   PROBE_FIX_DIALECT_MODULE,
   PROBE_FIX_SOURCE,
+  PROBE_MALFORMED_FIXES,
+  probeFixDialectModule,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import { formatFixLines } from "./fix-lines.ts";
@@ -116,6 +118,37 @@ describe("mx-tsc prints the fixes a diagnostic carries", () => {
       ),
     ).toBe(true);
   });
+});
+
+describe("mx-tsc with malformed fixes from a dialect hook", () => {
+  it.each(Object.entries(PROBE_MALFORMED_FIXES))(
+    "(%s) still prints the diagnostic, with no fix line",
+    { timeout: 120_000 },
+    (_name, fixes) => {
+      const project = probeProject({
+        "dialect.cjs": probeFixDialectModule(fixes),
+        "a.probe": PROBE_FIX_SOURCE,
+        "tsconfig.json": JSON.stringify({
+          compilerOptions: {
+            noEmit: true,
+            module: "esnext",
+            moduleResolution: "bundler",
+            target: "esnext",
+            types: [],
+          },
+          include: ["**/*.probe"],
+        }),
+      });
+      const result = runInProcess(["-p", project.dir, "--pretty", "false"]);
+      const text = stripVTControlCharacters(result.stderr + result.stdout);
+      expect(result.status).toBe(1);
+      expect(text.endsWith("(1,4): error PROBE_FIXABLE: fixable probe\n")).toBe(
+        true,
+      );
+      expect(text).not.toContain("fix:");
+      expect(text).not.toContain("TypeError");
+    },
+  );
 });
 
 describe("formatFixLines", () => {
