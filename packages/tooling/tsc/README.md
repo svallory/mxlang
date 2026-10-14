@@ -114,6 +114,25 @@ The cost on every `-b` run, up to date or not, is one program creation plus one
 Angular checker per project; caching it is not done. See
 [Angular → Template diagnostics](../../../apps/docs/docs/hosts/angular.md).
 
+## Quick fixes
+
+A diagnostic that carries fixes prints them under its own line, one `fix:` line
+per fix, the same fixes the TypeScript plugin offers tsserver as quick fixes:
+
+```
+page.mx(2,4): error MX_RESERVED_EFFECT_TAG: `<effect>` is not an MX tag. Use `<script>`: ...
+  fix: Rename to `<script>`: replace 2:4-2:10 with "script"; replace 2:17-2:23 with "script"
+```
+
+Positions are 1-based `line:column`, like the `file(line,column)` above them,
+and the end of a range is exclusive. An edit is `replace L:C-L:C with "text"`,
+`insert at L:C "text"` or `delete L:C-L:C`; the text is JSON-quoted, so a
+newline or a quote is exact and the fix stays on one line. The edits of one fix
+all refer to the file as it is. The output is the same with `--pretty` (a
+compile diagnostic is always printed in the compact form). Under `--watch` the
+first build prints them with its diagnostics; a rebuild does not print MX
+compile diagnostics at all, fixes or not.
+
 ## Host-policy diagnostics
 
 `package.json` decides which host compiles a `.mx` file. When that decision

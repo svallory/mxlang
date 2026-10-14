@@ -225,6 +225,91 @@ describe.skipIf(!built)("tsserver loads the built plugin", () => {
   }, 50_000);
 });
 
+// The protocol round trip of a quick fix: `getCodeFixes` reaches the plugin's
+// `getCodeFixesAtPosition`, and the fix comes back in tsserver's own shape
+// (1-based line/offset), applicable to the `.mx` file.
+describe.skipIf(!built)("an MX quick fix through a real tsserver", () => {
+  it("answers getCodeFixes with the `<effect>` rename", async () => {
+    const root = realpathSync(makePluginInstall());
+    let server: ReturnType<typeof startTsserver> | undefined;
+    try {
+      const { file, logFile } = writeProject(root, [
+        { name: "@mxlang/typescript-plugin" },
+      ]);
+      const page = path.join(root, "effect.mx");
+      writeFileSync(page, "<div>\n  <effect>go()</effect>\n</div>\n");
+      writeFileSync(
+        file,
+        'import "./effect.mx";\nimport Comp from "./comp.mx";\nexport default Comp;\n',
+      );
+      server = startTsserver(
+        [
+          "--pluginProbeLocations",
+          root,
+          "--logVerbosity",
+          "verbose",
+          "--logFile",
+          logFile,
+          "--disableAutomaticTypingAcquisition",
+        ],
+        root,
+        logFile,
+      );
+      await server.request("configure", {
+        extraFileExtensions: [
+          { extension: ".mx", isMixedContent: false, scriptKind: 7 },
+        ],
+      });
+      await server.request("open", { file });
+      await server.request("open", { file: page });
+      const diagnostics = (await server.request("syntacticDiagnosticsSync", {
+        file: page,
+      })) as { code: string; start: { line: number; offset: number } }[];
+      expect(diagnostics.map((d) => d.code)).toEqual([
+        "MX_RESERVED_EFFECT_TAG",
+      ]);
+
+      // A client that sent a number for every code sends `null` for this one.
+      for (const errorCodes of [["MX_RESERVED_EFFECT_TAG"], [null]]) {
+        const fixes = await server.request("getCodeFixes", {
+          file: page,
+          startLine: 2,
+          startOffset: 4,
+          endLine: 2,
+          endOffset: 4,
+          errorCodes,
+        });
+        expect(fixes).toEqual([
+          {
+            fixName: "MX_RESERVED_EFFECT_TAG",
+            description: "Rename to `<script>`",
+            changes: [
+              {
+                fileName: page,
+                textChanges: [
+                  {
+                    start: { line: 2, offset: 4 },
+                    end: { line: 2, offset: 10 },
+                    newText: "script",
+                  },
+                  {
+                    start: { line: 2, offset: 17 },
+                    end: { line: 2, offset: 23 },
+                    newText: "script",
+                  },
+                ],
+              },
+            ],
+          },
+        ]);
+      }
+    } finally {
+      server?.kill();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 50_000);
+});
+
 describe.skipIf(!built)("Angular tag calls through a real tsserver", () => {
   it("keeps authored template diagnostics without a static imports error", async () => {
     const root = realpathSync(makePluginInstall());

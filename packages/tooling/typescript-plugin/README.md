@@ -51,6 +51,14 @@ instead. The tsserver plugin appends it to `getSyntacticDiagnostics` so it
 shows up exactly once, at its own position, in the editor's normal diagnostics
 list rather than as a silent empty file.
 
+A compile diagnostic that carries fixes (`IrDiagnostic.fixes`, such as the
+"Rename to `<script>`" fix of `MX_RESERVED_EFFECT_TAG`, or a dialect's) also
+reaches tsserver as a quick fix: the plugin answers `getCodeFixesAtPosition`
+for the diagnostic's range, with one code fix per fix and the fix's edits
+against the `.mx` file. Requests for TypeScript's own codes, and for any file
+with no such diagnostic, go to TypeScript unchanged. `mx-tsc` prints the same
+fixes under the diagnostic, on `fix:` lines.
+
 `createCompoundExtensionResolver(ts)` is a second, deliberately inert plugin:
 it claims no file (`getLanguageId` and `getServiceScript` both return
 undefined) and exists only to advertise the terminal `mx` suffix. Volar 2.4.28

@@ -150,6 +150,27 @@ src/index.ts(1,23): error TS2307: Cannot find module './Widget.solid.mx' or
   its corresponding type declarations.
 ```
 
+## Quick fixes
+
+A diagnostic that knows the exact repair carries it as a *fix*: a title and the
+edits that make it. Both packages show it. In an editor the plugin answers
+tsserver's code-fix request, so the lightbulb (or `Ctrl+.`) on the squiggle
+offers the fix like any TypeScript quick fix. `mx-tsc` prints each fix on a
+`fix:` line under the diagnostic, with 1-based `line:column` positions (the end
+of a range is exclusive) and the new text in quotes:
+
+```
+$ mx-tsc --noEmit -p .
+page.mx(2,4): error MX_RESERVED_EFFECT_TAG: `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
+  fix: Rename to `<script>`: replace 2:4-2:10 with "script"; replace 2:17-2:23 with "script"
+```
+
+An edit is `replace L:C-L:C with "text"`, `insert at L:C "text"` or
+`delete L:C-L:C`; the edits of one fix all refer to the file as it is, and a
+fix applies whole or not at all. The line is the same with `--pretty`, and in
+`--watch` it is printed with the diagnostics of the first build. A dialect's
+diagnostic carries its fixes the same way.
+
 ## Relationship to the language server
 
 They do not overlap. [`@mxlang/language-server`](/editors/language-server/)

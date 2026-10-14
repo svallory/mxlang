@@ -16,6 +16,7 @@ import {
   type AstroLanguagePluginLoader,
   createAstroLanguagePlugin,
 } from "./astro-language.ts";
+import { diagnosticCodeOf, mxCodeFixes } from "./code-fixes.ts";
 import {
   createDialectLanguagePlugin,
   dialectFileExtensions,
@@ -307,6 +308,49 @@ function withSyntaxDiagnostics(
             : diagnostics;
         };
       }
+      if (property === "getCodeFixesAtPosition") {
+        return (
+          fileName: string,
+          start: number,
+          end: number,
+          errorCodes: readonly number[],
+          ...rest: [ts.FormatCodeSettings, ts.UserPreferences]
+        ) => {
+          // Compiles a file the editor changed since, so the offsets below
+          // belong to the text the request is about.
+          target.getProgram();
+          const diagnostics = (getLanguagePlugins() ?? []).flatMap((plugin) =>
+            plugin.getCompileDiagnostics(fileName),
+          );
+          if (diagnostics.length === 0) {
+            return target.getCodeFixesAtPosition(
+              fileName,
+              start,
+              end,
+              errorCodes,
+              ...rest,
+            );
+          }
+          // TypeScript answers for its own codes only: an MX code is a name,
+          // and a code TypeScript never raises has no fix of its own.
+          const mxCodes = new Set(diagnostics.map(diagnosticCodeOf));
+          const typescriptCodes = errorCodes.filter(
+            (code) => Number.isFinite(code) && !mxCodes.has(code),
+          );
+          return [
+            ...(typescriptCodes.length === 0
+              ? []
+              : target.getCodeFixesAtPosition(
+                  fileName,
+                  start,
+                  end,
+                  typescriptCodes,
+                  ...rest,
+                )),
+            ...mxCodeFixes(diagnostics, start, end, errorCodes),
+          ];
+        };
+      }
       if (property !== "getSyntacticDiagnostics") {
         return Reflect.get(target, property, receiver);
       }
@@ -367,8 +411,7 @@ function withSyntaxDiagnostics(
             // `formatDiag` and `formatDiagnosticToProtocol` copy `code` into the
             // protocol response untouched (it is JSON). Consumers that expect a
             // number (TypeScript's own message table) never see a dialect's.
-            code: (diagnostic.diagnosticCode ??
-              (diagnostic.category === "error" ? 80001 : 80002)) as number,
+            code: diagnosticCodeOf(diagnostic) as number,
             source: diagnostic.diagnosticSource ?? source,
             messageText: diagnostic.message,
           })),
@@ -407,6 +450,7 @@ export {
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 export { createAstroLanguagePlugin } from "./astro-language.ts";
+export { applicableFixes, mxCodeFixes } from "./code-fixes.ts";
 export {
   createDialectLanguagePlugin,
   DIALECT_LANGUAGE_ID,

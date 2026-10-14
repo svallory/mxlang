@@ -17,7 +17,7 @@ is rejected on every target (`lowerSource` and the html targets), in every form 
 
 > `<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.
 
-The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. The diagnostic carries one quick fix, "Rename to `<script>`", that renames the open and close tag; an editor shows it as a code action. A host (embedded MX in a framework) says "`<effect>` is not supported in embedded MX on Preact." (its own name, no second sentence); this text is the default target's; the html `strict` policy says "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
+The code is `MX_RESERVED_EFFECT_TAG` and the position is the tag name. The diagnostic carries one quick fix, "Rename to `<script>`", that renames the open and close tag; an editor shows it as a code action (the language server and the TypeScript plugin both offer it), and `mx-tsc` prints it on a `fix:` line under the error. A host (embedded MX in a framework) says "`<effect>` is not supported in embedded MX on Preact." (its own name, no second sentence); this text is the default target's; the html `strict` policy says "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name. See [Stateful tags](/language/stateful-tags/).
 
 ## A `<let>` written while the template renders
 

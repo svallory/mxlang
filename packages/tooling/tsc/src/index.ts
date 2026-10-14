@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   ambientTypeDiagnostics,
   ambientTypeFiles,
+  applicableFixes,
   approximateUnmappedDiagnostics,
   approximateUnmappedEmit,
   type CompiledNgMx,
@@ -32,6 +33,7 @@ import {
   parseBuildMode,
   resolveBuildProjects,
 } from "./build-templates.ts";
+import { formatFixLines } from "./fix-lines.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
@@ -897,16 +899,17 @@ export function reportCompileDiagnostics(
   const formatted = diagnostics
     .map((diagnostic) => {
       const code = diagnostic.category === "error" ? 80001 : 80002;
+      const file = typescript.createSourceFile(
+        diagnostic.fileName,
+        diagnostic.source,
+        typescript.ScriptTarget.Latest,
+        false,
+        typescript.ScriptKind.TSX,
+      );
       const line = typescript.formatDiagnostics(
         [
           {
-            file: typescript.createSourceFile(
-              diagnostic.fileName,
-              diagnostic.source,
-              typescript.ScriptTarget.Latest,
-              false,
-              typescript.ScriptKind.TSX,
-            ),
+            file,
             start: diagnostic.offset,
             length: Math.max(
               0,
@@ -937,12 +940,22 @@ export function reportCompileDiagnostics(
       // tsc prints `TS<number>`; MX's own code is a name, printed as it is:
       // `page.mx(1,4): error MX_PARSE_MISSING_END_TAG: …`. `TS80001` and
       // `TS80002` remain for a diagnostic that has no code.
-      return diagnostic.diagnosticCode === undefined
-        ? line
-        : line.replace(
-            ` ${diagnostic.category} TS${code}: `,
-            ` ${diagnostic.category} ${diagnostic.diagnosticCode}: `,
-          );
+      const header =
+        diagnostic.diagnosticCode === undefined
+          ? line
+          : line.replace(
+              ` ${diagnostic.category} TS${code}: `,
+              ` ${diagnostic.category} ${diagnostic.diagnosticCode}: `,
+            );
+      // The fixes the diagnostic carries, one `fix:` line each under it (the
+      // same fixes tsserver offers as quick fixes).
+      return (
+        header +
+        formatFixLines(
+          applicableFixes(diagnostic.fixes, diagnostic.source.length),
+          (offset) => file.getLineAndCharacterOfPosition(offset),
+        )
+      );
     })
     .join("");
   process.stderr.write(formatted);

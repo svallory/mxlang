@@ -6,6 +6,8 @@ import {
   cleanupProbeProjects,
   PROBE_CONTRACT_MESSAGE,
   PROBE_DIALECT_MODULE,
+  PROBE_FIX_DIALECT_MODULE,
+  PROBE_FIX_SOURCE,
   PROBE_MANIFEST,
   PROBE_SOURCES,
   probeProject,
@@ -156,6 +158,41 @@ describe("dialect files through the TypeScript plugin", () => {
     ]);
     const [diagnostic] = service.getSyntacticDiagnostics(file);
     expect(diagnostic?.file?.text).toBe(PROBE_SOURCES.bad);
+  });
+
+  it("offers a dialect diagnostic's fix as a code fix, in the dialect file's offsets", () => {
+    const project = probeProject({ "dialect.cjs": PROBE_FIX_DIALECT_MODULE });
+    const file = project.path("page.probe");
+    const service = createService(project.dir, { [file]: PROBE_FIX_SOURCE });
+    const [diagnostic] = service.getSyntacticDiagnostics(file);
+    expect(diagnostic).toMatchObject({ start: 3, length: 4 });
+    expect(diagnostic?.code).toBe("PROBE_FIXABLE");
+
+    const fixes = service.getCodeFixesAtPosition(
+      file,
+      3,
+      3,
+      ["PROBE_FIXABLE" as unknown as number],
+      {},
+      {},
+    );
+    expect(fixes).toEqual([
+      {
+        fixName: "PROBE_FIXABLE",
+        description: "Replace with `!ok`",
+        changes: [
+          {
+            fileName: file,
+            textChanges: [{ span: { start: 3, length: 4 }, newText: "!ok" }],
+          },
+        ],
+      },
+    ]);
+    // A diagnostic with no fix offers none.
+    const plain = createService(project.dir, { [file]: PROBE_SOURCES.ok });
+    expect(plain.getCodeFixesAtPosition(file, 0, 10, [0, 1], {}, {})).toEqual(
+      [],
+    );
   });
 
   it("a valid dialect file has no diagnostics of any kind", () => {

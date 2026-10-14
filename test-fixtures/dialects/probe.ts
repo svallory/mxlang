@@ -35,6 +35,39 @@ export const PROBE_DIALECT_MODULE = `module.exports.default = {
 };
 `;
 
+/**
+ * {@link PROBE_DIALECT_MODULE} plus a fixable error: `!fix` fails with
+ * `PROBE_FIXABLE` and carries one quick fix, "Replace with `!ok`", whose edit
+ * is the trigger's own text. A hook attaches `fixes` to the error it throws
+ * (UTF-16 offsets into the file, `end` exclusive), as core does for its own.
+ */
+export const PROBE_FIX_DIALECT_MODULE = `module.exports.default = {
+  tagRules: "none",
+  table: {
+    attributeTriggers: [
+      { id: "probe", chars: "!", match: "![a-z]+", standIn: "keep", node: { call: "probe" } },
+    ],
+  },
+  lowerTrigger(id, text, span, ctx) {
+    if (text !== "!fix") return ctx.attribute("a", true);
+    try {
+      ctx.fail("fixable probe", { code: "PROBE_FIXABLE" });
+    } catch (error) {
+      error.fixes = [
+        {
+          title: "Replace with \`!ok\`",
+          edits: [{ offset: span.sourceStart, end: span.sourceStart + text.length, newText: "!ok" }],
+        },
+      ];
+      throw error;
+    }
+  },
+};
+`;
+
+/** The source {@link PROBE_FIX_DIALECT_MODULE} fails on: `!fix` at offset 3, 4 characters. */
+export const PROBE_FIX_SOURCE = "<y !fix/>\n";
+
 /** The dialect's manifest: its identity and the extensions it claims. */
 export const PROBE_MANIFEST = {
   id: "probe",
