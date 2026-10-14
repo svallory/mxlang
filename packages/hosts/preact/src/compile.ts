@@ -270,9 +270,12 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
     // threaded as the third-argument content or the props object's own
     // content key — and nothing at all renders for a self-closing call
     // (returning the raw falsy value would let JSX render 0 as text).
-    if (Array.isArray(payload)) return content ? content() : null;
+    // The body is wrapped in a fragment with a null sibling: a host
+    // component's body function returns the bare child value (a lone 0, say),
+    // and Hono's Fragment drops a lone falsy child.
+    if (Array.isArray(payload)) return content ? <>{content()}{null}</> : null;
     const body = content ?? payload.content;
-    return body ? body() : null;
+    return body ? <>{body()}{null}</> : null;
   }
   if (Array.isArray(payload)) {
     if (typeof target === "function") return target(...payload);
@@ -320,7 +323,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
       "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
     );
   }
-  return props.content ? props.content() : target;
+  return props.content ? <>{props.content()}{null}</> : target;
 }
 /**
  * __mxDynamic for a call that binds /var: a target with a render path (a

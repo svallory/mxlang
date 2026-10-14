@@ -559,6 +559,29 @@ export function closeFragmentBody(body: MappedCode): MappedCode {
   return LONE_VALUE_BODIES.has(body) ? concatMapped(body, "{null}") : body;
 }
 
+/**
+ * Whether a call's target is a host component: a binding the module imports
+ * from a module that is not an MX or Marko template, called as a tag
+ * (`import { Fragment } from "hono/jsx"` then `<Fragment>…</Fragment>`).
+ *
+ * Core marks exactly these calls (and a local whose value it cannot prove is
+ * a function) with `valueImportBinding` when it routes them through the
+ * dynamic dispatch; an author's own `<${expr}/>` never has it, and neither
+ * does a `<define>` or an imported template. A positional call (`<X(a)>`) is
+ * not JSX-shaped and a `/var` call reads a template's return value, so
+ * neither counts.
+ */
+function isHostComponentCall(
+  node: Extract<IrNode, { kind: "Component" }>,
+): boolean {
+  return (
+    node.target.kind === "dynamic" &&
+    node.target.valueImportBinding !== undefined &&
+    node.args.length === 0 &&
+    !node.var
+  );
+}
+
 /** Preact JSX text emitter over the shared core IR. */
 export class PreactEmitter implements Emitter<string> {
   readonly #out: MappedCode[] = [];
@@ -2135,6 +2158,7 @@ export class PreactEmitter implements Emitter<string> {
    * against the callee") and is a no-op for annotated or destructured params.
    */
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+    if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
     const rendered = this.#expression(node.content?.children ?? []);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
@@ -2143,6 +2167,72 @@ export class PreactEmitter implements Emitter<string> {
       closeFragmentBody(rendered),
       "</>) as (...args: any[]) => any",
     );
+  }
+
+  /**
+   * A host component's body, as the `content` function `__mxDynamic` calls to
+   * fill the component's `children`.
+   *
+   * The reference is the JSX an author writes by hand: `<Box>{n}</Box>` hands
+   * `Box` the bare value `n`, `<Box>a{n}</Box>` the array `["a", n]` and
+   * `<Box><b/></Box>` the element. `__mxDynamic` passes whatever this function
+   * returns as the one child expression of `<Tag>`, so it returns exactly
+   * that, with no fragment of its own around it and no `{null}` sibling: Hono's
+   * `Fragment` drops a lone `0` and `NaN` for the hand-written
+   * `<Fragment>{n}</Fragment>`, and a host component must drop it the same way.
+   * (MX's own fragments, the ones `closeFragmentBody` closes, are not
+   * hand-written JSX and keep their sibling.)
+   *
+   * A body that is one placeholder, element, call, `<if>` or `<for>` is that
+   * expression. Any other body (text, or several children) is written as a
+   * fragment and read back as the `children` the JSX compiler gave it, so
+   * text cooking and the single-or-array choice are the compiler's, not ours.
+   * With tag params the body is the render prop's return value, as written by
+   * hand: `(n) => n`.
+   */
+  #hostComponentContentFn(
+    node: Extract<IrNode, { kind: "Component" }>,
+  ): MappedCode {
+    const children = node.content?.children ?? [];
+    if (node.content?.hasParams) {
+      return concatMapped(
+        `((${node.content.params.join(", ")}) => `,
+        this.#arrowBody(children),
+        ") as (...args: any[]) => any",
+      );
+    }
+    const content = meaningful(children);
+    const only = content.length === 1 ? content[0] : undefined;
+    if (
+      only &&
+      ((only.kind === "Interpolation" && only.escaped) ||
+        only.kind === "Element" ||
+        only.kind === "Component" ||
+        only.kind === "IfChain" ||
+        only.kind === "For" ||
+        only.kind === "DelegatedTag")
+    ) {
+      return concatMapped("() => ", this.#arrowBody(children));
+    }
+    return concatMapped(
+      "() => (<>",
+      this.#render(content),
+      "</> as any).props.children",
+    );
+  }
+
+  /**
+   * A body as the expression an arrow function returns. A lone placeholder is
+   * the author's own expression, so an object literal (read as a block) or a
+   * sequence (read as a second argument) needs its parentheses back.
+   */
+  #arrowBody(children: IrNode[]): MappedCode {
+    const body = this.#expression(children, undefined, true);
+    const content = meaningful(children);
+    const lone = content.length === 1 && content[0]?.kind === "Interpolation";
+    return lone && (body.code.startsWith("{") || body.code.includes(","))
+      ? concatMapped("(", body, ")")
+      : body;
   }
 
   /**

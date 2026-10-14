@@ -338,16 +338,16 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
 });
 
 describe("tag params leave other emission alone", () => {
-  it("a call with no params keeps `content: () =>` and no render prop", () => {
+  it("a host component call with no params keeps `content: () =>` and no render prop", () => {
     const { code } = compilePreactMx(
       `import List from "./list.tsx"\n<List><b>x</b></List>`,
       "/fixtures/t.mx",
     );
-    expect(code).toContain("content: () => <><b>x</b></>");
+    // A host component's body is what hand-written JSX would pass: the
+    // element itself, with no fragment of MX's around it.
+    expect(code).toContain("content: () => <b>x</b>");
     expect(code).not.toContain("=> (");
-    expect(code).toContain(
-      "__mxDynamic(List, { content: () => <><b>x</b></> })",
-    );
+    expect(code).toContain("__mxDynamic(List, { content: () => <b>x</b> })");
   });
 
   it("a call with params makes `content` itself take them", () => {
@@ -355,9 +355,19 @@ describe("tag params leave other emission alone", () => {
       CASES["an imported component"]?.caller as string,
       "/fixtures/t.mx",
     );
-    expect(code).toContain("content: ((item, i) => <>");
+    // The render prop returns what `(item, i) => <b>…</b>` would.
+    expect(code).toContain("content: ((item, i) => <b>{item}{i}</b>)");
     expect(code).toContain("as (...args: any[]) => any");
     expect(code).not.toContain("() => (item, i)");
+    expect(code).toContain(", undefined, true)");
+  });
+
+  it("an authored dynamic tag keeps MX's fragment around a params body", () => {
+    const { code } = compilePreactMx(
+      CASES["a dynamic target"]?.caller as string,
+      "/fixtures/t.mx",
+    );
+    expect(code).toContain("content: ((item, i) => <>");
     expect(code).toContain(", undefined, true)");
   });
 
