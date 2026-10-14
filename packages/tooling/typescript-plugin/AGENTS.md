@@ -228,7 +228,13 @@ Four facts worth knowing before editing either:
   the `var <names>;` it leaves at run time, so its errors are reported at the
   authored token. A diagnostic outside every mapping is reported on the nearest
   enclosing tag or attribute (else 1:1) with a position marker appended, never
-  dropped (decision 161; see the section below).
+  dropped (decision 161; see the section below). Two consequences of the
+  projection are known noise, not bugs. Under a tsconfig whose `lib` has no
+  `dom`, `window` and `document` in a `client` statement are TS2304/TS2584.
+  Adding `dom` would type server code with it too, so there is no clean
+  silencer. `client import "./a.css"` is TS2882 unless the project has
+  `declare module "*.css"` (or `noUncheckedSideEffectImports: false`), exactly
+  as a `static` or `server` import is.
 - **`preventLeadingOffset` must stay unset for both whole-file `.mx` and
   `.solid.mx`.** With that flag set, Volar's `runTsc` parses its
   `SourceFile` from the generated text alone, so `tsc` converts a correctly
