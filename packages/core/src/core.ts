@@ -2076,6 +2076,12 @@ export function rejectUnsupportedFields(
 }
 
 /**
+ * Spreads on a built-in `<script>` that `lower.ts` already refused with the
+ * script's own wording, so `rejectInertShape` does not report them again.
+ */
+export const scriptSpreadsRefused = new WeakSet<object>();
+
+/**
  * Enforces that an inert tag appears in the shape its own definition allows.
  *
  * A tag is inert because *it* emits nothing, not because anything written
@@ -2103,6 +2109,7 @@ export function rejectInertShape(
 
   for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
+      if (scriptSpreadsRefused.has(attr)) continue;
       raise(
         INERT_TAG_SHAPE_CODE,
         `spread attributes on \`<${name}>\` are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,

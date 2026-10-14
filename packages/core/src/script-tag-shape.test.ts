@@ -26,8 +26,10 @@ function lower(source: string, options: Record<string, unknown> = {}) {
 
 const attributeMessage = (name: string) =>
   `\`<script>\` does not support the \`${name}\` attribute: the tag is client code, not an html element, so the attribute would be silently discarded. For a native html \`<script>\` element use \`<html-script>\``;
+const spreadMessage =
+  "`<script>` does not support spread attributes: the tag is client code, not an html element, so a spread's keys would be silently discarded. For a native html `<script>` element use `<html-script>`";
 const PLACEHOLDER =
-  "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Write the value in a template literal, or for a native html `<script>` element use `<html-script>`";
+  "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Use the value directly (`x`, not `${x}`), in a string through a template literal, or for a native html `<script>` element use `<html-script>`";
 
 type Refusal = {
   message: string;
@@ -302,6 +304,106 @@ const REFUSED: [string, string, Refusal][] = [
       end: { line: 5, column: 16 },
     },
   ],
+  [
+    "a #id shorthand",
+    page("<script#foo>"),
+    {
+      message: attributeMessage("#foo"),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 11 },
+    },
+  ],
+  [
+    "a .class shorthand",
+    page("<script.foo>"),
+    {
+      message: attributeMessage(".foo"),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 11 },
+    },
+  ],
+  [
+    "a dynamic .class shorthand",
+    page("<script.${c}>"),
+    {
+      message: attributeMessage(".${c}"),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 12 },
+    },
+  ],
+  [
+    "a #id shorthand on a concise script",
+    "div\nscript#foo -- a();\n",
+    {
+      message: attributeMessage("#foo"),
+      line: 2,
+      column: 6,
+      end: { line: 2, column: 10 },
+    },
+  ],
+  [
+    "a method attribute that is not the default",
+    "<div/>\n<script foo() { a() }/>\n",
+    {
+      message: attributeMessage("foo"),
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 21 },
+    },
+  ],
+  [
+    "an attribute with arguments",
+    "<div/>\n<script foo(x)=1/>\n",
+    {
+      message: attributeMessage("foo"),
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 16 },
+    },
+  ],
+  [
+    "a bound value",
+    "<div/>\n<script value:=x/>\n",
+    {
+      message: attributeMessage("value:="),
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 16 },
+    },
+  ],
+  [
+    "a bound default value",
+    "<div/>\n<script:=x/>\n",
+    {
+      message: attributeMessage("value:="),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 10 },
+    },
+  ],
+  [
+    "a value with a modifier",
+    "<div/>\n<script value:no-update=() => a()/>\n",
+    {
+      message: attributeMessage("value:no-update"),
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 33 },
+    },
+  ],
+  [
+    "a spread",
+    page("<script ...attrs>"),
+    {
+      message: spreadMessage,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 16 },
+    },
+  ],
 ];
 
 describe("a built-in <script> with an attribute or a placeholder is refused", () => {
@@ -374,6 +476,8 @@ const ACCEPTED: [string, string][] = [
   ["the tag's default value", "<div/>\n<script=() => {}>\n</script>\n"],
   ["the tag's method form", "<div/>\n<script() { console.log(1) }/>\n"],
   ["a method named async", "<div/>\n<script async() { console.log(1) }/>\n"],
+  ["a method on the value", "<div/>\n<script value() { console.log(1) }/>\n"],
+  ["the value with arguments", "<div/>\n<script value(x)=1/>\n"],
   ["a template literal placeholder", page("<script>", "const a = `${x}`;")],
   ["nested template literals", page("<script>", "const a = `${`${x}`}`;")],
   [

@@ -691,20 +691,24 @@ the CommonJS forms `import x = require(…)` and `export = value`, which say wha
 to write instead. In a concise-mode body (`--` lines, or two `--` blocks) the
 lines are read together as one body, and a position is the position in the file.
 
-A built-in `<script>` has one attribute of its own, its value (`value=…`, `=…` or the
-method form `async() { … }`), and no `${…}` placeholder in its body. Any other attribute
-(`async`, `src`, `type`, `defer`, `id`, `class`, …) and any placeholder, whether in
-code, in a quoted string, in a regular expression or in an HTML comment, is a compile
+A built-in `<script>` has one attribute of its own, its value (`value=…`, `=…` or a
+method form: `() { … }`, `async() { … }`, `value() { … }`), and no `${…}` placeholder in
+its body. Any other attribute (`async`, `src`, `type`, `defer`, `id`, `class`, a `#id` or
+`.class` shorthand, an attribute with a method or arguments of its own, …), a bound or
+modified value (`value:=x`, `value:no-update=x`), a spread, and any placeholder, whether
+in code, in a quoted string, in a regular expression or in an HTML comment, is a compile
 error, `MX_INERT_TAG_SHAPE`, on every target: the tag is client code, not an html
 element, so the attribute would be discarded and the placeholder was never read. The error
-is positioned at the attribute or at the `${…}` (its whole range), and its text says to
-use `<html-script>`, the tag for a native html `<script>` element, which keeps its
-attributes and interpolates its body. A `${…}` inside a template literal in the body
-(`` `${x}` ``) is the script's own and is not a placeholder. The first attribute and the
-first placeholder of a tag are reported. A spread on `<script>` is refused with the other
-inert-shape rules ("Inert is a shape, not a licence to drop"). Only the built-in `<script>` is checked: not
-`<html-script>`, not a `<script>` a caller registered as a custom tag, and not a
-`<script>` under the `none` tag-rules preset, where it is an ordinary tag.
+is positioned at the attribute (a shorthand at its own spelling) or at the `${…}` (its
+whole range). For an attribute its text says to use `<html-script>`, the tag for a native
+html `<script>` element, which keeps its attributes and interpolates its body; for a
+placeholder it says to use the value directly (`x`, not `${x}`), to write it through a
+template literal inside a string, or to use `<html-script>`. A `${…}` inside a template
+literal in the body (`` `${x}` ``) is the script's own and is not a placeholder. The
+first attribute and the first placeholder of a tag are reported. Only the built-in
+`<script>` is checked: not `<html-script>`, not a `<script>` a caller registered as a
+custom tag, and not a `<script>` under the `none` tag-rules preset, where it is an
+ordinary tag.
 
 **Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
 

@@ -36,7 +36,7 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 "Inert" is a shape, not a license to silently drop content: an inert tag's own attributes and body are validated against what Marko's own tag definition allows, and anything unexpected is a compile error naming the tag — not silently discarded.
 
-For `<script>` that means its body is script text and its only attribute is its value: `<script async>` and `<script src="/x.js">` are compile errors (`MX_INERT_TAG_SHAPE`), as is a `${…}` placeholder in its body (a `${…}` inside a template literal is the script's own). Both say to use `<html-script>`, the tag for a native html `<script>` element.
+For `<script>` that means its body is script text and its only attribute is its value: `<script async>`, `<script src="/x.js">`, `<script#id>` and `<script ...attrs>` are compile errors (`MX_INERT_TAG_SHAPE`), as is a `${…}` placeholder in its body (a `${…}` inside a template literal is the script's own). In a body, write the value directly (`const a = x;`, not `${x}`); for a native html `<script>` element use `<html-script>`, which keeps its attributes and interpolates its body.
 
 ### Opting into `strict`
 

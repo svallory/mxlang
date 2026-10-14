@@ -100,6 +100,7 @@ import {
   relatedErrorsOf,
   scopeBindings,
   scopeDefines,
+  scriptSpreadsRefused,
   shadowBindings,
   sliceLoc,
   sliceNode,
@@ -796,9 +797,10 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  * `<script>`, which MX read past without a word:
  *
  * - an attribute other than the tag's own value (`value=…`, `=…`, or the
- *   method form `async() { … }`). The tag is client code that html does not
- *   emit, so `async`, `src`, `type`, `id` and the rest were discarded. A spread
- *   is refused with the tag's other inert-shape rules.
+ *   method forms `() { … }`, `async() { … }`, `value() { … }`), a bound or
+ *   modified value (`value:=x`, `value:no-update=x`) and a spread. The tag is
+ *   client code that html does not emit, so `async`, `src`, `type`, `id`, a
+ *   `#id`/`.class` shorthand and the rest were discarded.
  * - a `${…}` placeholder in the body, in code or inside a quoted string. The
  *   body is script text, and a placeholder in it was never read. Inside a
  *   template literal the `${…}` is the script's own and is not a placeholder.
@@ -820,17 +822,42 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
   };
   const attr = tagAttributesOf(tag).find(
     (candidate: Node) =>
-      !isSpreadAttributeNode(candidate) &&
-      attrNameOf(candidate) !== "value" &&
-      !isDefaultAttr(candidate) &&
-      !attrArgsOf(candidate) &&
-      !isMethodAttr(candidate),
+      isSpreadAttributeNode(candidate) ||
+      isBoundAttr(candidate) ||
+      candidate.modifier != null ||
+      !(attrNameOf(candidate) === "value" || isDefaultAttr(candidate)),
   );
+  for (const candidate of tagAttributesOf(tag)) {
+    if (isSpreadAttributeNode(candidate)) scriptSpreadsRefused.add(candidate);
+  }
   if (attr) {
-    refuse(
-      `\`<script>\` does not support the \`${attrNameOf(attr)}\` attribute: the tag is client code, not an html element, so the attribute would be silently discarded. For a native html \`<script>\` element use \`<html-script>\``,
-      attr,
-    );
+    const fix = (what: string) =>
+      `the tag is client code, not an html element, so ${what} would be silently discarded. For a native html \`<script>\` element use \`<html-script>\``;
+    if (isSpreadAttributeNode(attr)) {
+      refuse(
+        `\`<script>\` does not support spread attributes: ${fix("a spread's keys")}`,
+        attr,
+      );
+    } else {
+      // A shorthand (`#id`, `.class`) has no position of its own in the AST:
+      // point at its spelling instead of at 0:0.
+      const span = tagAttrNameSpan(ctx, attr, tag);
+      const positioned = attr.loc || typeof attr.start === "number";
+      const spelled = ctx.source.slice(span.sourceStart, span.sourceEnd);
+      const named = isBoundAttr(attr)
+        ? `${spelled || "value"}:=`
+        : spelled || attrNameOf(attr);
+      refuse(
+        `\`<script>\` does not support the \`${named}\` attribute: ${fix("the attribute")}`,
+        positioned
+          ? attr
+          : {
+              type: "MxAttribute",
+              start: span.sourceStart,
+              end: span.sourceEnd,
+            },
+      );
+    }
   }
   const placeholder = bodyChildren(tag).find(
     (child: Node) =>
@@ -839,7 +866,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
   if (placeholder) {
     const message =
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
-      "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Write the value in a template literal, or for a native html `<script>` element use `<html-script>`";
+      "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Use the value directly (`x`, not `${x}`), in a string through a template literal, or for a native html `<script>` element use `<html-script>`";
     refuse(message, placeholder);
   }
 }

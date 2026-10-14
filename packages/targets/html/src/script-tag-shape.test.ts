@@ -43,6 +43,35 @@ describe("the html target refuses a <script> attribute", () => {
     expect(error.end).toEqual({ line, column: endColumn });
   });
 
+  it.each([
+    ["a #id shorthand", "<div/>\n<script#foo>\n  a();\n</script>\n", 2, 7, 11],
+    [
+      "a .class shorthand",
+      "<div/>\n<script.foo>\n  a();\n</script>\n",
+      2,
+      7,
+      11,
+    ],
+    ["a bound value", "<div/>\n<script value:=x/>\n", 2, 8, 16],
+  ])(
+    "%s is positioned at itself, not at 0:0",
+    (_name, source, line, column, endColumn) => {
+      const error = thrown(source);
+      expect(error.diagnosticCode).toBe("MX_INERT_TAG_SHAPE");
+      expect([error.line, error.column]).toEqual([line, column]);
+      expect(error.end).toEqual({ line, column: endColumn });
+    },
+  );
+
+  it("a spread is reported once, with the script's own wording", () => {
+    const error = thrown("<div/>\n<script ...attrs>\n  a();\n</script>\n");
+    expect(error.diagnosticCode).toBe("MX_INERT_TAG_SHAPE");
+    expect([error.line, error.column]).toEqual([2, 8]);
+    expect(error.errors ?? [error]).toHaveLength(1);
+    expect(error.message).toContain("does not support spread attributes");
+    expect(error.message).toContain("`<html-script>`");
+  });
+
   it("still accepts <html-script> with the same attributes", () => {
     expect(
       thrown('<div/>\n<html-script async src="/x.js"></html-script>\n'),
