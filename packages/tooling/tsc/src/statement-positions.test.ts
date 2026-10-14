@@ -31,12 +31,10 @@ interface Project {
 function runProject(
   files: Record<string, string>,
   strict: boolean,
+  host = "html",
 ): Project & { dispose: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "mx-statement-positions-"));
-  writeFileSync(
-    join(dir, "package.json"),
-    JSON.stringify({ mx: { host: "html" } }),
-  );
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ mx: { host } }));
   writeFileSync(
     join(dir, "tsconfig.json"),
     JSON.stringify({
@@ -53,6 +51,7 @@ function runProject(
         baseUrl: ".",
         paths: {
           "@mxlang/target-html": SRC("targets/html/src/index.ts"),
+          "@mxlang/host-astro/typecheck": SRC("hosts/astro/src/typecheck.ts"),
           "@mxlang/core": SRC("core/src/index.ts"),
           "@mxlang/tsx-bridge": SRC("tsx-bridge/src/public.d.ts"),
         },
@@ -256,4 +255,25 @@ describe("mx-tsc under strict: a client declaration keeps its type", () => {
       expect(line).not.toContain("position approximate");
     }
   });
+});
+
+describe("mx-tsc on the astro host: a plain .mx page takes the html target's strict policy", () => {
+  // `server` is accepted there, so its errors get the same mapping; `client`
+  // is refused by that policy.
+  it("reports a server statement's error at the authored token", () => {
+    const project = runProject(
+      { "page.mx": 'server const a: number = "x";\n<div/>\n' },
+      false,
+      "astro",
+    );
+    try {
+      const lines = project.linesOf("page.mx");
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(
+        /^page\.mx\(1,14\): error TS2322: Type 'string' is not assignable to type 'number'\.$/,
+      );
+    } finally {
+      project.dispose();
+    }
+  }, 120_000);
 });
