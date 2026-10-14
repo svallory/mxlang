@@ -31,6 +31,7 @@ import type { HostDeclarations } from "./declarations.ts";
 import atomFixture from "./fixtures/syntax/atom-fixture.ts";
 import declaresFixture from "./fixtures/syntax/declares-fixture.ts";
 import memberFixture from "./fixtures/syntax/member-fixture.ts";
+import { lowerSource } from "./ir-entry/index.ts";
 import type { ContractAttr, LoweredUnit } from "./lowered-unit.ts";
 import { scanCustomTags } from "./scan.ts";
 import {
@@ -541,6 +542,20 @@ describe("core keeps its checks beside a module's claims", () => {
     table: {},
     contractFields: ATOM_FIELDS,
   };
+
+  it("a plain string behind an assertion is the same error with `stripTypes: false`", () => {
+    const diagnostics = (stripTypes: boolean) =>
+      lowerSource('<link to=("red" as string)/>', "/f.mx", {
+        dialect: claimOnly,
+        customTags: vocab,
+        stripTypes,
+      }).diagnostics;
+    const byDefault = diagnostics(true);
+    expect(byDefault.map((d) => d.message)).toEqual([
+      "`<link>`: attribute `to` must be atom, got string",
+    ]);
+    expect(diagnostics(false)).toEqual(byDefault);
+  });
 
   it("a plain string against a claimed-key atom declaration is core's shape error, behind the module's hook", () => {
     const source = '<link to="red"/>';

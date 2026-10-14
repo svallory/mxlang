@@ -332,7 +332,8 @@ describe("the passes over the IR take typed nodes", () => {
  * Core's own checks look through TypeScript assertions, so they give the same
  * diagnostics with `stripTypes: false`: the bound-attribute check and each
  * contract check (`string`, `number`, `boolean`, `enum`, `literalOnly`,
- * `array`, `items`, `function`, `atom`), one row each. What differs is the
+ * `array`, `items`, `function`, `atom`; `member` is in the member fixture
+ * test), one row each. What differs is the
  * kind and shape of an attribute whose value is an assertion over a literal
  * (`dynamic`, shape `other`) and, with it, the contract `expression` check;
  * both are pinned below as documented.
@@ -426,6 +427,37 @@ describe("`stripTypes: false` and core's own checks", () => {
       expect(attrOf(source, false)).toEqual(kept);
     },
   );
+
+  it("an attribute's span ends at the operand either way, so with `false` it no longer contains its value's span", () => {
+    const spans = (stripTypes: boolean) => {
+      const { ir } = lowerSource("<x a=(1 as number)/>\n", "/f.mx", {
+        stripTypes,
+      });
+      const tag = (
+        ir as unknown as {
+          body: {
+            tag: {
+              attrs: {
+                span: { sourceStart: number; sourceEnd: number };
+                value: { span: { sourceStart: number; sourceEnd: number } };
+              }[];
+            };
+          }[];
+        }
+      ).body[0]?.tag;
+      const attr = tag?.attrs[0];
+      return { attr: attr?.span, value: attr?.value.span };
+    };
+    // `a=(1`: [3,7) in both. The value is `1` by default, `1 as number` with `false`.
+    expect(spans(true)).toEqual({
+      attr: { sourceStart: 3, sourceEnd: 7 },
+      value: { sourceStart: 6, sourceEnd: 7 },
+    });
+    expect(spans(false)).toEqual({
+      attr: { sourceStart: 3, sourceEnd: 7 },
+      value: { sourceStart: 6, sourceEnd: 17 },
+    });
+  });
 
   // One row per contract check. `bad` is refused by default, `good` is
   // accepted; with `stripTypes: false` both give the very same diagnostics

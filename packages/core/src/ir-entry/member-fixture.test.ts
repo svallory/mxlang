@@ -510,6 +510,27 @@ describe("one member per slot, and the member type's refusals", () => {
     ]);
   });
 
+  it.each([
+    ["member", "sort load=(&visible as any)\n"],
+    ["member", "sort load=(&visible!)\n"],
+    ["member", "sort load=((&visible as any) satisfies unknown)\n"],
+    ["atom", "sort load=(&visible as any)\n"],
+    ["member", "sort load=(1 as number)\n"],
+  ] as const)(
+    "a `%s` slot: %s gives the same diagnostics with `stripTypes: false`",
+    (type, source) => {
+      const customTags = { sort: { attributes: { load: { type } } } };
+      const byDefault = parse(source, { customTags }).diagnostics;
+      expect(
+        parse(source, { customTags, stripTypes: false }).diagnostics,
+      ).toEqual(byDefault);
+      // The member row is accepted, the other three refused.
+      expect(byDefault.length).toBe(
+        type === "member" && source.includes("&") ? 0 : 1,
+      );
+    },
+  );
+
   it("a second member in one name slot is an error at the second", () => {
     const result = parse("sort asc &c &d\n");
     expect(result.ir).toBeUndefined();

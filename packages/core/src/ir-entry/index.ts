@@ -166,8 +166,8 @@ export interface LowerSourceOptions {
    * Whether TypeScript types are erased from the nodes before the source
    * lowers. The default (`true`, or omitted) erases them: an arrow's
    * parameter and return annotations are gone from its `node`, and a
-   * top-level `as`, `!`, `satisfies` or `<T>x` is replaced by its operand
-   * (the `node`, `span` and `code` are the operand's). `Expr.code` is sliced
+   * top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its
+   * operand (the `node`, `span` and `code` are the operand's). `Expr.code` is sliced
    * from the source either way, so annotations inside an expression stay in
    * it. `false` keeps the authored TypeScript in the nodes a dialect's hooks
    * see (`TSTypeAnnotation`, `returnType`, `TSAsExpression`, …), for a
@@ -183,7 +183,9 @@ export interface LowerSourceOptions {
    * (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's
    * diagnostics, positions included: the bound-attribute check
    * (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`,
-   * `literalOnly`, `array`, `items`, `function` and `atom` checks.
+   * `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks. An
+   * attribute's `span` ends at the operand either way, so with `false` it does
+   * not contain the wider `span` of its value (`a=(1 as number)`: attribute [3,7), value [6,17)).
    * A tag-file hook's `ctx.lower` takes the option but does not inherit this
    * call's value.
    */

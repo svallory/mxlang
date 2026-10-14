@@ -1563,7 +1563,10 @@ function checkAtomAttr(
  */
 function isMemberValue(attr: Attr): boolean {
   if (attr.kind === "static") return attr.member !== undefined;
-  return attr.kind === "dynamic" && !!attr.value.node?.extra?.mxMember;
+  return (
+    attr.kind === "dynamic" &&
+    !!withoutTsWrappers(attr.value.node)?.extra?.mxMember
+  );
 }
 
 /**
@@ -2202,7 +2205,7 @@ function usesClaimedKey(
 function plainStringOf(attr: Attr): string | undefined {
   if (attr.kind === "static") return attr.atom ? undefined : attr.value;
   if (attr.kind !== "dynamic") return undefined;
-  const node = attr.value.node;
+  const node = withoutTsWrappers(attr.value.node);
   return node?.type === "StringLiteral" && !node.extra?.mxAtom
     ? String(node.value)
     : undefined;
