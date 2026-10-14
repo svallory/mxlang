@@ -197,15 +197,6 @@ const INTENDED: Record<string, { pattern: RegExp; cases: string[] }> = {
     pattern: /Unterminated string constant/,
     cases: ["attr-multi-line-string", "placeholder-within-string-newlines"],
   },
-  // A `<script>` body is TypeScript and must parse; stock Marko 6.4.4 refuses
-  // each of these at Babel's error ("Missing semicolon." after two adjacent
-  // strings, "Unterminated regular expression." at the `/` of `</b>`).
-  // The grammar reads any raw text. Under `tagRules: "none"` `<script>` is an
-  // ordinary tag and its body is not checked.
-  scriptBodyDoesNotParse: {
-    pattern: /^(Missing semicolon\.|Unterminated regular expression\.)$/,
-    cases: ["script", "script-mismatched-close"],
-  },
 };
 
 const KNOWN_GAPS: Record<string, string[]> = {
@@ -261,7 +252,6 @@ const NONE_GAPS: Record<string, string[]> = {
     "open-tag-only",
     "parsed-text-style-tag",
     "script",
-    "script-concise",
     "script-mismatched-close",
   ],
 };
@@ -296,18 +286,6 @@ const PRESETS = [
   },
 ];
 
-/**
- * The refusal that is intended for `name` under these tag rules. The `none`
- * preset reads `<script>` as an ordinary tag, so a `<script>` body is not
- * checked there (its cases are in `NONE_GAPS` instead).
- */
-function intendedFor(tagRules: "none" | undefined, name: string) {
-  const intended = intendedBy.get(name);
-  return tagRules === "none" && intended?.group === "scriptBodyDoesNotParse"
-    ? undefined
-    : intended;
-}
-
 function run(source: string, tagRules?: "none") {
   // Only real parse rejections count: the structural, import and unknown-tag
   // checks are left at their pass-through settings.
@@ -329,14 +307,11 @@ for (const { label, tagRules, gapBy } of PRESETS) {
         expect(names, name).toContain(name);
       }
       for (const name of intendedBy.keys())
-        expect(
-          gapBy.has(name) && intendedFor(tagRules, name),
-          name,
-        ).toBeFalsy();
+        expect(gapBy.has(name), name).toBe(false);
     });
 
     for (const c of cases) {
-      const intended = intendedFor(tagRules, c.name);
+      const intended = intendedBy.get(c.name);
       const gap = gapBy.get(c.name);
 
       if (intended) {

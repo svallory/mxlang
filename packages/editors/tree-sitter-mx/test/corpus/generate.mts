@@ -71,6 +71,21 @@ const EXTRA: Record<string, [string, string][]> = {
   ],
 };
 
+// Fixtures rewritten so the case is an input the language accepts. htmljs-parser
+// reads a `<script>` body as raw text and never parses it, but MX (like Marko)
+// parses it as TypeScript, so a fixture whose script text is not valid script
+// text is refused by `lowerSource` (packages/core/src/ir-entry/conformance.test.ts).
+// Each rewrite keeps the text nodes the grammar sees; only the script text
+// changes (a `;` between two strings, a regexp for the mismatched close, a
+// statement and a comment in the concise block).
+const SOURCE_OVERRIDES: Record<string, string> = {
+  script:
+    "<script>// line comment within <script>\n/* block comment within <script> */\"string within \\\"<script>\\\"\";'string within \\'<script>\\''</script>",
+  "script-mismatched-close": "<script>a</b>/g</script>",
+  "script-concise":
+    "script\n    ---\n    const text = 1;\n    // within the </script> block\n    ---\n    -- // This should be okay too\ndiv",
+};
+
 const out = new Map<string, string[]>();
 const add = (
   topic: string,
@@ -95,7 +110,7 @@ let kept = 0;
 for (const entry of fs.readdirSync(D).sort()) {
   const input = path.join(D, entry, "input.marko");
   if (!fs.existsSync(input)) continue;
-  const source = fs.readFileSync(input, "utf-8");
+  const source = SOURCE_OVERRIDES[entry] ?? fs.readFileSync(input, "utf-8");
   const tree = parseMx(source);
   if (ERROR_FIXTURES.has(entry)) {
     if (!tree?.rootNode.hasError)

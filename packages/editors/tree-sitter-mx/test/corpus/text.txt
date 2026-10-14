@@ -774,7 +774,7 @@ parsed-text-style-tag
 script
 ===============
 <script>// line comment within <script>
-/* block comment within <script> */"string within \"<script>\""'string within \'<script>\''</script>
+/* block comment within <script> */"string within \"<script>\"";'string within \'<script>\''</script>
 ---------------
 
 (document
@@ -795,10 +795,10 @@ script-concise
 ===============
 script
     ---
-    This is text
-    within the </script> block
+    const text = 1;
+    // within the </script> block
     ---
-    -- This should be okay too
+    -- // This should be okay too
 div
 ---------------
 
@@ -882,7 +882,7 @@ script-escaped-placeholder
 ===============
 script-mismatched-close
 ===============
-<script>a</b>c</script>
+<script>a</b>/g</script>
 ---------------
 
 (document

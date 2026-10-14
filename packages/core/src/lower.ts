@@ -781,30 +781,85 @@ type ScriptBody = { program: Node } | { failure: TranslateError };
 const scriptBodies = new WeakMap<Node, ScriptBody | null>();
 
 /**
+ * `import x = require("y")` and `export = x` parse as TypeScript but are
+ * CommonJS forms, which stock Marko's TypeScript transform refuses in a module.
+ * Refused here with MX's own text, at the statement.
+ */
+function commonJsStatementIn(program: Node): TranslateError | undefined {
+  for (const statement of program.body ?? []) {
+    let message: string | undefined;
+    if (
+      statement.type === "TSImportEqualsDeclaration" &&
+      statement.moduleReference?.type === "TSExternalModuleReference"
+    ) {
+      message =
+        '`import x = require(...)` is a CommonJS form and is not read in a `<script>` body. Write `import x from "..."`';
+    } else if (statement.type === "TSExportAssignment") {
+      message =
+        "`export = value` is a CommonJS form and is not read in a `<script>` body. Write `export default value`";
+    }
+    if (!message || !statement.loc) continue;
+    const failure = codedError(
+      INVALID_STATEMENT_CODE,
+      message,
+      statement.loc.start.line,
+      statement.loc.start.column,
+    );
+    failure.end = {
+      line: statement.loc.end.line,
+      column: statement.loc.end.column,
+    };
+    return failure;
+  }
+  return undefined;
+}
+
+/**
+ * The text of a `<script>` body written as one or more text runs: an html
+ * `<script>` is one run; a concise `script` body is one run per `--` line
+ * (and per `--` block), with the indentation and the delimiters between them.
+ * The runs are joined with their gaps filled by spaces and every line break
+ * kept, so a position in the joined text is the file's position.
+ */
+function scriptTextOf(ctx: Ctx, runs: readonly Node[]): string {
+  let text = "";
+  let previousEnd: number | undefined;
+  for (const run of runs) {
+    if (previousEnd !== undefined && run.start > previousEnd) {
+      text += ctx.source.slice(previousEnd, run.start).replace(/[^\r\n]/g, " ");
+    }
+    text += run.value;
+    previousEnd = run.end;
+  }
+  return text;
+}
+
+/**
  * The `<script>` body of `tag`, parsed once the way Marko 6.4.4 parses it: as
  * the statements of a module with TypeScript, no JSX and no proposal syntax,
  * where `import`, `export`, a top-level `return` and a top-level `await` read
  * (`parseAuthoredSource`). The program carries the positions of the file.
- * `null` when the body is not one plain text run (a `${…}` placeholder splits
- * it); such a body is not read.
+ * `null` when the body is not only text runs (a `${…}` placeholder is not
+ * text); such a body is not read.
  */
 function scriptBodyOf(ctx: Ctx, tag: Node): ScriptBody | null {
   const cached = scriptBodies.get(tag);
   if (cached !== undefined) return cached;
   const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
-  const [text] = children;
+  const [first] = children;
   let body: ScriptBody | null = null;
-  if (children.length === 1 && isTextNode(text)) {
-    const at = text.loc?.start ?? positionAtOffset(ctx, text.start);
+  if (children.length > 0 && children.every((child) => isTextNode(child))) {
+    const at = first.loc?.start ?? positionAtOffset(ctx, first.start);
+    const text = scriptTextOf(ctx, children);
     try {
-      body = {
-        program: parseAuthoredSource(text.value, at.line, at.column, {
-          allowReturnOutsideFunction: true,
-          jsx: false,
-        }).program,
-      };
+      const program = parseAuthoredSource(text, at.line, at.column, {
+        allowReturnOutsideFunction: true,
+        jsx: false,
+      }).program;
+      const commonJs = commonJsStatementIn(program);
+      body = commonJs ? { failure: commonJs } : { program };
     } catch (error) {
-      body = { failure: scriptBodyFailure(text.value, at, error) };
+      body = { failure: scriptBodyFailure(text, at, error) };
     }
   }
   scriptBodies.set(tag, body);
@@ -882,10 +937,17 @@ function scriptBodyFailure(
     message?: unknown;
     loc?: { line: number; column: number };
     missingPlugin?: unknown;
+    reasonCode?: unknown;
   };
   const start = babel.loc
     ? { line: babel.loc.line, column: babel.loc.column }
     : at;
+  if (babel.reasonCode === "ImportAttributesUseAssert") {
+    return fail(
+      'Import attributes are written with `with`, not `assert`: `import j from "./x.json" with { type: "json" }`',
+      start,
+    );
+  }
   if (Array.isArray(babel.missingPlugin)) {
     const proposal = String(babel.missingPlugin[0] ?? "");
     return fail(

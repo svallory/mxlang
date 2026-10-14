@@ -669,7 +669,10 @@ JSX, a proposal that is not part of the language, an HTML comment) is a compile
 error, `MX_INVALID_STATEMENT`, positioned at the error, and no target compiles
 it (a target that emits nothing for the body still refuses it). A body that
 holds a `${…}` placeholder is not read. The text of the error is Babel's own,
-except for a decorator, JSX and a proposal, which say what to write instead.
+except for a decorator, JSX, a proposal, an `assert { … }` import attribute and
+the CommonJS forms `import x = require(…)` and `export = value`, which say what
+to write instead. In a concise-mode body (`--` lines, or two `--` blocks) the
+lines are read together as one body, and a position is the position in the file.
 
 **Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
 

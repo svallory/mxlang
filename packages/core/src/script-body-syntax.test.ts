@@ -18,6 +18,12 @@ const CODE = "MX_INVALID_STATEMENT";
 
 const DECORATOR =
   "Decorators are not read inside a `<script>` body: its text is TypeScript without decorator syntax. Move the decorated class to a `.ts` module and import it, or apply the decorator as a plain function call";
+const ASSERT =
+  'Import attributes are written with `with`, not `assert`: `import j from "./x.json" with { type: "json" }`';
+const IMPORT_EQUALS =
+  '`import x = require(...)` is a CommonJS form and is not read in a `<script>` body. Write `import x from "..."`';
+const EXPORT_EQUALS =
+  "`export = value` is a CommonJS form and is not read in a `<script>` body. Write `export default value`";
 const JSX =
   "JSX is not read in a `<script>` body: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`";
 const PIPELINE =
@@ -121,6 +127,83 @@ const REFUSED: [string, string, Refusal][] = [
     },
   ],
   [
+    "an import attribute written with assert",
+    page('import j from "./x.json" assert { type: "json" };'),
+    { message: ASSERT, line: 3, column: 25, end: { line: 3, column: 25 } },
+  ],
+  [
+    "import x = require()",
+    page('import x = require("y");'),
+    {
+      message: IMPORT_EQUALS,
+      line: 3,
+      column: 0,
+      end: { line: 3, column: 24 },
+    },
+  ],
+  [
+    "export =",
+    page("export = x;"),
+    {
+      message: EXPORT_EQUALS,
+      line: 3,
+      column: 0,
+      end: { line: 3, column: 11 },
+    },
+  ],
+  [
+    "new.target",
+    page("new.target;"),
+    {
+      message:
+        "`new.target` can only be used in functions or class properties.",
+      line: 3,
+      column: 0,
+      end: { line: 3, column: 0 },
+    },
+  ],
+  [
+    "super() outside a constructor",
+    page("super();"),
+    {
+      message:
+        "`super()` is only valid inside a class constructor of a subclass. Maybe a typo in the method name ('constructor') or not extending another class?",
+      line: 3,
+      column: 0,
+      end: { line: 3, column: 0 },
+    },
+  ],
+  [
+    "super.x outside a method",
+    page("super.x;"),
+    {
+      message: "'super' is only allowed in object methods and classes.",
+      line: 3,
+      column: 0,
+      end: { line: 3, column: 0 },
+    },
+  ],
+  [
+    "an import inside a block",
+    page('if (x) { import a from "b"; }'),
+    {
+      message: "'import' and 'export' may only appear at the top level.",
+      line: 3,
+      column: 9,
+      end: { line: 3, column: 9 },
+    },
+  ],
+  [
+    "an export inside a function",
+    page("function f() { export const a = 1; }"),
+    {
+      message: "'import' and 'export' may only appear at the top level.",
+      line: 3,
+      column: 15,
+      end: { line: 3, column: 15 },
+    },
+  ],
+  [
     "a JSON body (it is read as JavaScript)",
     page('{"a": 1}', '<script type="application/json">'),
     {
@@ -154,7 +237,11 @@ describe("a <script> body that does not parse is refused", () => {
   });
 
   it("never tells the user to enable a parser plugin", () => {
-    for (const body of ["@d class C {}", "const v = a |> b;"]) {
+    for (const body of [
+      "@d class C {}",
+      "const v = a |> b;",
+      'import j from "./x.json" assert { type: "json" };',
+    ]) {
       const [diagnostic] = lower(page(body)).diagnostics;
       expect(diagnostic?.message).not.toMatch(/plugin|experimental syntax/i);
     }
@@ -177,6 +264,7 @@ const ACCEPTED: [string, string][] = [
   ],
   ["class fields", "class C { x = 1; static y = 2 }"],
   ["a template literal", "const s = `a`;"],
+  ["an import alias", "namespace B { export const C = 1 } import a = B.C;"],
   ["a closing-tag-like string", 'const s = "</scr" + "ipt>";'],
   [
     "object rest and spread",
@@ -278,6 +366,65 @@ describe("the error is placed in the file", () => {
   it("after a multi-byte character in the body", () => {
     const { diagnostics } = lower(page("const s = '😀'; const = 1;"));
     expect(diagnostics[0]).toMatchObject({ code: CODE, line: 3, column: 22 });
+  });
+});
+
+describe("a concise-mode script body", () => {
+  const concise = (...lines: string[]) =>
+    `<div/>\nscript\n${lines.map((l) => `  ${l}`).join("\n")}\n`;
+
+  it("is checked across its lines, at the file's position", () => {
+    const { diagnostics } = lower(
+      concise("--", "const a = 1;", "const = 1;", "--"),
+    );
+    // `const = 1;` is on line 5, after two spaces of indentation.
+    expect(diagnostics[0]).toMatchObject({
+      code: CODE,
+      message: "Unexpected token",
+      line: 5,
+      column: 8,
+    });
+  });
+
+  it("is checked across two -- blocks", () => {
+    const { diagnostics } = lower(
+      concise("--", "const a = 1;", "--", "-- const = 1;"),
+    );
+    expect(diagnostics[0]).toMatchObject({
+      code: CODE,
+      line: 6,
+      column: 11,
+    });
+  });
+
+  it("refuses a decorator on the second line", () => {
+    const { diagnostics } = lower(
+      concise("--", "const a = 1;", "@d class C {}", "--"),
+    );
+    expect(diagnostics[0]).toMatchObject({
+      code: CODE,
+      message: DECORATOR,
+      line: 5,
+      column: 2,
+      end: { line: 5, column: 4 },
+    });
+  });
+
+  it("accepts a body that parses", () => {
+    expect(
+      lower(concise("--", "const a = 1;", "const b = a + 1;", "--"))
+        .diagnostics,
+    ).toEqual([]);
+    expect(
+      lower(concise("--", "const a = 1;", "--", "-- const b = 2;")).diagnostics,
+    ).toEqual([]);
+  });
+
+  it("reports a stale read in its lines", () => {
+    const { diagnostics } = lower(
+      "<let/items=[1]/>\n<const/total=items.length/>\n<div>${total}</div>\nscript\n  --\n  items = [];\n  console.log(total);\n  --\n",
+    );
+    expect(diagnostics.map((d) => d.code)).toEqual(["MX_STALE_DERIVED_READ"]);
   });
 });
 

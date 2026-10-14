@@ -11,6 +11,13 @@ tree it produces.
   `16f453a6d86502c24578c339d17bc5ba81257539`, MIT licence, Copyright (c)
   htmljs-parser contributors). A fixture is kept when the grammar parses it
   with no `ERROR`/`MISSING` node and htmljs-parser reports no error for it.
+  Three of them are rewritten (`SOURCE_OVERRIDES` in `generate.mts`): `script`,
+  `script-mismatched-close` and `script-concise`. htmljs-parser reads a
+  `<script>` body as raw text and never parses it, but MX parses it as
+  TypeScript, so the original text (two adjacent strings, `a</b>c`, prose in a
+  `---` block) is refused by `lowerSource`. The fixture was rewritten so the
+  body is valid script text (a `;` between the strings, `a</b>/g`, a statement
+  and a comment); the trees are the ones the originals had.
 - `mx-*.txt`: MX's own cases (comments, tags, atoms, the Mesh invoice entity).
 
 `bun test/corpus/generate.mts` rewrites the sources (it fetches the pinned
