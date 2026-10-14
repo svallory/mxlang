@@ -127,16 +127,26 @@ describe("an attribute tag's arguments are refused, where stock Marko refuses", 
         expectRefused("<foo><@list-item(§1¶)/></foo>\n", "list-item", preset);
       });
 
-      it("points at the first argument of several, over a line break", () => {
-        const result = lower(
-          "<foo><@item(\n  1,\n  2\n)>hi</@item></foo>\n",
+      it("the range runs from the first argument to the last", () => {
+        expectRefused("<foo><@item(§1, 2¶)/></foo>\n", "item", preset);
+        expectRefused("<foo><@item(§a, b, c¶)/></foo>\n", "item", preset);
+      });
+
+      it("the range runs over a line break", () => {
+        expectRefused(
+          "<foo><@item(\n  §1,\n  2¶\n)>hi</@item></foo>\n",
+          "item",
           preset,
         );
-        expect(result.diagnostics[0]).toMatchObject({
-          code: CODE,
-          line: 2,
-          column: 2,
-        });
+      });
+
+      it("a spread argument, and a trailing comma", () => {
+        expectRefused("<foo><@item(§...xs¶)/></foo>\n", "item", preset);
+        expectRefused("<foo><@item(§1¶,)/></foo>\n", "item", preset);
+      });
+
+      it("in concise mode", () => {
+        expectRefused("foo\n  @item(§1¶)\n    -- hi\n", "item", preset);
       });
 
       it("a refused attribute tag is the only diagnostic of its kind, and no IR", () => {

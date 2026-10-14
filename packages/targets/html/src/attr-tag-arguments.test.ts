@@ -103,6 +103,36 @@ describe("html: an attribute tag's arguments are a positioned error", () => {
   }
 });
 
+describe("html: the range covers the arguments, first to last", () => {
+  // Marko 6.4.4 (`assertNoArgs`): from the first argument's start to the last
+  // argument's end. Columns are 0-based, as in `TranslateError`.
+  const DEFINE = "<define/Foo>x</define>\n";
+  const ROWS: Array<[string, string, { line: number; column: number }]> = [
+    [
+      "two arguments",
+      `${DEFINE}<Foo><@item(1, 2)>hi</@item></Foo>\n`,
+      { line: 2, column: 16 },
+    ],
+    [
+      "three arguments",
+      `${DEFINE}<Foo><@item(a, b, c)>hi</@item></Foo>\n`,
+      { line: 2, column: 19 },
+    ],
+    [
+      "lines",
+      `${DEFINE}<Foo><@item(\n  1,\n  2\n)>hi</@item></Foo>\n`,
+      { line: 4, column: 3 },
+    ],
+  ];
+  for (const [label, source, end] of ROWS) {
+    it(label, () => {
+      expect(() => emit(source)).toThrow(
+        expect.objectContaining({ end: expect.objectContaining(end) }),
+      );
+    });
+  }
+});
+
 describe("html: what Marko accepts still compiles", () => {
   const ACCEPTED: Array<[string, string]> = [
     ["arguments on the <define> call", "<define/Foo>x</define>\n<Foo(bar)/>\n"],

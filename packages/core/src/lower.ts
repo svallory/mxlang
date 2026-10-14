@@ -2672,18 +2672,26 @@ function lowerOneAttributeTag(
 /**
  * An attribute tag takes no arguments: `<@item(1)>` has nowhere to put `(1)`,
  * and the IR has no field for it, so lowering it would drop the value without
- * a word. Marko 6.4.4 refuses it ("Tag does not support arguments.") at the
- * argument; so does MX, at the first argument. An empty `()` writes no
- * argument and stays accepted, as in Marko. Arguments on the call itself
- * (`<Foo(bar)>`) are not this check's business.
+ * a word. Marko 6.4.4 refuses it ("Tag does not support arguments.") over the
+ * arguments, from the first one's start to the last one's end
+ * (`assertNoArgs`); so does MX. An empty `()` writes no argument and stays
+ * accepted, as in Marko. Arguments on the call itself (`<Foo(bar)>`) are not
+ * this check's business.
  */
-function rejectAttributeTagArguments(node: Node, name: string): void {
+function rejectAttributeTagArguments(ctx: Ctx, node: Node, name: string): void {
   const args = tagArgsOf(node) ?? [];
-  if (args.length === 0) return;
+  const first = args[0];
+  const last = args[args.length - 1];
+  if (first === undefined || last === undefined) return;
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
     `\`<@${name}>\` does not take arguments. Remove \`(…)\` and pass the value as an attribute (\`<@${name} value=1>\`) or as the tag's body.`,
-    args[0],
+    {
+      loc: {
+        start: positionAtOffset(ctx, nodeSpan(ctx, first).sourceStart),
+        end: positionAtOffset(ctx, nodeSpan(ctx, last).sourceEnd),
+      },
+    },
   );
 }
 
@@ -2693,7 +2701,7 @@ function lowerAuthoredAttributeTag(
   schema: AttrSchema,
 ): AttributeTag {
   const name = attrName(node);
-  rejectAttributeTagArguments(node, name);
+  rejectAttributeTagArguments(ctx, node, name);
   if (schema.customTagContract) rejectBadRefinements(ctx, node);
   else validateBoundAttributes(ctx, node);
   const declaration = declarationFor(schema, name, node);
