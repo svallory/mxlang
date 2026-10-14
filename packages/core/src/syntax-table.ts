@@ -27,6 +27,7 @@ import { codedError, isTranslateError, type TranslateError } from "./core.ts";
 import type { ContractMap, CustomTag, IrBuilders } from "./custom-tags.ts";
 import { isDeepFrozen } from "./deep-frozen.ts";
 import {
+  effectiveDiagnosticCodes,
   INVALID_CONFIG_CODE,
   INVALID_DIALECT_CONTRACT_CODE,
   INVALID_DIALECT_MODULE_CODE,
@@ -606,7 +607,9 @@ export interface Dialect {
    * ordered, so message, position, range, severity and fixes are unchanged.
    * A code the dialect itself raises (`ctx.fail`'s `code`, `explainUnknownTag`'s
    * `code`) is never renamed. `MX_INTERNAL_ERROR` and `MX_DIALECT_HOOK_ERROR`
-   * stay MX's and cannot be keys. A value is a non-empty string that does not
+   * stay MX's and cannot be keys; `MX_DIALECT_ERROR`, the dialect's own defect
+   * (an error it gave no code), loads but is ignored: MX keeps that code. A
+   * value is a non-empty string that does not
    * start with `MX_`; two keys may share one value. A bad map fails the dialect
    * at load. @unstable
    */
@@ -1205,6 +1208,31 @@ export function resolveSyntaxOf(
   options: RouteDialectOptions = {},
 ): ResolvedSyntax {
   return resolveManifestSyntax(filename, options);
+}
+
+/**
+ * The renames the dialect of `filename` states in `diagnosticCodes` (core code
+ * to the dialect's code), or `undefined` when the file's dialect states none,
+ * the file has no dialect, or the dialect does not load (the diagnostics say
+ * why). The map is the one `lowerSource` applies: `MX_DIALECT_ERROR` is not in
+ * it, since MX keeps that code whatever the dialect says.
+ *
+ * A tool that reports diagnostics it did not get from `lowerSource` (the
+ * project scan's: tag files, `mx.tags`, `mx.contracts`) renames their codes
+ * with it, so one core code has one name per dialect. Rename a diagnostic once:
+ * `lowerSource`'s own diagnostics are already renamed. `options` are the
+ * routing options the tool routes with. @unstable
+ */
+export function diagnosticCodesOf(
+  filename: string,
+  options: RouteDialectOptions = {},
+): Readonly<Record<string, string>> | undefined {
+  try {
+    const map = resolveSyntaxOf(filename, options).dialect?.diagnosticCodes;
+    return map === undefined ? undefined : effectiveDiagnosticCodes(map);
+  } catch {
+    return undefined;
+  }
 }
 
 /**

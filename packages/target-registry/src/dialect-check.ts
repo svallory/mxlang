@@ -13,6 +13,7 @@ import {
   collectTagFileDependencies,
   type DialectEmit,
   type DialectManifest,
+  diagnosticCodesOf,
   discoverDialects,
   emitFor,
   findMxConfig,
@@ -378,6 +379,16 @@ export function checkDialectFile(
   // never discovers them on its own, so a contract (`mx.contracts`) or a local
   // `tags/` template is checked only if it is handed over here. A dialect
   // file has no target, so no `mx.tags[].hosts` restriction applies to it.
+  // The dialect's own names for core's codes. `lowerSource` renames its
+  // diagnostics itself; the scan's (and the scan error) are renamed here, so a
+  // code is renamed once and has one name per dialect.
+  const codes = diagnosticCodesOf(filePath, {
+    hostSegments: moduleSegments(),
+  });
+  const renamed = (code: string | undefined): string | undefined =>
+    code !== undefined && codes !== undefined && Object.hasOwn(codes, code)
+      ? codes[code]
+      : code;
   let scan: ScanResult;
   try {
     scan = scanCached(filePath, { host: null });
@@ -396,7 +407,7 @@ export function checkDialectFile(
           error.file,
           filePath,
           "error",
-          error.diagnosticCode,
+          renamed(error.diagnosticCode),
           error.end,
         ),
       ],
@@ -426,7 +437,7 @@ export function checkDialectFile(
           diagnostic.file,
           filePath,
           diagnostic.severity ?? "warning",
-          diagnostic.code,
+          renamed(diagnostic.code),
           diagnostic.end,
         ),
       })),

@@ -367,24 +367,44 @@ export function isMxDiagnosticCode(code: string): code is MxDiagnosticCode {
   return knownCodes.has(code);
 }
 
+const effective = new WeakMap<object, Readonly<Record<string, string>>>();
+
+/**
+ * The renames of a dialect's `diagnosticCodes` that apply: the map without its
+ * `MX_DIALECT_ERROR` entry. That code reports the dialect's own defect (an
+ * error it gave no code to), so MX keeps it: the entry loads, and is ignored.
+ */
+export function effectiveDiagnosticCodes(
+  map: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> {
+  let kept = effective.get(map);
+  if (kept === undefined) {
+    const { [DIALECT_ERROR_CODE]: _ignored, ...rest } = map;
+    kept = rest;
+    effective.set(map, kept);
+  }
+  return kept;
+}
+
 /**
  * `diagnostics` with each core code the dialect's `diagnosticCodes` map names
  * replaced by its value; nothing else changes. A code the map does not name
- * (a hook's own code, an unlisted core code) and a diagnostic with no code
- * stay as they are. Returns `diagnostics` itself when there is nothing to
- * rename. Call it once, on the final list.
+ * (a hook's own code, an unlisted core code), `MX_DIALECT_ERROR` and a
+ * diagnostic with no code stay as they are. Returns `diagnostics` itself when
+ * there is nothing to rename. Call it once, on the final list.
  */
 export function renameDiagnosticCodes<T extends { code?: string }>(
   diagnostics: readonly T[],
   map: Readonly<Record<string, string>> | undefined,
 ): readonly T[] {
   if (map === undefined) return diagnostics;
+  const names = effectiveDiagnosticCodes(map);
   let changed = false;
   const renamed = diagnostics.map((diagnostic) => {
     const code = diagnostic.code;
-    if (code === undefined || !Object.hasOwn(map, code)) return diagnostic;
+    if (code === undefined || !Object.hasOwn(names, code)) return diagnostic;
     changed = true;
-    return { ...diagnostic, code: map[code] as string };
+    return { ...diagnostic, code: names[code] as string };
   });
   return changed ? renamed : diagnostics;
 }

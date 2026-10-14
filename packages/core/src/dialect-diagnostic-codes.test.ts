@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { lowerSource } from "./ir-entry/index.ts";
 import type { Dialect } from "./syntax-table.ts";
+import { diagnosticCodesOf } from "./syntax-table.ts";
 
 function lexi(diagnosticCodes: unknown): Dialect {
   return { id: "lexi", name: "Lexi", table: {}, diagnosticCodes } as Dialect;
@@ -130,5 +131,12 @@ describe("a good `diagnosticCodes` map loads", () => {
       });
       expect(result.ir).toBeDefined();
     }
+  });
+});
+
+describe("diagnosticCodesOf", () => {
+  it("is undefined for a file with no dialect", () => {
+    expect(diagnosticCodesOf("/v/page.mx")).toBeUndefined();
+    expect(diagnosticCodesOf("relative.mx")).toBeUndefined();
   });
 });

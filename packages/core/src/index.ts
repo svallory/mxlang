@@ -346,6 +346,7 @@ export {
   type Dialect,
   type DialectModule,
   defaultSyntax,
+  diagnosticCodesOf,
   resolveSyntax,
   type StandIn,
   type SyntaxBuildContext,

@@ -144,11 +144,11 @@ A file with `<widget/>` that is not declared now reports `KIT_UNKNOWN_TAG` where
 
 - **An explicit map, never a prefix.** A code the map does not name keeps its `MX_` code.
 - **Only the code changes.** The message, position, range, severity and fixes are the same, and the diagnostics come out in the same order.
-- **Where it applies.** To every diagnostic core reports for a dialect file when it checks or lowers it (`lowerSource`, and so the language server, the TypeScript plugin and `mx-tsc`), a tag file's included. The diagnostics of reading the project's configuration (a missing `mx.tags` directory, a misplaced tag file) are not about the file's own rules and keep their `MX_` codes.
+- **Where it applies.** To every diagnostic core reports for a dialect file when it checks or lowers it (`lowerSource`, and so the language server, the TypeScript plugin and `mx-tsc`), a tag file's included, and to the diagnostics of the project scan those tools add: a reserved tag name in `mx.contracts`, a misplaced or dotted tag file, an ignored sidecar, an `mx.tags` entry that names no directory. One core code has one name in your dialect. A tool that reports core diagnostics of its own renames them with `diagnosticCodesOf(file)` from `@mxlang/core` (`@unstable`), which returns the map that applies (or `undefined`).
 - **Your own codes stay yours.** A `ctx.fail(message, { code })` or `explainUnknownTag` code is never renamed, even when it equals a value in the map.
-- **Two codes stay MX's.** `MX_INTERNAL_ERROR` (a bug in MX) and `MX_DIALECT_HOOK_ERROR` (a hook of yours broke its contract) cannot be keys, so a tool that triages them always finds them. `MX_DIALECT_ERROR` and `MX_DIALECT_WARNING` (your own error or warning that gave no code) can be renamed.
+- **Three codes stay MX's.** `MX_INTERNAL_ERROR` (a bug in MX) and `MX_DIALECT_HOOK_ERROR` (a hook of yours broke its contract) cannot be keys. `MX_DIALECT_ERROR` is your own error that gave no code; it loads as a key but is ignored, because it reports a defect of the dialect itself and MX keeps that name.
 - **Two keys may share a value** (`KIT_BAD` for both), at the cost of telling them apart by message.
-- **A wrong map fails the dialect at load**, in your module: it is not an object, a key is not a core code (the message names it), a value is not a non-empty string, a value starts with `MX_` (that prefix is MX's own), or a key is one of the two codes above.
+- **A wrong map fails the dialect at load**, in your module: it is not an object, a key is not a core code (the message names it), a value is not a non-empty string, a value starts with `MX_` (that prefix is MX's own), or a key is `MX_INTERNAL_ERROR` or `MX_DIALECT_HOOK_ERROR`.
 
 ## Passing your dialect to a call
 

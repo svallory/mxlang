@@ -212,7 +212,7 @@ describe("a code the dialect raises is not renamed", () => {
     expect(codes(without.diagnostics)).toEqual(["FX_SAME", "MX_UNKNOWN_TAG"]);
   });
 
-  it("an `explainUnknownTag` explanation with no code is `MX_DIALECT_ERROR`, which the map may rename", () => {
+  it("an `explainUnknownTag` explanation with no code is `MX_DIALECT_ERROR`, which MX keeps whatever the map says", () => {
     const explain: Dialect["explainUnknownTag"] = () => ({ message: "no" });
     const without = lower("<x/>\n", dialectOf({ explainUnknownTag: explain }), {
       unknownTags: "reject",
@@ -223,7 +223,7 @@ describe("a code the dialect raises is not renamed", () => {
       dialectOf({ explainUnknownTag: explain, diagnosticCodes: MAP }),
       { unknownTags: "reject" },
     );
-    expect(codes(mapped.diagnostics)).toEqual(["FX_DIALECT"]);
+    expect(codes(mapped.diagnostics)).toEqual(["MX_DIALECT_ERROR"]);
   });
 
   it("`MX_DIALECT_HOOK_ERROR` and `MX_INTERNAL_ERROR` are never renamed", () => {
