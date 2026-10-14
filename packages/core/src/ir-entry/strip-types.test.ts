@@ -232,7 +232,7 @@ describe("`ctx.lower` in a tag-file hook", () => {
       off: ret(off)?.type ?? null,
       on: ret(on)?.type ?? null,
       sameOff: off === offAgain,
-            distinct: off !== none,
+      distinct: off !== none,
     });
     return { contract: {} };
   },
@@ -259,6 +259,15 @@ describe("`ctx.lower` in a tag-file hook", () => {
         distinct: true,
       },
     ]);
+  });
+
+  it("the outer call's `stripTypes: false` is not inherited by the hook's `ctx.lower()`", () => {
+    project();
+    lowerSource("<money/>\n", file, {
+      customTags: scanCached(file, { targets }).customTags,
+      stripTypes: false,
+    });
+    expect(seen()).toMatchObject([{ none: null, off: "TSTypeAnnotation" }]);
   });
 });
 
