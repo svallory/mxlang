@@ -65,7 +65,17 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-describe("Solid language plugin", () => {
+// ts-plugin-tsserver-test-timeouts: the describe blocks below build a TypeScript
+// program or a real tsserver per test. Alone they take 1.5-6 s; under the full
+// gate's load the worst took 12.9 s (a callee's Input changing, tighten-then-
+// loosen) and five others came within 1 s of vitest's 5 s default. 60 s is
+// the astro-mx-to-mx-call-types block's value below: ~4.6x that worst case, and
+// a real hang still fails.
+const TSSERVER_DESCRIBE_TIMEOUT = 60_000;
+
+describe("Solid language plugin", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   it("puts a discovered tag's hoisted import in the virtual file", () => {
     const plugin = createSolidMxLanguagePlugin(ts);
     const fileName = `${here}/fixtures/solid-tags/page.solid.mx`;
@@ -586,7 +596,9 @@ describe("Solid language plugin", () => {
   });
 });
 
-describe("MX language plugin", () => {
+describe("MX language plugin", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   it("maps offsets past entity-decoded text to the shifted generated positions", () => {
     // jsx-text-entities: the Preact emitter HTML5-decodes authored text and
     // re-emits `&copy;` as `&#169;`, one character longer than the source. An
@@ -3343,7 +3355,9 @@ describe("MX language plugin", () => {
   });
 });
 
-describe("declared attribute-tag values in the emitted TypeScript", () => {
+describe("declared attribute-tag values in the emitted TypeScript", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   const solidDirectory = `${here}/fixtures/solid-policy`;
   const preactDirectory = `${here}/fixtures/preact-policy`;
   const solidCard = [
@@ -4556,7 +4570,9 @@ describe("the hosts' ambient types in the editor (TargetHost.ambientTypes)", () 
   });
 });
 
-describe("a tag call's props errors land on the tag name (html-call-props-mapped)", () => {
+describe("a tag call's props errors land on the tag name (html-call-props-mapped)", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   // The call's props object (`{ … }`) maps onto the tag name, as the JSX
   // hosts report it: a missing required prop (TS2345 on the whole object) is
   // reported exactly on the name, with no position marker.
@@ -5228,7 +5244,9 @@ describe("custom tag template mappings", () => {
   });
 });
 
-describe("host-policy diagnostics through tsserver", () => {
+describe("host-policy diagnostics through tsserver", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const dir of dirs.splice(0)) {
@@ -5498,7 +5516,9 @@ describe("TS80001 text carries one position base", () => {
  * expression lands on exactly the expression the author wrote (offset and
  * length).
  */
-describe("expression values are mapped in the language service", () => {
+describe("expression values are mapped in the language service", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
   const FIELD =
     'export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }\n<p>${input.mode}</p>\n';
@@ -5555,7 +5575,9 @@ describe("expression values are mapped in the language service", () => {
   });
 });
 
-describe("an unmapped diagnostic lands on its enclosing tag in every file kind (decision 161)", () => {
+describe("an unmapped diagnostic lands on its enclosing tag in every file kind (decision 161)", {
+  timeout: TSSERVER_DESCRIBE_TIMEOUT,
+}, () => {
   const REGION_KINDS = ["solid", "preact", "react", "hono"] as const;
   const APPROXIMATE = /\(position approximate: generated \d+:\d+\)$/;
   const text = (d: ts.Diagnostic) =>
