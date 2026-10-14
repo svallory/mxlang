@@ -2375,6 +2375,14 @@ conditional occurrences are supported and render only the taken projection.
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
 
+An attribute tag takes **no arguments**: `<@item(1)>` is the compile error
+`MX_UNSUPPORTED_TAG_ARGUMENTS`, positioned at the first argument, whatever the
+parent is (a `<define>` call, a custom tag, a dynamic tag, an imported
+component), as Marko 6.4.4 refuses it with "Tag does not support arguments."
+Write the value as an attribute or as the body. Empty parentheses
+(`<@item()>`), type arguments (`<@item<T>>`) and params (`<@item|x|>`) are
+accepted, and arguments on the call itself (`<Foo(bar)/>`) keep their meaning.
+
 ### Collisions and placement
 
 | Message | When |
@@ -2389,6 +2397,7 @@ starts one character in so the `@` is excluded from diagnostics.
 | `` `<@${name}>` declares params in `<${owner}>`; add `|…|` `` | The declaration has a params tuple and the call omits tag params. |
 | `` `<@${name}>` declares no params in `<${owner}>`; remove `|…|` `` | The call authors tag params but the declaration has none. |
 | `` `<@${name}>` is renderable in `<${owner}>`; it can't take attributes or nested attribute tags `` | A renderable occurrence attempts to carry data. |
+| `` `<@${name}>` does not take arguments. Remove `(…)` and pass the value as an attribute (`<@${name} value=1>`) or as the tag's body. `` | An attribute tag is written with arguments, `<@${name}(…)>`. Positioned at the first argument; code `MX_UNSUPPORTED_TAG_ARGUMENTS`. |
 | `Cannot have attribute tags and body content under a control flow tag.` | One `<if>`/`<for>` body mixes attribute tags with ordinary content. |
 | `attribute tag \`<${name}>\` is only valid directly inside a component call` | An `@`-named tag reached the general tag path. |
 | `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call` | Attribute tags on `<if>`, `<for>`, an element, etc. |
