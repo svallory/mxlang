@@ -163,14 +163,25 @@ export interface LowerSourceOptions {
    */
   unknownTags?: "allow" | "reject";
   /**
-   * Whether TypeScript types are erased before the source lowers. The
-   * default (`true`, or omitted) strips them: an arrow's parameter and return
-   * annotations are gone from the lowered nodes, and a top-level `as`, `!` or
-   * `satisfies` is reduced to its operand. `false` keeps the authored
-   * TypeScript in the nodes the hooks see (`TSTypeAnnotation`, `returnType`,
-   * `TSAsExpression`, …) and in `Expr.code`. For a dialect whose
-   * `nodeType.lower`, contract hooks or `afterLower` read the types. The IR
-   * shape is the same either way.
+   * Whether TypeScript types are erased from the nodes before the source
+   * lowers. The default (`true`, or omitted) erases them: an arrow's
+   * parameter and return annotations are gone from its `node`, and a
+   * top-level `as`, `!`, `satisfies` or `<T>x` is replaced by its operand
+   * (the `node`, `span` and `code` are the operand's). `Expr.code` is sliced
+   * from the source either way, so annotations inside an expression stay in
+   * it. `false` keeps the authored TypeScript in the nodes a dialect's hooks
+   * see (`TSTypeAnnotation`, `returnType`, `TSAsExpression`, …), for a
+   * dialect whose `nodeType.lower`, contract hooks or `afterLower` read
+   * types.
+   *
+   * With `false`, core's own checks see the assertion too, so a few results
+   * differ from the default: a bound attribute over an assertion
+   * (`v:=(y as any)`) is `MX_INVALID_BOUND_ATTRIBUTE`; an attribute whose
+   * value is an assertion over a literal (`a=("s" as const)`) is `dynamic`
+   * with shape `other` rather than `static`, `boolean`, `object`, `array` or
+   * `string`; and a contract's `type` is not checked against such a value.
+   * A tag-file hook's `ctx.lower` takes the option but does not inherit this
+   * call's value.
    */
   stripTypes?: boolean;
   /**

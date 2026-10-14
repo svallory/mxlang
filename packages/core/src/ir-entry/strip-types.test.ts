@@ -232,8 +232,7 @@ describe("`ctx.lower` in a tag-file hook", () => {
       off: ret(off)?.type ?? null,
       on: ret(on)?.type ?? null,
       sameOff: off === offAgain,
-      noneIsOn: none === on,
-      distinct: off !== none,
+            distinct: off !== none,
     });
     return { contract: {} };
   },
@@ -257,7 +256,6 @@ describe("`ctx.lower` in a tag-file hook", () => {
         off: "TSTypeAnnotation",
         on: null,
         sameOff: true,
-        noneIsOn: false,
         distinct: true,
       },
     ]);
@@ -278,16 +276,16 @@ describe("the passes over the IR take typed nodes", () => {
     SOURCES.flatMap((source) =>
       (["pass", "reject"] as const).map(
         (structural) =>
-          [JSON.stringify(source), source, structural] as [
-            string,
+          [JSON.stringify(source), structural, source] as [
             string,
             "pass" | "reject",
+            string,
           ],
       ),
     ),
   )(
     "%s, structural %s: no crash, the diagnostics of the stripped lowering",
-    (_label, source, structural) => {
+    (_label, structural, source) => {
       const diagnostics = (stripTypes: boolean) =>
         lowerSource(source, "/f.mx", { structural, stripTypes }).diagnostics;
       expect(diagnostics(false)).toEqual(diagnostics(true));
@@ -318,5 +316,102 @@ describe("the passes over the IR take typed nodes", () => {
         ).toEqual(["MX_STRUCTURAL_CONSTRUCT"]);
       }
     }
+  });
+});
+
+/**
+ * What `stripTypes: false` changes in core's own results. These pin today's
+ * behaviour; they are not a claim that it is wanted.
+ */
+describe("`stripTypes: false` and core's own checks", () => {
+  const codes = (source: string, options: LowerSourceOptions) =>
+    lowerSource(source, "/f.mx", options).diagnostics.map((d) => d.code);
+
+  it.each([
+    "<x v:=(y as any)/>",
+    "<x v:=y!/>",
+    "<x v:=(y satisfies any)/>",
+    "<x v:=(<any>y)/>",
+    "<x v:=(a.b as any)/>",
+  ])(
+    "%s: a clean bound attribute by default, MX_INVALID_BOUND_ATTRIBUTE with `false`",
+    (source) => {
+      expect(codes(source, {})).toEqual([]);
+      expect(codes(source, { stripTypes: true })).toEqual([]);
+      expect(codes(source, { stripTypes: false })).toEqual([
+        "MX_INVALID_BOUND_ATTRIBUTE",
+      ]);
+    },
+  );
+
+  it("a wrapper inside the bound member is fine either way", () => {
+    for (const stripTypes of [true, false]) {
+      expect(codes("<x v:=(a as any).b/>", { stripTypes })).toEqual([]);
+    }
+  });
+
+  interface Lowered {
+    kind: string;
+    shape?: string;
+    value?: unknown;
+  }
+  const attrOf = (source: string, stripTypes: boolean): Lowered => {
+    const { ir } = lowerSource(source, "/f.mx", { stripTypes });
+    const tag = (ir as unknown as { body: { tag: { attrs: Attr[] } }[] })
+      .body[0]?.tag;
+    const attr = tag?.attrs[0] as unknown as {
+      kind: string;
+      value: { shape?: string } | string | boolean;
+    };
+    return {
+      kind: attr.kind,
+      ...(typeof attr.value === "object" ? { shape: attr.value.shape } : {}),
+    };
+  };
+
+  it.each([
+    [
+      'a=("s" as const)',
+      { kind: "static" },
+      { kind: "dynamic", shape: "other" },
+    ],
+    [
+      "a=(true as boolean)",
+      { kind: "boolean" },
+      { kind: "dynamic", shape: "other" },
+    ],
+    [
+      "a=({ b: 1 } as object)",
+      { kind: "dynamic", shape: "object" },
+      { kind: "dynamic", shape: "other" },
+    ],
+    [
+      "a=([1] as number[])",
+      { kind: "dynamic", shape: "array" },
+      { kind: "dynamic", shape: "other" },
+    ],
+    [
+      "a=(`t` as string)",
+      { kind: "dynamic", shape: "string" },
+      { kind: "dynamic", shape: "other" },
+    ],
+  ])(
+    "%s: kind and shape by default, then with `false`",
+    (attr, byDefault, kept) => {
+      const source = `<x ${attr}/>\n`;
+      expect(attrOf(source, true)).toEqual(byDefault);
+      expect(attrOf(source, false)).toEqual(kept);
+    },
+  );
+
+  it("a contract's `type` is checked against a wrapped literal by default, not with `false`", () => {
+    const customTags: Record<string, CustomTag> = {
+      x: { attributes: { a: { type: "string" } } },
+    };
+    const source = "<x a=(1 as number)/>\n";
+    expect(codes(source, { customTags })).toEqual([
+      "MX_INVALID_ATTRIBUTE_VALUE",
+    ]);
+    expect(codes(source, { customTags, stripTypes: false })).toEqual([]);
   });
 });
