@@ -261,9 +261,12 @@ describe("mx-tsc -w host-policy diagnostics: more cases", () => {
         // The rebuild that only removes a root file: tsc may write a TS6053
         // summary first, then the settled one.
         rmSync(added);
-        let settled = await watcher.untilSummary();
+        // Both summaries may arrive in one chunk: decide on the last cycle.
+        const lastCycle = (text: string) =>
+          text.slice(Math.max(text.lastIndexOf("File change detected"), 0));
+        let settled = lastCycle(await watcher.untilSummary());
         if (policyLines(settled).length > 0 || count(settled) > 0) {
-          settled = await watcher.untilSummary();
+          settled = lastCycle(await watcher.untilSummary());
         }
         expect(policyLines(settled)).toEqual([]);
         expect(settled).toContain("Found 0 errors. Watching for file changes.");

@@ -140,7 +140,7 @@ MX errors).`
 ## Host-policy diagnostics
 
 `package.json` decides which host compiles a `.mx` file. When that decision
-has a problem, `mx-tsc` prints it as a warning positioned in the
+has a problem, `mx-tsc` prints it, positioned in the
 `package.json`, in `tsc`'s shape:
 
 ```
