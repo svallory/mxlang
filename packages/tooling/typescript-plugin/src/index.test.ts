@@ -65,12 +65,12 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-// ts-plugin-tsserver-test-timeouts: the describe blocks below build a TypeScript
-// program or a real tsserver per test. Alone they take 1.5-6 s; under the full
-// gate's load the worst took 12.9 s (a callee's Input changing, tighten-then-
-// loosen) and five others came within 1 s of vitest's 5 s default. 60 s is
-// the astro-mx-to-mx-call-types block's value below: ~4.6x that worst case, and
-// a real hang still fails.
+// ts-plugin-tsserver-test-timeouts: the describe blocks that use this build a
+// TypeScript program (the plugin's language service) per test. Those tests take
+// 1.6-3.5 s alone; under the full gate's load they took 5.2-12.9 s and failed
+// vitest's 5 s default (the worst: a callee's Input changing, tighten-then-
+// loosen). 60 s is the astro-mx-to-mx-call-types block's value below: ~4.6x that
+// worst case, and a real hang still fails.
 const TSSERVER_DESCRIBE_TIMEOUT = 60_000;
 
 describe("Solid language plugin", {
