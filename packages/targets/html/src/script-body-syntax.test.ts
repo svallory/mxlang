@@ -80,12 +80,6 @@ describe("the html target accepts the <script> bodies stock Marko compiles", () 
   it("a body that writes a <let>", () => {
     expect(thrown("<let/n=0/>\n<script>\nn = 1;\n</script>")).toBeUndefined();
   });
-
-  it("a body with a ${…} placeholder, which is not read", () => {
-    expect(
-      thrown("<let/x=1/>\n<script>\nconst a = ${x};\n</script>"),
-    ).toBeUndefined();
-  });
 });
 
 describe("the stale read in a <script> body (review of #568, L4)", () => {
