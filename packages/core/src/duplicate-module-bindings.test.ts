@@ -659,6 +659,79 @@ describe("an export list names a declared binding", () => {
       2,
       16,
     ],
+    // A value only `declare` introduces is erased by the TypeScript strip, so
+    // the export list names nothing at run time (Node: "Export 'd' is not
+    // defined in module"). A type name is erased from the list too, so it loads.
+    [
+      "an ambient const",
+      "static declare const d: number\nstatic export { d }",
+      "d",
+      2,
+      16,
+    ],
+    [
+      "an ambient let",
+      "static declare let d: number\nstatic export { d }",
+      "d",
+      2,
+      16,
+    ],
+    [
+      "an ambient var",
+      "static declare var d: number\nstatic export { d }",
+      "d",
+      2,
+      16,
+    ],
+    [
+      "an ambient function",
+      "static declare function d(): void\nstatic export { d }",
+      "d",
+      2,
+      16,
+    ],
+    [
+      "an ambient class",
+      "static declare class C {}\nstatic export { C }",
+      "C",
+      2,
+      16,
+    ],
+    [
+      "an ambient enum",
+      "static declare enum E { A }\nstatic export { E }",
+      "E",
+      2,
+      16,
+    ],
+    [
+      "an ambient namespace with values",
+      "static declare namespace N { const a: number }\nstatic export { N }",
+      "N",
+      2,
+      16,
+    ],
+    [
+      "an ambient const in a block, exported by another statement",
+      "static { declare const d: number }\nserver export { d }",
+      "d",
+      2,
+      16,
+    ],
+    [
+      "an ambient const exported in the same block",
+      "static { declare const d: number; export { d } }",
+      "d",
+      1,
+      43,
+    ],
+    [
+      "an `export declare const`",
+      "export declare const d: number\nstatic export { d }",
+      "d",
+      2,
+      16,
+    ],
     [
       "an `export default` default alias",
       "static export { q as default }",
@@ -721,10 +794,17 @@ describe("an export list names a declared binding", () => {
     ],
     ["a type alias", "static type T = 1\nstatic export { T }"],
     ["an interface", "static interface I { a: 1 }\nstatic export { I }"],
-    ["an ambient const", "static declare const d: number\nstatic export { d }"],
     [
-      "an ambient function",
-      "static declare function d(): void\nstatic export { d }",
+      "an ambient namespace with only types",
+      "static declare namespace N { type A = 1 }\nstatic export { N }",
+    ],
+    [
+      "an ambient const beside a real one that is exported",
+      "static declare const d: number\nstatic const e = 1\nstatic export { e }",
+    ],
+    [
+      "a declare class merged with a namespace that has values",
+      "static declare class C {}\nstatic namespace C { export const a = 1 }\nstatic export { C }",
     ],
     [
       "a function, a class, an enum",

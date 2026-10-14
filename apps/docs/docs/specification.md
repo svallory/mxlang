@@ -320,7 +320,13 @@ produce does not load (`function` twice, `function` with `var`, `var` with
 `import`, `function` with `const`, `export function` with `const`); that is one
 row of `divergences.md`. An export list name that no module statement declares,
 at any position, is refused at the name, `MX_UNDECLARED_EXPORT`: "Export 'q' is
-not defined in module: …". Re-exports (`export { q } from "…"`) and type
+not defined in module: …". A value that only `declare` introduces
+(`static declare const d: number` beside `static export { d }`, and likewise
+`declare let`, `var`, `function`, `class`, `enum` and a `declare namespace`
+holding values) counts as undeclared, because the TypeScript strip erases the
+declaration and the module would not load; a type name (`type`, `interface`,
+`import type`, a namespace holding only types) is erased from the export list
+too, so it is accepted. Re-exports (`export { q } from "…"`) and type
 exports are not checked, and a template-scope name (`<const/q>`) is not a
 module binding. Both checks are skipped under the `none` tag rules, and a
 render-only name (above) is reported first.

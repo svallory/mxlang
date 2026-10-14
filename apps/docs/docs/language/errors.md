@@ -76,7 +76,7 @@ is refused on every host and in `lowerSource`:
 
 The code is `MX_DUPLICATE_DECLARATION`, positioned at the second declaration's name. The rule is JavaScript's, applied after the TypeScript strip, so two `var`s of a name and the merges TypeScript accepts (enum with enum, overloads, namespace merges, `declare` merges) still compile; a `function` declared twice, or a `function` beside a `var` or `const`, is refused although stock Marko compiles it, because the module does not load.
 
-An export list that names something no module statement declares (`static export { q }` with no `q`) is `MX_UNDECLARED_EXPORT`, at the name: "Export 'q' is not defined in module: …". A declaration in a later statement, an `import`, a type and an `export { q } from "…"` all count as fine.
+An export list that names something no module statement declares (`static export { q }` with no `q`) is `MX_UNDECLARED_EXPORT`, at the name: "Export 'q' is not defined in module: …". A declaration in a later statement, an `import`, a type and an `export { q } from "…"` all count as fine. A value only `declare` introduces (`static declare const d: number` then `static export { d }`) does not count: the TypeScript strip erases it and the module would not load. A `type` or `interface` name in an export list is erased too and is accepted.
 
 ## A derived `<const>` read after its `<let>` was written
 

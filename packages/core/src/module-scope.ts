@@ -56,8 +56,8 @@
  * function overloads. Type-only names (`type`, `interface`, `import type`)
  * are not values and never collide. The second declaration is refused,
  * positioned at its name. An `export { q }` whose `q` no module statement
- * declares (before or after it, a type or an ambient `declare` counts) is
- * refused at `q`, because the module it makes cannot load. A re-export
+ * declares (before or after it; a type counts, an ambient `declare` value does
+ * not) is refused at `q`, because the module it makes cannot load. A re-export
  * (`export { q } from "m"`) and a type export (`export type { T }`) bind
  * nothing local.
  */
@@ -428,7 +428,7 @@ type DeclarationKind =
 interface StatementDeclarations {
   /** The value names, in source order. Types and uninstantiated namespaces are not here. */
   readonly values: readonly Declaration[];
-  /** Every name, values and types alike: what an export list can name. */
+  /** Every name an export list can name: types, and values that survive the strip (not ambient ones). */
   readonly names: ReadonlySet<string>;
   /** The local names of the statement's export lists (`export { q }`). */
   readonly exports: readonly Node[];
@@ -478,7 +478,9 @@ function statementDeclarations(file: Node): StatementDeclarations {
     id: Node,
     extra: Partial<Declaration> = {},
   ): void => {
-    names.add(id.name);
+    // An ambient value (`declare const d`) is erased with the TypeScript
+    // strip, so an export list naming only it names nothing at run time.
+    if (extra.ambient !== true) names.add(id.name);
     values.push({
       name: id.name,
       kind,
@@ -583,13 +585,12 @@ function statementDeclarations(file: Node): StatementDeclarations {
   for (const statement of file.program.body as Node[]) walk(statement);
   coreBabel().traverse(file, {
     Program(path: Node) {
-      for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
+      for (const binding of Object.values<Node>(path.scope.bindings)) {
         if (binding.kind !== "var") continue;
         const declaration = binding.path.parentPath;
         add("var", binding.identifier, {
           ambient: declaration?.node.declare === true,
         });
-        names.add(name);
       }
     },
   });
