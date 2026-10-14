@@ -281,8 +281,10 @@ from "…"`, `export { a as default } from "…"` and `export * as default from
 declaration): "A template is already its own default export, so this default
 export would give the module a second one and the module would not load. Use a
 named export instead (`export const x`, or `export { x }`)." A type-only
-default (`export default interface I {}`, `export type { T as default }`) is
-erased and exports nothing, so it is accepted. Named exports (`export const`,
+default (`export default interface I {}`, `export type { T as default }`, or
+`export { T as default }` of a type imported with `import type` in the same
+statement) is erased and exports nothing, so it is accepted; a type imported
+by an earlier statement is not known to the check, so that form is refused. Named exports (`export const`,
 `export { x }`, `export { x as y }`, `export *`) are unaffected, and an
 `export { x }` may name a binding that an earlier `static`, `server`,
 `client` or `import` statement declares.

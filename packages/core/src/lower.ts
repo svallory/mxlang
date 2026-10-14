@@ -4077,7 +4077,19 @@ function isDefaultExportName(name: Node): boolean {
  * exports nothing, so it is not one.
  */
 function secondDefaultExportIn(program: Node | undefined): Node | undefined {
-  for (const statement of program?.program?.body ?? []) {
+  const body: Node[] = program?.program?.body ?? [];
+  // Names this statement imports as types only: `export { T as default }` of
+  // one is erased with the import. An import in an earlier statement is not
+  // visible here, so that form stays refused.
+  const typeOnly = new Set<string>();
+  for (const statement of body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    for (const specifier of statement.specifiers ?? []) {
+      if (statement.importKind === "type" || specifier.importKind === "type")
+        typeOnly.add(specifier.local?.name);
+    }
+  }
+  for (const statement of body) {
     if (statement.type === "ExportDefaultDeclaration") {
       const declaration = statement.declaration;
       if (
@@ -4093,6 +4105,11 @@ function secondDefaultExportIn(program: Node | undefined): Node | undefined {
       (statement.specifiers ?? []).some(
         (specifier: Node) =>
           specifier.exportKind !== "type" &&
+          !(
+            !statement.source &&
+            specifier.local?.type === "Identifier" &&
+            typeOnly.has(specifier.local.name)
+          ) &&
           isDefaultExportName(specifier.exported),
       )
     ) {

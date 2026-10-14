@@ -416,10 +416,27 @@ describe("a type-only default export is erased, so it is not a second default", 
     ["client", "client export default interface I {}"],
     ["export type", "static { type T = 1; export type { T as default } }"],
     ["a type specifier", "static { type T = 1; export { type T as default } }"],
+    [
+      "an import type in the same statement",
+      'static { import type { T } from "./m"; export { T as default } }',
+    ],
+    [
+      "a type specifier import in the same statement",
+      'static { import { type T } from "./m"; export { T as default } }',
+    ],
   ])("%s", (_name, statement) => {
     const { ir, diagnostics } = lower(`${statement}\n<div/>`);
     expect(diagnostics).toEqual([]);
     expect(ir).toBeDefined();
+  });
+});
+
+describe("a type imported by an earlier statement is not known to the default-export check", () => {
+  it("refuses `export { T as default }`, as the spec says", () => {
+    const { diagnostics } = lower(
+      'static import type { T } from "./m";\nstatic export { T as default };\n<div/>',
+    );
+    expect(diagnostics[0]?.message).toBe(SECOND_DEFAULT);
   });
 });
 
