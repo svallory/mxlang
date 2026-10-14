@@ -298,8 +298,9 @@ block, are a positioned error (`MX_INVALID_STATEMENT`, over the form):
 named export instead (`export const x = …`, or `export { x }`).", or
 "`import x = require(...);` is only supported when compiling modules to
 CommonJS. Write `import x from "…"`." (for `export import`, `export { default as
-x } from "…"`). The exception is a form directly in a namespace body or a
-`declare module` body, which TypeScript reads as a declaration and compiles.
+x } from "…"`). The exception is a form directly in a namespace body or a `declare module`
+body: the compile does not refuse it, as in Marko, and outside `declare`
+TypeScript's own check reports it.
 `import x = M.N`, a TypeScript alias, is not a CommonJS form and compiles in
 these statements.
 
