@@ -781,7 +781,7 @@ type ScriptBody = { program: Node } | { failure: TranslateError };
 const scriptBodies = new WeakMap<Node, ScriptBody | null>();
 
 /**
- * `import x = require("y")` and `export = x` parse as TypeScript but are
+ * `import x = require(...)` and `export = x` parse as TypeScript but are
  * CommonJS forms, which stock Marko's TypeScript transform refuses in a module.
  * Refused here with MX's own text, at the statement.
  */
