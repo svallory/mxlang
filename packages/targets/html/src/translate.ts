@@ -146,6 +146,14 @@ function rejectInputShadowing(target: Node, what: string): void {
   );
 }
 
+/** The `var E = …` Marko's TypeScript pass turns an enum into, as a node the name walk reads. */
+function enumAsVar(node: Node): Node {
+  return {
+    type: "VariableDeclaration",
+    declarations: [{ type: "VariableDeclarator", id: node.id }],
+  };
+}
+
 /**
  * The names a `client` block declares at its own top level, in the order
  * Marko emits them.
@@ -159,6 +167,12 @@ function rejectInputShadowing(target: Node, what: string): void {
  * statement its label, as Babel's table says. `declare` forms and types
  * declare nothing at run time. An `import` declares its local names and an
  * `export` of a declaration the declaration's (`client export const y = 1`).
+ *
+ * An `enum` declares its name, a `const enum` only when exported: Marko's
+ * TypeScript pass keeps an exported `const enum` as `var E = {…}` and inlines
+ * an unexported one into its uses, removing the declaration. `declare` enums
+ * are skipped like every `declare` form. A plain `enum` declares its name
+ * where stock Marko refuses to compile it.
  */
 function clientDeclaredNames(code: string, at: Node): string[] {
   let program: { body: Node[] };
@@ -247,7 +261,22 @@ function clientDeclaredNames(code: string, at: Node): string[] {
       case "ExportNamedDeclaration":
         // `export { y }` has no declaration and adds nothing; any other
         // declaration is declared (or not) by its own case.
-        queue.push(node.declaration);
+        if (node.declaration?.type === "TSEnumDeclaration") {
+          // An exported enum, `const` included, stays as `var E = …`.
+          if (!node.declaration.declare)
+            queue.push(enumAsVar(node.declaration));
+        } else {
+          queue.push(node.declaration);
+        }
+        break;
+      case "TSEnumDeclaration":
+        // Reached only unexported (an exported one is read below, and a
+        // `declare` one never gets here). Marko's TypeScript pass inlines a
+        // `const enum` into its uses and removes it, so it declares nothing;
+        // a plain `enum` is declared like every other `client` declaration.
+        // Both are walked as the `var E = …` Marko turns an enum into, so the
+        // name lands where stock puts it among the others.
+        if (!node.const) queue.push(enumAsVar(node));
         break;
       case "ExportDefaultDeclaration":
         // `export default foo` is an expression and binds nothing; only a

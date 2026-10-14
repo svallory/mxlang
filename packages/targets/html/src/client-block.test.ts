@@ -230,6 +230,105 @@ describe("html: the non-block `client import` and `client export` declare their 
   });
 });
 
+describe("html: a `client` enum declares its name the way stock Marko does", () => {
+  // Stock Marko 6.4.4 (`stockMarkoCompile`, source followed by a template that
+  // reads `E`): an exported enum, `const` included, is kept as `var E = …` and
+  // declares `E`; an unexported `const enum` is inlined and removed, so it
+  // declares nothing; a `declare` enum declares nothing. An unexported plain
+  // `enum` crashes stock ("Unexpected enum parent 'MarkoScriptlet'") and is the
+  // one row below that MX compiles as the exported form (divergences.md).
+  it.each([
+    ["an exported enum", "client export enum E { A }", "var E;"],
+    ["an exported const enum", "client export const enum E { A }", "var E;"],
+    [
+      "a block with an exported enum",
+      "client { export enum E { A } }",
+      "var E;",
+    ],
+    [
+      "a block with an exported const enum",
+      "client { export const enum E { A } }",
+      "var E;",
+    ],
+    [
+      "several exported enums",
+      "client { export enum E { A } export enum F { B } }",
+      "var E, F;",
+    ],
+    [
+      "an enum beside a let",
+      "client { let q = 1; export enum E { A } }",
+      "var q, E;",
+    ],
+    [
+      "an enum among functions, classes and exports",
+      "client { export enum E { A }; export const x = 1; class C {} function f() {} }",
+      "var C, f, E, x;",
+    ],
+    ["an exported declare enum", "client export declare enum E { A }", ""],
+    [
+      "an exported declare const enum",
+      "client { export declare const enum E { A } }",
+      "",
+    ],
+    ["a declare enum", "client declare enum E { A }", ""],
+    ["a declare const enum", "client { declare const enum E { A } }", ""],
+    ["an unexported const enum", "client const enum E { A }", ""],
+    [
+      "a block with an unexported const enum",
+      "client { const enum E { A } }",
+      "",
+    ],
+    [
+      "an unexported const enum named by an export list",
+      "client { const enum E { A }; export { E } }",
+      "",
+    ],
+    // Stock crashes on these two; MX declares the name, as for the exported form.
+    ["an unexported enum (stock crashes)", "client enum E { A }", "var E;"],
+    [
+      "a block with an unexported enum (stock crashes)",
+      "client { enum E { A } }",
+      "var E;",
+    ],
+  ])("%s", (_name, statement, expected) => {
+    expect(hoisted(`${statement}${TEMPLATE}`)).toBe(expected);
+  });
+
+  it("`static enum` and `server enum` keep the enum", () => {
+    expect(hoisted(`static enum E { A }${TEMPLATE}`)).toBe("enum E { A }");
+    expect(hoisted(`server enum E { A }${TEMPLATE}`)).toBe("enum E { A }");
+  });
+
+  const render = (source: string) => String(mx(source)({}));
+
+  it("a template reads a declared enum name as undefined", () => {
+    for (const statement of [
+      "client export enum E { A }",
+      "client export const enum E { A }",
+      "client { export enum E { A } }",
+      "client enum E { A }",
+    ]) {
+      expect(render(`${statement}\n<div>${"${typeof E}"}</div>\n`)).toBe(
+        "<div>undefined</div>",
+      );
+      expect(render(`${statement}\n<div>[${"${E}"}]</div>\n`)).toBe(
+        "<div>[]</div>",
+      );
+    }
+  });
+
+  it("an unexported const enum declares nothing: `typeof` is fine, a plain read throws, as on stock", () => {
+    const statement = "client const enum E { A }";
+    expect(render(`${statement}\n<div>${"${typeof E}"}</div>\n`)).toBe(
+      "<div>undefined</div>",
+    );
+    expect(() => render(`${statement}\n<div>[${"${E}"}]</div>\n`)).toThrow(
+      ReferenceError,
+    );
+  });
+});
+
 describe("html: the statement text parses the way Marko's does", () => {
   it("a top-level `return` still declares the names", () => {
     expect(hoisted(`client { let q = 1; return }${TEMPLATE}`)).toBe("var q;");
