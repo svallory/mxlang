@@ -22,7 +22,12 @@ function errors(source: string) {
     .filter((diagnostic) => diagnostic.code !== 2307);
 }
 
-describe("a type error in a server or client statement", () => {
+// ts-plugin-tsserver-test-timeouts: each test builds the plugin's language
+// service (1.2-2.0 s per test in a full gate). 60 s is index.test.ts's
+// TSSERVER_DESCRIBE_TIMEOUT: room for gate load, and a real hang still fails.
+describe("a type error in a server or client statement", {
+  timeout: 60_000,
+}, () => {
   const cases: Array<[string, string, string]> = [
     ["server one line", 'server const a: number = "x";\n<div/>\n', "a: number"],
     [
