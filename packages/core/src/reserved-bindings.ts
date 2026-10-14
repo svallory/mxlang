@@ -124,11 +124,11 @@ export function checkReservedBindings(tree: unknown): void {
  * `decorators` plugin, as in Marko: `static @d() class C {}` and `@d m() {}`
  * are a syntax error there, and lowering refuses them (`rejectInvalidStatement`)
  * before a host sees the statement. Without the plugin here the reparse
- * throws and the tag is skipped. For a statement tag that refusal is the
- * statement checks' to report; for a `<script>` body (`scriptProgramOf`, which
- * reads with the same plugins) nothing reports it, so a body with a decorator
- * is skipped silently, and its stale-read check (`MX_STALE_DERIVED_READ`) does
- * not run. Marko refuses such a body itself.
+ * throws and the tag is skipped; that refusal is the statement checks' to
+ * report. A `<script>` body is read with the same plugins
+ * (`parseAuthoredSource` with `jsx: false`, from `scriptBodyOf` in
+ * `lower.ts`), and a body that does not parse is refused there
+ * (`checkScriptBodySyntax`), as Marko refuses it.
  */
 const MARKO_PLUGINS = [
   "objectRestSpread",
@@ -146,6 +146,8 @@ export function parseAuthoredSource(
     allowReturnOutsideFunction?: boolean;
     /** Keep going past an error the parser can recover from (`export { x }` with no `x`). */
     errorRecovery?: boolean;
+    /** Read the source as JSX first (the default). `false` reads it as Marko does a `<script>` body: TypeScript only, so `<b/>` is an error. */
+    jsx?: boolean;
   } = {},
 ) {
   const position = {
@@ -157,17 +159,20 @@ export function parseAuthoredSource(
       : {}),
     ...(options.errorRecovery ? { errorRecovery: true } : {}),
   };
-  try {
-    return coreParser().parse(source, {
-      ...position,
-      plugins: [...MARKO_PLUGINS, "jsx"],
-    });
-  } catch {
-    return coreParser().parse(source, {
-      ...position,
-      plugins: [...MARKO_PLUGINS],
-    });
+  if (options.jsx !== false) {
+    try {
+      return coreParser().parse(source, {
+        ...position,
+        plugins: [...MARKO_PLUGINS, "jsx"],
+      });
+    } catch {
+      // TypeScript's angle assertions: read again without JSX.
+    }
   }
+  return coreParser().parse(source, {
+    ...position,
+    plugins: [...MARKO_PLUGINS],
+  });
 }
 
 /** Checks Marko statement tags before a host can reject or discard them. */

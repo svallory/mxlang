@@ -41,7 +41,7 @@ export const INVALID_DEFINE_CODE = "MX_INVALID_DEFINE";
 export const INVALID_RETURN_CODE = "MX_INVALID_RETURN";
 /** The shape rules of `<try>`. */
 export const INVALID_TRY_CODE = "MX_INVALID_TRY";
-/** An `import`, `export` or `static` statement core cannot take. */
+/** An `import`, `export` or `static` statement core cannot take, or a `<script>` body that does not parse. */
 export const INVALID_STATEMENT_CODE = "MX_INVALID_STATEMENT";
 /** A tag name the language refuses, or a lowercase tag naming a local variable. */
 export const INVALID_TAG_NAME_CODE = "MX_INVALID_TAG_NAME";
@@ -402,7 +402,7 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         [INVALID_TRY_CODE, "the shape rules of `<try>`"],
         [
           INVALID_STATEMENT_CODE,
-          "an `import`, `export` or `static` statement core cannot take",
+          "an `import`, `export` or `static` statement core cannot take, or a `<script>` body that does not parse",
         ],
         [INVALID_TAG_NAME_CODE, "a tag name the language refuses"],
         [

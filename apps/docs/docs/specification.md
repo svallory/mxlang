@@ -661,6 +661,16 @@ single `MarkoText`, so the construct there is ordinary text: it stays text, as t
 body's other text does (the html target does not emit a `<script>` body). `<style>a <![CDATA[ b < c ]]></style>` is a stylesheet holding
 the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
 
+A `<script>` body must parse. It is read as the statements of a TypeScript
+module, so an `import`, an `export`, a top-level `return` or `await` and type
+annotations, an `enum`, `satisfies`, a `namespace` and `declare` are all
+accepted, as in Marko; a body that does not parse (a syntax error, a decorator,
+JSX, a proposal that is not part of the language, an HTML comment) is a compile
+error, `MX_INVALID_STATEMENT`, positioned at the error, and no target compiles
+it (a target that emits nothing for the body still refuses it). A body that
+holds a `${…}` placeholder is not read. The text of the error is Babel's own,
+except for a decorator, JSX and a proposal, which say what to write instead.
+
 **Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
 
 ---
@@ -1679,8 +1689,8 @@ it is declared (a handler parameter, a local `let`, `const` or `var`, a catch
 parameter, a function name, a `for (const x of …)` head), a `<for>`, `<define>`
 or `<let>` that declares the name again inside takes over from the outer
 binding, and writing a member (`o.a = 1`) is not a write to the binding. A
-`<script>` body that does not parse is skipped by this check, and so is a
-`<const>` written above its declaration (Marko refuses it; not guarded yet).
+`<const>` written above its declaration is skipped by this check (Marko refuses
+it; not guarded yet).
 
 **A handler, a `<script>` body or a `<lifecycle>` hook does not read a stale
 `<const>`.** Targets disagree on what a `<const>` shows inside the body that just
@@ -1715,7 +1725,7 @@ or local that shadows the `<const>` or the `<let>` is neither a read nor a write
 Not detected: a handler held in a variable or built by a call, a function
 declared with `<const>` and called from a handler, a write made inside a nested
 function, a `for (items of …)` head used as a write, a `<const>` declared below
-the body's tag, a `<script>` body that holds a `${…}` placeholder or does not parse, a write in
+the body's tag, a `<script>` body that holds a `${…}` placeholder, a write in
 one body and a read in another, and any other flow through a called function. Hosts and the html
 `strict` policy refuse `<let>` itself, so they never reach this check, and under
 the `none` tag-rules preset nothing fires.
@@ -4077,7 +4087,7 @@ host, a target or a dialect.
 | `MX_INVALID_DEFINE` | error | the shape rules of `<define>` |
 | `MX_INVALID_RETURN` | error | the shape rules of `<return>` |
 | `MX_INVALID_TRY` | error | the shape rules of `<try>` |
-| `MX_INVALID_STATEMENT` | error | an `import`, `export` or `static` statement core cannot take |
+| `MX_INVALID_STATEMENT` | error | an `import`, `export` or `static` statement core cannot take, or a `<script>` body that does not parse |
 | `MX_INVALID_TAG_NAME` | error | a tag name the language refuses |
 | `MX_UNBOUND_COMPONENT` | error | a capitalized tag with no import or `<define>` in scope |
 | `MX_INVALID_TAG_CALL` | error | a tag that cannot be called here |

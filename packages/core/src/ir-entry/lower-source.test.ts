@@ -184,15 +184,19 @@ describe("absent `tagRules`: the strict `html` preset", () => {
     ]);
   });
 
-  it.each(["script", "style", "textarea", "title"])(
-    "a `<%s>` body is text",
-    (name) => {
-      const result = lowerSource(`<${name}><child/></${name}>\n`, "/t.mx");
-      expect(result.diagnostics).toEqual([]);
-      const tag = tagOf(result.ir?.body[0]);
-      expect(tag.children).toMatchObject([{ kind: "Text", value: "<child/>" }]);
-    },
-  );
+  // A `<script>` body is code and must parse, so its text holds a `<` that
+  // starts no tag, not markup (`script-body-syntax.test.ts`).
+  it.each([
+    ["script", "a < b;"],
+    ["style", "<child/>"],
+    ["textarea", "<child/>"],
+    ["title", "<child/>"],
+  ])("a `<%s>` body is text", (name, body) => {
+    const result = lowerSource(`<${name}>${body}</${name}>\n`, "/t.mx");
+    expect(result.diagnostics).toEqual([]);
+    const tag = tagOf(result.ir?.body[0]);
+    expect(tag.children).toMatchObject([{ kind: "Text", value: body }]);
+  });
 
   it("`<pre>` keeps the whitespace around a child tag", () => {
     const result = lowerSource("<pre>\n  <child/>\n</pre>\n", "/t.mx");

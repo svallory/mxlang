@@ -696,8 +696,12 @@ describe("what must keep compiling", () => {
     expect(error?.message).toBe(letRenderMessage("count"));
   });
 
-  it("a script that does not parse is skipped, as it was", () => {
-    expect(attempt("<const/x=1/>\n<script>x = = 2</script>\n")).toBeUndefined();
+  it("a script that does not parse is refused as such, not skipped", () => {
+    // Stock Marko 6.4.4 refuses it at Babel's error (1:13).
+    expect(attempt("<const/x=1/>\n<script>x = = 2</script>\n")).toMatchObject({
+      diagnosticCode: "MX_INVALID_STATEMENT",
+      message: "Unexpected token",
+    });
   });
 
   it("a `<script>` split by a placeholder is skipped, as it was", () => {

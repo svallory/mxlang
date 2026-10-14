@@ -716,17 +716,11 @@ function checkTagValueWrites(ctx: Ctx, node: Node): void {
  * The same check over the text of a `<script>`, which is all function
  * position: a `<const>` or a `<for>` parameter written there, a `<let>`
  * written above its declaration, or a `<let>` as the left side of a
- * `for…of`. A body that is not one plain text run, or does not parse, is
- * skipped (`scriptProgramOf`).
+ * `for…of`. A body that is not one plain text run is skipped, and one that
+ * does not parse is refused ahead of this (`checkScriptBodySyntax`).
  */
 function checkScriptBodyWrites(ctx: Ctx, tag: Node): void {
-  const name = tagNameOf(tag);
-  if (
-    name !== "script" ||
-    (ctx.customTags && Object.hasOwn(ctx.customTags, name))
-  ) {
-    return;
-  }
+  if (!isBuiltinScript(ctx, tag)) return;
   const rules = writeRulesOf(ctx);
   if (!rules) return;
   const program = scriptProgramOf(ctx, tag);
@@ -771,23 +765,154 @@ function staleBodiesOf(
   return bodies;
 }
 
+/** Is `tag` the built-in `<script>`, not a tag a caller registered under that name? */
+function isBuiltinScript(ctx: Ctx, tag: Node): boolean {
+  const name = tagNameOf(tag);
+  return (
+    name === "script" &&
+    !(ctx.customTags && Object.hasOwn(ctx.customTags, name))
+  );
+}
+
+/** What reading one `<script>` body came to: its statements, or why they are not. */
+type ScriptBody = { program: Node } | { failure: TranslateError };
+
+/** Each `<script>` is read once: the syntax check and both analyses share it. */
+const scriptBodies = new WeakMap<Node, ScriptBody | null>();
+
 /**
- * The parsed statements of a `<script>` body, with the positions of the
- * file; `undefined` when the body is not one plain text run (a `${…}`
- * placeholder splits it) or does not parse; such a body is skipped.
+ * The `<script>` body of `tag`, parsed once the way Marko 6.4.4 parses it: as
+ * the statements of a module with TypeScript, no JSX and no proposal syntax,
+ * where `import`, `export`, a top-level `return` and a top-level `await` read
+ * (`parseAuthoredSource`). The program carries the positions of the file.
+ * `null` when the body is not one plain text run (a `${…}` placeholder splits
+ * it); such a body is not read.
  */
-function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
+function scriptBodyOf(ctx: Ctx, tag: Node): ScriptBody | null {
+  const cached = scriptBodies.get(tag);
+  if (cached !== undefined) return cached;
   const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
   const [text] = children;
-  if (children.length !== 1 || !isTextNode(text)) return undefined;
-  try {
+  let body: ScriptBody | null = null;
+  if (children.length === 1 && isTextNode(text)) {
     const at = text.loc?.start ?? positionAtOffset(ctx, text.start);
-    return parseAuthoredSource(text.value, at.line, at.column, {
-      allowReturnOutsideFunction: true,
-    }).program;
-  } catch {
-    return undefined;
+    try {
+      body = {
+        program: parseAuthoredSource(text.value, at.line, at.column, {
+          allowReturnOutsideFunction: true,
+          jsx: false,
+        }).program,
+      };
+    } catch (error) {
+      body = { failure: scriptBodyFailure(text.value, at, error) };
+    }
   }
+  scriptBodies.set(tag, body);
+  return body;
+}
+
+/** The statements of a `<script>` body that parses; `undefined` when it is not read or does not parse (`checkScriptBodySyntax` reports that). */
+function scriptProgramOf(ctx: Ctx, tag: Node): Node | undefined {
+  const body = scriptBodyOf(ctx, tag);
+  return body && "program" in body ? body.program : undefined;
+}
+
+/**
+ * Refuses a `<script>` body that does not parse, at Babel's error, as Marko
+ * does. The body is TypeScript, as the module statements are; it was not
+ * checked, nothing of it is emitted by html, and since the stale-read check
+ * reads it, a body that did not parse switched that check off without a word.
+ *
+ * When the walk collects errors the failure is recorded and the tag keeps
+ * lowering, so its other errors are still reported; otherwise it throws.
+ * Where `<script>` is not a raw-text tag (the `none` tag rules) there is no
+ * script text to check.
+ */
+function checkScriptBodySyntax(ctx: Ctx, tag: Node): void {
+  if (!isBuiltinScript(ctx, tag)) return;
+  // Only a raw-text body is the authored text. Under the `none` preset a
+  // `<script>` is an ordinary tag whose body is parsed as tags and text, and
+  // its text is whitespace-normalized: it is not code to check.
+  if (
+    ctx.tagTable &&
+    ctx.tagTable.getTag("script")?.parseOptions?.text !== true
+  )
+    return;
+  const body = scriptBodyOf(ctx, tag);
+  if (!body || !("failure" in body)) return;
+  if (!ctx.errors) throw body.failure;
+  ctx.errors.push(body.failure);
+}
+
+/**
+ * The error for a `<script>` body Babel could not read: `text` starts at `at`
+ * in the file, and `error` is the parse failure, whose position already is the
+ * file's. A decorator and a proposal syntax are named for what they are, with
+ * what to do instead; Babel's text would tell the user to enable a parser
+ * plugin, and there is none to enable.
+ */
+function scriptBodyFailure(
+  text: string,
+  at: { line: number; column: number },
+  error: unknown,
+): TranslateError {
+  const fail = (
+    message: string,
+    start: { line: number; column: number },
+    end: { line: number; column: number } = start,
+  ): TranslateError => {
+    const failure = codedError(
+      INVALID_STATEMENT_CODE,
+      message,
+      start.line,
+      start.column,
+    );
+    failure.end = { line: end.line, column: end.column };
+    return failure;
+  };
+  const decorator = decoratorFailure(text, error, at);
+  if (decorator) {
+    return fail(
+      decoratorMessage("a `<script>` body"),
+      decorator.start,
+      decorator.end,
+    );
+  }
+  const babel = error as {
+    message?: unknown;
+    loc?: { line: number; column: number };
+    missingPlugin?: unknown;
+  };
+  const start = babel.loc
+    ? { line: babel.loc.line, column: babel.loc.column }
+    : at;
+  if (Array.isArray(babel.missingPlugin)) {
+    const proposal = String(babel.missingPlugin[0] ?? "");
+    return fail(
+      `This syntax${proposal ? ` (the \`${proposal}\` proposal)` : ""} is not read in a \`<script>\` body: its text is TypeScript, and a proposal that is not part of the language yet is not accepted. Write it with standard syntax`,
+      start,
+    );
+  }
+  // JSX is not read in a `<script>`. Detected by what the failure is: the text
+  // parses once the JSX syntax is on, so the error is the markup's, and it is
+  // reported at the first element's `<` rather than where Babel's tokenizer
+  // gave up (`Unexpected token, expected ","`).
+  const jsx = firstJsxStart(text, { plugins: ["typescript"] });
+  if (jsx) {
+    return fail(
+      "JSX is not read in a `<script>` body: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
+      {
+        line: at.line + jsx.line - 1,
+        column: jsx.line === 1 ? at.column + jsx.column : jsx.column,
+      },
+    );
+  }
+  return fail(
+    String(babel.message ?? "Unexpected token")
+      .replace(/\s*\(\d+:\d+\)$/, "")
+      .trim(),
+    start,
+  );
 }
 
 /**
@@ -3771,7 +3896,9 @@ function rejectInvalidStatement(
       const at = place(decorator.start);
       const failure = codedError(
         INVALID_STATEMENT_CODE,
-        `Decorators are not read inside ${/^[aeiou]/.test(keyword) ? "an" : "a"} \`${keyword}\` statement: its text is TypeScript without decorator syntax. Move the decorated class to a \`.ts\` module and import it, or apply the decorator as a plain function call`,
+        decoratorMessage(
+          `${/^[aeiou]/.test(keyword) ? "an" : "a"} \`${keyword}\` statement`,
+        ),
         at.line,
         at.column,
       );
@@ -3829,6 +3956,11 @@ function isImportExportPlacement(error: unknown): boolean {
   );
 }
 
+/** The refusal of a decorator inside `where` (`a \`static\` statement`): the user cannot enable a parser plugin, so it says what to write. */
+function decoratorMessage(where: string): string {
+  return `Decorators are not read inside ${where}: its text is TypeScript without decorator syntax. Move the decorated class to a \`.ts\` module and import it, or apply the decorator as a plain function call`;
+}
+
 /**
  * Where the decorator that made `code` unparsable starts and ends (statement-
  * relative line/column), or `undefined` when `error` is not Babel's "this
@@ -3839,6 +3971,7 @@ function isImportExportPlacement(error: unknown): boolean {
 function decoratorFailure(
   code: string,
   error: unknown,
+  origin?: { line: number; column: number },
 ):
   | {
       start: { line: number; column: number };
@@ -3865,6 +3998,7 @@ function decoratorFailure(
       sourceType: "module",
       allowReturnOutsideFunction: true,
       errorRecovery: true,
+      ...(origin ? { startLine: origin.line, startColumn: origin.column } : {}),
       // The proposal's own grammar reads every form: `export @d class` and
       // `@d accessor x` do not parse under `decorators-legacy`.
       plugins: ["typescript", "decorators", "decoratorAutoAccessors"],
@@ -5979,6 +6113,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             // Before the tag's own lowering: a host with no runtime for the
             // handler refuses it there, and the stale read is the first thing
             // wrong with it.
+            checkScriptBodySyntax(ctx, child);
             checkStaleDerivedReads(ctx, child);
             checkScriptBodyWrites(ctx, child);
             const lowered = lowerTag(ctx, child);

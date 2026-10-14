@@ -43,7 +43,8 @@ const FORMS: Array<[string, string, string[], string[]]> = [
     "bodied with an element",
     "<effect><div>x</div></effect>",
     ["effect", "effect"],
-    [],
+    // A `<script>` body is code and must parse: `<div>x</div>` does not.
+    ["MX_INVALID_STATEMENT"],
   ],
   [
     "bodied with a method",
