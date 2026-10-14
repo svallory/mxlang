@@ -256,6 +256,19 @@ initializer, in the order the statements were written, so a template that reads
 one renders `undefined` instead of failing; declarations inside nested blocks
 are not.
 
+**A block holds module statements.** `static { … }`, `server { … }` and
+`client { … }` take the block's statements as module-level statements, so an
+`import` or an `export` written directly in the block is the same statement
+as one written after the bare keyword: `static { import x from "./x" }` and
+`static import x from "./x"` hoist the same code, and `static { export const z = 1 }`
+exports `z` from the module. In a `client` block the names an `import` or an
+`export` declaration binds are declared as `var name;`, as for any other
+`client` statement; an `export * from`, an `export { a } from` and a type-only
+`import` bind none. An `import` or `export` below the block's own statements
+(inside a nested block, an `if` or a function body, or in a second block after
+the first) stays an error, `'import' and 'export' may only appear at the top
+level.`, at the position of the declaration.
+
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one

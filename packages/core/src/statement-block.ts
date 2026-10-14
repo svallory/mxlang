@@ -60,3 +60,14 @@ export function unwrapStatementBlock(code: string): string {
   if (!block) return code;
   return block.empty ? "" : code.slice(block.open + 1, block.close).trim();
 }
+
+/**
+ * `code` with the braces of its one block blanked, so the statements inside
+ * read as module statements (where `import` and `export` may stand) while
+ * every character keeps its position. `code` itself for any other body.
+ */
+export function blankStatementBlock(code: string): string {
+  const block = statementBlock(code);
+  if (!block) return code;
+  return `${code.slice(0, block.open)} ${code.slice(block.open + 1, block.close)} ${code.slice(block.close + 1)}`;
+}

@@ -980,7 +980,12 @@ export function stripMxTypes(document: Node): void {
           "node" in field &&
           "outer" in field
         ) {
-          stripContainer(field, t);
+          stripContainer(
+            field,
+            t,
+            value.type === "MxModuleStatement" &&
+              BLOCK_STATEMENT_KEYWORDS.has(value.keyword),
+          );
         }
         visit(field);
       }
@@ -1005,7 +1010,38 @@ export function stripMxTypes(document: Node): void {
   visit(document.body);
 }
 
-function stripContainer(container: Node, t: Node): void {
+/** The module statements whose text may be one block of module statements. */
+const BLOCK_STATEMENT_KEYWORDS = new Set(["static", "server", "client"]);
+
+/** Is `statement` an `import` or an `export` declaration? */
+function isModuleDeclaration(statement: Node): boolean {
+  return (
+    statement?.type === "ImportDeclaration" ||
+    statement?.type === "ExportNamedDeclaration" ||
+    statement?.type === "ExportDefaultDeclaration" ||
+    statement?.type === "ExportAllDeclaration"
+  );
+}
+
+/**
+ * `static { import x from "x" }`: the block's statements are the module's own,
+ * so an `import` or `export` in it is stripped as the program-level statement
+ * it stands for. Run as a statement of the block, Babel's TypeScript plugin
+ * has no program scope to find for it (`export default` crashes it).
+ *
+ * The block keeps its shape: its body is replaced by the stripped statements.
+ * A block without an `import` or an `export` is left to the ordinary strip, so
+ * its payload does not change.
+ */
+function stripModuleBlock(container: Node): boolean {
+  const [block, ...rest] = container.node;
+  if (rest.length > 0 || block?.type !== "BlockStatement") return false;
+  if (!block.body.some(isModuleDeclaration)) return false;
+  block.body = stripProgram([...block.body]);
+  return true;
+}
+
+function stripContainer(container: Node, t: Node, moduleBlock = false): void {
   const node = container.node;
   if (node == null) return;
   switch (container.type) {
@@ -1015,6 +1051,7 @@ function stripContainer(container: Node, t: Node): void {
       return;
     }
     case "MxStatements":
+      if (moduleBlock && stripModuleBlock(container)) return;
       container.node = stripProgram([...node]);
       return;
     case "MxPattern": {

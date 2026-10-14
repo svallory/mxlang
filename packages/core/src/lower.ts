@@ -233,7 +233,10 @@ import {
   findStaleRead,
   handlerFunction,
 } from "./stale-derived-read.ts";
-import { unwrapStatementBlock } from "./statement-block.ts";
+import {
+  blankStatementBlock,
+  unwrapStatementBlock,
+} from "./statement-block.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   fileTagRules,
@@ -3705,11 +3708,20 @@ function statementSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
 function rejectInvalidStatement(
   ctx: Ctx,
   node: Node,
-  code: string,
+  authored: string,
   prefix: number,
   keyword: string,
 ): void {
-  const options = {
+  // `static { import x from "x" }`: the statements inside the one block are
+  // the module's own (Marko hoists them), so `import` and `export` are valid
+  // there. The braces are blanked, not removed, so a position does not move.
+  const code = blankStatementBlock(authored);
+  let options: {
+    sourceType: string;
+    plugins: string[];
+    allowReturnOutsideFunction: boolean;
+    allowImportExportEverywhere?: boolean;
+  } = {
     sourceType: "module",
     // No decorators plugin: stock Marko (compiler 5.42.11) has none either, so
     // `static @d() class C {}` and `@d m() {}` are refused below, as it does.
@@ -3727,9 +3739,30 @@ function rejectInvalidStatement(
         ? start.column + prefix + (at?.column ?? 0)
         : at.column,
   });
-  try {
-    coreBabel().parse(code, options);
-  } catch (error) {
+  const attempt = (opts: object): unknown => {
+    try {
+      coreBabel().parse(code, opts);
+    } catch (error) {
+      return error ?? new Error("invalid statement");
+    }
+    return undefined;
+  };
+  let parseFailure = attempt(options);
+  // An `import` or `export` the text places below the module is Babel's first
+  // error whatever else is wrong, and the block read above only unwraps a
+  // block that parses. Read the text again with placement allowed: if that
+  // fails, the failure is the text's real syntax error, ahead of the
+  // placement one. Otherwise the placement is the error.
+  if (parseFailure && isImportExportPlacement(parseFailure)) {
+    const relaxed = { ...options, allowImportExportEverywhere: true };
+    const real = attempt(relaxed);
+    if (real) {
+      parseFailure = real;
+      options = relaxed;
+    }
+  }
+  if (parseFailure) {
+    const error = parseFailure;
     // A decorator is not read in a statement. The failure is Babel's
     // "missing plugin" one for decorators, positioned at the first `@` as
     // stock Marko reports it; the span runs over that decorator.
@@ -3778,6 +3811,13 @@ function rejectInvalidStatement(
     failure.end = { line: at.line, column: at.column };
     throw failure;
   }
+}
+
+/** Is `error` Babel's refusal of an `import` or `export` below the module's top level? */
+function isImportExportPlacement(error: unknown): boolean {
+  return (
+    (error as { reasonCode?: unknown }).reasonCode === "UnexpectedImportExport"
+  );
 }
 
 /**
@@ -3860,13 +3900,14 @@ function followsGreaterThan(
 /** Where the first JSX element or fragment of `code` starts, when `code` parses only with JSX on. */
 function firstJsxStart(
   code: string,
-  options: { plugins: string[] },
+  options: { plugins: string[]; allowImportExportEverywhere?: boolean },
 ): { line: number; column: number } | undefined {
   const parseWithJsx = (text: string): Node =>
     // Marko's slim Babel has no `jsx` plugin; core's own `@babel/parser` does.
     coreParser().parse(text, {
       sourceType: "module",
       allowReturnOutsideFunction: true,
+      allowImportExportEverywhere: options.allowImportExportEverywhere,
       plugins: [...options.plugins, "jsx"],
     });
   let file: Node;
