@@ -688,6 +688,16 @@ const ROWS: Row[] = [
     { tagRules: "html" },
   ),
   lowerRow(
+    "MX_DUPLICATE_DECLARATION",
+    'import x from "./x"\nstatic const x = 1\n<div>${x}</div>\n',
+    2,
+    13,
+    { tagRules: "html" },
+  ),
+  lowerRow("MX_UNDECLARED_EXPORT", "static export { q }\n<div/>\n", 1, 16, {
+    tagRules: "html",
+  }),
+  lowerRow(
     "MX_STALE_DERIVED_READ",
     "<let/n=0/>\n<const/d=n * 2/>\n<button onClick() {\n  n = 1;\n  log(d);\n}>x</button>\n",
     5,

@@ -80,6 +80,10 @@ export const READONLY_BINDING_WRITE_CODE = "MX_READONLY_BINDING_WRITE";
 export const STALE_DERIVED_READ_CODE = "MX_STALE_DERIVED_READ";
 /** Module level code (`static`, `server`, `client`, `export`) names something that exists only while the template renders. */
 export const RENDER_ONLY_IN_MODULE_CODE = "MX_RENDER_ONLY_IN_MODULE";
+/** A module level name declared twice across the module statements (`import x` and `static const x`), other than `var` with `var` and TypeScript's merges. */
+export const DUPLICATE_DECLARATION_CODE = "MX_DUPLICATE_DECLARATION";
+/** An export list names (`static export { q }`) a binding no module statement declares: the module cannot load. */
+export const UNDECLARED_EXPORT_CODE = "MX_UNDECLARED_EXPORT";
 /** A `.marko` file used as a tag or an import. */
 export const UNSUPPORTED_MARKO_FILE_CODE = "MX_UNSUPPORTED_MARKO_FILE";
 /** A bad `#id`/`.class` shorthand, or one with no default tag. */
@@ -531,6 +535,14 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "module level code names a tag variable, `input`, `$global` or `$signal`, which exist only while the template renders",
         ],
         [
+          DUPLICATE_DECLARATION_CODE,
+          "a module level name declared twice across the module statements",
+        ],
+        [
+          UNDECLARED_EXPORT_CODE,
+          "an export list names a binding no module statement declares",
+        ],
+        [
           UNSUPPORTED_MARKO_FILE_CODE,
           "a `.marko` file used as a tag or an import",
         ],
@@ -755,6 +767,8 @@ export type MxDiagnosticCode =
   | typeof READONLY_BINDING_WRITE_CODE
   | typeof STALE_DERIVED_READ_CODE
   | typeof RENDER_ONLY_IN_MODULE_CODE
+  | typeof DUPLICATE_DECLARATION_CODE
+  | typeof UNDECLARED_EXPORT_CODE
   | typeof UNSUPPORTED_MARKO_FILE_CODE
   | typeof INVALID_SHORTHAND_CODE
   | typeof RESERVED_BINDING_CODE

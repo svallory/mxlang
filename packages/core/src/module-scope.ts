@@ -44,6 +44,22 @@
  * refuses `server` or `client` outright reports that first. It is skipped
  * under the `none` tag rules, where a dialect owns what its tags and its
  * statements mean.
+ *
+ * The same scan checks the module's own bindings, for every host and every
+ * target (`MX_DUPLICATE_DECLARATION`, `MX_UNDECLARED_EXPORT`). The module
+ * statements share one scope, as the file's single module does once they are
+ * hoisted: a name is declared once across `import`, `static`, `server`,
+ * `client` and `export`, in block and block-less form. The rule is
+ * JavaScript's, applied after the TypeScript strip. Two `var`s of a name
+ * merge, and so do the declarations TypeScript merges: enum with enum (and
+ * namespace), a namespace after a function, class, enum or namespace, and
+ * function overloads. Type-only names (`type`, `interface`, `import type`)
+ * are not values and never collide. The second declaration is refused,
+ * positioned at its name. An `export { q }` whose `q` no module statement
+ * declares (before or after it, a type or an ambient `declare` counts) is
+ * refused at `q`, because the module it makes cannot load. A re-export
+ * (`export { q } from "m"`) and a type export (`export type { T }`) bind
+ * nothing local.
  */
 
 import { coreBabel } from "./babel.ts";
@@ -58,7 +74,11 @@ import {
   raise,
   sliceNode,
 } from "./core.ts";
-import { RENDER_ONLY_IN_MODULE_CODE } from "./diagnostic-codes.ts";
+import {
+  DUPLICATE_DECLARATION_CODE,
+  RENDER_ONLY_IN_MODULE_CODE,
+  UNDECLARED_EXPORT_CODE,
+} from "./diagnostic-codes.ts";
 import { parseAuthoredSource } from "./reserved-bindings.ts";
 import { blankStatementBlock } from "./statement-block.ts";
 import { hasStaticName, tagNameOf, tagVarOf } from "./tag-fields.ts";
@@ -80,6 +100,8 @@ interface Parsed {
   /** `static { … }`: its statements are the module's, the braces are gone. */
   readonly block: boolean;
   readonly bindings: ReadonlySet<string>;
+  /** Every declaration of the statement, for the duplicate and export checks. */
+  readonly declared: StatementDeclarations;
 }
 
 /** What a template's module statements are checked against. */
@@ -94,6 +116,8 @@ export interface ModuleScope {
   readonly parsed: Map<Node, Parsed | null>;
   /** The names every module statement binds, filled on first use. */
   moduleBindings?: ReadonlySet<string>;
+  /** The binding errors by the statement that holds them, filled on first use. */
+  bindingErrors?: Map<Node, BindingError>;
 }
 
 /**
@@ -168,7 +192,12 @@ function parseStatement(
     const file = parseAuthoredSource(source, at.line, at.column, {
       errorRecovery: true,
     });
-    result = { file, block, bindings: moduleLevelNames(file, block) };
+    result = {
+      file,
+      block,
+      bindings: moduleLevelNames(file, block),
+      declared: statementDeclarations(file),
+    };
   } catch {
     // A statement that does not parse is the statement checks' to report.
   }
@@ -290,11 +319,20 @@ const WHERE =
 
 /**
  * Refuses a module statement that names something which exists only while the
- * template renders. A no-op for a file with no such name in the statement.
+ * template renders, declares a module name a statement before it declared, or
+ * exports a name no module statement declares. A no-op for a statement with
+ * none of these.
  */
 export function checkModuleScope(ctx: Ctx, node: Node): void {
   const scope = ctx.moduleScope;
   if (!scope) return;
+  checkRenderOnly(ctx, scope, node);
+  const error = bindingErrors(ctx, scope).get(node);
+  if (error) raise(error.code, error.message, error.at);
+}
+
+/** The render-only half of {@link checkModuleScope}. */
+function checkRenderOnly(ctx: Ctx, scope: ModuleScope, node: Node): void {
   const text = sliceNode(ctx, node);
   const candidate = (name: string): boolean =>
     scope.renderOnly.has(name) ||
@@ -361,4 +399,299 @@ export function checkModuleScope(ctx: Ctx, node: Node): void {
       : `\`${first.name}\` exists only while the template renders, so module level code ${WHERE}, cannot reference it. Reference it in the template instead, passing it to module level functions as an argument.`,
     first.node,
   );
+}
+
+/** One module name a statement declares. */
+interface Declaration {
+  readonly name: string;
+  readonly kind: DeclarationKind;
+  /** The name's identifier: where an error about it goes. */
+  readonly id: Node;
+  /** `declare`d, or inside `declare`: it has no runtime. */
+  readonly ambient: boolean;
+  /** A function with no body: an overload signature or a `declare function`. */
+  readonly signature: boolean;
+  /** `const enum`: it merges with another `const enum` only. */
+  readonly constEnum: boolean;
+}
+
+type DeclarationKind =
+  | "var"
+  | "lexical"
+  | "function"
+  | "class"
+  | "import"
+  | "enum"
+  | "namespace";
+
+/** What a parsed statement declares and exports at module level. */
+interface StatementDeclarations {
+  /** The value names, in source order. Types and uninstantiated namespaces are not here. */
+  readonly values: readonly Declaration[];
+  /** Every name, values and types alike: what an export list can name. */
+  readonly names: ReadonlySet<string>;
+  /** The local names of the statement's export lists (`export { q }`). */
+  readonly exports: readonly Node[];
+}
+
+/** An error about one module statement. */
+interface BindingError {
+  readonly code:
+    | typeof DUPLICATE_DECLARATION_CODE
+    | typeof UNDECLARED_EXPORT_CODE;
+  readonly message: string;
+  readonly at: Node;
+}
+
+/** Does a namespace declare no value (only types, or empty namespaces)? TypeScript emits nothing for it. */
+function typeOnlyNamespace(declaration: Node): boolean {
+  const body = declaration.body;
+  if (!body) return true;
+  if (body.type === "TSModuleDeclaration") return typeOnlyNamespace(body);
+  return (body.body as Node[]).every(typeOnlyStatement);
+}
+
+function typeOnlyStatement(statement: Node): boolean {
+  switch (statement.type) {
+    case "TSInterfaceDeclaration":
+    case "TSTypeAliasDeclaration":
+      return true;
+    case "TSModuleDeclaration":
+      return typeOnlyNamespace(statement);
+    case "ExportNamedDeclaration":
+      return statement.declaration
+        ? typeOnlyStatement(statement.declaration)
+        : statement.exportKind === "type";
+    default:
+      return false;
+  }
+}
+
+/** The declarations and export lists of one parsed statement. */
+function statementDeclarations(file: Node): StatementDeclarations {
+  const { types } = coreBabel();
+  const values: Declaration[] = [];
+  const names = new Set<string>();
+  const exports: Node[] = [];
+  const add = (
+    kind: DeclarationKind,
+    id: Node,
+    extra: Partial<Declaration> = {},
+  ): void => {
+    names.add(id.name);
+    values.push({
+      name: id.name,
+      kind,
+      id,
+      ambient: false,
+      signature: false,
+      constEnum: false,
+      ...extra,
+    });
+  };
+  const walk = (statement: Node): void => {
+    switch (statement.type) {
+      case "ImportDeclaration": {
+        const typeOnly =
+          statement.importKind === "type" || statement.importKind === "typeof";
+        for (const specifier of statement.specifiers as Node[]) {
+          const kind = specifier.importKind;
+          if (typeOnly || kind === "type" || kind === "typeof") {
+            names.add(specifier.local.name);
+          } else {
+            add("import", specifier.local);
+          }
+        }
+        return;
+      }
+      case "TSImportEqualsDeclaration":
+        if (statement.importKind === "type") names.add(statement.id.name);
+        else add("import", statement.id);
+        return;
+      case "VariableDeclaration":
+        // A `var` is read from the scope below: one nested in a block hoists.
+        if (statement.kind === "var") return;
+        for (const declarator of statement.declarations as Node[]) {
+          for (const id of Object.values<Node>(
+            types.getBindingIdentifiers(declarator.id),
+          )) {
+            add("lexical", id, { ambient: statement.declare === true });
+          }
+        }
+        return;
+      case "FunctionDeclaration":
+        add("function", statement.id);
+        return;
+      case "TSDeclareFunction":
+        add("function", statement.id, {
+          signature: true,
+          ambient: statement.declare === true,
+        });
+        return;
+      case "ClassDeclaration":
+        add("class", statement.id, { ambient: statement.declare === true });
+        return;
+      case "TSEnumDeclaration":
+        add("enum", statement.id, {
+          ambient: statement.declare === true,
+          constEnum: statement.const === true,
+        });
+        return;
+      case "TSModuleDeclaration": {
+        // `declare module "m"` and `declare global` name no binding.
+        const id = statement.id;
+        if (id?.type !== "Identifier" || statement.global) return;
+        if (typeOnlyNamespace(statement)) names.add(id.name);
+        else add("namespace", id, { ambient: statement.declare === true });
+        return;
+      }
+      case "TSTypeAliasDeclaration":
+      case "TSInterfaceDeclaration":
+        names.add(statement.id.name);
+        return;
+      case "ExportNamedDeclaration":
+        if (statement.declaration) {
+          walk(statement.declaration);
+          return;
+        }
+        // A re-export binds nothing locally; a type export is erased.
+        if (statement.source || statement.exportKind === "type") return;
+        for (const specifier of statement.specifiers as Node[]) {
+          if (
+            specifier.type === "ExportSpecifier" &&
+            specifier.exportKind !== "type" &&
+            specifier.local?.type === "Identifier"
+          ) {
+            exports.push(specifier.local);
+          }
+        }
+        return;
+      case "ExportDefaultDeclaration": {
+        const declaration = statement.declaration;
+        if (
+          declaration?.id &&
+          (declaration.type === "FunctionDeclaration" ||
+            declaration.type === "TSDeclareFunction" ||
+            declaration.type === "ClassDeclaration")
+        ) {
+          walk(declaration);
+        }
+        return;
+      }
+    }
+  };
+  for (const statement of file.program.body as Node[]) walk(statement);
+  coreBabel().traverse(file, {
+    Program(path: Node) {
+      for (const [name, binding] of Object.entries<Node>(path.scope.bindings)) {
+        if (binding.kind !== "var") continue;
+        const declaration = binding.path.parentPath;
+        add("var", binding.identifier, {
+          ambient: declaration?.node.declare === true,
+        });
+        names.add(name);
+      }
+    },
+  });
+  values.sort((a, b) => a.id.start - b.id.start);
+  return { values, names, exports };
+}
+
+/**
+ * May `next` be declared after `earlier`, which already declare its name?
+ * Only two `var`s, and what TypeScript merges: enum with enum or namespace
+ * (a `const enum` only with another), a namespace after a function, class,
+ * enum or namespace, and the signatures of an overloaded function followed
+ * by one more, all `declare`d or none.
+ */
+function merges(earlier: readonly Declaration[], next: Declaration): boolean {
+  switch (next.kind) {
+    case "var":
+      return earlier.every((d) => d.kind === "var");
+    case "enum":
+      return earlier.every(
+        (d) =>
+          d.kind === "namespace" ||
+          (d.kind === "enum" && d.constEnum === next.constEnum),
+      );
+    case "namespace":
+      return earlier.every((d) =>
+        ["function", "class", "enum", "namespace"].includes(d.kind),
+      );
+    case "function":
+      return earlier.every(
+        (d) =>
+          d.kind === "function" && d.signature && d.ambient === next.ambient,
+      );
+    default:
+      return false;
+  }
+}
+
+/** 1-based `line:column`, as an editor shows a position. */
+function whereIs(node: Node): string {
+  const at = node.loc?.start;
+  return at ? `${at.line}:${at.column + 1}` : "earlier in the file";
+}
+
+/**
+ * The binding errors of the file's module statements, by the statement that
+ * holds each one, at most one per statement (its first, by position). Read
+ * once for the file, on the first statement checked.
+ */
+function bindingErrors(
+  ctx: Ctx,
+  scope: ModuleScope,
+): ReadonlyMap<Node, BindingError> {
+  if (scope.bindingErrors) return scope.bindingErrors;
+  const errors = new Map<Node, BindingError>();
+  scope.bindingErrors = errors;
+  const record = (statement: Node, error: BindingError): void => {
+    const known = errors.get(statement);
+    if (!known || error.at.start < known.at.start) {
+      errors.set(statement, error);
+    }
+  };
+  const declared = new Map<string, Declaration[]>();
+  const parsed = scope.statements.map((statement) => ({
+    statement,
+    parsed: parseStatement(ctx, scope, statement),
+  }));
+  for (const { statement, parsed: p } of parsed) {
+    if (!p) continue;
+    for (const next of p.declared.values) {
+      const earlier = declared.get(next.name);
+      if (!earlier) {
+        declared.set(next.name, [next]);
+      } else if (merges(earlier, next)) {
+        earlier.push(next);
+      } else {
+        record(statement, {
+          code: DUPLICATE_DECLARATION_CODE,
+          message: `Duplicate declaration "${next.name}": it is already declared at ${whereIs((earlier[0] as Declaration).id)}. The \`import\`, \`static\`, \`server\`, \`client\` and \`export\` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two \`var\`s, TypeScript's overloads, enums and namespaces merge).`,
+          at: next.id,
+        });
+      }
+    }
+  }
+  // An export list can name any declaration in the file, above or below it. A
+  // statement that did not parse might declare it: the lowering reports that
+  // statement, and no name is called undeclared until every one is read.
+  if (parsed.every((entry) => entry.parsed)) {
+    const all = new Set<string>();
+    for (const { parsed: p } of parsed) {
+      for (const name of p?.declared.names ?? []) all.add(name);
+    }
+    for (const { statement, parsed: p } of parsed) {
+      for (const id of p?.declared.exports ?? []) {
+        if (all.has(id.name)) continue;
+        record(statement, {
+          code: UNDECLARED_EXPORT_CODE,
+          message: `Export '${id.name}' is not defined in module: no \`import\`, \`static\`, \`server\`, \`client\` or \`export\` statement declares it, so the module cannot load. Declare \`${id.name}\` in a module statement, or remove it from the export list.`,
+          at: id,
+        });
+      }
+    }
+  }
+  return errors;
 }
