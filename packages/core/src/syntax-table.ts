@@ -30,9 +30,14 @@ import {
   INVALID_CONFIG_CODE,
   INVALID_DIALECT_CONTRACT_CODE,
   INVALID_DIALECT_MODULE_CODE,
+  isMxDiagnosticCode,
+  isReservedHookCode,
   MODULE_LOAD_FAILED_CODE,
+  type MxDiagnosticCode,
   NO_LOWERING_CODE,
   RESERVED_TAG_CODE,
+  reservedHookCodeMessage,
+  UNRENAMEABLE_CODES,
 } from "./diagnostic-codes.ts";
 import {
   type ContractFail,
@@ -590,6 +595,22 @@ export interface Dialect {
    * dynamic tag, which a data file refuses. @unstable
    */
   readonly bindingsCallTags?: boolean;
+  /**
+   * Renames the codes core reports on this dialect's files: each key is a
+   * core code (`MX_UNKNOWN_TAG`, `MX_DUPLICATE_ATTRIBUTE`, ...), each value
+   * the code the dialect's files report instead. An explicit map, never a
+   * prefix: a code it does not name keeps its MX code.
+   *
+   * Applied once to the final diagnostics of `lowerSource` and of the
+   * language tools built on it (the editors, `mx-tsc`), after they are
+   * ordered, so message, position, range, severity and fixes are unchanged.
+   * A code the dialect itself raises (`ctx.fail`'s `code`, `explainUnknownTag`'s
+   * `code`) is never renamed. `MX_INTERNAL_ERROR` and `MX_DIALECT_HOOK_ERROR`
+   * stay MX's and cannot be keys. A value is a non-empty string that does not
+   * start with `MX_`; two keys may share one value. A bad map fails the dialect
+   * at load. @unstable
+   */
+  readonly diagnosticCodes?: Partial<Record<MxDiagnosticCode, string>>;
 }
 
 /**
@@ -754,6 +775,7 @@ const MODULE_FIELDS = new Set([
   "tagFile",
   "contracts",
   "bindingsCallTags",
+  "diagnosticCodes",
 ]);
 
 /** The lowering options a dialect states a default for, with the values each accepts. */
@@ -850,6 +872,47 @@ export function dialectTagRules(dialect: Dialect): TagRulesPreset {
   return dialect.tagRules ?? "html";
 }
 
+/** Fails the dialect when its `diagnosticCodes` map is not a valid rename map. */
+function checkDiagnosticCodes(
+  map: unknown,
+  path: string,
+  fail: (message: string) => never,
+): void {
+  if (map === undefined) return;
+  const field = `${path}diagnosticCodes`;
+  if (
+    map === null ||
+    typeof map !== "object" ||
+    Array.isArray(map) ||
+    (Object.getPrototypeOf(map) !== Object.prototype &&
+      Object.getPrototypeOf(map) !== null)
+  ) {
+    fail(
+      `\`${field}\` must be an object mapping core diagnostic codes to the dialect's codes`,
+    );
+  }
+  for (const [key, code] of Object.entries(map as Record<string, unknown>)) {
+    if (UNRENAMEABLE_CODES.has(key)) {
+      fail(
+        `\`${field}.${key}\`: \`${key}\` stays MX's own code and cannot be renamed (\`MX_INTERNAL_ERROR\` and \`MX_DIALECT_HOOK_ERROR\` report a bug in MX or in a dialect hook)`,
+      );
+    }
+    if (!isMxDiagnosticCode(key)) {
+      fail(
+        `\`${field}.${key}\`: \`${key}\` is not a core diagnostic code; a key names the code core reports (\`MX_UNKNOWN_TAG\`, ...)`,
+      );
+    }
+    if (typeof code !== "string" || code.length === 0) {
+      fail(
+        `\`${field}.${key}\` must be a non-empty string: the dialect's code`,
+      );
+    }
+    if (isReservedHookCode(code as string)) {
+      fail(`\`${field}.${key}\`: ${reservedHookCodeMessage(code as string)}`);
+    }
+  }
+}
+
 /**
  * A dialect's shape: an object with an `id` and a `name`, a `table`
  * object, a `tagRules` preset, node types, hooks that are functions. `path`
@@ -916,6 +979,7 @@ function checkModuleShape(
   ) {
     fail(`\`${path}bindingsCallTags\` must be a boolean`);
   }
+  checkDiagnosticCodes(value.diagnosticCodes, path, fail);
   checkContractFields(value.contractFields, path, fail);
   checkDialectContracts(value, path, failContract);
   // SAFETY: the checks above validated `value` field by field (keys in

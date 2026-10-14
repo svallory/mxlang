@@ -125,6 +125,31 @@ export default {
 - **Default `true`.** Leave it out for a dialect whose files are templates, where a bound capitalized name is a component call. A value other than a boolean is an error in your module: `` `bindingsCallTags` must be a boolean ``.
 - **Without it,** rename the import (`import { Task as TaskRef }`) so the tag name is free.
 
+## Your own codes for core's errors: `diagnosticCodes`
+
+Core reports its errors and warnings under `MX_` codes (`MX_UNKNOWN_TAG`, `MX_DUPLICATE_ATTRIBUTE`, ...). A dialect that has its own error vocabulary can rename the ones its users see:
+
+```ts
+export default {
+  table: {},
+  unknownTags: "reject",
+  diagnosticCodes: {
+    MX_UNKNOWN_TAG: "KIT_UNKNOWN_TAG",
+    MX_DUPLICATE_ATTRIBUTE: "KIT_DUPLICATE_FIELD",
+  },
+} satisfies Partial<Dialect>;
+```
+
+A file with `<widget/>` that is not declared now reports `KIT_UNKNOWN_TAG` where it reported `MX_UNKNOWN_TAG`.
+
+- **An explicit map, never a prefix.** A code the map does not name keeps its `MX_` code.
+- **Only the code changes.** The message, position, range, severity and fixes are the same, and the diagnostics come out in the same order.
+- **Where it applies.** To every diagnostic core reports for a dialect file when it checks or lowers it (`lowerSource`, and so the language server, the TypeScript plugin and `mx-tsc`), a tag file's included. The diagnostics of reading the project's configuration (a missing `mx.tags` directory, a misplaced tag file) are not about the file's own rules and keep their `MX_` codes.
+- **Your own codes stay yours.** A `ctx.fail(message, { code })` or `explainUnknownTag` code is never renamed, even when it equals a value in the map.
+- **Two codes stay MX's.** `MX_INTERNAL_ERROR` (a bug in MX) and `MX_DIALECT_HOOK_ERROR` (a hook of yours broke its contract) cannot be keys, so a tool that triages them always finds them. `MX_DIALECT_ERROR` and `MX_DIALECT_WARNING` (your own error or warning that gave no code) can be renamed.
+- **Two keys may share a value** (`KIT_BAD` for both), at the cost of telling them apart by message.
+- **A wrong map fails the dialect at load**, in your module: it is not an object, a key is not a core code (the message names it), a value is not a non-empty string, a value starts with `MX_` (that prefix is MX's own), or a key is one of the two codes above.
+
 ## Passing your dialect to a call
 
 A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a deep-frozen object. Core validates the object it is given and remembers the result only when the object is deep-frozen, that is, it and every plain object and array inside it (`table`, its rows, `contracts`) are frozen: a deep-frozen dialect is validated once, any other again on every call, because a mutable object can change between calls. A dialect frozen only at the top, with an unfrozen `table` or `contracts` inside, is validated again on every call, so a change to those is seen. RegExps and functions inside it need not be frozen. Freeze the nested objects and arrays too (a deep freeze) to have the dialect validated once. The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.

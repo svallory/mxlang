@@ -348,6 +348,47 @@ export function reservedHookCodeMessage(
   return `code \`${code}\` starts with \`MX_\`, which is MX's own prefix for its diagnostic codes; use ${owner} own prefix`;
 }
 
+/**
+ * The codes a dialect may not rename (`Dialect.diagnosticCodes`): a bug in
+ * MX, and a dialect hook that broke its contract. Both say something about
+ * MX or the hook, never about the author's file, so a tool that triages
+ * them must always find MX's own code.
+ */
+export const UNRENAMEABLE_CODES: ReadonlySet<string> = new Set([
+  INTERNAL_ERROR_CODE,
+  DIALECT_HOOK_ERROR_CODE,
+]);
+
+let knownCodes: ReadonlySet<string> | undefined;
+
+/** Whether `code` is one of the codes core raises ({@link MX_DIAGNOSTIC_CODES}). */
+export function isMxDiagnosticCode(code: string): code is MxDiagnosticCode {
+  knownCodes ??= new Set(MX_DIAGNOSTIC_CODES.map((entry) => entry.code));
+  return knownCodes.has(code);
+}
+
+/**
+ * `diagnostics` with each core code the dialect's `diagnosticCodes` map names
+ * replaced by its value; nothing else changes. A code the map does not name
+ * (a hook's own code, an unlisted core code) and a diagnostic with no code
+ * stay as they are. Returns `diagnostics` itself when there is nothing to
+ * rename. Call it once, on the final list.
+ */
+export function renameDiagnosticCodes<T extends { code?: string }>(
+  diagnostics: readonly T[],
+  map: Readonly<Record<string, string>> | undefined,
+): readonly T[] {
+  if (map === undefined) return diagnostics;
+  let changed = false;
+  const renamed = diagnostics.map((diagnostic) => {
+    const code = diagnostic.code;
+    if (code === undefined || !Object.hasOwn(map, code)) return diagnostic;
+    changed = true;
+    return { ...diagnostic, code: map[code] as string };
+  });
+  return changed ? renamed : diagnostics;
+}
+
 /** One entry of {@link MX_DIAGNOSTIC_CODES}. @unstable */
 export interface MxDiagnosticCodeEntry {
   /** The code, as `IrDiagnostic.code` carries it. */

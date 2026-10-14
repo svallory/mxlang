@@ -37,7 +37,11 @@ import {
   withoutCollected,
 } from "../custom-tags.ts";
 import type { HostDeclarations } from "../declarations.ts";
-import { RESERVED_TAG_CODE, UNKNOWN_TAG_CODE } from "../diagnostic-codes.ts";
+import {
+  RESERVED_TAG_CODE,
+  renameDiagnosticCodes,
+  UNKNOWN_TAG_CODE,
+} from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
 import {
   CORE_TAG_DISCOVERY,
@@ -463,6 +467,35 @@ export function lowerSource(
   filename: string,
   options: LowerSourceOptions = {},
 ): LowerSourceResult {
+  // The file's dialect, resolved at most once per call (routing costs a stat
+  // pass): a throw is not kept, so the compile still reports it.
+  let resolved: { dialect: ReturnType<typeof dialectOf> } | undefined;
+  const dialectOnce = () => {
+    resolved ??= { dialect: dialectOf(options, filename) };
+    return resolved.dialect;
+  };
+  const result = lowerResolved(source, filename, options, dialectOnce);
+  // The one place the dialect's `diagnosticCodes` apply: to the final list
+  // of every exit, after it is ordered (ordering keys on core codes).
+  let map: Readonly<Record<string, string>> | undefined;
+  try {
+    map = dialectOnce()?.diagnosticCodes;
+  } catch {
+    // A dialect that does not resolve has no map; the diagnostics say why.
+  }
+  if (map === undefined) return result;
+  return {
+    ...result,
+    diagnostics: [...renameDiagnosticCodes(result.diagnostics, map)],
+  };
+}
+
+function lowerResolved(
+  source: string,
+  filename: string,
+  options: LowerSourceOptions,
+  dialectOnce: () => ReturnType<typeof dialectOf>,
+): LowerSourceResult {
   const lineStarts = lineStartsOf(source);
   const warnings: MxWarning[] = options.warnings ?? [];
   const firstWarning = warnings.length;
@@ -472,13 +505,6 @@ export function lowerSource(
   let customTags =
     refused.length > 0 ? without(options, refused) : options.customTags;
   const refusedNames = new Set(refused.map((definition) => definition.name));
-  // The file's dialect, resolved at most once per call (routing costs a stat
-  // pass): a throw is not kept, so the compile still reports it.
-  let resolved: { dialect: ReturnType<typeof dialectOf> } | undefined;
-  const dialectOnce = () => {
-    resolved ??= { dialect: dialectOf(options, filename) };
-    return resolved.dialect;
-  };
   let rules: ReturnType<typeof tagRulesPreset> | undefined;
   let calls: readonly ReservedCall[] | undefined;
   // Found once, after `rules` is known, and only when a definition was refused.

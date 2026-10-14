@@ -4714,6 +4714,7 @@ interface Dialect {
   tagFile?(file: TagFileInput, ctx: TagFileContext): TagFileResult;  // §9.2
   contracts?: ContractMap;                        // @unstable; the dialect's own tags
   bindingsCallTags?: boolean;                     // @unstable; default true
+  diagnosticCodes?: Partial<Record<MxDiagnosticCode, string>>;  // @unstable; the dialect's codes for core's
 }
 
 // @unstable, exported from @mxlang/core
@@ -4804,6 +4805,8 @@ with no native elements under `none`; `lowerSource` does the same when its call
 states no `tagRules` option, and a `tagRules` option it states wins.
 
 **`bindingsCallTags`** (`@unstable`, default `true`) says whether a file-local binding of a PascalCase name (an `import`, `<define>`, `<const>`, tag parameter) makes that tag a call of the binding. With `false`, no binding does: the contract, a parent's wildcard and the unknown-tag rules read the name as unbound, and the import stays in the file's imports. A data dialect whose files import a value named like a tag sets it; otherwise the tag is a dynamic tag, which a data file refuses. A value other than a boolean fails the dialect at load.
+
+**`diagnosticCodes`** (`@unstable`) renames the codes core reports on the dialect's files: each key is a core code, each value the code the dialect's files report instead. It is an explicit map: a code it does not name keeps its `MX_` code. It is applied once, to the final diagnostics of `lowerSource` and of the tools built on it (after they are ordered), and changes the code alone. A code the dialect raises itself (`ctx.fail`'s, `explainUnknownTag`'s) is never renamed; `MX_INTERNAL_ERROR` and `MX_DIALECT_HOOK_ERROR` cannot be keys; diagnostics about reading the project's configuration keep their codes. A value is a non-empty string that does not start with `MX_`; two keys may share a value. A map that breaks these rules fails the dialect at load.
 
 **`structural`, `imports` and `unknownTags`** are the dialect's defaults for the
 `lowerSource` options of the same name (§13.7.1), with the same values; each is
