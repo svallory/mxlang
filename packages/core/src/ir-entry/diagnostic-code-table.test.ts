@@ -725,9 +725,9 @@ const ROWS: Row[] = [
   }),
   compileRow(
     "MX_INVALID_STATEMENT",
-    "import { x } from 'y'\nexport { x }\n",
+    "import { x } from 'y'\nexport { x as }\n",
     2,
-    9,
+    14,
   ),
 
   // Callee `Input` rules (the callee is a file next to the caller).

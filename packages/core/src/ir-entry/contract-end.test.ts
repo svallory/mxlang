@@ -76,8 +76,8 @@ describe("a lowering warning's or statement error's end", () => {
   });
 
   it("a statement that does not parse is a point: it ends where it starts", () => {
-    expect(ranges("import { x } from 'y'\nexport { x }\n")).toEqual([
-      ["MX_INVALID_STATEMENT", 2, 9, [2, 9, 31]],
+    expect(ranges("import { x } from 'y'\nexport { x as }\n")).toEqual([
+      ["MX_INVALID_STATEMENT", 2, 14, [2, 14, 36]],
     ]);
   });
 });
