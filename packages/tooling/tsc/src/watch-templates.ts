@@ -234,7 +234,7 @@ export function installWatchTemplatePass(
         : write(recounted, ...writeArgs);
     } catch (cause) {
       // tsc's own summary is the one thing a crashed pass must not swallow:
-      // report the crash and write what tsc would have written.
+      // report the crash and write tsc's summary, still counting the MX errors.
       process.stderr.write(
         `error mxlang: the Angular template pass failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
       );
