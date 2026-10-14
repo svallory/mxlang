@@ -199,7 +199,9 @@ export interface LowerSourceOptions {
    * A sink for core's warnings: they are pushed here as they are raised, so
    * those raised before a later error stay in the caller's array.
    * `diagnostics` still reports this call's warnings (not entries already in
-   * the array) when the source lowers.
+   * the array) when the source lowers. The sink holds core's warnings as
+   * raised, with core's codes: a dialect's `diagnosticCodes` renames the
+   * codes of `diagnostics`, not the sink's entries.
    */
   warnings?: MxWarning[];
 }

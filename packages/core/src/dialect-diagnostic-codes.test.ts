@@ -3,10 +3,14 @@
  * fails the dialect with a named error, through the `dialect` option and
  * through a dialect module alike. The dialect `lexi` is a fixture.
  */
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { lowerSource } from "./ir-entry/index.ts";
 import type { Dialect } from "./syntax-table.ts";
 import { diagnosticCodesOf } from "./syntax-table.ts";
+import { dialectProject } from "./test-dialect-project.ts";
 
 function lexi(diagnosticCodes: unknown): Dialect {
   return { id: "lexi", name: "Lexi", table: {}, diagnosticCodes } as Dialect;
@@ -138,5 +142,33 @@ describe("diagnosticCodesOf", () => {
   it("is undefined for a file with no dialect", () => {
     expect(diagnosticCodesOf("/v/page.mx")).toBeUndefined();
     expect(diagnosticCodesOf("relative.mx")).toBeUndefined();
+  });
+});
+
+describe("a bad map in a routed dialect module", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-dcodes-")));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("fails with the module as the file, at 1:0, without the `dialect.` prefix", () => {
+    const { packageDir } = dialectProject(dir, {
+      module:
+        'export default { table: {}, diagnosticCodes: { MX_NOPE: "A_B" } };',
+    });
+    const result = lowerSource("<p/>\n", join(dir, "page.tst"));
+    expect(result.ir).toBeUndefined();
+    expect(result.diagnostics).toHaveLength(1);
+    const [only] = result.diagnostics;
+    expect(only?.code).toBe("MX_INVALID_DIALECT_MODULE");
+    expect(only?.message).toContain(
+      "`diagnosticCodes.MX_NOPE`: `MX_NOPE` is not a core diagnostic code",
+    );
+    expect(only?.message).not.toContain("`dialect.diagnosticCodes");
+    expect(only?.file).toBe(join(packageDir, "index.mjs"));
+    expect([only?.line, only?.column]).toEqual([1, 0]);
   });
 });

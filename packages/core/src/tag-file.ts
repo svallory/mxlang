@@ -96,7 +96,9 @@ export interface TagFileContext {
    * directory). Memoized per options. Contracts in that map are lazy, so
    * lowering derives only those of the tags the file calls, and each one it
    * reads becomes a dependency of this tag file. `customTags`, when given,
-   * are merged over the scanned map (they win on a shared name).
+   * are merged over the scanned map (they win on a shared name). The
+   * diagnostics it returns carry the dialect's codes: a dialect with
+   * `diagnosticCodes` sees `KIT_UNKNOWN_TAG` here, not `MX_UNKNOWN_TAG`.
    */
   lower(
     options?: Pick<
