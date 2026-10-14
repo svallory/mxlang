@@ -129,9 +129,14 @@ and the end of a range is exclusive. An edit is `replace L:C-L:C with "text"`,
 `insert at L:C "text"` or `delete L:C-L:C`; the text is JSON-quoted, so a
 newline or a quote is exact and the fix stays on one line. The edits of one fix
 all refer to the file as it is. The output is the same with `--pretty` (a
-compile diagnostic is always printed in the compact form). Under `--watch` the
-first build prints them with its diagnostics; a rebuild does not print MX
-compile diagnostics at all, fixes or not.
+compile diagnostic is always printed in the compact form). Under `--watch` every
+rebuild prints the MX compile diagnostics that hold after it, fixes included,
+before tsc's summary, and the summary's count includes them (the newest compile
+of each file decides, so a fixed error is gone and an untouched file's error is
+printed again). A one-shot run exits 1 on an MX error; when tsc printed its own
+`Found N errors` line (`--pretty` only), which cannot include them, the run
+ends with `mx-tsc: Found N MX error(s) (tsc's own error count does not include
+MX errors).`
 
 ## Host-policy diagnostics
 

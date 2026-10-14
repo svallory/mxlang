@@ -26,8 +26,14 @@ function fixesOf(diagnostic: Diagnostic): readonly IrDiagnosticFix[] {
 
 /** Whether `fix` can be applied to `length` units of text: whole numbers, in range, in order. */
 function applicable(fix: IrDiagnosticFix, length: number): boolean {
-  if (typeof fix.title !== "string" || !Array.isArray(fix.edits)) return false;
-  if (fix.edits.length === 0) return false;
+  // A diagnostic's `data` comes from a client (or a dialect hook behind the
+  // server) and is only as well-formed as it was sent: each level is checked
+  // before it is read, so a malformed fix is dropped and never thrown on.
+  const isObject = (value: unknown): boolean =>
+    typeof value === "object" && value !== null;
+  if (!isObject(fix) || typeof fix.title !== "string") return false;
+  if (!Array.isArray(fix.edits) || fix.edits.length === 0) return false;
+  if (!fix.edits.every(isObject)) return false;
   let previousEnd = -1;
   const edits = [...fix.edits].sort((a, b) => a.offset - b.offset);
   for (const edit of edits) {
@@ -59,9 +65,8 @@ export function fixActions(
   const length = document.getText().length;
   const actions: CodeAction[] = [];
   for (const diagnostic of diagnostics) {
-    const fixes = fixesOf(diagnostic);
+    const fixes = fixesOf(diagnostic).filter((fix) => applicable(fix, length));
     for (const fix of fixes) {
-      if (!applicable(fix, length)) continue;
       const edits: TextEdit[] = fix.edits.map((edit) => ({
         range: {
           start: document.positionAt(edit.offset),

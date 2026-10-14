@@ -78,7 +78,14 @@ export interface WatchTemplatePassOptions {
    * errors it printed, so the summary can count them. Runs inside tsc's own
    * write, before the summary line goes out.
    */
-  report: (result: NgDiagnosticsResult) => number;
+  report: (result: NgDiagnosticsResult, compileErrors: number) => number;
+  /**
+   * Prints the MX compile diagnostics that hold after this rebuild (a `.mx`
+   * file's parse and lowering errors, which tsc's own diagnostics cannot carry)
+   * and returns how many are errors, for the same summary. Runs before
+   * `report`, so they read in tsc's order: its own errors, MX's, the summary.
+   */
+  compile?: () => number;
 }
 
 export interface WatchTemplatePass {
@@ -211,7 +218,10 @@ export function installWatchTemplatePass(
     if (!summary || text === undefined || busy) return passThrough();
     busy = true;
     try {
-      const errors = options.report(checkWatchTemplates(options));
+      const errors = options.report(
+        checkWatchTemplates(options),
+        compileErrorsOf(options),
+      );
       pass.ran = true;
       rebuilding = false;
       const recounted =
@@ -231,6 +241,22 @@ export function installWatchTemplatePass(
     }
   }) as typeof process.stdout.write;
   return pass;
+}
+
+/**
+ * One rebuild's MX compile errors. A reporter that crashed is itself an error,
+ * said out loud: a rebuild must not read as clean because its MX errors could
+ * not be printed.
+ */
+function compileErrorsOf(options: WatchTemplatePassOptions): number {
+  try {
+    return options.compile?.() ?? 0;
+  } catch (cause) {
+    process.stderr.write(
+      `error mxlang: reporting the MX compile errors failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+    );
+    return 1;
+  }
 }
 
 /**

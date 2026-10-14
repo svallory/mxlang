@@ -172,8 +172,25 @@ page.mx(2,4): error MX_RESERVED_EFFECT_TAG: `<effect>` is not an MX tag. Use `<s
 An edit is `replace L:C-L:C with "text"`, `insert at L:C "text"` or
 `delete L:C-L:C`; the edits of one fix all refer to the file as it is, and a
 fix applies whole or not at all. The line is the same with `--pretty`, and in
-`--watch` it is printed with the diagnostics of the first build. A dialect's
-diagnostic carries its fixes the same way.
+`--watch` every rebuild prints the MX errors that hold after it, fixes included.
+A dialect's diagnostic carries its fixes the same way.
+
+### What `mx-tsc` counts
+
+An MX error (a parse or lowering error in a `.mx` file, with an `MX_` code) is
+not a TypeScript diagnostic, and tsc counts only its own.
+
+- **`--watch`.** Every rebuild prints the MX errors that hold now, after tsc's
+  own errors and before the summary, and the summary's count includes them:
+  `Found 2 errors. Watching for file changes.` is one tsc error and one MX
+  error. An MX error you fix is gone from the next rebuild, and one in a file
+  the rebuild did not touch is printed again.
+- **One run.** The exit code is 1 when there is an MX error. tsc prints its
+  `Found N errors` line only with `--pretty`, and it cannot include errors that
+  do not exist yet when it prints, so with that line present the MX errors
+  follow it and end with a count of their own:
+  `mx-tsc: Found 1 MX error (tsc's own error count does not include MX errors).`
+  Without `--pretty` tsc prints no count, and neither does `mx-tsc`.
 
 ## Relationship to the language server
 

@@ -41,6 +41,11 @@ import {
   type NgProgram,
 } from "./ng-diagnostics.ts";
 import {
+  currentCompileDiagnostics,
+  type PluginGeneration,
+  trackGeneration,
+} from "./watch-compile.ts";
+import {
   installWatchTemplatePass,
   rebuildActivity,
   reportMissedRebuildIfMarked,
@@ -420,6 +425,7 @@ function runPatchedTsc(
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
   ngPlugins: NgProgram[],
   watchMode = false,
+  generations?: PluginGeneration[],
 ): number {
   let tscExitCode = 0;
   approximateUnmappedInVolar();
@@ -467,6 +473,16 @@ function runPatchedTsc(
           diagnosticPlugins.push(amx);
           plugins.push(amx, createAstroLanguagePlugin());
         }
+        // Watch only: which plugins this program made, so a rebuild reports
+        // the newest answer per file (see `currentCompileDiagnostics`).
+        generations?.push(
+          trackGeneration(
+            plugins.filter(
+              (plugin): plugin is MxDiagnosticLanguagePlugin =>
+                "getCompileDiagnostics" in plugin,
+            ),
+          ),
+        );
         plugins.push(createCompoundExtensionResolver(typescript));
         return {
           languagePlugins: plugins,
@@ -678,21 +694,37 @@ function runMxTscChecks(): number {
   // the pass made below: every later rebuild needs the template pass of its
   // own, run from inside tsc's rebuild (see `installWatchTemplatePass`).
   const watchMode = isWatchMode(argv, process.cwd());
+  const generations: PluginGeneration[] = [];
   const watchPass = watchMode
     ? installWatchTemplatePass({
+        compile: () => {
+          const current = currentCompileDiagnostics(generations);
+          reportCompileDiagnostics(current);
+          return countCompileErrors(current);
+        },
         argv,
         cwd: process.cwd(),
         build: build !== undefined && !build.clean && !build.dry,
         programs: ngPlugins,
-        report: reportWatchPass,
+        report: (result, compileErrors) =>
+          reportWatchPass(result, undefined, compileErrors),
       })
     : undefined;
-  const tscExitCode = runPatchedTsc(
-    astro,
-    diagnosticPlugins,
-    ngPlugins,
-    watchMode,
-  );
+  // Whether tsc printed its own "Found N errors" line (only `--pretty` does,
+  // and only when it has errors), which the MX count must sit beside.
+  const tscCount = watchForCountLine();
+  let tscExitCode: number;
+  try {
+    tscExitCode = runPatchedTsc(
+      astro,
+      diagnosticPlugins,
+      ngPlugins,
+      watchMode,
+      generations,
+    );
+  } finally {
+    tscCount.stop();
+  }
   // The first watch build is complete: its summary went out before
   // `executeCommandLine` returned, and a recognized one already ran the pass
   // (`watchPass.ran`). A rebuild mark still set was never cleared by a
@@ -735,7 +767,14 @@ function runMxTscChecks(): number {
         .map((d) => [JSON.stringify(d), d] as const),
     ).values(),
   ];
-  reportCompileDiagnostics(diagnostics);
+  // A watch run printed them from inside its first build's summary, counted in
+  // it, and prints the current ones again at every rebuild.
+  if (!watchRan) {
+    reportCompileDiagnostics(diagnostics);
+    // A watch run whose summary was not recognized (a localized tsc) cannot
+    // tell, so it says so.
+    if (watchMode || tscCount.seen()) reportCompileSummary(diagnostics);
+  }
   // Existing host warnings are non-fatal; invalid targets and mismatches
   // fail the run. A file two programs both compiled is reported once.
   const policyDiagnostics = [
@@ -810,10 +849,11 @@ let watchFailure = false;
 export function reportWatchPass(
   result: NgDiagnosticsResult,
   ambient: readonly string[] = currentAmbientTypeErrors(),
+  compileErrors = 0,
 ): number {
   reportAmbientTypeErrors(ambient);
   reportNgDiagnostics(result);
-  const errors = ambient.length + countNgErrors(result);
+  const errors = ambient.length + countNgErrors(result) + compileErrors;
   if (errors > 0) {
     process.exitCode = 1;
     watchFailure = true;
@@ -887,6 +927,65 @@ export function reportNgDiagnostics(result: NgDiagnosticsResult): void {
   for (const error of result.errors) {
     process.stderr.write(`error mxlang: ${error}\n`);
   }
+}
+
+/** How many of `diagnostics` are errors; a warning is printed and not counted. */
+export function countCompileErrors(
+  diagnostics: readonly MxCompileDiagnostic[],
+): number {
+  return diagnostics.filter((diagnostic) => diagnostic.category === "error")
+    .length;
+}
+
+/**
+ * Watches `process.stdout` for tsc's own count line (`Found 1 error in a.ts:1`,
+ * `Found 2 errors in 2 files.`), which tsc writes only under `--pretty` and
+ * only when it has errors. Every write passes through untouched.
+ */
+function watchForCountLine(): { seen(): boolean; stop(): void } {
+  const stdout = process.stdout;
+  const original = stdout.write;
+  let seen = false;
+  stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
+    if (
+      !seen &&
+      typeof chunk === "string" &&
+      /(?:^|\n)Found \d+ errors?\b/.test(chunk)
+    ) {
+      seen = true;
+    }
+    return (original as (...args: unknown[]) => boolean).call(
+      stdout,
+      chunk,
+      ...rest,
+    );
+  }) as typeof process.stdout.write;
+  return {
+    seen: () => seen,
+    stop: () => {
+      // Only if nothing wrapped it since (a nested run restores in order).
+      stdout.write = original;
+    },
+  };
+}
+
+/**
+ * The count line of a one-shot run that printed a count of its own. tsc's
+ * "Found N errors" line is written before the MX errors exist and cannot
+ * include them, so a run with MX errors ends with their own count, saying so;
+ * without it an agent reading "Found 0 errors" or "Found 1 error" above the MX
+ * errors would take the project for cleaner than it is. A run without tsc's
+ * count line (no `--pretty`) has nothing to be misread against and prints none.
+ * A watch run rewrites tsc's count instead (see `watch-templates.ts`).
+ */
+export function reportCompileSummary(
+  diagnostics: readonly MxCompileDiagnostic[],
+): void {
+  const errors = countCompileErrors(diagnostics);
+  if (errors === 0) return;
+  process.stderr.write(
+    `mx-tsc: Found ${errors} MX ${errors === 1 ? "error" : "errors"} (tsc's own error count does not include MX errors).\n`,
+  );
 }
 
 /** Prints the compiler failures Volar's empty virtual files cannot expose. */

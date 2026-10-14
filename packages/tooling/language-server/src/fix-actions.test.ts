@@ -167,6 +167,38 @@ describe("fixActions", () => {
     ).toEqual([]);
   });
 
+  it.each([
+    ["a null fix entry", null],
+    ["a string fix entry", "oops"],
+    ["a null edit", { title: "T", edits: [null] }],
+    [
+      "a null edit beside a good one",
+      { title: "T", edits: [{ offset: 0, end: 1, newText: "z" }, null] },
+    ],
+    ["a missing edits array", { title: "T" }],
+    ["edits that are not a list", { title: "T", edits: "oops" }],
+    [
+      "an edit with no end",
+      { title: "T", edits: [{ offset: 0, newText: "z" }] },
+    ],
+  ])("drops %s without throwing", (_name, fix) => {
+    const doc = document("abcdef");
+    expect(fixActions(doc, [diagnosticWith([fix])])).toEqual([]);
+  });
+
+  it("keeps the good fix beside a null entry, and prefers it as the only one", () => {
+    const doc = document("abcdef");
+    const actions = fixActions(doc, [
+      diagnosticWith([
+        null,
+        { title: "good", edits: [{ offset: 0, end: 1, newText: "z" }] },
+        { title: "T", edits: [null] },
+      ]),
+    ]);
+    expect(actions.map((action) => action.title)).toEqual(["good"]);
+    expect(actions[0]?.isPreferred).toBe(true);
+  });
+
   it("keeps the good fix when its sibling is dropped", () => {
     const doc = document("abcdef");
     const actions = fixActions(doc, [
