@@ -185,7 +185,8 @@ export interface LowerSourceOptions {
    * (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`,
    * `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks. An
    * attribute's `span` ends at the operand either way, so with `false` it does
-   * not contain the wider `span` of its value (`a=(1 as number)`: attribute [3,7), value [6,17)).
+   * not contain the wider `span` of its value (for `a=(1 as number)`, the
+   * attribute's span is `a=(1` and its value's is `1 as number`).
    * A tag-file hook's `ctx.lower` takes the option but does not inherit this
    * call's value.
    */

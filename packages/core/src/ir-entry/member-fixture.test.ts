@@ -524,7 +524,7 @@ describe("one member per slot, and the member type's refusals", () => {
       expect(
         parse(source, { customTags, stripTypes: false }).diagnostics,
       ).toEqual(byDefault);
-      // The member row is accepted, the other three refused.
+      // The three member rows are accepted, the other two refused.
       expect(byDefault.length).toBe(
         type === "member" && source.includes("&") ? 0 : 1,
       );
