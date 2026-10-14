@@ -208,6 +208,7 @@ import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
 import {
+  commonJsFormOf,
   endOfInputError,
   isTypeofImport,
   parsedImportDeclarations,
@@ -884,17 +885,13 @@ const scriptBodies = new WeakMap<Node, ScriptBody | null>();
  */
 function commonJsStatementIn(program: Node): TranslateError | undefined {
   for (const statement of program.body ?? []) {
-    let message: string | undefined;
-    if (
-      statement.type === "TSImportEqualsDeclaration" &&
-      statement.moduleReference?.type === "TSExternalModuleReference"
-    ) {
-      message =
-        '`import x = require(...)` is a CommonJS form and is not read in a `<script>` body. Write `import x from "..."`';
-    } else if (statement.type === "TSExportAssignment") {
-      message =
-        "`export = value` is a CommonJS form and is not read in a `<script>` body. Write `export default value`";
-    }
+    const form = commonJsFormOf(statement);
+    const message =
+      form === "import"
+        ? '`import x = require(...)` is a CommonJS form and is not read in a `<script>` body. Write `import x from "..."`'
+        : form === "export"
+          ? "`export = value` is a CommonJS form and is not read in a `<script>` body. Write `export default value`"
+          : undefined;
     if (!message || !statement.loc) continue;
     const failure = codedError(
       INVALID_STATEMENT_CODE,
@@ -4123,6 +4120,20 @@ function rejectInvalidStatement(
     failure.end = { line: at.line, column: at.column };
     throw failure;
   }
+  if (BLOCK_STATEMENT_KEYWORDS.has(keyword) || keyword === "export") {
+    for (const statement of parsed?.program?.body ?? []) {
+      const form = commonJsFormOf(statement);
+      if (!form || !statement.loc) continue;
+      const failure = codedError(
+        INVALID_STATEMENT_CODE,
+        commonJsStatementMessage(form, statement),
+        place(statement.loc.start).line,
+        place(statement.loc.start).column,
+      );
+      failure.end = place(statement.loc.end);
+      throw failure;
+    }
+  }
   if (BLOCK_STATEMENT_KEYWORDS.has(keyword)) {
     const second = secondDefaultExportIn(parsed);
     if (second?.loc) {
@@ -4136,6 +4147,24 @@ function rejectInvalidStatement(
       throw failure;
     }
   }
+}
+
+/**
+ * MX's text for a CommonJS form in a `static`, `server`, `client` or `export` statement:
+ * the first sentence is Babel's, the fix is MX's (a template is its own default
+ * export, so `export =` has a named export to go to, not `export default`).
+ */
+function commonJsStatementMessage(
+  form: "import" | "export",
+  statement: Node,
+): string {
+  if (form === "export") {
+    return "`export = <value>;` is only supported when compiling modules to CommonJS. Use a named export instead (`export const x = …`, or `export { x }`).";
+  }
+  const name = statement.id?.name ?? "x";
+  const source = statement.moduleReference?.expression?.value ?? "...";
+  const type = statement.importKind === "type" ? "type " : "";
+  return `\`import ${name} = require(...);\` is only supported when compiling modules to CommonJS. Write \`import ${type}${name} from "${source}"\``;
 }
 
 /** The statements whose text is module code the template module takes in as its own. */

@@ -958,6 +958,43 @@ function leavesImportUnstripped(statement: Node): boolean {
   );
 }
 
+/**
+ * The CommonJS form a statement is, if it is one: `import x = require(…)`
+ * (`"import"`) or `export = x` (`"export"`). Both parse as TypeScript, and
+ * Babel's strip throws on them with CommonJS advice that does not apply to
+ * MX, at a position of the generated code. `import x = M.N` is an alias, not
+ * one.
+ */
+export function commonJsFormOf(
+  statement: Node | null | undefined,
+): "import" | "export" | undefined {
+  if (
+    statement?.type === "TSImportEqualsDeclaration" &&
+    statement.moduleReference?.type === "TSExternalModuleReference"
+  ) {
+    return "import";
+  }
+  if (statement?.type === "TSExportAssignment") return "export";
+  return undefined;
+}
+
+/**
+ * Whether a `static`, `server`, `client` or `export` payload holds a CommonJS
+ * form, as one of its statements or inside its one block. Its strip is skipped so
+ * lowering refuses the statement (`rejectInvalidStatement`) at its position
+ * with a coded error; the strip would throw an uncoded one from the
+ * generated code.
+ */
+function holdsCommonJsStatement(statement: Node): boolean {
+  const body = statement.code?.node;
+  if (!Array.isArray(body)) return false;
+  return body.some((node: Node) =>
+    node?.type === "BlockStatement"
+      ? (node.body ?? []).some((inner: Node) => commonJsFormOf(inner))
+      : commonJsFormOf(node),
+  );
+}
+
 /** Flow's `import typeof T from "m"` / `import { typeof T } from "m"`. */
 export function isTypeofImport(declaration: Node): boolean {
   return (
@@ -994,6 +1031,12 @@ export function stripMxTypes(document: Node): void {
       if (value.type === "MxModuleStatement") {
         recordImportDeclaration(value);
         if (value.keyword === "import" && leavesImportUnstripped(value)) return;
+        if (
+          (BLOCK_STATEMENT_KEYWORDS.has(value.keyword) ||
+            value.keyword === "export") &&
+          holdsCommonJsStatement(value)
+        )
+          return;
       }
       for (const [key, field] of Object.entries(value) as [string, Node][]) {
         if (

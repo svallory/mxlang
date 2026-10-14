@@ -289,6 +289,17 @@ by an earlier statement is not known to the check, so that form is refused. Name
 `export { x }` may name a binding that an earlier `static`, `server`,
 `client` or `import` statement declares.
 
+**CommonJS forms are refused.** `export = value` and `import x = require("…")`
+(also `import type x = require("…")` and `export import x = require("…")`) in a
+`static`, `server` or `client` statement, in a block or without one, or in an
+`export` statement, are a positioned error (`MX_INVALID_STATEMENT`, over the
+statement): "`export = <value>;` is only supported when compiling modules to
+CommonJS. Use a named export instead (`export const x = …`, or `export { x }`).",
+or "`import x = require(...);` is only supported when compiling modules to
+CommonJS. Write `import x from "…"`." Both used to stop the compile with an
+internal error from the generated code. `import x = M.N`, a TypeScript alias,
+is not a CommonJS form and compiles in these statements.
+
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one
