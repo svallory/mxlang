@@ -3936,8 +3936,12 @@ function rejectInvalidStatement(
     plugins: string[];
     allowReturnOutsideFunction: boolean;
     allowImportExportEverywhere?: boolean;
+    allowUndeclaredExports: boolean;
   } = {
     sourceType: "module",
+    // This statement is one of the module's, parsed alone: an `export { q }`
+    // names a binding an earlier statement or import declares.
+    allowUndeclaredExports: true,
     // No decorators plugin: stock Marko (compiler 5.42.11) has none either, so
     // `static @d() class C {}` and `@d m() {}` are refused below, as it does.
     plugins: ["typescript"],
@@ -3954,9 +3958,10 @@ function rejectInvalidStatement(
         ? start.column + prefix + (at?.column ?? 0)
         : at.column,
   });
+  let parsed: Node | undefined;
   const attempt = (opts: object): unknown => {
     try {
-      coreBabel().parse(code, opts);
+      parsed = coreBabel().parse(code, opts);
     } catch (error) {
       return error ?? new Error("invalid statement");
     }
@@ -4030,6 +4035,71 @@ function rejectInvalidStatement(
     failure.end = { line: at.line, column: at.column };
     throw failure;
   }
+  if (BLOCK_STATEMENT_KEYWORDS.has(keyword)) {
+    const second = secondDefaultExportIn(parsed);
+    if (second?.loc) {
+      const failure = codedError(
+        INVALID_STATEMENT_CODE,
+        SECOND_DEFAULT_EXPORT_MESSAGE,
+        place(second.loc.start).line,
+        place(second.loc.start).column,
+      );
+      failure.end = place(second.loc.end);
+      throw failure;
+    }
+  }
+}
+
+/** The statements whose text is module code the template module takes in as its own. */
+const BLOCK_STATEMENT_KEYWORDS = new Set(["static", "server", "client"]);
+
+/**
+ * MX's text for a `default` export in a `static`, `server` or `client`
+ * statement: the template is already its module's default export.
+ */
+const SECOND_DEFAULT_EXPORT_MESSAGE =
+  "A template is already its own default export, so this default export would give the module a second one and the module would not load. Use a named export instead (`export const x`, or `export { x }`).";
+
+/** Is `name` (an `Identifier` or a string literal) the export name `default`? */
+function isDefaultExportName(name: Node): boolean {
+  return (
+    (name?.type === "Identifier" && name.name === "default") ||
+    (name?.type === "StringLiteral" && name.value === "default")
+  );
+}
+
+/**
+ * The first statement of `program` that exports a runtime `default`:
+ * `export default <expr | function | class>`, `export { x as default }`,
+ * `export { default } from "m"` and `export * as default from "m"`. A
+ * type-only form (`export default interface I {}`, `export type { T as
+ * default }`, `export { type T as default }`) is erased by the strip and
+ * exports nothing, so it is not one.
+ */
+function secondDefaultExportIn(program: Node | undefined): Node | undefined {
+  for (const statement of program?.program?.body ?? []) {
+    if (statement.type === "ExportDefaultDeclaration") {
+      const declaration = statement.declaration;
+      if (
+        declaration?.type === "TSInterfaceDeclaration" ||
+        (declaration?.type === "TSDeclareFunction" && !declaration.body)
+      )
+        continue;
+      return statement;
+    }
+    if (
+      statement.type === "ExportNamedDeclaration" &&
+      statement.exportKind !== "type" &&
+      (statement.specifiers ?? []).some(
+        (specifier: Node) =>
+          specifier.exportKind !== "type" &&
+          isDefaultExportName(specifier.exported),
+      )
+    ) {
+      return statement;
+    }
+  }
+  return undefined;
 }
 
 /**

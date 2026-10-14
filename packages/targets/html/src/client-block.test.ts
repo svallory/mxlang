@@ -197,12 +197,6 @@ describe("html: the non-block `client import` and `client export` declare their 
     ["an exported const", "client export const y = 1;", "var y;"],
     ["an exported function", "client export function g() {}", "var g;"],
     [
-      "a default-exported function",
-      "client export default function h() {}",
-      "var h;",
-    ],
-    ["a default-exported class", "client export default class K {}", "var K;"],
-    [
       "an exported namespace",
       "client export namespace N { export const a = 1 }",
       "var N;",
@@ -214,7 +208,6 @@ describe("html: the non-block `client import` and `client export` declare their 
       "var u;",
     ],
     ["a type-only default import", 'client import type D from "./t";', ""],
-    ["a default-exported expression", "client export default foo;", ""],
   ])("%s", (_name, statement, expected) => {
     expect(hoisted(`${statement}${TEMPLATE}`)).toBe(expected);
   });

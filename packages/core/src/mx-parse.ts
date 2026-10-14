@@ -878,6 +878,7 @@ function stripProgram(body: Node[]): Node[] {
   );
   const path = file.path;
   path.state = { file };
+  const declared = declareExportedNames(path, t);
   babel.traverse(
     path.node,
     babel.traverse.visitors.explode({ ...typeScriptVisitor() }),
@@ -889,11 +890,43 @@ function stripProgram(body: Node[]): Node[] {
   // Marko drops the empty `export {}` the plugin adds to a module.
   return path.node.body.filter(
     (statement: Node) =>
-      statement.type !== "ExportNamedDeclaration" ||
-      statement.declaration ||
-      statement.specifiers.length > 0 ||
-      statement.source,
+      !declared.has(statement) &&
+      (statement.type !== "ExportNamedDeclaration" ||
+        statement.declaration ||
+        statement.specifiers.length > 0 ||
+        statement.source),
   );
+}
+
+/**
+ * A statement of the module is stripped as a program of its own, so an
+ * `export { q }` or `export default q` naming a binding an earlier statement
+ * declares finds none in this program, and the plugin warns on stderr that
+ * `q` is not in Babel's scope tracker. Gives each such name a placeholder
+ * `var` for the run; returns the placeholders so the caller drops them.
+ */
+function declareExportedNames(path: Node, t: Node): Set<Node> {
+  const placeholders = new Set<Node>();
+  const names = new Set<string>();
+  for (const statement of path.node.body as Node[]) {
+    if (statement.type === "ExportNamedDeclaration" && !statement.source) {
+      for (const specifier of statement.specifiers) {
+        if (specifier.local?.type === "Identifier")
+          names.add(specifier.local.name);
+      }
+    } else if (
+      statement.type === "ExportDefaultDeclaration" &&
+      statement.declaration?.type === "Identifier"
+    ) {
+      names.add(statement.declaration.name);
+    }
+  }
+  for (const name of names) {
+    if (path.scope.hasBinding(name)) continue;
+    path.scope.push({ id: t.identifier(name), kind: "var" });
+    placeholders.add(path.node.body[0]);
+  }
+  return placeholders;
 }
 
 /**

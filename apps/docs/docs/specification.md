@@ -272,6 +272,21 @@ the top of the file, after `static`, `server` or `client`, or directly inside
 that statement's `{ … }` block. This one is inside a nested block, an `if` or
 a function body; move it out to the block's own statements."
 
+**A template module's default export is the template.** A `static`, `server`
+or `client` statement, in a block or without one, cannot add a second default
+export: `export default <value>`, `export default function`, `export default
+class`, `export { x as default }` (also `as "default"`), `export { default }
+from "…"`, `export { a as default } from "…"` and `export * as default from
+"…"` are a positioned error (`MX_INVALID_STATEMENT`, over the export
+declaration): "A template is already its own default export, so this default
+export would give the module a second one and the module would not load. Use a
+named export instead (`export const x`, or `export { x }`)." A type-only
+default (`export default interface I {}`, `export type { T as default }`) is
+erased and exports nothing, so it is accepted. Named exports (`export const`,
+`export { x }`, `export { x as y }`, `export *`) are unaffected, and an
+`export { x }` may name a binding that an earlier `static`, `server`,
+`client` or `import` statement declares.
+
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one

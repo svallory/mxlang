@@ -72,11 +72,6 @@ describe("an import or export in a static block is a module statement", () => {
       "export type T = number; export interface I {}",
     ],
     [
-      "a default export",
-      "static { const foo = 1; export default foo }\n<div/>",
-      "const foo = 1; export default foo",
-    ],
-    [
       "an import used by a later statement",
       'static { import x from "./x"; const y = x; }\n<div>${y}</div>',
       'import x from "./x"; const y = x;',
@@ -107,33 +102,13 @@ describe("server and client blocks with an import or export lower without an err
     ["server import", 'server { import x from "./x" }\n<div/>'],
     ["server export const", "server { export const z = 1 }\n<div/>"],
     ["server export star", 'server { export * from "./x" }\n<div/>'],
-    [
-      "server export default",
-      "server { const foo = 1; export default foo }\n<div/>",
-    ],
-    [
-      "server export default function",
-      "server { export default function f() {} }\n<div/>",
-    ],
     ["client import", 'client { import x from "./x"; }\n<div/>'],
     ["client export const", "client { export const y = 1 }\n<div/>"],
-    [
-      "client export default",
-      "client { const foo = 1; export default foo }\n<div/>",
-    ],
     ["client export from", 'client { export { a } from "./x" }\n<div/>'],
   ])("%s", (_name, source) => {
     const { ir, diagnostics } = lower(source);
     expect(diagnostics).toEqual([]);
     expect(ir).toBeDefined();
-  });
-
-  it("raises no internal error for `export default` in a block", () => {
-    for (const keyword of ["static", "server", "client"]) {
-      expect(() =>
-        lower(`${keyword} { export default foo }\n<div/>`),
-      ).not.toThrow();
-    }
   });
 });
 
@@ -255,5 +230,309 @@ describe("a syntax error in a block with an import is reported where it is", () 
   it("the same errors in a block without an import keep their position", () => {
     const { diagnostics } = lower("static {\n  let a = ;\n}\n<div/>");
     expect([diagnostics[0]?.line, diagnostics[0]?.column]).toEqual([2, 10]);
+  });
+});
+
+const SECOND_DEFAULT =
+  "A template is already its own default export, so this default export would give the module a second one and the module would not load. Use a named export instead (`export const x`, or `export { x }`).";
+
+/** `[line, column]` (1-based line, 0-based column) of `offset` in `source`. */
+function positionOf(source: string, offset: number): [number, number] {
+  const before = source.slice(0, offset).split("\n");
+  return [before.length, (before.at(-1) ?? "").length];
+}
+
+/** Runs `fn` with the console silenced; returns what was written to it (Babel's TypeScript plugin warns there). */
+function consoleOutput(fn: () => void): string[] {
+  const lines: string[] = [];
+  const methods = ["warn", "error", "log"] as const;
+  const originals = methods.map((method) => console[method]);
+  for (const method of methods) {
+    console[method] = (...args: unknown[]) => {
+      lines.push(args.map(String).join(" "));
+    };
+  }
+  try {
+    fn();
+  } finally {
+    methods.forEach((method, index) => {
+      console[method] = originals[index] as never;
+    });
+  }
+  return lines;
+}
+
+const KEYWORDS = ["static", "server", "client"] as const;
+
+/** [name, keyword => [source, the refused export's text]] */
+const REFUSED: [string, (k: string) => [string, string]][] = [
+  [
+    "a block, export default <expression>",
+    (k) => [
+      `${k} { const foo = 1; export default foo }\n<div/>`,
+      "export default foo",
+    ],
+  ],
+  [
+    "a block, export default <literal>",
+    (k) => [`${k} { export default 5 }\n<div/>`, "export default 5"],
+  ],
+  [
+    "a block, export default function",
+    (k) => [
+      `${k} { export default function f() {} }\n<div/>`,
+      "export default function f() {}",
+    ],
+  ],
+  [
+    "a block, export default class",
+    (k) => [
+      `${k} { export default class C {} }\n<div/>`,
+      "export default class C {}",
+    ],
+  ],
+  [
+    "a block, export { x as default } beside the declaration",
+    (k) => [
+      `${k} { const q = 1; export { q as default } }\n<div/>`,
+      "export { q as default }",
+    ],
+  ],
+  [
+    "a block, export { x as default } of an earlier statement",
+    (k) => [
+      `${k} const q = 1;\n${k} { export { q as default } }\n<div/>`,
+      "export { q as default }",
+    ],
+  ],
+  [
+    'a block, export { x as "default" }',
+    (k) => [
+      `${k} { const q = 1; export { q as "default" } }\n<div/>`,
+      'export { q as "default" }',
+    ],
+  ],
+  [
+    "a block, export { default } from",
+    (k) => [
+      `${k} { export { default } from "./m" }\n<div/>`,
+      'export { default } from "./m"',
+    ],
+  ],
+  [
+    "a block, export { a as default } from",
+    (k) => [
+      `${k} { export { a as default } from "./m" }\n<div/>`,
+      'export { a as default } from "./m"',
+    ],
+  ],
+  [
+    "a block, export * as default from",
+    (k) => [
+      `${k} { export * as default from "./m" }\n<div/>`,
+      'export * as default from "./m"',
+    ],
+  ],
+  [
+    "a block with a named export beside the default one",
+    (k) => [
+      `${k} {\n  export const a = 1;\n  export default a;\n}\n<div/>`,
+      "export default a;",
+    ],
+  ],
+  [
+    "block-less, export default <literal>",
+    (k) => [`${k} export default 5;\n<div/>`, "export default 5;"],
+  ],
+  [
+    "block-less, export default function",
+    (k) => [
+      `${k} export default function f() {}\n<div/>`,
+      "export default function f() {}",
+    ],
+  ],
+  [
+    "block-less, export { x as default } of an earlier statement",
+    (k) => [
+      `${k} const q = 1;\n${k} export { q as default };\n<div/>`,
+      "export { q as default };",
+    ],
+  ],
+  [
+    "block-less, export { default } from",
+    (k) => [
+      `${k} export { default } from "./m";\n<div/>`,
+      'export { default } from "./m";',
+    ],
+  ],
+  [
+    "block-less, export { a as default } from",
+    (k) => [
+      `${k} export { a as default } from "./m";\n<div/>`,
+      'export { a as default } from "./m";',
+    ],
+  ],
+];
+
+describe("a default export in a static, server or client statement is refused", () => {
+  for (const keyword of KEYWORDS) {
+    it.each(REFUSED)(`${keyword}: %s`, (_name, build) => {
+      const [source, exported] = build(keyword);
+      const at = source.indexOf(exported);
+      const { ir, diagnostics } = lower(source);
+      expect(ir).toBeUndefined();
+      expect(diagnostics).toHaveLength(1);
+      const [line, column] = positionOf(source, at);
+      const [endLine, endColumn] = positionOf(source, at + exported.length);
+      expect(diagnostics[0]).toMatchObject({
+        severity: "error",
+        code: "MX_INVALID_STATEMENT",
+        message: SECOND_DEFAULT,
+        line,
+        column,
+        end: { line: endLine, column: endColumn },
+      });
+    });
+  }
+
+  it("names the form and the fix, with no decision number or link", () => {
+    expect(SECOND_DEFAULT).toContain("default export");
+    expect(SECOND_DEFAULT).toContain("Use a named export instead");
+    expect(SECOND_DEFAULT).not.toMatch(/decision|https?:/i);
+  });
+
+  it("refuses the export in a second statement, not the first", () => {
+    const source = "static const a = 1;\nstatic export default a;\n<div/>";
+    const { diagnostics } = lower(source);
+    expect(diagnostics[0]).toMatchObject({ line: 2, column: 7 });
+  });
+});
+
+describe("a type-only default export is erased, so it is not a second default", () => {
+  it.each([
+    ["static", "static export default interface I {}"],
+    ["static block", "static { export default interface I {} }"],
+    ["server", "server export default interface I {}"],
+    ["client", "client export default interface I {}"],
+    ["export type", "static { type T = 1; export type { T as default } }"],
+    ["a type specifier", "static { type T = 1; export { type T as default } }"],
+  ])("%s", (_name, statement) => {
+    const { ir, diagnostics } = lower(`${statement}\n<div/>`);
+    expect(diagnostics).toEqual([]);
+    expect(ir).toBeDefined();
+  });
+});
+
+describe("a named export never reads as a default one", () => {
+  it.each([
+    ["export const", "static { export const a = 1 }"],
+    ["export function", "static export function f() {}"],
+    ["export list", "static { const a = 1; export { a } }"],
+    ["export rename", "static { const a = 1; export { a as b } }"],
+    [
+      "a name that contains default",
+      "static { const a = 1; export { a as defaults } }",
+    ],
+    ["export star", 'static export * from "./m";'],
+    ["export star as", 'static export * as ns from "./m";'],
+    ["export from", 'static export { a } from "./m";'],
+    ["server export list", "server { const a = 1; export { a } }"],
+    ["client export const", "client { export const a = 1 }"],
+  ])("%s", (_name, statement) => {
+    const { ir, diagnostics } = lower(`${statement}\n<div/>`);
+    expect(diagnostics).toEqual([]);
+    expect(ir).toBeDefined();
+  });
+
+  it("does not refuse a top-level `export default` that has no keyword, as before", () => {
+    const { diagnostics } = lower("export default foo;\n<div/>");
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe("an export list names a binding an earlier statement declares", () => {
+  const CASES: [string, string, string][] = [
+    [
+      "an earlier static statement",
+      "static const q = 1;\nstatic export { q };\n<div/>",
+      "export { q }",
+    ],
+    [
+      "an earlier static import",
+      'static import { q } from "./q";\nstatic export { q };\n<div/>',
+      "export { q }",
+    ],
+    [
+      "an earlier server statement",
+      "server const q = 1;\nserver export { q };\n<div/>",
+      "export { q }",
+    ],
+    [
+      "a rename",
+      "static const q = 1;\nstatic export { q as other };\n<div/>",
+      "export { q as other }",
+    ],
+    [
+      "a block",
+      "static const q = 1;\nstatic { export { q } }\n<div/>",
+      "export { q }",
+    ],
+    [
+      "an earlier statement, several names",
+      "static const a = 1;\nstatic const b = 2;\nstatic export { a, b as c };\n<div/>",
+      "export { a, b as c }",
+    ],
+  ];
+
+  it.each(CASES)(
+    "%s compiles, with nothing on the console",
+    (_name, source, code) => {
+      const lines = consoleOutput(() => {
+        const { ir, diagnostics } = lower(source);
+        expect(diagnostics).toEqual([]);
+        // A `server` statement is the target's to emit; it is not hoisted here.
+        if (source.startsWith("static")) {
+          expect(
+            ir?.hoisted.map((statement) => statement.code).join("\n"),
+          ).toContain(code);
+        }
+      });
+      expect(lines).toEqual([]);
+    },
+  );
+
+  it("compiles a client binding", () => {
+    const lines = consoleOutput(() => {
+      const { diagnostics } = lower(
+        "client const q = 1;\nclient export { q };\n<div/>",
+      );
+      expect(diagnostics).toEqual([]);
+    });
+    expect(lines).toEqual([]);
+  });
+
+  it("compiles an `export default` of a name an earlier statement declares in the keyword-less form", () => {
+    const lines = consoleOutput(() => {
+      expect(
+        lower("static const foo = 1;\nexport default foo;\n<div/>").diagnostics,
+      ).toEqual([]);
+    });
+    expect(lines).toEqual([]);
+  });
+
+  it("keeps the statement's own text", () => {
+    const { ir } = lower("static const q = 1;\nstatic export { q };\n<div/>");
+    expect((ir?.hoisted ?? []).map((statement) => statement.code)).toEqual([
+      "const q = 1;",
+      "export { q };",
+    ]);
+  });
+
+  it("still reports a real syntax error in such a statement", () => {
+    const { diagnostics } = lower(
+      "static const q = 1;\nstatic export { q as };\n<div/>",
+    );
+    expect(diagnostics[0]?.code).toBe("MX_INVALID_STATEMENT");
+    expect(diagnostics[0]?.line).toBe(2);
   });
 });

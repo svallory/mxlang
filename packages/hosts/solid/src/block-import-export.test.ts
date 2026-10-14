@@ -52,7 +52,7 @@ describe("solid: an import or export in a static block is module code", () => {
 describe("solid: a client or server block with an import or export keeps the host's refusal", () => {
   it.each([
     ["client", 'client { import x from "./x" }', /`client` block/],
-    ["server", "server { export default foo }", /`server` block/],
+    ["server", "server { export const foo = 1 }", /`server` block/],
   ])("%s block: %s", (_name, statement, message) => {
     expect(() => compile(`${statement}\n<div/>`)).toThrow(message);
   });

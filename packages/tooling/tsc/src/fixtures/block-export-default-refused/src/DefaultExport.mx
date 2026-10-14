@@ -1,0 +1,6 @@
+export interface Input { title: string }
+static {
+  const foo = 1;
+  export default foo;
+}
+<h1>${input.title}</h1>

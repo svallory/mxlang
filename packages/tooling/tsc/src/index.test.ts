@@ -100,6 +100,24 @@ describe("mx-tsc", () => {
   );
 
   it(
+    "reports a default export in a static block as MX's own refusal at the export, not TS2528 at 1:1",
+    () => {
+      const result = run(mxTsc, [
+        "--noEmit",
+        "-p",
+        join(fixtures, "block-export-default-refused"),
+      ]);
+
+      expect(result.status).not.toBe(0);
+      // Line 4, column 3 is the `export default foo` inside the block.
+      expect(result.output).toContain("DefaultExport.mx(4,3)");
+      expect(result.output).toContain("already its own default export");
+      expect(result.output).not.toContain("TS2528");
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  it(
     "reports a wrong prop passed to a component at the attribute, and a missing required prop at the tag name",
     () => {
       const result = run(mxTsc, [
