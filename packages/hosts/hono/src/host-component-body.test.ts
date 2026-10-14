@@ -447,4 +447,24 @@ describe("hono: an MX host-component call renders and passes what the JSX does",
       expect(rendered.html).toBe(html);
     },
   );
+
+  // A truthy target that cannot render (`true`) takes the dispatch's last
+  // path: the body is returned on its own, so it too must close the bare
+  // value the body function now returns, or a lone 0 is lost on Hono.
+  it.each<[string, unknown, string]>([
+    ["0", 0, "0"],
+    ["NaN", Number.NaN, "NaN"],
+    ["1", 1, "1"],
+    ["an empty string", "", ""],
+  ])(
+    "a truthy target that cannot render still renders its body, count %s",
+    async (_label, count, html) => {
+      const rendered = await scratch.render(
+        "mx",
+        "<const/T=true/>\n<T>${input.count}</T>",
+        { count },
+      );
+      expect(rendered.html).toBe(html);
+    },
+  );
 });
