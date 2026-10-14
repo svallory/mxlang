@@ -101,7 +101,12 @@ export interface TagFileContext {
   lower(
     options?: Pick<
       LowerSourceOptions,
-      "structural" | "imports" | "unknownTags" | "defaultTag" | "customTags"
+      | "structural"
+      | "imports"
+      | "unknownTags"
+      | "defaultTag"
+      | "customTags"
+      | "stripTypes"
     >,
   ): LowerSourceResult;
   /**
@@ -539,6 +544,7 @@ function runHook(
         options.imports,
         options.unknownTags,
         options.defaultTag,
+        options.stripTypes,
         id,
       ]);
       const known = lowered.get(key);
@@ -556,6 +562,9 @@ function runHook(
           : {}),
         ...(options.defaultTag !== undefined
           ? { defaultTag: options.defaultTag }
+          : {}),
+        ...(options.stripTypes !== undefined
+          ? { stripTypes: options.stripTypes }
           : {}),
       });
       lowered.set(key, result);

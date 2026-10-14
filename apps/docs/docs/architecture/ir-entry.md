@@ -120,6 +120,7 @@ lowerSource(source, filename, {
   structural: "reject", // "pass" | "reject"; default: the dialect's, else "pass"
   imports: "pass", // optional; default: the dialect's, else whatever `structural` is
   unknownTags: "reject", // "allow" | "reject"; default: the dialect's, else "allow"
+  stripTypes: false, // default: true
 });
 ```
 
@@ -131,6 +132,7 @@ lowerSource(source, filename, {
 - **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>` and `import`/`export`/`static` in the IR. `"reject"` makes each one a positioned error, so a dialect that reads only tags and attributes cannot silently ignore an `<if>`. Comments are never structural: a `//` line or `<!-- -->` stays in the IR under either value (decision 131 addendum 5).
 - **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural`. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; they arrive in `ir.imports`. A tag-body `import` is body text, not an import, so `imports` does not apply to it.
 - **`unknownTags`**: `"allow"` accepts a tag with no contract (the open set of decision 131). `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/contract-packages/#contract-packages-closing-the-vocabulary) has an example.
+- **`stripTypes`**: `true` (the default) erases TypeScript before the source lowers, so the nodes a dialect's hooks see have no `typeAnnotation` or `returnType`, and a top-level `as`, `!` or `satisfies` is reduced to its operand (`(y as string)` lowers as `y`). `false` keeps the authored TypeScript in the nodes (`TSTypeAnnotation`, `TSAsExpression`, …) and in `Expr.code`, for a dialect whose `nodeType.lower`, contract hooks or `afterLower` read types. The IR has the same shape either way. In a tag-file hook, `ctx.lower({ stripTypes: false })` takes it too.
 - **`warnings`**: a sink for core's warnings, pushed as they are raised, so those raised before a later error stay in the caller's array.
 
 ## Tag rules presets

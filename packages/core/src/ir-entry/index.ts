@@ -163,6 +163,17 @@ export interface LowerSourceOptions {
    */
   unknownTags?: "allow" | "reject";
   /**
+   * Whether TypeScript types are erased before the source lowers. The
+   * default (`true`, or omitted) strips them: an arrow's parameter and return
+   * annotations are gone from the lowered nodes, and a top-level `as`, `!` or
+   * `satisfies` is reduced to its operand. `false` keeps the authored
+   * TypeScript in the nodes the hooks see (`TSTypeAnnotation`, `returnType`,
+   * `TSAsExpression`, …) and in `Expr.code`. For a dialect whose
+   * `nodeType.lower`, contract hooks or `afterLower` read the types. The IR
+   * shape is the same either way.
+   */
+  stripTypes?: boolean;
+  /**
    * A sink for core's warnings: they are pushed here as they are raised, so
    * those raised before a later error stay in the caller's array.
    * `diagnostics` still reports this call's warnings (not entries already in
@@ -535,6 +546,9 @@ export function lowerSource(
       statementTags: false,
       customTags,
       defaultTag: options.defaultTag,
+      ...(options.stripTypes !== undefined
+        ? { stripTypes: options.stripTypes }
+        : {}),
       ...(options.dialect !== undefined ? { dialect: options.dialect } : {}),
       warnings,
       emitIr: (lowered) => {
