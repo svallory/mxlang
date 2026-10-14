@@ -266,8 +266,11 @@ exports `z` from the module. In a `client` block the names an `import` or an
 `client` statement; an `export * from`, an `export { a } from` and a type-only
 `import` bind none. An `import` or `export` below the block's own statements
 (inside a nested block, an `if` or a function body, or in a second block after
-the first) stays an error, `'import' and 'export' may only appear at the top
-level.`, at the position of the declaration.
+the first) stays an error (`MX_INVALID_STATEMENT`, at the position of the
+declaration): "An `import` or `export` must be a statement of the module: at
+the top of the file, after `static`, `server` or `client`, or directly inside
+that statement's `{ … }` block. This one is inside a nested block, an `if` or
+a function body; move it out to the block's own statements."
 
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole

@@ -3801,9 +3801,11 @@ function rejectInvalidStatement(
     const at = place((error as { loc?: { line: number; column: number } }).loc);
     const failure = codedError(
       INVALID_STATEMENT_CODE,
-      String((error as Error).message)
-        .replace(/\s*\(\d+:\d+\)$/, "")
-        .trim(),
+      isImportExportPlacement(error)
+        ? IMPORT_EXPORT_PLACEMENT_MESSAGE
+        : String((error as Error).message)
+            .replace(/\s*\(\d+:\d+\)$/, "")
+            .trim(),
       at.line,
       at.column,
     );
@@ -3812,6 +3814,13 @@ function rejectInvalidStatement(
     throw failure;
   }
 }
+
+/**
+ * MX's text for Babel's "'import' and 'export' may only appear at the top
+ * level.": a statement's own block is allowed, so "top level" would mislead.
+ */
+const IMPORT_EXPORT_PLACEMENT_MESSAGE =
+  "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
 
 /** Is `error` Babel's refusal of an `import` or `export` below the module's top level? */
 function isImportExportPlacement(error: unknown): boolean {

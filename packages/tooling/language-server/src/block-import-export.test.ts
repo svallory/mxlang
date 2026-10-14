@@ -42,7 +42,7 @@ describe("a diagnostic inside a block with an import, in the editor", () => {
     [
       "an import in a nested block",
       'static {\n  { import x from "./x" }\n}\n<div/>\n',
-      "'import' and 'export' may only appear at the top level.",
+      "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.",
       [1, 4, 1, 5],
     ],
   ])("%s", (_name, source, message, [sl, sc, el, ec]) => {

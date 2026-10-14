@@ -144,7 +144,7 @@ describe("html: an import or export below the block's statements is refused with
       error = thrown as typeof error;
     }
     expect(error.message).toBe(
-      "'import' and 'export' may only appear at the top level.",
+      "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.",
     );
     expect([error.line, error.column]).toEqual([line, column]);
   });

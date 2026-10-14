@@ -6,7 +6,7 @@
  * `import` or an `export` there is valid (stock Marko 6.4.4 compiles every row
  * below; `packages/targets/html/src/block-import-export.test.ts` pins the
  * module code it emits). The block's braces used to reach the statement check
- * (`'import' and 'export' may only appear at the top level.`) and the
+ * ("'import' and 'export' may only appear at the top level.") and the
  * TypeScript strip (`export default` crashed it with an internal TypeError).
  * Only an `import` or `export` below the block's own statements is still
  * refused, and a real syntax error in the block is reported ahead of it.
@@ -14,7 +14,8 @@
 import { describe, expect, it } from "vitest";
 import { lowerSource } from "./ir-entry/index.ts";
 
-const PLACEMENT = "'import' and 'export' may only appear at the top level.";
+const PLACEMENT =
+  "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
 
 function lower(source: string) {
   return lowerSource(source, "/f/t.mx", { tagRules: "html" });
