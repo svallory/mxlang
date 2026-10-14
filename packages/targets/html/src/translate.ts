@@ -169,9 +169,12 @@ function enumAsVar(node: Node): Node {
  * `export` of a declaration the declaration's (`client export const y = 1`).
  *
  * An `enum` declares its name, a `const enum` only when exported: Marko's
- * TypeScript pass keeps an exported `const enum` as `var E = {…}` and inlines
- * an unexported one into its uses, removing the declaration. `declare` enums
- * are skipped like every `declare` form. A plain `enum` declares its name
+ * TypeScript pass keeps an exported `const enum` as `var E = {…}` and, for an
+ * unexported one, replaces `E.A` in the whole file with the member's value and
+ * removes the declaration. This target declares nothing for it too but does
+ * not substitute member reads, so `${E.A}` throws a ReferenceError where
+ * Marko prints the value. `declare` enums are skipped like every `declare`
+ * form. A plain `enum` declares its name
  * where stock Marko refuses to compile it.
  */
 function clientDeclaredNames(code: string, at: Node): string[] {
@@ -270,9 +273,10 @@ function clientDeclaredNames(code: string, at: Node): string[] {
         }
         break;
       case "TSEnumDeclaration":
-        // Reached only unexported (an exported one is read below, and a
-        // `declare` one never gets here). Marko's TypeScript pass inlines a
-        // `const enum` into its uses and removes it, so it declares nothing;
+        // Reached only unexported (an exported one is read above, and a
+        // `declare` one never gets here). Marko's TypeScript pass replaces a
+        // `const enum`'s member reads with their values and removes it, so it
+        // declares nothing (this target does not substitute the reads);
         // a plain `enum` is declared like every other `client` declaration.
         // Both are walked as the `var E = …` Marko turns an enum into, so the
         // name lands where stock puts it among the others.

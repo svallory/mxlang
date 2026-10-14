@@ -329,6 +329,17 @@ describe("html: a `client` enum declares its name the way stock Marko does", () 
   });
 });
 
+describe("html: known gap, an unexported `client const enum` member read", () => {
+  // Stock Marko replaces `E.A` with the member's value (`<div>0</div>`); this
+  // target declares nothing for the enum and does not substitute, so the read
+  // throws. Pinned so closing the gap is a deliberate change.
+  it("`${E.A}` throws a ReferenceError where stock prints the value", () => {
+    expect(() =>
+      String(mx("client const enum E { A }\n<div>${E.A}</div>\n")({})),
+    ).toThrow(ReferenceError);
+  });
+});
+
 describe("html: the statement text parses the way Marko's does", () => {
   it("a top-level `return` still declares the names", () => {
     expect(hoisted(`client { let q = 1; return }${TEMPLATE}`)).toBe("var q;");
