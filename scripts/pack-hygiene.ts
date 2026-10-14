@@ -150,6 +150,9 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       // it and references only unmapped-diagnostics.d.ts and the declared
       // @mxlang/core, so it dangles on nothing private.
       "dist/authored-spans.d.ts",
+      // index.d.ts re-exports applicableFixes and mxCodeFixes from it; it
+      // references only language.d.ts and the declared @mxlang/core.
+      "dist/code-fixes.d.ts",
       "dist/dialect-language.d.ts",
       "dist/failed-module-stub.d.ts",
       "dist/host-policy-diagnostics.d.ts",
