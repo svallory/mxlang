@@ -42,6 +42,7 @@ import {
 } from "./ng-diagnostics.ts";
 import {
   currentCompileDiagnostics,
+  currentPolicyDiagnostics,
   type PluginGeneration,
   trackGeneration,
 } from "./watch-compile.ts";
@@ -702,6 +703,11 @@ function runMxTscChecks(): number {
           reportCompileDiagnostics(current);
           return countCompileErrors(current);
         },
+        policy: () => {
+          const current = currentPolicyDiagnostics(generations);
+          reportTargetPolicyDiagnostics(current);
+          return current.filter((d) => d.severity === "error").length;
+        },
         argv,
         cwd: process.cwd(),
         build: build !== undefined && !build.clean && !build.dry,
@@ -784,7 +790,8 @@ function runMxTscChecks(): number {
         .map((d) => [`${d.file}\0${d.message}`, d] as const),
     ).values(),
   ];
-  reportTargetPolicyDiagnostics(policyDiagnostics);
+  // A watch run printed them from inside every build's summary, counted in it.
+  if (!watchRan) reportTargetPolicyDiagnostics(policyDiagnostics);
   const hasPolicyError = policyDiagnostics.some((d) => d.severity === "error");
   // A host whose `ambientTypes` threw: one error, the run went on without
   // that host's ambient files, and it fails. A watch run printed them from

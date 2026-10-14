@@ -15,6 +15,7 @@ import { existsSync } from "node:fs";
 import type {
   MxCompileDiagnostic,
   MxDiagnosticLanguagePlugin,
+  TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 
 /** The plugins one `createProgram` of a watch run made, and the files they compiled. */
@@ -100,4 +101,33 @@ export function currentCompileDiagnostics(
     .sort((a, b) =>
       a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0,
     );
+}
+
+/**
+ * The host-policy diagnostics that hold now, by the same rule as
+ * {@link currentCompileDiagnostics}: for each `.mx` file, those of the newest
+ * generation that compiled it (a plugin re-resolves the policy at every
+ * compile, so a fixed `package.json` stops being reported once its files are
+ * compiled again). A file that no longer exists has none, and a policy two
+ * files share is reported once. Read-only: pruning is the compile pass's.
+ */
+export function currentPolicyDiagnostics(
+  generations: readonly PluginGeneration[],
+): TargetPolicyDiagnostic[] {
+  const settled = new Set<string>();
+  const current = new Map<string, TargetPolicyDiagnostic>();
+  for (let at = generations.length - 1; at >= 0; at--) {
+    const generation = generations[at] as PluginGeneration;
+    for (const fileName of generation.touched) {
+      if (settled.has(fileName)) continue;
+      settled.add(fileName);
+      if (!existsSync(fileName)) continue;
+      for (const plugin of generation.plugins) {
+        for (const d of plugin.getTargetPolicyDiagnostics?.(fileName) ?? []) {
+          current.set(`${d.file}\0${d.message}`, d);
+        }
+      }
+    }
+  }
+  return [...current.values()];
 }

@@ -86,6 +86,13 @@ export interface WatchTemplatePassOptions {
    * `report`, so they read in tsc's order: its own errors, MX's, the summary.
    */
   compile?: () => number;
+  /**
+   * Prints the host-policy diagnostics (`TS80003`, a `package.json` that names
+   * an invalid or mismatched target) that hold after this rebuild, warnings
+   * included, and returns how many are errors, for the same summary. Runs
+   * after `compile`, so they read in the order of the one-shot run.
+   */
+  policy?: () => number;
 }
 
 export interface WatchTemplatePass {
@@ -220,7 +227,7 @@ export function installWatchTemplatePass(
     let compileErrors = 0;
     try {
       // First: the MX errors are printed even if the Angular pass throws.
-      compileErrors = compileErrorsOf(options);
+      compileErrors = compileErrorsOf(options) + policyErrorsOf(options);
       const errors = options.report(
         checkWatchTemplates(options),
         compileErrors,
@@ -263,6 +270,21 @@ function compileErrorsOf(options: WatchTemplatePassOptions): number {
   } catch (cause) {
     process.stderr.write(
       `error mxlang: reporting the MX compile errors failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
+    );
+    return 1;
+  }
+}
+
+/**
+ * One rebuild's host-policy errors. A reporter that crashed is an error, said
+ * out loud, for the same reason as {@link compileErrorsOf}.
+ */
+function policyErrorsOf(options: WatchTemplatePassOptions): number {
+  try {
+    return options.policy?.() ?? 0;
+  } catch (cause) {
+    process.stderr.write(
+      `error mxlang: reporting the host-policy errors failed: ${cause instanceof Error ? cause.message : String(cause)}\n`,
     );
     return 1;
   }

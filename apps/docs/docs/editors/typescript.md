@@ -184,7 +184,12 @@ not a TypeScript diagnostic, and tsc counts only its own.
   own errors and before the summary, and the summary's count includes them:
   `Found 2 errors. Watching for file changes.` is one tsc error and one MX
   error. An MX error you fix is gone from the next rebuild, and one in a file
-  the rebuild did not touch is printed again.
+  the rebuild did not touch is printed again. A `package.json` host-policy
+  error (`TS80003`, such as an `mx.target` that belongs to another host) is
+  treated the same: printed with every build, the first included, and counted
+  in the summary. A host-policy warning is printed with every build and is not
+  counted. After you fix the `package.json`, the next rebuild that compiles a
+  `.mx` file stops reporting it.
 - **One run.** The exit code is 1 when there is an MX error. tsc prints its
   `Found N errors` line only with `--pretty`, counts only its own diagnostics,
   and does not rewrite that count for MX errors, so with that line present the
