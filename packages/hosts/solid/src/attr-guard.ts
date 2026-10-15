@@ -66,6 +66,7 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
 export const MX_TEXTAREA_CONTENT_BINDING = "__mxTextareaContent";
 export const MX_TEXTAREA_PICK_BINDING = "__mxTextareaPick";
 export const MX_TEXTAREA_OMIT_BINDING = "__mxTextareaOmit";
+export const MX_SCRIPT_TEXT_BINDING = "__mxScriptText";
 export const MX_IS_SERVER_BINDING = "__mxIsServer";
 export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
 export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
@@ -117,4 +118,16 @@ export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BIN
   return new Proxy(attrs as object, {
     get: (target, key) => (key === "value" ? ${MX_TEXTAREA_DYN_VALUE_BINDING}(Reflect.get(target, key), tag) : Reflect.get(target, key)),
   }) as never;
+}`;
+
+/**
+ * The body of `<html-script>`, as the text of a `<script>` element: each
+ * placeholder stringified as Marko's text rule does (`_to_text`: a truthy value
+ * as its string, `0` as `0`, every other falsy value as nothing), then the
+ * joined body escaped for script context (`_escape_script`): `<script`,
+ * `</script` (any case) and `<!--` become `\u003C…`. Handed to `innerHTML`,
+ * because Solid HTML-escapes a text child.
+ */
+export const SCRIPT_TEXT_HELPER = String.raw`function ${MX_SCRIPT_TEXT_BINDING}(...parts: unknown[]): string {
+  return parts.map((part) => (part || part === 0 ? part + "" : "")).join("").replace(/<(\/?script|!--)/gi, "\\u003C$1");
 }`;

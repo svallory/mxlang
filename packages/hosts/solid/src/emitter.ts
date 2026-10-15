@@ -37,6 +37,7 @@ import {
   MX_ATTR_SPREAD_BINDING,
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
+  MX_SCRIPT_TEXT_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_DYN_SPREAD_BINDING,
   MX_TEXTAREA_DYN_VALUE_BINDING,
@@ -114,6 +115,7 @@ let attrGuardUse: {
   klass: boolean;
   textarea: boolean;
   dynTextarea: boolean;
+  scriptText: boolean;
 } | null = null;
 
 /**
@@ -597,6 +599,7 @@ export function collectReturnVars(
     klass: boolean;
     textarea: boolean;
     dynTextarea: boolean;
+    scriptText: boolean;
   };
   hoistedDefines: HoistedSolidDefine[];
 } {
@@ -613,6 +616,7 @@ export function collectReturnVars(
     klass: false,
     textarea: false,
     dynTextarea: false,
+    scriptText: false,
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
@@ -2095,7 +2099,53 @@ export class SolidEmitter implements Emitter<string> {
     this.#out.push(concatMapped("{", mappedExpr(node.expr), "}"));
   }
 
+  /**
+   * `<html-script>`: a real `<script>` element, as Marko's html output writes
+   * it. Every attribute is kept (validated as a `script`'s own). The body is
+   * script text, not markup, and Solid HTML-escapes a text child (`&&` would
+   * reach the browser as `&amp;&amp;`), so it rides `innerHTML` after
+   * `__mxScriptText` has stringified each placeholder as Marko's text rule does
+   * and escaped the joined body for script context (`<script`, `</script`,
+   * `<!--`), so no placeholder can close the element. `nonce` is the author's
+   * `nonce=`: a Solid render has no `$global.cspNonce` to read.
+   */
+  #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
+    const body = node.children.filter(
+      (child) => child.kind === "Text" || child.kind === "Interpolation",
+    );
+    if (body.length > 0 && hasNamedAttr(node.attrs, "innerHTML")) {
+      fail(
+        "`<html-script>` body combined with an explicit `innerHTML=` attribute",
+        node,
+      );
+    }
+    const attrs = renderAttrs(node.attrs, false, { tag: '"script"' });
+    if (body.length === 0) {
+      this.#out.push(concatMapped("<script", attrs, " />"));
+      return;
+    }
+    if (attrGuardUse) attrGuardUse.scriptText = true;
+    this.#out.push(
+      concatMapped(
+        "<script",
+        attrs,
+        ` innerHTML={${MX_SCRIPT_TEXT_BINDING}(`,
+        ...body.flatMap((child, index) => [
+          index === 0 ? "" : ", ",
+          child.kind === "Text"
+            ? JSON.stringify(child.value)
+            : mappedExpr(child.expr),
+        ]),
+        ")} />",
+      ),
+    );
+  }
+
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    if (node.name === "html-script") {
+      this.#htmlScript(node);
+      return;
+    }
     const raw = rawChild(node.children);
     rejectMixedRaw(node.children);
     if (raw && hasNamedAttr(node.attrs, "innerHTML")) {

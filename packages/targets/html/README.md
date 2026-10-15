@@ -372,7 +372,7 @@ byte-identical with and without the construct.
 | Construct | Why it emits nothing |
 |---|---|
 | `<lifecycle>` | Client-side lifecycle hook. |
-| `<script>` (the core tag) | Client behaviour, not markup. `<html-script>` emits a literal `<script>` element. |
+| `<script>` (the core tag) | Client behaviour, not markup. `<html-script>` emits a `<script>` element that keeps its attributes; its body is escaped for script context (`<script`, `</script`, `<!--` become `\u003C…`), not HTML-escaped. |
 | `<id>` | Allocates an identifier for the reactive runtime. |
 | `<log>`, `<debug>` | Write to the console / attach a debugger hook. |
 | `by=` on `<for>` | Reconciler input: which item a DOM node belongs to across re-renders. A one-shot render performs no reconciliation. |

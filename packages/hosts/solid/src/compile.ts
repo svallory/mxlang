@@ -47,11 +47,13 @@ import {
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
   MX_IS_SERVER_BINDING,
+  MX_SCRIPT_TEXT_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_DYN_SPREAD_BINDING,
   MX_TEXTAREA_DYN_VALUE_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
+  SCRIPT_TEXT_HELPER,
   TEXTAREA_CONTENT_HELPER,
   TEXTAREA_DYN_SPREAD_HELPER,
   TEXTAREA_DYN_VALUE_HELPER,
@@ -485,6 +487,12 @@ export function compileSolidMx(
       binding: MX_ATTR_SPREAD_BINDING,
     });
   }
+  if (needsAttrGuard.scriptText) {
+    hoistedDefines.unshift({
+      code: SCRIPT_TEXT_HELPER,
+      binding: MX_SCRIPT_TEXT_BINDING,
+    });
+  }
   if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
     hoistedImports.unshift({
       code: `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";`,
@@ -690,6 +698,7 @@ export function compileSolidUnit(
       `${TEXTAREA_DYN_SPREAD_HELPER}\n${TEXTAREA_DYN_VALUE_HELPER}\n`,
     );
   }
+  if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
   if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);
   if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
   if (needsAttrGuard.value || needsAttrGuard.spread) {

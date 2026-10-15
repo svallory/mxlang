@@ -70,6 +70,13 @@ function skips(targetName: string): Record<string, string> {
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
     "html-comment-body-markup":
       "same as `html-comment-placeholder`: a rendered HTML comment has no JSX form",
+    "html-script-raw-body": `stock Marko reads the body of \`<html-script>\` as raw text: \`</script>\`, \`<!--\` and a \`<\` that looks like a tag are script source, and the body's own leading and trailing whitespace is kept. The html target (and Solid and Astro) read the tag's raw-text parse option; the whole-file ${targetName} compile does not register it, so the parser reads the body as markup (\`The closing "script" tag does not match the corresponding opening "html-script" tag\`) and trims its edge whitespace. The fix is in core's compile (register the raw-text parse option for every host), not in the host; the html target locks the fixture`,
+    ...(targetName === "React"
+      ? {
+          "html-script-async-src":
+            "React 19 treats a `<script async src>` as a hoistable resource and renders it ahead of the rest of the markup, where Marko renders it in place. The element and its attributes are the same; only its position differs, and that is the renderer's, not this host's lowering",
+        }
+      : {}),
     "text-falsy-values": `a placeholder's value is handed to the ${targetName} renderer unchanged, and its child rule differs from Marko's text rule: it drops \`true\` and prints \`NaN\` (and \`0n\` as \`0\`, except Hono, which prints nothing for \`1n\` and \`0n\`), where Marko prints nothing for \`NaN\` and \`0n\` and \`1\` for \`1n\`. Making the JSX hosts follow Marko's text rule is a host item of its own; the html target is the one this fixture locks`,
     "text-falsy-values-unescaped":
       "a raw `$!{…}` placeholder is handed to the host renderer unchanged: on all three hosts it prints `true`, `false`, `NaN` and `0` (for `0n`), where Marko prints nothing for `false`, `NaN` and `0n`; Hono also prints `null` and `undefined`",

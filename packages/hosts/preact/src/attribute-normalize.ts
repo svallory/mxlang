@@ -124,6 +124,25 @@ export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | unde
 })`;
 
 /**
+ * The body of `<html-script>`, as the text of a `<script>` element.
+ *
+ * Marko's html output stringifies each `${…}` placeholder as it does anywhere
+ * in text (`_to_text`: a truthy value as its string, `0` as `0`, every other
+ * falsy value as nothing) and then escapes the *joined* body for script
+ * context (`_escape_script`): `<script`, `</script` (any case) and `<!--`
+ * become `\u003C…`, so the body cannot close its element or open a comment. A
+ * JSX text child cannot carry it: every renderer HTML-escapes text, which turns
+ * `&&` and `<` in script source into entities the browser never decodes. The
+ * result is therefore handed over as raw HTML, through the dialect's
+ * raw-HTML prop, after this escape.
+ */
+export const JSX_SCRIPT_TEXT_EXPRESSION = `(...parts: unknown[]): string =>
+  parts
+    .map((part) => (part || part === 0 ? part + "" : ""))
+    .join("")
+    .replace(/<(\\/?script|!--)/gi, "\\\\u003C$1")`;
+
+/**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
  * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
  * and a leading newline doubled because the HTML parser drops a textarea's

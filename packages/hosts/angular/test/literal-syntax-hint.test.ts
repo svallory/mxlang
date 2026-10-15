@@ -257,13 +257,19 @@ describe("literal Angular syntax in a template", () => {
 
   describe("html-script / html-style bodies", () => {
     it.each([
-      ["html script", "<html-script>var t = '{{ y }}';</html-script>"],
       ["html style", "<html-style>.a{} @if (x) { }</html-style>"],
-      ["html script @", "<html-script>var a = 'x@if (a) { }';</html-script>"],
-      ["concise script", "html-script -- var t = '{{ y }}';"],
       ["concise style", "html-style -- .a{} @if (x) { }"],
     ])("%s stays silent", (_n, src) => {
       expect(lit(src)).toEqual([]);
+    });
+    // `<html-script>` is refused on Angular (its template compiler removes
+    // every `<script>`), so its body never reaches the literal-syntax check.
+    it.each([
+      ["html script", "<html-script>var t = '{{ y }}';</html-script>"],
+      ["html script @", "<html-script>var a = 'x@if (a) { }';</html-script>"],
+      ["concise script", "html-script -- var t = '{{ y }}';"],
+    ])("%s is refused, not hinted", (_n, src) => {
+      expect(() => lit(src)).toThrow(/cannot be emitted into an Angular/);
     });
     it("text after the tag still warns", () => {
       expect(

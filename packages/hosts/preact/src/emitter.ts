@@ -363,6 +363,9 @@ export const preactRegionDeclarations = createJsxDeclarations("Preact", {
  */
 const RAW_TEXT_ELEMENTS = new Set(["script", "style"]);
 
+/** Stands in for the expression while a dialect's raw-HTML wrapper is split around it. */
+const RAW_HTML_SLOT = "\u0000";
+
 /**
  * Escapes text for a JSX child position, decoding authored HTML entities
  * first so the JSX render equals Marko's browser-decoded text.
@@ -1779,7 +1782,61 @@ export class PreactEmitter implements Emitter<string> {
     this.#valueChildren++;
   }
 
+  /**
+   * `<html-script>`: a real `<script>` element, as Marko's html output writes
+   * it. Every attribute is kept (validated as a `script`'s own), and the body
+   * is script text, not markup: the renderers HTML-escape a text child, which
+   * would turn `a && b` into entities the browser never decodes inside a
+   * script. The body therefore rides the dialect's raw-HTML prop, after
+   * `__mxScriptText` has stringified each placeholder as Marko's text rule
+   * does and escaped the joined body for script context (`<script`,
+   * `</script`, `<!--`), so no placeholder can close the element.
+   *
+   * The prop comes after the attributes, so it wins over a `dangerouslySetInnerHTML`
+   * key a spread carries. Marko also writes `nonce` from the render's global
+   * when the author gives none; a JSX render has no such global, so a nonce is
+   * the `nonce=` the author writes.
+   */
+  #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
+    const body = node.children.filter(
+      (child) => child.kind === "Text" || child.kind === "Interpolation",
+    );
+    const prop = this.#dialect.rawHtmlProp;
+    if (body.length > 0 && hasNamedAttr(node.attrs, prop)) {
+      fail(
+        `\`<html-script>\` body combined with an explicit \`${prop}=\` attribute`,
+        node,
+      );
+    }
+    const attrs = this.#attrs(node.attrs, true, false, "script");
+    if (body.length === 0) {
+      this.#out.push(concatMapped("<script", attrs, " />"));
+      return;
+    }
+    const [open = "", close = ""] = this.#dialect
+      .rawHtmlValue(RAW_HTML_SLOT)
+      .split(RAW_HTML_SLOT);
+    this.#out.push(
+      concatMapped(
+        "<script",
+        attrs,
+        ` ${prop}={${open}__mxScriptText(`,
+        ...body.flatMap((child, index) => [
+          index === 0 ? "" : ", ",
+          child.kind === "Text"
+            ? JSON.stringify(child.value)
+            : mappedExpr(child.expr),
+        ]),
+        `)${close}} />`,
+      ),
+    );
+  }
+
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    if (node.name === "html-script") {
+      this.#htmlScript(node);
+      return;
+    }
     rejectMixedRaw(node.children);
     const raw = rawChild(node.children);
     if (raw && hasNamedAttr(node.attrs, this.#dialect.rawHtmlProp)) {

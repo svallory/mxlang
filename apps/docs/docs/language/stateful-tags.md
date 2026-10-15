@@ -38,6 +38,18 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 
 For `<script>` that means its body is script text and its only attribute is its value: `<script async>`, `<script src="/x.js">`, `<script#id>` and `<script ...attrs>` are compile errors (`MX_INERT_TAG_SHAPE`), as is a `${…}` placeholder in its body (a `${…}` inside a template literal is the script's own). In a body, write the value directly (`const a = x;`, not `${x}`); for a native html `<script>` element use `<html-script>`, which keeps its attributes and interpolates its body.
 
+`<html-script>` writes a real `<script>` element on every target but one, and its body is script text, not markup: each `${…}` is stringified as in any text and the whole body is then escaped for script context (`<script`, `</script` and `<!--` become `\u003C…`, so a value cannot close the element), never HTML-escaped (`a && b` stays `a && b`). Per target:
+
+| Target | Output |
+|---|---|
+| html | `<script …attrs>body</script>`, as Marko writes it |
+| Preact, React, Hono | `<script …attrs dangerouslySetInnerHTML={{ __html: … }} />`: a JSX renderer HTML-escapes a text child, which would turn `&&` into an entity the browser never decodes |
+| Solid | `<script …attrs innerHTML={…} />`, for the same reason |
+| Astro | `<script is:inline …attrs set:html={…} />`: `is:inline` keeps the element where it is instead of bundling it |
+| Angular | a compile error at the tag: Angular's template compiler removes every `<script>` element. Load the script from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API |
+
+Marko also adds a `nonce` from the render's `$global.cspNonce`. MX has no render global, so no target invents one: write `nonce=` yourself and it is kept as any attribute is. On Preact, React and Hono a body that contains tag-like text (`a<b`, `</script>`, `<!--`) is read as markup, and a body loses its leading and trailing whitespace; the html target, Solid and Astro read it as raw text, as Marko does.
+
 ### Opting into `strict`
 
 Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).

@@ -89,6 +89,12 @@ const TAGS: Record<string, Disposition> = {
     // genuinely consumed and genuinely emitting nothing. Verified: Marko's own
     // server render of `<script>console.log(1)</script>` emits no bytes.
     body: "text",
+    // `"any"` is only what this row lets through to the core's own check of the
+    // tag's shape, which runs first (`MX_INERT_TAG_SHAPE`, `checkScriptShape`
+    // in core's lower.ts): the tag takes its own value and no other attribute,
+    // no spread and no `${…}` placeholder in the body, because html emits
+    // nothing for it and would discard them. `<html-script>` is the element
+    // that keeps attributes and interpolates its body.
     attributes: "any",
   },
   id: {
@@ -859,6 +865,23 @@ const TEXT_OF = `function __mxTextOf(__mxValue: unknown): string {
   return __mxValue || __mxValue === 0 ? __mxValue + "" : "";
 }`;
 
+/**
+ * Marko 6.4.4's html `_escape_script`: `<script`, `</script` (any case) and
+ * `<!--` become `\u003C…`, so no run of script text can close its element or
+ * open a comment. A string that holds none of them is unchanged. The one
+ * pattern serves both the compile-time escape of a static body and the helper
+ * a body with placeholders calls.
+ */
+const SCRIPT_UNSAFE = /<(\/?script|!--)/gi;
+
+export function escapeScript(text: string): string {
+  return text.replace(SCRIPT_UNSAFE, "\\u003C$1");
+}
+
+const ESCAPE_SCRIPT = `function __mxEscapeScript(__mxValue: string): string {
+  return __mxValue.replace(/<(\\/?script|!--)/gi, "\\\\u003C$1");
+}`;
+
 // Marko 6.3.51's html `_textarea_value`: `normalizeStrAttrValue` (nothing for
 // null/undefined/false/true), escaped as text, and a leading newline doubled
 // because the HTML parser drops the first one.
@@ -1120,6 +1143,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxTextareaBody("), TEXTAREA_BODY],
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [code.includes("__mxTextOf("), TEXT_OF],
+    [code.includes("__mxEscapeScript("), ESCAPE_SCRIPT],
     [dynamic, DYNAMIC_PROPS],
     [dynamic, RENDER_DYNAMIC],
     [code.includes("__mxRenderTag("), RENDER_CALL],

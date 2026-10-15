@@ -37,6 +37,7 @@ import {
 } from "@mxlang/core";
 import {
   JSX_ATTRIBUTE_SPREAD_EXPRESSION,
+  JSX_SCRIPT_TEXT_EXPRESSION,
   jsxAttrValueExpression,
   jsxTextareaContentExpression,
   jsxTextareaPropsExpression,
@@ -190,6 +191,11 @@ export function attributeHelpers(
     helpers.push({
       binding: "__mxAttrSpread",
       code: `const __mxAttrSpread = ${JSX_ATTRIBUTE_SPREAD_EXPRESSION};`,
+    });
+  if (text.includes("__mxScriptText("))
+    helpers.push({
+      binding: "__mxScriptText",
+      code: `const __mxScriptText = ${JSX_SCRIPT_TEXT_EXPRESSION};`,
     });
   if (text.includes("__mxTextareaContent(") || text.includes("__mxTextarea("))
     helpers.push({

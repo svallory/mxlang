@@ -61,7 +61,7 @@ import {
   TranslateError,
 } from "@mxlang/core";
 import type { DelegatedTagData } from "./translate.ts";
-import { DYNAMIC, escapeComment } from "./translate.ts";
+import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
 
 const INDENT = "  ";
 
@@ -1330,6 +1330,52 @@ export function createEmitter(
   };
 
   /**
+   * `<html-script>`: a real `<script>` element with every attribute kept and
+   * the body written as script text, as Marko's html output writes it
+   * (`_escape_script` over the body with `_to_text` placeholders, never the
+   * HTML escape).
+   *
+   * The escape runs over the joined body, not per piece: `<` in the text and
+   * `/script>` in a placeholder are each harmless alone, and a `</script>`
+   * together. A body of static text is escaped here at compile time.
+   *
+   * Marko also writes `nonce` from the render's `$global.cspNonce` when the
+   * author gives none; this target has no render global, so a nonce is the
+   * `nonce=` attribute the author writes, and none is invented.
+   */
+  function scriptElement(tag: DelegatedTag): void {
+    literal("<script");
+    elementAttributes("script", tag.attrs);
+    literal(">");
+    const parts: Array<string | MappedCode> = [];
+    let dynamic = false;
+    for (const child of tag.children) {
+      if (child.kind === "Text") parts.push(quote(child.value));
+      else if (child.kind === "Interpolation") {
+        dynamic = true;
+        parts.push(concatMapped("__mxTextOf(", mappedExpr(child.expr), ")"));
+      }
+    }
+    if (!dynamic) {
+      const text = tag.children
+        .map((child) => (child.kind === "Text" ? child.value : ""))
+        .join("");
+      literal(escapeScript(text));
+    } else {
+      write(
+        concatMapped(
+          "__mxEscapeScript(",
+          ...parts.flatMap((part, index) =>
+            index === 0 ? [part] : [" + ", part],
+          ),
+          ")",
+        ),
+      );
+    }
+    literal("</script>");
+  }
+
+  /**
    * The tags this host claims for itself, each with its parts already
    * resolved.
    *
@@ -1404,6 +1450,10 @@ export function createEmitter(
       case "raw-element": {
         // `<html-script>`/`<html-style>` are Marko's spelling of a literal
         // `<script>`/`<style>` element, since the bare names are core tags.
+        if (data.tag === "script") {
+          scriptElement(tag);
+          return;
+        }
         write(quote(`<${data.tag}>`));
         for (const child of tag.children) {
           if (child.kind === "Text") write(quote(child.value));

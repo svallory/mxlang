@@ -102,6 +102,9 @@ function unknownTagMessage(name: string): string {
     : base;
 }
 
+const HTML_SCRIPT_MESSAGE =
+  '`<html-script>` cannot be emitted into an Angular template: Angular\'s template compiler removes every `<script>` element, so the script would never reach the page. Load it from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API (`document.createElement("script")`).';
+
 const MODULE_LEVEL_MESSAGE =
   "cannot be emitted into an Angular template: an Angular template has no module scope. Move it into the component's TypeScript file, or use `.ng.mx` (step 2), where MX emits the module for you.";
 
@@ -1987,6 +1990,21 @@ class AngularEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
+    // Angular's template compiler drops every `<script>` element (verified
+    // against `parseTemplate`: a `<script>` parses to no node at all), so an
+    // `<html-script>` emitted as the element it names would either reach
+    // ngtsc as an unknown element or, written as `<script>`, vanish without a
+    // word. Neither is a script on the page; refuse it here, once, with the
+    // ways Angular does load one.
+    if (node.name === "html-script") {
+      const loc = node.nameSpan
+        ? {
+            ...node.loc,
+            ...lineColumnAt(this.ctx.source, node.nameSpan.sourceStart),
+          }
+        : node.loc;
+      fail(HTML_SCRIPT_MESSAGE, { loc });
+    }
     // Marko recognizes SVG <switch>, not a control-flow switch. Angular's
     // HTML template has no <switch> at all, so outside an `<svg>` context the
     // name can only be an attempted control-flow switch — reject it here,

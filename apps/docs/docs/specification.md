@@ -761,7 +761,8 @@ error, `MX_INERT_TAG_SHAPE`, on every target: the tag is client code, not an htm
 element, so the attribute would be discarded and the placeholder was never read. The error
 is positioned at the attribute (a shorthand at its own spelling) or at the `${…}` (its
 whole range). For an attribute its text says to use `<html-script>`, the tag for a native
-html `<script>` element, which keeps its attributes and interpolates its body; for a
+html `<script>` element, which keeps its attributes and interpolates its body (on every
+target but Angular, whose templates cannot hold a `<script>` element and refuse the tag); for a
 placeholder it says to use the value directly (`x`, not `${x}`), to write it through a
 template literal inside a string, or to use `<html-script>`. A `${…}` inside a template
 literal in the body (`` `${x}` ``) is the script's own and is not a placeholder. The

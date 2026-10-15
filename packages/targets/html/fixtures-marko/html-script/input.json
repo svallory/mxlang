@@ -1,0 +1,14 @@
+{
+  "x": 1,
+  "y": "a b",
+  "s": "q",
+  "n": "k1",
+  "close": "</script><b>&amp;",
+  "id": "s1",
+  "f": false,
+  "n2": null,
+  "zero": 0,
+  "attrs": { "type": "module", "data-k": "v" },
+  "html": "<!-- x --> </SCRIPT> <p>&lt;</p>",
+  "ns": [1, 2]
+}

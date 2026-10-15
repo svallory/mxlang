@@ -86,6 +86,20 @@ const ATTRIBUTE_SPREAD_OUT_SOURCE = `((guard: (attrs: any, tag?: string) => any)
 })(${ATTRIBUTE_SPREAD_SOURCE})`;
 const COMMENT_VALUE_EXPRESSION = "__mxCommentValue";
 const TEXTAREA_CONTENT_EXPRESSION = "__mxTextareaContent";
+const SCRIPT_TEXT_EXPRESSION = "__mxScriptText";
+/**
+ * The body of `<html-script>`, as the text of a `<script>` element. Marko
+ * stringifies each placeholder as it does anywhere in text (`_to_text`: a
+ * truthy value as its string, `0` as `0`, every other falsy value as nothing)
+ * and then escapes the joined body for script context (`_escape_script`):
+ * `<script`, `</script` (any case) and `<!--` become `\u003C…`. It is handed
+ * to `set:html`, so Astro writes it as it is instead of HTML-escaping it.
+ */
+const SCRIPT_TEXT_SOURCE = String.raw`(...parts: unknown[]): string =>
+  parts
+    .map((part) => (part || part === 0 ? part + "" : ""))
+    .join("")
+    .replace(/<(\/?script|!--)/gi, "\\u003C$1")`;
 /** Marko's `_textarea_value`: nullish/boolean render nothing, and a leading newline is doubled (a parser drops the first). */
 const TEXTAREA_CONTENT_SOURCE = String.raw`(v: unknown): string => {
   const text = v === null || v === undefined || v === false || v === true ? "" : v + "";
@@ -832,6 +846,36 @@ export function createEmitter(
   };
 
   /**
+   * `<html-script>`: a real `<script>` element, as Marko's html output writes
+   * it, with every attribute kept (validated as a `script`'s own). Astro would
+   * otherwise hoist and bundle a bare `<script>`, so it is written
+   * `is:inline`. The body is script text, not markup: Astro HTML-escapes a
+   * text child (`&&` would reach the browser as `&amp;&amp;`), so it rides
+   * `set:html`, after `__mxScriptText` has stringified each placeholder as
+   * Marko's text rule does and escaped the joined body for script context, so
+   * no placeholder can close the element. `nonce` is the author's `nonce=`: an
+   * Astro render has no `$global.cspNonce` to read.
+   */
+  const emitHtmlScript = (node: Extract<IrNode, { kind: "Element" }>): void => {
+    const body = node.children.filter(
+      (child) => child.kind === "Text" || child.kind === "Interpolation",
+    );
+    write("<script is:inline");
+    emitElementAttrs("script", node.attrs, write, writeMapped);
+    if (body.length === 0) {
+      write(" />");
+      return;
+    }
+    write(` set:html={${SCRIPT_TEXT_EXPRESSION}(`);
+    body.forEach((child, index) => {
+      if (index > 0) write(", ");
+      if (child.kind === "Text") write(JSON.stringify(child.value));
+      else if (child.kind === "Interpolation") writeExpr(child.expr);
+    });
+    write(")} />");
+  };
+
+  /**
    * `<html-comment>`: Marko's `<!--…-->`, escaping only `>` (as `_escape_comment`).
    *
    * Astro never interpolates inside a comment, so a placeholder makes the whole
@@ -963,6 +1007,10 @@ export function createEmitter(
     element(node) {
       if (node.name === "textarea") {
         emitTextarea(node);
+        return;
+      }
+      if (node.name === "html-script") {
+        emitHtmlScript(node);
         return;
       }
       write(`<${node.name}`);
@@ -1556,6 +1604,9 @@ export function lowerAstroMx(
       helpers.push(
         `const ${COMMENT_VALUE_EXPRESSION} = ${COMMENT_VALUE_SOURCE};`,
       );
+    }
+    if (templateCode.includes(`${SCRIPT_TEXT_EXPRESSION}(`)) {
+      helpers.push(`const ${SCRIPT_TEXT_EXPRESSION} = ${SCRIPT_TEXT_SOURCE};`);
     }
     if (templateCode.includes(`${TEXTAREA_CONTENT_EXPRESSION}(`)) {
       helpers.push(
