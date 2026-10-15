@@ -21,6 +21,7 @@ import {
   cleanupProbeProjects,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
+import { waitForValue } from "./wait-for.ts";
 
 const BIN_PATH = join(import.meta.dirname, "../dist/bin.js");
 
@@ -80,12 +81,12 @@ it("re-checks an open dialect file when only the dialect's module changes", asyn
     if (params.uri !== pageUri) return;
     latest.push(params.diagnostics.map((d) => `${d.code}: ${d.message}`));
   });
-  const until = async (count: number) => {
-    for (let i = 0; i < 300 && latest.length < count; i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    return latest[count - 1];
-  };
+  const publication = (count: number) =>
+    waitForValue(
+      () => latest[count - 1],
+      `publication ${count} for the dialect file`,
+      { observed: () => latest },
+    );
   conn.sendNotification("textDocument/didOpen", {
     textDocument: {
       uri: pageUri,
@@ -95,7 +96,7 @@ it("re-checks an open dialect file when only the dialect's module changes", asyn
     },
   });
   const missing = "`<entity>`: missing required attribute `name`";
-  expect(await until(1)).toEqual([`MX_MISSING_ATTRIBUTE: ${missing}`]);
+  expect(await publication(1)).toEqual([`MX_MISSING_ATTRIBUTE: ${missing}`]);
 
   let tick = Date.now() + 10_000;
   const edit = async (text: string, count: number) => {
@@ -106,7 +107,7 @@ it("re-checks an open dialect file when only the dialect's module changes", asyn
     conn.sendNotification("workspace/didChangeWatchedFiles", {
       changes: [{ uri: moduleUri, type: 2 }],
     });
-    return until(count);
+    return publication(count);
   };
 
   // The contract relaxed: the call is now valid.

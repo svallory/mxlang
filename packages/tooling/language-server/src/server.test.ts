@@ -28,6 +28,7 @@ import {
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
 import { globMatcher, isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
+import { expectQuiet, waitFor } from "./wait-for.ts";
 
 /**
  * The one stdio end-to-end test the brief asks for (§5): spawn the real
@@ -676,11 +677,6 @@ describe("stdio server (e2e)", () => {
     conn.onNotification(PublishDiagnosticsNotification, (params) => {
       seen.push(params as Published);
     });
-    const until = async (done: () => boolean) => {
-      for (let i = 0; i < 300 && !done(); i++) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    };
 
     const dir = join(import.meta.dirname, "fixtures/bad-mx-tags");
     const uri = `file://${join(dir, "page.mx")}`;
@@ -688,9 +684,11 @@ describe("stdio server (e2e)", () => {
     conn.sendNotification("textDocument/didOpen", {
       textDocument: { uri, languageId: "mx", version: 1, text: "<p>x</p>\n" },
     });
-    await until(
+    await waitFor(
       () =>
         seen.some((p) => p.uri === uri) && seen.some((p) => p.uri === pkgUri),
+      "diagnostics published for both the page and its package.json",
+      { observed: () => seen.map((p) => p.uri) },
     );
 
     // The .mx gets 1:1 plus a pointer; package.json gets the real range.
@@ -705,13 +703,15 @@ describe("stdio server (e2e)", () => {
     conn.sendNotification("textDocument/didClose", {
       textDocument: { uri },
     });
-    await until(() =>
-      seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
+    await waitFor(
+      () => seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
+      "package.json to be published with no diagnostics after the page closed",
+      { observed: () => seen.map((p) => [p.uri, p.diagnostics.length]) },
     );
     expect(
       seen.some((p) => p.uri === pkgUri && p.diagnostics.length === 0),
     ).toBe(true);
-  }, 15000);
+  }, 30000);
 
   it("keeps a shared package.json problem until the last document closes, and clears all of it when package.json is fixed", async () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-pkg-")));
@@ -732,14 +732,12 @@ describe("stdio server (e2e)", () => {
       });
       conn.sendNotification("initialized", {});
       const latest = new Map<string, number>();
+      const log: Array<{ uri: string; count: number }> = [];
       conn.onNotification(PublishDiagnosticsNotification, (params) => {
         latest.set(params.uri, params.diagnostics.length);
+        log.push({ uri: params.uri, count: params.diagnostics.length });
       });
-      const until = async (done: () => boolean) => {
-        for (let i = 0; i < 300 && !done(); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      };
+      const counts = () => Object.fromEntries(latest);
       const open = (uri: string) =>
         conn.sendNotification("textDocument/didOpen", {
           textDocument: {
@@ -751,11 +749,13 @@ describe("stdio server (e2e)", () => {
         });
       open(uriA);
       open(uriB);
-      await until(
+      await waitFor(
         () =>
           latest.get(uriA) === 1 &&
           latest.get(uriB) === 1 &&
           latest.get(pkgUri) === 1,
+        "one diagnostic on each of a.mx, b.mx and package.json",
+        { observed: counts },
       );
       expect([latest.get(uriA), latest.get(uriB), latest.get(pkgUri)]).toEqual([
         1, 1, 1,
@@ -765,22 +765,34 @@ describe("stdio server (e2e)", () => {
       conn.sendNotification("textDocument/didClose", {
         textDocument: { uri: uriA },
       });
-      await new Promise((r) => setTimeout(r, 500));
+      await expectQuiet(
+        () => log.filter((p) => p.uri === pkgUri && p.count !== 1),
+        "publish clearing package.json while b.mx still shows its problem",
+        { windowMs: 500 },
+      );
       expect(latest.get(pkgUri)).toBe(1);
 
       // Reopen A, then fix package.json and send only the watcher event:
       // neither document is edited.
       open(uriA);
-      await until(() => latest.get(uriA) === 1);
+      await waitFor(
+        () => latest.get(uriA) === 1,
+        "a.mx to be diagnosed again",
+        {
+          observed: counts,
+        },
+      );
       writeFileSync(pkgPath, good);
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: pkgUri, type: 2 }],
       });
-      await until(
+      await waitFor(
         () =>
           latest.get(uriA) === 0 &&
           latest.get(uriB) === 0 &&
           latest.get(pkgUri) === 0,
+        "a.mx, b.mx and package.json to be cleared once package.json is fixed",
+        { observed: counts },
       );
       expect([latest.get(uriA), latest.get(uriB), latest.get(pkgUri)]).toEqual([
         0, 0, 0,
@@ -811,11 +823,6 @@ describe("stdio server (e2e)", () => {
         params.diagnostics.map((d) => String(d.code ?? d.message)),
       );
     });
-    const until = async (done: () => boolean) => {
-      for (let i = 0; i < 300 && !done(); i++) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    };
     conn.sendNotification("textDocument/didOpen", {
       textDocument: {
         uri: pageUri,
@@ -824,9 +831,11 @@ describe("stdio server (e2e)", () => {
         text: "<p/>\n<money/>\n",
       },
     });
-    await until(
+    await waitFor(
       () =>
         latest.get(tagUri)?.length === 1 && latest.get(pageUri)?.length === 2,
+      "the tag file (1) and the page (2) to be diagnosed",
+      { observed: () => Object.fromEntries(latest) },
     );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
     expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
@@ -835,9 +844,11 @@ describe("stdio server (e2e)", () => {
     conn.sendNotification("workspace/didChangeWatchedFiles", {
       changes: [{ uri: tagUri, type: 2 }],
     });
-    await until(
+    await waitFor(
       () =>
         latest.get(tagUri)?.length === 0 && latest.get(pageUri)?.length === 0,
+      "the tag file and the page to be cleared after the tag file was fixed on disk",
+      { observed: () => Object.fromEntries(latest) },
     );
     expect(latest.get(tagUri)).toEqual([]);
     expect(latest.get(pageUri)).toEqual([]);
@@ -865,11 +876,6 @@ describe("stdio server (e2e)", () => {
         params.diagnostics.map((d) => String(d.code ?? d.message)),
       );
     });
-    const until = async (done: () => boolean) => {
-      for (let i = 0; i < 300 && !done(); i++) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    };
     conn.sendNotification("textDocument/didOpen", {
       textDocument: {
         uri: pageUri,
@@ -886,9 +892,11 @@ describe("stdio server (e2e)", () => {
         text: "<x/>\n<!-- BAD -->\n",
       },
     });
-    await until(
+    await waitFor(
       () =>
         latest.get(pageUri)?.length === 2 && latest.get(tagUri)?.length === 1,
+      "the page (2) and the open tag file (1) to be diagnosed",
+      { observed: () => Object.fromEntries(latest) },
     );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
     expect(latest.get(tagUri)).toEqual(["KIT_BAD"]);
@@ -898,9 +906,11 @@ describe("stdio server (e2e)", () => {
       textDocument: { uri: tagUri, version: 2 },
       contentChanges: [{ text: "<x/>\n" }],
     });
-    await until(
+    await waitFor(
       () =>
         latest.get(pageUri)?.length === 0 && latest.get(tagUri)?.length === 0,
+      "the page and the tag file to be cleared by the unsaved fix",
+      { observed: () => Object.fromEntries(latest) },
     );
     expect(latest.get(tagUri)).toEqual([]);
     expect(latest.get(pageUri)).toEqual([]);
@@ -910,7 +920,11 @@ describe("stdio server (e2e)", () => {
       textDocument: { uri: tagUri, version: 3 },
       contentChanges: [{ text: "<x/>\n<!-- BAD -->\n" }],
     });
-    await until(() => latest.get(pageUri)?.length === 2);
+    await waitFor(
+      () => latest.get(pageUri)?.length === 2,
+      "the page to report the unsaved break",
+      { observed: () => Object.fromEntries(latest) },
+    );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
 
     // Fixed again, then closed without saving: the disk's text is back in
@@ -919,12 +933,20 @@ describe("stdio server (e2e)", () => {
       textDocument: { uri: tagUri, version: 4 },
       contentChanges: [{ text: "<x/>\n" }],
     });
-    await until(() => latest.get(pageUri)?.length === 0);
+    await waitFor(
+      () => latest.get(pageUri)?.length === 0,
+      "the page to be cleared by the second unsaved fix",
+      { observed: () => Object.fromEntries(latest) },
+    );
     expect(latest.get(pageUri)).toEqual([]);
     conn.sendNotification("textDocument/didClose", {
       textDocument: { uri: tagUri },
     });
-    await until(() => latest.get(pageUri)?.length === 2);
+    await waitFor(
+      () => latest.get(pageUri)?.length === 2,
+      "the page to report the disk's error once the tag file closed unsaved",
+      { observed: () => Object.fromEntries(latest) },
+    );
     expect(latest.get(pageUri)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
   }, 30000);
 
@@ -989,11 +1011,6 @@ describe("stdio server (e2e)", () => {
           );
         }
       });
-      const until = async (done: () => boolean) => {
-        for (let i = 0; i < 300 && !done(); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      };
       conn.sendNotification("textDocument/didOpen", {
         textDocument: {
           uri: pageUri,
@@ -1002,34 +1019,52 @@ describe("stdio server (e2e)", () => {
           text: "<p/>\n<money/>\n",
         },
       });
-      await until(() => published.length > 0);
-      return { project, conn, published, watchers, until };
+      await waitFor(
+        () => published.length > 0,
+        "the page's first diagnostics",
+        { observed: () => published },
+      );
+      return { project, conn, published, watchers };
     };
 
     it("re-checks the dialect file when it changes on disk, and asks the client to watch it", async () => {
-      const { project, conn, published, watchers, until } = await setup();
+      const { project, conn, published, watchers } = await setup();
       expect(published.at(-1)).toEqual([]);
       const moneyJson = project.path("concepts/money.json");
-      const watched = watchers
-        .flatMap((registration) => registration.watchers)
-        .map((watcher) => watcher.globPattern)
-        .filter((glob) => typeof glob !== "string");
-      expect(watched).toEqual([
+      const watched = () =>
+        watchers
+          .flatMap((registration) => registration.watchers)
+          .map((watcher) => watcher.globPattern)
+          .filter((glob) => typeof glob !== "string");
+      const expected = [
         {
           baseUri: pathToFileURL(project.path("concepts")).href,
           pattern: "money.json",
         },
-      ]);
+      ];
+      // The server publishes the page and then sends the registration, two
+      // messages the client reads one after the other: the first publish does
+      // not say the registration has arrived.
+      await waitFor(
+        () => JSON.stringify(watched()) === JSON.stringify(expected),
+        "the client to be asked to watch concepts/money.json",
+        { observed: watched },
+      );
+      expect(watched()).toEqual(expected);
       writeFileSync(moneyJson, "BAD\n");
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: pathToFileURL(moneyJson).href, type: 2 }],
       });
-      await until(() => published.at(-1)?.length === 2);
+      await waitFor(
+        () => published.at(-1)?.length === 2,
+        "the page to report the tag file's error after money.json changed",
+        { observed: () => published },
+      );
       expect(published.at(-1)).toEqual(["MX_TAG_FILE_ERROR", "KIT_BAD"]);
     }, 30000);
 
     it("leaves the dialect file alone when a file nobody names changes", async () => {
-      const { project, conn, published, until } = await setup();
+      const { project, conn, published } = await setup();
       const before = published.length;
       const otherJson = project.path("concepts/other.json");
       writeFileSync(otherJson, "BAD\n");
@@ -1037,14 +1072,22 @@ describe("stdio server (e2e)", () => {
         changes: [{ uri: pathToFileURL(otherJson).href, type: 2 }],
       });
       // Longer than the debounce, then the named file proves the server is live.
-      await new Promise((r) => setTimeout(r, 800));
+      await expectQuiet(
+        () => published.slice(before),
+        "publish for the page after a file nobody names changed",
+        { windowMs: 800 },
+      );
       expect(published.length).toBe(before);
       const moneyJson = project.path("concepts/money.json");
       writeFileSync(moneyJson, "BAD\n");
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: pathToFileURL(moneyJson).href, type: 2 }],
       });
-      await until(() => published.length > before);
+      await waitFor(
+        () => published.length > before,
+        "the page to be re-diagnosed after the named money.json changed",
+        { observed: () => published },
+      );
       expect(published.length).toBe(before + 1);
     }, 30000);
   });
@@ -1124,11 +1167,6 @@ describe("stdio server (e2e)", () => {
           );
         }
       });
-      const until = async (done: () => boolean) => {
-        for (let i = 0; i < 300 && !done(); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      };
       /** The watchers the client holds beyond the static globs. */
       const extra = (): Glob[] =>
         [...live.values()]
@@ -1147,42 +1185,62 @@ describe("stdio server (e2e)", () => {
         });
       open(tagUri, "<x/>\n");
       open(pageUri, "<p/>\n<money/>\n");
-      await until(() => published.length > 0);
-      return { project, conn, tagUri, edit, extra, until, refused };
+      await waitFor(
+        () => published.length > 0,
+        "the page's first diagnostics",
+        { observed: () => published },
+      );
+      return { project, conn, tagUri, edit, extra, refused };
     };
 
     it("watches what the open documents name now: a path, then another, then none", async () => {
-      const { project, tagUri, edit, extra, until } = await setup(true);
+      const { project, tagUri, edit, extra } = await setup(true);
       const dir = pathToFileURL(project.path("concepts")).href;
       expect(extra()).toEqual([]);
       edit(tagUri, 2, "<x/>\n<!-- dep=a.json -->\n");
-      await until(() => extra().length > 0);
+      await waitFor(
+        () => extra().length > 0,
+        "the client to be asked to watch a.json",
+        { observed: extra },
+      );
       expect(extra()).toEqual([{ baseUri: dir, pattern: "a.json" }]);
       edit(tagUri, 3, "<x/>\n<!-- dep=b.json -->\n");
-      await until(
+      await waitFor(
         () =>
           JSON.stringify(extra()) ===
           JSON.stringify([{ baseUri: dir, pattern: "b.json" }]),
+        "the watched set to be b.json alone",
+        { observed: extra },
       );
       expect(extra()).toEqual([{ baseUri: dir, pattern: "b.json" }]);
       edit(tagUri, 4, "<x/>\n");
-      await until(() => extra().length === 0);
+      await waitFor(() => extra().length === 0, "the watched set to be empty", {
+        observed: extra,
+      });
       expect(extra()).toEqual([]);
     }, 30000);
 
     it("logs a refused registration", async () => {
-      const { project, tagUri, edit, refused, until } = await setup(true, true);
+      const { project, tagUri, edit, refused } = await setup(true, true);
       edit(tagUri, 2, "<x/>\n<!-- dep=a.json -->\n");
-      await until(() => refused.some((m) => m.includes("refused to watch")));
+      await waitFor(
+        () => refused.some((m) => m.includes("refused to watch")),
+        "the server to log that the client refused to watch a.json",
+        { observed: () => refused },
+      );
       expect(refused.filter((m) => m.includes("refused to watch"))).toEqual([
         `The client refused to watch ${project.path("concepts/a.json")}: Request client/registerCapability failed with message: no extra watchers`,
       ]);
     }, 30000);
 
     it("without relative patterns, registers the absolute path with every segment escaped", async () => {
-      const { project, tagUri, edit, extra, until } = await setup(false);
+      const { project, tagUri, edit, extra } = await setup(false);
       edit(tagUri, 2, "<x/>\n<!-- dep=we[ird]/m.json -->\n");
-      await until(() => extra().length > 0);
+      await waitFor(
+        () => extra().length > 0,
+        "the client to be asked to watch we[ird]/m.json",
+        { observed: extra },
+      );
       expect(extra()).toEqual([`${project.path("concepts")}/we[[]ird]/m.json`]);
     }, 30000);
   });
@@ -1246,50 +1304,89 @@ describe("stdio server (e2e)", () => {
       });
       conn.sendNotification("initialized", {});
       const latest = new Map<string, Published[]>();
+      const log: Array<{ uri: string; diagnostics: Published[] }> = [];
       conn.onNotification(PublishDiagnosticsNotification, (params) => {
         latest.set(params.uri, params.diagnostics as Published[]);
+        log.push({
+          uri: params.uri,
+          diagnostics: params.diagnostics as Published[],
+        });
       });
-      const until = async (done: () => boolean) => {
-        for (let i = 0; i < 300 && !done(); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      };
       const open = (uri: string, text: string) =>
         conn.sendNotification("textDocument/didOpen", {
           textDocument: { uri, languageId: "probe", version: 1, text },
         });
-      return { project, tagFile, uris, conn, latest, until, open };
+      /** The publishes on the tag file that are not the union `expected`. */
+      const tagPublishesOtherThan = (expected: unknown) => () =>
+        log.filter(
+          (p) =>
+            p.uri === uris.tag &&
+            JSON.stringify(p.diagnostics) !== JSON.stringify(expected),
+        );
+      return {
+        project,
+        tagFile,
+        uris,
+        conn,
+        latest,
+        open,
+        tagPublishesOtherThan,
+      };
     }
     const codes = (list: Published[] | undefined) =>
       (list ?? []).map((d) => d.code);
+    const seenOf = (latest: Map<string, Published[]>) => () =>
+      Object.fromEntries([...latest].map(([uri, list]) => [uri, codes(list)]));
 
     it("two callers and the file's own diagnostic are all there, whichever published last", async () => {
-      const { uris, latest, until, open } = await session();
+      const { uris, latest, open, tagPublishesOtherThan } = await session();
       open(uris.a, CALLER_TEXT);
       open(uris.b, CALLER_TEXT);
-      await until(() => codes(latest.get(uris.tag)).length > 0);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length > 0,
+        "the tag file to show its callers' diagnostic",
+        { observed: seenOf(latest) },
+      );
       // Both callers raise the same KIT_BAD on the tag file: one diagnostic.
       expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
 
       // The tag file is opened; its own diagnostic must not replace the callers'.
       open(uris.tag, OWN_TEXT);
-      await until(() => codes(latest.get(uris.tag)).length === 2);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length === 2,
+        "the tag file to show its own and its callers' diagnostics",
+        { observed: seenOf(latest) },
+      );
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
 
       // A caller is edited, so it publishes again: the own diagnostic stays.
       open(uris.a, `${CALLER_TEXT}<p/>\n`);
-      await new Promise((r) => setTimeout(r, 700));
+      await expectQuiet(
+        tagPublishesOtherThan([OWN, KIT_BAD]),
+        "publish on the tag file that is not its own plus its callers' diagnostics",
+        { windowMs: 700 },
+      );
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
     }, 30000);
 
     it("shrinks both ways: a caller closing or fixing removes only its part, the file's own change keeps the callers'", async () => {
-      const { uris, conn, latest, until, open } = await session();
+      const { uris, conn, latest, open, tagPublishesOtherThan } =
+        await session();
+      const seen = seenOf(latest);
       open(uris.tag, OWN_TEXT);
-      await until(() => codes(latest.get(uris.tag)).length === 1);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length === 1,
+        "the tag file to show its own diagnostic",
+        { observed: seen },
+      );
       expect(latest.get(uris.tag)).toEqual([OWN]);
       open(uris.a, CALLER_TEXT);
       open(uris.b, CALLER_TEXT);
-      await until(() => codes(latest.get(uris.tag)).length === 2);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length === 2,
+        "the tag file to show its own and its callers' diagnostics",
+        { observed: seen },
+      );
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
 
       // The file's own diagnostics change (the `!bad` is fixed in the
@@ -1298,7 +1395,11 @@ describe("stdio server (e2e)", () => {
         textDocument: { uri: uris.tag, version: 2 },
         contentChanges: [{ text: "<y/>\n<!-- BAD -->\n" }],
       });
-      await until(() => codes(latest.get(uris.tag)).join() === "KIT_BAD");
+      await waitFor(
+        () => codes(latest.get(uris.tag)).join() === "KIT_BAD",
+        "the tag file to keep only its callers' diagnostic after its own was fixed",
+        { observed: seen },
+      );
       expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
 
       // Back to a bad own text, then one caller closes: the other's part and
@@ -1307,12 +1408,24 @@ describe("stdio server (e2e)", () => {
         textDocument: { uri: uris.tag, version: 3 },
         contentChanges: [{ text: OWN_TEXT }],
       });
-      await until(() => codes(latest.get(uris.tag)).length === 2);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length === 2,
+        "the tag file to show its own diagnostic again",
+        { observed: seen },
+      );
       conn.sendNotification("textDocument/didClose", {
         textDocument: { uri: uris.a },
       });
-      await until(() => latest.get(uris.a)?.length === 0);
-      await new Promise((r) => setTimeout(r, 300));
+      await waitFor(
+        () => latest.get(uris.a)?.length === 0,
+        "a.probe to be cleared when it closed",
+        { observed: seen },
+      );
+      await expectQuiet(
+        tagPublishesOtherThan([OWN, KIT_BAD]),
+        "publish on the tag file that drops a part b.probe still raises",
+        { windowMs: 300 },
+      );
       expect(latest.get(uris.tag)).toEqual([OWN, KIT_BAD]);
 
       // The tag file is fixed in the editor, unsaved: the remaining caller
@@ -1321,30 +1434,45 @@ describe("stdio server (e2e)", () => {
         textDocument: { uri: uris.tag, version: 4 },
         contentChanges: [{ text: "<y/>\n" }],
       });
-      await until(
+      await waitFor(
         () =>
           latest.get(uris.tag)?.length === 0 &&
           latest.get(uris.b)?.length === 0,
+        "the tag file and b.probe to be cleared by the unsaved fix",
+        { observed: seen },
       );
       expect(latest.get(uris.tag)).toEqual([]);
       expect(latest.get(uris.b)).toEqual([]);
     }, 30000);
 
     it("closing the last caller leaves the file's own diagnostic; closing the file leaves the callers'", async () => {
-      const { uris, conn, latest, until, open } = await session();
+      const { uris, conn, latest, open } = await session();
+      const seen = seenOf(latest);
       open(uris.a, CALLER_TEXT);
       open(uris.tag, OWN_TEXT);
-      await until(() => codes(latest.get(uris.tag)).length === 2);
+      await waitFor(
+        () => codes(latest.get(uris.tag)).length === 2,
+        "the tag file to show its own and its caller's diagnostics",
+        { observed: seen },
+      );
       conn.sendNotification("textDocument/didClose", {
         textDocument: { uri: uris.tag },
       });
-      await until(() => codes(latest.get(uris.tag)).join() === "KIT_BAD");
+      await waitFor(
+        () => codes(latest.get(uris.tag)).join() === "KIT_BAD",
+        "the tag file to keep only its caller's diagnostic after it closed",
+        { observed: seen },
+      );
       // Its own part is gone with the document; the caller's part is not.
       expect(latest.get(uris.tag)).toEqual([KIT_BAD]);
       conn.sendNotification("textDocument/didClose", {
         textDocument: { uri: uris.a },
       });
-      await until(() => latest.get(uris.tag)?.length === 0);
+      await waitFor(
+        () => latest.get(uris.tag)?.length === 0,
+        "the tag file to be cleared once its last caller closed",
+        { observed: seen },
+      );
       expect(latest.get(uris.tag)).toEqual([]);
     }, 30000);
   });
@@ -1412,9 +1540,11 @@ describe("stdio server (e2e)", () => {
         text: PROBE_SOURCES.ok,
       },
     });
-    for (let i = 0; i < 100 && !(seen.has(uri) && seen.has(packageUri)); i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    await waitFor(
+      () => seen.has(uri) && seen.has(packageUri),
+      "diagnostics published for both the dialect file and its package.json",
+      { timeoutMs: 5000, observed: () => [...seen.keys()] },
+    );
     const message =
       '`mx.dialect.tagDirs` must be an array of the directory names the dialect\'s files discover tags in (`["components"]`), or `[]` for none';
     const onPackage = {
@@ -1510,15 +1640,14 @@ describe("stdio server (e2e)", () => {
           params.diagnostics.map((d) => d.message),
         );
       });
-      const until = async (done: () => boolean) => {
-        for (let i = 0; i < 300 && !done(); i++) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      };
       conn.sendNotification("textDocument/didOpen", {
         textDocument: { uri, languageId: "mx", version: 1, text: "<p>x</p>\n" },
       });
-      await until(() => latest.get(uri)?.length === 0);
+      await waitFor(
+        () => latest.get(uri)?.length === 0,
+        "a.mx to be diagnosed with no problems",
+        { observed: () => Object.fromEntries(latest) },
+      );
       expect(latest.get(uri)).toEqual([]);
 
       // The file did not exist when the document compiled: only the watcher
@@ -1527,9 +1656,11 @@ describe("stdio server (e2e)", () => {
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: configUri, type: 1 }],
       });
-      await until(
+      await waitFor(
         () =>
           latest.get(uri)?.length === 1 && latest.get(configUri)?.length === 1,
+        "a.mx and the new mx.config.json to each show the bad host",
+        { observed: () => Object.fromEntries(latest) },
       );
       expect(latest.get(uri)).toHaveLength(1);
       expect(latest.get(configUri)?.[0]).toContain('"htmll"');
@@ -1538,9 +1669,11 @@ describe("stdio server (e2e)", () => {
       conn.sendNotification("workspace/didChangeWatchedFiles", {
         changes: [{ uri: configUri, type: 2 }],
       });
-      await until(
+      await waitFor(
         () =>
           latest.get(uri)?.length === 0 && latest.get(configUri)?.length === 0,
+        "a.mx and mx.config.json to be cleared once the host is fixed",
+        { observed: () => Object.fromEntries(latest) },
       );
       expect([latest.get(uri), latest.get(configUri)]).toEqual([[], []]);
     } finally {

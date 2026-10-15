@@ -20,6 +20,7 @@ import {
   cleanupProbeProjects,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
+import { waitForValue } from "./wait-for.ts";
 
 const BIN_PATH = join(import.meta.dirname, "../dist/bin.js");
 
@@ -80,12 +81,12 @@ it("a module that closes the vocabulary reaches an open file, and an edit to the
     if (params.uri !== pageUri) return;
     latest.push(params.diagnostics.map((d) => `${d.code}: ${d.message}`));
   });
-  const until = async (count: number) => {
-    for (let i = 0; i < 300 && latest.length < count; i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    return latest[count - 1];
-  };
+  const publication = (count: number) =>
+    waitForValue(
+      () => latest[count - 1],
+      `publication ${count} for the dialect file`,
+      { observed: () => latest },
+    );
   conn.sendNotification("textDocument/didOpen", {
     textDocument: {
       uri: pageUri,
@@ -95,7 +96,7 @@ it("a module that closes the vocabulary reaches an open file, and an edit to the
     },
   });
   // The module states nothing: the open set, the structural constructs pass.
-  expect(await until(1)).toEqual([]);
+  expect(await publication(1)).toEqual([]);
 
   let tick = Date.now() + 10_000;
   const edit = async (text: string, count: number) => {
@@ -106,7 +107,7 @@ it("a module that closes the vocabulary reaches an open file, and an edit to the
     conn.sendNotification("workspace/didChangeWatchedFiles", {
       changes: [{ uri: moduleUri, type: 2 }],
     });
-    return until(count);
+    return publication(count);
   };
 
   // `unknownTags: "reject"` added to the module: the misspelt tag is reported.
