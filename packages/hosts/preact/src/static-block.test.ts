@@ -9,12 +9,14 @@ import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
 const out = (source: string): string => compilePreactMx(source, "/f/t.mx").code;
 
-/** The module code before `export interface Input`, after the pragma line. */
+/** The module code before the text helper and `export interface Input`, after the pragma line. */
 function hoisted(source: string): string {
   const code = out(source);
-  return code
-    .slice(code.indexOf("*/") + 2, code.indexOf("export interface Input"))
-    .trim();
+  const end = [
+    code.indexOf("const __mxRenderable"),
+    code.indexOf("export interface Input"),
+  ].filter((index) => index >= 0);
+  return code.slice(code.indexOf("*/") + 2, Math.min(...end)).trim();
 }
 
 describe("preact: a `static { … }` block hoists its statements, not the block", () => {
@@ -48,7 +50,7 @@ describe("preact: a `static { … }` block hoists its statements, not the block"
 
   it("the component reads a binding the block declares, declared above it", () => {
     const code = out("static { const q = 1 }\n<div>${q}</div>\n");
-    expect(code).toContain("<div>{q}</div>");
+    expect(code).toContain("<div>{__mxRenderable(q)}</div>");
     expect(code).not.toContain("{ const q = 1 }");
     expect(code.indexOf("const q = 1")).toBeLessThan(
       code.indexOf("export default function"),

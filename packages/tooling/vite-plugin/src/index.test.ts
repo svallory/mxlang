@@ -692,7 +692,9 @@ export default () => <div />;
       const result = await transform.call({}, GREETING, path + MX_SUFFIX);
 
       expect(result?.code).toContain("/** @jsxImportSource preact */");
-      expect(result?.code).toContain("<h1>Hello, {input.name}</h1>");
+      expect(result?.code).toContain(
+        "<h1>Hello, {__mxRenderable(input.name)}</h1>",
+      );
       expect(result?.code).not.toContain("let out =");
     }, 20_000);
 

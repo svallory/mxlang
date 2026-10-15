@@ -1,10 +1,10 @@
-import Counter from "./counter.mx";
+import Counter from "./counter.mx";const __mxRenderable = (value: any): any => {const render = (item: any): any => {if (item === null || typeof item !== "object") return item;if (Array.isArray(item)) {const next = item.map(render);return next.some((entry: any, index: number) => entry !== item[index]) ? next : item;}const proto = Object.getPrototypeOf(item);if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object) return item;const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);return own("constructor") && item.constructor === undefined ? item : null;};return render(value);};
 
 export default function Page() {
   return (
     <>{(() =>
       {const __mxRet0 = Counter.render({ "start": 3 });
         const doubled =
-        __mxRet0.value;return <><div>{__mxRet0.output}<p>doubled {doubled}</p></div></>;})()}</>);
+        __mxRet0.value;return <><div>{__mxRet0.output}<p>doubled {__mxRenderable(doubled)}</p></div></>;})()}</>);
 
 }

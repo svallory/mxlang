@@ -25,8 +25,14 @@ const DEF = `<define/Box|{ content }|><b><${D}{content}/></b></define>\n`;
 const DEF_ARGS = `<define/Box|{ content }|><b><${D}{content}(5)/></b></define>\n`;
 const IMP = 'import Bar from "./bar.mx"\n';
 
+/** These tests pin the emitted JSX shape; the placeholder guard is pinned in `text-data-vnode.test.ts`. */
+const unguard = (code: string): string =>
+  code.replace(
+    /__mxRenderable\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g,
+    (_call, inner: string) => (inner.startsWith("{") ? `(${inner})` : inner),
+  );
 const compile = (source: string): string =>
-  compilePreactMx(source, "/fixtures/sole.mx").code;
+  unguard(compilePreactMx(source, "/fixtures/sole.mx").code);
 
 /** What the component returns: the one `return (<>…</>);` of the module. */
 function returned(code: string): string {

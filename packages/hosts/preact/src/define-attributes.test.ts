@@ -47,7 +47,7 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("a define with a body keeps the body as the function", () => {
     expect(whole("<define/D|x| a=1><p>${x}</p></define>\n<D(2)/>")).toContain(
-      'const D = Object.assign((x) => (<><p>{x}</p></>), { "a": 1 });',
+      'const D = Object.assign((x) => (<><p>{__mxRenderable(x)}</p></>), { "a": 1 });',
     );
   });
 

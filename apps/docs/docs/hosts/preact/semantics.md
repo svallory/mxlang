@@ -84,7 +84,9 @@ MX calls a component with `children`, the JSX way, so hand-written Preact compon
 
 ## Data in a text placeholder
 
-`${expr}` holding a plain object (JSON from a request, say) renders nothing on Preact, where Marko prints `[object Object]`. Preact drops an object that is not a vnode, and it never reads one as markup, so MX leaves the value as it is. Pass a string, a number or a vnode, or call `JSON.stringify` yourself to print data.
+`${expr}` holding a plain object (JSON from a request, say) renders nothing on Preact, where Marko prints `[object Object]`. Preact drops an object that is not a vnode, so MX keeps that behaviour: data never becomes markup, on the server or in the browser. Pass a string, a number or a vnode, or call `JSON.stringify` yourself to print data.
+
+Preact's server renderer takes any object with no `constructor` for a vnode, so a null-prototype object shaped like one (what `qs` builds with `plainObjects`) would render as an element there while the browser renders nothing. MX therefore hands each placeholder to a small check that lets through strings, numbers, vnodes, class instances and arrays of them, and drops every other object. A vnode is told apart by its own `constructor: undefined`, which JSON cannot carry. Data decoded by a library that keeps `undefined` (`devalue`, `superjson`, `structuredClone`) can imitate one, so do not pass it to a placeholder.
 
 ## Data as a dynamic tag
 

@@ -46,6 +46,17 @@ export interface JsxDialect {
    */
   textObjectGuard?: boolean;
   /**
+   * Wrap a `${expr}` placeholder in `__mxRenderable`, which renders nothing for
+   * an object that is not a node of this dialect's `nodeShape`: data never
+   * becomes markup, and the server agrees with the client. Needed where the
+   * server renderer reads data as a node (`preact-render-to-string` takes a
+   * null-prototype object with vnode fields for a vnode) although the client
+   * drops it. Unlike `textObjectGuard` it keeps Preact's own behaviour for a
+   * plain object (rendered as nothing, not as `[object Object]`). Mutually
+   * exclusive with `textObjectGuard`.
+   */
+  textDataGuard?: boolean;
+  /**
    * Which renderer's node objects a dynamic tag's value may be (`"preact"` when
    * absent). A plain object that is none of them is data and renders nothing,
    * as in Marko; see `jsxRenderableExpression`.
@@ -311,4 +322,5 @@ export const preactDialect: JsxDialect = {
   eventPropNames: preactEventPropNames,
   closedEventPropNames: true,
   hookModules: ["preact/hooks", "preact/compat", "react"],
+  textDataGuard: true,
 };

@@ -41,7 +41,7 @@ describe("preact: an import or export in a static block is module code", () => {
   it("leaves the template reading the static binding", () => {
     expect(
       compile('static { import x from "./x"; const y = x; }\n<div>${y}</div>'),
-    ).toContain("<div>{y}</div>");
+    ).toContain("<div>{__mxRenderable(y)}</div>");
   });
 
   it("is the module code the statement has without the block", () => {

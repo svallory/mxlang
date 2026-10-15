@@ -21,8 +21,14 @@ const DEFINE = "<define/Foo><p>inner</p></define>\n";
 const IMP = 'import Bar from "./bar.mx"\n';
 const CALL_ROW = "<define/Row|p|><li>${p.n}</li></define>\n";
 
+/** These tests pin the emitted JSX shape; the placeholder guard is pinned in `text-data-vnode.test.ts`. */
+const unguard = (code: string): string =>
+  code.replace(
+    /__mxRenderable\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g,
+    (_call, inner: string) => (inner.startsWith("{") ? `(${inner})` : inner),
+  );
 const compile = (source: string): string =>
-  compilePreactMx(source, "/fixtures/slot.mx").code;
+  unguard(compilePreactMx(source, "/fixtures/slot.mx").code);
 
 /** What the component returns: the one `return (<>…</>);` of the module. */
 function returned(code: string): string {

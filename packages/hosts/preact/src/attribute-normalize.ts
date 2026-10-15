@@ -229,6 +229,11 @@ export type JsxNodeShape = "preact" | "react" | "hono";
  * Limit: a decoder that keeps `undefined` (`devalue`, `superjson`,
  * `structuredClone`) can build a node-shaped object on Preact and Hono; data
  * decoded that way must not reach a dynamic tag.
+ *
+ * A `textDataGuard` dialect (Preact) also passes every non-literal text
+ * placeholder through this check, so data renders nothing there instead of
+ * being read as a node by the server renderer; a plain object already rendered
+ * nothing on Preact, so only a null-prototype vnode-shaped object changes.
  */
 export function jsxRenderableExpression(shape: JsxNodeShape): string {
   const check =

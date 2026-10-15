@@ -153,7 +153,9 @@ describe("elements and text", () => {
   });
 
   it("emits an escaped placeholder as an expression container", () => {
-    expect(markup("<p>${input.name}</p>")).toBe("<p>{input.name}</p>");
+    expect(markup("<p>${input.name}</p>")).toBe(
+      "<p>{__mxRenderable(input.name)}</p>",
+    );
   });
 
   it("carries an attribute method as a callable prop, a function expression", () => {
@@ -267,7 +269,7 @@ describe("<if> chains", () => {
 describe("<for> loops", () => {
   it("keys an `of` loop by the row itself when `by=` is absent", () => {
     expect(markup("<for|x| of=input.items><li>${x}</li></for>")).toBe(
-      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <__mxFragment key={x}><li>{x}</li></__mxFragment>)}",
+      "{((mxList) => mxList ? [...mxList] : [])(input.items).map((x) => <__mxFragment key={x}><li>{__mxRenderable(x)}</li></__mxFragment>)}",
     );
   });
 
@@ -305,7 +307,7 @@ describe("<for> loops", () => {
 
   it("keys an `in` loop by the property name", () => {
     expect(markup("<for|k, v| in=input.obj><p>${k}</p></for>")).toBe(
-      "{Object.entries(input.obj ?? {}).map(([k, v]) => <__mxFragment key={k}><p>{k}</p></__mxFragment>)}",
+      "{Object.entries(input.obj ?? {}).map(([k, v]) => <__mxFragment key={k}><p>{__mxRenderable(k)}</p></__mxFragment>)}",
     );
   });
 
@@ -401,7 +403,9 @@ describe("components", () => {
       markup(
         'import List from "./list.mx"\n<List|item| items=input.items><span>${item}</span></List>',
       ),
-    ).toBe("<List items={input.items}>{(item) => <span>{item}</span>}</List>");
+    ).toBe(
+      "<List items={input.items}>{(item) => <span>{__mxRenderable(item)}</span>}</List>",
+    );
   });
 
   it("passes ordinary children the JSX way, so `input.content` still reads them", () => {
@@ -1044,14 +1048,16 @@ describe("<define> and <const>", () => {
   it("lowers a top-level `<const>` to a binding in the component body", () => {
     const code = compile("<const/n=input.a * 2/>\n<p>${n}</p>");
     expect(code).toContain("const n = input.a * 2;");
-    expect(code).toContain("<p>{n}</p>");
+    expect(code).toContain("<p>{__mxRenderable(n)}</p>");
   });
 
   it("lowers a top-level `<define>` to a local function", () => {
     const code = compile(
       "<define/Row|label|><li>${label}</li></define>\n<Row('a')/>",
     );
-    expect(code).toContain("const Row = (label) => (<><li>{label}</li></>);");
+    expect(code).toContain(
+      "const Row = (label) => (<><li>{__mxRenderable(label)}</li></>);",
+    );
     expect(code).toContain("{Row('a')}");
   });
 
@@ -1114,7 +1120,7 @@ describe("<try>", () => {
       'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/host-preact/runtime";',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallback={(err) => <p>{err}</p>}>{() => (<><Body />",
+      "<__mxErrorBoundary fallback={(err) => <p>{__mxRenderable(err)}</p>}>{() => (<><Body />",
     );
     expect(code).toContain("</>)}</__mxErrorBoundary>");
   });
@@ -1125,7 +1131,7 @@ describe("<try>", () => {
         'import Body from "./body.mx"\n<try><p>${input.a.b}</p><@catch><p>failed</p></@catch></try>',
       ),
     ).toBe(
-      "<__mxErrorBoundary fallback={() => <p>failed</p>}>{() => (<><p>{input.a.b}</p></>)}</__mxErrorBoundary>",
+      "<__mxErrorBoundary fallback={() => <p>failed</p>}>{() => (<><p>{__mxRenderable(input.a.b)}</p></>)}</__mxErrorBoundary>",
     );
   });
 
@@ -1422,7 +1428,7 @@ describe("a unit that returns a value", () => {
     expect(bind).toBeGreaterThan(call);
     expect(ret).toBeGreaterThan(bind);
     expect(code).toContain("{__mxRet0.output}");
-    expect(code).toContain("<p>{n}</p>");
+    expect(code).toContain("<p>{__mxRenderable(n)}</p>");
   });
 
   it("unwraps the output when the call binds no /var", () => {

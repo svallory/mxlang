@@ -632,8 +632,11 @@ describe("MX language plugin", {
     };
     // `&copy;` is 6 source characters and `&#169;` is 7 generated ones, so the
     // expression after the entity carries one extra character of drift over
-    // the expression in plain text.
-    expect(find("input.zed") - find("input.two")).toBe(1);
+    // the expression in plain text. Each placeholder is wrapped in
+    // `__mxRenderable(…)`, 16 characters, and the first one sits before the
+    // second, so the second drifts by those too.
+    const wrapper = "__mxRenderable()".length;
+    expect(find("input.zed") - find("input.two")).toBe(1 - wrapper);
   });
 
   it("keeps the Astro composed panel a module after reading Card's attribute-tag Input", () => {
@@ -2697,7 +2700,7 @@ describe("MX language plugin", {
     // The Preact host's own module shape, not the string host's.
     expect(generated).toContain("/** @jsxImportSource preact */");
     expect(generated).toContain("export default function Card(props: Input) {");
-    expect(generated).toContain("<h1>{input.title}</h1>");
+    expect(generated).toContain("<h1>{__mxRenderable(input.title)}</h1>");
     expect(generated).not.toContain("let out =");
     expect(virtual.mappings.length).toBeGreaterThan(0);
     expect(plugin.getSyntaxError(preactFile)).toBeUndefined();

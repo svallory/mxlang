@@ -356,7 +356,9 @@ describe("tag params leave other emission alone", () => {
       "/fixtures/t.mx",
     );
     // The render prop returns what `(item, i) => <b>…</b>` would.
-    expect(code).toContain("content: ((item, i) => <b>{item}{i}</b>)");
+    expect(code).toContain(
+      "content: ((item, i) => <b>{__mxRenderable(item)}{__mxRenderable(i)}</b>)",
+    );
     expect(code).toContain("as (...args: any[]) => any");
     expect(code).not.toContain("() => (item, i)");
     expect(code).toContain(", undefined, true)");

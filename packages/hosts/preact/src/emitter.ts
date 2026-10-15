@@ -1817,14 +1817,21 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * The expression a text placeholder hands the renderer. A dialect with
    * `textObjectGuard` (Hono) wraps one that may hold an object in
-   * `__mxTextValue`, so a plain object prints as text, as Marko prints it. Every
-   * path that emits a placeholder's expression goes through here: the
-   * interpolation itself and a lone placeholder used as a branch, loop, body,
-   * render-prop, `<@catch>` or `<@placeholder>` value.
+   * `__mxTextValue`, so a plain object prints as text, as Marko prints it. One
+   * with `textDataGuard` (Preact) wraps it in `__mxRenderable`, so data renders
+   * nothing instead of being read as a node. Every path that emits a
+   * placeholder's expression goes through here: the interpolation itself and a
+   * lone placeholder used as a branch, loop, body, render-prop, `<@catch>` or
+   * `<@placeholder>` value.
    */
   #textValue(node: Extract<IrNode, { kind: "Interpolation" }>): MappedCode {
+    const helper = this.#dialect.textObjectGuard
+      ? "__mxTextValue"
+      : this.#dialect.textDataGuard
+        ? "__mxRenderable"
+        : undefined;
     const primitive =
-      !this.#dialect.textObjectGuard ||
+      helper === undefined ||
       node.expr.shape === "string" ||
       [
         "NumericLiteral",
@@ -1835,8 +1842,8 @@ export class PreactEmitter implements Emitter<string> {
     if (primitive) return mappedExpr(node.expr);
     // A sequence (`${0, x}`) is one argument, not two.
     return node.expr.node?.type === "SequenceExpression"
-      ? concatMapped("__mxTextValue((", mappedExpr(node.expr), "))")
-      : concatMapped("__mxTextValue(", mappedExpr(node.expr), ")");
+      ? concatMapped(`${helper}((`, mappedExpr(node.expr), "))")
+      : concatMapped(`${helper}(`, mappedExpr(node.expr), ")");
   }
 
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
@@ -2351,6 +2358,7 @@ export class PreactEmitter implements Emitter<string> {
     const lone = content.length === 1 && content[0]?.kind === "Interpolation";
     return lone &&
       !body.code.startsWith("__mxTextValue(") &&
+      !body.code.startsWith("__mxRenderable(") &&
       (body.code.startsWith("{") || body.code.includes(","))
       ? concatMapped("(", body, ")")
       : body;
