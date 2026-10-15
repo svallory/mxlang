@@ -24,8 +24,6 @@ const elements: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
-type Named = Exclude<Attr, { kind: "spread" }>;
-
 function slice(source: string, span: SourceSpan | null | undefined): string {
   if (!span) throw new Error("expected a span");
   return source.slice(span.sourceStart, span.sourceEnd);
@@ -331,6 +329,18 @@ describe("a static attribute whose literal carries a wrapper", () => {
     if (attr.kind !== "static") return;
     expect(slice(source, attr.valueSpan)).toBe('"s"');
     expect(slice(source, attr.span)).toBe('title=("s" as const)');
+  });
+
+  it("a wrapper shows in attr.span only: span covers it, valueSpan does not", () => {
+    for (const wrapper of ["as const", "satisfies string"]) {
+      const source = `<div title=("s" ${wrapper}) />`;
+      const attr = only(attrsOf(source), "title");
+      if (attr.kind !== "static")
+        throw new Error("expected a static attribute");
+      expect(slice(source, attr.valueSpan)).toBe('"s"');
+      expect(slice(source, attr.span)).toBe(`title=("s" ${wrapper})`);
+      expect(attr.span?.sourceEnd).toBeGreaterThan(attr.valueSpan.sourceEnd);
+    }
   });
 
   it("a plain literal is unchanged", () => {

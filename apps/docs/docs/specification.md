@@ -4049,7 +4049,9 @@ A static attribute always has `valueSpan` (an atom's and a member's included;
 spread attribute always has `valueSpan` (the value as written, wrapper
 included: `(x)`, `x!`, `x as T`, `x satisfies T`; it differs from `value.span`
 exactly when the default lowering stripped a wrapper), and an `Import` always
-has `from` and `names`.
+has `from` and `names`. On a static attribute a wrapper such as
+`("s" as const)` does not show in `valueSpan`, which stays on the literal; it
+shows only as `span` ending after `valueSpan`.
 `bodySpan` and `paramSpans` stay optional. A promised span or field that is
 missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 (`{ sourceStart, sourceEnd }`, UTF-16 code units from the file's start, so
