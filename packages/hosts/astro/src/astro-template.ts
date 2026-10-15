@@ -857,9 +857,17 @@ export function createEmitter(
    * Astro render has no `$global.cspNonce` to read.
    */
   const emitHtmlScript = (node: Extract<IrNode, { kind: "Element" }>): void => {
-    const body = node.children.filter(
-      (child) => child.kind === "Text" || child.kind === "Interpolation",
-    );
+    const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
+    for (const child of node.children) {
+      if (child.kind === "Text" || child.kind === "Interpolation") {
+        body.push(child);
+        continue;
+      }
+      fail(
+        "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+        child,
+      );
+    }
     write("<script is:inline");
     emitElementAttrs("script", node.attrs, write, writeMapped);
     if (body.length === 0) {

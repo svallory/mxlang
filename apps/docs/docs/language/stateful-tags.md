@@ -43,12 +43,12 @@ For `<script>` that means its body is script text and its only attribute is its 
 | Target | Output |
 |---|---|
 | html | `<script …attrs>body</script>`, as Marko writes it |
-| Preact, React, Hono | `<script …attrs dangerouslySetInnerHTML={{ __html: … }} />`: a JSX renderer HTML-escapes a text child, which would turn `&&` into an entity the browser never decodes |
+| Preact, React, Hono | `<script …attrs dangerouslySetInnerHTML={{ __html: … }} />`: a JSX renderer HTML-escapes a text child, which would turn `&&` into an entity the browser never decodes. React 19 also hoists a `<script async src>` ahead of the markup around it, where Marko writes it in place |
 | Solid | `<script …attrs innerHTML={…} />`, for the same reason |
 | Astro | `<script is:inline …attrs set:html={…} />`: `is:inline` keeps the element where it is instead of bundling it |
 | Angular | a compile error at the tag: Angular's template compiler removes every `<script>` element. Load the script from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API |
 
-Marko also adds a `nonce` from the render's `$global.cspNonce`. MX has no render global, so no target invents one: write `nonce=` yourself and it is kept as any attribute is. On Preact, React and Hono a body that contains tag-like text (`a<b`, `</script>`, `<!--`) is read as markup, and a body loses its leading and trailing whitespace; the html target, Solid and Astro read it as raw text, as Marko does.
+Marko also adds a `nonce` from the render's `$global.cspNonce`. MX has no render global, so no target invents one: write `nonce=` yourself and it is kept as any attribute is. On Preact, React and Hono the body is read as markup: an element, an `<if>` or a comment in it is refused with an error, because it would otherwise be dropped from the script (put markup-like text inside a string placeholder, `${"<b>hi</b>"}`), and a body loses its leading and trailing whitespace. The html target, Solid and Astro read the body as raw text, as Marko does.
 
 ### Opting into `strict`
 

@@ -54,6 +54,21 @@ async function renderMx(
 }
 
 describe("<html-script> on React", () => {
+  it.each([
+    [
+      "an element inside a string",
+      '<html-script>x = "<b>hi</b>"; go();</html-script>',
+    ],
+    ["an <if>", "<html-script>x(); <if=input.c>y();</if></html-script>"],
+    ["a comment", "<html-script>a(); <!-- c --> b();</html-script>"],
+  ])(
+    "refuses markup in the body instead of dropping it: %s",
+    (_name, source) => {
+      expect(() => compileReactMx(source, "/x/App.mx")).toThrow(
+        /read as markup/,
+      );
+    },
+  );
   it("emits a real <script>, never a literal <html-script>", () => {
     const code = compileReactMx(
       '<html-script type="module">go();</html-script>',

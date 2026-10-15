@@ -55,6 +55,21 @@ async function renderMx(
 const code = (source: string) => compilePreactMx(source, "/x/App.mx").code;
 
 describe("<html-script> on Preact emits a real <script>", () => {
+  it.each([
+    [
+      "an element inside a string",
+      '<html-script>x = "<b>hi</b>"; go();</html-script>',
+    ],
+    ["an <if>", "<html-script>x(); <if=input.c>y();</if></html-script>"],
+    ["a comment", "<html-script>a(); <!-- c --> b();</html-script>"],
+  ])(
+    "refuses markup in the body instead of dropping it: %s",
+    (_name, source) => {
+      expect(() => compilePreactMx(source, "/x/App.mx")).toThrow(
+        /read as markup/,
+      );
+    },
+  );
   it("writes a script element, not a literal <html-script>", () => {
     const emitted = code('<html-script async src="/a.js"/>');
     expect(emitted).toContain('<script async={true} src="/a.js" />');

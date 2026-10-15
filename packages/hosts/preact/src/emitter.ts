@@ -1798,9 +1798,17 @@ export class PreactEmitter implements Emitter<string> {
    * the `nonce=` the author writes.
    */
   #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
-    const body = node.children.filter(
-      (child) => child.kind === "Text" || child.kind === "Interpolation",
-    );
+    const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
+    for (const child of node.children) {
+      if (child.kind === "Text" || child.kind === "Interpolation") {
+        body.push(child);
+        continue;
+      }
+      fail(
+        'The body of `<html-script>` is read as markup on this host, so this would be dropped from the script. Put markup-like text inside a string placeholder, for example `${"<b>hi</b>"}`.',
+        child,
+      );
+    }
     const prop = this.#dialect.rawHtmlProp;
     if (body.length > 0 && hasNamedAttr(node.attrs, prop)) {
       fail(

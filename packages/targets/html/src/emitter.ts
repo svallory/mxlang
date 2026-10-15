@@ -1354,6 +1354,11 @@ export function createEmitter(
       else if (child.kind === "Interpolation") {
         dynamic = true;
         parts.push(concatMapped("__mxTextOf(", mappedExpr(child.expr), ")"));
+      } else {
+        fail(
+          "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+          child,
+        );
       }
     }
     if (!dynamic) {

@@ -2110,9 +2110,17 @@ export class SolidEmitter implements Emitter<string> {
    * `nonce=`: a Solid render has no `$global.cspNonce` to read.
    */
   #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
-    const body = node.children.filter(
-      (child) => child.kind === "Text" || child.kind === "Interpolation",
-    );
+    const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
+    for (const child of node.children) {
+      if (child.kind === "Text" || child.kind === "Interpolation") {
+        body.push(child);
+        continue;
+      }
+      fail(
+        "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+        child,
+      );
+    }
     if (body.length > 0 && hasNamedAttr(node.attrs, "innerHTML")) {
       fail(
         "`<html-script>` body combined with an explicit `innerHTML=` attribute",

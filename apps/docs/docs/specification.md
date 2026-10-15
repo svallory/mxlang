@@ -3601,7 +3601,7 @@ rewritten to `${…}` only when it parses as JS with no Angular pipe
 the text node's own source span (also in concise mode).
 
 It never fires in an attribute value, a `${…}` placeholder (so `${"{{"}` writes
-a real literal `{{`), an HTML comment, `<script>`/`<style>`/`<html-script>`/`<html-style>` content, or on a lone `{`/`}`
+a real literal `{{`), an HTML comment, `<script>`/`<style>`/`<html-style>` content (`<html-script>` is refused on Angular, so its body is never scanned), or on a lone `{`/`}`
 or an `@` in prose (`user@host`, "the @if keyword", "Ping me @if (now) only"):
 `{{` needs its closing `}}`, and `@name` needs real block syntax after the
 keyword: a balanced `(…)` then `{` (`@if`, `@for`, `@switch`, `@case`,
