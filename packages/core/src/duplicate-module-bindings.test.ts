@@ -1000,7 +1000,7 @@ describe("a type-only import beside a real declaration follows stock Marko", () 
 
   it("refuses across a server block and a client block", () => {
     expectRefused(
-      'import type { x } from "./x"\nserver { const x = 1 }\nclient { class x {} }',
+      'import type { x } from "./x"\nserver { const y = 1 }\nclient { class x {} }',
       DUPLICATE,
       "x",
       3,
