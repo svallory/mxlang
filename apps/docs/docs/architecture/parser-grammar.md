@@ -724,7 +724,7 @@ indentation and then acts on the first other character:
 | 1 | the line's indentation is compared, by length, with each open tag's | a tag indented as much or more is closed: `div\n  span\np` | g0765 |
 | 2 | no tag remains open and the line is indented | `Line has extra indentation at the beginning`, unless its first character is `/` | g0767 g0768 |
 | 3 | the enclosing tag is a text tag and the first character is not `-` | `A line within a tag that only allows text content must begin with a "-" character` | g0769 |
-| 4 | a child line whose indentation string differs from the tag's first child line | `Line indentation does match indentation of previous line` | g0770 g0766 |
+| 4 | a child line whose indentation string differs from the tag's first child line | `Line indentation does not match indentation of previous line` | g0770 g0766 |
 | 5 | otherwise | the first character selects a row of the next table | g0771 |
 
 | First character | Result | Probes |
@@ -1504,7 +1504,7 @@ rules:
 | --- | --- | --- |
 | `div --\n    a\n  b\nspan` | text `a`; child tag `b`; tag `span`. The `indent` is the four spaces of the `a` line, so `  b` ends the block (row 3) | g0515 |
 | `div\n  --\n    a\n  span\nb` | text `  a\n`; text `span`; `div` closes; tag `b`. The `indent` is the two spaces of the `--` line, so `  span` stays in the block (row 2) | g0514 |
-| `div\n  --\n    a\n span` | `Line indentation does match indentation of previous line` | g0239 |
+| `div\n  --\n    a\n span` | `Line indentation does not match indentation of previous line` | g0239 |
 
 ### E13 — Interpolation in a tag name or shorthand
 
@@ -2236,10 +2236,10 @@ and the text.
 | OpenTagName, OpenTagEnd, OpenTagName, Error: "static" can only be used at the root of the template. | g1275 |
 | OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd | g1041 g1063 g1145 g1146 g1222 g1393 g1428 g1429 g1430 g1432 g1433 g1434 g1441 g1442 g1443 g1520 g1568 g1576 g1583 g1584 |
 | OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1539 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does match indentation of previous line | g1310 g1311 g1563 |
+| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does not match indentation of previous line | g1310 g1311 g1563 |
 | OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1312 |
 | OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×3 | g1309 |
-| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does match indentation of previous line | g1316 g1564 |
+| OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd, Error: Line indentation does not match indentation of previous line | g1316 g1564 |
 | OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, OpenTagEnd | g1191 |
 | OpenTagName, OpenTagEnd, OpenTagStart, OpenTagName, OpenTagEnd, CloseTagStart, Text, CloseTagName, CloseTagEnd, OpenTagName, OpenTagEnd, CloseTagEnd ×2 | g1279 |
 | OpenTagName, OpenTagEnd, Text ×2, CloseTagEnd | g1188 |

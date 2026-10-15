@@ -9,10 +9,11 @@
  * An error means `ir: undefined` (no partial IR) and every independent error
  * the source has, each positioned, earliest first: every parse error (the
  * parser recovers and reports several), and, once the source lowers, every
- * check reject, structural hit and unknown tag (`checks.ts`). Lowering stops
- * at its first error by design, so a lowering error (`parents`/`children`, a
- * bad attribute) is the one error of its kind; under `unknownTags: "reject"`
- * the source's unknown tags are still listed beside it. No input makes
+ * check reject, structural hit and unknown tag (`checks.ts`). A lowering
+ * error (`parents`/`children`, a bad attribute) skips only the subtree of the
+ * tag whose own lowering failed; independent errors elsewhere are still
+ * reported beside it, and under `unknownTags: "reject"` so are the source's
+ * unknown tags. No input makes
  * `lowerSource` throw: an error with no position (a bug in core) is reported
  * at 1:0 with an `internal error: ` prefix, and a user-facing one that has
  * none with `unpositioned error: `. Warnings are collected and returned

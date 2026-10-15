@@ -99,7 +99,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
           this.emitError(
             this.pos,
             ErrorCode.INVALID_INDENTATION,
-            "Line indentation does match indentation of previous line",
+            "Line indentation does not match indentation of previous line",
           );
           return;
         }

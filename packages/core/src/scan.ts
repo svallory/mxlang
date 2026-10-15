@@ -173,7 +173,7 @@ export interface TagDiscovery {
   readonly extensions: readonly string[];
   /** Whether `<name>.tag.ts` sidecars index. */
   readonly sidecars: boolean;
-  /** The names only this dialect may define (enforced by a later slice). */
+  /** The names only this dialect may define (`reservedRefusal` enforces it). */
   readonly reservedTags: readonly string[];
   /**
    * Whether the project's `package.json#mx.tags` and `mx.contracts` define

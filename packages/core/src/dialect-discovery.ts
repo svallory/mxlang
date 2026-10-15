@@ -138,8 +138,8 @@ export interface DialectManifest {
   readonly sidecars?: boolean;
   /**
    * The tag names only the dialect itself may define (validated here;
-   * enforced by the scan in a later slice). Core's own structural names are
-   * always reserved and cannot be listed. @unstable
+   * enforced by the scan, `reservedRefusal` in `scan.ts`). Core's own
+   * structural names are always reserved and cannot be listed. @unstable
    */
   readonly reservedTags?: readonly string[];
   /**
