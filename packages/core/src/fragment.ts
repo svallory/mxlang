@@ -55,6 +55,7 @@ import {
   customTagTaglib,
   rejectRegistration,
 } from "./custom-tags.ts";
+import { voiceOf } from "./message-vocabulary.ts";
 import {
   compileErrorOf,
   filePosition,
@@ -62,7 +63,7 @@ import {
   parseMx,
   registerDocument,
 } from "./mx-parse.ts";
-import { BARE_COMMA_MESSAGE, tagParamError } from "./stock-parser.ts";
+import { bareCommaMessage, tagParamError } from "./stock-parser.ts";
 import {
   type Dialect,
   dialectCustomTags,
@@ -506,6 +507,7 @@ export function parseFragment(
   // stayed in the tree for lowering, as the containers' `error` do now.
   const parseError = compileErrorOf(document, resolved.filename, {
     expressionErrors: false,
+    voice: voiceOf(resolvedSyntax.dialect),
   });
   // Marko crashed on a nameless tag the moment it closed its open tag, so a
   // bare `,` before the error Marko's parse threw wins over it.
@@ -515,7 +517,10 @@ export function parseFragment(
   const error =
     parseError ??
     (methodTypeParamsFail(document.body)
-      ? compileErrorOf(document, resolved.filename, { expressionErrors: true })
+      ? compileErrorOf(document, resolved.filename, {
+          expressionErrors: true,
+          voice: voiceOf(resolvedSyntax.dialect),
+        })
       : undefined);
   // The first error in the file wins, whichever kind it is: the table's
   // (nothing lowers a construct) when it starts before the default row's.
@@ -529,7 +534,7 @@ export function parseFragment(
     const at = filePosition(document, comma.offset);
     throw codedError(
       TAG_NAME_MISSING_CODE,
-      BARE_COMMA_MESSAGE,
+      bareCommaMessage(voiceOf(resolvedSyntax.dialect)),
       at.line,
       at.column,
     );

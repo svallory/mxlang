@@ -66,6 +66,7 @@ import {
 import type { Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { voiceOf } from "./message-vocabulary.ts";
 import type {
   CallPosition,
   Dialect,
@@ -329,6 +330,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   const { table, dialect } = run.syntax;
   ctx.triggerSplices = run.splices;
   ctx.dialect = dialect;
+  ctx.voice = voiceOf(dialect);
   if (dialect && !applied.has(ctx)) {
     applied.add(ctx);
     const afterLower = dialect.afterLower;

@@ -711,6 +711,24 @@ Five facts worth knowing before editing it:
   `Trigger` are declared in core;
   `packages/parse-differential/src/syntax-types.test.ts` pins them equal to
   the parser's until parser port PR 4 bundles the front end.
+- **A dialect words core's messages with `Dialect.messageVocabulary`
+  (`@unstable`; `src/message-vocabulary.ts`).** `attribute { one, many,
+  article? }`, `file`, `tree`, `formatTag`; validated in `checkModuleShape`
+  (`checkMessageVocabulary`, `syntax-table.ts`). T1-T3 messages (IR entry,
+  contract validation, generic lowering) take a `Voice` (`voiceOf(dialect)`,
+  `voiceOfCtx(ctx)`; `MX_VOICE` is the default and reproduces MX's text byte
+  for byte) and spell a noun as `voice.attribute`, a tag as `voice.tag(name,
+  trigger?)` / `attrTag` / `dynamicTag`; never hand-spell `` `<${name}>` `` or
+  write "attribute" in a T1-T3 message. `message-vocabulary-guard.test.ts`
+  scans those files for exactly that, with the exceptions listed (and
+  reasoned) in `message-vocabulary-guard.allowlist.txt`; an entry that no
+  longer matches fails too. A `formatTag` throw or bad return is
+  `VoiceHookError`, raised as `MX_DIALECT_HOOK_ERROR` at the tag
+  (`voicedAt`/`spelledAtCall`/IR-entry `voiced`). `ChildTag.trigger` carries
+  the authored text of a trigger-made child to `formatTag`. The funnels
+  (`raise`, `failForOwner`, IR-entry `fail`, `warn`) still take finished
+  strings. MX's built-in tag text (T4) and registration text for the dialect
+  author (T5) keep MX's words. Tests: `src/message-vocabulary.test.ts`.
 - **A dialect ships its vocabulary as `Dialect.contracts` (`@unstable`;
   `src/dialect-contracts.ts`).** `checkDialectContracts` runs last in
   `checkModuleShape` (`syntax-table.ts`), so for a routed module and an

@@ -32,7 +32,17 @@
 import { contractDefaultTag } from "../contract-default-tag.ts";
 import { codedError, DYNAMIC_TAG } from "../core.ts";
 import type { HostDeclarations } from "../declarations.ts";
-import { NOT_IN_DATA_FILE_CODE } from "../diagnostic-codes.ts";
+import {
+  DIALECT_HOOK_ERROR_CODE,
+  type MxDiagnosticCode,
+  NOT_IN_DATA_FILE_CODE,
+} from "../diagnostic-codes.ts";
+import {
+  MX_VOICE,
+  triggerOfNode,
+  type Voice,
+  VoiceHookError,
+} from "../message-vocabulary.ts";
 import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
 
@@ -50,15 +60,24 @@ export const DEFAULT_TAG = "object";
 /** The names provided without a tag-table entry: what `builtinTags` declares. */
 const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
 
-const byNatives = new WeakMap<NativeTags, HostDeclarations>();
+const byNatives = new WeakMap<NativeTags, WeakMap<Voice, HostDeclarations>>();
 
 /**
  * The declarations over `nativeTags`, the tag rules preset's native elements
- * (empty under `none`). Cached per native set, so the tag table core builds
- * from them is reused across calls.
+ * (empty under `none`), their messages in `voice`'s words. Cached per native
+ * set and voice, so the tag table core builds from them is reused across
+ * calls.
  */
-export function entryDeclarations(nativeTags: NativeTags): HostDeclarations {
-  let declarations = byNatives.get(nativeTags);
+export function entryDeclarations(
+  nativeTags: NativeTags,
+  voice: Voice = MX_VOICE,
+): HostDeclarations {
+  let perVoice = byNatives.get(nativeTags);
+  if (!perVoice) {
+    perVoice = new WeakMap();
+    byNatives.set(nativeTags, perVoice);
+  }
+  let declarations = perVoice.get(voice);
   if (!declarations) {
     declarations = {
       // Read by two core messages ("not supported by tree yet", "on tree a
@@ -92,14 +111,18 @@ export function entryDeclarations(nativeTags: NativeTags): HostDeclarations {
         define: {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
-          reason:
-            "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
+          // Read when the tag is rejected, so a `formatTag` that breaks its
+          // contract is the lowering's error at this tag, not the build's.
+          get reason() {
+            return `${voice.tag("define")} is a render-time macro: the ${voice.tree} is static and cannot expand it; inline the content at each use`;
+          },
         },
         return: {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
-          reason:
-            "`<return>` needs the evaluated mode: the data tree is static and has no value to return",
+          get reason() {
+            return `${voice.tag("return")} needs the evaluated mode: the ${voice.tree} is static and has no value to return`;
+          },
         },
       },
       isElement: () => false,
@@ -109,15 +132,19 @@ export function entryDeclarations(nativeTags: NativeTags): HostDeclarations {
       resolveAttributeMethod: () => true,
       rejectComponentTag: (name, node) => {
         const loc = node?.loc?.start ?? { line: 0, column: 0 };
-        throw codedError(
-          NOT_IN_DATA_FILE_CODE,
-          `\`<${name}>\` calls a template tag; a data file cannot call a template tag`,
-          loc.line ?? 0,
-          loc.column ?? 0,
-        );
+        let code: MxDiagnosticCode = NOT_IN_DATA_FILE_CODE;
+        let message: string;
+        try {
+          message = `${voice.tag(name, triggerOfNode(node))} calls a template tag; ${voice.aFile} cannot call a template tag`;
+        } catch (error) {
+          if (!(error instanceof VoiceHookError)) throw error;
+          code = DIALECT_HOOK_ERROR_CODE;
+          message = error.message;
+        }
+        throw codedError(code, message, loc.line ?? 0, loc.column ?? 0);
       },
     };
-    byNatives.set(nativeTags, declarations);
+    perVoice.set(voice, declarations);
   }
   return declarations;
 }

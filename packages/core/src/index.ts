@@ -347,6 +347,8 @@ export {
   type DialectModule,
   defaultSyntax,
   diagnosticCodesOf,
+  type MessageTag,
+  type MessageVocabulary,
   resolveSyntax,
   type StandIn,
   type SyntaxBuildContext,

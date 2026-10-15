@@ -46,6 +46,7 @@ import {
 import type { Policy } from "./declarations.ts";
 import type { Ir } from "./ir.ts";
 import { lower } from "./lower.ts";
+import { voiceOf } from "./message-vocabulary.ts";
 import {
   compileErrorOf,
   firstErrorAt,
@@ -578,6 +579,7 @@ export function compileSource(
     );
     const parseError = compileErrorOf(document, filename, {
       expressionErrors: true,
+      voice: voiceOf(resolvedSyntax.dialect),
     });
     // The first error in the file wins, whichever kind it is: the table's
     // (nothing lowers a construct) when it starts before the parse error.

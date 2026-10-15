@@ -45,6 +45,7 @@ import {
   rowKey,
 } from "./dialect-registry.ts";
 import type { SourceSpan } from "./mapping.ts";
+import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
 import type {
   Dialect,
   SyntaxTable,
@@ -321,7 +322,7 @@ export function firstErrorAt(error: Error): number | undefined {
 export function compileErrorOf(
   document: Node,
   filename: string,
-  options: { expressionErrors: boolean },
+  options: { expressionErrors: boolean; voice?: Voice },
 ): Error | undefined {
   // A module statement's code is checked by lowering (`rejectInvalidStatement`,
   // with MX's own wording), as Marko left a statement tag's text unparsed:
@@ -341,7 +342,7 @@ export function compileErrorOf(
       (error) =>
         error.origin === "front-end" && MARKO_PARSER_RULES.has(error.code),
     ),
-    ...shorthandIdErrors(document.body ?? []),
+    ...shorthandIdErrors(document.body ?? [], options.voice ?? MX_VOICE),
   ].sort((a, b) => detectedAt(a) - detectedAt(b))[0];
   const template = parse.findIndex((error) => error.origin === "template");
   const templateError = template < 0 ? undefined : parse[template];
@@ -400,7 +401,7 @@ function detectedAt(error: Node): number {
  * `#x` is not an `id` attribute to Marko (its name is `#x`), so it does not
  * count.
  */
-function shorthandIdErrors(body: readonly Node[]): Node[] {
+function shorthandIdErrors(body: readonly Node[], voice: Voice): Node[] {
   const errors: Node[] = [];
   const visit = (children: readonly Node[]): void => {
     for (const child of children) {
@@ -425,7 +426,7 @@ function shorthandIdErrors(body: readonly Node[]): Node[] {
           start: id.start,
           end: id.end,
           detectedAt: child.openTag?.end ?? id.end,
-          message: "Cannot have shorthand id and id attribute.",
+          message: `Cannot have shorthand id and id ${voice.attribute}.`,
           diagnosticCode: INVALID_SHORTHAND_CODE,
         });
       }

@@ -19,6 +19,7 @@ import type {
 } from "./custom-tags.ts";
 import { handleNode } from "./host-handle.ts";
 import { mxNodeOf } from "./marko-view.ts";
+import { MX_VOICE, triggerOfNode, type Voice } from "./message-vocabulary.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   attributeTagDeclarationFor,
@@ -186,7 +187,9 @@ export function matchWildcardChild(
     definition,
     groups: found.groups,
     parent: {
-      label: scope.label,
+      get label() {
+        return scope.label;
+      },
       explicit: explicitChildEntries(children)
         .map(([child]) => child)
         .filter((child) => child !== "#text"),
@@ -209,8 +212,10 @@ export function scopeForChildren(
   name: string,
   scope: ContractScope | undefined,
   customTags: Readonly<Record<string, CustomTag>> | undefined,
+  voice: Voice = MX_VOICE,
 ): ContractScope | undefined {
   if (CONTROL_FLOW_TAGS.includes(name)) return scope;
+  const trigger = triggerOfNode(mxNodeOf(node));
   if (name.startsWith("@")) {
     const attrName = name.slice(1);
     const declaration = attributeTagDeclarationFor(
@@ -218,14 +223,23 @@ export function scopeForChildren(
       attrName,
     );
     return declaration && scope
-      ? { declaration, label: `${scope.label}: \`<${name}>\`` }
+      ? {
+          declaration,
+          // Spelled when a message reads it: a dialect's `formatTag` that
+          // breaks its contract is that message's error, not the walk's.
+          get label() {
+            return `${scope.label}: ${voice.attrTag(attrName, trigger)}`;
+          },
+        }
       : undefined;
   }
   const match = matches.get(node)?.match;
   if (match) {
     return {
       declaration: match.definition,
-      label: tagLabel(match.canonical, match),
+      get label() {
+        return tagLabel(match.canonical, match, voice, trigger);
+      },
     };
   }
   const declaration = Object.hasOwn(BUILTIN_CUSTOM_TAGS, name)
@@ -233,5 +247,12 @@ export function scopeForChildren(
     : customTags && Object.hasOwn(customTags, name)
       ? customTags[name]
       : undefined;
-  return declaration ? { declaration, label: `\`<${name}>\`` } : undefined;
+  return declaration
+    ? {
+        declaration,
+        get label() {
+          return voice.tag(name, trigger);
+        },
+      }
+    : undefined;
 }

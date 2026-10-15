@@ -16,6 +16,8 @@ import type {
   WildcardAttributeTagEntry,
   WildcardChildEntry,
 } from "./custom-tags.ts";
+import type { TagTrigger } from "./ir.ts";
+import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
 
 /** The `children` key that holds the wildcard entries. */
 export const WILDCARD = "*";
@@ -172,9 +174,11 @@ export function attributeTagDeclarationFor(
 export function tagLabel(
   name: string,
   alias: { authored: string } | undefined,
+  voice: Voice = MX_VOICE,
+  trigger?: TagTrigger,
 ): string {
-  if (!alias) return `\`<${name}>\``;
+  if (!alias) return voice.tag(name, trigger);
   return alias.authored === name
-    ? `\`<${name}>\` (inline contract)`
-    : `\`<${alias.authored}>\` (as \`${name}\`)`;
+    ? `${voice.tag(name, trigger)} (inline contract)`
+    : `${voice.tag(alias.authored, trigger)} (as \`${name}\`)`;
 }

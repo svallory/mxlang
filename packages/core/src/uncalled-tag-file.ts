@@ -15,6 +15,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { MX_DIALECT } from "./dialect-registry.ts";
+import type { TagTrigger } from "./ir.ts";
+import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
 
 const TAGS_DIR = "tags";
 const TAG_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
@@ -72,13 +74,16 @@ export function uncalledTagFileMessage(
   name: string,
   found: UncalledTagFile,
   product = MX_DIALECT.name,
+  voice: Voice = MX_VOICE,
+  trigger?: TagTrigger,
 ): string {
+  const label = voice.tag(name, trigger);
   const shown = relative(dirname(resolve(filename)), found.file);
   // A dialect names its own tag files, so the flat `.mx` clause is MX's alone.
   if (product !== MX_DIALECT.name) {
-    return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call. Import it explicitly.`;
+    return `${label} matches \`${shown}\`, which ${product} cannot call. Import it explicitly.`;
   }
-  return `\`<${name}>\` matches \`${shown}\`, which ${product} cannot call: ${product} calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
+  return `${label} matches \`${shown}\`, which ${product} cannot call: ${product} calls flat \`tags/<name>.mx\` files only. Write the tag as \`tags/${name}.mx\`, or import it explicitly.`;
 }
 
 /**
@@ -92,11 +97,14 @@ export function markoFileTagMessage(
   name: string,
   file: string,
   product = MX_DIALECT.name,
+  voice: Voice = MX_VOICE,
+  trigger?: TagTrigger,
 ): string {
+  const label = voice.tag(name, trigger);
   const shown = relative(dirname(resolve(filename)), file);
   if (product !== MX_DIALECT.name) {
-    return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to a file ${product} compiles.`;
+    return `${label} resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to a file ${product} compiles.`;
   }
   const mx = shown.replace(/\.marko$/, ".mx");
-  return `\`<${name}>\` resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to \`.mx\` (\`${mx}\`).`;
+  return `${label} resolves to \`${shown}\`, a \`.marko\` file, and ${product} does not compile \`.marko\` files. Convert it to \`.mx\` (\`${mx}\`).`;
 }

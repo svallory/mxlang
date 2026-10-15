@@ -1,0 +1,62 @@
+# Literals the message-vocabulary guard test lets stand.
+# One entry per line: file :: function :: fragment of the literal -- one-line reason
+#
+# An entry covers every hit in that function whose literal contains the
+# fragment. An entry that matches no hit fails the test, so a migrated site
+# takes its entry with it.
+#
+# Reasons come in five kinds:
+#   key       a contract or AST key name, not message text
+#   internal  an "IR invariant broken" error: an MX bug report, not a message a dialect's author or user reads
+#   mx-tag    text about a tag MX itself defines (<script>, <return>, <for>, <define>, import attributes); those tags keep MX's words
+#   example   a syntax example the message shows; the example is written in MX's own syntax
+#   register  text for the dialect author at registration, not for the file's author
+
+ir-entry/checks.ts :: checkAttr :: attribute -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: attribute -- internal: span invariant label
+ir-entry/checks.ts :: checkTag :: <${…}> -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTag :: attribute tag -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTagNode :: attribute-tag -- internal: span invariant label
+
+custom-tags.ts :: shadowedBuiltinMessage :: core-owned custom tag -- register: the shadowing refusal is addressed to the registering author
+custom-tags.ts :: customTagTaglib :: <${…}> -- key: the parser-facing taglib key, not message text
+custom-tags.ts :: defaultAttr :: declares a `default` -- register: contract registration error
+custom-tags.ts :: validateAttributes :: attributes -- key: the `CustomTag.attributes` field name
+custom-tags.ts :: rejectUnreachableHooks :: has no call site -- register: contract registration error
+custom-tags.ts :: <top> :: attributes -- key: contract key names (`attributes`)
+custom-tags.ts :: reject :: Invalid -- register: contract registration error
+custom-tags.ts :: rejectUnknownDeclarationKeys :: <${…}> -- register: contract registration error
+custom-tags.ts :: rejectAttributeTagParentConflicts :: <${…}> -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: attribute -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: ${…}> -- register: contract registration error
+custom-tags.ts :: visit :: ${…}> -- register: contract registration error
+custom-tags.ts :: rejectWildcardReferences :: <${…}> -- register: contract registration error
+
+wildcard-children.ts :: <top> :: attributes -- key: contract key names (`attributes`)
+tag-file.ts :: <top> :: attributes -- key: contract key names (`attributes`)
+tag-file.ts :: definitionError :: definition has errors -- register: a tag file's load error, addressed to the tag's author
+mx-parse.ts :: visit :: attribute -- key: the AST position name `"attribute"`
+
+core.ts :: if :: =condition> -- example: the suggested rewrite is written in MX's syntax
+core.ts :: else-if :: =condition> -- example: the suggested rewrite is written in MX's syntax
+core.ts :: await :: |result|=promise> -- example: the suggested rewrite is written in MX's syntax
+parse-error-hints.ts :: DEFAULT_REPLACEMENT :: declare a value with -- example: the suggested rewrite is written in MX's syntax
+template-tag.ts :: routeTemplateCall :: input.content -- example: the placeholder `<${input.content}/>` is MX's syntax
+
+lower.ts :: checkScriptShape :: `<script>` does not support spread -- mx-tag: <script> is an MX built-in
+lower.ts :: checkScriptShape :: `<script>` does not support the -- mx-tag: <script> is an MX built-in
+lower.ts :: checkScriptShape :: the attribute -- mx-tag: <script> is an MX built-in
+lower.ts :: scriptBodyFailure :: Import attributes -- mx-tag: the JavaScript `import ... with` feature, not a tag attribute
+lower.ts :: rejectLoopParamInBy :: `by=` attribute -- mx-tag: <for> is an MX built-in
+lower.ts :: lowerForHead :: `by=` attribute -- mx-tag: <for> is an MX built-in
+lower.ts :: dropContentAttrBesideBody :: so this attribute is dropped -- mx-tag: <define> is an MX built-in
+lower.ts :: lowerStatement :: parsed as a tag with attributes -- mx-tag: statement tags are MX built-ins
+lower.ts :: lowerReturn :: `<return>` -- mx-tag: <return> is an MX built-in
+lower.ts :: lowerReturn :: Invalid duplicate value -- mx-tag: <return> is an MX built-in
+lower.ts :: rejectAttributeTagArguments :: pass the value as -- example: the suggested rewrite is written in MX's syntax
+lower.ts :: lowercaseBindingFix :: `<${ -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: localVariableTagMessage :: Use `<${ -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: rejectUncalledParameterizedAttributeTag :: pass its arguments with -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: render its body with -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: call the binding as -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: or write -- example: the suggested rewrite is written in MX's dynamic-tag syntax

@@ -41,9 +41,9 @@ import type { HostDeclarations } from "../declarations.ts";
 import {
   RESERVED_TAG_CODE,
   renameDiagnosticCodes,
-  UNKNOWN_TAG_CODE,
 } from "../diagnostic-codes.ts";
 import type { Ir } from "../ir.ts";
+import { MX_VOICE, type Voice, voiceOf } from "../message-vocabulary.ts";
 import {
   CORE_TAG_DISCOVERY,
   callerTagDiscovery,
@@ -64,7 +64,7 @@ import {
 } from "../tag-presets.ts";
 import { createTargetLookup, type TargetLookup } from "../target-descriptor.ts";
 import { scanAuthoredTags } from "./authored-tags.ts";
-import { checkIr, labelInside, unknownTagMessage } from "./checks.ts";
+import { checkIr, labelInside, unknownTagReport } from "./checks.ts";
 import {
   builtinTagNames,
   DEFAULT_TAG,
@@ -310,6 +310,17 @@ function dialectIdOf(
     return dialectOnce()?.id;
   } catch {
     return undefined;
+  }
+}
+
+/** The words of the file's dialect, or MX's when it has none (or cannot be resolved). */
+function voiceOfDialect(
+  dialectOnce: () => ReturnType<typeof dialectOf>,
+): Voice {
+  try {
+    return voiceOf(dialectOnce());
+  } catch {
+    return MX_VOICE;
   }
 }
 
@@ -582,7 +593,8 @@ function lowerResolved(
     // The compile below resolves the dialect again and reports the failure.
   }
   const modes = modesOf(options, dialectOnce);
-  const declarations = entryDeclarations(rules.nativeTags);
+  const voice = voiceOfDialect(dialectOnce);
+  const declarations = entryDeclarations(rules.nativeTags, voice);
   const declared = declaredTagNames(customTags);
   const dialectId = dialectIdOf(dialectOnce);
   let ir: Ir | null = null;
@@ -676,10 +688,10 @@ function lowerResolved(
       const errors = reported.map((tag) => {
         if (tag.explained) return tag.explained;
         const extra = guidance.get(`${tag.offset}:${tag.name}`);
+        const report = unknownTagReport(tag.name, declared, dialectId, voice);
         const unknownError = codedError(
-          UNKNOWN_TAG_CODE,
-          unknownTagMessage(tag.name, declared, dialectId) +
-            (extra ? `; ${extra}` : ""),
+          report.code,
+          report.message + (extra ? `; ${extra}` : ""),
           tag.line,
           tag.column,
         );
@@ -701,6 +713,7 @@ function lowerResolved(
           [...kept.map(withoutCollected), ...errors],
           ranges,
           explained,
+          voice,
         ),
       );
     } catch (scanError) {
@@ -728,6 +741,7 @@ function lowerResolved(
     declaredTags: declared,
     ...(dialectId !== undefined ? { dialectId } : {}),
     exemptTags: refusedNames,
+    voice,
     ...(successExplainer ? { explainer: successExplainer } : {}),
   });
   if (errors.length > 0) return failed(errors);

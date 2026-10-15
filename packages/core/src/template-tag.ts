@@ -21,12 +21,18 @@ import type { CustomTag, TagCall } from "./custom-tags.ts";
 import {
   ATTRIBUTE_TAG_DROPPED_CODE,
   BODY_DROPPED_CODE,
+  DIALECT_HOOK_ERROR_CODE,
   INTERNAL_ERROR_CODE,
   INVALID_TAG_CALL_CODE,
   INVALID_TAG_VAR_CODE,
   RESERVED_INPUT_CODE,
 } from "./diagnostic-codes.ts";
 import type { Ir, IrNode } from "./ir.ts";
+import {
+  type Voice,
+  VoiceHookError,
+  voiceOfCtx,
+} from "./message-vocabulary.ts";
 
 export interface TemplateTag {
   filename: string;
@@ -902,6 +908,31 @@ function isTaken(ctx: Ctx, binding: string): boolean {
   );
 }
 
+/**
+ * A call's tags as the dialect spells them in a message. A `formatTag` that
+ * breaks its contract is the hook error at the call, not a bare throw.
+ */
+function spelledAtCall<T>(call: Pick<TagCall, "loc">, spell: () => T): T {
+  try {
+    return spell();
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      throw codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        error.message,
+        call.loc.line,
+        call.loc.column,
+        call.loc.file,
+      );
+    }
+    throw error;
+  }
+}
+
+function callLabel(voice: Voice, call: TagCall): string {
+  return spelledAtCall(call, () => voice.tag(call.name, call.trigger));
+}
+
 function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
   const path = resolve(tag.filename);
 
@@ -921,7 +952,7 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
     // that fails at runtime with no diagnostic anywhere.
     throw codedError(
       INVALID_TAG_CALL_CODE,
-      `\`<${call.name}>\` is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
+      `${callLabel(voiceOfCtx(ctx), call)} is this file's own tag, and a host module region (an expression spliced into another module) has no module scope to declare it in; call it from a file that compiles to a module, or move the markup into its own tag file`,
       call.loc.line,
       call.loc.column,
       call.loc.file,
@@ -950,12 +981,13 @@ function bindingForTemplate(ctx: Ctx, tag: TemplateTag, call: TagCall): string {
   return binding;
 }
 
-function rejectReservedInputs(call: TagCall): void {
+function rejectReservedInputs(ctx: Ctx, call: TagCall): void {
+  const voice = voiceOfCtx(ctx);
   for (const attr of call.attrs) {
     if (attr.kind === "spread" || attr.name !== "content") continue;
     throw codedError(
       RESERVED_INPUT_CODE,
-      `\`<${call.name}>\`: \`content\` is reserved on a template tag; it names the body slot`,
+      `${callLabel(voice, call)}: \`content\` is reserved on a template tag; it names the body slot`,
       attr.loc.line,
       attr.loc.column,
       attr.loc.file,
@@ -965,7 +997,7 @@ function rejectReservedInputs(call: TagCall): void {
   if (contentTag) {
     throw codedError(
       RESERVED_INPUT_CODE,
-      `\`<@content>\` is reserved for the body of \`<${call.name}>\``,
+      `${spelledAtCall(call, () => voice.attrTag("content"))} is reserved for the body of ${callLabel(voice, call)}`,
       contentTag.loc.line,
       contentTag.loc.column,
       contentTag.loc.file,
@@ -979,7 +1011,8 @@ export function routeTemplateCall(
   definition: TemplateBackedTag,
   call: TagCall,
 ): IrNode[] {
-  rejectReservedInputs(call);
+  rejectReservedInputs(ctx, call);
+  const voice = voiceOfCtx(ctx);
   const tag = definition.template;
   const metadata = metadataForTemplate(ctx, tag);
   // A pending unit is mid-compile (this call is inside its own recursion, or
@@ -988,7 +1021,7 @@ export function routeTemplateCall(
   // placeholder would accuse a template that does place the content.
   if (call.content && !metadata.readsContent && !metadata.pending) {
     warn(ctx, {
-      message: `\`<${call.name}>\`: body content was dropped; ${tag.filename} has no \`<\${input.content}/>\` placeholder`,
+      message: `${callLabel(voice, call)}: body content was dropped; ${tag.filename} has no \`<\${input.content}/>\` placeholder`,
       line: call.loc.line,
       column: call.loc.column,
       ...callNameEnd(ctx, call),
@@ -1000,7 +1033,7 @@ export function routeTemplateCall(
     if (metadata.pending || metadata.readsAllInput) break;
     if (metadata.attributeTags.includes(attributeTag.name)) continue;
     warn(ctx, {
-      message: `\`<${call.name}>\`: \`<@${attributeTag.name}>\` was dropped; ${tag.filename} does not read \`input.${attributeTag.name}\``,
+      message: `${callLabel(voice, call)}: ${spelledAtCall(call, () => voice.attrTag(attributeTag.name))} was dropped; ${tag.filename} does not read \`input.${attributeTag.name}\``,
       line: call.loc.line,
       column: call.loc.column,
       ...callNameEnd(ctx, call),
@@ -1023,7 +1056,7 @@ export function routeTemplateCall(
       : call.loc;
     const error = codedError(
       INVALID_TAG_VAR_CODE,
-      `\`<${call.name}>\` does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
+      `${callLabel(voice, call)} does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
       at.line,
       at.column,
       call.loc.file,

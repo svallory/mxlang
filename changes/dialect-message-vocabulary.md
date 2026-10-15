@@ -1,0 +1,5 @@
+---
+packages: [core]
+kind: Added
+---
+`Dialect.messageVocabulary` (`@unstable`) lets a dialect state the words core's messages use for its files: `attribute: { one, many, article? }` (what it calls an attribute, in both numbers; the article is derived when absent), `file` and `tree` (what the data-file checks call a data file and its tree) and `formatTag({ name, form, trigger? })` (the bare spelling of a tag, so a message can say `title` or `&title` instead of `<member>`). The messages of the IR entry (`lowerSource`), of contract validation and of the generic lowering use them; the messages about MX's own built-in tags and the text read when a contract is registered keep MX's words. A malformed vocabulary fails the dialect at load, and a `formatTag` that throws or returns something other than `undefined` or a non-empty single-line string without backticks is `MX_DIALECT_HOOK_ERROR` at the tag. `ChildTag.trigger` (the child a dialect's `lowerTrigger` made through `ctx.child`) reports the authored trigger to `formatTag`. Output for a `.mx` file and for a dialect with no vocabulary is unchanged.

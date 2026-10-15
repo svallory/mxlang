@@ -61,6 +61,7 @@ import {
   type LowerSourceResult,
   lowerSource,
 } from "./ir-entry/index.ts";
+import { voiceOf } from "./message-vocabulary.ts";
 import {
   type DiscoveredTag,
   registerTagFileReader,
@@ -671,7 +672,7 @@ function refuseKeys(
       );
     } else if (key === "template") {
       at(
-        "a tag file's contract cannot set `template`: a tag file defines a contract, and a data file never calls a template tag",
+        `a tag file's contract cannot set \`template\`: a tag file defines a contract, and ${voiceOf(dialect).aFile} never calls a template tag`,
       );
     } else if ((HOOK_KEYS as readonly string[]).includes(key)) {
       at(

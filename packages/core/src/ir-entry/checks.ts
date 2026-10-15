@@ -48,8 +48,15 @@ import type {
   Ir,
   IrNode,
   Position,
+  TagTrigger,
 } from "../ir.ts";
 import type { SourceSpan } from "../mapping.ts";
+import {
+  MX_VOICE,
+  mxSpelling,
+  type Voice,
+  VoiceHookError,
+} from "../message-vocabulary.ts";
 import { lineStartsOf } from "./diagnostics.ts";
 import {
   type Explainer,
@@ -83,26 +90,54 @@ export interface CheckOptions {
    * too; one the dialect leaves alone is core's error in `"reject"` only.
    */
   explainer?: Explainer;
+  /**
+   * The words the file's dialect uses in these messages (`Dialect.messageVocabulary`).
+   * Absent: MX's own.
+   */
+  voice?: Voice;
 }
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
-const DYNAMIC_TAG_MESSAGE = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
+function dynamicTagMessage(voice: Voice): string {
+  return `a dynamic tag (${voice.dynamicTag("expr")}) has no name; the ${voice.tree} is static and needs one`;
+}
 
 /**
  * The dynamic-tag reject for a capitalized tag a file-local binding names
  * (`<Task>` with `import { Task }`): it names the tag and the way out. The
  * dialect's flag is offered only when the file has a dialect to set it on.
  */
-function boundDynamicTagMessage(name: string, dialectId?: string): string {
-  const base = `\`<${name}>\` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`)`;
+function boundDynamicTagMessage(
+  name: string,
+  voice: Voice,
+  dialectId?: string,
+  trigger?: TagTrigger,
+): string {
+  const base = `${voice.tag(name, trigger)} is bound in this file, so it is a dynamic tag; the ${voice.tree} is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`)`;
   return dialectId === undefined
     ? base
     : `${base} or set \`bindingsCallTags: false\` in the dialect`;
 }
 
 /** The fixed structural-reject message (the 131 addendum's item 1). */
-function structuralMessage(construct: string): string {
-  return `the data tree is static; this file's consumer does not evaluate ${construct}`;
+function structuralMessage(construct: string, voice: Voice): string {
+  return `the ${voice.tree} is static; this file's consumer does not evaluate ${construct}`;
+}
+
+/**
+ * `fn`'s message, or, when the dialect's `formatTag` broke its contract while
+ * spelling it, the hook error at `at`: the message being built is replaced by
+ * the error about the hook.
+ */
+function voiced(at: Position, end: BlameEnd, fn: () => string): string {
+  try {
+    return fn();
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      fail(DIALECT_HOOK_ERROR_CODE, error.message, at, end);
+    }
+    throw error;
+  }
 }
 
 /**
@@ -278,11 +313,16 @@ function checkTagName(
 ): void {
   if (!unusableTagName(name)) return;
   if (name.startsWith("$") && name.includes("{")) {
-    fail(NOT_IN_DATA_FILE_CODE, DYNAMIC_TAG_MESSAGE, tag.loc, nameEndOf(tag));
+    fail(
+      NOT_IN_DATA_FILE_CODE,
+      voiced(tag.loc, nameEndOf(tag), () => dynamicTagMessage(activeVoice)),
+      tag.loc,
+      nameEndOf(tag),
+    );
   }
   fail(
     NOT_IN_DATA_FILE_CODE,
-    `\`${name}\` is not a tag name a data file can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which a data file does not have`,
+    `\`${name}\` is not a tag name ${activeVoice.aFile} can use: it must not start with \`$\` or \`!\`, or contain \`{\`, \`}\` or whitespace — those are a \`$…\` scriptlet or a \`\${…}\` placeholder, which ${activeVoice.aFile} does not have`,
     tag.loc,
     nameEndOf(tag),
   );
@@ -298,8 +338,9 @@ function checkTagName(
  * tag. A shorthand `class` alone is fine: core gives that one a real
  * `valueSpan` and `nameSpan`. TODO `core-shorthand-attr-spans`.
  */
-const MERGED_SHORTHAND_CLASS =
-  "a shorthand class (`.a`) together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
+function mergedShorthandClass(voice: Voice): string {
+  return `a shorthand class (\`.a\`) together with a \`class\` ${voice.attribute} is not supported in ${voice.aFile}: write every class in the \`class\` ${voice.attribute}`;
+}
 
 /**
  * The reject for a shorthand `class` whose value has no source span.
@@ -325,7 +366,12 @@ function rejectSpanlessShorthand(
           ? undefined
           : attr.value.span;
     if (span) continue;
-    fail(DIALECT_HOOK_ERROR_CODE, MERGED_SHORTHAND_CLASS, at, nameEndOf(tag));
+    fail(
+      DIALECT_HOOK_ERROR_CODE,
+      mergedShorthandClass(activeVoice),
+      at,
+      nameEndOf(tag),
+    );
   }
 }
 
@@ -457,7 +503,12 @@ function checkTag(tag: DelegatedTag<unknown>): void {
     attempt(() =>
       fail(
         NOT_IN_DATA_FILE_CODE,
-        `tag variable \`/${tag.var}\` on \`<${tag.name}>\`: the data tree is static; a binding without evaluation means nothing`,
+        voiced(
+          tag.loc,
+          nameEndOf(tag),
+          () =>
+            `tag variable \`/${tag.var}\` on ${activeVoice.tag(tag.name, tag.trigger)}: the ${activeVoice.tree} is static; a binding without evaluation means nothing`,
+        ),
         tag.loc,
         nameEndOf(tag),
       ),
@@ -531,6 +582,8 @@ let activeSourceLength = 0;
 let activeSource = "";
 /** The id of the file's dialect, when it has one. */
 let activeDialectId: string | undefined;
+/** The words of the file's dialect in the messages; MX's own without one. */
+let activeVoice: Voice = MX_VOICE;
 
 function positionOfOffset(offset: number): { line: number; column: number } {
   let low = 0;
@@ -606,31 +659,48 @@ function checkNode(node: IrNode): void {
       checkExpr(node.init, "`<const>`");
       requiredSpan(node.span, "`<const>`");
       return;
-    case "Component":
+    case "Component": {
       if (node.target.kind === "dynamic") {
+        const end = dynamicTagEnd(node.target.expr);
         fail(
           NOT_IN_DATA_FILE_CODE,
-          node.target.valueImportBinding
-            ? boundDynamicTagMessage(
-                node.target.valueImportBinding,
-                activeDialectId,
-              )
-            : DYNAMIC_TAG_MESSAGE,
+          voiced(node.loc, end, () =>
+            node.target.kind === "dynamic" && node.target.valueImportBinding
+              ? boundDynamicTagMessage(
+                  node.target.valueImportBinding,
+                  activeVoice,
+                  activeDialectId,
+                  node.trigger,
+                )
+              : dynamicTagMessage(activeVoice),
+          ),
           node.loc,
-          dynamicTagEnd(node.target.expr),
+          end,
         );
       }
+      const calledName = node.authoredName ?? node.target.name;
       fail(
         NOT_IN_DATA_FILE_CODE,
-        `\`<${node.authoredName ?? node.target.name}>\` calls a template tag; a data file cannot call a template tag`,
+        voiced(
+          node.loc,
+          nameEndOf(node),
+          () =>
+            `${activeVoice.tag(calledName, node.trigger)} calls a template tag; ${activeVoice.aFile} cannot call a template tag`,
+        ),
         node.loc,
         nameEndOf(node),
       );
       break;
+    }
     case "DocumentType":
       fail(
         NOT_IN_DATA_FILE_CODE,
-        "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
+        voiced(
+          node.loc,
+          keywordEnd(node.loc, "!doctype"),
+          () =>
+            `${activeVoice.tag("!doctype")} means nothing in ${activeVoice.aFile}; the ${activeVoice.tree} describes tags and data, not a page`,
+        ),
         node.loc,
         keywordEnd(node.loc, "!doctype"),
       );
@@ -708,18 +778,46 @@ export function unknownTagMessage(
   name: string,
   declaredTags: ReadonlySet<string>,
   dialectId?: string,
+  voice: Voice = MX_VOICE,
+  trigger?: TagTrigger,
 ): string {
   const near = nearestName(name, declaredTags);
   const where =
     dialectId === undefined
       ? ": no contract for it was given"
       : ` in the \`${dialectId}\` dialect`;
-  return `\`<${name}>\` is not a known tag${where}${near ? `; did you mean \`<${near}>\`?` : ""}`;
+  return `${voice.tag(name, trigger)} is not a known tag${where}${near ? `; did you mean ${voice.tag(near)}?` : ""}`;
+}
+
+/**
+ * {@link unknownTagMessage} with its code: the dialect's `formatTag` breaking
+ * its contract while spelling the tag is `MX_DIALECT_HOOK_ERROR` instead,
+ * with the hook's own message.
+ */
+export function unknownTagReport(
+  name: string,
+  declaredTags: ReadonlySet<string>,
+  dialectId: string | undefined,
+  voice: Voice,
+  trigger?: TagTrigger,
+): { message: string; code: MxDiagnosticCode } {
+  try {
+    return {
+      message: unknownTagMessage(name, declaredTags, dialectId, voice, trigger),
+      code: UNKNOWN_TAG_CODE,
+    };
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      return { message: error.message, code: DIALECT_HOOK_ERROR_CODE };
+    }
+    throw error;
+  }
 }
 
 /** An unknown authored tag, for `unknownTags: "reject"`. */
 interface UnknownTagHit {
   name: string;
+  trigger?: TagTrigger;
   message: string;
   code: MxDiagnosticCode;
   at: Position;
@@ -766,8 +864,14 @@ function allUnknownTags(
       });
       found.push({
         name: tag.name,
-        message: unknownTagMessage(tag.name, declaredTags, dialectId),
-        code: UNKNOWN_TAG_CODE,
+        ...(tag.trigger ? { trigger: tag.trigger } : {}),
+        ...unknownTagReport(
+          tag.name,
+          declaredTags,
+          dialectId,
+          activeVoice,
+          tag.trigger,
+        ),
         at: tag.loc,
         blameEnd: nameEndOf(tag),
         ...(tag.span && Number.isFinite(tag.span.sourceEnd)
@@ -828,7 +932,10 @@ function allUnknownTags(
 
 /** A structural construct, for `structural: "reject"`. */
 interface StructuralHit {
-  construct: string;
+  /** The construct as written, backticked; unset for a tag keyword. */
+  construct?: string;
+  /** A tag keyword (`if`, `for`, `const`): spelled through the voice. */
+  keyword?: "if" | "for" | "const";
   at: Position;
   /** Where the error's range ends; a point when unset. */
   blameEnd?: BlameEnd;
@@ -853,13 +960,13 @@ function structuralInAttrTagNodes(
   for (const node of nodes) {
     if (node.kind === "AttributeTagIf") {
       out.push({
-        construct: "`<if>`",
+        keyword: "if",
         at: node.loc,
         blameEnd: keywordEnd(node.loc, "if"),
       });
     } else if (node.kind === "AttributeTagFor") {
       out.push({
-        construct: "`<for>`",
+        keyword: "for",
         at: node.loc,
         blameEnd: keywordEnd(node.loc, "for"),
       });
@@ -897,21 +1004,21 @@ function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
         break;
       case "IfChain":
         out.push({
-          construct: "`<if>`",
+          keyword: "if",
           at: node.loc,
           blameEnd: keywordEnd(node.loc, "if"),
         });
         break;
       case "For":
         out.push({
-          construct: "`<for>`",
+          keyword: "for",
           at: node.loc,
           blameEnd: keywordEnd(node.loc, "for"),
         });
         break;
       case "Const":
         out.push({
-          construct: "`<const>`",
+          keyword: "const",
           at: node.loc,
           blameEnd: keywordEnd(node.loc, "const"),
         });
@@ -955,17 +1062,35 @@ function allStructural(
       blameEnd: keywordEnd(at, stmt.kind),
     });
   }
-  return hits.map((found) => ({
-    message: structuralMessage(found.construct),
-    at: found.at,
-    code: STRUCTURAL_CONSTRUCT_CODE,
-    ...(found.blameEnd ? { blameEnd: found.blameEnd } : {}),
-  }));
+  return hits.map((found) => {
+    const blame = found.blameEnd ? { blameEnd: found.blameEnd } : {};
+    try {
+      const construct = found.keyword
+        ? activeVoice.tag(found.keyword)
+        : (found.construct ?? "");
+      return {
+        message: structuralMessage(construct, activeVoice),
+        at: found.at,
+        code: STRUCTURAL_CONSTRUCT_CODE,
+        ...blame,
+      };
+    } catch (error) {
+      if (!(error instanceof VoiceHookError)) throw error;
+      return {
+        message: error.message,
+        at: found.at,
+        code: DIALECT_HOOK_ERROR_CODE,
+        ...blame,
+      };
+    }
+  });
 }
 
 /** An unknown tag's element: where it opens and (when known) closes. */
 export interface UnknownTagRange {
   name: string;
+  /** The trigger that made the tag, when one did. */
+  trigger?: TagTrigger;
   at: Position;
   end?: Position;
 }
@@ -973,8 +1098,18 @@ export interface UnknownTagRange {
 const NONE: ReadonlySet<unknown> = new Set();
 
 /** The suffix of an error that sits inside an unknown tag's element. */
-function insideUnknownTagLabel(name: string): string {
-  return ` (inside the unknown tag \`<${name}>\`; may resolve once it is declared)`;
+function insideUnknownTagLabel(range: UnknownTagRange, voice: Voice): string {
+  // The tag's own error already reports a `formatTag` that breaks its
+  // contract; the label falls back to MX's spelling rather than lose the
+  // error it labels.
+  let spelled: string;
+  try {
+    spelled = voice.tag(range.name, range.trigger);
+  } catch (error) {
+    if (!(error instanceof VoiceHookError)) throw error;
+    spelled = `\`${mxSpelling({ name: range.name, form: "tag" })}\``;
+  }
+  return ` (inside the unknown tag ${spelled}; may resolve once it is declared)`;
 }
 
 /**
@@ -992,6 +1127,7 @@ export function labelInside(
   errors: unknown[],
   unknown: readonly UnknownTagRange[],
   except: ReadonlySet<unknown> = NONE,
+  voice: Voice = MX_VOICE,
 ): unknown[] {
   const inside = (at: Position, tag: UnknownTagRange) =>
     tag.end !== undefined &&
@@ -1023,7 +1159,7 @@ export function labelInside(
     // one is MX's bug, as the funnel would say).
     const labelled = codedError(
       INTERNAL_ERROR_CODE,
-      `${(error as TranslateError).message}${insideUnknownTagLabel(innermost.name)}`,
+      `${(error as TranslateError).message}${insideUnknownTagLabel(innermost, voice)}`,
       at.line,
       at.column,
       at.file,
@@ -1106,6 +1242,7 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
   activeLineStarts = lineStartsOf(source);
   activeSource = source;
   activeDialectId = options.dialectId;
+  activeVoice = options.voice ?? MX_VOICE;
   activeSourceLength = source.length;
   const stmts = attempt(() => statements(ir)) ?? [];
   checkNodes(ir.body);
@@ -1151,6 +1288,6 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
     });
   }
   return sortedProblems(
-    labelInside([...problems, ...extra], unknownHits, explained),
+    labelInside([...problems, ...extra], unknownHits, explained, activeVoice),
   );
 }

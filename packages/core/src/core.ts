@@ -52,6 +52,7 @@ import type { Atom, Attr, Expr, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import { MX_VOICE, type Voice, voiceOfCtx } from "./message-vocabulary.ts";
 import type { ModuleScope } from "./module-scope.ts";
 import type { Dialect } from "./syntax-table.ts";
 import {
@@ -300,7 +301,7 @@ export function unsupportedTagMessage(
 ): string {
   const { hostName } = ctx.declarations;
   const where = hostName === undefined ? "" : ` on ${hostName}`;
-  const first = `\`<${tag}>\` is not supported in embedded ${productOf(ctx)}${where}.`;
+  const first = `${voiceOfCtx(ctx).tag(tag)} is not supported in embedded ${productOf(ctx)}${where}.`;
   return hint === undefined || hint === "" ? first : `${first} ${hint}`;
 }
 
@@ -522,6 +523,13 @@ export interface Ctx {
    * place.
    */
   productName?: string;
+  /**
+   * The words this file's messages use (`Dialect.messageVocabulary`), set
+   * by the trigger pass from the file's dialect. Read through
+   * `voiceOfCtx`, never bare: unset means MX's own words, so every message
+   * of a file with no dialect is unchanged.
+   */
+  voice?: Voice;
   /**
    * Post-lowering hooks (decision 183): run once the file's body is fully
    * lowered, in order, each receiving the file's own `Ctx` — the same
@@ -1187,14 +1195,15 @@ export function unresolvedCustomTagMessage(
   name: string,
   options: UnresolvedTagOptions = {},
 ): string {
-  const base = `Unable to find entry point for custom tag \`<${name}>\`.`;
+  const voice = options.voice ?? MX_VOICE;
+  const base = `Unable to find entry point for custom tag ${voice.tag(name)}.`;
   // A capitalized name is a component call, so the nearest in-scope binding
   // is the likeliest intent; a lowercase one is likeliest a mistyped element.
   const isComponent = /^[A-Z]/.test(name);
   const near = isComponent
     ? nearestName(name, options.candidates ?? [])
     : nearestHtmlElement(name);
-  if (near) return `${base} Did you mean \`<${near}>\`?`;
+  if (near) return `${base} Did you mean ${voice.tag(near)}?`;
   return options.hint && isComponent ? `${base} ${options.hint}` : base;
 }
 
@@ -1204,6 +1213,8 @@ export interface UnresolvedTagOptions {
   candidates?: Iterable<string>;
   /** How the host resolves a component, shown when no candidate is near. */
   hint?: string;
+  /** The file's words in the message (`voiceOfCtx(ctx)`); MX's own when absent. */
+  voice?: Voice;
 }
 
 export function quote(text: string): string {
@@ -1817,15 +1828,18 @@ export function hasContent(children: Node[]): boolean {
  * where Marko's `assertNoArgs` knows a hint. Everything else — and any tag
  * whose name is not statically known — gets Marko's plain sentence.
  */
-const TAG_ARGUMENTS_MESSAGES: Record<string, (name: string) => string> = {
-  if: (name) =>
-    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
-  "else-if": (name) =>
-    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
-  else: () =>
-    "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`.",
-  await: (name) =>
-    `Tag does not support arguments. Write the promise as a value attribute and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
+const TAG_ARGUMENTS_MESSAGES: Record<
+  string,
+  (name: string, voice: Voice) => string
+> = {
+  if: (name, voice) =>
+    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead: \`<${name}=condition>\`.`,
+  "else-if": (name, voice) =>
+    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead: \`<${name}=condition>\`.`,
+  else: (_name, voice) =>
+    `Tag does not support arguments. Write the condition as ${voice.anAttribute} instead: \`<else if=condition>\`.`,
+  await: (name, voice) =>
+    `Tag does not support arguments. Write the promise as a value ${voice.attribute} and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
 };
 
 function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
@@ -1856,7 +1870,9 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
     /`?<([^`>]+)>`?/.exec(what)?.[1] ||
     String(tagNameOf(node) ?? "");
   const message = TAG_ARGUMENTS_MESSAGES[name];
-  return message ? message(name) : "Tag does not support arguments.";
+  return message
+    ? message(name, voiceOfCtx(ctx))
+    : "Tag does not support arguments.";
 }
 
 function eventHandlerHint(ctx: Ctx, node: Node): string {
@@ -2030,7 +2046,7 @@ export function rejectUnsupportedFields(
     const tagName = String(tagNameOf(first) ?? "@…").replace(/^@/, "");
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `attribute tag \`@${tagName}\` on ${what}; attribute tags are props of components, so they are only valid directly inside a component call`,
+      `${voiceOfCtx(ctx).attributeTag} \`@${tagName}\` on ${what}; ${voiceOfCtx(ctx).attributeTags} are props of components, so they are only valid directly inside a component call`,
       first,
     );
   }
@@ -2101,7 +2117,9 @@ export function rejectInertShape(
   name: string,
   disposition: Extract<Disposition, { kind: "inert" }>,
 ): void {
-  rejectUnsupportedFields(ctx, node, `\`<${name}>\``, {
+  const voice = voiceOfCtx(ctx);
+  const label = voice.tag(name);
+  rejectUnsupportedFields(ctx, node, label, {
     params: true,
     args: true,
     var: true,
@@ -2112,7 +2130,7 @@ export function rejectInertShape(
       if (scriptSpreadsRefused.has(attr)) continue;
       raise(
         INERT_TAG_SHAPE_CODE,
-        `spread attributes on \`<${name}>\` are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
+        `spread ${voice.attributes} on ${label} are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
         attr,
       );
     }
@@ -2125,7 +2143,7 @@ export function rejectInertShape(
       continue;
     raise(
       INERT_TAG_SHAPE_CODE,
-      `\`<${name}>\` does not support the \`${attrNameOf(attr)}\` attribute; it emits nothing, so the attribute would be silently discarded`,
+      `${label} does not support the \`${attrNameOf(attr)}\` ${voice.attribute}; it emits nothing, so the ${voice.attribute} would be silently discarded`,
       attr,
     );
   }
@@ -2134,7 +2152,7 @@ export function rejectInertShape(
   if (hasContent(bodyChildren(node))) {
     raise(
       INERT_TAG_SHAPE_CODE,
-      `\`<${name}>\` does not support body content; it emits nothing, so the body would be silently discarded`,
+      `${label} does not support body content; it emits nothing, so the body would be silently discarded`,
       node,
     );
   }

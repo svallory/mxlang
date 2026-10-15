@@ -207,6 +207,11 @@ import type {
 } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import {
+  type Voice,
+  VoiceHookError,
+  voiceOfCtx,
+} from "./message-vocabulary.ts";
 import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
 import {
   commonJsFormOf,
@@ -1391,12 +1396,12 @@ function declaredVariable(scriptlet: Node): ScriptletDeclaration | undefined {
     : undefined;
 }
 
-function foreignAttrHint(name: string, product: string): string {
+function foreignAttrHint(name: string, product: string, voice: Voice): string {
   for (const [pattern, hint] of FOREIGN_ATTR_HINTS) {
     const match = name.match(pattern);
     if (match) return hint(match, product);
   }
-  return "an attribute name may use letters, digits and `._:-`";
+  return `${voice.anAttribute} name may use letters, digits and \`._:-\``;
 }
 
 /** Words Babel's `isValidIdentifier` refuses: keywords and strict-mode (module) reserved words. */
@@ -1434,8 +1439,7 @@ function boundRefinement(ctx: Ctx, attr: Node): Expr | undefined {
   const start = attr.loc?.start;
   const nameLength = attr.default ? 0 : String(attr.name).length;
   if (!isRefinementIdentifier(modifier)) {
-    const message =
-      "Bound attribute refinement shorthand must be a valid JavaScript identifier.";
+    const message = `Bound ${voiceOfCtx(ctx).attribute} refinement shorthand must be a valid JavaScript identifier.`;
     if (mxAt !== undefined)
       raise(INVALID_BOUND_ATTRIBUTE_CODE, message, {
         span: { start: mxAt, end: mxAt },
@@ -1475,7 +1479,7 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
     if (attr.type === "MxAttribute" && attr.value?.error) {
       raise(
         INVALID_BOUND_ATTRIBUTE_CODE,
-        "Attributes may only be bound to identifiers or member expressions",
+        `${voiceOfCtx(ctx).Attributes} may only be bound to identifiers or member expressions`,
         attr.value,
       );
     }
@@ -1494,7 +1498,7 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
     ) {
       raise(
         INVALID_BOUND_ATTRIBUTE_CODE,
-        "Attributes may only be bound to identifiers or member expressions",
+        `${voiceOfCtx(ctx).Attributes} may only be bound to identifiers or member expressions`,
         value,
       );
     }
@@ -1502,12 +1506,17 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
 }
 
 /** Marko's builtin value checks run before any host can drop or claim a tag. */
-function validateBuiltinValueAttributes(node: Node, name: string): void {
+function validateBuiltinValueAttributes(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+): void {
+  const voice = voiceOfCtx(ctx);
   if (name === "const" || name === "id") {
     if (tagAttributesOf(node).length > 1) {
       raise(
         INVALID_ATTRIBUTE_CODE,
-        `The \`<${name}>\` tag only supports the \`value=\` attribute.`,
+        `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
         node.name,
       );
     }
@@ -1518,7 +1527,7 @@ function validateBuiltinValueAttributes(node: Node, name: string): void {
       if (seen)
         raise(
           DUPLICATE_VALUE_ATTRIBUTE_CODE,
-          "Invalid duplicate value attribute.",
+          `Invalid duplicate value ${voice.attribute}.`,
           attr,
         );
       seen = true;
@@ -1792,7 +1801,7 @@ function lowerAttrNamed(
   ) {
     raise(
       INVALID_ATTRIBUTE_CODE,
-      `Invalid attribute name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx))}`,
+      `Invalid ${voiceOfCtx(ctx).attribute} name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx), voiceOfCtx(ctx))}`,
       attr,
     );
   }
@@ -1808,7 +1817,7 @@ function lowerAttrNamed(
   if (isElement && attr.modifier === "" && attr.name === "on") {
     raise(
       INVALID_ATTRIBUTE_CODE,
-      "`on:` is not a valid attribute, did you mean `on`?",
+      `\`on:\` is not a valid ${voiceOfCtx(ctx).attribute}, did you mean \`on\`?`,
       attr,
     );
   }
@@ -1828,14 +1837,14 @@ function lowerAttrNamed(
     ) {
       raise(
         INVALID_ATTRIBUTE_CODE,
-        `The \`${name}\` attribute cannot be a function.`,
+        `The \`${name}\` ${voiceOfCtx(ctx).attribute} cannot be a function.`,
         attr,
       );
     }
     if (attrArgsOf(attr)) {
       raise(
         INVALID_ATTRIBUTE_CODE,
-        `Unsupported arguments on the \`${name}\` attribute.`,
+        `Unsupported arguments on the \`${name}\` ${voiceOfCtx(ctx).attribute}.`,
         attr,
       );
     }
@@ -1847,7 +1856,7 @@ function lowerAttrNamed(
       ctx.declarations.rejectAttributeMethod?.(hooked, on);
       raise(
         UNSUPPORTED_CONSTRUCT_CODE,
-        `attribute method \`${attrNameOf(attr)}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
+        `${voiceOfCtx(ctx).attribute} method \`${attrNameOf(attr)}(...)\` is an event handler and requires a runtime; standalone ${productOf(ctx)} renders once to a string`,
         attr,
       );
     }
@@ -1889,7 +1898,7 @@ function lowerAttrNamed(
     ctx.declarations.rejectModifier?.(hookView, on);
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `attribute modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template`,
+      `${voiceOfCtx(ctx).attribute} modifier \`${attr.name}:${attr.modifier}\` is not supported in a standalone template`,
       attr,
     );
   }
@@ -2122,7 +2131,7 @@ function resolveDuplicateAttrs(ctx: Ctx, attrs: Attr[]): Attr[] {
       ),
     );
     warn(ctx, {
-      message: `duplicate attribute ${attrLabel(attr)}: the later one${winner.sugar ? ` (${attrLabel(winner)})` : ""} at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
+      message: `duplicate ${voiceOfCtx(ctx).attribute} ${attrLabel(attr)}: the later one${winner.sugar ? ` (${attrLabel(winner)})` : ""} at ${wins.line}:${wins.column + 1} wins, so this one is dropped`,
       line: at.line,
       column: at.column,
       end: { line: end.line, column: end.column },
@@ -2308,7 +2317,11 @@ function containsAttributeTags(node: Node): boolean {
  * and only rejects args plus a plain *attribute*. `target` absent, or
  * `"dynamic"`/`"define"`, takes this lenient rule; `"name"` stays strict.
  */
-function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
+function rejectArgsWithProps(
+  ctx: Ctx,
+  node: Node,
+  target?: ComponentTarget,
+): void {
   if ((tagArgsOf(node) ?? []).length === 0) return;
   const lenient =
     !target || target.kind === "dynamic" || target.kind === "define";
@@ -2316,7 +2329,7 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
     if (tagAttributesOf(node).length === 0) return;
     raise(
       UNSUPPORTED_TAG_ARGUMENTS_CODE,
-      "Tag does not support arguments when attributes present.",
+      `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} present.`,
       tagNameSpanOf(node) ?? node,
     );
   }
@@ -2329,7 +2342,7 @@ function rejectArgsWithProps(node: Node, target?: ComponentTarget): void {
   }
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
-    "Tag does not support arguments when attributes or body present.",
+    `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} or body present.`,
     tagNameSpanOf(node) ?? node,
   );
 }
@@ -2356,8 +2369,9 @@ function warnDefineExtraParams(
     hasContent(bodyChildren(node));
   if (!carries) return;
   const pos = posOf(ctx, tagNameSpanOf(node) ?? node);
+  const voice = voiceOfCtx(ctx);
   warn(ctx, {
-    message: `\`<${name}>\` has ${params.length} params, but only the first parameter receives the attributes object; destructure it (\`|{ a, b }|\`) instead of reading one param per attribute`,
+    message: `${tagText(ctx, name, node)} has ${params.length} params, but only the first parameter receives the ${voice.attributes} object; destructure it (\`|{ a, b }|\`) instead of reading one param per ${voice.attribute}`,
     line: pos.line,
     column: pos.column,
     ...warningEnd(ctx, node),
@@ -2366,7 +2380,11 @@ function warnDefineExtraParams(
   });
 }
 
-function validateParentCollision(node: Node, schema: AttrSchema): void {
+function validateParentCollision(
+  ctx: Ctx,
+  node: Node,
+  schema: AttrSchema,
+): void {
   const owner = schema.collisionOwner;
   if (!owner) return;
   const parentAttrs = new Set(
@@ -2378,7 +2396,7 @@ function validateParentCollision(node: Node, schema: AttrSchema): void {
   if (parentAttrs.has(name)) {
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
-      `attribute tag \`@${name}\` collides with attribute \`${name}\``,
+      `${voiceOfCtx(ctx).attributeTag} \`@${name}\` collides with ${voiceOfCtx(ctx).attribute} \`${name}\``,
       tagNameSpanOf(node) ?? node,
     );
   }
@@ -2446,7 +2464,7 @@ function raiseInvalidCalleeInput(
     const position = spanPosition(ctx, parseError.span);
     raise(
       INVALID_CALLEE_INPUT_CODE,
-      `can't read \`<${owner}>\`'s Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(parseError.message)}`,
+      `can't read ${voiceOfCtx(ctx).tag(owner)}'s Input (${position.file}:${position.line}:${position.column}): ${cleanParseMessage(parseError.message)}`,
       { loc: { start: attributeTagNamePosition(ctx, firstTag) } },
     );
   }
@@ -2459,7 +2477,7 @@ function raiseInvalidCalleeInput(
     const position = spanPosition(ctx, error.span);
     raise(
       INVALID_CALLEE_INPUT_CODE,
-      `can't read \`<${owner}>\`'s declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`,
+      `can't read ${voiceOfCtx(ctx).tag(owner)}'s declaration of \`${name}\` (${position.file}:${position.line}); ${error.message}`,
       { loc: { start: attributeTagNamePosition(ctx, tag) } },
     );
   }
@@ -2488,6 +2506,7 @@ function raiseInvalidOwnInput(ctx: Ctx, input: CalleeInput): void {
 }
 
 function declarationFor(
+  ctx: Ctx,
   schema: AttrSchema,
   name: string,
   node: Node,
@@ -2497,14 +2516,14 @@ function declarationFor(
   if (schema.otherProps?.has(name)) {
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
-      `\`${name}\` is declared as a plain prop; declare it \`AttrTag\` to pass it as \`<@${name}>\``,
+      `\`${name}\` is declared as a plain prop; declare it \`AttrTag\` to pass it as ${voiceOfCtx(ctx).attrTag(name)}`,
       tagNameSpanOf(node) ?? node,
     );
   }
   if (schema.declarations && !schema.open) {
     raise(
       UNKNOWN_ATTRIBUTE_TAG_CODE,
-      `\`<${schema.owner}>\` declares no attribute tag \`${name}\``,
+      `${ownerLabel(voiceOfCtx(ctx), schema.owner)} declares no ${voiceOfCtx(ctx).attributeTag} \`${name}\``,
       tagNameSpanOf(node) ?? node,
     );
   }
@@ -2614,6 +2633,7 @@ function planAttributeTags(
   schema: AttrSchema,
   ownerNode: Node,
 ): AttrTagProp[] {
+  const voice = voiceOfCtx(ctx);
   const names: string[] = [];
   for (const tag of flat) if (!names.includes(tag.name)) names.push(tag.name);
   for (const [name, declaration] of schema.declarations ?? []) {
@@ -2622,7 +2642,7 @@ function planAttributeTags(
     if (declaration.cardinality === "required" && !names.includes(name)) {
       raise(
         MISSING_ATTRIBUTE_TAG_CODE,
-        `missing required attribute tag \`<@${name}>\``,
+        `missing required ${voice.attributeTag} ${voice.attrTag(name)}`,
         ownerNode.name ?? ownerNode,
       );
     }
@@ -2641,7 +2661,7 @@ function planAttributeTags(
         );
         raise(
           REPEATED_ATTRIBUTE_TAG_CODE,
-          `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           loop
             ? { loc: { start: loop.loc, end: forNameEnd(ctx, loop) } }
             : ownerNode,
@@ -2651,7 +2671,7 @@ function planAttributeTags(
         const repeated = occurrences[1] ?? first;
         raise(
           REPEATED_ATTRIBUTE_TAG_CODE,
-          `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           repeated
             ? {
                 loc: {
@@ -2669,7 +2689,7 @@ function planAttributeTags(
         );
         raise(
           MISSING_ATTRIBUTE_TAG_CODE,
-          `\`<@${name}>\` is required but not provided on every \`<if>\` path`,
+          `${voice.attrTag(name)} is required but not provided on every \`<if>\` path`,
           conditional ? { loc: { start: conditional.loc } } : ownerNode,
         );
       }
@@ -2694,7 +2714,7 @@ function planAttributeTags(
     ) {
       requireAttrTagsV2(
         ctx,
-        `the declared shape of \`<@${name}>\``,
+        `the declared shape of ${voice.attrTag(name)}`,
         "isn't",
         ownerNode.name ?? ownerNode,
       );
@@ -2737,9 +2757,10 @@ function rejectAttributeTagArguments(ctx: Ctx, node: Node, name: string): void {
   const first = args[0];
   const last = args[args.length - 1];
   if (first === undefined || last === undefined) return;
+  const voice = voiceOfCtx(ctx);
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
-    `\`<@${name}>\` does not take arguments. Remove \`(…)\` and pass the value as an attribute (\`<@${name} value=1>\`) or as the tag's body.`,
+    `${voice.attrTag(name)} does not take arguments. Remove \`(…)\` and pass the value as ${voice.anAttribute} (\`<@${name} value=1>\`) or as the tag's body.`,
     {
       loc: {
         start: positionAtOffset(ctx, nodeSpan(ctx, first).sourceStart),
@@ -2755,11 +2776,12 @@ function lowerAuthoredAttributeTag(
   schema: AttrSchema,
 ): AttributeTag {
   const name = attrName(node);
+  const voice = voiceOfCtx(ctx);
   rejectAttributeTagArguments(ctx, node, name);
   if (schema.customTagContract) rejectBadRefinements(ctx, node);
   else validateBoundAttributes(ctx, node);
-  const declaration = declarationFor(schema, name, node);
-  validateParentCollision(node, schema);
+  const declaration = declarationFor(ctx, schema, name, node);
+  validateParentCollision(ctx, node, schema);
   const attrs = tagAttributesOf(node);
   const contentAttr = attrs.find(
     (attr: Node) =>
@@ -2768,14 +2790,14 @@ function lowerAuthoredAttributeTag(
   if (contentAttr) {
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
-      "`content` is reserved on an attribute tag; it names the body",
+      `\`content\` is reserved on ${voice.anAttribute} tag; it names the body`,
       contentAttr,
     );
   }
   if (attrs.length > 0) {
     requireAttrTagsV2(
       ctx,
-      `\`<@${name}>\`: attributes on attribute tags`,
+      `${voice.attrTag(name)}: ${voice.attributes} on ${voice.attributeTags}`,
       "aren't",
       attrs[0],
     );
@@ -2783,7 +2805,7 @@ function lowerAuthoredAttributeTag(
   if (declaration?.as === "renderable" && attrs.length > 0) {
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
-      `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes`,
+      `${voice.attrTag(name)} is renderable in ${ownerLabel(voice, schema.owner)}; it can't take ${voice.attributes}`,
       tagNameSpanOf(node) ?? node,
     );
   }
@@ -2793,8 +2815,8 @@ function lowerAuthoredAttributeTag(
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
       declaration.hasParams
-        ? `\`<@${name}>\` declares params in \`<${schema.owner}>\`; add \`|…|\``
-        : `\`<@${name}>\` declares no params in \`<${schema.owner}>\`; remove \`|…|\``,
+        ? `${voice.attrTag(name)} declares params in ${ownerLabel(voice, schema.owner)}; add \`|…|\``
+        : `${voice.attrTag(name)} declares no params in ${ownerLabel(voice, schema.owner)}; remove \`|…|\``,
       tagNameSpanOf(node) ?? node,
     );
   }
@@ -2824,14 +2846,14 @@ function lowerAuthoredAttributeTag(
     const firstAttrTag = firstAttributeTag(node) ?? node;
     requireAttrTagsV2(
       ctx,
-      `\`<@${name}>\`: nested attribute tags`,
+      `${voice.attrTag(name)}: nested ${voice.attributeTags}`,
       "aren't",
       firstAttrTag,
     );
     if (declaration?.as === "renderable") {
       raise(
         INVALID_ATTRIBUTE_TAG_CODE,
-        `\`<@${name}>\` is renderable in \`<${schema.owner}>\`; it can't take attributes or nested attribute tags`,
+        `${voice.attrTag(name)} is renderable in ${ownerLabel(voice, schema.owner)}; it can't take ${voice.attributes} or nested ${voice.attributeTags}`,
         tagNameSpanOf(node) ?? node,
       );
     }
@@ -2856,7 +2878,12 @@ function lowerAttributeFor(
   node: Node,
   schema: AttrSchema,
 ): AttributeTagNode {
-  requireAttrTagsV2(ctx, "attribute tags inside `<for>`", "aren't", node);
+  requireAttrTagsV2(
+    ctx,
+    `${voiceOfCtx(ctx).attributeTags} inside \`<for>\``,
+    "aren't",
+    node,
+  );
   const loop = lowerForHead(ctx, node, true);
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, loop.bindings, paramGuards(node, "for"));
@@ -2880,7 +2907,12 @@ function lowerAttributeIf(
   schema: AttrSchema,
 ): [AttributeTagNode, number] {
   const first = siblings[index];
-  requireAttrTagsV2(ctx, "attribute tags inside `<if>`", "aren't", first);
+  requireAttrTagsV2(
+    ctx,
+    `${voiceOfCtx(ctx).attributeTags} inside \`<if>\``,
+    "aren't",
+    first,
+  );
   const branches: Array<{
     test?: Expr;
     span: SourceSpan;
@@ -2926,7 +2958,7 @@ function lowerAttributeIf(
   ) {
     raise(
       INVALID_ATTRIBUTE_TAG_CODE,
-      "Cannot have attribute tags and body content under a control flow tag.",
+      `Cannot have ${voiceOfCtx(ctx).attributeTags} and body content under a control flow tag.`,
       branchContent[0],
     );
   }
@@ -3106,7 +3138,7 @@ function lowerAttributeTags(
     if (offending) {
       raise(
         INVALID_ATTRIBUTE_TAG_CODE,
-        "Cannot have attribute tags and body content under a control flow tag.",
+        `Cannot have ${voiceOfCtx(ctx).attributeTags} and body content under a control flow tag.`,
         offending,
       );
     }
@@ -3127,7 +3159,7 @@ function lowerAttributeTags(
     if (childrenTag) {
       raise(
         INVALID_ATTRIBUTE_TAG_CODE,
-        "attribute tag `@children` collides with the parent's ordinary children",
+        `${voiceOfCtx(ctx).attributeTag} \`@children\` collides with the parent's ordinary children`,
         {
           loc: {
             start: positionAtOffset(ctx, childrenTag.nameSpan.sourceStart),
@@ -3199,7 +3231,7 @@ function lowerIfChain(
     }
 
     validateBoundAttributes(ctx, child);
-    rejectUnsupportedFields(ctx, child, `\`<${childName}>\``);
+    rejectUnsupportedFields(ctx, child, tagText(ctx, String(childName), child));
     // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
     // `<else-if=cond>` spells it as the tag's first (value) attribute.
     const ifAttr =
@@ -3584,9 +3616,25 @@ function failUncalled(
 ): never {
   raise(
     UNSUPPORTED_MARKO_FILE_CODE,
-    found.file.endsWith(".marko")
-      ? markoFileTagMessage(ctx.filename, name, found.file, productOf(ctx))
-      : uncalledTagFileMessage(ctx.filename, name, found, productOf(ctx)),
+    voicedAt(node, () =>
+      found.file.endsWith(".marko")
+        ? markoFileTagMessage(
+            ctx.filename,
+            name,
+            found.file,
+            productOf(ctx),
+            voiceOfCtx(ctx),
+            triggerOf(node)?.trigger,
+          )
+        : uncalledTagFileMessage(
+            ctx.filename,
+            name,
+            found,
+            productOf(ctx),
+            voiceOfCtx(ctx),
+            triggerOf(node)?.trigger,
+          ),
+    ),
     node,
   );
 }
@@ -3612,11 +3660,15 @@ function rejectMarkoImportTag(
   }
   raise(
     UNSUPPORTED_MARKO_FILE_CODE,
-    markoFileTagMessage(
-      ctx.filename,
-      written,
-      resolve(dirname(ctx.filename), from),
-      productOf(ctx),
+    voicedAt(node, () =>
+      markoFileTagMessage(
+        ctx.filename,
+        written,
+        resolve(dirname(ctx.filename), from),
+        productOf(ctx),
+        voiceOfCtx(ctx),
+        triggerOf(node)?.trigger,
+      ),
     ),
     node,
   );
@@ -3638,7 +3690,7 @@ function rejectDynamicTagVarWithoutReturn(
 ): void {
   if (!tagVarOf(node) || ctx.tagVarShadowed?.has(binding)) return;
   if (ctx.defines.has(binding)) {
-    rejectUnsupportedFields(ctx, node, `\`<${binding}>\``, {
+    rejectUnsupportedFields(ctx, node, voiceOfCtx(ctx).tag(binding), {
       attributeTags: true,
       args: true,
       params: true,
@@ -3651,7 +3703,7 @@ function rejectDynamicTagVarWithoutReturn(
   }
   raise(
     INVALID_TAG_VAR_CODE,
-    `\`<${binding}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+    `${voiceOfCtx(ctx).tag(binding)} does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
     tagVarOf(node),
   );
 }
@@ -3696,7 +3748,16 @@ function discoveredTagModuleOf(
   if (modulePath?.endsWith(".marko"))
     raise(
       UNSUPPORTED_MARKO_FILE_CODE,
-      markoFileTagMessage(ctx.filename, name, modulePath, productOf(ctx)),
+      voicedAt(node, () =>
+        markoFileTagMessage(
+          ctx.filename,
+          name,
+          modulePath,
+          productOf(ctx),
+          voiceOfCtx(ctx),
+          triggerOf(node)?.trigger,
+        ),
+      ),
       node,
     );
   return modulePath;
@@ -3713,7 +3774,7 @@ function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
   const product = productOf(ctx);
   raise(
     INVALID_TAG_CALL_CODE,
-    `\`<${name}>\` is declared by a taglib with no template (a \`renderer\`), which ${product} cannot call. ${product === MX_DIALECT.name ? `Write the tag as \`tags/${name}.mx\`, or import it explicitly.` : "Import it explicitly."}`,
+    `${tagText(ctx, name, node)} is declared by a taglib with no template (a \`renderer\`), which ${product} cannot call. ${product === MX_DIALECT.name ? `Write the tag as \`tags/${name}.mx\`, or import it explicitly.` : "Import it explicitly."}`,
     node,
   );
 }
@@ -3796,7 +3857,7 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
   );
   const at = posOf(ctx, node);
   warn(ctx, {
-    message: `\`<${name}>\` is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
+    message: `${tagText(ctx, name, node)} is the native element; the \`${name}\` ${kind}${where} is not called. ${fix}`,
     line: at.line,
     column: at.column,
     ...warningEnd(ctx, node),
@@ -4877,6 +4938,7 @@ function validateCustomAttributeTagBodies(
   allowUncontractedTags: boolean,
   controlName?: string,
 ): void {
+  const voice = voiceOfCtx(ctx);
   const children = bodyChildren(node);
   const directTags = [
     ...new Set<Node>([
@@ -4905,7 +4967,7 @@ function validateCustomAttributeTagBodies(
       if (controlName) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: attribute tag \`<@${name}>\` may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve attribute-tag control flow`,
+          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside ${voice.tag(controlName)}; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
           tagNameSpanOf(tag) ?? tag,
         );
       }
@@ -4913,7 +4975,7 @@ function validateCustomAttributeTagBodies(
       if (attrs.length > 0) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: attribute tag \`<@${name}>\` does not support attributes`,
+          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} does not support ${voice.attributes}`,
           attrs[0],
         );
       }
@@ -4929,12 +4991,12 @@ function validateCustomAttributeTagBodies(
       if (nested) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: attribute tag \`<@${name}>\` does not support nested attribute tags`,
+          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} does not support nested ${voice.attributeTags}`,
           tagNameSpanOf(nested) ?? nested.name ?? nested,
         );
       }
     }
-    const nestedOwner = `${owner}: \`<@${name}>\``;
+    const nestedOwner = `${owner}: ${voice.attrTag(name)}`;
     if (declaration) {
       validateCustomTagChildren(
         declaration,
@@ -4945,6 +5007,7 @@ function validateCustomAttributeTagBodies(
         },
         nestedOwner,
         blameEndOffset(tag),
+        voice,
       );
     }
     validateCustomAttributeTagBodies(
@@ -5017,6 +5080,37 @@ function triggerOf(node: Node): { trigger: TagTrigger } | undefined {
   };
 }
 
+/**
+ * A tag in backticks as the file's dialect spells it (`<name>` for MX), with
+ * the trigger that made `node` when it has one.
+ */
+function tagText(ctx: Ctx, name: string, node?: Node): string {
+  return voiceOfCtx(ctx).tag(name, node ? triggerOf(node)?.trigger : undefined);
+}
+
+/** An owner label (`name`, or `@name` for an attribute tag) as a message spells it. */
+function ownerLabel(voice: Voice, owner: string): string {
+  return owner.startsWith("@")
+    ? voice.attrTag(owner.slice(1))
+    : voice.tag(owner);
+}
+
+/**
+ * Runs `run`, one tag's lowering. A dialect `formatTag` that breaks its
+ * contract while a message is spelled surfaces here as an
+ * `MX_DIALECT_HOOK_ERROR` at the tag being lowered.
+ */
+function voicedAt<T>(node: Node, run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      raise(DIALECT_HOOK_ERROR_CODE, error.message, node);
+    }
+    throw error;
+  }
+}
+
 function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
   const span = exprSpan(ctx, tagNameSpanOf(node));
   return {
@@ -5032,6 +5126,7 @@ function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
  * child, so it is an error on every target and in every tool.
  */
 function rejectNearExplicitChild(
+  ctx: Ctx,
   node: Node,
   match: WildcardMatch,
   label: string,
@@ -5040,7 +5135,7 @@ function rejectNearExplicitChild(
   if (near === undefined) return;
   raise(
     NEAR_EXPLICIT_CHILD_CODE,
-    `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child \`<${near}>\`?`,
+    `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child ${tagText(ctx, near)}?`,
     node,
   );
 }
@@ -5159,6 +5254,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           kind: "ChildTag",
           name: wildcard?.canonical ?? name,
           loc,
+          ...triggerOf(node),
           ...(why ? { hint: why } : {}),
           ...(wildcard ? { alias: aliasOf(ctx, node, wildcard) } : {}),
           ...(known ? { known } : {}),
@@ -5209,7 +5305,7 @@ function raiseDeferredContract(
   if (!isTranslateError(error)) {
     raise(
       INVALID_CONTRACT_CODE,
-      `\`<${name}>\`: ${error instanceof Error ? error.message : String(error)}`,
+      `${tagText(ctx, name, node)}: ${error instanceof Error ? error.message : String(error)}`,
       node,
     );
   }
@@ -5284,7 +5380,8 @@ function lowerCustomTag(
   raiseDeferredContract(ctx, node, name, definition);
   rejectBadRefinements(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
-  const label = tagLabel(name, alias);
+  const voice = voiceOfCtx(ctx);
+  const label = tagLabel(name, alias, voice, triggerOf(node)?.trigger);
   validateCustomTagParents(
     definition,
     name,
@@ -5292,8 +5389,10 @@ function lowerCustomTag(
     ctx.authoredAncestors?.at(-2) ?? "#root",
     label,
     blameEndOffset(node),
+    voice,
+    triggerOf(node)?.trigger,
   );
-  if (wildcard) rejectNearExplicitChild(node, wildcard, label);
+  if (wildcard) rejectNearExplicitChild(ctx, node, wildcard, label);
   rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
     params: true,
@@ -5344,9 +5443,10 @@ function lowerCustomTag(
   const childTree = authoredChildTree(ctx, children);
   validateCustomTagChildren(
     definition,
-    { name, loc: posOf(ctx, node), childTree },
+    { name, loc: posOf(ctx, node), childTree, ...triggerOf(node) },
     label,
     blameEndOffset(node),
+    voice,
   );
   const handsToHost =
     !isBuiltin &&
@@ -5428,7 +5528,7 @@ function lowerComponent(
     // named or `define` call reaches `lowerComponent` directly and needs its
     // own pass so `<Card(1)><@head>…</@head></Card>` fails here instead of
     // reaching a host emitter, which can only silently drop one side.
-    rejectArgsWithProps(node, target);
+    rejectArgsWithProps(ctx, node, target);
   }
   // `/var` binds an imported `.mx` unit's `<return>` the way it does a
   // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
@@ -5437,14 +5537,14 @@ function lowerComponent(
   if (tagVarOf(node) && returnShape === "none") {
     raise(
       INVALID_TAG_VAR_CODE,
-      `\`<${targetName(target)}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+      `${tagText(ctx, targetName(target), node)} does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
       tagVarOf(node),
     );
   }
   if (tagVarOf(node) && unreadable) {
     raise(
       INVALID_TAG_VAR_CODE,
-      `\`/${declName(ctx, tagVarOf(node))}\` on \`<${targetName(target)}>\` can't bind: ${unreadable.path} ${unreadable.reason}`,
+      `\`/${declName(ctx, tagVarOf(node))}\` on ${tagText(ctx, targetName(target), node)} can't bind: ${unreadable.path} ${unreadable.reason}`,
       tagVarOf(node),
     );
   }
@@ -5455,7 +5555,7 @@ function lowerComponent(
   const allowVar =
     returnShape === "returns" ||
     (target.kind === "dynamic" && ctx.declarations.bindsDynamicTagVar === true);
-  rejectUnsupportedFields(ctx, node, `\`<${targetName(target)}>\``, {
+  rejectUnsupportedFields(ctx, node, tagText(ctx, targetName(target), node), {
     attributeTags: true,
     args: true,
     params: true,
@@ -5468,7 +5568,7 @@ function lowerComponent(
   if (input.kind === "unresolved" && containsAttributeTags(node)) {
     const pos = posOf(ctx, tagNameSpanOf(node) ?? node);
     warn(ctx, {
-      message: `couldn't read \`<${owner}>\`'s Input (\`${input.specifier}\` not resolvable); attribute-tag shape inferred from this call`,
+      message: `couldn't read ${tagText(ctx, owner, node)}'s Input (\`${input.specifier}\` not resolvable); ${voiceOfCtx(ctx).attributeTagCompound} shape inferred from this call`,
       line: pos.line,
       column: pos.column,
       ...warningEnd(ctx, node),
@@ -5625,7 +5725,7 @@ function rejectUncalledParameterizedAttributeTag(
   if (!readsDeclaredRenderable && !readsDeclaredContent) return;
   raise(
     INVALID_ATTRIBUTE_TAG_CODE,
-    `\`${expression}\` is a parameterized attribute tag; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
+    `\`${expression}\` is a parameterized ${voiceOfCtx(ctx).attributeTag}; pass its arguments with \`<\${${expression}(/* arguments */)}/>\``,
     node,
   );
 }
@@ -5645,8 +5745,9 @@ function pushAuthoredAncestor(ctx: Ctx, name: string, node: Node): () => void {
 }
 
 /** An attribute tag (`name` with its `@`) written outside a component call. */
-function strayAttributeTagMessage(name: string): string {
-  return `attribute tag \`<${name}>\` is only valid directly inside a component call`;
+function strayAttributeTagMessage(ctx: Ctx, name: string): string {
+  const voice = voiceOfCtx(ctx);
+  return `${voice.attributeTag} ${voice.attrTag(name.replace(/^@/, ""))} is only valid directly inside a component call`;
 }
 
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
@@ -5755,7 +5856,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // dynamic target, resolved at run time like any other host.
   if (node.name && !hasStaticName(node)) {
     validateBoundAttributes(ctx, node);
-    rejectArgsWithProps(node);
+    rejectArgsWithProps(ctx, node);
     const isBare =
       tagAttributesOf(node).length === 0 && !bodyChildren(node).length;
     const dynamicExpr = exprOf(ctx, tagNameExprOf(node));
@@ -5769,7 +5870,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       if (read.declaration.as === "data" && !read.readsContent) {
         raise(
           INVALID_TAG_CALL_CODE,
-          `\`input.${read.name}\` is a data attribute tag; render its body with \`<\${input.${read.name}.content}/>\``,
+          `\`input.${read.name}\` is a data ${voiceOfCtx(ctx).attributeTag}; render its body with \`<\${input.${read.name}.content}/>\``,
           node.name,
         );
       }
@@ -5852,7 +5953,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       (ctx.declarations.isBuiltinTag?.(name, ctx) ??
         !ctx.declarations.isDelegatedTag?.(name, ctx)));
   if (!fileLocalBinding && compilerValueTag)
-    validateBuiltinValueAttributes(node, name);
+    validateBuiltinValueAttributes(ctx, node, name);
 
   // A `server`/`client` statement's text is checked like any statement
   // (#395 r3), before a host runs it (html's `server`), drops it (html's
@@ -5929,20 +6030,24 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       const label = attrByName(node, "if") ? "else if" : "else";
       return raise(
         INVALID_IF_CODE,
-        `\`<${label}>\` without a preceding \`<if>\``,
+        `${tagText(ctx, label, node)} without a preceding \`<if>\``,
         node,
       );
     }
     case "else-if":
       return raise(
         INVALID_IF_CODE,
-        `\`<${name}>\` without a preceding \`<if>\``,
+        `${tagText(ctx, name, node)} without a preceding \`<if>\``,
         node,
       );
   }
 
   if (name.startsWith("@"))
-    raise(INVALID_ATTRIBUTE_TAG_CODE, strayAttributeTagMessage(name), node);
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
+      strayAttributeTagMessage(ctx, name),
+      node,
+    );
 
   // Core-owned custom tags (`<try>`) are consulted before a caller's own
   // `ctx.customTags`, and win unconditionally: a caller registering the same
@@ -6189,8 +6294,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     raise(
       UNBOUND_COMPONENT_CODE,
       capitalBinding(ctx, name)
-        ? `\`<${name}>\` is bound in this file, but ${ctx.dialect?.name} files never call a binding as a tag (\`bindingsCallTags: false\`), and no \`${name}\` tag is registered: register one, or call the binding as \`<\${${name}}>\``
-        : `\`<${name}>\` has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
+        ? `${tagText(ctx, name, node)} is bound in this file, but ${ctx.dialect?.name} files never call a binding as a tag (\`bindingsCallTags: false\`), and no \`${name}\` tag is registered: register one, or call the binding as \`<\${${name}}>\``
+        : `${tagText(ctx, name, node)} has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
       node,
     );
   }
@@ -6206,8 +6311,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     raise(
       UNKNOWN_TAG_CODE,
       lowercaseBinding
-        ? `unknown tag \`<${name}>\`: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
-        : `unknown tag \`<${name}>\`: not an HTML element, and no matching import or \`<define>\` is in scope`,
+        ? `unknown tag ${tagText(ctx, name, node)}: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
+        : `unknown tag ${tagText(ctx, name, node)}: not an HTML element, and no matching import or \`<define>\` is in scope`,
       node,
     );
   }
@@ -6229,7 +6334,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx,
     );
   }
-  rejectUnsupportedFields(ctx, node, `\`<${name}>\``);
+  rejectUnsupportedFields(ctx, node, tagText(ctx, name, node));
 
   // Void by the same table the parse read (the target's `nativeTags`, else
   // core's own HTML elements), so a body the parse kept is never dropped.
@@ -6268,8 +6373,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
  * tests assert the literal rather than importing the thing under test.
  */
 // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
-const CDATA_MESSAGE =
-  '`<![CDATA[…]]>` is not supported: write the text inline, as `${"…"}` when it must stay raw, or in an attribute value';
+const cdataMessage = (voice: Voice): string =>
+  `\`<![CDATA[…]]>\` is not supported: write the text inline, as \`\${"…"}\` when it must stay raw, or in ${voice.anAttribute} value`;
 // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
 const DECLARATION_MESSAGE =
   "`<?…?>` (an XML declaration or processing instruction) is not supported: remove it";
@@ -6459,7 +6564,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       const child: Node = children[index];
 
       if (isTagNode(child) && tagNameOf(child) === "if") {
-        const lowered = recover(ctx, () => lowerIfChain(ctx, children, index));
+        const lowered = recover(ctx, () =>
+          voicedAt(child, () => lowerIfChain(ctx, children, index)),
+        );
         if (lowered) {
           out.push(lowered[0]);
           index = lowered[1];
@@ -6529,7 +6636,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             checkScriptBodySyntax(ctx, child);
             checkStaleDerivedReads(ctx, child);
             checkScriptBodyWrites(ctx, child);
-            const lowered = lowerTag(ctx, child);
+            const lowered = voicedAt(child, () => lowerTag(ctx, child));
             if (Array.isArray(lowered)) out.push(...lowered);
             else out.push(lowered);
             declareRenderLet(ctx, child);
@@ -6539,7 +6646,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           case "MxAttributeTag":
             raise(
               INVALID_ATTRIBUTE_TAG_CODE,
-              strayAttributeTagMessage(`@${child.name.value}`),
+              strayAttributeTagMessage(ctx, `@${child.name.value}`),
               child,
             );
             break;
@@ -6586,7 +6693,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           // not this switch's, which is why nothing here has to special-case them.
           case "MarkoCDATA":
           case "MxCDATA":
-            raise(UNSUPPORTED_CONSTRUCT_CODE, CDATA_MESSAGE, child);
+            raise(
+              UNSUPPORTED_CONSTRUCT_CODE,
+              cdataMessage(voiceOfCtx(ctx)),
+              child,
+            );
             break;
           case "MarkoDeclaration":
           case "MxDeclaration":

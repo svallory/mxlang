@@ -171,6 +171,32 @@ A file with `<widget/>` that is not declared now reports `KIT_UNKNOWN_TAG` where
 - **Two keys may share a value** (`KIT_BAD` for both), at the cost of telling them apart by message.
 - **A wrong map fails the dialect at load**, in your module: it is not an object, a key is not a core code (the message names it), a value is not a non-empty string, a value starts with `MX_` (that prefix is MX's own), or a key is `MX_INTERNAL_ERROR` or `MX_DIALECT_HOOK_ERROR`.
 
+## Your own words in core's messages: `messageVocabulary`
+
+Core's messages about a dialect file say "attribute", "attribute tag", "data file" and "data tree", and spell a tag as `` `<name>` ``. In a language whose files have no angle brackets, or that calls `key=value` an option, those words read wrong. `messageVocabulary` (`@unstable`) states the words to use; every member is optional.
+
+```ts
+export default {
+  table: {},
+  messageVocabulary: {
+    attribute: { one: "option", many: "options" },
+    file: "Kit file",
+    tree: "Kit file",
+    formatTag: ({ name, trigger }) => (trigger ? trigger.text : name),
+  },
+} satisfies Partial<Dialect>;
+```
+
+With that, `` `<string>`: unknown attribute `bogus` `` reads `` `string`: unknown option `bogus` ``, and `` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page `` reads `` `!doctype` means nothing in a Kit file; the Kit file describes tags and data, not a page ``.
+
+- **`attribute`** is `{ one, many, article? }`, an object with `many` required. Core derives every form it needs ("Option", "an option", "option tag", "option-tag") from the two. `article` (`"a"` or `"an"`) is the indefinite article for `one`; leave it out and core writes "an" before a vowel letter and "a" otherwise, which is wrong for a word like "hour" or "user": state it there.
+- **`file`** and **`tree`** are noun phrases for "a data file" and "the data tree". Core writes the article itself ("a Kit file", "an entity file"), so give the bare noun.
+- **`formatTag`** receives `{ name, form, trigger? }` and returns the bare spelling; core adds the backticks. `form` is `"tag"`, `"attributeTag"` (`name` has no `@`) or `"dynamic"` (a tag whose name is an expression; `name` is its source). `trigger` is set when your own `lowerTrigger` made the tag, and `trigger.text` is what the user wrote (`&title`), so a message can name the thing the user typed instead of the tag it lowered to. Return `undefined` for MX's spelling of that tag.
+- **A broken `formatTag`** is an error, never a silent fallback. A throw, or a return that is not `undefined` or a non-empty single-line string without backticks, reports `MX_DIALECT_HOOK_ERROR` at the tag, naming the hook.
+- **What stays MX's.** Messages about MX's own tags (`<for>`, `<script>`, `<define>`, ...) and the text you read when registering a contract or a tag file keep MX's wording. Messages you raise yourself (`ctx.fail`, `explainUnknownTag`) are yours and are not reworded.
+- **A wrong vocabulary fails the dialect at load**, in your module: it is not an object, a member is not one of the four, `attribute` is not an `{ one, many, article? }` object, a noun is empty, multi-line or holds a backtick, `article` is not `"a"` or `"an"`, or `formatTag` is not a function.
+- **`.mx` files are unchanged.** A dialect with no `messageVocabulary` reads exactly as before.
+
 ## Passing your dialect to a call
 
 A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a deep-frozen object. Core validates the object it is given and remembers the result only when the object is deep-frozen, that is, it and every plain object and array inside it (`table`, its rows, `contracts`) are frozen: a deep-frozen dialect is validated once, any other again on every call, because a mutable object can change between calls. A dialect frozen only at the top, with an unfrozen `table` or `contracts` inside, is validated again on every call, so a change to those is seen. RegExps and functions inside it need not be frozen. Freeze the nested objects and arrays too (a deep freeze) to have the dialect validated once. The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.

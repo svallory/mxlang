@@ -30,6 +30,7 @@ import {
 import {
   ATTRIBUTE_TAG_DROPPED_CODE,
   CONTENT_NOT_ALLOWED_CODE,
+  DIALECT_HOOK_ERROR_CODE,
   INVALID_ATTRIBUTE_TAG_CODE,
   INVALID_ATTRIBUTE_VALUE_CODE,
   INVALID_CONTRACT_CODE,
@@ -67,6 +68,12 @@ import type {
 } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
+import {
+  MX_VOICE,
+  type Voice,
+  VoiceHookError,
+  voiceOfCtx,
+} from "./message-vocabulary.ts";
 import { isNativeVoid } from "./tag-table.ts";
 import {
   hasTemplate,
@@ -243,6 +250,12 @@ export type ChildNode =
       alias?: TagAlias;
       /** Why no wildcard entry may claim this name: a built-in or a registered tag, or a binding in the file. */
       known?: "built-in" | "registered" | "bound";
+      /**
+       * Set when a dialect's `lowerTrigger` built the child (`ctx.child`): a
+       * message spells the tag as its author wrote it (`&title`) when the
+       * dialect's `messageVocabulary.formatTag` says so.
+       */
+      trigger?: TagTrigger;
     }
   | { kind: "ChildText"; loc: Position }
   | { kind: "ChildDynamic"; loc: Position }
@@ -497,6 +510,7 @@ function rebuildAttributeTagPlan(
   originalTree: readonly AttributeTagNode[],
   originalProps: readonly AttrTagProp[],
   tags: readonly AttributeTag[],
+  voice: Voice = MX_VOICE,
 ): Pick<TagCall, "attributeTagTree" | "attrTagProps"> {
   const remaining = new Map<AttributeTag, number>();
   for (const tag of tags) remaining.set(tag, (remaining.get(tag) ?? 0) + 1);
@@ -534,18 +548,20 @@ function rebuildAttributeTagPlan(
         failAt(
           REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
-          `\`<@${name}>\` may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may not appear inside ${voice.tag("for")} (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           occurrences[0]?.loc ?? { line: 0, column: 0 },
           nameEndOf(occurrences[0]),
+          voice,
         );
       }
       if (range.max > 1) {
         failAt(
           REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
-          `\`<@${name}>\` may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may appear at most once (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           (occurrences[1] ?? occurrences[0])?.loc ?? { line: 0, column: 0 },
           nameEndOf(occurrences[1] ?? occurrences[0]),
+          voice,
         );
       }
     }
@@ -868,8 +884,64 @@ function failAt(
   message: string,
   at: Position,
   end?: number,
+  voice: Voice = MX_VOICE,
 ): never {
-  return failForOwner(code, `\`<${tagName}>\``, message, at, undefined, end);
+  return failForOwner(
+    code,
+    spellAt(voice, tagName, at),
+    message,
+    at,
+    undefined,
+    end,
+  );
+}
+
+/** A call's owner label, spelled through the voice (a failure is the hook error at the call). */
+function tagLabelAt(
+  call: Pick<TagCall, "name" | "alias" | "loc" | "trigger">,
+  voice: Voice,
+): string {
+  try {
+    return tagLabel(call.name, call.alias, voice, call.trigger);
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      throw codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        error.message,
+        call.loc.line,
+        call.loc.column,
+        call.loc.file,
+      );
+    }
+    throw error;
+  }
+}
+
+/**
+ * `voice.tag(name)`, or, when the dialect's `formatTag` broke its contract,
+ * the hook error at `at`: the label being built is replaced by the error about
+ * the hook.
+ */
+function spellAt(
+  voice: Voice,
+  name: string,
+  at: Position,
+  trigger?: TagTrigger,
+): string {
+  try {
+    return voice.tag(name, trigger);
+  } catch (error) {
+    if (error instanceof VoiceHookError) {
+      throw codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        error.message,
+        at.line,
+        at.column,
+        at.file,
+      );
+    }
+    throw error;
+  }
 }
 
 function isPosition(value: unknown): value is Position {
@@ -1134,8 +1206,10 @@ export function buildersFor(
         return failAt(
           TAG_HOOK_ERROR_CODE,
           tagName,
-          `\`<${name}>\` is void and takes no children; pass { void: false } to emit an end tag`,
+          `${voiceOfCtx(ctx).tag(name)} is void and takes no children; pass { void: false } to emit an end tag`,
           loc,
+          undefined,
+          voiceOfCtx(ctx),
         );
       }
       return {
@@ -1212,14 +1286,18 @@ export function buildersFor(
           tagName,
           "`ctx.build.delegatedTag` is not available in `finalize`",
           loc,
+          undefined,
+          voiceOfCtx(ctx),
         );
       }
       if (ctx.declarations.isDelegatedTag?.(name, ctx) !== true) {
         return failAt(
           TAG_HOOK_ERROR_CODE,
           tagName,
-          `this host does not claim \`<${name}>\`, so a custom tag cannot emit one`,
+          `this host does not claim ${voiceOfCtx(ctx).tag(name)}, so a custom tag cannot emit one`,
           loc,
+          undefined,
+          voiceOfCtx(ctx),
         );
       }
       const attributeTagTree = attributeTags.map((tag) => ({
@@ -1272,6 +1350,8 @@ export function buildersFor(
           tagName,
           "`ctx.build.template` is not available in `finalize`",
           loc,
+          undefined,
+          voiceOfCtx(ctx),
         );
       }
       if (!hasTemplate(definition)) {
@@ -1280,6 +1360,8 @@ export function buildersFor(
           tagName,
           "this tag has no template file, so `ctx.build.template(call)` has nothing to expand",
           loc,
+          undefined,
+          voiceOfCtx(ctx),
         );
       }
       return routeTemplateCall(
@@ -1431,13 +1513,14 @@ function checkCompositeAttr(
   owner: string,
   attr: Exclude<Attr, { kind: "spread" }>,
   declaration: CustomTagAttribute,
+  voice: Voice = MX_VOICE,
 ): void {
   const shape = attrShape(attr);
   if (shape && shape !== declaration.type) {
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
+      `${voice.attribute} ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
       attr.loc,
       undefined,
       attrEndOf(attr),
@@ -1460,7 +1543,7 @@ function checkCompositeAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `attribute ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
+      `${voice.attribute} ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -1485,6 +1568,7 @@ function checkAtomAttr(
   claims?: ClaimContext,
 ): void {
   const expected = expectationOf(declaration, claims?.claimed);
+  const voice = claims?.voice ?? MX_VOICE;
   const at = valueLoc(attr, locate);
   // An atom, the sugar-derived `name` included, satisfies an atom contract.
   if (attr.kind === "static" && attr.atom) return;
@@ -1493,7 +1577,7 @@ function checkAtomAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `attribute ${attrLabel(attr)} must be an atom, got a member${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be an atom, got a member${expected}`,
       at,
       undefined,
       attrEndOf(attr),
@@ -1513,7 +1597,7 @@ function checkAtomAttr(
     claims.defer(
       codedError(
         INVALID_ATTRIBUTE_VALUE_CODE,
-        `${owner}: attribute ${attrLabel(attr)} must be atom, got string${expected}`,
+        `${owner}: ${voice.attribute} ${attrLabel(attr)} must be atom, got string${expected}`,
         at.line,
         at.column,
         at.file,
@@ -1525,7 +1609,7 @@ function checkAtomAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `attribute ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
       at,
       undefined,
       attrEndOf(attr),
@@ -1545,7 +1629,7 @@ function checkAtomAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `attribute ${attrLabel(attr)} must be atom, got ${got}${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be atom, got ${got}${expected}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -1579,6 +1663,7 @@ function checkMemberAttr(
   owner: string,
   attr: Exclude<Attr, { kind: "spread" }>,
   locate?: Locate,
+  voice: Voice = MX_VOICE,
 ): void {
   if (isMemberValue(attr)) return;
   const got =
@@ -1587,12 +1672,12 @@ function checkMemberAttr(
         ? "an atom"
         : "a string"
       : attr.kind === "boolean"
-        ? "a bare attribute"
+        ? `a bare ${voice.attribute}`
         : "an expression";
   failForOwner(
     INVALID_ATTRIBUTE_VALUE_CODE,
     owner,
-    `attribute ${attrLabel(attr)} must be a member, got ${got}`,
+    `${voice.attribute} ${attrLabel(attr)} must be a member, got ${got}`,
     valueLoc(attr, locate),
     undefined,
     attrEndOf(attr),
@@ -1684,21 +1769,24 @@ export function validateCustomTagParents(
   name: string,
   loc: Position,
   parent: string,
-  label = `\`<${name}>\``,
+  givenLabel?: string,
   nameEnd?: number,
+  voice: Voice = MX_VOICE,
+  trigger?: TagTrigger,
 ): void {
   const parents = definition.parents;
   // A dynamic parent's diagnostic placeholder is not an authored name.
   if (!parents || (parent !== `\${…}` && parents.includes(parent))) return;
+  const label = givenLabel ?? spellAt(voice, name, loc, trigger);
   const named = parents.filter((allowed) => allowed !== "#root");
-  const inside = named.map((allowed) => `\`<${allowed}>\``).join(", ");
+  const inside = named.map((allowed) => voice.tag(allowed)).join(", ");
   const required = inside
     ? `inside ${inside}${parents.includes("#root") ? " or at the top level" : ""}`
     : parents.includes("#root")
       ? "at the top level"
       : "inside an allowed parent (none declared)";
   const found =
-    parent === "#root" ? "at the top level" : `inside \`<${parent}>\``;
+    parent === "#root" ? "at the top level" : `inside ${voice.tag(parent)}`;
   const error = codedError(
     PARENT_NOT_ALLOWED_CODE,
     `${label} must be ${required}; found ${found}`,
@@ -1713,11 +1801,13 @@ export function validateCustomTagParents(
 /** Validates authored children before any plain child is lowered. */
 export function validateCustomTagChildren(
   definition: Pick<CustomTag, "children">,
-  call: Pick<TagCall, "name" | "loc" | "childTree">,
-  owner = `\`<${call.name}>\``,
+  call: Pick<TagCall, "name" | "loc" | "childTree"> & { trigger?: TagTrigger },
+  givenOwner?: string,
   nameEnd?: number,
+  voice: Voice = MX_VOICE,
 ): void {
   if (!definition.children) return;
+  const owner = givenOwner ?? spellAt(voice, call.name, call.loc, call.trigger);
   const declarations = definition.children;
   const explicit = explicitChildEntries(declarations);
   const entries = wildcardEntries(declarations);
@@ -1725,14 +1815,14 @@ export function validateCustomTagChildren(
   const leaves: Array<Extract<ChildNode, { kind: "ChildTag" | "ChildText" }>> =
     [];
   const allowed =
-    explicit.map(([name]) => `\`<${name}>\``).join(", ") || "none";
+    explicit.map(([name]) => voice.tag(name)).join(", ") || "none";
   // Check order (decision 147): an explicit entry, then the `"*"` entries in
   // order (the lowerer already matched them, recorded on the child), then the
   // closed record's own error.
   const notAllowed = (
     node: Extract<ChildNode, { kind: "ChildTag" }>,
   ): { message: string; guidance?: string } => {
-    const label = `\`<${node.name}>\``;
+    const label = voice.tag(node.name, node.trigger);
     const hint = node.hint ? ` ${node.hint}` : "";
     if (entries.length === 0) {
       return {
@@ -1760,7 +1850,7 @@ export function validateCustomTagChildren(
       : "";
     const listed =
       names.length > 0
-        ? `allowed children: ${names.map(([name]) => `\`<${name}>\``).join(", ")}; `
+        ? `allowed children: ${names.map(([name]) => voice.tag(name)).join(", ")}; `
         : "";
     return {
       message: `${label} is not allowed here; ${listed}${rule}${known}${hint}`,
@@ -1773,7 +1863,7 @@ export function validateCustomTagChildren(
     entries.length > 0
       ? `it accepts only child tags: ${[
           ...explicit.flatMap(([name]) =>
-            name === "#text" ? [] : [`\`<${name}>\``],
+            name === "#text" ? [] : [voice.tag(name)],
           ),
           ...entries.map((entry) =>
             entry.pattern === undefined
@@ -1793,7 +1883,7 @@ export function validateCustomTagChildren(
         failForOwner(
           UNCHECKABLE_CHILD_CODE,
           owner,
-          `a dynamic tag \`<\${…}>\` cannot be checked against the declared children`,
+          `a dynamic tag ${voice.dynamicTag("…")} cannot be checked against the declared children`,
           node.loc,
           undefined,
           childEnds.get(node),
@@ -1847,8 +1937,8 @@ export function validateCustomTagChildren(
       const repeated = occurrences[1] ?? occurrences[0];
       const label =
         repeated?.kind === "ChildTag"
-          ? tagLabel(repeated.name, repeated.alias)
-          : `\`<${name}>\``;
+          ? tagLabel(repeated.name, repeated.alias, voice, repeated.trigger)
+          : voice.tag(name);
       failForOwner(
         REPEATED_CHILD_CODE,
         owner,
@@ -1862,7 +1952,7 @@ export function validateCustomTagChildren(
       failForOwner(
         MISSING_CHILD_CODE,
         owner,
-        `missing required child \`<${name}>\``,
+        `missing required child ${voice.tag(name)}`,
         call.loc,
         undefined,
         nameEnd,
@@ -1905,6 +1995,7 @@ function validateAttributes(
   locEnd?: number,
 ): void {
   if (!attributes) return;
+  const voice = claims?.voice ?? MX_VOICE;
   // An empty closed contract rejects named and spread attributes identically.
   const acceptsNone = Object.keys(attributes).length === 0;
   const present = new Set<string>();
@@ -1914,8 +2005,8 @@ function validateAttributes(
         UNKNOWN_ATTRIBUTE_CODE,
         owner,
         acceptsNone
-          ? "accepts no attributes"
-          : "spread attributes cannot be checked against this tag's declared attributes",
+          ? `accepts no ${voice.attributes}`
+          : `spread ${voice.attributes} cannot be checked against this tag's declared ${voice.attributes}`,
         attr.loc,
         undefined,
         attrEndOf(attr),
@@ -1929,8 +2020,8 @@ function validateAttributes(
         UNKNOWN_ATTRIBUTE_CODE,
         owner,
         acceptsNone
-          ? "accepts no attributes"
-          : `unknown attribute ${attrLabel(attr)}`,
+          ? `accepts no ${voice.attributes}`
+          : `unknown ${voice.attribute} ${attrLabel(attr)}`,
         attr.loc,
         undefined,
         attrEndOf(attr),
@@ -1942,7 +2033,7 @@ function validateAttributes(
       failForOwner(
         INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
-        `attribute ${attrLabel(attr)} must be a literal`,
+        `${voice.attribute} ${attrLabel(attr)} must be a literal`,
         attr.loc,
         undefined,
         attrEndOf(attr),
@@ -1951,12 +2042,12 @@ function validateAttributes(
     if (declaration.type === "atom") {
       checkAtomAttr(owner, attr, declaration, locate, claims);
     } else if (declaration.type === "member") {
-      checkMemberAttr(owner, attr, locate);
+      checkMemberAttr(owner, attr, locate, voice);
     } else if (
       declaration.type === "array" ||
       declaration.type === "function"
     ) {
-      checkCompositeAttr(owner, attr, declaration);
+      checkCompositeAttr(owner, attr, declaration, voice);
     } else if (
       declaration.type &&
       declaration.type !== "expression" &&
@@ -1966,7 +2057,7 @@ function validateAttributes(
       failForOwner(
         INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
-        `attribute ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
+        `${voice.attribute} ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
         valueAt(attr, locate),
         undefined,
         attrEndOf(attr),
@@ -1980,7 +2071,7 @@ function validateAttributes(
       failForOwner(
         INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
-        `attribute ${attrLabel(attr)} must be an expression`,
+        `${voice.attribute} ${attrLabel(attr)} must be an expression`,
         attr.loc,
         undefined,
         attrEndOf(attr),
@@ -1991,7 +2082,7 @@ function validateAttributes(
         failForOwner(
           INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
-          `attribute ${attrLabel(attr)} must be a static value from ${listEnum(declaration.enum)}`,
+          `${voice.attribute} ${attrLabel(attr)} must be a static value from ${listEnum(declaration.enum)}`,
           attr.loc,
           undefined,
           attrEndOf(attr),
@@ -2007,7 +2098,7 @@ function validateAttributes(
         failForOwner(
           INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
-          `attribute ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
+          `${voice.attribute} ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
           attr.loc,
           undefined,
           attrEndOf(attr),
@@ -2017,7 +2108,7 @@ function validateAttributes(
         failForOwner(
           INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
-          `attribute ${attrLabel(attr)} must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
+          `${voice.attribute} ${attrLabel(attr)} must be one of ${listEnum(declaration.enum)}, got ${JSON.stringify(literal.value)}`,
           attr.loc,
           undefined,
           attrEndOf(attr),
@@ -2030,7 +2121,7 @@ function validateAttributes(
       failForOwner(
         MISSING_ATTRIBUTE_CODE,
         owner,
-        `missing required attribute \`${name}\``,
+        `missing required ${voice.attribute} \`${name}\``,
         loc,
         undefined,
         locEnd,
@@ -2062,6 +2153,7 @@ function validateAttributeTags(
   claims?: ClaimContext,
   locEnd?: number,
 ): void {
+  const voice = claims?.voice ?? MX_VOICE;
   const wildcardMatches = new Map<
     string,
     { entry: CustomTagAttributeTag; loc: Position }
@@ -2084,7 +2176,7 @@ function validateAttributeTags(
         failForOwner(
           INVALID_ATTRIBUTE_TAG_CODE,
           owner,
-          `attribute tag \`<@${tag.name}>\` does not support attributes`,
+          `${voice.attributeTag} ${voice.attrTag(tag.name)} does not support ${voice.attributes}`,
           tag.attrs[0]?.loc ?? tag.loc,
           undefined,
           tag.attrs[0] ? attrEndOf(tag.attrs[0]) : nameEndOf(tag),
@@ -2094,7 +2186,7 @@ function validateAttributeTags(
         failForOwner(
           INVALID_ATTRIBUTE_TAG_CODE,
           owner,
-          `attribute tag \`<@${tag.name}>\` does not support nested attribute tags`,
+          `${voice.attributeTag} ${voice.attrTag(tag.name)} does not support nested ${voice.attributeTags}`,
           tag.attributeTags[0]?.loc ?? tag.loc,
           undefined,
           nameEndOf(tag.attributeTags[0] ?? tag),
@@ -2105,14 +2197,14 @@ function validateAttributeTags(
       failForOwner(
         UNKNOWN_ATTRIBUTE_TAG_CODE,
         owner,
-        `unknown attribute tag \`<@${tag.name}>\``,
+        `unknown ${voice.attributeTag} ${voice.attrTag(tag.name)}`,
         tag.loc,
         undefined,
         nameEndOf(tag),
       );
     }
     if (declaration) {
-      const nestedOwner = `${owner}: \`<@${tag.name}>\``;
+      const nestedOwner = `${owner}: ${voice.attrTag(tag.name)}`;
       validateAttributes(
         nestedOwner,
         declaration.attributes,
@@ -2143,7 +2235,7 @@ function validateAttributeTags(
       failForOwner(
         REPEATED_ATTRIBUTE_TAG_CODE,
         owner,
-        `attribute tag \`<@${name}>\` may not be repeated`,
+        `${voice.attributeTag} ${voice.attrTag(name)} may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
         undefined,
         occurrences.length > 0
@@ -2155,7 +2247,7 @@ function validateAttributeTags(
       failForOwner(
         MISSING_ATTRIBUTE_TAG_CODE,
         owner,
-        `missing required attribute tag \`<@${name}>\``,
+        `missing required ${voice.attributeTag} ${voice.attrTag(name)}`,
         loc,
         undefined,
         locEnd,
@@ -2173,7 +2265,7 @@ function validateAttributeTags(
       failForOwner(
         REPEATED_ATTRIBUTE_TAG_CODE,
         owner,
-        `attribute tag \`<@${name}>\` may not be repeated`,
+        `${voice.attributeTag} ${voice.attrTag(name)} may not be repeated`,
         occurrences[1]?.loc ?? occurrences[0]?.loc ?? loc,
         undefined,
         occurrences.length > 0
@@ -2191,6 +2283,8 @@ function validateAttributeTags(
 export interface ClaimContext {
   claimed: ClaimedFields;
   defer(error: TranslateError): void;
+  /** The words of the file's dialect in the messages; MX's own when absent. */
+  voice?: Voice;
 }
 
 /** Does the declaration use a key the file's dialect claims? */
@@ -2241,8 +2335,9 @@ export function validateCustomTagCall(
   locate?: Locate,
   claims?: ClaimContext,
 ): void {
-  const owner = tagLabel(call.name, call.alias);
-  validateCustomTagChildren(definition, call, owner, nameEndOf(call));
+  const voice = claims?.voice ?? MX_VOICE;
+  const owner = tagLabelAt(call, voice);
+  validateCustomTagChildren(definition, call, owner, nameEndOf(call), voice);
   if (definition.parseOptions?.openTagOnly && call.content) {
     failForOwner(
       CONTENT_NOT_ALLOWED_CODE,
@@ -3513,7 +3608,13 @@ export function runAnalyzeHooks(
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
       fail: (message, options) =>
-        failFromHook(ctx, `\`<${name}>\``, message, options, first.loc),
+        failFromHook(
+          ctx,
+          spellAt(voiceOfCtx(ctx), name, first.loc),
+          message,
+          options,
+          first.loc,
+        ),
       declare: (kind, declaredName, options) => {
         ctx.contractDerived ??= [];
         ctx.contractDerived.push({
@@ -3527,7 +3628,7 @@ export function runAnalyzeHooks(
     try {
       analyze(tagCalls, analyzeContext);
     } catch (error) {
-      throw wrapHookError(error, name, "analyze", first.loc);
+      throw wrapHookError(error, name, "analyze", first.loc, voiceOfCtx(ctx));
     }
   }
 }
@@ -3570,7 +3671,7 @@ export function runFinalizeHooks(
     try {
       nodes = finalize(finalizeContext);
     } catch (error) {
-      throw wrapHookError(error, name, "finalize", loc);
+      throw wrapHookError(error, name, "finalize", loc, voiceOfCtx(ctx));
     }
     if (!Array.isArray(nodes)) {
       failAt(
@@ -3578,6 +3679,8 @@ export function runFinalizeHooks(
         name,
         "`finalize` must return an array of IR nodes",
         loc,
+        undefined,
+        voiceOfCtx(ctx),
       );
     }
     prepended.push(...nodes);
@@ -3591,11 +3694,12 @@ function wrapHookError(
   tagName: string,
   hook: string,
   loc: Position,
+  voice: Voice = MX_VOICE,
 ): TranslateError {
   if (isTranslateError(error)) return error;
   return codedError(
     TAG_HOOK_ERROR_CODE,
-    `\`<${tagName}>\`: custom tag \`${hook}\` threw: ${error instanceof Error ? error.message : String(error)}`,
+    `${spellAt(voice, tagName, loc)}: custom tag \`${hook}\` threw: ${error instanceof Error ? error.message : String(error)}`,
     loc.line,
     loc.column,
     loc.file,
@@ -3749,7 +3853,8 @@ export function transformCustomTag(
   // on a name the active host claims; anywhere else a call has nothing to
   // expand to.
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
-  const owner = tagLabel(call.name, call.alias);
+  const voice = voiceOfCtx(ctx);
+  const owner = tagLabelAt(call, voice);
   if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
     // An inline `children["*"]` contract can carry no transform: it is
     // validation-only, useful where the target delegates (data).
@@ -3768,6 +3873,7 @@ export function transformCustomTag(
   }
 
   validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset), {
+    voice,
     claimed: claimedFields(ctx.dialect),
     defer: (error) => {
       ctx.deferredContractErrors ??= [];
@@ -3830,6 +3936,7 @@ export function transformCustomTag(
       originalAttributeTagTree,
       originalAttrTagProps,
       routedCall.attributeTags,
+      voice,
     ),
   });
   const builders = buildersFor(
@@ -3911,7 +4018,7 @@ export function transformCustomTag(
     !observed.attributeTagsRead()
   ) {
     warn(ctx, {
-      message: `${owner}: custom tag transform did not read its attributeTags; authored attribute tags were dropped`,
+      message: `${owner}: custom tag transform did not read its attributeTags; authored ${voice.attributeTags} were dropped`,
       code: ATTRIBUTE_TAG_DROPPED_CODE,
       line: call.loc.line,
       column: call.loc.column,

@@ -1,0 +1,198 @@
+/**
+ * The words core's messages use for a dialect's files (`Dialect.messageVocabulary`).
+ *
+ * A message that a dialect file's author reaches with the dialect's own tags
+ * and attributes names three things in MX's words: an "attribute", the "data
+ * file" and its "data tree", and a tag as `<name>`. {@link Voice} is the one
+ * place those words live: the message builders in the IR entry checks, the
+ * contract validators and the generic lowering take a `Voice` and splice its
+ * words, and {@link MX_VOICE} (the default) spells every message exactly as it
+ * was before a dialect could change it.
+ *
+ * Funnels (`raise`, `failForOwner`, the IR entry's `fail`, `warn`) keep taking
+ * finished strings: only a builder knows which words it uses.
+ */
+import type { Ctx } from "./core.ts";
+import type { TagTrigger } from "./ir.ts";
+import type { Dialect, MessageTag, MessageVocabulary } from "./syntax-table.ts";
+
+/**
+ * Thrown by {@link Voice.tag} when the dialect's `formatTag` throws or returns
+ * a value that is not a spelling. Not a diagnostic yet: the message was being
+ * built, so the lowering boundary (`lower.ts`, the IR entry's walk) turns it
+ * into an `MX_DIALECT_HOOK_ERROR` at the tag it was lowering.
+ */
+export class VoiceHookError extends Error {
+  /** The tag as MX spells it, for the message. */
+  readonly tag: string;
+  constructor(message: string, tag: string) {
+    super(message);
+    this.name = "VoiceHookError";
+    this.tag = tag;
+  }
+}
+
+/** MX's own spelling of a tag, bare: `<name>`, `<@name>`, `<${name}>`. */
+export function mxSpelling(tag: MessageTag): string {
+  switch (tag.form) {
+    case "attributeTag":
+      return `<@${tag.name}>`;
+    case "dynamic":
+      return `<\${${tag.name}}>`;
+    case "tag":
+      return `<${tag.name}>`;
+  }
+}
+
+/** The words a message splices. See the file header. */
+export interface Voice {
+  /** `attribute` */
+  readonly attribute: string;
+  /** `attributes` */
+  readonly attributes: string;
+  /** `Attribute`, for the start of a sentence. */
+  readonly Attribute: string;
+  /** `Attributes`, for the start of a sentence. */
+  readonly Attributes: string;
+  /** `an attribute`: the article the dialect states or the noun's first letter picks. */
+  readonly anAttribute: string;
+  /** `attribute tag` */
+  readonly attributeTag: string;
+  /** `attribute tags` */
+  readonly attributeTags: string;
+  /** `attribute-tag`, the compound ("an attribute-tag declaration"). */
+  readonly attributeTagCompound: string;
+  /** `data file` */
+  readonly file: string;
+  /** `a data file` (article by first letter) */
+  readonly aFile: string;
+  /** `data tree` */
+  readonly tree: string;
+  /**
+   * A tag in backticks, as the dialect spells it (`` `<member>` `` by
+   * default). Throws {@link VoiceHookError} when the dialect's `formatTag`
+   * breaks its contract.
+   */
+  tag(name: string, trigger?: TagTrigger): string;
+  /** An `@name` attribute tag in backticks (`` `<@name>` `` by default). */
+  attrTag(name: string, trigger?: TagTrigger): string;
+  /**
+   * A dynamic tag in backticks (`` `<${expr}>` `` by default), `source` being
+   * the expression's source text.
+   */
+  dynamicTag(source: string, trigger?: TagTrigger): string;
+  /** The bare spelling of `tag`, without backticks. */
+  spell(tag: MessageTag): string;
+}
+
+/**
+ * The trigger that made a tag (`ctx.child`), read off its AST node, or none for
+ * an authored tag.
+ */
+export function triggerOfNode(
+  node: { mxTrigger?: TagTrigger | undefined } | null | undefined,
+): TagTrigger | undefined {
+  const mark = node?.mxTrigger;
+  return mark ? { id: mark.id, span: mark.span, text: mark.text } : undefined;
+}
+
+/** "an" before a vowel letter, else "a". */
+export function articleFor(noun: string): "a" | "an" {
+  return /^[aeiou]/i.test(noun.trim()) ? "an" : "a";
+}
+
+function capitalized(noun: string): string {
+  return noun.charAt(0).toUpperCase() + noun.slice(1);
+}
+
+function describe(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  if (typeof value === "object") return "an object";
+  if (typeof value === "string") return JSON.stringify(value);
+  return `a ${typeof value}`;
+}
+
+/** Builds a voice from a dialect's vocabulary (all members optional). */
+function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
+  const one = vocabulary?.attribute?.one ?? "attribute";
+  const many = vocabulary?.attribute?.many ?? "attributes";
+  const article = vocabulary?.attribute?.article ?? articleFor(one);
+  const file = vocabulary?.file ?? "data file";
+  const tree = vocabulary?.tree ?? "data tree";
+  const format = vocabulary?.formatTag;
+  const spell = (tag: MessageTag): string => {
+    if (format === undefined) return mxSpelling(tag);
+    let spelled: unknown;
+    try {
+      spelled = format.call(vocabulary, tag);
+    } catch (thrown) {
+      const reason =
+        thrown instanceof Error ? thrown.message : describe(thrown);
+      throw new VoiceHookError(
+        `the dialect's \`messageVocabulary.formatTag\` threw while spelling \`${mxSpelling(tag)}\`: ${reason}`,
+        tag.name,
+      );
+    }
+    if (spelled === undefined) return mxSpelling(tag);
+    if (
+      typeof spelled !== "string" ||
+      spelled === "" ||
+      /[\r\n`]/.test(spelled)
+    ) {
+      throw new VoiceHookError(
+        `the dialect's \`messageVocabulary.formatTag\` must return undefined or a non-empty single-line string without backticks, got ${describe(spelled)} for \`${mxSpelling(tag)}\``,
+        tag.name,
+      );
+    }
+    return spelled;
+  };
+  const marked = (
+    name: string,
+    form: MessageTag["form"],
+    trigger?: TagTrigger,
+  ): string => `\`${spell({ name, form, ...(trigger ? { trigger } : {}) })}\``;
+  const voice: Voice = {
+    attribute: one,
+    attributes: many,
+    Attribute: capitalized(one),
+    Attributes: capitalized(many),
+    anAttribute: `${article} ${one}`,
+    attributeTag: `${one} tag`,
+    attributeTags: `${one} tags`,
+    attributeTagCompound: `${one}-tag`,
+    file,
+    aFile: `${articleFor(file)} ${file}`,
+    tree,
+    tag: (name, trigger) => marked(name, "tag", trigger),
+    attrTag: (name, trigger) => marked(name, "attributeTag", trigger),
+    dynamicTag: (source, trigger) => marked(source, "dynamic", trigger),
+    spell,
+  };
+  return Object.freeze(voice);
+}
+
+/** MX's own words: every message spelled as it always was. */
+export const MX_VOICE: Voice = buildVoice(undefined);
+
+const voices = new WeakMap<object, Voice>();
+
+/**
+ * The voice of a file's dialect: {@link MX_VOICE} for none, or for a dialect
+ * that states no vocabulary. Cached per dialect object.
+ */
+export function voiceOf(dialect: Dialect | undefined): Voice {
+  const vocabulary = dialect?.messageVocabulary;
+  if (!dialect || !vocabulary) return MX_VOICE;
+  let voice = voices.get(dialect);
+  if (voice === undefined) {
+    voice = buildVoice(vocabulary);
+    voices.set(dialect, voice);
+  }
+  return voice;
+}
+
+/** The voice of the file being lowered, as `productOf` reads its product. */
+export function voiceOfCtx(ctx: Ctx): Voice {
+  return ctx.voice ?? MX_VOICE;
+}

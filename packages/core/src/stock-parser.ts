@@ -1,6 +1,7 @@
 import { createParser, TagType } from "@mxlang/parser/lexer";
 import { codedError, type TranslateError } from "./core.ts";
 import { PARSE_INVALID_TAG_PARAMS_CODE } from "./diagnostic-codes.ts";
+import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
 
 /**
  * The parse-error rewrite that turns a template-parser failure inside a tag's
@@ -42,8 +43,12 @@ export function markoParser(): TemplateLexer | undefined {
  * front end's `MX_TAG_NAME_MISSING`. `parseFragment` throws it, as it did
  * when Marko crashed on the nameless tag (grammar probe g1683).
  */
-export const BARE_COMMA_MESSAGE =
-  "a `,` continues the attributes of the tag above; there is no tag here";
+export const BARE_COMMA_MESSAGE = bareCommaMessage(MX_VOICE);
+
+/** The same message in a dialect's words. */
+export function bareCommaMessage(voice: Voice): string {
+  return `a \`,\` continues the ${voice.attributes} of the tag above; there is no tag here`;
+}
 
 /**
  * The text Babel gave a failure inside a tag's `|params|`: Marko builds its

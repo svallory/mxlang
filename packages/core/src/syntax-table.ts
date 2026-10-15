@@ -62,7 +62,7 @@ import {
   unregisteredNodeRow,
 } from "./dialect-registry.ts";
 import { findNearestPackageJson } from "./host-policy.ts";
-import type { IrNode } from "./ir.ts";
+import type { IrNode, TagTrigger } from "./ir.ts";
 import type { ContractData, LoweredUnit } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
@@ -434,6 +434,65 @@ export interface UnknownTagExplanation {
   readonly at?: SourceSpan;
 }
 
+/**
+ * A tag as a message names it, handed to `MessageVocabulary.formatTag`.
+ * @unstable
+ */
+export interface MessageTag {
+  /**
+   * The name core has: the lowered one (`member`), never undefined. For a
+   * dynamic tag, its expression source (`x` in `<${x}/>`).
+   */
+  readonly name: string;
+  /**
+   * `"tag"` for a plain tag, `"attributeTag"` for an `@name` attribute tag
+   * (`name` has no `@`), `"dynamic"` for a tag whose name is an expression.
+   */
+  readonly form: "tag" | "attributeTag" | "dynamic";
+  /**
+   * Set when the dialect's own `lowerTrigger` made this tag (`ctx.child`);
+   * `trigger.text` is what the user wrote (`&title`). Absent on a tag the
+   * user wrote as a tag.
+   */
+  readonly trigger?: TagTrigger;
+}
+
+/**
+ * The words core's messages use for a dialect's files where MX's own would
+ * read wrong. Every member is optional; MX's wording is the default, so a
+ * dialect that sets none keeps every message as it is. Core words only the
+ * messages a dialect file's author reaches with the dialect's own tags and
+ * attributes; a message about MX's built-in tags (`<for>`, `<script>`, ...)
+ * and the text a dialect author reads when a contract is registered keep MX's
+ * words. @unstable
+ */
+export interface MessageVocabulary {
+  /**
+   * What the dialect calls MX's "attribute" (`key=value` on a tag), in both
+   * numbers: `{ one: "option", many: "options" }`. Both are non-empty single
+   * words or phrases without backticks. `article` is the indefinite article
+   * `one` takes ("an option"); without it core picks "an" before a vowel
+   * letter and "a" otherwise. Default: `attribute` / `attributes`.
+   */
+  readonly attribute?: {
+    readonly one: string;
+    readonly many: string;
+    readonly article?: "a" | "an";
+  };
+  /** What the data-file checks call the file: "a data file". A noun phrase. */
+  readonly file?: string;
+  /** What they call its tree: "the data tree is static". A noun phrase. */
+  readonly tree?: string;
+  /**
+   * The bare spelling of a tag in a message; core wraps it in backticks.
+   * Return `undefined` for core's own spelling (`<name>`, `<@name>`,
+   * `<${expr}>`). Synchronous. A throw, or a return that is neither
+   * `undefined` nor a non-empty single-line string without backticks, is
+   * `MX_DIALECT_HOOK_ERROR` at the tag.
+   */
+  readonly formatTag?: (tag: MessageTag) => string | undefined;
+}
+
 /** What `lowerBlockTag` and `lowerFilter` get: the IR builders a custom tag's `transform` gets. */
 export interface SyntaxBuildContext {
   readonly build: IrBuilders;
@@ -567,6 +626,13 @@ export interface Dialect {
   readonly describeAttribute?: (
     declaration: Readonly<Record<string, unknown>>,
   ) => string;
+  /**
+   * The words core's messages use on this dialect's files: what an
+   * attribute, the data file and its tree are called, and how a tag is
+   * spelled. Absent members keep MX's words. See {@link MessageVocabulary}.
+   * @unstable
+   */
+  readonly messageVocabulary?: MessageVocabulary;
   /**
    * Turns one of this dialect's tag files (a file in one of its manifest's
    * `tagDirs`) into a contract. Sync. The scan never runs it: the first call
@@ -788,6 +854,7 @@ const MODULE_FIELDS = new Set([
   "checkContract",
   "explainUnknownTag",
   "describeAttribute",
+  "messageVocabulary",
   "tagFile",
   "contracts",
   "bindingsCallTags",
@@ -929,6 +996,89 @@ function checkDiagnosticCodes(
   }
 }
 
+/** The members `Dialect.messageVocabulary` may state. */
+const VOCABULARY_FIELDS = ["attribute", "file", "tree", "formatTag"] as const;
+
+/**
+ * Fails the dialect when its `messageVocabulary` is not a valid vocabulary:
+ * an object of known members, each noun a non-empty single-line string
+ * without backticks (a message wraps names in backticks itself), `article`
+ * `"a"` or `"an"`, `formatTag` a function.
+ */
+function checkMessageVocabulary(
+  vocabulary: unknown,
+  path: string,
+  fail: (message: string) => never,
+): void {
+  if (vocabulary === undefined) return;
+  const field = `${path}messageVocabulary`;
+  if (
+    vocabulary === null ||
+    typeof vocabulary !== "object" ||
+    Array.isArray(vocabulary)
+  ) {
+    fail(`\`${field}\` must be an object (${VOCABULARY_FIELDS.join(", ")})`);
+  }
+  const members = vocabulary as Record<string, unknown>;
+  for (const key of Object.keys(members)) {
+    if (!(VOCABULARY_FIELDS as readonly string[]).includes(key)) {
+      fail(
+        `\`${field}.${key}\` is not a message vocabulary field (${VOCABULARY_FIELDS.join(", ")})`,
+      );
+    }
+  }
+  const noun = (value: unknown, name: string): void => {
+    if (
+      typeof value !== "string" ||
+      value.trim() === "" ||
+      /[\r\n`]/.test(value)
+    ) {
+      fail(
+        `\`${name}\` must be a non-empty single-line string without backticks, got ${JSON.stringify(value)}`,
+      );
+    }
+  };
+  const { attribute } = members;
+  if (attribute !== undefined) {
+    if (
+      attribute === null ||
+      typeof attribute !== "object" ||
+      Array.isArray(attribute)
+    ) {
+      fail(
+        `\`${field}.attribute\` must be an object \`{ one, many, article? }\`, such as \`{ one: "option", many: "options" }\``,
+      );
+    }
+    const noun_ = attribute as Record<string, unknown>;
+    for (const key of Object.keys(noun_)) {
+      if (key !== "one" && key !== "many" && key !== "article") {
+        fail(
+          `\`${field}.attribute.${key}\` is not a field of the attribute noun (one, many, article)`,
+        );
+      }
+    }
+    noun(noun_.one, `${field}.attribute.one`);
+    noun(noun_.many, `${field}.attribute.many`);
+    if (
+      noun_.article !== undefined &&
+      noun_.article !== "a" &&
+      noun_.article !== "an"
+    ) {
+      fail(
+        `\`${field}.attribute.article\` must be "a" or "an", got ${JSON.stringify(noun_.article)}`,
+      );
+    }
+  }
+  if (members.file !== undefined) noun(members.file, `${field}.file`);
+  if (members.tree !== undefined) noun(members.tree, `${field}.tree`);
+  if (
+    members.formatTag !== undefined &&
+    typeof members.formatTag !== "function"
+  ) {
+    fail(`\`${field}.formatTag\` must be a function`);
+  }
+}
+
 /**
  * A dialect's shape: an object with an `id` and a `name`, a `table`
  * object, a `tagRules` preset, node types, hooks that are functions. `path`
@@ -996,6 +1146,7 @@ function checkModuleShape(
     fail(`\`${path}bindingsCallTags\` must be a boolean`);
   }
   checkDiagnosticCodes(value.diagnosticCodes, path, fail);
+  checkMessageVocabulary(value.messageVocabulary, path, fail);
   checkContractFields(value.contractFields, path, fail);
   checkDialectContracts(value, path, failContract);
   // SAFETY: the checks above validated `value` field by field (keys in

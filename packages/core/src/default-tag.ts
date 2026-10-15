@@ -10,6 +10,7 @@ import {
 import type { DefaultTagScope } from "./default-tag-validate.ts";
 import { INVALID_SHORTHAND_CODE } from "./diagnostic-codes.ts";
 import { markoViewOf } from "./marko-view.ts";
+import { voiceOfCtx } from "./message-vocabulary.ts";
 import { rewriteShorthands } from "./shorthand.ts";
 import {
   hasStaticName,
@@ -194,7 +195,9 @@ export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
       walk(
         [...bodyChildren(node), ...(node.attributeTags ?? [])],
         [self, ...parents],
-        named ? scopeForChildren(node, name, scope, ctx.customTags) : undefined,
+        named
+          ? scopeForChildren(node, name, scope, ctx.customTags, voiceOfCtx(ctx))
+          : undefined,
       );
     }
   };
