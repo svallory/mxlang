@@ -315,12 +315,13 @@ same constness) or after a namespace, overload signatures followed by one more
 function, a namespace after a function, class, enum or namespace, and the same
 with `declare`. A type-only name (`type`, `interface`, an `import type`, a
 namespace holding only types) shares only the value space it does not occupy.
-Six forms stock Marko compiles are refused too, because the module they
-produce does not load (`function` twice, `function` with `var`, `var` with
-`import`, `function` with `const`, `export function` with `const`, and a
-namespace holding values before a `function` or `class` of its name: Bun,
-esbuild and `tsc` emit `var N` beside `function N`, and a class is read before
-it is initialised); that is one row of `divergences.md`. Only bindings that
+Pairs stock Marko compiles are refused too, because the module they produce
+does not load: a `var` before a `const`, a `function` or an `import`; a
+`function` beside a `function`, a `var`, a `const` or an `import`; and a
+namespace holding values beside a `const`, `let`, `var` or `import` in either
+order, or before a `function` or `class` of its name (Bun, esbuild and `tsc` emit
+`var N` beside `function N`, and a class is read before it is initialised);
+that is one row of `divergences.md`. Only bindings that
 exist at run time collide: a `declare function`, `class`, `enum` or
 `namespace` and a function signature without a body bind nothing once the
 TypeScript strip has run, so they compile beside a real declaration, and the

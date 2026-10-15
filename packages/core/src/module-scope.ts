@@ -762,9 +762,15 @@ function bindingErrors(
         earlier.push(next);
       } else {
         const first = clash ?? (real[0] as Declaration);
+        // A namespace with values before a function or class is order-sensitive.
+        const hint =
+          first.kind === "namespace" &&
+          (next.kind === "function" || next.kind === "class")
+            ? ` Declare the ${next.kind} before the namespace: the other order does not load.`
+            : "";
         record(statement, {
           code: DUPLICATE_DECLARATION_CODE,
-          message: `Duplicate declaration "${next.name}": it is already declared at ${whereIs(first.id)}. The \`import\`, \`static\`, \`server\`, \`client\` and \`export\` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two \`var\`s, TypeScript's overloads, enums and namespaces merge).`,
+          message: `Duplicate declaration "${next.name}": it is already declared at ${whereIs(first.id)}. The \`import\`, \`static\`, \`server\`, \`client\` and \`export\` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two \`var\`s, TypeScript's overloads, enums and namespaces merge).${hint}`,
           at: next.id,
         });
       }

@@ -244,9 +244,9 @@ describe("a module name declared twice is refused at the second declaration", ()
       5,
       8,
     ],
-    // The five forms stock Marko compiles and node then refuses to load
-    // ("Identifier 'f' has already been declared"): MX refuses them (one
-    // divergences.md row).
+    // Pairs stock Marko compiles and the compiled module then fails to load
+    // ("Identifier 'f' has already been declared") or refuses under Bun's or
+    // esbuild's strip: MX refuses them (one divergences.md row).
     [
       "function + function (stock compiles it)",
       "static function f() {}\nstatic function f() {}",
@@ -275,6 +275,83 @@ describe("a module name declared twice is refused at the second declaration", ()
       "f",
       2,
       13,
+    ],
+    [
+      "var + const (stock compiles it)",
+      "static var f = 1\nstatic const f = 2",
+      "f",
+      2,
+      13,
+    ],
+    [
+      "var + export const (stock compiles it)",
+      "static var f = 1\nstatic export const f = 2",
+      "f",
+      2,
+      20,
+    ],
+    [
+      "var + function (stock compiles it)",
+      "static var f = 1\nstatic function f() {}",
+      "f",
+      2,
+      16,
+    ],
+    [
+      "function + import (stock compiles it)",
+      `static function x() {}\n${X}`,
+      "x",
+      2,
+      7,
+    ],
+    [
+      "import + namespace with values (stock compiles it)",
+      `${X}\nstatic namespace x { export const a = 1 }`,
+      "x",
+      2,
+      17,
+    ],
+    [
+      "const + namespace with values (stock compiles it)",
+      "static const N = 1\nstatic namespace N { export const a = 1 }",
+      "N",
+      2,
+      17,
+    ],
+    [
+      "let + namespace with values (stock compiles it)",
+      "static let N = 1\nstatic namespace N { export const a = 1 }",
+      "N",
+      2,
+      17,
+    ],
+    [
+      "var + namespace with values (stock compiles it)",
+      "static var N = 1\nstatic namespace N { export const a = 1 }",
+      "N",
+      2,
+      17,
+    ],
+    [
+      "namespace with values + let (stock compiles it)",
+      "static namespace N { export const a = 1 }\nstatic let N = 1",
+      "N",
+      2,
+      11,
+    ],
+    [
+      "namespace with values + var (stock compiles it)",
+      "static namespace N { export const a = 1 }\nstatic var N = 1",
+      "N",
+      2,
+      11,
+    ],
+    [
+      "namespace with values + import (stock compiles it)",
+      `static namespace x { export const a = 1 }\n${X}`,
+      "x",
+      2,
+      7,
     ],
     // Stock Marko crashes on an enum parent; the rule refuses it.
     [
@@ -700,6 +777,38 @@ describe("TypeScript's merges", () => {
   ];
   it.each(refused)("%s is refused", (_label, source, name, line, column) => {
     expectRefused(source, DUPLICATE, name, line, column);
+  });
+});
+
+describe("the message for a namespace before a function or class", () => {
+  it("says to declare the function or class first", () => {
+    const fn = expectRefused(
+      "static namespace N { export const a = 1 }\nstatic function N() {}",
+      DUPLICATE,
+      "N",
+      2,
+      16,
+    );
+    expect(fn.message).toContain("Declare the function before the namespace");
+    const cls = expectRefused(
+      "static namespace N { export const a = 1 }\nstatic class N {}",
+      DUPLICATE,
+      "N",
+      2,
+      13,
+    );
+    expect(cls.message).toContain("Declare the class before the namespace");
+  });
+
+  it("does not say it for other pairs", () => {
+    const error = expectRefused(
+      "static function f() {}\nstatic const f = 1",
+      DUPLICATE,
+      "f",
+      2,
+      13,
+    );
+    expect(error.message).not.toContain("before the namespace");
   });
 });
 
