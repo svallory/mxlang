@@ -43,37 +43,62 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  * Proxy validates each key as Solid reads it, which keeps reactivity and means
  * a key a later source overwrites is never read, so never validated. Exempt:
  * event handlers (Marko's `/^on[A-Z-]/`, plus Solid's `on:`/`oncapture:`),
- * `prop:` (a real property write) and ref, children, class, style. Everything
- * else, including `attr:`, `bool:`, `use:`, innerHTML, textContent and
- * classList, is a plain attribute write on Solid and validates like Marko.
+ * `prop:` (a real property write), ref, class, style and children. Everything
+ * else, including `attr:`, `bool:`, `use:` and classList, is a plain attribute
+ * write on Solid and validates like Marko.
  * `<T,>` keeps the helper unconstrained so any spread type-checks, and {@link SPREADABLE} keeps its result spreadable (covered by mx-tsc `attr-guard-solid.test.ts`).
  *
- * `innerHTML` and `outerHTML` are the exception to "a plain attribute write":
- * as props Solid assigns them as markup (server) or as DOM properties
- * (client), where Marko prints a spread's key as an ordinary attribute with an
- * escaped value. The view therefore lists them under their lowercase names,
- * which are no such props, so Solid writes the attribute Marko does (an HTML
- * parser reads the same attribute name); the camel-case names read as absent.
- * The view sits over an empty target, so hiding a key breaks no Proxy
- * invariant, even for a frozen source.
+ * Four keys are not "a plain attribute write" on Solid, and each can put
+ * markup into the page where Marko prints a spread's key as an ordinary
+ * attribute with an escaped value:
+ *  - `innerHTML`, `outerHTML`, `textContent` and `innerText` are props Solid
+ *    assigns as markup (server) or as DOM properties (client; the server also
+ *    writes `textContent`/`innerText` raw inside `<script>` and `<style>`).
+ *    The view lists them under their lowercase names, which are no such props,
+ *    so Solid writes the attribute Marko does (an HTML parser reads the same
+ *    attribute name); the camel-case names read as absent.
+ *  - `prop:innerHTML` and `prop:outerHTML` assign the DOM property on the
+ *    client; they are hidden.
+ *  - `children` is exempt for a native element's own content, but the server
+ *    treats an object there as an already-rendered node (`{ t: "<b>" }` is
+ *    written raw), and writes any value raw inside `<script>` and `<style>`.
+ *    It is hidden unless it is a primitive on another element, where Solid
+ *    escapes it as text.
+ * The view sits over an empty target, so hiding or renaming a key breaks no
+ * Proxy invariant, even for a frozen source.
  */
 export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = ""): ${SPREADABLE} {
   if (tag === null || attrs === null || typeof attrs !== "object") return attrs as never;
   const source = attrs as object;
-  const rawName = (key: string | symbol): boolean => key === "innerHTML" || key === "outerHTML";
-  const original = (key: string | symbol): string | symbol => (key === "innerhtml" && Reflect.has(source, "innerHTML") ? "innerHTML" : key === "outerhtml" && Reflect.has(source, "outerHTML") ? "outerHTML" : key);
+  const markup = ["innerHTML", "outerHTML", "textContent", "innerText"];
+  const hidden = (key: string | symbol): boolean => {
+    if (typeof key !== "string") return false;
+    if (markup.includes(key) || key === "prop:innerHTML" || key === "prop:outerHTML") return true;
+    if (key !== "children" || !Reflect.has(source, key)) return false;
+    const child = Reflect.get(source, key);
+    return tag === "script" || tag === "style" || (child !== null && (typeof child === "object" || typeof child === "function"));
+  };
+  const original = (key: string | symbol): string | symbol => {
+    const name = typeof key === "string" ? markup.find((entry) => entry.toLowerCase() === key) : undefined;
+    return name !== undefined && Reflect.has(source, name) ? name : key;
+  };
   return new Proxy({}, {
     get(_, key) {
-      if (rawName(key)) return undefined;
+      if (hidden(key)) return undefined;
       const name = original(key);
       const value = Reflect.get(source, name);
-      if (typeof name === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(name)) ${MX_ATTR_VALUE_BINDING}(name, value, tag);
+      if (typeof name === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(name)) {
+        try { ${MX_ATTR_VALUE_BINDING}(name, value, tag); } catch (error) {
+          if ((name === "innerHTML" || name === "outerHTML") && error instanceof Error) error.message += " To write raw HTML, make \`$!{html}\` the element's only child.";
+          throw error;
+        }
+      }
       return (name === "class" || name === "style") && value === true ? "true" : value;
     },
-    has: (_, key) => !rawName(key) && Reflect.has(source, original(key)),
-    ownKeys: () => [...new Set(Reflect.ownKeys(source).filter((key) => (key !== "class" && key !== "style") || Boolean(Reflect.get(source, key))).map((key) => (key === "innerHTML" ? "innerhtml" : key === "outerHTML" ? "outerhtml" : key)))],
+    has: (_, key) => !hidden(key) && Reflect.has(source, original(key)),
+    ownKeys: () => [...new Set(Reflect.ownKeys(source).flatMap((key) => (hidden(key) ? (typeof key === "string" && markup.includes(key) ? [key.toLowerCase()] : []) : (key === "class" || key === "style") && !Reflect.get(source, key) ? [] : [key])))],
     getOwnPropertyDescriptor(_, key) {
-      if (rawName(key)) return undefined;
+      if (hidden(key)) return undefined;
       const descriptor = Reflect.getOwnPropertyDescriptor(source, original(key));
       return descriptor && { ...descriptor, configurable: true };
     },

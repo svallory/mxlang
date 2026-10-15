@@ -11,7 +11,7 @@ React has no control-flow components, so every structural tag becomes a plain JS
 |---|---|
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML={{ __html: expr }}` |
-| A spread key named `dangerouslySetInnerHTML`, `innerHTML` or `outerHTML` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; a literal `dangerouslySetInnerHTML=` on an element is a compile error |
+| A spread key named `dangerouslySetInnerHTML`, `innerHTML` or `outerHTML` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; a literal `innerHTML=` or `outerHTML=` is the same lowercase attribute; a literal `dangerouslySetInnerHTML=` on an element is a compile error |
 | `class="a"`, `.a` | `className="a"` |
 | `class={ a: cond }`, `class=[…]` | `className={mxClass({ a: cond })}` |
 | `<label for=…>` | `htmlFor={…}` |

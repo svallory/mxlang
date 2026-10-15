@@ -61,6 +61,44 @@ describe("a literal innerHTML= on a native element is refused", () => {
   });
 });
 
+describe("a literal text prop on a raw-text element is refused", () => {
+  it.each([
+    ["<style textContent=input.t>x</style>", "textContent", "style", 1, 7],
+    ["<style children=input.t/>", "children", "style", 1, 7],
+    ["<html-script textContent=input.t/>", "textContent", "html-script", 1, 13],
+    [
+      "<html-script textContent=input.t>y</html-script>",
+      "textContent",
+      "html-script",
+      1,
+      13,
+    ],
+  ])("%s", (source, name, tag, line, column) => {
+    expect(failure(source)).toMatchObject({
+      message: `\`${name}\` is not a valid attribute on \`<${tag}>\`: write the text as its body`,
+      line,
+      column,
+    });
+  });
+
+  it("is fine on an element whose server render escapes it", () => {
+    expect(() =>
+      compileSolidMx("<div textContent=input.t/>", {
+        filename: "fixture.solid.mx",
+      }),
+    ).not.toThrow();
+  });
+
+  it("a dynamic tag routes the literal through the guarded view instead", () => {
+    const { code } = compileSolidMx(
+      "<${input.tag} textContent=input.t innerHTML=input.h/>",
+      { filename: "fixture.solid.mx" },
+    );
+    expect(code).toContain('{...__mxAttrSpread({"textContent": (input.t)}');
+    expect(code).toContain('{...__mxAttrSpread({"innerHTML": (input.h)}');
+  });
+});
+
 describe("raw HTML still has its way", () => {
   it("`$!{…}` as the sole child lowers to innerHTML", () => {
     const { code } = compileSolidMx("<div>$!{input.h}</div>", {

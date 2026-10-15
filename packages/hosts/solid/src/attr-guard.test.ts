@@ -12,6 +12,7 @@ import solidBabelPlugin from "@solidjs/babel-plugin";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ATTR_SPREAD_HELPER,
+  ATTR_VALUE_HELPER,
   TEXTAREA_DYN_SPREAD_HELPER,
   TEXTAREA_OMIT_HELPER,
 } from "./attr-guard.ts";
@@ -155,6 +156,54 @@ const CASES: Record<string, Case> = {
     fragment: "<div ...input.a ...input.b/>",
     setup:
       'const input = { a: { innerHTML: "<b>x</b>" }, b: { innerHTML: "plain" } };',
+  },
+  propInnerHtmlSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { "prop:innerHTML": "<b>x</b>", id: "k" } };',
+  },
+  propOuterHtmlSpread: {
+    fragment: "<section><span ...input.a/></section>",
+    setup: 'const input = { a: { "prop:outerHTML": "<b>x</b>" } };',
+  },
+  textContentSpread: {
+    fragment: "<div ...input.a/>",
+    setup:
+      'const input = { a: { textContent: "<b>x</b>", innerText: "<i>y</i>" } };',
+  },
+  scriptTextSpread: {
+    fragment: "<html-script ...input.a/>",
+    setup:
+      'const input = { a: { textContent: "</script><b>x</b>", innerText: "</script><i>y</i>", children: "</script><u>z</u>" } };',
+  },
+  scriptTextSpreadBody: {
+    fragment: "<html-script ...input.a>var a = 1;</html-script>",
+    setup:
+      'const input = { a: { textContent: "</script><b>x</b>", children: "</script><u>z</u>" } };',
+  },
+  styleDynamicTag: {
+    fragment: "<${input.tag} ...input.a/>",
+    setup:
+      'const input = { tag: "style", a: { textContent: "</style><b>x</b>", children: "</style><u>z</u>" } };',
+  },
+  childrenObjectSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { children: { t: "<b>x</b>" } } };',
+  },
+  childrenArraySpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { children: [{ t: "<b>x</b>" }] } };',
+  },
+  childrenTextSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { children: "hello <i>" } };',
+  },
+  dynamicLiteralInnerHtml: {
+    fragment: "<${input.tag} innerHTML=input.x/>",
+    setup: 'const input = { tag: "div", x: "<b>x</b>" };',
+  },
+  dynamicLiteralStyleText: {
+    fragment: "<${input.tag} textContent=input.x/>",
+    setup: 'const input = { tag: "style", x: "</style><b>x</b>" };',
   },
   rawHtmlSpreadObject: {
     fragment: "<div ...input.a/>",
@@ -397,10 +446,67 @@ describe.each(["ssr", "dom"] as const)(
       expect(html).toContain('innerhtml="plain"');
       expect(markup(html)).not.toContain("<b>");
     });
-    it("validates a raw key like any attribute", () => {
+    it("validates a raw key like any attribute, and says how to write raw HTML", () => {
       expect(get("rawHtmlSpreadObject").error).toBe(
-        "The `innerHTML` attribute cannot be a plain object (it would render as `[object Object]`).",
+        "The `innerHTML` attribute cannot be a plain object (it would render as `[object Object]`). To write raw HTML, make `$!{html}` the element's only child.",
       );
+    });
+    it("does not let a spread's prop:innerHTML or prop:outerHTML assign markup", () => {
+      const inner = get("propInnerHtmlSpread");
+      expect(inner.error).toBeUndefined();
+      expect(markup(inner.html)).not.toContain("<b>");
+      expect(inner.html).toContain('id="k"');
+      const outer = get("propOuterHtmlSpread");
+      expect(outer.error).toBeUndefined();
+      expect(markup(outer.html)).not.toContain("<b>");
+      expect(outer.html).toContain("<span");
+    });
+    it("writes a spread's textContent and innerText as escaped lowercase attributes", () => {
+      const { error, html } = get("textContentSpread");
+      expect(error).toBeUndefined();
+      expect(markup(html)).not.toContain("<b>");
+      expect(markup(html)).not.toContain("<i>");
+      expect(html).toContain('textcontent="');
+      expect(html).toContain('innertext="');
+    });
+    it("cannot be broken out of by a spread on <html-script> or <style>", () => {
+      for (const name of [
+        "scriptTextSpread",
+        "scriptTextSpreadBody",
+        "styleDynamicTag",
+      ]) {
+        const { error, html } = get(name);
+        expect(error).toBeUndefined();
+        const outside = markup(html);
+        expect(outside).not.toMatch(/<[biu]>/);
+        expect(outside.match(/<\/(?:script|style)>/g)).toHaveLength(1);
+      }
+    });
+    it("writes a literal markup prop on a dynamic string tag as an escaped attribute", () => {
+      const inner = get("dynamicLiteralInnerHtml");
+      expect(inner.error).toBeUndefined();
+      expect(markup(inner.html)).not.toContain("<b>");
+      expect(inner.html).toContain('innerhtml="');
+      const style = get("dynamicLiteralStyleText");
+      expect(style.error).toBeUndefined();
+      expect(markup(style.html)).not.toContain("<b>");
+      expect(style.html).toContain('textcontent="');
+      expect(markup(style.html).match(/<\/style>/g)).toHaveLength(1);
+    });
+    it("keeps the <html-script> body over a spread's text keys", () => {
+      expect(get("scriptTextSpreadBody").html).toContain("var a = 1;");
+    });
+    it("never lets a spread's object children reach Solid's node path", () => {
+      for (const name of ["childrenObjectSpread", "childrenArraySpread"]) {
+        const { error, html } = get(name);
+        expect(error).toBeUndefined();
+        expect(markup(html)).not.toContain("<b>");
+      }
+    });
+    it("keeps a spread's text children as escaped text", () => {
+      const { error, html } = get("childrenTextSpread");
+      expect(error).toBeUndefined();
+      expect(html).toContain("hello &lt;i");
     });
     it("drops a null or false raw key", () => {
       const { error, html } = get("rawHtmlSpreadFalsy");
@@ -494,6 +600,70 @@ describe("module assembly", () => {
     });
     expect(code).toContain("function __mxAttrValue");
     expect(code).toContain("function __mxAttrSpread");
+  });
+});
+
+// Solid asks the view for lowercase names only, so the camel-case guard is
+// exercised against the helper itself.
+describe("the spread view", () => {
+  const view = (source: object, tag: string | null = "div") => {
+    const js = transformSync(
+      `function run(source: any, tag: any) {\n${ATTR_VALUE_HELPER}\n${ATTR_SPREAD_HELPER}\nreturn __mxAttrSpread(source, tag);\n}`,
+      {
+        filename: "view.ts",
+        presets: [[typescriptPreset, {}]],
+        babelrc: false,
+        configFile: false,
+      },
+    )?.code;
+    return new Function(`${js}\nreturn run;`)()(source, tag) as Record<
+      string | symbol,
+      unknown
+    >;
+  };
+
+  it("hides the camel-case markup keys everywhere and lists the lowercase ones", () => {
+    const v = view({
+      innerHTML: "<b>",
+      outerHTML: "<i>",
+      textContent: "t",
+      innerText: "u",
+      "prop:innerHTML": "<b>",
+      id: "k",
+    });
+    for (const key of [
+      "innerHTML",
+      "outerHTML",
+      "textContent",
+      "innerText",
+      "prop:innerHTML",
+    ]) {
+      expect(v[key]).toBeUndefined();
+      expect(key in v).toBe(false);
+      expect(Object.getOwnPropertyDescriptor(v, key)).toBeUndefined();
+    }
+    expect(Object.keys(v).sort()).toEqual([
+      "id",
+      "innerhtml",
+      "innertext",
+      "outerhtml",
+      "textcontent",
+    ]);
+    expect(v.innerhtml).toBe("<b>");
+    expect({ ...v }).toMatchObject({ innerhtml: "<b>", id: "k" });
+  });
+
+  it("hides children unless it is a primitive on a tag that escapes it", () => {
+    expect(view({ children: "t" }).children).toBe("t");
+    expect(view({ children: { t: "<b>" } }).children).toBeUndefined();
+    expect(view({ children: [1] }).children).toBeUndefined();
+    expect(view({ children: "t" }, "script").children).toBeUndefined();
+    expect("children" in view({ children: "t" }, "style")).toBe(false);
+  });
+
+  it("is the source itself for a component target", () => {
+    const source = { innerHTML: "<b>" };
+    expect(view(source, null)).toBe(source);
   });
 });
 

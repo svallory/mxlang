@@ -1066,12 +1066,47 @@ function mappedValue(expr: Expr): MappedCode {
   return mappedMethod(expr) ?? mappedExpr(expr);
 }
 
+/** Literal attribute names the spread view hides or renames on a string tag. */
+const SPREAD_VIEW_NAMES: ReadonlySet<string> = new Set([
+  "innerHTML",
+  "outerHTML",
+  "textContent",
+  "innerText",
+  "children",
+  "prop:innerHTML",
+  "prop:outerHTML",
+]);
+
 function renderAttr(
   attr: Attr,
   mapName = false,
   native?: NativeAttrs,
   hasSpread = false,
 ): MappedCode {
+  // A literal markup-writing prop on a runtime-resolved tag cannot be refused
+  // at compile time (the tag may be `script`, `style` or a component), so it
+  // goes through the same spread view a spread does: it renders as Marko's
+  // escaped attribute on a string tag and stays a prop on a component.
+  if (
+    native?.when !== undefined &&
+    (attr.kind === "static" ||
+      attr.kind === "dynamic" ||
+      attr.kind === "boolean") &&
+    SPREAD_VIEW_NAMES.has(attr.name)
+  ) {
+    if (attrGuardUse) attrGuardUse.spread = true;
+    return concatMapped(
+      ` {...${MX_ATTR_SPREAD_BINDING}({`,
+      mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
+      ": (",
+      attr.kind === "static"
+        ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
+        : attr.kind === "boolean"
+          ? concatMapped("true")
+          : mappedValue(attr.value),
+      `)}, ${nativeTagOf(native)})}`,
+    );
+  }
   // JSX only permits one colon with a nonempty suffix. Preserve Marko's
   // `value:` and `value:foo:bar` names as string keys in a prop spread.
   if (
@@ -1461,18 +1496,40 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
  * where stock Marko prints an escaped attribute. A sole `$!{html}` child is
  * the way to write raw HTML, and it lowers to `innerHTML` itself. A component
  * target keeps `innerHTML` as an ordinary prop, so this runs for native
- * elements and `<html-script>` only; a spread cannot reach it (the spread
+ * elements and `<html-script>` only. On `<script>`, `<style>` and
+ * `<html-script>` it also refuses `textContent`, `innerText` and `children`; a spread cannot reach it (the spread
  * helper renames the key).
  */
-function rejectRawHtmlAttr(attrs: Attr[]): void {
+function rejectRawHtmlAttr(attrs: Attr[], tag: string): void {
   for (const attr of attrs) {
-    if (attr.kind === "spread" || attr.name !== "innerHTML") continue;
-    fail(
-      "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
-      attr,
-    );
+    if (attr.kind === "spread") continue;
+    if (attr.name === "innerHTML") {
+      fail(
+        "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
+        attr,
+      );
+    }
+    // Solid's server renderer writes the text props of a `<script>` or
+    // `<style>` unescaped, so these names close the element and open markup.
+    if (RAW_TEXT_ELEMENTS.has(tag) && RAW_TEXT_PROPS.has(attr.name)) {
+      fail(
+        `\`${attr.name}\` is not a valid attribute on \`<${tag}>\`: write the text as its body`,
+        attr,
+      );
+    }
   }
 }
+
+const RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
+  "script",
+  "style",
+  "html-script",
+]);
+const RAW_TEXT_PROPS: ReadonlySet<string> = new Set([
+  "textContent",
+  "innerText",
+  "children",
+]);
 
 function renderWithNewEmitter(
   nodes: IrNode[],
@@ -2141,7 +2198,7 @@ export class SolidEmitter implements Emitter<string> {
         child,
       );
     }
-    rejectRawHtmlAttr(node.attrs);
+    rejectRawHtmlAttr(node.attrs, "html-script");
     const attrs = renderAttrs(node.attrs, false, { tag: '"script"' });
     if (body.length === 0) {
       this.#out.push(concatMapped("<script", attrs, " />"));
@@ -2171,7 +2228,7 @@ export class SolidEmitter implements Emitter<string> {
     }
     const raw = rawChild(node.children);
     rejectMixedRaw(node.children);
-    rejectRawHtmlAttr(node.attrs);
+    rejectRawHtmlAttr(node.attrs, node.name);
     // `<textarea value=x/>` renders the value as content, as Marko does.
     const textarea =
       node.name === "textarea" ? textareaContent(node) : undefined;

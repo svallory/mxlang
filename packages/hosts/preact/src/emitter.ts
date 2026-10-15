@@ -419,6 +419,12 @@ function escapeAttribute(value: string): string {
 /** A tag name the host's `JSX.IntrinsicElements` could declare. */
 const NATIVE_TAG = /^[a-z][a-z0-9]*$/;
 
+/** Native-element attributes a JSX renderer may assign as markup-writing DOM properties; see `#attr`. */
+const RAW_HTML_PROP_NAMES: ReadonlySet<string> = new Set([
+  "innerHTML",
+  "outerHTML",
+]);
+
 /**
  * An attribute value's JSX text with its authored mapping. Every function
  * value is emitted as written: a method shorthand (`onClick() { … }`) as the
@@ -952,12 +958,24 @@ export class PreactEmitter implements Emitter<string> {
     // A JSXNamespacedName has exactly two nonempty pieces. Marko also
     // accepts `value:` and `value:foo:bar`; a string-keyed spread carries the
     // exact prop through every JSX frontend without emitting invalid JSX.
-    if (
+    // A literal `innerHTML=`/`outerHTML=` on a native element is an ordinary
+    // attribute in Marko, but a JSX renderer may assign the camel-case prop as
+    // a DOM property (Preact on the client does, writing markup). It leaves as
+    // the lowercase attribute the spread helper writes, through a string key
+    // like a colon name (the JSX types declare no such attribute).
+    const rawProp =
+      !isComponent &&
       attr.kind !== "spread" &&
       attr.kind !== "bound" &&
       attr.kind !== "event" &&
-      attr.name.includes(":") &&
-      !/^[^:]+:[^:]+$/.test(attr.name)
+      RAW_HTML_PROP_NAMES.has(attr.name);
+    if (
+      rawProp ||
+      (attr.kind !== "spread" &&
+        attr.kind !== "bound" &&
+        attr.kind !== "event" &&
+        attr.name.includes(":") &&
+        !/^[^:]+:[^:]+$/.test(attr.name))
     ) {
       const valueSpan =
         attr.kind === "static"
@@ -967,7 +985,10 @@ export class PreactEmitter implements Emitter<string> {
             : undefined;
       return concatMapped(
         " {...{",
-        mapped(JSON.stringify(attr.name), mapName ? attr.nameSpan : null),
+        mapped(
+          JSON.stringify(rawProp ? attr.name.toLowerCase() : attr.name),
+          mapName ? attr.nameSpan : null,
+        ),
         ": (",
         !isComponent && attr.kind === "dynamic"
           ? concatMapped(

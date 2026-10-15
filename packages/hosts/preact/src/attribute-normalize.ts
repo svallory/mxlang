@@ -125,8 +125,13 @@ export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | unde
     const skip = props.includes(name) || (events && /^on[A-Z]/.test(name));
     if (skip && name !== "class" && name !== "className") continue;
     if (name === "key" || name === "ref") continue;
-    const next = __mxAttrValue(name, values[name], tag, false, skip);
-    if (name === "dangerouslySetInnerHTML" || name === "innerHTML" || name === "outerHTML") {
+    const raw = name === "dangerouslySetInnerHTML" || name === "innerHTML" || name === "outerHTML";
+    let next: unknown;
+    try { next = __mxAttrValue(name, values[name], tag, false, skip); } catch (error) {
+      if (raw && error instanceof Error) error.message += " To write raw HTML, make \`$!{html}\` the element's only child.";
+      throw error;
+    }
+    if (raw) {
       delete values[name];
       if (next !== undefined) values[name.toLowerCase()] = next;
     } else if (next === undefined) delete values[name]; else values[name] = next;

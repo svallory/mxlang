@@ -219,3 +219,69 @@ describe("a literal dangerouslySetInnerHTML= on a native element is refused, as 
     ).toContain("dangerouslySetInnerHTML");
   });
 });
+
+describe("a literal innerHTML= or outerHTML= is an escaped lowercase attribute", () => {
+  it.each([
+    ["innerHTML on an element", "<div innerHTML=input.h/>", "innerhtml"],
+    ["outerHTML on an element", "<div outerHTML=input.h/>", "outerhtml"],
+    [
+      "innerHTML on a custom element",
+      "<my-el innerHTML=input.h/>",
+      "innerhtml",
+    ],
+    [
+      "outerHTML on a custom element",
+      "<my-el outerHTML=input.h/>",
+      "outerhtml",
+    ],
+    [
+      "innerHTML beside a body",
+      "<div innerHTML=input.h>kept</div>",
+      "innerhtml",
+    ],
+    [
+      "innerHTML on a dynamic tag",
+      "<${input.tag} innerHTML=input.h/>",
+      "innerhtml",
+    ],
+  ])("%s", async (_name, source, attribute) => {
+    const html = await renderMx(source, { h: RAW, tag: "section" });
+    expect(html).toContain(`${attribute}="`);
+    // The value is escaped: no markup survives outside the attribute.
+    expect(html.replace(/="[^"]*"/g, "")).not.toContain("<b>");
+  });
+
+  it("a string literal value is the same attribute", async () => {
+    expect(await renderMx('<div innerHTML="a<b>c"/>')).toMatch(
+      /^<div innerhtml="a&lt;b(&gt;|>)c"><\/div>$/,
+    );
+  });
+
+  it("drops a null or false value, as any attribute", async () => {
+    expect(await renderMx("<div innerHTML=input.h/>", { h: false })).toBe(
+      "<div></div>",
+    );
+  });
+
+  it("is not renamed on a component", async () => {
+    const Box = (props: { innerHTML?: string }) => h("i", {}, props.innerHTML);
+    expect(
+      await renderMx("<${input.C} innerHTML=input.h/>", { C: Box, h: "t" }),
+    ).toBe("<i>t</i>");
+  });
+});
+
+describe("a spread's object value says how to write raw HTML", () => {
+  it.each(["dangerouslySetInnerHTML", "innerHTML", "outerHTML"])(
+    "%s",
+    async (key) => {
+      await expect(
+        renderMx("<div ...input.attrs/>", {
+          attrs: { [key]: { __html: RAW } },
+        }),
+      ).rejects.toThrow(
+        "To write raw HTML, make `$!{html}` the element's only child.",
+      );
+    },
+  );
+});
