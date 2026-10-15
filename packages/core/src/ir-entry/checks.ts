@@ -98,8 +98,8 @@ export interface CheckOptions {
 }
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
-function dynamicTagMessage(voice: Voice): string {
-  return `a dynamic tag (${voice.dynamicTag("expr")}) has no name; the ${voice.tree} is static and needs one`;
+function dynamicTagMessage(voice: Voice, source: string): string {
+  return `a dynamic tag (${voice.dynamicTag(source, undefined, "expr")}) has no name; the ${voice.tree} is static and needs one`;
 }
 
 /**
@@ -315,7 +315,9 @@ function checkTagName(
   if (name.startsWith("$") && name.includes("{")) {
     fail(
       NOT_IN_DATA_FILE_CODE,
-      voiced(tag.loc, nameEndOf(tag), () => dynamicTagMessage(activeVoice)),
+      voiced(tag.loc, nameEndOf(tag), () =>
+        dynamicTagMessage(activeVoice, name.replace(/^\$\{|\}$/g, "")),
+      ),
       tag.loc,
       nameEndOf(tag),
     );
@@ -661,18 +663,19 @@ function checkNode(node: IrNode): void {
       return;
     case "Component": {
       if (node.target.kind === "dynamic") {
-        const end = dynamicTagEnd(node.target.expr);
+        const target = node.target;
+        const end = dynamicTagEnd(target.expr);
         fail(
           NOT_IN_DATA_FILE_CODE,
           voiced(node.loc, end, () =>
-            node.target.kind === "dynamic" && node.target.valueImportBinding
+            target.valueImportBinding
               ? boundDynamicTagMessage(
-                  node.target.valueImportBinding,
+                  target.valueImportBinding,
                   activeVoice,
                   activeDialectId,
                   node.trigger,
                 )
-              : dynamicTagMessage(activeVoice),
+              : dynamicTagMessage(activeVoice, target.expr.code),
           ),
           node.loc,
           end,

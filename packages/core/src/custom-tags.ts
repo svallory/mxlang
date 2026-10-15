@@ -69,7 +69,10 @@ import type {
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
+  lazyOwner,
   MX_VOICE,
+  type Owner,
+  ownerText,
   type Voice,
   VoiceHookError,
   voiceOfCtx,
@@ -258,7 +261,7 @@ export type ChildNode =
       trigger?: TagTrigger;
     }
   | { kind: "ChildText"; loc: Position }
-  | { kind: "ChildDynamic"; loc: Position }
+  | { kind: "ChildDynamic"; loc: Position; source: string }
   | { kind: "ChildFor"; nodes: ChildNode[]; loc: Position }
   | {
       kind: "ChildIf";
@@ -548,7 +551,7 @@ function rebuildAttributeTagPlan(
         failAt(
           REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
-          `${voice.attrTag(name)} may not appear inside ${voice.tag("for")} (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           occurrences[0]?.loc ?? { line: 0, column: 0 },
           nameEndOf(occurrences[0]),
           voice,
@@ -960,7 +963,7 @@ function isPosition(value: unknown): value is Position {
  */
 function failFromHook(
   ctx: Ctx,
-  owner: string,
+  owner: Owner,
   message: string,
   arg: unknown,
   fallback: Position,
@@ -1077,7 +1080,7 @@ export function markCoreOwned(definition: CustomTag): CustomTag {
 /** An already formatted owner chain, shared by contracts at every depth. */
 function failForOwner(
   code: MxDiagnosticCode,
-  owner: string,
+  owner: Owner,
   message: string,
   at: Position,
   occurrence?: TagOccurrence,
@@ -1085,7 +1088,7 @@ function failForOwner(
 ): never {
   const error = codedError(
     code,
-    `${owner}: ${message}`,
+    `${ownerText(owner)}: ${message}`,
     at.line,
     at.column,
     at.file,
@@ -1510,7 +1513,7 @@ function attrShape(attr: Attr): string | null {
  * non-literal element, a spread or a hole passes the same way.
  */
 function checkCompositeAttr(
-  owner: string,
+  owner: Owner,
   attr: Exclude<Attr, { kind: "spread" }>,
   declaration: CustomTagAttribute,
   voice: Voice = MX_VOICE,
@@ -1561,7 +1564,7 @@ function checkCompositeAttr(
  * business.
  */
 function checkAtomAttr(
-  owner: string,
+  owner: Owner,
   attr: Exclude<Attr, { kind: "spread" }>,
   declaration: CustomTagAttribute,
   locate?: Locate,
@@ -1597,7 +1600,7 @@ function checkAtomAttr(
     claims.defer(
       codedError(
         INVALID_ATTRIBUTE_VALUE_CODE,
-        `${owner}: ${voice.attribute} ${attrLabel(attr)} must be atom, got string${expected}`,
+        `${ownerText(owner)}: ${voice.attribute} ${attrLabel(attr)} must be atom, got string${expected}`,
         at.line,
         at.column,
         at.file,
@@ -1660,7 +1663,7 @@ function isMemberValue(attr: Attr): boolean {
  * naming what was written.
  */
 function checkMemberAttr(
-  owner: string,
+  owner: Owner,
   attr: Exclude<Attr, { kind: "spread" }>,
   locate?: Locate,
   voice: Voice = MX_VOICE,
@@ -1769,7 +1772,7 @@ export function validateCustomTagParents(
   name: string,
   loc: Position,
   parent: string,
-  givenLabel?: string,
+  givenLabel?: Owner,
   nameEnd?: number,
   voice: Voice = MX_VOICE,
   trigger?: TagTrigger,
@@ -1777,7 +1780,9 @@ export function validateCustomTagParents(
   const parents = definition.parents;
   // A dynamic parent's diagnostic placeholder is not an authored name.
   if (!parents || (parent !== `\${…}` && parents.includes(parent))) return;
-  const label = givenLabel ?? spellAt(voice, name, loc, trigger);
+  const label = givenLabel
+    ? ownerText(givenLabel)
+    : spellAt(voice, name, loc, trigger);
   const named = parents.filter((allowed) => allowed !== "#root");
   const inside = named.map((allowed) => voice.tag(allowed)).join(", ");
   const required = inside
@@ -1802,19 +1807,22 @@ export function validateCustomTagParents(
 export function validateCustomTagChildren(
   definition: Pick<CustomTag, "children">,
   call: Pick<TagCall, "name" | "loc" | "childTree"> & { trigger?: TagTrigger },
-  givenOwner?: string,
+  givenOwner?: Owner,
   nameEnd?: number,
   voice: Voice = MX_VOICE,
 ): void {
   if (!definition.children) return;
-  const owner = givenOwner ?? spellAt(voice, call.name, call.loc, call.trigger);
+  const owner: Owner =
+    givenOwner ??
+    lazyOwner(() => spellAt(voice, call.name, call.loc, call.trigger));
   const declarations = definition.children;
   const explicit = explicitChildEntries(declarations);
   const entries = wildcardEntries(declarations);
   const tree = call.childTree ?? [];
   const leaves: Array<Extract<ChildNode, { kind: "ChildTag" | "ChildText" }>> =
     [];
-  const allowed =
+  // Spelled when a message needs it: a valid file spells nothing.
+  const allowedNames = (): string =>
     explicit.map(([name]) => voice.tag(name)).join(", ") || "none";
   // Check order (decision 147): an explicit entry, then the `"*"` entries in
   // order (the lowerer already matched them, recorded on the child), then the
@@ -1826,7 +1834,7 @@ export function validateCustomTagChildren(
     const hint = node.hint ? ` ${node.hint}` : "";
     if (entries.length === 0) {
       return {
-        message: `${label} is not allowed here; allowed children: ${allowed}${hint}`,
+        message: `${label} is not allowed here; allowed children: ${allowedNames()}${hint}`,
         ...(hint ? { guidance: hint.trim() } : {}),
       };
     }
@@ -1859,7 +1867,7 @@ export function validateCustomTagChildren(
   };
   // What a text child is told the parent does accept; a wildcard entry means
   // tags are accepted even when no child is named.
-  const textRule =
+  const textRule = (): string =>
     entries.length > 0
       ? `it accepts only child tags: ${[
           ...explicit.flatMap(([name]) =>
@@ -1871,9 +1879,9 @@ export function validateCustomTagChildren(
               : `names matching \`${entry.pattern}\``,
           ),
         ].join(", ")}`
-      : allowed === "none"
+      : allowedNames() === "none"
         ? "it accepts no child tags"
-        : `it accepts only the child tags ${allowed}`;
+        : `it accepts only the child tags ${allowedNames()}`;
   const collect = (nodes: readonly ChildNode[]): void => {
     for (const node of nodes) {
       if (node.kind === "ChildFor") collect(node.nodes);
@@ -1883,7 +1891,7 @@ export function validateCustomTagChildren(
         failForOwner(
           UNCHECKABLE_CHILD_CODE,
           owner,
-          `a dynamic tag ${voice.dynamicTag("…")} cannot be checked against the declared children`,
+          `a dynamic tag ${voice.dynamicTag(node.source, undefined, "…")} cannot be checked against the declared children`,
           node.loc,
           undefined,
           childEnds.get(node),
@@ -1896,7 +1904,7 @@ export function validateCustomTagChildren(
             failForOwner(
               TEXT_NOT_ALLOWED_CODE,
               owner,
-              `text is not allowed here; ${textRule}`,
+              `text is not allowed here; ${textRule()}`,
               node.loc,
               undefined,
               childEnds.get(node),
@@ -1915,7 +1923,7 @@ export function validateCustomTagChildren(
                   name: node.name,
                   offset,
                   ...(guidance
-                    ? { guidance: `inside ${owner}: ${guidance}` }
+                    ? { guidance: `inside ${ownerText(owner)}: ${guidance}` }
                     : {}),
                 },
             childEnds.get(node),
@@ -1986,7 +1994,7 @@ function valueAt(attr: Attr, locate?: Locate): Position {
 
 /** One attribute checker for top-level tags and every declared attribute tag. */
 function validateAttributes(
-  owner: string,
+  owner: Owner,
   attributes: CustomTag["attributes"],
   attrs: readonly Attr[],
   loc: Position,
@@ -2143,7 +2151,7 @@ export function hasAttributeTagContract(
 }
 
 function validateAttributeTags(
-  owner: string,
+  owner: Owner,
   declaredTags: CustomTag["attributeTags"],
   tags: readonly AttributeTag[],
   tree: readonly AttributeTagNode[],
@@ -2204,7 +2212,9 @@ function validateAttributeTags(
       );
     }
     if (declaration) {
-      const nestedOwner = `${owner}: ${voice.attrTag(tag.name)}`;
+      const nestedOwner: Owner = lazyOwner(
+        () => `${ownerText(owner)}: ${voice.attrTag(tag.name)}`,
+      );
       validateAttributes(
         nestedOwner,
         declaration.attributes,
@@ -2336,7 +2346,7 @@ export function validateCustomTagCall(
   claims?: ClaimContext,
 ): void {
   const voice = claims?.voice ?? MX_VOICE;
-  const owner = tagLabelAt(call, voice);
+  const owner = lazyOwner(() => tagLabelAt(call, voice));
   validateCustomTagChildren(definition, call, owner, nameEndOf(call), voice);
   if (definition.parseOptions?.openTagOnly && call.content) {
     failForOwner(
@@ -3854,7 +3864,7 @@ export function transformCustomTag(
   // expand to.
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
   const voice = voiceOfCtx(ctx);
-  const owner = tagLabelAt(call, voice);
+  const owner = lazyOwner(() => tagLabelAt(call, voice));
   if (!definition.transform && !hasTemplate(definition) && !contractOnly) {
     // An inline `children["*"]` contract can carry no transform: it is
     // validation-only, useful where the target delegates (data).
@@ -3975,7 +3985,7 @@ export function transformCustomTag(
     if (isTranslateError(error)) throw error;
     throw codedError(
       TAG_HOOK_ERROR_CODE,
-      `${owner}: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
+      `${ownerText(owner)}: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,
       call.loc.line,
       call.loc.column,
       call.loc.file,
@@ -4018,7 +4028,7 @@ export function transformCustomTag(
     !observed.attributeTagsRead()
   ) {
     warn(ctx, {
-      message: `${owner}: custom tag transform did not read its attributeTags; authored ${voice.attributeTags} were dropped`,
+      message: `${ownerText(owner)}: custom tag transform did not read its attributeTags; authored ${voice.attributeTags} were dropped`,
       code: ATTRIBUTE_TAG_DROPPED_CODE,
       line: call.loc.line,
       column: call.loc.column,

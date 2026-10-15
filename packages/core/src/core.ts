@@ -52,7 +52,13 @@ import type { Atom, Attr, Expr, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
-import { MX_VOICE, type Voice, voiceOfCtx } from "./message-vocabulary.ts";
+import {
+  MX_VOICE,
+  type Owner,
+  ownerText,
+  type Voice,
+  voiceOfCtx,
+} from "./message-vocabulary.ts";
 import type { ModuleScope } from "./module-scope.ts";
 import type { Dialect } from "./syntax-table.ts";
 import {
@@ -1828,18 +1834,15 @@ export function hasContent(children: Node[]): boolean {
  * where Marko's `assertNoArgs` knows a hint. Everything else — and any tag
  * whose name is not statically known — gets Marko's plain sentence.
  */
-const TAG_ARGUMENTS_MESSAGES: Record<
-  string,
-  (name: string, voice: Voice) => string
-> = {
-  if: (name, voice) =>
-    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead: \`<${name}=condition>\`.`,
-  "else-if": (name, voice) =>
-    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead: \`<${name}=condition>\`.`,
-  else: (_name, voice) =>
-    `Tag does not support arguments. Write the condition as ${voice.anAttribute} instead: \`<else if=condition>\`.`,
-  await: (name, voice) =>
-    `Tag does not support arguments. Write the promise as a value ${voice.attribute} and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
+const TAG_ARGUMENTS_MESSAGES: Record<string, (name: string) => string> = {
+  if: (name) =>
+    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
+  "else-if": (name) =>
+    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
+  else: () =>
+    "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`.",
+  await: (name) =>
+    `Tag does not support arguments. Write the promise as a value attribute and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
 };
 
 function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
@@ -1870,9 +1873,7 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
     /`?<([^`>]+)>`?/.exec(what)?.[1] ||
     String(tagNameOf(node) ?? "");
   const message = TAG_ARGUMENTS_MESSAGES[name];
-  return message
-    ? message(name, voiceOfCtx(ctx))
-    : "Tag does not support arguments.";
+  return message ? message(name) : "Tag does not support arguments.";
 }
 
 function eventHandlerHint(ctx: Ctx, node: Node): string {
@@ -2031,7 +2032,7 @@ export function firstAttributeTag(node: Node): Node | undefined {
 export function rejectUnsupportedFields(
   ctx: Ctx,
   node: Node,
-  what: string,
+  what: Owner,
   allow: {
     attributeTags?: boolean;
     var?: boolean;
@@ -2046,7 +2047,7 @@ export function rejectUnsupportedFields(
     const tagName = String(tagNameOf(first) ?? "@…").replace(/^@/, "");
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `${voiceOfCtx(ctx).attributeTag} \`@${tagName}\` on ${what}; ${voiceOfCtx(ctx).attributeTags} are props of components, so they are only valid directly inside a component call`,
+      `${voiceOfCtx(ctx).attributeTag} \`@${tagName}\` on ${ownerText(what)}; ${voiceOfCtx(ctx).attributeTags} are props of components, so they are only valid directly inside a component call`,
       first,
     );
   }
@@ -2060,7 +2061,7 @@ export function rejectUnsupportedFields(
     // stays as a second sentence after it.
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `${tagArgumentsMessage(ctx, node, what)}${eventHandlerHint(ctx, node)}`,
+      `${tagArgumentsMessage(ctx, node, ownerText(what))}${eventHandlerHint(ctx, node)}`,
       tagArgsOf(node)?.[0] ?? node,
     );
   }
@@ -2071,21 +2072,21 @@ export function rejectUnsupportedFields(
     // refusal above follows).
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${what} is not supported in ${unsupportedIn(ctx)}`,
+      `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${ownerText(what)} is not supported in ${unsupportedIn(ctx)}`,
       tagVarOf(node),
     );
   }
   if (hasTypeArguments(node)) {
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `type arguments on ${what} are not supported in ${unsupportedIn(ctx)}`,
+      `type arguments on ${ownerText(what)} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }
   if (!allow.params && tagParamsOf(node).length) {
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `tag params \`|...|\` on ${what} are not supported in ${unsupportedIn(ctx)}`,
+      `tag params \`|...|\` on ${ownerText(what)} are not supported in ${unsupportedIn(ctx)}`,
       node,
     );
   }

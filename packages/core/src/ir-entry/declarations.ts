@@ -114,14 +114,14 @@ export function entryDeclarations(
           // Read when the tag is rejected, so a `formatTag` that breaks its
           // contract is the lowering's error at this tag, not the build's.
           get reason() {
-            return `${voice.tag("define")} is a render-time macro: the ${voice.tree} is static and cannot expand it; inline the content at each use`;
+            return `\`<define>\` is a render-time macro: the ${voice.tree} is static and cannot expand it; inline the content at each use`;
           },
         },
         return: {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
           get reason() {
-            return `${voice.tag("return")} needs the evaluated mode: the ${voice.tree} is static and has no value to return`;
+            return `\`<return>\` needs the evaluated mode: the ${voice.tree} is static and has no value to return`;
           },
         },
       },

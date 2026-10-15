@@ -1,62 +1,97 @@
 # Literals the message-vocabulary guard test lets stand.
-# One entry per line: file :: function :: fragment of the literal -- one-line reason
+# One entry per line: file :: function :: fragment -- kind: one-line reason
 #
-# An entry covers every hit in that function whose literal contains the
-# fragment. An entry that matches no hit fails the test, so a migrated site
-# takes its entry with it.
+# An entry allows the span its fragment names, in every literal of that
+# function that holds it. The guard removes the fragment and checks what is
+# left, so a literal that holds an allowed example and also a raw noun or a
+# hand-spelled tag is still a hit.
+#
+# A fragment that starts with `==` allows only a literal that is exactly the
+# text after it (a contract key, an internal label), not a longer message that
+# happens to contain it.
+#
+# An entry that matches no hit fails the test, so a migrated site takes its
+# entry with it.
 #
 # Reasons come in five kinds:
 #   key       a contract or AST key name, not message text
 #   internal  an "IR invariant broken" error: an MX bug report, not a message a dialect's author or user reads
-#   mx-tag    text about a tag MX itself defines (<script>, <return>, <for>, <define>, import attributes); those tags keep MX's words
+#   mx-tag    text about a tag MX itself defines (<script>, <return>, <for>, <else>, import attributes); those tags keep MX's words
 #   example   a syntax example the message shows; the example is written in MX's own syntax
 #   register  text for the dialect author at registration, not for the file's author
 
-ir-entry/checks.ts :: checkAttr :: attribute -- internal: span invariant label
-ir-entry/checks.ts :: checkAttrValue :: attribute -- internal: span invariant label
-ir-entry/checks.ts :: checkTag :: <${…}> -- internal: span invariant label
-ir-entry/checks.ts :: checkAttrTag :: attribute tag -- internal: span invariant label
-ir-entry/checks.ts :: checkAttrTagNode :: attribute-tag -- internal: span invariant label
+ir-entry/checks.ts :: checkAttr :: ==argument ${…} of attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttr :: ==spread attribute -- internal: span invariant label
+ir-entry/checks.ts :: checkAttr :: ==attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: ==static attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: ==attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: ==bound attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: ==refinement of bound attribute `${…}` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrValue :: ==spread attribute -- internal: span invariant label
+ir-entry/checks.ts :: checkTag :: ==argument ${…} of `<${…}>` -- internal: span invariant label
+ir-entry/checks.ts :: checkTag :: ==tag `<${…}>`'s name -- internal: span invariant label
+ir-entry/checks.ts :: checkTag :: ==tag `<${…}>` -- internal: span invariant label
+ir-entry/checks.ts :: checkTag :: ==tag `<${…}>`'s alias -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTag :: ==attribute tag `<@${…}>`'s name -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTag :: ==attribute tag `<@${…}>` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTagNode :: ==attribute-tag `<if>` condition -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTagNode :: ==attribute-tag `<if>` -- internal: span invariant label
+ir-entry/checks.ts :: checkAttrTagNode :: ==attribute-tag `<for>` -- internal: span invariant label
 
-custom-tags.ts :: shadowedBuiltinMessage :: core-owned custom tag -- register: the shadowing refusal is addressed to the registering author
-custom-tags.ts :: customTagTaglib :: <${…}> -- key: the parser-facing taglib key, not message text
-custom-tags.ts :: defaultAttr :: declares a `default` -- register: contract registration error
-custom-tags.ts :: validateAttributes :: attributes -- key: the `CustomTag.attributes` field name
-custom-tags.ts :: rejectUnreachableHooks :: has no call site -- register: contract registration error
-custom-tags.ts :: <top> :: attributes -- key: contract key names (`attributes`)
-custom-tags.ts :: reject :: Invalid -- register: contract registration error
+custom-tags.ts :: shadowedBuiltinMessage :: `<${…}>` is a core-owned custom tag -- register: the shadowing refusal is addressed to the registering author
+custom-tags.ts :: customTagTaglib :: ==<${…}> -- key: the parser-facing taglib key, not message text
+custom-tags.ts :: defaultAttr :: attribute `${…}` declares a `default` -- register: contract registration error
+custom-tags.ts :: defaultAttr :: no attribute spelling -- register: contract registration error
+custom-tags.ts :: validateAttributes :: ==attributes -- key: the `CustomTag.attributes` field name
+custom-tags.ts :: rejectUnreachableHooks :: `<${…}>`: a custom tag -- register: contract registration error
+custom-tags.ts :: <top> :: ==attributes -- key: contract key names (`attributes`)
+custom-tags.ts :: reject :: Invalid "${…}" attribute declaration -- register: contract registration error
 custom-tags.ts :: rejectUnknownDeclarationKeys :: <${…}> -- register: contract registration error
 custom-tags.ts :: rejectAttributeTagParentConflicts :: <${…}> -- register: contract registration error
-custom-tags.ts :: rejectRecursiveContractKeys :: attribute -- register: contract registration error
-custom-tags.ts :: rejectRecursiveContractKeys :: ${…}> -- register: contract registration error
-custom-tags.ts :: visit :: ${…}> -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: ==attributes -- key: contract key names (`attributes`)
+custom-tags.ts :: rejectRecursiveContractKeys :: attribute declaration -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: attribute tag declaration -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: attribute-tag declaration -- register: contract registration error
+custom-tags.ts :: rejectRecursiveContractKeys :: <@${…}> -- register: contract registration error
+custom-tags.ts :: visit :: <${…}> -- register: contract registration error
+custom-tags.ts :: visit :: <@${…}> -- register: contract registration error
 custom-tags.ts :: rejectWildcardReferences :: <${…}> -- register: contract registration error
 
-wildcard-children.ts :: <top> :: attributes -- key: contract key names (`attributes`)
-tag-file.ts :: <top> :: attributes -- key: contract key names (`attributes`)
-tag-file.ts :: definitionError :: definition has errors -- register: a tag file's load error, addressed to the tag's author
-mx-parse.ts :: visit :: attribute -- key: the AST position name `"attribute"`
+wildcard-children.ts :: <top> :: ==attributes -- key: contract key names (`attributes`)
+tag-file.ts :: <top> :: ==attributes -- key: contract key names (`attributes`)
+tag-file.ts :: definitionError :: <${…}> -- register: a tag file's load error, addressed to the tag's author
+mx-parse.ts :: visit :: ==attribute -- key: the AST position name `"attribute"`
 
-core.ts :: if :: =condition> -- example: the suggested rewrite is written in MX's syntax
-core.ts :: else-if :: =condition> -- example: the suggested rewrite is written in MX's syntax
-core.ts :: await :: |result|=promise> -- example: the suggested rewrite is written in MX's syntax
-parse-error-hints.ts :: DEFAULT_REPLACEMENT :: declare a value with -- example: the suggested rewrite is written in MX's syntax
-template-tag.ts :: routeTemplateCall :: input.content -- example: the placeholder `<${input.content}/>` is MX's syntax
+core.ts :: if :: value attribute -- mx-tag: Marko's own sentence for `<if>` (decision 183), verbatim
+core.ts :: if :: <${…}=condition> -- example: the suggested rewrite is written in MX's syntax
+core.ts :: else-if :: value attribute -- mx-tag: Marko's own sentence for `<else-if>` (decision 183), verbatim
+core.ts :: else-if :: <${…}=condition> -- example: the suggested rewrite is written in MX's syntax
+core.ts :: else :: an attribute -- mx-tag: Marko's own sentence for `<else>` (decision 183), verbatim
+core.ts :: await :: value attribute -- mx-tag: Marko's own sentence for `<await>` (decision 183), verbatim
+core.ts :: await :: <${…}|result|=promise> -- example: the suggested rewrite is written in MX's syntax
+parse-error-hints.ts :: DEFAULT_REPLACEMENT :: <${…}/${…}=…/> -- example: the suggested rewrite is written in MX's syntax
+template-tag.ts :: routeTemplateCall :: <${input.content}/> -- example: the placeholder is MX's syntax
 
-lower.ts :: checkScriptShape :: `<script>` does not support spread -- mx-tag: <script> is an MX built-in
-lower.ts :: checkScriptShape :: `<script>` does not support the -- mx-tag: <script> is an MX built-in
-lower.ts :: checkScriptShape :: the attribute -- mx-tag: <script> is an MX built-in
+lower.ts :: checkScriptShape :: spread attributes -- mx-tag: <script> is an MX built-in
+lower.ts :: checkScriptShape :: `${…}` attribute -- mx-tag: <script> is an MX built-in
+lower.ts :: checkScriptShape :: ==the attribute -- mx-tag: <script> is an MX built-in
 lower.ts :: scriptBodyFailure :: Import attributes -- mx-tag: the JavaScript `import ... with` feature, not a tag attribute
+lower.ts :: rejectAttributeTagArguments :: <@${…} value=1> -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: rejectLoopParamInBy :: `by=` attribute -- mx-tag: <for> is an MX built-in
 lower.ts :: lowerForHead :: `by=` attribute -- mx-tag: <for> is an MX built-in
+lower.ts :: lowercaseBindingFix :: ==`<${${…}}${…}>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: localVariableTagMessage :: `<${${…}}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
 lower.ts :: dropContentAttrBesideBody :: so this attribute is dropped -- mx-tag: <define> is an MX built-in
 lower.ts :: lowerStatement :: parsed as a tag with attributes -- mx-tag: statement tags are MX built-ins
-lower.ts :: lowerReturn :: `<return>` -- mx-tag: <return> is an MX built-in
-lower.ts :: lowerReturn :: Invalid duplicate value -- mx-tag: <return> is an MX built-in
-lower.ts :: rejectAttributeTagArguments :: pass the value as -- example: the suggested rewrite is written in MX's syntax
-lower.ts :: lowercaseBindingFix :: `<${ -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: localVariableTagMessage :: Use `<${ -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: rejectUncalledParameterizedAttributeTag :: pass its arguments with -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: lowerAuthoredTag :: render its body with -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: lowerAuthoredTag :: call the binding as -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: lowerAuthoredTag :: or write -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerReturn :: spread attributes -- mx-tag: <return> is an MX built-in
+lower.ts :: lowerReturn :: `valueChange` attribute -- mx-tag: <return> is an MX built-in
+lower.ts :: lowerReturn :: `${…}` attribute -- mx-tag: <return> is an MX built-in
+lower.ts :: lowerReturn :: `value=` attribute -- mx-tag: <return> is an MX built-in
+lower.ts :: lowerReturn :: ==Invalid duplicate value attribute. -- mx-tag: <return> is an MX built-in
+lower.ts :: validateCustomAttributeTagBodies :: `<${…}>` -- mx-tag: the control tag (<for> or <if>) is an MX built-in
+lower.ts :: tagText :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
+lower.ts :: ownerLabel :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
+lower.ts :: rejectUncalledParameterizedAttributeTag :: `<${${…}(/* arguments */)}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: `<${input.${…}.content}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: `<${${…}}>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
+lower.ts :: lowerAuthoredTag :: `<${…}>` without a preceding -- mx-tag: <else> and <else-if> are MX built-ins

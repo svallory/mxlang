@@ -114,8 +114,8 @@ function whyFlagged(parts: readonly string[], joined: string): string | null {
   return null;
 }
 
-function scan(file: string): Hit[] {
-  const source = readFileSync(join(SRC, file), "utf8");
+/** The literals of `source` (the text of `file`) that spell a dialect's words. */
+function scanSource(file: string, source: string): Hit[] {
   const ast = parse(source, {
     sourceType: "module",
     plugins: ["typescript"],
@@ -162,11 +162,11 @@ function scan(file: string): Hit[] {
   return hits;
 }
 
-function readAllowList(): Entry[] {
-  const text = readFileSync(
-    join(SRC, "message-vocabulary-guard.allowlist.txt"),
-    "utf8",
-  );
+function scan(file: string): Hit[] {
+  return scanSource(file, readFileSync(join(SRC, file), "utf8"));
+}
+
+function readAllowList(text: string): Entry[] {
   const entries: Entry[] = [];
   text.split("\n").forEach((raw, index) => {
     const line = raw.trim();
@@ -189,12 +189,48 @@ function readAllowList(): Entry[] {
   return entries;
 }
 
-const allow = readAllowList();
+/**
+ * An entry allows the span its fragment names, not the literal around it. The
+ * fragment is removed from the hit's text and what is left is checked again,
+ * so a literal that holds an allowed example and also a raw noun is still a
+ * hit. A fragment starting with `==` allows only a literal that is exactly the
+ * text after it (a contract key, an internal label).
+ */
+const WHOLE = "==";
+
+function covering(entry: Entry, hit: Hit): boolean {
+  if (entry.file !== hit.file || entry.fn !== hit.fn) return false;
+  return entry.fragment.startsWith(WHOLE)
+    ? hit.text === entry.fragment.slice(WHOLE.length)
+    : hit.text.includes(entry.fragment);
+}
+
+/** What is still wrong in `hit` once the allowed spans are taken out, or null. */
+function remainder(hit: Hit, entries: readonly Entry[]): string | null {
+  let text = hit.text;
+  for (const entry of entries) {
+    if (!covering(entry, hit)) continue;
+    text = entry.fragment.startsWith(WHOLE)
+      ? ""
+      : text.split(entry.fragment).join("");
+  }
+  return whyFlagged([text], text);
+}
+
+/** The hits no entry (or not all of the hit's spans) allows. */
+function unlisted(found: readonly Hit[], entries: readonly Entry[]): Hit[] {
+  return found.filter((hit) => remainder(hit, entries) !== null);
+}
+
+/** The entries no hit uses. */
+function stale(found: readonly Hit[], entries: readonly Entry[]): Entry[] {
+  return entries.filter((entry) => !found.some((hit) => covering(entry, hit)));
+}
+
+const allow = readAllowList(
+  readFileSync(join(SRC, "message-vocabulary-guard.allowlist.txt"), "utf8"),
+);
 const hits = SCANNED.flatMap((file) => scan(file));
-const covers = (entry: Entry, hit: Hit) =>
-  entry.file === hit.file &&
-  entry.fn === hit.fn &&
-  hit.text.includes(entry.fragment);
 
 describe("message vocabulary guard", () => {
   it("scans the files that build dialect-reachable messages", () => {
@@ -206,11 +242,8 @@ describe("message vocabulary guard", () => {
   });
 
   it("finds no message spelling a dialect's words by hand outside the allow-list", () => {
-    const unlisted = hits.filter(
-      (hit) => !allow.some((entry) => covers(entry, hit)),
-    );
     expect(
-      unlisted.map(
+      unlisted(hits, allow).map(
         (hit) =>
           `${hit.file}:${hit.line} in ${hit.fn} (${hit.why}): ${hit.text}`,
       ),
@@ -219,11 +252,8 @@ describe("message vocabulary guard", () => {
   });
 
   it("has no allow-list entry that matches nothing", () => {
-    const stale = allow.filter(
-      (entry) => !hits.some((hit) => covers(entry, hit)),
-    );
     expect(
-      stale.map(
+      stale(hits, allow).map(
         (entry) =>
           `line ${entry.line}: ${entry.file} :: ${entry.fn} :: ${entry.fragment}`,
       ),
@@ -233,5 +263,96 @@ describe("message vocabulary guard", () => {
 
   it("gives every allow-list entry a reason", () => {
     for (const entry of allow) expect(entry.reason.length).toBeGreaterThan(8);
+  });
+
+  describe("catches a migrated site that is reverted to raw text", () => {
+    /**
+     * Each case takes the real file, swaps one voiced message back to the text
+     * it had before the vocabulary, and expects the guard to flag a hit the
+     * allow-list does not cover. The swap is checked to apply, so a refactor
+     * that moves the message fails here instead of passing vacuously.
+     */
+    const revert = (
+      file: string,
+      from: string,
+      to: string,
+      count: number,
+    ): Hit[] => {
+      const source = readFileSync(join(SRC, file), "utf8");
+      expect(source.split(from).length - 1, `${from} in ${file}`).toBe(count);
+      return scanSource(file, source.split(from).join(to));
+    };
+
+    it("flags `accepts no attributes` in custom-tags.ts", () => {
+      const reverted = revert(
+        "custom-tags.ts",
+        "`accepts no ${voice.attributes}`",
+        '"accepts no attributes"',
+        2,
+      );
+      const fresh = unlisted(reverted, allow);
+      expect(fresh.length).toBeGreaterThanOrEqual(2);
+      expect(fresh.every((hit) => hit.text === "accepts no attributes")).toBe(
+        true,
+      );
+    });
+
+    it("flags a hand-spelled tag-variable message in ir-entry/checks.ts", () => {
+      const reverted = revert(
+        "ir-entry/checks.ts",
+        "${activeVoice.tag(tag.name, tag.trigger)}",
+        "\\`<${tag.name}>\\`",
+        1,
+      );
+      expect(unlisted(reverted, allow).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("flags a hand-spelled tag beside an allowed example in lower.ts", () => {
+      const reverted = revert(
+        "lower.ts",
+        "${tagText(ctx, name, node)} is bound in this file",
+        "\\`<${name}>\\` is bound in this file",
+        1,
+      );
+      expect(unlisted(reverted, allow).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("lets an allowed example stand when nothing else in its literal is raw", () => {
+      const entries = readAllowList(
+        "a.ts :: f :: <${…}=x> -- example: shown in MX syntax\n",
+      );
+      const only = scanSource(
+        "a.ts",
+        "function f() { return `use <${y}=x>`; }",
+      );
+      expect(only.length).toBe(1);
+      expect(unlisted(only, entries)).toEqual([]);
+      const mixed = scanSource(
+        "a.ts",
+        "function f() { return `use <${y}=x> and an attribute`; }",
+      );
+      expect(unlisted(mixed, entries).length).toBe(1);
+    });
+
+    it("lets a whole-literal key stand only as exactly that literal", () => {
+      const entries = readAllowList(
+        "a.ts :: f :: ==attributes -- key: a contract key\n",
+      );
+      expect(
+        unlisted(
+          scanSource("a.ts", 'function f() { return "attributes"; }'),
+          entries,
+        ),
+      ).toEqual([]);
+      expect(
+        unlisted(
+          scanSource(
+            "a.ts",
+            'function f() { return "accepts no attributes"; }',
+          ),
+          entries,
+        ).length,
+      ).toBe(1);
+    });
   });
 });

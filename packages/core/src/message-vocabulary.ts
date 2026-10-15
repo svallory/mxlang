@@ -78,9 +78,12 @@ export interface Voice {
   attrTag(name: string, trigger?: TagTrigger): string;
   /**
    * A dynamic tag in backticks (`` `<${expr}>` `` by default), `source` being
-   * the expression's source text.
+   * the expression's source text: it is what the dialect's `formatTag` gets as
+   * `name`. A message that only illustrates a dynamic tag passes `example`,
+   * the placeholder MX's own words print (`expr`, `…`) when the dialect has no
+   * spelling; it is `source` when omitted.
    */
-  dynamicTag(source: string, trigger?: TagTrigger): string;
+  dynamicTag(source: string, trigger?: TagTrigger, example?: string): string;
   /** The bare spelling of `tag`, without backticks. */
   spell(tag: MessageTag): string;
 }
@@ -121,8 +124,10 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
   const file = vocabulary?.file ?? "data file";
   const tree = vocabulary?.tree ?? "data tree";
   const format = vocabulary?.formatTag;
-  const spell = (tag: MessageTag): string => {
-    if (format === undefined) return mxSpelling(tag);
+  const spell = (tag: MessageTag, example?: string): string => {
+    const mx = (): string =>
+      mxSpelling(example === undefined ? tag : { ...tag, name: example });
+    if (format === undefined) return mx();
     let spelled: unknown;
     try {
       spelled = format.call(vocabulary, tag);
@@ -130,18 +135,18 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
       const reason =
         thrown instanceof Error ? thrown.message : describe(thrown);
       throw new VoiceHookError(
-        `the dialect's \`messageVocabulary.formatTag\` threw while spelling \`${mxSpelling(tag)}\`: ${reason}`,
+        `the dialect's \`messageVocabulary.formatTag\` threw while spelling \`${mx()}\`: ${reason}`,
         tag.name,
       );
     }
-    if (spelled === undefined) return mxSpelling(tag);
+    if (spelled === undefined) return mx();
     if (
       typeof spelled !== "string" ||
       spelled === "" ||
       /[\r\n`]/.test(spelled)
     ) {
       throw new VoiceHookError(
-        `the dialect's \`messageVocabulary.formatTag\` must return undefined or a non-empty single-line string without backticks, got ${describe(spelled)} for \`${mxSpelling(tag)}\``,
+        `the dialect's \`messageVocabulary.formatTag\` must return undefined or a non-empty single-line string without backticks, got ${describe(spelled)} for \`${mx()}\``,
         tag.name,
       );
     }
@@ -151,7 +156,9 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
     name: string,
     form: MessageTag["form"],
     trigger?: TagTrigger,
-  ): string => `\`${spell({ name, form, ...(trigger ? { trigger } : {}) })}\``;
+    example?: string,
+  ): string =>
+    `\`${spell({ name, form, ...(trigger ? { trigger } : {}) }, example)}\``;
   const voice: Voice = {
     attribute: one,
     attributes: many,
@@ -166,7 +173,8 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
     tree,
     tag: (name, trigger) => marked(name, "tag", trigger),
     attrTag: (name, trigger) => marked(name, "attributeTag", trigger),
-    dynamicTag: (source, trigger) => marked(source, "dynamic", trigger),
+    dynamicTag: (source, trigger, example) =>
+      marked(source, "dynamic", trigger, example),
     spell,
   };
   return Object.freeze(voice);
@@ -195,4 +203,24 @@ export function voiceOf(dialect: Dialect | undefined): Voice {
 /** The voice of the file being lowered, as `productOf` reads its product. */
 export function voiceOfCtx(ctx: Ctx): Voice {
   return ctx.voice ?? MX_VOICE;
+}
+
+/**
+ * An owner chain, or a thunk that spells it. A label is spelled through the
+ * dialect's `formatTag`, which may throw, and a valid file reports nothing:
+ * the chain is spelled only when a message is built (`ownerText`).
+ */
+export type Owner = string | (() => string);
+
+/** A thunk that spells the owner once, on first use. */
+export function lazyOwner(spell: () => string): () => string {
+  let text: string | undefined;
+  return () => {
+    text ??= spell();
+    return text;
+  };
+}
+
+export function ownerText(owner: Owner): string {
+  return typeof owner === "string" ? owner : owner();
 }

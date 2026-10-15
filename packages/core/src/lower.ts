@@ -208,6 +208,9 @@ import type {
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
+  lazyOwner,
+  type Owner,
+  ownerText,
   type Voice,
   VoiceHookError,
   voiceOfCtx,
@@ -2254,14 +2257,14 @@ interface LoweredAttributeTags {
 
 function requireAttrTagsV2(
   ctx: Ctx,
-  construct: string,
+  construct: Owner,
   verb: "isn't" | "aren't",
   node: Node,
 ): void {
   if (ctx.declarations.attrTags === 2) return;
   raise(
     UNSUPPORTED_CONSTRUCT_CODE,
-    `${construct} ${verb} supported by ${ctx.declarations.name ?? "the current host"} yet`,
+    `${ownerText(construct)} ${verb} supported by ${ctx.declarations.name ?? "the current host"} yet`,
     node,
   );
 }
@@ -2714,7 +2717,7 @@ function planAttributeTags(
     ) {
       requireAttrTagsV2(
         ctx,
-        `the declared shape of ${voice.attrTag(name)}`,
+        () => `the declared shape of ${voice.attrTag(name)}`,
         "isn't",
         ownerNode.name ?? ownerNode,
       );
@@ -2797,7 +2800,8 @@ function lowerAuthoredAttributeTag(
   if (attrs.length > 0) {
     requireAttrTagsV2(
       ctx,
-      `${voice.attrTag(name)}: ${voice.attributes} on ${voice.attributeTags}`,
+      () =>
+        `${voice.attrTag(name)}: ${voice.attributes} on ${voice.attributeTags}`,
       "aren't",
       attrs[0],
     );
@@ -2846,7 +2850,7 @@ function lowerAuthoredAttributeTag(
     const firstAttrTag = firstAttributeTag(node) ?? node;
     requireAttrTagsV2(
       ctx,
-      `${voice.attrTag(name)}: nested ${voice.attributeTags}`,
+      () => `${voice.attrTag(name)}: nested ${voice.attributeTags}`,
       "aren't",
       firstAttrTag,
     );
@@ -2880,7 +2884,7 @@ function lowerAttributeFor(
 ): AttributeTagNode {
   requireAttrTagsV2(
     ctx,
-    `${voiceOfCtx(ctx).attributeTags} inside \`<for>\``,
+    () => `${voiceOfCtx(ctx).attributeTags} inside \`<for>\``,
     "aren't",
     node,
   );
@@ -2909,7 +2913,7 @@ function lowerAttributeIf(
   const first = siblings[index];
   requireAttrTagsV2(
     ctx,
-    `${voiceOfCtx(ctx).attributeTags} inside \`<if>\``,
+    () => `${voiceOfCtx(ctx).attributeTags} inside \`<if>\``,
     "aren't",
     first,
   );
@@ -3015,7 +3019,7 @@ function mergeBySourceOffset(ctx: Ctx, first: Node[], second: Node[]): Node[] {
 function lowerAttributeTags(
   ctx: Ctx,
   node: Node,
-  schema: AttrSchema = { open: true, owner: "dynamic tag" },
+  schema: AttrSchema = { open: true, owner: DYNAMIC_OWNER },
   inControl = false,
   makePlan = true,
 ): LoweredAttributeTags {
@@ -3231,7 +3235,13 @@ function lowerIfChain(
     }
 
     validateBoundAttributes(ctx, child);
-    rejectUnsupportedFields(ctx, child, tagText(ctx, String(childName), child));
+    rejectUnsupportedFields(
+      ctx,
+      child,
+      lazyOwner(() =>
+        voicedAt(child, () => tagText(ctx, String(childName), child)),
+      ),
+    );
     // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
     // `<else-if=cond>` spells it as the tag's first (value) attribute.
     const ifAttr =
@@ -4932,7 +4942,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
 /** Check attribute-tag authored bodies before any child can transform away its name. */
 function validateCustomAttributeTagBodies(
   ctx: Ctx,
-  owner: string,
+  owner: Owner,
   node: Node,
   declarations: CustomTag["attributeTags"],
   allowUncontractedTags: boolean,
@@ -4967,7 +4977,7 @@ function validateCustomAttributeTagBodies(
       if (controlName) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside ${voice.tag(controlName)}; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
+          `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
           tagNameSpanOf(tag) ?? tag,
         );
       }
@@ -4975,7 +4985,7 @@ function validateCustomAttributeTagBodies(
       if (attrs.length > 0) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} does not support ${voice.attributes}`,
+          `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} does not support ${voice.attributes}`,
           attrs[0],
         );
       }
@@ -4991,12 +5001,14 @@ function validateCustomAttributeTagBodies(
       if (nested) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${owner}: ${voice.attributeTag} ${voice.attrTag(name)} does not support nested ${voice.attributeTags}`,
+          `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} does not support nested ${voice.attributeTags}`,
           tagNameSpanOf(nested) ?? nested.name ?? nested,
         );
       }
     }
-    const nestedOwner = `${owner}: ${voice.attrTag(name)}`;
+    const nestedOwner = lazyOwner(
+      () => `${ownerText(owner)}: ${voice.attrTag(name)}`,
+    );
     if (declaration) {
       validateCustomTagChildren(
         declaration,
@@ -5085,11 +5097,15 @@ function triggerOf(node: Node): { trigger: TagTrigger } | undefined {
  * the trigger that made `node` when it has one.
  */
 function tagText(ctx: Ctx, name: string, node?: Node): string {
+  if (name === DYNAMIC_OWNER) return `\`<${name}>\``;
   return voiceOfCtx(ctx).tag(name, node ? triggerOf(node)?.trigger : undefined);
 }
 
 /** An owner label (`name`, or `@name` for an attribute tag) as a message spells it. */
 function ownerLabel(voice: Voice, owner: string): string {
+  // The construct's own name (`targetName`), not a tag the dialect could spell:
+  // there is no name to hand `formatTag`.
+  if (owner === DYNAMIC_OWNER) return `\`<${owner}>\``;
   return owner.startsWith("@")
     ? voice.attrTag(owner.slice(1))
     : voice.tag(owner);
@@ -5129,13 +5145,13 @@ function rejectNearExplicitChild(
   ctx: Ctx,
   node: Node,
   match: WildcardMatch,
-  label: string,
+  label: Owner,
 ): void {
   const near = nearestName(match.authored, match.parent.explicit);
   if (near === undefined) return;
   raise(
     NEAR_EXPLICIT_CHILD_CODE,
-    `${label} matched the wildcard of ${match.parent.label}; did you mean the explicit child ${tagText(ctx, near)}?`,
+    `${ownerText(label)} matched the wildcard of ${match.parent.label}; did you mean the explicit child ${tagText(ctx, near)}?`,
     node,
   );
 }
@@ -5188,7 +5204,13 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
       tree.push(ended({ kind: "ChildText", loc }));
     } else if (isTagNode(node)) {
       if (!hasStaticName(node)) {
-        tree.push(ended({ kind: "ChildDynamic", loc }));
+        tree.push(
+          ended({
+            kind: "ChildDynamic",
+            loc,
+            source: expr(ctx, tagNameExprOf(node)),
+          }),
+        );
         continue;
       }
       const name = tagNameOf(node) as string;
@@ -5381,7 +5403,11 @@ function lowerCustomTag(
   rejectBadRefinements(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
   const voice = voiceOfCtx(ctx);
-  const label = tagLabel(name, alias, voice, triggerOf(node)?.trigger);
+  const label = lazyOwner(() =>
+    voicedAt(node, () =>
+      tagLabel(name, alias, voice, triggerOf(node)?.trigger),
+    ),
+  );
   validateCustomTagParents(
     definition,
     name,
@@ -5413,7 +5439,7 @@ function lowerCustomTag(
   if (!isBuiltin && tagVarOf(node) && !hasTemplate(definition)) {
     raise(
       INVALID_TAG_VAR_CODE,
-      `\`/var\` on ${label} is not supported: it has no template, so it has no \`<return>\` to bind`,
+      `\`/var\` on ${ownerText(label)} is not supported: it has no template, so it has no \`<return>\` to bind`,
       tagVarOf(node),
     );
   }
@@ -5555,12 +5581,19 @@ function lowerComponent(
   const allowVar =
     returnShape === "returns" ||
     (target.kind === "dynamic" && ctx.declarations.bindsDynamicTagVar === true);
-  rejectUnsupportedFields(ctx, node, tagText(ctx, targetName(target), node), {
-    attributeTags: true,
-    args: true,
-    params: true,
-    var: allowVar,
-  });
+  rejectUnsupportedFields(
+    ctx,
+    node,
+    lazyOwner(() =>
+      voicedAt(node, () => tagText(ctx, targetName(target), node)),
+    ),
+    {
+      attributeTags: true,
+      args: true,
+      params: true,
+      var: allowVar,
+    },
+  );
 
   const input =
     ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
@@ -5617,6 +5650,9 @@ function lowerComponent(
   };
 }
 
+/** What an authored dynamic target is called in a diagnostic: it has no name. */
+const DYNAMIC_OWNER = "dynamic tag";
+
 function targetName(target: ComponentTarget): string {
   // An authored dynamic target has no name to report, so the diagnostic
   // names the construct instead. Spelled without a `$`-brace so it is not
@@ -5626,7 +5662,7 @@ function targetName(target: ComponentTarget): string {
   // (an unresolved/invalid callee Input) should still name the tag the
   // author wrote, not the runtime lowering it now compiles to.
   if (target.kind === "dynamic")
-    return target.valueImportBinding ?? "dynamic tag";
+    return target.valueImportBinding ?? DYNAMIC_OWNER;
   return target.name;
 }
 
@@ -6030,14 +6066,14 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       const label = attrByName(node, "if") ? "else if" : "else";
       return raise(
         INVALID_IF_CODE,
-        `${tagText(ctx, label, node)} without a preceding \`<if>\``,
+        `\`<${label}>\` without a preceding \`<if>\``,
         node,
       );
     }
     case "else-if":
       return raise(
         INVALID_IF_CODE,
-        `${tagText(ctx, name, node)} without a preceding \`<if>\``,
+        `\`<${name}>\` without a preceding \`<if>\``,
         node,
       );
   }
@@ -6334,7 +6370,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       ctx,
     );
   }
-  rejectUnsupportedFields(ctx, node, tagText(ctx, name, node));
+  rejectUnsupportedFields(
+    ctx,
+    node,
+    lazyOwner(() => voicedAt(node, () => tagText(ctx, name, node))),
+  );
 
   // Void by the same table the parse read (the target's `nativeTags`, else
   // core's own HTML elements), so a body the parse kept is never dropped.

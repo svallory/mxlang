@@ -168,14 +168,6 @@ const ROWS: readonly Row[] = [
       "Invalid option name `a?b` — an option name may use letters, digits and `._:-`",
   },
   {
-    name: "a tag that takes no arguments (the value attribute)",
-    source: 'if(x)\n  entity name="e"\n',
-    group: "lowering",
-    mx: "Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. For an event handler write `onX=handler`",
-    option:
-      "Tag does not support arguments. Write the condition as a value option instead: `<if=condition>`. For an event handler write `onX=handler`",
-  },
-  {
     name: "an unknown tag",
     source: 'entity name="e"\n  bogus\n',
     group: "ir-entry",
@@ -188,7 +180,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
     option:
-      "`define` is a render-time macro: the Mesh file is static and cannot expand it; inline the content at each use",
+      "`<define>` is a render-time macro: the Mesh file is static and cannot expand it; inline the content at each use",
   },
   {
     name: "a doctype in a data file (the file noun)",
@@ -199,12 +191,12 @@ const ROWS: readonly Row[] = [
       "`!doctype` means nothing in a Mesh file; the Mesh file describes tags and data, not a page",
   },
   {
-    name: "a dynamic tag (form: dynamic, name = the expression source)",
+    name: "a dynamic tag (form: dynamic, name = the expression source `x`)",
     source: `<\${x}/>\n`,
     group: "ir-entry",
     mx: `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`,
     option:
-      "a dynamic tag (`expr`) has no name; the Mesh file is static and needs one",
+      "a dynamic tag (`x`) has no name; the Mesh file is static and needs one",
   },
 ];
 
@@ -402,6 +394,23 @@ describe("formatTag", () => {
     ]);
   });
 
+  it("a dynamic tag hands the dialect its source and MX's words their example", () => {
+    const seen: unknown[] = [];
+    const recording = spelling((tag) => {
+      seen.push(tag);
+      return undefined;
+    });
+    // `undefined` is MX's `<name>`, the example standing in for the source.
+    expect(recording.dynamicTag("cond ? A : B", undefined, "expr")).toBe(
+      `\`<\${expr}>\``,
+    );
+    expect(seen).toEqual([{ name: "cond ? A : B", form: "dynamic" }]);
+    expect(MX_VOICE.dynamicTag("cond ? A : B", undefined, "expr")).toBe(
+      `\`<\${expr}>\``,
+    );
+    expect(MX_VOICE.dynamicTag("x")).toBe(`\`<\${x}>\``);
+  });
+
   it("receives the trigger that made the tag", () => {
     const trigger = {
       id: "member",
@@ -478,9 +487,10 @@ describe("a formatTag that breaks its contract", () => {
     const [diagnostic] = diagnose('entity name="e"\n  bogus\n', throwing);
     expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
     expect(diagnostic?.message).toBe(
-      "the dialect's `messageVocabulary.formatTag` threw while spelling `<entity>`: no spelling",
+      "the dialect's `messageVocabulary.formatTag` threw while spelling `<bogus>`: no spelling",
     );
-    // The first tag the message spells is the parent's, so the error sits there.
+    // Spelled when the message is built; a child refusal is reported at the
+    // call that owns the contract, as the plain message is.
     expect([diagnostic?.line, diagnostic?.column]).toEqual([1, 0]);
   });
 
@@ -491,14 +501,14 @@ describe("a formatTag that breaks its contract", () => {
     );
     expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
     expect(diagnostic?.message).toBe(
-      "the dialect's `messageVocabulary.formatTag` must return undefined or a non-empty single-line string without backticks, got a number for `<entity>`",
+      "the dialect's `messageVocabulary.formatTag` must return undefined or a non-empty single-line string without backticks, got a number for `<string>`",
     );
   });
 
   it("generic lowering: the hook error is raised at the tag", () => {
-    const [diagnostic] = diagnose("if=x\n  p\nelse\n  p\n", throwing, {});
+    const [diagnostic] = diagnose("card\n  @head x=1\n", throwing);
     expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
-    expect(diagnostic?.message).toContain("threw while spelling `<else>`");
+    expect(diagnostic?.message).toContain("threw while spelling `<card>`");
     expect([diagnostic?.line, diagnostic?.column]).toEqual([1, 0]);
   });
 
@@ -508,6 +518,124 @@ describe("a formatTag that breaks its contract", () => {
     ).toEqual([
       "`x` means nothing in a data file; the data tree describes tags and data, not a page",
     ]);
+  });
+});
+
+// A hook that breaks its contract fails the message that spells it, never a
+// file that has nothing to say: spelling is lazy.
+
+describe("formatTag is called only when a message spells a tag", () => {
+  const always = dialectWith({
+    formatTag: () => {
+      throw new Error("never");
+    },
+  });
+  const wide: LowerSourceOptions = {
+    customTags: {
+      ...contracts,
+      shelf: { parents: ["#root"], children: { string: {}, "*": {} } },
+      form: {
+        attributes: { name: { type: "string" } },
+        attributeTags: { head: { attributes: { text: { type: "string" } } } },
+      },
+    } as unknown as Record<string, CustomTag>,
+    structural: "pass",
+    unknownTags: "reject",
+  };
+  const valid = [
+    'entity name="e"\n  string name="a"\n',
+    'entity name="e"\n  member name="m"\n',
+    'entity name="e"\n  string name="a" min=1\n  &title\n',
+    "card\n  @head\n",
+    'form name="f"\n  @head text="t"\n',
+    'entity name="e"\n  attributes\n    string name="s"\n',
+    'shelf\n  string name="a"\n',
+    'if=x\n  entity name="e"\n    string name="a"\n',
+  ];
+  for (const source of valid) {
+    it(`a valid file reports nothing: ${JSON.stringify(source)}`, () => {
+      expect(messages(source, noVocabulary, wide)).toEqual([]);
+      expect(messages(source, always, wide)).toEqual([]);
+    });
+  }
+
+  it("a throw for a tag only the allowed-children list names does not fail a valid file", () => {
+    const selective = dialectWith({
+      formatTag: ({ name }: { name: string }) => {
+        if (name === "string") throw new Error("only string");
+        return name;
+      },
+    });
+    expect(messages('entity name="e"\n  member name="m"\n', selective)).toEqual(
+      [],
+    );
+  });
+
+  it("a selective throw lands at the tag the message is about", () => {
+    const selective = dialectWith({
+      formatTag: ({ name }: { name: string }) => {
+        if (name === "bogus") throw new Error("only bogus");
+        return name;
+      },
+    });
+    const [diagnostic] = diagnose('entity name="e"\n  bogus\n', selective);
+    expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
+    expect(diagnostic?.message).toContain(
+      "while spelling `<bogus>`: only bogus",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What formatTag is handed
+
+describe("what formatTag is handed", () => {
+  const record = () => {
+    const seen: Array<{ name: string; form: string }> = [];
+    const dialect = dialectWith({
+      formatTag: ({ name, form }: { name: string; form: string }) => {
+        seen.push({ name, form });
+        return undefined;
+      },
+    });
+    return { seen, dialect };
+  };
+
+  it("a dynamic tag in a data file arrives as form dynamic, named by its source", () => {
+    const { seen, dialect } = record();
+    const [message] = messages("<${cond ? A : B}/>\n", dialect);
+    // MX's words keep their example; the dialect sees the real source.
+    expect(message).toBe(
+      `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`,
+    );
+    expect(seen).toEqual([{ name: "cond ? A : B", form: "dynamic" }]);
+  });
+
+  it("a dynamic child of a contract arrives as form dynamic, named by its source", () => {
+    const { seen, dialect } = record();
+    const [message] = messages('entity name="e"\n  <${pick()}/>\n', dialect);
+    expect(message).toContain("a dynamic tag `<${…}>` cannot be checked");
+    expect(seen).toContainEqual({ name: "pick()", form: "dynamic" });
+  });
+
+  it("a PascalCase head the file binds arrives as form tag, named as written", () => {
+    // The tag the author wrote is `<Money>`; only a head that is an expression
+    // (`<${x}/>`) is a dynamic tag.
+    const { seen, dialect } = record();
+    const [message] = messages(
+      'import { Money } from "./money.mx"\nentity name="e"\n  Money price=1\n',
+      dialect,
+    );
+    expect(message).toContain("`<Money>`");
+    expect(seen.filter((tag) => tag.name === "Money")).not.toHaveLength(0);
+    expect(seen.every((tag) => tag.form === "tag")).toBe(true);
+  });
+
+  it("built-in tags keep MX's words and never reach formatTag", () => {
+    const { seen, dialect } = record();
+    const [message] = messages('entity name="e"\n  define/x\n', dialect);
+    expect(message).toContain("`<define>` is a render-time macro");
+    expect(seen.map((tag) => tag.name)).not.toContain("define");
   });
 });
 
