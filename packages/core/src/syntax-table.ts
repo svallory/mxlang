@@ -445,8 +445,10 @@ export interface MessageTag {
    */
   readonly name: string;
   /**
-   * `"tag"` for a plain tag, `"attributeTag"` for an `@name` attribute tag
-   * (`name` has no `@`), `"dynamic"` for a tag whose name is an expression.
+   * How the head is written, not what it resolves to. `"tag"` for any head
+   * written as a name (a capitalized name the file binds included, `name` as
+   * written), `"attributeTag"` for an `@name` attribute tag (`name` has no
+   * `@`), `"dynamic"` only for a head that is an expression (`<${x}/>`).
    */
   readonly form: "tag" | "attributeTag" | "dynamic";
   /**
