@@ -20,7 +20,7 @@ import {
   cleanupProbeProjects,
   probeProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
-import { waitForValue } from "./wait-for.ts";
+import { waitForValue } from "./fixtures/wait-for.ts";
 
 const BIN_PATH = join(import.meta.dirname, "../dist/bin.js");
 

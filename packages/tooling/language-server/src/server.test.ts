@@ -27,8 +27,8 @@ import {
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
+import { expectQuiet, waitFor } from "./fixtures/wait-for.ts";
 import { globMatcher, isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
-import { expectQuiet, waitFor } from "./wait-for.ts";
 
 /**
  * The one stdio end-to-end test the brief asks for (§5): spawn the real

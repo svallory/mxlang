@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { expectQuiet, waitFor, waitForValue } from "./wait-for.ts";
+import { expectQuiet, waitFor, waitForValue } from "./fixtures/wait-for.ts";
 
 beforeEach(() => {
   vi.useFakeTimers();
