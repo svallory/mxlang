@@ -891,6 +891,7 @@ describe("a type-only import beside a real declaration follows stock Marko", () 
     named: 'import type { x } from "./x"',
     inline: 'import { type x } from "./x"',
     star: 'import type * as x from "./x"',
+    mixed: 'import y, { type x } from "./x"',
   };
   const kinds: Record<string, string> = {
     const: "static const x = 1",
@@ -900,6 +901,10 @@ describe("a type-only import beside a real declaration follows stock Marko", () 
     sig: "static function x(): void",
     cls: "static class x {}",
     imp: 'import x from "./x"',
+    // A TypeScript alias is not a value import to stock's scope: it compiles
+    // beside every spelling, in both orders.
+    importEquals: "static import x = M.N",
+    exportImportEquals: "static export import x = M.N",
     dconst: "static declare const x: number",
     dlet: "static declare let x: number",
     dvar: "static declare var x: number",
@@ -909,7 +914,7 @@ describe("a type-only import beside a real declaration follows stock Marko", () 
     ns: "static namespace x { export const a = 1 }",
     tns: "static namespace x { export type a = 1 }",
     iface: "static interface x {}",
-    alias: "static type x = number",
+    typeAlias: "static type x = number",
     typeImport: 'import type { x } from "./y"',
   };
   // `kind>type` and `type>kind`: the pairs stock refuses.

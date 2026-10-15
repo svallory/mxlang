@@ -415,6 +415,8 @@ interface Declaration {
   readonly constEnum: boolean;
   /** Declared with `let` (not `const`): stock Marko's scope tells them apart beside a `declare`. */
   readonly isLet: boolean;
+  /** `import x = M.N`: a TypeScript alias, which stock's scope does not treat as a value import. */
+  readonly importEquals: boolean;
 }
 
 type DeclarationKind =
@@ -522,6 +524,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
       signature: false,
       constEnum: false,
       isLet: false,
+      importEquals: false,
       ...extra,
     });
   };
@@ -544,7 +547,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
       }
       case "TSImportEqualsDeclaration":
         if (statement.importKind === "type") names.add(statement.id.name);
-        else add("import", statement.id);
+        else add("import", statement.id, { importEquals: true });
         return;
       case "VariableDeclaration":
         // A `var` is read from the scope below: one nested in a block hoists.
@@ -728,7 +731,7 @@ function typeImportClash(first: Declaration, second: Declaration): boolean {
     return (
       first.kind === "lexical" ||
       first.kind === "class" ||
-      first.kind === "import"
+      (first.kind === "import" && !first.importEquals)
     );
   }
   if (first.kind === "typeImport") {
