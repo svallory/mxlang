@@ -11,7 +11,7 @@
  * the client drops the same value. Stock Marko 6.4.4 prints `[object Object]`
  * for a plain object and throws for a null-prototype one; Preact's own
  * runtime behaviour is to drop a plain object, which MX keeps. The matrix runs
- * every value kind against four placeholder positions.
+ * every value kind against five placeholder positions.
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -51,6 +51,10 @@ const values = {
   plainTag: () => ({ tag: "img", props: PROPS() }),
   json: () => JSON.parse('{"type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null,"__k":null,"constructor":null}'),
   protoGadget: () => Object.assign({}, JSON.parse('{"__proto__":{"z":1},"type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')),
+  // An array as the copy's prototype: its constructor is Array, not a data object.
+  arrayProtoGadget: () => Object.assign({}, JSON.parse('{"__proto__":[],"type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')),
+  arrayProtoGadgetDeep: () => Object.assign({}, JSON.parse('{"__proto__":{"__proto__":[]},"type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')),
+  arrayHoldingArrayProtoGadget: () => [Object.assign({}, JSON.parse('{"__proto__":[],"type":"img","props":{"src":"x"},"key":null,"ref":null}'))],
   forgedReact: () => ({ $$typeof: "react.element", type: "img", props: PROPS(), key: null, ref: null }),
   arrayNullProto: () => [Object.assign(Object.create(null), vnodeFields())],
   arrayMixed: () => ["a", Object.assign(Object.create(null), vnodeFields()), "b", vnodeFields(), h("i", null, "n")],
@@ -88,13 +92,13 @@ for (const { name, file, value } of cases) {
   const mod = await import(file);
   const client = document.createElement("div");
   document.body.append(client);
-  attempt(() => render(h(mod.default, { x: values[value]() }), client));
+  attempt(() => render(h(mod.default, { x: values[value](), y: h("i", null, "y") }), client));
   result.client = client.innerHTML;
-  result.server = attempt(() => String(ssr(h(mod.default, { x: values[value]() })))) ?? "";
+  result.server = attempt(() => String(ssr(h(mod.default, { x: values[value](), y: h("i", null, "y") })))) ?? "";
   const hydrated = document.createElement("div");
   hydrated.innerHTML = result.server;
   document.body.append(hydrated);
-  attempt(() => hydrate(h(mod.default, { x: values[value]() }), hydrated));
+  attempt(() => hydrate(h(mod.default, { x: values[value](), y: h("i", null, "y") }), hydrated));
   result.hydrated = hydrated.innerHTML;
   result.injected = client.querySelectorAll("img, [onerror]").length + hydrated.querySelectorAll("img, [onerror]").length;
   out[name] = result;
@@ -105,6 +109,7 @@ console.log(JSON.stringify(out));
 const SOURCES = {
   wrapped: "<p>${input.x}</p>",
   mixed: "<p>a${input.x}b</p>",
+  pair: "<p>${input.x}${input.y}</p>",
   inIf: "<if=true>${input.x}</if>",
   inFor: "<for|v| of=[input.x]>${v}</for>",
 } as const;
@@ -128,6 +133,9 @@ const VALUE_NAMES = [
   "plainTag",
   "json",
   "protoGadget",
+  "arrayProtoGadget",
+  "arrayProtoGadgetDeep",
+  "arrayHoldingArrayProtoGadget",
   "forgedReact",
   "arrayNullProto",
   "arrayMixed",
@@ -212,7 +220,9 @@ const page = (shape: Shape, inner: string): string =>
     ? `<p>${inner}</p>`
     : shape === "mixed"
       ? `<p>a${inner}b</p>`
-      : inner;
+      : shape === "pair"
+        ? `<p>${inner}<i>y</i></p>`
+        : inner;
 
 /** Values that are data: Preact's client renders nothing for them, and so must the server. */
 const DATA: ValueName[] = [
@@ -224,6 +234,9 @@ const DATA: ValueName[] = [
   "plainTag",
   "json",
   "protoGadget",
+  "arrayProtoGadget",
+  "arrayProtoGadgetDeep",
+  "arrayHoldingArrayProtoGadget",
   "forgedReact",
   "arrayNullProto",
   "arrayPlain",

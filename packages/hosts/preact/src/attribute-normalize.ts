@@ -172,8 +172,9 @@ const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && 
  * (`value + ""`, so an own `toString`/`valueOf` is honoured); `hono/jsx/dom`
  * instead reads a plain `{ tag, props }` object as an element, with its event
  * handlers and `dangerouslySetInnerHTML`, so JSON from a request could become
- * markup. A plain-prototype (or null-prototype) object is stringified like
- * Marko, unless Hono's own runtime made it. A prototype that is itself data
+ * markup. A plain-prototype object is stringified as Marko does; a
+ * null-prototype one, which Marko fails on, prints `[object Object]`, unless
+ * Hono's own runtime made it. A prototype that is itself data
  * (`Object.assign({}, JSON.parse('{"__proto__":{…}}'))` sets the copy's
  * prototype to the parsed object) does not make an object a class instance: only
  * a prototype whose `constructor` is a function other than `Object` does. `hono/jsx` elements are class
@@ -250,7 +251,7 @@ export function jsxRenderableExpression(shape: JsxNodeShape): string {
       return next.some((entry: any, index: number) => entry !== item[index]) ? next : item;
     }
     const proto = Object.getPrototypeOf(item);
-    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object) return item;
+    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object && proto.constructor !== Array) return item;
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
     return ${check} ? item : null;
   };
