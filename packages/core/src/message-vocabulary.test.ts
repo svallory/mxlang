@@ -484,14 +484,16 @@ describe("a formatTag that breaks its contract", () => {
   const nonString = dialectWith({ formatTag: () => 42 });
 
   it("IR entry: the hook error replaces the message, at the tag", () => {
-    const [diagnostic] = diagnose('entity name="e"\n  bogus\n', throwing);
+    const found = diagnose('entity name="e"\n  bogus\n', throwing);
+    expect(found).toHaveLength(1);
+    const [diagnostic] = found;
     expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
     expect(diagnostic?.message).toBe(
       "the dialect's `messageVocabulary.formatTag` threw while spelling `<bogus>`: no spelling",
     );
-    // Spelled when the message is built; a child refusal is reported at the
-    // call that owns the contract, as the plain message is.
-    expect([diagnostic?.line, diagnostic?.column]).toEqual([1, 0]);
+    // Spelled when the message is built, and reported at the child it is
+    // about (2:2), once: the owner is not blamed for its child's spelling.
+    expect([diagnostic?.line, diagnostic?.column]).toEqual([2, 2]);
   });
 
   it("contract validation: a non-string is the hook error", () => {
@@ -578,11 +580,28 @@ describe("formatTag is called only when a message spells a tag", () => {
         return name;
       },
     });
-    const [diagnostic] = diagnose('entity name="e"\n  bogus\n', selective);
+    const found = diagnose('entity name="e"\n  bogus\n', selective);
+    // One diagnostic, at `bogus` (2:2), not a second one at the parent.
+    expect(found).toHaveLength(1);
+    const [diagnostic] = found;
     expect(diagnostic?.code).toBe(DIALECT_HOOK_ERROR_CODE);
     expect(diagnostic?.message).toContain(
       "while spelling `<bogus>`: only bogus",
     );
+    expect([diagnostic?.line, diagnostic?.column]).toEqual([2, 2]);
+  });
+
+  it("a selective throw on a PascalCase child is also one diagnostic, at the child", () => {
+    const selective = dialectWith({
+      formatTag: ({ name }: { name: string }) => {
+        if (name === "Money") throw new Error("only Money");
+        return name;
+      },
+    });
+    const found = diagnose('entity name="e"\n  Money price=1\n', selective);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.code).toBe(DIALECT_HOOK_ERROR_CODE);
+    expect([found[0]?.line, found[0]?.column]).toEqual([2, 2]);
   });
 });
 

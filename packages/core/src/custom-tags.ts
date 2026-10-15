@@ -1910,8 +1910,30 @@ export function validateCustomTagChildren(
               childEnds.get(node),
             );
           }
-          const { message, guidance } = notAllowed(node);
           const offset = childOffsets.get(node);
+          let spelled: { message: string; guidance?: string };
+          try {
+            spelled = notAllowed(node);
+          } catch (error) {
+            if (!(error instanceof VoiceHookError)) throw error;
+            // The hook broke while spelling this child: the error is about
+            // this child, at it, and marked as its occurrence so that, when
+            // the same tag is also reported as unknown, that report (which
+            // spells it too) is the one the user gets.
+            const hookError = codedError(
+              DIALECT_HOOK_ERROR_CODE,
+              error.message,
+              node.loc.line,
+              node.loc.column,
+              node.loc.file,
+            );
+            if (offset !== undefined) {
+              occurrences.set(hookError, { name: node.name, offset });
+            }
+            endErrorAt(hookError, childEnds.get(node));
+            throw hookError;
+          }
+          const { message, guidance } = spelled;
           failForOwner(
             TAG_NOT_ALLOWED_CODE,
             owner,
