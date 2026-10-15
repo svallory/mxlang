@@ -64,9 +64,18 @@ describe("<html-script> on Hono", () => {
   ])(
     "refuses markup in the body instead of dropping it: %s",
     (_name, source) => {
-      expect(() => compileHonoMx(source, "/x/App.mx")).toThrow(
-        /read as markup/,
-      );
+      let error: unknown;
+      try {
+        compileHonoMx(source, "/x/App.mx");
+      } catch (caught) {
+        error = caught;
+      }
+      // Positioned at the offending child, not at the tag or 1:1.
+      expect(error).toMatchObject({
+        message: expect.stringMatching(/read as markup/),
+        line: 1,
+        column: 18,
+      });
     },
   );
   it("emits a real <script>, never a literal <html-script>", () => {
