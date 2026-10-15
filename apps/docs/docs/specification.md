@@ -313,8 +313,15 @@ The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
 merges, and so do the merges TypeScript accepts: an enum with an enum (of the
 same constness) or after a namespace, overload signatures followed by one more
 function, a namespace after a function, class, enum or namespace, and the same
-with `declare`. A type-only name (`type`, `interface`, an `import type`, a
-namespace holding only types) shares only the value space it does not occupy.
+with `declare`. A `type`, an `interface`
+and a namespace holding only types occupy no value, so they never collide. A
+type-only import (`import type x`, `import type { x }`, `import { type x }`,
+`import type * as x`) follows stock Marko's order-dependent answers: it is
+refused after a `const`, `let`, class, `import`, `declare const` or `declare
+let` of its name, and a `let`, class or `declare let` is refused after it;
+beside a `var`, a function, a `declare var`, an enum, a namespace, a type or
+another type-only import it compiles in either order, and a `const` after it
+compiles.
 Pairs stock Marko compiles are refused too, because the module they produce
 does not load: a `var` before a `const`, a `function` or an `import`; a
 `function` beside a `function`, a `var`, a `const` or an `import`; and a

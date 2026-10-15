@@ -423,6 +423,7 @@ type DeclarationKind =
   | "function"
   | "class"
   | "import"
+  | "typeImport"
   | "enum"
   | "namespace";
 
@@ -532,7 +533,9 @@ function statementDeclarations(file: Node): StatementDeclarations {
         for (const specifier of statement.specifiers as Node[]) {
           const kind = specifier.importKind;
           if (typeOnly || kind === "type" || kind === "typeof") {
-            names.add(specifier.local.name);
+            // Erased by the strip, but Babel's scope registers it: whether it
+            // clashes with a real declaration is `typeImportClash`'s table.
+            add("typeImport", specifier.local);
           } else {
             add("import", specifier.local);
           }
@@ -679,6 +682,7 @@ function declaredBinding(d: Declaration): boolean {
  * refuses. A `declare function`, `class`, `enum` or `namespace` is not in it.
  */
 function declareClash(first: Declaration, second: Declaration): boolean {
+  if (first.kind === "typeImport" || second.kind === "typeImport") return false;
   const lexical = (d: Declaration): boolean =>
     d.kind === "lexical" || d.kind === "class" || d.kind === "import";
   const varLike = (d: Declaration): boolean =>
@@ -702,6 +706,35 @@ function declareClash(first: Declaration, second: Declaration): boolean {
   if (second.ambient && second.kind === "var") {
     // `declare var` after a `var` or function is fine; after a lexical, not.
     return lexical(first);
+  }
+  return false;
+}
+
+/**
+ * Does stock Marko refuse `second` after `first` when one of them is a type-only
+ * import (`import type x`, `import type { x }`, `import { type x }`, `import
+ * type * as x`)? Babel's scope registers it as a binding, and not as one rule:
+ * the table is what stock 6.4.4 answers for every pair
+ * (`stockMarkoCompile`, in `static`, `server`, `client` and `export` positions).
+ * It refuses a type-only import after a `const`, `let`, class, value `import`,
+ * `declare const` or `declare let`, and a `let`, class or `declare let` after a
+ * type-only import. Everything else compiles: a `var`, a function, a `declare
+ * var`, an enum, a namespace, a type and another type-only import beside it, in
+ * either order. The strip erases a type-only import, so the module loads either
+ * way; MX refuses what stock refuses, at the second name, and no more.
+ */
+function typeImportClash(first: Declaration, second: Declaration): boolean {
+  if (second.kind === "typeImport") {
+    return (
+      first.kind === "lexical" ||
+      first.kind === "class" ||
+      first.kind === "import"
+    );
+  }
+  if (first.kind === "typeImport") {
+    return (
+      second.kind === "class" || (second.kind === "lexical" && second.isLet)
+    );
   }
   return false;
 }
@@ -747,17 +780,24 @@ function bindingErrors(
         declared.set(next.name, [next]);
         continue;
       }
-      // A `declare const`, `let` or `var` beside another declaration follows
-      // stock's table; two run-time bindings follow `merges`.
-      const clash = earlier.find((d) =>
-        declaredBinding(d) || declaredBinding(next)
-          ? declareClash(d, next)
-          : false,
+      // A `declare const`, `let` or `var` and a type-only import beside
+      // another declaration follow stock's tables; two run-time bindings
+      // follow `merges`.
+      const clash = earlier.find(
+        (d) =>
+          typeImportClash(d, next) ||
+          (declaredBinding(d) || declaredBinding(next)
+            ? declareClash(d, next)
+            : false),
       );
-      const real = earlier.filter((d) => !d.ambient);
+      // A type-only import is erased: it is never one of the bindings `merges` sees.
+      const real = earlier.filter((d) => !d.ambient && d.kind !== "typeImport");
       if (
         !clash &&
-        (declaredBinding(next) || real.length === 0 || merges(real, next))
+        (declaredBinding(next) ||
+          next.kind === "typeImport" ||
+          real.length === 0 ||
+          merges(real, next))
       ) {
         earlier.push(next);
       } else {

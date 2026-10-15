@@ -13,8 +13,10 @@
  *   TS2384, TS2434, TS2451) are mx-tsc's; a namespace with values before a
  *   function or class of its name does not load, so it is refused; a `declare
  *   const`, `let` or `var` follows stock Marko's own, order-dependent table);
- * - a type-only name (`type`, `interface`, `import type`) is not a value, so it
- *   never collides;
+ * - a `type`, an `interface` and a namespace holding only types are not values,
+ *   so they never collide; a type-only import (`import type`) is a binding in
+ *   stock's scope, so it follows stock's order-dependent table (a `const`, `let`,
+ *   class or `import` before it, a `let` or class after it, are refused);
  * - any other second declaration is refused at its name with
  *   `MX_DUPLICATE_DECLARATION`, in source order.
  *
@@ -867,6 +869,164 @@ describe("a declare const, let or var beside another declaration follows stock M
       2,
       15,
     );
+  });
+});
+
+describe("a type-only import beside a real declaration follows stock Marko", () => {
+  // Babel's scope registers a type-only import as a binding, and not as one
+  // rule: stock 6.4.4 refuses some orders and compiles others, the same for
+  // `import type x`, `import type { x }`, `import { type x }` and `import type
+  // * as x`. Every pair below was run through `stockMarkoCompile` (read
+  // `result.error.loc`: `Duplicate declaration` at the second name), and MX
+  // refuses exactly those, at the same position. Stock refuses:
+  //   - a type-only import after a `const`, `let`, class, value import,
+  //     `declare const` or `declare let`;
+  //   - a `let`, a class or a `declare let` after a type-only import.
+  // It compiles everything else, a `var`, a function, a `declare var`, an
+  // enum, a namespace, a type and another type-only import included.
+  // (`static enum` is not probeable on stock: it throws "Unexpected enum
+  // parent"; `export enum` is, and compiles in both orders.)
+  const spellings: Record<string, string> = {
+    default: 'import type x from "./x"',
+    named: 'import type { x } from "./x"',
+    inline: 'import { type x } from "./x"',
+    star: 'import type * as x from "./x"',
+  };
+  const kinds: Record<string, string> = {
+    const: "static const x = 1",
+    let: "static let x = 1",
+    var: "static var x = 1",
+    fn: "static function x() {}",
+    sig: "static function x(): void",
+    cls: "static class x {}",
+    imp: 'import x from "./x"',
+    dconst: "static declare const x: number",
+    dlet: "static declare let x: number",
+    dvar: "static declare var x: number",
+    dfn: "static declare function x(): void",
+    dcls: "static declare class x {}",
+    enum: "export enum x { A }",
+    ns: "static namespace x { export const a = 1 }",
+    tns: "static namespace x { export type a = 1 }",
+    iface: "static interface x {}",
+    alias: "static type x = number",
+    typeImport: 'import type { x } from "./y"',
+  };
+  // `kind>type` and `type>kind`: the pairs stock refuses.
+  const typeAfter = new Set(["const", "let", "cls", "imp", "dconst", "dlet"]);
+  const typeBefore = new Set(["let", "cls", "dlet"]);
+  const pairs: [string, string, string, boolean][] = [];
+  for (const spelling of Object.keys(spellings)) {
+    for (const kind of Object.keys(kinds)) {
+      pairs.push([`${kind} > ${spelling}`, kind, spelling, true]);
+      pairs.push([`${spelling} > ${kind}`, kind, spelling, false]);
+    }
+  }
+  it.each(pairs)("%s", (_label, kind, spelling, typeSecond) => {
+    const type = spellings[spelling] as string;
+    const real = kinds[kind] as string;
+    const source = typeSecond ? `${real}\n${type}` : `${type}\n${real}`;
+    const refused = typeSecond ? typeAfter.has(kind) : typeBefore.has(kind);
+    if (refused) {
+      const second = typeSecond ? type : real;
+      expectRefused(source, DUPLICATE, "x", 2, second.search(/\bx\b/));
+    } else {
+      expectCompiles(source);
+    }
+  });
+
+  // The same answers in a `server`, `client` or `static` block, and with
+  // `export`: stock's table does not depend on where the statement sits.
+  const wraps: Record<string, (body: string) => string[]> = {
+    "static block": (body) => ["static {", `  ${body}`, "}"],
+    server: (body) => ["server {", `  ${body}`, "}"],
+    client: (body) => ["client {", `  ${body}`, "}"],
+    export: (body) => [`export ${body}`],
+  };
+  const bodies: Record<string, string> = {
+    const: "const x = 1",
+    let: "let x = 1",
+    class: "class x {}",
+    var: "var x = 1",
+    function: "function x() {}",
+  };
+  const where: [string, string, string, boolean, boolean][] = [];
+  for (const wrap of Object.keys(wraps)) {
+    for (const body of Object.keys(bodies)) {
+      where.push([
+        `${wrap}: ${body} > type`,
+        wrap,
+        body,
+        true,
+        ["const", "let", "class"].includes(body),
+      ]);
+      where.push([
+        `${wrap}: type > ${body}`,
+        wrap,
+        body,
+        false,
+        ["let", "class"].includes(body),
+      ]);
+    }
+  }
+  it.each(where)("%s", (_label, wrap, body, typeSecond, refused) => {
+    const type = 'import type { x } from "./x"';
+    const lines = (wraps[wrap] as (b: string) => string[])(
+      bodies[body] as string,
+    );
+    const source = typeSecond
+      ? [...lines, type].join("\n")
+      : [type, ...lines].join("\n");
+    if (!refused) return expectCompiles(source);
+    const all = source.split("\n");
+    const line = typeSecond
+      ? all.length
+      : all.findIndex((text, i) => i > 0 && /\bx\b/.test(text)) + 1;
+    const text = all[line - 1] as string;
+    expectRefused(source, DUPLICATE, "x", line, text.search(/\bx\b/));
+  });
+
+  it("says where the first declaration is, and how to resolve it", () => {
+    const error = expectRefused(
+      'import type { x } from "./x"\nstatic let x = 1',
+      DUPLICATE,
+      "x",
+      2,
+      11,
+    );
+    expect(error.message).toContain('Duplicate declaration "x"');
+    expect(error.message).toContain("already declared at 1:15");
+  });
+
+  it("refuses across a server block and a client block", () => {
+    expectRefused(
+      'import type { x } from "./x"\nserver { const x = 1 }\nclient { class x {} }',
+      DUPLICATE,
+      "x",
+      3,
+      15,
+    );
+  });
+
+  it("refuses a name an alias binds, not the imported name", () => {
+    expectRefused(
+      'import type { a as y } from "./x"\nstatic let y = 1',
+      DUPLICATE,
+      "y",
+      2,
+      11,
+    );
+    expectCompiles('import type { y as a } from "./x"\nstatic let y = 1');
+  });
+
+  it("keeps a type-only import beside a type-only import legal", () => {
+    expectCompiles(
+      'import type { x } from "./a"\nimport type { x } from "./b"\nstatic type x = 1',
+    );
+  });
+
+  it("does not make an export list of a type-only name stop working", () => {
+    expectCompiles('import type { x } from "./x"\nstatic export { x }');
   });
 });
 
