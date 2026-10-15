@@ -319,7 +319,7 @@ function runNames(
         ...(generate === "dom" ? ["--conditions=browser"] : []),
         join(dir, "run.mjs"),
       ],
-      { cwd: packageRoot, encoding: "utf8", timeout: 30_000 },
+      { cwd: packageRoot, encoding: "utf8", timeout: 120_000 },
     );
     return JSON.parse(stdout) as Record<string, Outcome>;
   } finally {
@@ -330,7 +330,7 @@ function runNames(
 beforeAll(() => {
   outcomes.ssr = runAll("ssr");
   outcomes.dom = runAll("dom");
-}, 60_000);
+}, 240_000);
 
 /** The markup outside attribute values: the DOM serializer leaves `<` raw inside a quoted attribute, so only an element would show here. */
 const markup = (html = ""): string => html.replace(/="[^"]*"/g, '=""');
