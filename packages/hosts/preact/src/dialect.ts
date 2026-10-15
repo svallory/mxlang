@@ -1,3 +1,5 @@
+import type { JsxNodeShape } from "./attribute-normalize.ts";
+
 /**
  * The knobs that separate Preact from React, isolated from the emitter.
  *
@@ -45,6 +47,12 @@ export interface JsxDialect {
    * element); Preact drops such an object and React throws on it.
    */
   textObjectGuard?: boolean;
+  /**
+   * Which renderer's node objects a dynamic tag's value may be (`"preact"` when
+   * absent). A plain object that is none of them is data and renders nothing,
+   * as in Marko; see `jsxRenderableExpression`.
+   */
+  nodeShape?: JsxNodeShape;
   /**
    * How a native `<textarea>`'s content (Marko renders `value` as content) is
    * handed to the renderer. `"children"` (Preact, Hono) passes a text child;

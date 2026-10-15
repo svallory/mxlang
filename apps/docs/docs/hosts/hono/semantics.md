@@ -33,6 +33,10 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 
 What Hono built itself is left alone: elements from `hono/jsx`, nodes from the `hono/jsx/dom` runtime (`jsx`, `createElement`, `cloneElement`, `Fragment`), portals from `createPortal`, strings, numbers and arrays of them. The plain objects the dom runtime builds are recognised by an own `key` and `ref` (with `ref` equal to `props.ref`) that JSON cannot produce, so data from `JSON.parse` is never taken for one. (A node written with `ref={null}` and a `key` is not recognised and prints as text.) Data decoded by a library that keeps `undefined` (`devalue`, `superjson`, `structuredClone`) can look like such a node, so do not pass it to a text placeholder. To render markup, build an element or write `$!{html}`.
 
+## Data as a dynamic tag
+
+`<${expr}>` holding data works as in Marko: a string is an element name, a component is called, a node Hono built (see above) passes through, and any other plain object (JSON from a request, say) renders nothing. Without that, `hono/jsx/dom` would read `{ tag: "img", props: { onerror } }` as an element. The same check as for text placeholders applies, with the same limit: data decoded by a library that keeps `undefined` (`devalue`, `superjson`, `structuredClone`) can look like a `hono/jsx/dom` node, so do not pass it as a dynamic tag.
+
 ## Element or component?
 
 MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.

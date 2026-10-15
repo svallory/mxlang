@@ -90,6 +90,10 @@ MX calls a component with `children`, the JSX way, so hand-written React compone
 
 `${expr}` holding a plain object (JSON from a request, say) throws on React ("Objects are not valid as a React child"), where Marko prints `[object Object]`. React never reads such an object as markup, so MX leaves the value as it is. Pass a string, a number or an element, or call `JSON.stringify` yourself to print data.
 
+## Data as a dynamic tag
+
+`<${expr}>` holding data works as in Marko: a string is an element name, a component is called, an element (an object with a `Symbol` `$$typeof`) passes through, and any other plain object (JSON from a request, say) renders nothing. React would throw on a plain object, so MX drops it before the renderer sees it.
+
 ## Attribute tags on your own components
 
 Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-react`. A renderable is a `ReactNode`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call, which is how `<Suspense><@fallback>…</@fallback></Suspense>` works on a library component. See [AttrTag](/language/attr-tag/).

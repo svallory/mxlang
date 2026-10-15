@@ -276,6 +276,7 @@ export const reactDialect: JsxDialect = {
   attrTagModule: "@mxlang/host-react",
   classAttr: "className",
   reactBooleanAttributes: true,
+  nodeShape: "react",
   forAttr: "htmlFor",
   textareaContent: "value",
   textareaLeadingNewline: "never",

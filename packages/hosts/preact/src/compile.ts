@@ -40,6 +40,7 @@ import {
   JSX_SCRIPT_TEXT_EXPRESSION,
   JSX_TEXT_VALUE_EXPRESSION,
   jsxAttrValueExpression,
+  jsxRenderableExpression,
   jsxTextareaContentExpression,
   jsxTextareaPropsExpression,
 } from "./attribute-normalize.ts";
@@ -203,6 +204,11 @@ export function attributeHelpers(
       binding: "__mxTextValue",
       code: `const __mxTextValue = ${JSX_TEXT_VALUE_EXPRESSION};`,
     });
+  if (text.includes("__mxRenderable("))
+    helpers.push({
+      binding: "__mxRenderable",
+      code: `const __mxRenderable = ${jsxRenderableExpression(dialect.nodeShape ?? "preact")};`,
+    });
   if (text.includes("__mxTextareaContent(") || text.includes("__mxTextarea("))
     helpers.push({
       binding: "__mxTextareaContent",
@@ -304,7 +310,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
       }
       return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
     }
-    return target;
+    return __mxRenderable(target);
   }
   const props = payload;
   if (
@@ -335,7 +341,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
       "MX: this value is a data attribute tag ({ ...attrs, content }); render its body with <\${x.content}/>",
     );
   }
-  return props.content ? <>{props.content()}{null}</> : target;
+  return props.content ? <>{props.content()}{null}</> : __mxRenderable(target);
 }
 /**
  * __mxDynamic for a call that binds /var: a target with a render path (a

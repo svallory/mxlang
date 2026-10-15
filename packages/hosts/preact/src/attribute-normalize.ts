@@ -159,6 +159,14 @@ export const JSX_SCRIPT_TEXT_EXPRESSION = `(...parts: unknown[]): string =>
     .replace(/<(\\/?script|!--)/gi, "\\\\u003C$1")`;
 
 /**
+ * How `hono/jsx/dom` objects are told from JSON (see {@link JSX_TEXT_VALUE_EXPRESSION}),
+ * as source text over `item` and an `own(name)` test, shared by the text
+ * placeholder and the dynamic-tag value so the two cannot drift.
+ */
+const HONO_PORTAL_CHECK = `item.p === 1 && typeof Node !== "undefined" && item.e instanceof Node`;
+const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && typeof item.props === "object" && item.ref === item.props.ref && (item.ref === undefined || typeof item.ref === "function" || (item.ref !== null && typeof item.ref === "object") || (item.ref === null && item.key === undefined))`;
+
+/**
  * What a `${expr}` placeholder hands the renderer (`textObjectGuard` dialects,
  * Hono). Stock Marko prints a plain object in text as `[object Object]`
  * (`value + ""`, so an own `toString`/`valueOf` is honoured); `hono/jsx/dom`
@@ -187,12 +195,59 @@ export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
     const proto = Object.getPrototypeOf(item);
     if (proto !== Object.prototype && proto !== null) return item;
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
-    if (item.p === 1 && typeof Node !== "undefined" && item.e instanceof Node) return item;
-    if (own("key") && own("ref") && item.props !== null && typeof item.props === "object" && item.ref === item.props.ref && (item.ref === undefined || typeof item.ref === "function" || (item.ref !== null && typeof item.ref === "object") || (item.ref === null && item.key === undefined))) return item;
+    if (${HONO_PORTAL_CHECK}) return item;
+    if (${HONO_DOM_NODE_CHECK}) return item;
     try { return item + ""; } catch { return "[object Object]"; }
   };
   return text(value);
 }`;
+
+/** Which renderer's node shape {@link jsxRenderableExpression} recognises. */
+export type JsxNodeShape = "preact" | "react" | "hono";
+
+/**
+ * What a dynamic tag hands the renderer when its value is neither a tag name
+ * nor a component: an already-rendered node (`<${input.content}/>`), an array
+ * of them, or, wrongly, data. Stock Marko 6.4.4 renders nothing for a plain
+ * object (and for an array of them); a JSX renderer reads one as an element
+ * (`hono/jsx/dom` renders `{ tag, props }` with its `onerror`), throws on it
+ * (React) or trips on a null-prototype one (Preact). A plain-prototype or
+ * null-prototype object is therefore dropped (`null`) unless it is what the
+ * renderer itself builds, recognised by something JSON cannot carry:
+ * - React: a symbol `$$typeof` (`"react.element"` as a string is data);
+ * - Preact: an own `constructor` that is `undefined` (`createVNode`'s marker;
+ *   Preact itself rejects a vnode that has any other `constructor`, and a
+ *   null-prototype object has no own one);
+ * - Hono: the `hono/jsx/dom` node and portal checks of
+ *   {@link JSX_TEXT_VALUE_EXPRESSION}. `hono/jsx` elements are class instances.
+ * Class instances (DOM nodes, `HtmlEscapedString`, Hono elements) pass. An
+ * array is checked item by item and rebuilt only when an item was dropped.
+ * Limit: a decoder that keeps `undefined` (`devalue`, `superjson`,
+ * `structuredClone`) can build a node-shaped object on Preact and Hono; data
+ * decoded that way must not reach a dynamic tag.
+ */
+export function jsxRenderableExpression(shape: JsxNodeShape): string {
+  const check =
+    shape === "react"
+      ? 'typeof item.$$typeof === "symbol"'
+      : shape === "preact"
+        ? 'own("constructor") && item.constructor === undefined'
+        : `(${HONO_PORTAL_CHECK}) || (${HONO_DOM_NODE_CHECK})`;
+  return `(value: any): any => {
+  const render = (item: any): any => {
+    if (item === null || typeof item !== "object") return item;
+    if (Array.isArray(item)) {
+      const next = item.map(render);
+      return next.some((entry: any, index: number) => entry !== item[index]) ? next : item;
+    }
+    const proto = Object.getPrototypeOf(item);
+    if (proto !== Object.prototype && proto !== null) return item;
+    const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
+    return ${check} ? item : null;
+  };
+  return render(value);
+}`;
+}
 
 /**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
