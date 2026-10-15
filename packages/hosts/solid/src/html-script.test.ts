@@ -97,10 +97,15 @@ describe("<html-script> on Solid emits a real <script>", () => {
     );
   });
 
-  it("refuses a body beside an explicit innerHTML", () => {
-    expect(() =>
-      emitted("<html-script innerHTML=input.h>y</html-script>"),
-    ).toThrow(/innerHTML/);
+  it("refuses an explicit innerHTML, as it does on any native element", () => {
+    for (const source of [
+      "<html-script innerHTML=input.h>y</html-script>",
+      "<html-script innerHTML=input.h/>",
+    ]) {
+      expect(() => emitted(source)).toThrow(
+        "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
+      );
+    }
   });
 });
 

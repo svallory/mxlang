@@ -75,10 +75,6 @@ const CASES: Record<string, Case> = {
     setup:
       "const input = { o: { a: 1 } }; function Box(props: { data: object }) { return <p>{typeof props.data}</p>; }",
   },
-  innerHtml: {
-    fragment: "<div innerHTML=input.o/>",
-    setup: "const input = { o: { a: 1 } };",
-  },
   textContent: {
     fragment: "<div textContent=input.o/>",
     setup: "const input = { o: { a: 1 } };",
@@ -176,10 +172,6 @@ const CASES: Record<string, Case> = {
     fragment: "<${input.tag} ...input.a/>",
     setup:
       'const input = { a: { innerHTML: "<b>x</b>" }, tag: function Box(props: { innerHTML: string }) { return <p>{props.innerHTML}</p>; } };',
-  },
-  rawHtmlAttribute: {
-    fragment: "<div innerHTML=input.h/>",
-    setup: 'const input = { h: "<b>raw</b>" };',
   },
 };
 
@@ -317,9 +309,8 @@ describe.each(["ssr", "dom"] as const)(
       expect(get("attributeBeforeSpread").error).toBeUndefined();
       expect(get("attributeBeforeSpread").html).toContain('data-x="ok"');
     });
-    it("validates innerHTML, textContent, classList and colon names", () => {
+    it("validates textContent, classList and colon names", () => {
       for (const name of [
-        "innerHtml",
         "textContent",
         "classList",
         "classListSpread",
@@ -424,11 +415,6 @@ describe.each(["ssr", "dom"] as const)(
       const component = get("rawHtmlSpreadComponent");
       expect(component.error).toBeUndefined();
       expect(component.html).toMatch(/<p>&lt;b(&gt;|>)x&lt;\/b(&gt;|>)<\/p>/);
-    });
-    it("keeps a literal innerHTML= as the raw-HTML form Solid has", () => {
-      const { error, html } = get("rawHtmlAttribute");
-      expect(error).toBeUndefined();
-      expect(html).toContain("<b>raw</b>");
     });
     it("rejects a function like Marko", () => {
       expect(get("functionValue").error).toBe(

@@ -13,6 +13,7 @@ Each MX region compiles to Solid 2 JSX at the same position in the file, and Sol
 |---|---|
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` | `innerHTML={expr}`; it must be the only child |
+| A spread key named `innerHTML` or `outerHTML` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; a literal `innerHTML=` on an element is a compile error, so write `$!{html}` |
 | `.cls`, `#id` | `class="cls"`, `id="id"`; beside `class={…}` it is `class={["cls", {…}]}` |
 | `prop:name=value` | `prop:name={value}` |
 | a component | a JSX element; ordinary children are `props.children` |

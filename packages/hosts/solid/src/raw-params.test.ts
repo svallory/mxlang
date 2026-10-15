@@ -60,11 +60,9 @@ describe("raw `$!{}` body with tag params (solid)", () => {
 
   it("compiles the suggested element wrapper", () => {
     const { code } = compileSolidUnit(
-      `${IMPORT}<Row|item|><div innerHTML=item/></Row>\n`,
+      `${IMPORT}<Row|item|><div>$!{item}</div></Row>\n`,
       { filename: "fixture.mx" },
     );
-    expect(code).toContain(
-      '<div innerHTML={__mxAttrValue("innerHTML", item, "div")}',
-    );
+    expect(code).toContain("<div innerHTML={item}></div>");
   });
 });

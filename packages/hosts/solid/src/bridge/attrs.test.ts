@@ -449,10 +449,10 @@ describe("raw placeholder ($!{}) as innerHTML", () => {
     expect(element.openingElement.attributes[0]?.name.name).toBe("innerHTML");
   });
 
-  it("is a parse error combined with an explicit innerHTML= attribute", () => {
+  it("is a parse error beside an explicit innerHTML= attribute", () => {
     expectSyntaxError(
       () => parseMx(`const el = <div innerHTML=a>$!{b}</div>;`),
-      "combined with an explicit `innerHTML=` attribute",
+      "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
     );
   });
 });

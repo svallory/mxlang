@@ -1448,10 +1448,30 @@ function rejectRawWithParams(
 }
 
 const RAW_WITH_PARAMS_MESSAGE =
-  "`$!{...}` in a body with tag params is not supported on Solid: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div innerHTML=item/>`";
+  "`$!{...}` in a body with tag params is not supported on Solid: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div>$!{item}</div>`";
 
 function hasNamedAttr(attrs: Attr[], name: string): boolean {
   return attrs.some((attr) => attr.kind !== "spread" && attr.name === name);
+}
+
+/**
+ * A literal `innerHTML=` on a native element is refused, at the attribute,
+ * the way the JSX hosts refuse `dangerouslySetInnerHTML=`: it is Solid's raw
+ * HTML channel, so an authored value (`innerHTML=input.h`) was raw markup
+ * where stock Marko prints an escaped attribute. A sole `$!{html}` child is
+ * the way to write raw HTML, and it lowers to `innerHTML` itself. A component
+ * target keeps `innerHTML` as an ordinary prop, so this runs for native
+ * elements and `<html-script>` only; a spread cannot reach it (the spread
+ * helper renames the key).
+ */
+function rejectRawHtmlAttr(attrs: Attr[]): void {
+  for (const attr of attrs) {
+    if (attr.kind === "spread" || attr.name !== "innerHTML") continue;
+    fail(
+      "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
+      attr,
+    );
+  }
 }
 
 function renderWithNewEmitter(
@@ -2092,7 +2112,7 @@ export class SolidEmitter implements Emitter<string> {
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
     if (!node.escaped) {
       fail(
-        "`$!{...}` is only supported as the sole child of an element or a tag without params: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div innerHTML=x/>`",
+        "`$!{...}` is only supported as the sole child of an element or a tag without params: raw HTML needs an element to carry `innerHTML`; wrap it, e.g. `<div>$!{x}</div>`",
         node,
       );
     }
@@ -2121,12 +2141,7 @@ export class SolidEmitter implements Emitter<string> {
         child,
       );
     }
-    if (body.length > 0 && hasNamedAttr(node.attrs, "innerHTML")) {
-      fail(
-        "`<html-script>` body combined with an explicit `innerHTML=` attribute",
-        node,
-      );
-    }
+    rejectRawHtmlAttr(node.attrs);
     const attrs = renderAttrs(node.attrs, false, { tag: '"script"' });
     if (body.length === 0) {
       this.#out.push(concatMapped("<script", attrs, " />"));
@@ -2156,12 +2171,7 @@ export class SolidEmitter implements Emitter<string> {
     }
     const raw = rawChild(node.children);
     rejectMixedRaw(node.children);
-    if (raw && hasNamedAttr(node.attrs, "innerHTML")) {
-      fail(
-        "`$!{...}` sole child combined with an explicit `innerHTML=` attribute",
-        raw,
-      );
-    }
+    rejectRawHtmlAttr(node.attrs);
     // `<textarea value=x/>` renders the value as content, as Marko does.
     const textarea =
       node.name === "textarea" ? textareaContent(node) : undefined;

@@ -116,7 +116,7 @@ const CASES: Case[] = [
     name: "RenderPropRawWrapper",
     input: `{}`,
     mx: `${PREAMBLE}export interface Input {}
-<Row|item|><div innerHTML=item/></Row>
+<Row|item|><div>$!{item}</div></Row>
 `,
   },
   {
@@ -271,7 +271,7 @@ describe("Solid: a tag-params body is an arrow EXPRESSION body", () => {
     );
   });
 
-  it("renders the `<div innerHTML=item/>` wrapper a rejected `$!{item}` body suggests", () => {
+  it("renders the `<div>$!{item}</div>` wrapper a rejected `$!{item}` body suggests", () => {
     expect(html("RenderPropRawWrapper")).toBe(
       "<ul><div>a</div><div>b</div></ul>",
     );
