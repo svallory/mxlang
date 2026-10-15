@@ -1,5 +1,0 @@
----
-packages: [core, html, angular, astro, hono, preact, react, solid, language-server, typescript-plugin, tsc]
-kind: Fixed
----
-A default export in a `static`, `server` or `client` statement (`export default <value>`, `export default function`, `export default class`, `export { x as default }`, `export { default } from "…"`, `export { a as default } from "…"`, `export * as default from "…"`, in a block or without one) is a compile error at the export, `MX_INVALID_STATEMENT`, with a message that says a template is already its own default export and to use a named export instead. It used to compile to a module with two default exports that does not load, and `mx-tsc` reported TS2528 at 1:1. A type-only default (`export default interface I {}`) is erased and still compiles. Also, an `export { q }` or `export { q as other }` in its own `static`, `server` or `client` statement may name a binding an earlier statement or import declares (`static const q = 1;` then `static export { q };`, or a plain top-level `export { q }` after an `import`); it was refused with "Export 'q' is not defined." and printed a Babel warning, and stock Marko compiles it.
