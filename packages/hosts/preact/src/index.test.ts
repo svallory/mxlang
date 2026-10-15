@@ -164,7 +164,7 @@ describe("elements and text", () => {
 
   it("emits a spread attribute", () => {
     expect(markup("<div ...input.rest>x</div>")).toBe(
-      `<div {...${SPREAD}({ ...input.rest }, "div", ["ref","key","dangerouslySetInnerHTML"], true)}>x</div>`,
+      `<div {...${SPREAD}({ ...input.rest }, "div", ["ref","key"], true)}>x</div>`,
     );
   });
 });
@@ -230,7 +230,9 @@ describe("raw HTML", () => {
   it("rejects a raw placeholder beside an explicit raw-HTML attribute", () => {
     expect(
       errorOf("<div dangerouslySetInnerHTML=input.x>$!{input.html}</div>"),
-    ).toContain("combined with an explicit `dangerouslySetInnerHTML=`");
+    ).toContain(
+      "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+    );
   });
 });
 

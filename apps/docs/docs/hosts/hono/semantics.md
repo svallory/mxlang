@@ -11,6 +11,7 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 |---|---|
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML={{ __html: expr }}` |
+| A spread key named `dangerouslySetInnerHTML`, `innerHTML` or `outerHTML` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; a literal `dangerouslySetInnerHTML=` on an element is a compile error |
 | `class="a"`, `.a` | `class="a"` |
 | `class={ a: cond }`, `class=[…]` | `class={mxClass({ a: cond })}` |
 | `<label for=…>` | `for={…}`, unchanged |

@@ -110,15 +110,26 @@ export function jsxAttrValueExpression(reactBooleans: boolean): string {
  * The spread/merged-object writer: validates (skipping `props`/events, as
  * core's does) and normalizes every key. Needs `__mxAttrValue` hoisted first.
  * `class`/`className` are normalized even when they skip validation.
+ *
+ * A key that would write raw markup (`dangerouslySetInnerHTML`, `innerHTML`,
+ * `outerHTML`) is validated like any other and then written under its
+ * lowercase name. Marko prints these keys of a spread as ordinary attributes,
+ * with an escaped value; as props every JSX renderer reads them as raw HTML
+ * (or, on the client, as a DOM property write). A lowercase name is no such
+ * prop, so every renderer writes it as the plain attribute Marko does, and an
+ * HTML parser reads the same attribute name.
  */
 export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | undefined,>(attrs: T, tag = "", props: readonly string[] = [], events = false): T => {
   const values = { ...attrs } as Record<string, unknown>;
   for (const name of Object.keys(values)) {
     const skip = props.includes(name) || (events && /^on[A-Z]/.test(name));
     if (skip && name !== "class" && name !== "className") continue;
-    if (name === "key" || name === "ref" || name === "dangerouslySetInnerHTML") continue;
+    if (name === "key" || name === "ref") continue;
     const next = __mxAttrValue(name, values[name], tag, false, skip);
-    if (next === undefined) delete values[name]; else values[name] = next;
+    if (name === "dangerouslySetInnerHTML" || name === "innerHTML" || name === "outerHTML") {
+      delete values[name];
+      if (next !== undefined) values[name.toLowerCase()] = next;
+    } else if (next === undefined) delete values[name]; else values[name] = next;
   }
   return values as T;
 })`;

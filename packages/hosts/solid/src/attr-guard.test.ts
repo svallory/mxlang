@@ -141,6 +141,46 @@ const CASES: Record<string, Case> = {
     fragment: "<div data-x=input.f/>",
     setup: "const input = { f: () => 1 };",
   },
+  rawHtmlSpread: {
+    fragment: "<div ...input.a/>",
+    setup:
+      'const input = { a: { innerHTML: "<b>x</b>", outerHTML: "<i>y</i>", id: "k" } };',
+  },
+  rawHtmlSpreadBody: {
+    fragment: "<div ...input.a>body</div>",
+    setup: 'const input = { a: { innerHTML: "<b>x</b>" } };',
+  },
+  rawHtmlSpreadFrozen: {
+    fragment: "<div ...input.a/>",
+    setup:
+      'const input = { a: Object.freeze({ innerHTML: "<b>x</b>", class: false, id: "k" }) };',
+  },
+  rawHtmlSpreadOverwritten: {
+    fragment: "<div ...input.a ...input.b/>",
+    setup:
+      'const input = { a: { innerHTML: "<b>x</b>" }, b: { innerHTML: "plain" } };',
+  },
+  rawHtmlSpreadObject: {
+    fragment: "<div ...input.a/>",
+    setup: "const input = { a: { innerHTML: { a: 1 } } };",
+  },
+  rawHtmlSpreadFalsy: {
+    fragment: "<div ...input.a/>",
+    setup: "const input = { a: { innerHTML: null, outerHTML: false } };",
+  },
+  rawHtmlSpreadDynamicTag: {
+    fragment: "<${input.tag} ...input.a/>",
+    setup: 'const input = { tag: "p", a: { innerHTML: "<b>x</b>" } };',
+  },
+  rawHtmlSpreadComponent: {
+    fragment: "<${input.tag} ...input.a/>",
+    setup:
+      'const input = { a: { innerHTML: "<b>x</b>" }, tag: function Box(props: { innerHTML: string }) { return <p>{props.innerHTML}</p>; } };',
+  },
+  rawHtmlAttribute: {
+    fragment: "<div innerHTML=input.h/>",
+    setup: 'const input = { h: "<b>raw</b>" };',
+  },
 };
 
 type Outcome = { html?: string; error?: string; hit?: number };
@@ -251,6 +291,9 @@ beforeAll(() => {
   outcomes.dom = runAll("dom");
 }, 60_000);
 
+/** The markup outside attribute values: the DOM serializer leaves `<` raw inside a quoted attribute, so only an element would show here. */
+const markup = (html = ""): string => html.replace(/="[^"]*"/g, '=""');
+
 describe.each(["ssr", "dom"] as const)(
   "native attribute guard (%s)",
   (mode) => {
@@ -335,6 +378,57 @@ describe.each(["ssr", "dom"] as const)(
     it("leaves component props alone", () => {
       expect(get("component").error).toBeUndefined();
       expect(get("component").html).toContain("object");
+    });
+    it("writes a spread's innerHTML and outerHTML as escaped attributes, as Marko does", () => {
+      const { error, html } = get("rawHtmlSpread");
+      expect(error).toBeUndefined();
+      expect(markup(html)).not.toContain("<b>");
+      expect(markup(html)).not.toContain("<i>");
+      expect(html).toContain('innerhtml="');
+      expect(html).toContain('outerhtml="');
+      expect(html).toContain('id="k"');
+    });
+    it("keeps the body beside a spread that carries innerHTML", () => {
+      const { error, html } = get("rawHtmlSpreadBody");
+      expect(error).toBeUndefined();
+      expect(html).toContain("body");
+      expect(markup(html)).not.toContain("<b>");
+    });
+    it("hides the camel-case key of a frozen spread without a Proxy error", () => {
+      const { error, html } = get("rawHtmlSpreadFrozen");
+      expect(error).toBeUndefined();
+      expect(markup(html)).not.toContain("<b>");
+      expect(html).toContain('id="k"');
+    });
+    it("does not read a raw key a later spread overwrites", () => {
+      const { error, html } = get("rawHtmlSpreadOverwritten");
+      expect(error).toBeUndefined();
+      expect(html).toContain('innerhtml="plain"');
+      expect(markup(html)).not.toContain("<b>");
+    });
+    it("validates a raw key like any attribute", () => {
+      expect(get("rawHtmlSpreadObject").error).toBe(
+        "The `innerHTML` attribute cannot be a plain object (it would render as `[object Object]`).",
+      );
+    });
+    it("drops a null or false raw key", () => {
+      const { error, html } = get("rawHtmlSpreadFalsy");
+      expect(error).toBeUndefined();
+      expect(html).not.toMatch(/innerhtml|outerhtml/i);
+    });
+    it("guards a dynamic tag's element target, not its component target", () => {
+      const element = get("rawHtmlSpreadDynamicTag");
+      expect(element.error).toBeUndefined();
+      expect(markup(element.html)).not.toContain("<b>");
+      expect(element.html).toContain('innerhtml="');
+      const component = get("rawHtmlSpreadComponent");
+      expect(component.error).toBeUndefined();
+      expect(component.html).toMatch(/<p>&lt;b(&gt;|>)x&lt;\/b(&gt;|>)<\/p>/);
+    });
+    it("keeps a literal innerHTML= as the raw-HTML form Solid has", () => {
+      const { error, html } = get("rawHtmlAttribute");
+      expect(error).toBeUndefined();
+      expect(html).toContain("<b>raw</b>");
     });
     it("rejects a function like Marko", () => {
       expect(get("functionValue").error).toBe(

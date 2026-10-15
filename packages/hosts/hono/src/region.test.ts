@@ -67,7 +67,7 @@ describe(".hono.mx region renders what the whole-file .mx renders", () => {
     '<textarea value="ab"/>',
     '<${"em"} title="t">dyn</>',
     '<define/Item|label: string|><li>${label}</li></define><ol><Item("one")/><Item("two")/></ol>',
-    '<div dangerouslySetInnerHTML=("<b>raw</b>")>ignored</div>',
+    '<div>$!{"<b>raw</b>"}</div>',
   ];
 
   it.each(markups)("%s", async (markup) => {

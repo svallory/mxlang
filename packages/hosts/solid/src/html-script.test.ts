@@ -163,4 +163,16 @@ describe("<html-script> on Solid keeps its attributes and escapes its body as sc
       render("<html-script>if (a < b && c > d) go('&amp;');</html-script>"),
     ).toBe("<script>if (a < b && c > d) go('&amp;');</script>");
   });
+
+  it("keeps a body beside a spread whose innerHTML is not the body", () => {
+    const html = render(
+      "<html-script ...input.a>var a = 1 && 2;</html-script>",
+      {
+        a: { innerHTML: "<b>x</b>", id: "s" },
+      },
+    );
+    expect(html).toContain("var a = 1 && 2;");
+    expect(html).not.toContain("<b>x</b></script>");
+    expect(html).not.toMatch(/<script[^>]*>[^<]*<b>/);
+  });
 });

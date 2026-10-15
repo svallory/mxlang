@@ -294,9 +294,9 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
       }
       if (target === "textarea") {
         if (content) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
-        return <Tag {...__mxTextarea(__mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
+        return <Tag {...__mxTextarea(__mxAttrSpread(attrs, target, ["ref", "key", "className"], true))} />;
       }
-      return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
+      return <Tag {...(typeof target === "string" ? __mxAttrSpread(attrs, target, ["ref", "key", "className"], true) : attrs)}>{content ? content() : undefined}</Tag>;
     }
     return target;
   }
@@ -314,9 +314,9 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
     }
     if (target === "textarea") {
       if (bodyContent) throw new Error("A dynamic tag rendering a \`<textarea>\` cannot have \`content\` and must use the \`value\` attribute instead.");
-      return <Tag {...__mxTextarea(__mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true))} />;
+      return <Tag {...__mxTextarea(__mxAttrSpread(rest, target, ["ref", "key", "className"], true))} />;
     }
-    return <Tag {...(typeof target === "string" ? __mxAttrSpread(rest, target, ["ref", "key", "dangerouslySetInnerHTML", "className"], true) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
+    return <Tag {...(typeof target === "string" ? __mxAttrSpread(rest, target, ["ref", "key", "className"], true) : rest)}>{bodyContent ? bodyContent() : undefined}</Tag>;
   }
   if (
     target !== null &&

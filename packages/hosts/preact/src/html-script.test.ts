@@ -97,12 +97,14 @@ describe("<html-script> on Preact emits a real <script>", () => {
     expect(code('<html-script src="/a.js"/>')).not.toContain("__mxScriptText");
   });
 
-  it("refuses a body beside an explicit dangerouslySetInnerHTML", () => {
+  it("refuses an explicit dangerouslySetInnerHTML, as it does on any native element", () => {
     expect(() =>
       code(
         "<html-script dangerouslySetInnerHTML={__html: 'x'}>y</html-script>",
       ),
-    ).toThrow(/dangerouslySetInnerHTML/);
+    ).toThrow(
+      "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+    );
   });
 });
 

@@ -11,6 +11,7 @@ Preact has no control-flow components, so every structural tag becomes a plain J
 |---|---|
 | `text`, `${expr}` | text, `{expr}` |
 | `$!{expr}` as the sole child | `dangerouslySetInnerHTML={{ __html: expr }}` |
+| A spread key named `dangerouslySetInnerHTML`, `innerHTML` or `outerHTML` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; a literal `dangerouslySetInnerHTML=` on an element is a compile error |
 | `class="a"`, `.a` | `class="a"` |
 | `class={ a: cond }`, `class=[…]` | `class={mxClass({ a: cond })}` |
 | `style={ color: c }` | `style={{ color: c }}` |

@@ -1205,6 +1205,7 @@ export class PreactEmitter implements Emitter<string> {
     tag?: string,
     textareaBody = false,
   ): MappedCode {
+    if (!isComponent) this.#rejectRawHtmlAttr(attrs);
     if (!isComponent && attrs.some((attr) => attr.kind === "spread")) {
       // Validate after the authored merge: an overwritten object is never
       // serialized by Marko and must not throw just because it appeared first.
@@ -1272,7 +1273,6 @@ export class PreactEmitter implements Emitter<string> {
         JSON.stringify([
           "ref",
           "key",
-          this.#dialect.rawHtmlProp,
           ...(this.#dialect.classAttr === "class"
             ? []
             : [this.#dialect.classAttr]),
@@ -1283,6 +1283,25 @@ export class PreactEmitter implements Emitter<string> {
     return concatMapped(
       ...attrs.map((attr) => this.#attr(attr, mapNames, isComponent, tag)),
     );
+  }
+
+  /**
+   * Marko refuses `dangerouslySetInnerHTML=` on a native element: it is not an
+   * HTML attribute, and the raw-HTML form is `$!{html}`. This host's JSX prop
+   * of that name writes its value as markup, so letting it through would turn
+   * the attribute into an unescaped-HTML escape hatch Marko does not have.
+   * Only an authored attribute is refused; a spread's keys are runtime data
+   * and are made safe by `__mxAttrSpread`.
+   */
+  #rejectRawHtmlAttr(attrs: Attr[]): void {
+    for (const attr of attrs) {
+      if (attr.kind === "spread" || attr.name !== "dangerouslySetInnerHTML")
+        continue;
+      fail(
+        "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+        attr,
+      );
+    }
   }
 
   /** `__mxTextareaContent(<value>)` for a textarea's explicit `value`. */
@@ -1792,8 +1811,10 @@ export class PreactEmitter implements Emitter<string> {
    * does and escaped the joined body for script context (`<script`,
    * `</script`, `<!--`), so no placeholder can close the element.
    *
-   * The prop comes after the attributes, so it wins over a `dangerouslySetInnerHTML`
-   * key a spread carries. Marko also writes `nonce` from the render's global
+   * A `dangerouslySetInnerHTML` attribute is refused (as on any element), and
+   * a spread's `dangerouslySetInnerHTML` key is rewritten by `__mxAttrSpread`
+   * into a plain attribute, so the body is the only raw HTML on the element.
+   * Marko also writes `nonce` from the render's global
    * when the author gives none; a JSX render has no such global, so a nonce is
    * the `nonce=` the author writes.
    */
@@ -1809,13 +1830,6 @@ export class PreactEmitter implements Emitter<string> {
         child,
       );
     }
-    const prop = this.#dialect.rawHtmlProp;
-    if (body.length > 0 && hasNamedAttr(node.attrs, prop)) {
-      fail(
-        `\`<html-script>\` body combined with an explicit \`${prop}=\` attribute`,
-        node,
-      );
-    }
     const attrs = this.#attrs(node.attrs, true, false, "script");
     if (body.length === 0) {
       this.#out.push(concatMapped("<script", attrs, " />"));
@@ -1828,7 +1842,7 @@ export class PreactEmitter implements Emitter<string> {
       concatMapped(
         "<script",
         attrs,
-        ` ${prop}={${open}__mxScriptText(`,
+        ` ${this.#dialect.rawHtmlProp}={${open}__mxScriptText(`,
         ...body.flatMap((child, index) => [
           index === 0 ? "" : ", ",
           child.kind === "Text"
@@ -1847,12 +1861,6 @@ export class PreactEmitter implements Emitter<string> {
     }
     rejectMixedRaw(node.children);
     const raw = rawChild(node.children);
-    if (raw && hasNamedAttr(node.attrs, this.#dialect.rawHtmlProp)) {
-      fail(
-        `\`$!{…}\` sole child combined with an explicit \`${this.#dialect.rawHtmlProp}=\` attribute`,
-        raw,
-      );
-    }
     // `<textarea value=x/>` renders the value as content, as Marko does.
     let explicitValue: Attr | undefined;
     if (node.name === "textarea") {

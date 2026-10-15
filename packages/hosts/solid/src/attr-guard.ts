@@ -47,17 +47,35 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  * else, including `attr:`, `bool:`, `use:`, innerHTML, textContent and
  * classList, is a plain attribute write on Solid and validates like Marko.
  * `<T,>` keeps the helper unconstrained so any spread type-checks, and {@link SPREADABLE} keeps its result spreadable (covered by mx-tsc `attr-guard-solid.test.ts`).
+ *
+ * `innerHTML` and `outerHTML` are the exception to "a plain attribute write":
+ * as props Solid assigns them as markup (server) or as DOM properties
+ * (client), where Marko prints a spread's key as an ordinary attribute with an
+ * escaped value. The view therefore lists them under their lowercase names,
+ * which are no such props, so Solid writes the attribute Marko does (an HTML
+ * parser reads the same attribute name); the camel-case names read as absent.
+ * The view sits over an empty target, so hiding a key breaks no Proxy
+ * invariant, even for a frozen source.
  */
 export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = ""): ${SPREADABLE} {
   if (tag === null || attrs === null || typeof attrs !== "object") return attrs as never;
-  return new Proxy(attrs as object, {
-    get(target, key) {
-      const value = Reflect.get(target, key);
-      if (typeof key === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(key)) ${MX_ATTR_VALUE_BINDING}(key, value, tag);
-      return (key === "class" || key === "style") && value === true ? "true" : value;
+  const source = attrs as object;
+  const rawName = (key: string | symbol): boolean => key === "innerHTML" || key === "outerHTML";
+  const original = (key: string | symbol): string | symbol => (key === "innerhtml" && Reflect.has(source, "innerHTML") ? "innerHTML" : key === "outerhtml" && Reflect.has(source, "outerHTML") ? "outerHTML" : key);
+  return new Proxy({}, {
+    get(_, key) {
+      if (rawName(key)) return undefined;
+      const name = original(key);
+      const value = Reflect.get(source, name);
+      if (typeof name === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(name)) ${MX_ATTR_VALUE_BINDING}(name, value, tag);
+      return (name === "class" || name === "style") && value === true ? "true" : value;
     },
-    ownKeys(target) {
-      return Reflect.ownKeys(target).filter((key) => (key !== "class" && key !== "style") || Boolean(Reflect.get(target, key)));
+    has: (_, key) => !rawName(key) && Reflect.has(source, original(key)),
+    ownKeys: () => [...new Set(Reflect.ownKeys(source).filter((key) => (key !== "class" && key !== "style") || Boolean(Reflect.get(source, key))).map((key) => (key === "innerHTML" ? "innerhtml" : key === "outerHTML" ? "outerhtml" : key)))],
+    getOwnPropertyDescriptor(_, key) {
+      if (rawName(key)) return undefined;
+      const descriptor = Reflect.getOwnPropertyDescriptor(source, original(key));
+      return descriptor && { ...descriptor, configurable: true };
     },
   }) as never;
 }`;
