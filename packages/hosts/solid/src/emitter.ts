@@ -1075,7 +1075,29 @@ const SPREAD_VIEW_NAMES: ReadonlySet<string> = new Set([
   "children",
   "prop:innerHTML",
   "prop:outerHTML",
+  "prop:textContent",
+  "prop:innerText",
+  "prop:text",
 ]);
+
+/** Writes a literal attribute as a one-key spread through the guarded view. */
+function viewedAttr(
+  attr: Extract<Attr, { kind: "static" | "dynamic" | "boolean" }>,
+  native: NativeAttrs,
+): MappedCode {
+  if (attrGuardUse) attrGuardUse.spread = true;
+  return concatMapped(
+    ` {...${MX_ATTR_SPREAD_BINDING}({`,
+    mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
+    ": (",
+    attr.kind === "static"
+      ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
+      : attr.kind === "boolean"
+        ? concatMapped("true")
+        : mappedValue(attr.value),
+    `)}, ${nativeTagOf(native)})}`,
+  );
+}
 
 function renderAttr(
   attr: Attr,
@@ -1094,18 +1116,20 @@ function renderAttr(
       attr.kind === "boolean") &&
     SPREAD_VIEW_NAMES.has(attr.name)
   ) {
-    if (attrGuardUse) attrGuardUse.spread = true;
-    return concatMapped(
-      ` {...${MX_ATTR_SPREAD_BINDING}({`,
-      mapped(JSON.stringify(attr.name), attr.nameSpan ?? null),
-      ": (",
-      attr.kind === "static"
-        ? mapped(JSON.stringify(attr.value), attr.valueSpan ?? null)
-        : attr.kind === "boolean"
-          ? concatMapped("true")
-          : mappedValue(attr.value),
-      `)}, ${nativeTagOf(native)})}`,
-    );
+    return viewedAttr(attr, native);
+  }
+  // A literal `children=` on a native element: Solid's server renderer
+  // writes an object there raw (`{ t }` is an already-rendered node), so a
+  // value that may be one goes through the view, which drops an object or
+  // function and leaves a primitive as escaped text. A string, number or
+  // boolean literal cannot be an object and stays a plain prop.
+  if (
+    native !== undefined &&
+    attr.kind === "dynamic" &&
+    attr.name === "children" &&
+    !isPrimitiveValue(attr.value)
+  ) {
+    return viewedAttr(attr, native);
   }
   // JSX only permits one colon with a nonempty suffix. Preserve Marko's
   // `value:` and `value:foo:bar` names as string keys in a prop spread.
@@ -1503,9 +1527,11 @@ function hasNamedAttr(attrs: Attr[], name: string): boolean {
 function rejectRawHtmlAttr(attrs: Attr[], tag: string): void {
   for (const attr of attrs) {
     if (attr.kind === "spread") continue;
-    if (attr.name === "innerHTML") {
+    // `prop:innerHTML` / `prop:outerHTML` assign the DOM property on the
+    // client: the same raw-markup channel under another spelling.
+    if (RAW_MARKUP_PROPS.has(attr.name)) {
       fail(
-        "`innerHTML` is not a valid attribute, did you mean `$!{html}`?",
+        `\`${attr.name}\` is not a valid attribute, did you mean \`$!{html}\`?`,
         attr,
       );
     }
@@ -1520,6 +1546,11 @@ function rejectRawHtmlAttr(attrs: Attr[], tag: string): void {
   }
 }
 
+const RAW_MARKUP_PROPS: ReadonlySet<string> = new Set([
+  "innerHTML",
+  "prop:innerHTML",
+  "prop:outerHTML",
+]);
 const RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
   "script",
   "style",
@@ -1529,6 +1560,9 @@ const RAW_TEXT_PROPS: ReadonlySet<string> = new Set([
   "textContent",
   "innerText",
   "children",
+  "prop:textContent",
+  "prop:innerText",
+  "prop:text",
 ]);
 
 function renderWithNewEmitter(

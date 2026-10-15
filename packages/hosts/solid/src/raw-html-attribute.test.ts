@@ -53,6 +53,33 @@ describe("a literal innerHTML= on a native element is refused", () => {
     expect(failure(source)).toMatchObject({ message, line, column });
   });
 
+  it.each([
+    ["prop:innerHTML", "<div prop:innerHTML=input.h/>", 1, 5],
+    ["prop:outerHTML", "<div prop:outerHTML=input.h/>", 1, 5],
+    ["prop:innerHTML as a string", '<div prop:innerHTML="a"/>', 1, 5],
+    [
+      "prop:outerHTML on a custom element",
+      "<section><my-el prop:outerHTML=input.h/></section>",
+      1,
+      16,
+    ],
+    [
+      "prop:innerHTML on <html-script>",
+      "<html-script prop:innerHTML=input.h>y</html-script>",
+      1,
+      13,
+    ],
+  ])("the prop: spelling, %s", (name, source, line, column) => {
+    const prop = name.startsWith("prop:outerHTML")
+      ? "prop:outerHTML"
+      : "prop:innerHTML";
+    expect(failure(source)).toMatchObject({
+      message: `\`${prop}\` is not a valid attribute, did you mean \`$!{html}\`?`,
+      line,
+      column,
+    });
+  });
+
   it("is not refused on a component", () => {
     const { code } = compileSolidMx("<${input.C} innerHTML=input.h/>", {
       filename: "fixture.solid.mx",
@@ -65,6 +92,9 @@ describe("a literal text prop on a raw-text element is refused", () => {
   it.each([
     ["<style textContent=input.t>x</style>", "textContent", "style", 1, 7],
     ["<style children=input.t/>", "children", "style", 1, 7],
+    ["<style prop:textContent=input.t/>", "prop:textContent", "style", 1, 7],
+    ["<style prop:innerText=input.t/>", "prop:innerText", "style", 1, 7],
+    ["<html-script prop:text=input.t/>", "prop:text", "html-script", 1, 13],
     ["<html-script textContent=input.t/>", "textContent", "html-script", 1, 13],
     [
       "<html-script textContent=input.t>y</html-script>",
@@ -96,6 +126,30 @@ describe("a literal text prop on a raw-text element is refused", () => {
     );
     expect(code).toContain('{...__mxAttrSpread({"textContent": (input.t)}');
     expect(code).toContain('{...__mxAttrSpread({"innerHTML": (input.h)}');
+  });
+
+  it("a dynamic tag routes the literal prop: text names through the view too", () => {
+    const { code } = compileSolidMx(
+      "<${input.tag} prop:textContent=input.t prop:text=input.u/>",
+      { filename: "fixture.solid.mx" },
+    );
+    expect(code).toContain(
+      '{...__mxAttrSpread({"prop:textContent": (input.t)}',
+    );
+    expect(code).toContain('{...__mxAttrSpread({"prop:text": (input.u)}');
+  });
+
+  it("a native element routes a non-literal children= through the view", () => {
+    const { code } = compileSolidMx("<div children=input.x/>", {
+      filename: "fixture.solid.mx",
+    });
+    expect(code).toContain(
+      '{...__mxAttrSpread({"children": (input.x)}, "div")}',
+    );
+    const literal = compileSolidMx('<div children="x"/>', {
+      filename: "fixture.solid.mx",
+    }).code;
+    expect(literal).not.toContain("__mxAttrSpread");
   });
 });
 

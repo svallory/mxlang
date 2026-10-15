@@ -58,7 +58,10 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  *    so Solid writes the attribute Marko does (an HTML parser reads the same
  *    attribute name); the camel-case names read as absent.
  *  - `prop:innerHTML` and `prop:outerHTML` assign the DOM property on the
- *    client; they are hidden.
+ *    client; they are hidden. So are `prop:textContent`, `prop:innerText` and
+ *    `prop:text` on a `<script>` or `<style>`, whose text is code or style
+ *    (the tag is compared by its lowercase name: a dynamic tag may be
+ *    `"SCRIPT"`).
  *  - `children` is exempt for a native element's own content, but the server
  *    treats an object there as an already-rendered node (`{ t: "<b>" }` is
  *    written raw), and writes any value raw inside `<script>` and `<style>`.
@@ -71,12 +74,14 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
   if (tag === null || attrs === null || typeof attrs !== "object") return attrs as never;
   const source = attrs as object;
   const markup = ["innerHTML", "outerHTML", "textContent", "innerText"];
+  const raw = typeof tag === "string" && /^(?:script|style)$/i.test(tag);
   const hidden = (key: string | symbol): boolean => {
     if (typeof key !== "string") return false;
     if (markup.includes(key) || key === "prop:innerHTML" || key === "prop:outerHTML") return true;
+    if (raw && (key === "prop:textContent" || key === "prop:innerText" || key === "prop:text")) return true;
     if (key !== "children" || !Reflect.has(source, key)) return false;
     const child = Reflect.get(source, key);
-    return tag === "script" || tag === "style" || (child !== null && (typeof child === "object" || typeof child === "function"));
+    return raw || (child !== null && (typeof child === "object" || typeof child === "function"));
   };
   const original = (key: string | symbol): string | symbol => {
     const name = typeof key === "string" ? markup.find((entry) => entry.toLowerCase() === key) : undefined;

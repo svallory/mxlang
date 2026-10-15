@@ -205,6 +205,44 @@ const CASES: Record<string, Case> = {
     fragment: "<${input.tag} textContent=input.x/>",
     setup: 'const input = { tag: "style", x: "</style><b>x</b>" };',
   },
+  literalChildrenObject: {
+    fragment: "<div children=input.x/>",
+    setup: 'const input = { x: { t: "<b>x</b>" } };',
+  },
+  literalChildrenArray: {
+    fragment: "<div children=input.x/>",
+    setup: 'const input = { x: [{ t: "<b>x</b>" }] };',
+  },
+  literalChildrenText: {
+    fragment: "<div children=input.x/>",
+    setup: 'const input = { x: "hello <i>" };',
+  },
+  dynamicLiteralChildrenObject: {
+    fragment: "<${input.tag} children=input.x/>",
+    setup: 'const input = { tag: "div", x: { t: "<b>x</b>" } };',
+  },
+  literalOuterHtml: {
+    fragment: "<section><div outerHTML=input.h/></section>",
+    setup: 'const input = { h: "<b>x</b>" };',
+  },
+  upperScriptTagSpread: {
+    fragment: "<${input.tag} ...input.a/>",
+    setup:
+      'const input = { tag: "SCRIPT", a: { children: "alert(1)", id: "k" } };',
+  },
+  scriptPropTextSpread: {
+    fragment: "<${input.tag} ...input.a/>",
+    setup:
+      'const input = { tag: "script", a: { "prop:textContent": "alert(1)", "prop:innerText": "alert(2)", "prop:text": "alert(3)", id: "k" } };',
+  },
+  scriptPropTextLiteralDynamicTag: {
+    fragment: "<${input.tag} prop:textContent=input.x/>",
+    setup: 'const input = { tag: "script", x: "alert(1)" };',
+  },
+  divPropTextSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { "prop:textContent": "plain" } };',
+  },
   rawHtmlSpreadObject: {
     fragment: "<div ...input.a/>",
     setup: "const input = { a: { innerHTML: { a: 1 } } };",
@@ -503,6 +541,49 @@ describe.each(["ssr", "dom"] as const)(
         expect(markup(html)).not.toContain("<b>");
       }
     });
+    it("never lets a literal children= reach Solid's node path", () => {
+      for (const name of [
+        "literalChildrenObject",
+        "literalChildrenArray",
+        "dynamicLiteralChildrenObject",
+      ]) {
+        const { error, html } = get(name);
+        expect(error, name).toBeUndefined();
+        expect(markup(html), name).not.toContain("<b>");
+      }
+    });
+    it("keeps a literal text children= as escaped text", () => {
+      const { error, html } = get("literalChildrenText");
+      expect(error).toBeUndefined();
+      expect(html).toContain("hello &lt;i");
+    });
+    it("does not write a literal outerHTML= as markup", () => {
+      const { error, html } = get("literalOuterHtml");
+      expect(error).toBeUndefined();
+      expect(markup(html)).not.toContain("<b>");
+    });
+    it("matches a dynamic script tag by its lowercase name", () => {
+      const { error, html } = get("upperScriptTagSpread");
+      expect(error).toBeUndefined();
+      expect(html).not.toContain("alert(1)");
+      expect(html).toContain('id="k"');
+    });
+    it("hides prop: text props on a dynamic script tag, as a spread or a literal", () => {
+      for (const name of [
+        "scriptPropTextSpread",
+        "scriptPropTextLiteralDynamicTag",
+      ]) {
+        const { error, html } = get(name);
+        expect(error, name).toBeUndefined();
+        expect(html ?? "", name).not.toContain("alert(");
+      }
+      if (mode === "dom") {
+        expect(get("scriptPropTextSpread").html).toContain('id="k"');
+      }
+    });
+    it("leaves a spread's prop:textContent on other elements", () => {
+      expect(get("divPropTextSpread").error).toBeUndefined();
+    });
     it("keeps a spread's text children as escaped text", () => {
       const { error, html } = get("childrenTextSpread");
       expect(error).toBeUndefined();
@@ -659,6 +740,23 @@ describe("the spread view", () => {
     expect(view({ children: [1] }).children).toBeUndefined();
     expect(view({ children: "t" }, "script").children).toBeUndefined();
     expect("children" in view({ children: "t" }, "style")).toBe(false);
+  });
+
+  it("compares the tag by its lowercase name", () => {
+    for (const tag of ["SCRIPT", "Style", "sCrIpT"]) {
+      expect(view({ children: "t" }, tag).children).toBeUndefined();
+      for (const key of ["prop:textContent", "prop:innerText", "prop:text"]) {
+        const v = view({ [key]: "t", id: "k" }, tag);
+        expect(v[key]).toBeUndefined();
+        expect(key in v).toBe(false);
+        expect(Object.keys(v)).toEqual(["id"]);
+      }
+    }
+  });
+
+  it("keeps prop: text props on other tags", () => {
+    const v = view({ "prop:textContent": "t" }, "div");
+    expect(v["prop:textContent"]).toBe("t");
   });
 
   it("is the source itself for a component target", () => {
