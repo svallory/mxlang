@@ -139,8 +139,8 @@ export interface LowerSourceOptions {
    * consumer to interpret. Comments are never structural: under either value
    * a `//` line or `<!-- -->` stays in the IR as its `Comment` node
    * (decision 131 addendum 5). `"reject"` makes each structural construct a
-   * positioned error ("the data tree is static; this file's consumer does
-   * not evaluate `<if>`"), for a consumer that wants tags and attributes
+   * positioned error ("Data files are static, so they do not evaluate
+   * `<if>`"), for a consumer that wants tags and attributes
    * only and must not silently ignore an `<if>` it never reads. A
    * structural hit and a check error are ordered by position.
    */

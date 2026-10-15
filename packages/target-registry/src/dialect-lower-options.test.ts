@@ -24,8 +24,7 @@ entity
 widget
 `;
 
-const IF =
-  "the data tree is static; this file's consumer does not evaluate `<if>`";
+const IF = "Data files are static, so they do not evaluate `<if>`";
 const UNKNOWN = "`<widget>` is not a known tag in the `probe` dialect";
 const CONTRACTS = { entity: {}, field: { parents: ["entity"] } };
 const STRICT = {

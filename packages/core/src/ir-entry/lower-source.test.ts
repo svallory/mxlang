@@ -62,7 +62,7 @@ describe("open-tag-only statements: parseData's text and position", () => {
     expect(errors("<const/y=1>\n", { structural: "reject" })).toEqual([
       [
         "error",
-        "the data tree is static; this file's consumer does not evaluate `<const>`",
+        "Data files are static, so they do not evaluate `<const>`",
         1,
         0,
         0,
@@ -98,7 +98,7 @@ describe("open-tag-only statements: parseData's text and position", () => {
     expect(errors("<return value=1>\n<a/>\n")).toEqual([
       [
         "error",
-        "`<return>` needs the evaluated mode: the data tree is static and has no value to return",
+        "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
         1,
         0,
         0,

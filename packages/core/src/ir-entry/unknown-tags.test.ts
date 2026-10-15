@@ -176,11 +176,11 @@ describe('unknownTags: "reject"', () => {
     // Both are reported, in file order.
     expect(earlier.diagnostics).toMatchObject([
       { message: expect.stringContaining("`<widget>`"), line: 1 },
-      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
+      { message: expect.stringContaining("do not evaluate `<if>`"), line: 2 },
     ]);
     const later = parse("<if=x/>\n<widget/>", { structural: "reject" });
     expect(later.diagnostics).toMatchObject([
-      { message: expect.stringContaining("does not evaluate `<if>`"), line: 1 },
+      { message: expect.stringContaining("do not evaluate `<if>`"), line: 1 },
       { message: expect.stringContaining("`<widget>`"), line: 2 },
     ]);
   });
@@ -345,14 +345,14 @@ describe('unknownTags: "reject"', () => {
     });
     expect(dynamicFirst.diagnostics).toMatchObject([
       { message: expect.stringContaining("a dynamic tag"), line: 1 },
-      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
+      { message: expect.stringContaining("do not evaluate `<if>`"), line: 2 },
     ]);
     const structuralFirst = parse("<if=x/>\n<$bad/>", {
       unknownTags: "allow",
       structural: "reject",
     });
     expect(structuralFirst.diagnostics).toMatchObject([
-      { message: expect.stringContaining("does not evaluate `<if>`"), line: 1 },
+      { message: expect.stringContaining("do not evaluate `<if>`"), line: 1 },
       { message: expect.stringContaining("not a tag name"), line: 2 },
     ]);
   });
@@ -397,7 +397,7 @@ describe('unknownTags: "reject"', () => {
     });
     // The `<if>` is first; `<nope>` inside it is a second, independent error.
     expect(diagnostics).toMatchObject([
-      { message: expect.stringContaining("does not evaluate `<if>`"), line: 2 },
+      { message: expect.stringContaining("do not evaluate `<if>`"), line: 2 },
       {
         message: expect.stringContaining("`<nope>` is not a known tag"),
         line: 2,
@@ -547,7 +547,7 @@ describe("walk order: attribute tags and children in source order", () => {
       where("<known>\n  <a>hello</a>\n  <@meta>bye</@meta>\n</known>", {
         structural: "reject",
       }),
-    ).toMatch(/^2:5 the data tree is static/);
+    ).toMatch(/^2:5 Data files are static/);
   });
 
   it("structural against structural: an earlier <if> wins over a later attribute-tag <if>", () => {
@@ -558,7 +558,7 @@ describe("walk order: attribute tags and children in source order", () => {
         "<loose>\n  <if=x>\n    <a/>\n  </if>\n  <@meta>\n    <if=y>\n      <@m/>\n    </if>\n  </@meta>\n</loose>",
         { structural: "reject", unknownTags: "allow" },
       ),
-    ).toMatch(/^2:2 the data tree is static/);
+    ).toMatch(/^2:2 Data files are static/);
   });
 
   it("build against build: the earlier dynamic tag wins over a later doctype", () => {
@@ -575,7 +575,7 @@ describe("walk order: attribute tags and children in source order", () => {
         "<known>\n  <a>hello</a>\n  <bogus/>\n  <@meta>bye</@meta>\n</known>",
         { structural: "reject" },
       ),
-    ).toMatch(/^2:5 the data tree is static/);
+    ).toMatch(/^2:5 Data files are static/);
   });
 
   it("across categories: an earlier dynamic tag beats a later unknown tag and doctype", () => {

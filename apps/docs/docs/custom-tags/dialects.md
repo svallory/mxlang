@@ -173,7 +173,7 @@ A file with `<widget/>` that is not declared now reports `KIT_UNKNOWN_TAG` where
 
 ## Your own words in core's messages: `messageVocabulary`
 
-Core's messages about a dialect file say "attribute", "attribute tag", "data file" and "data tree", and spell a tag as `` `<name>` ``. In a language whose files have no angle brackets, or that calls `key=value` an option, those words read wrong. `messageVocabulary` (`@unstable`) states the words to use; every member is optional.
+Core's messages about a dialect file say "attribute", "attribute tag" and "data file" (and its plural, "data files"), and spell a tag as `` `<name>` ``. In a language whose files have no angle brackets, or that calls `key=value` an option, those words read wrong. `messageVocabulary` (`@unstable`) states the words to use; every member is optional.
 
 ```ts
 export default {
@@ -181,21 +181,21 @@ export default {
   messageVocabulary: {
     attribute: { one: "option", many: "options" },
     file: "Kit file",
-    tree: "Kit file",
     formatTag: ({ name, trigger }) => (trigger ? trigger.text : name),
   },
 } satisfies Partial<Dialect>;
 ```
 
-With that, `` `<string>`: unknown attribute `bogus` `` reads `` `string`: unknown option `bogus` ``, and `` `<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page `` reads `` `!doctype` means nothing in a Kit file; the Kit file describes tags and data, not a page ``.
+With that, `` `<string>`: unknown attribute `bogus` `` reads `` `string`: unknown option `bogus` ``, and `` `<!doctype>` means nothing in a data file; data files describe tags and data, not a page `` reads `` `!doctype` means nothing in a Kit file; Kit files describe tags and data, not a page ``. A static-file message starts with the plural: `` Data files are static, so they do not evaluate `<if>` `` reads `` Kit files are static, so they do not evaluate `<if>` ``.
 
 - **`attribute`** is `{ one, many, article? }`, an object with `many` required. Core derives every form it needs ("Option", "an option", "option tag", "option-tag") from the two. `article` (`"a"` or `"an"`) is the indefinite article for `one`; leave it out and core writes "an" before a vowel letter and "a" otherwise, which is wrong for a word like "hour" or "user": state it there.
-- **`file`** and **`tree`** are noun phrases for "a data file" and "the data tree". Core writes the article itself ("a Kit file", "an entity file"), so give the bare noun.
+- **`file`** is the noun phrase for "a data file", either a string or `{ one, many, article? }`. With a string, the plural is the string plus "s" (`"Kit file"` gives "Kit files"). State `{ one, many }` when that plural is wrong (`{ one: "index file", many: "index files" }`, or `{ one: "directory", many: "directories" }`). Core capitalises the plural where a message starts with it ("Kit files are static, so ...") and leaves the rest of your spelling alone, so a noun that is already capitalised stays so. Core writes the article itself ("a Kit file", "an entity file"); `article` (`"a"` or `"an"`) overrides it, as for `attribute`.
+- **`tree`** is unused: no message reads it any more, because the static-file messages say "Data files are static, so ...". It is still accepted and validated, so a dialect that states it keeps loading, and it has no effect. Leave it out.
 - **`formatTag`** receives `{ name, form, trigger? }` and returns the bare spelling; core adds the backticks. `form` follows how the head is written, not what it resolves to: `"tag"` for any head written as a name (a capitalized name the file binds included; `name` is the name as written), `"attributeTag"` (`name` has no `@`) or `"dynamic"` only for a head that is an expression, `<${x}/>` (`name` is its source, `x`). `formatTag` runs only when a message names a tag, so a file with nothing to report never calls it. MX's own built-in tags (`for`, `if`, `else`, `define`, `return`) keep their `<name>` spelling in messages and never reach it. `trigger` is set when your own `lowerTrigger` made the tag, and `trigger.text` is what the user wrote (`&title`), so a message can name the thing the user typed instead of the tag it lowered to. Return `undefined` for MX's spelling of that tag.
 - **A broken `formatTag`** is an error, never a silent fallback. A throw, or a return that is not `undefined` or a non-empty single-line string without backticks, reports `MX_DIALECT_HOOK_ERROR` at the tag, naming the hook.
 - **What stays MX's.** Messages about MX's own tags (`<for>`, `<script>`, `<define>`, ...) and the text you read when registering a contract or a tag file keep MX's wording. Messages you raise yourself (`ctx.fail`, `explainUnknownTag`) are yours and are not reworded.
-- **A wrong vocabulary fails the dialect at load**, in your module: it is not an object, a member is not one of the four, `attribute` is not an `{ one, many, article? }` object, a noun is empty, multi-line or holds a backtick, `article` is not `"a"` or `"an"`, or `formatTag` is not a function.
-- **`.mx` files are unchanged.** A dialect with no `messageVocabulary` reads exactly as before.
+- **A wrong vocabulary fails the dialect at load**, in your module: it is not an object, a member is not one of the four, `attribute` is not an `{ one, many, article? }` object, `file` is neither a string nor such an object, a noun is empty, multi-line or holds a backtick, `article` is not `"a"` or `"an"`, or `formatTag` is not a function.
+- **`.mx` files are unchanged.** A dialect with no `messageVocabulary` reads in MX's own words ("Data files are static, so ...").
 
 ## Passing your dialect to a call
 

@@ -481,9 +481,28 @@ export interface MessageVocabulary {
     readonly many: string;
     readonly article?: "a" | "an";
   };
-  /** What the data-file checks call the file: "a data file". A noun phrase. */
-  readonly file?: string;
-  /** What they call its tree: "the data tree is static". A noun phrase. */
+  /**
+   * What the data-file checks call the file: "a data file", and in the plural
+   * "Data files are static, so they do not evaluate `<if>`". A noun phrase
+   * without backticks. Either a string, whose plural is the string plus "s"
+   * (`"Kit file"` and `"Kit files"`), or `{ one, many, article? }` for a
+   * plural that is not that (`{ one: "index", many: "indices" }`). `article` is
+   * the indefinite article `one` takes, as for `attribute`. The plural is
+   * capitalised where a message starts with it. Default: `data file`.
+   */
+  readonly file?:
+    | string
+    | {
+        readonly one: string;
+        readonly many: string;
+        readonly article?: "a" | "an";
+      };
+  /**
+   * Unused: no message reads it any more, because the static-file messages
+   * say "<Files> are static, so ..." with {@link MessageVocabulary.file}.
+   * Still accepted and validated, so a dialect that states it keeps loading.
+   * A noun phrase.
+   */
   readonly tree?: string;
   /**
    * The bare spelling of a tag in a message; core wraps it in backticks.
@@ -1040,38 +1059,58 @@ function checkMessageVocabulary(
       );
     }
   };
-  const { attribute } = members;
-  if (attribute !== undefined) {
-    if (
-      attribute === null ||
-      typeof attribute !== "object" ||
-      Array.isArray(attribute)
-    ) {
-      fail(
-        `\`${field}.attribute\` must be an object \`{ one, many, article? }\`, such as \`{ one: "option", many: "options" }\``,
-      );
+  // A noun stated in both numbers: `{ one, many, article? }`. `what` names it
+  // in the unknown-field error; `shape` is the error for a value that is not
+  // an object.
+  const numbered = (
+    value: unknown,
+    name: string,
+    what: string,
+    shape: string,
+  ): void => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      fail(shape);
     }
-    const noun_ = attribute as Record<string, unknown>;
-    for (const key of Object.keys(noun_)) {
+    const parts = value as Record<string, unknown>;
+    for (const key of Object.keys(parts)) {
       if (key !== "one" && key !== "many" && key !== "article") {
         fail(
-          `\`${field}.attribute.${key}\` is not a field of the attribute noun (one, many, article)`,
+          `\`${name}.${key}\` is not a field of the ${what} noun (one, many, article)`,
         );
       }
     }
-    noun(noun_.one, `${field}.attribute.one`);
-    noun(noun_.many, `${field}.attribute.many`);
+    noun(parts.one, `${name}.one`);
+    noun(parts.many, `${name}.many`);
     if (
-      noun_.article !== undefined &&
-      noun_.article !== "a" &&
-      noun_.article !== "an"
+      parts.article !== undefined &&
+      parts.article !== "a" &&
+      parts.article !== "an"
     ) {
       fail(
-        `\`${field}.attribute.article\` must be "a" or "an", got ${JSON.stringify(noun_.article)}`,
+        `\`${name}.article\` must be "a" or "an", got ${JSON.stringify(parts.article)}`,
+      );
+    }
+  };
+  if (members.attribute !== undefined) {
+    numbered(
+      members.attribute,
+      `${field}.attribute`,
+      "attribute",
+      `\`${field}.attribute\` must be an object \`{ one, many, article? }\`, such as \`{ one: "option", many: "options" }\``,
+    );
+  }
+  if (members.file !== undefined) {
+    if (typeof members.file === "string") {
+      noun(members.file, `${field}.file`);
+    } else {
+      numbered(
+        members.file,
+        `${field}.file`,
+        "file",
+        `\`${field}.file\` must be a string, or an object \`{ one, many, article? }\`, such as \`{ one: "index file", many: "index files" }\`, got ${JSON.stringify(members.file)}`,
       );
     }
   }
-  if (members.file !== undefined) noun(members.file, `${field}.file`);
   if (members.tree !== undefined) noun(members.tree, `${field}.tree`);
   if (
     members.formatTag !== undefined &&

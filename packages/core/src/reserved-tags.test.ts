@@ -770,7 +770,7 @@ describe("passed `customTags`", () => {
       RESERVED_CODE,
       "MX_STRUCTURAL_CONSTRUCT",
     ]);
-    expect(result.diagnostics[1]?.message).toContain("the data tree is static");
+    expect(result.diagnostics[1]?.message).toContain("Data files are static");
   });
 
   it("a name never called is reported at the source's 1:0", () => {

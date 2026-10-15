@@ -119,7 +119,7 @@ const RESERVED = (name: string) =>
   `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
 
 const STATIC = (construct: string) =>
-  `the data tree is static; this file's consumer does not evaluate ${construct}`;
+  `Data files are static, so they do not evaluate ${construct}`;
 
 describe("normalized body text (decision 141)", () => {
   it.each(
@@ -414,7 +414,7 @@ describe("rejected constructs (the §3 table), each positioned", () => {
   it("`<define>` is rejected as a render-time macro", () => {
     failWith(`<define/R|a|>${D}a}</define>\n<R>y</R>\n`, {
       message:
-        "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
+        "`<define>` is a render-time macro: data files are static, so they cannot expand it; inline the content at each use",
       line: 1,
       column: 0,
     });
@@ -423,7 +423,7 @@ describe("rejected constructs (the §3 table), each positioned", () => {
   it("`<return>` is rejected as the evaluated mode's channel", () => {
     failWith(`<return=1/>\n`, {
       message:
-        "`<return>` needs the evaluated mode: the data tree is static and has no value to return",
+        "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
       line: 1,
       column: 0,
     });
@@ -432,14 +432,14 @@ describe("rejected constructs (the §3 table), each positioned", () => {
   it("a tag variable is rejected", () => {
     failWith(`<x/v/>\n`, {
       message:
-        "tag variable `/v` on `<x>`: the data tree is static; a binding without evaluation means nothing",
+        "tag variable `/v` on `<x>`: data files are static, so a binding without evaluation means nothing",
       line: 1,
       column: 0,
     });
   });
 
   it(`a dynamic tag is rejected, in the \`<\${x}>\` and bare \`\${x}\` forms`, () => {
-    const message = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
+    const message = `a dynamic tag (\`<\${expr}>\`) has no name; data files are static, so they need one`;
     failWith(`<${D}d} a=1/>\n`, { message, line: 1, column: 0 });
     failWith(`${D}d}\n`, { message, line: 1, column: 0 });
   });
@@ -447,7 +447,7 @@ describe("rejected constructs (the §3 table), each positioned", () => {
   it("`<!doctype>` is rejected", () => {
     failWith(`<!doctype html>\n<x/>\n`, {
       message:
-        "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
+        "`<!doctype>` means nothing in a data file; data files describe tags and data, not a page",
       line: 1,
       column: 0,
     });
@@ -1005,7 +1005,7 @@ describe("UTF-16 spans (note §2.1's verified fixture)", () => {
 describe("round 2 (rev-236)", () => {
   describe("finding 1: the path prefix on a relative filename", () => {
     const MESSAGE =
-      "`<return>` needs the evaluated mode: the data tree is static and has no value to return";
+      "`<return>` needs the evaluated mode: data files are static, so they have no value to return";
 
     // Babel resolves the filename itself before prefixing the error, so the
     // prefix is the absolute path whatever the caller passed.
@@ -1251,7 +1251,7 @@ describe("round 2 (rev-236)", () => {
     // else, namespaced and non-ASCII names included. Round 4's block covers
     // the accepted names; this keeps the rejected ones.
     it("a bare concise raw-placeholder line is the dynamic-tag reject", () => {
-      const message = `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`;
+      const message = `a dynamic tag (\`<\${expr}>\`) has no name; data files are static, so they need one`;
       failWith(`$!{x}\n`, { message, line: 1, column: 0 });
       failWith(`$!{x} a=1\n`, { message, line: 1, column: 0 });
     });
@@ -1714,7 +1714,7 @@ describe("round 4 (rev-236-r2)", () => {
     it("still rejects a bare `$!{x}` line as a dynamic tag", () => {
       failWith(`$!{x}\n`, {
         message:
-          "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+          "a dynamic tag (`<${expr}>`) has no name; data files are static, so they need one",
         line: 1,
         column: 0,
       });
@@ -1742,7 +1742,7 @@ describe("round 4 (rev-236-r2)", () => {
       expect(result.ir).toBeUndefined();
       expect(result.diagnostics).toHaveLength(1);
       expect(result.diagnostics[0]?.message).toBe(
-        "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+        "a dynamic tag (`<${expr}>`) has no name; data files are static, so they need one",
       );
     });
 
@@ -1760,7 +1760,7 @@ describe("round 4 (rev-236-r2)", () => {
     it("applies the dynamic-tag rule to an attribute tag too", () => {
       failWith(`<a><@$!{x}/></a>\n`, {
         message:
-          "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+          "a dynamic tag (`<${expr}>`) has no name; data files are static, so they need one",
         line: 1,
         column: 3,
       });

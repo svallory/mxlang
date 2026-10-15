@@ -62,7 +62,7 @@ const dialectModule = (fields: string) =>
 const UNKNOWN_WIDGET =
   "MX_UNKNOWN_TAG: `<widget>` is not a known tag in the `probe` dialect";
 const STATIC_IF =
-  "MX_STRUCTURAL_CONSTRUCT: the data tree is static; this file's consumer does not evaluate `<if>`";
+  "MX_STRUCTURAL_CONSTRUCT: Data files are static, so they do not evaluate `<if>`";
 
 it("a module that closes the vocabulary reaches an open file, and an edit to the module alone re-checks it", async () => {
   const project = probeProject({ "dialect.cjs": dialectModule("") });

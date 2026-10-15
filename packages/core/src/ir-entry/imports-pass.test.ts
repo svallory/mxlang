@@ -8,7 +8,7 @@ import { type LowerSourceOptions, lowerSource } from "./index.ts";
  */
 
 const STATIC = (construct: string) =>
-  `the data tree is static; this file's consumer does not evaluate ${construct}`;
+  `Data files are static, so they do not evaluate ${construct}`;
 
 function lower(source: string, options: LowerSourceOptions) {
   return lowerSource(source, "/t.mx", options);

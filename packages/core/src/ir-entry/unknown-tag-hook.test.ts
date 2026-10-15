@@ -611,7 +611,7 @@ describe("explainUnknownTag: the view the hook gets", () => {
     expect(ok.calls).toEqual([]);
     expect(lowered.diagnostics.map((d) => d.message)).toEqual([
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the message's own text
-      "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+      "a dynamic tag (`<${expr}>`) has no name; data files are static, so they need one",
     ]);
   });
 

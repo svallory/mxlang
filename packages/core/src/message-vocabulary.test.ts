@@ -175,28 +175,61 @@ const ROWS: readonly Row[] = [
     option: "`bogus` is not a known tag in the `member` dialect",
   },
   {
-    name: "a macro in a data tree (the tree noun)",
-    source: 'entity name="e"\n  define/x\n',
+    name: "a structural construct in a data file (the plural file noun, capitalised)",
+    source: 'import x from "y"\n',
     group: "ir-entry",
-    mx: "`<define>` is a render-time macro: the data tree is static and cannot expand it; inline the content at each use",
-    option:
-      "`<define>` is a render-time macro: the Mesh file is static and cannot expand it; inline the content at each use",
+    mx: "Data files are static, so they do not evaluate `import`",
+    option: "Mesh files are static, so they do not evaluate `import`",
   },
   {
-    name: "a doctype in a data file (the file noun)",
+    name: "a macro in a data file",
+    source: 'entity name="e"\n  define/x\n',
+    group: "ir-entry",
+    mx: "`<define>` is a render-time macro: data files are static, so they cannot expand it; inline the content at each use",
+    option:
+      "`<define>` is a render-time macro: Mesh files are static, so they cannot expand it; inline the content at each use",
+  },
+  {
+    name: "a return in a data file",
+    source: "<return=1/>\n",
+    group: "ir-entry",
+    mx: "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
+    option:
+      "`<return>` needs the evaluated mode: Mesh files are static, so they have no value to return",
+  },
+  {
+    name: "a tag variable in a data file",
+    source: "<x/v/>\n",
+    group: "ir-entry",
+    options: { structural: "reject" },
+    mx: "tag variable `/v` on `<x>`: data files are static, so a binding without evaluation means nothing",
+    option:
+      "tag variable `/v` on `x`: Mesh files are static, so a binding without evaluation means nothing",
+  },
+  {
+    name: "a doctype in a data file (the file noun, both numbers)",
     source: "<!doctype html>\n",
     group: "ir-entry",
-    mx: "`<!doctype>` means nothing in a data file; the data tree describes tags and data, not a page",
+    mx: "`<!doctype>` means nothing in a data file; data files describe tags and data, not a page",
     option:
-      "`!doctype` means nothing in a Mesh file; the Mesh file describes tags and data, not a page",
+      "`!doctype` means nothing in a Mesh file; Mesh files describe tags and data, not a page",
   },
   {
     name: "a dynamic tag (form: dynamic, name = the expression source `x`)",
     source: `<\${x}/>\n`,
     group: "ir-entry",
-    mx: `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`,
+    mx: `a dynamic tag (\`<\${expr}>\`) has no name; data files are static, so they need one`,
     option:
-      "a dynamic tag (`x`) has no name; the Mesh file is static and needs one",
+      "a dynamic tag (`x`) has no name; Mesh files are static, so they need one",
+  },
+  {
+    name: "a capitalized tag the file binds",
+    source: 'import { Task } from "./task"\n<Task/>\n',
+    group: "ir-entry",
+    options: { structural: "pass" },
+    mx: "`<Task>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
+    option:
+      "`Task` is bound in this file, so it is a dynamic tag; Mesh files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
   },
 ];
 
@@ -227,13 +260,59 @@ describe("messages in the dialect's words (the optionVocabulary column)", () => 
     });
   }
 
-  it('reads "data file" and "data tree" as one noun without breaking the sentence', () => {
-    // "a Mesh file" (file) and "the Mesh file" (tree), in the same message.
+  it('reads "data file" in both numbers without breaking the sentence', () => {
+    // "a Mesh file" (singular) and "Mesh files" (plural), in the same message.
     const [message] = messages("<!doctype html>\n", optionDialect);
     expect(message).toBe(
-      "`!doctype` means nothing in a Mesh file; the Mesh file describes tags and data, not a page",
+      "`!doctype` means nothing in a Mesh file; Mesh files describe tags and data, not a page",
     );
     expect(message).not.toMatch(/data (file|tree)/);
+  });
+
+  it("a string file noun: the plural is the string plus `s`, capitalised at sentence start", () => {
+    const kit = dialectWith({ file: "Kit file" });
+    expect(messages('import x from "y"\n', kit)).toEqual([
+      "Kit files are static, so they do not evaluate `import`",
+    ]);
+    expect(messages("<!doctype html>\n", kit)).toEqual([
+      "`<!doctype>` means nothing in a Kit file; Kit files describe tags and data, not a page",
+    ]);
+    const page = dialectWith({ file: "page file" });
+    expect(messages('import x from "y"\n', page)).toEqual([
+      "Page files are static, so they do not evaluate `import`",
+    ]);
+    // Mid-sentence, the plural is not capitalised.
+    expect(messages("<!doctype html>\n", page)).toEqual([
+      "`<!doctype>` means nothing in a page file; page files describe tags and data, not a page",
+    ]);
+  });
+
+  it("an object file noun: an irregular plural, an article override", () => {
+    const dialect = dialectWith({
+      file: { one: "hour directory", many: "hour directories", article: "an" },
+    });
+    expect(messages('import x from "y"\n', dialect)).toEqual([
+      "Hour directories are static, so they do not evaluate `import`",
+    ]);
+    expect(messages("<!doctype html>\n", dialect)).toEqual([
+      "`<!doctype>` means nothing in an hour directory; hour directories describe tags and data, not a page",
+    ]);
+    expect(messages("<${x}/>\n", dialect)).toEqual([
+      "a dynamic tag (`<${expr}>`) has no name; hour directories are static, so they need one",
+    ]);
+  });
+
+  it("a stated `file` with an irregular plural never reads `<one>s`", () => {
+    const dialect = dialectWith({ file: { one: "entry", many: "entries" } });
+    for (const source of [
+      'import x from "y"\n',
+      "<return=1/>\n",
+      "<${x}/>\n",
+    ]) {
+      const [message] = messages(source, dialect);
+      expect(message).toMatch(/[Ee]ntries/);
+      expect(message).not.toMatch(/entrys/);
+    }
   });
 
   it("an authored tag keeps its name; a trigger-made tag prints what the user wrote", () => {
@@ -282,6 +361,8 @@ describe("voiceOf", () => {
       attributeTags: "attribute tags",
       attributeTagCompound: "attribute-tag",
       file: "data file",
+      files: "data files",
+      Files: "Data files",
       aFile: "a data file",
       tree: "data tree",
     });
@@ -309,6 +390,8 @@ describe("voiceOf", () => {
       attributeTags: "option tags",
       attributeTagCompound: "option-tag",
       file: "Mesh file",
+      files: "Mesh files",
+      Files: "Mesh files",
       aFile: "a Mesh file",
       tree: "Mesh file",
     });
@@ -317,10 +400,106 @@ describe("voiceOf", () => {
   it("only the members the dialect states change", () => {
     const voice = voiceOf(dialectWith({ file: "entity file" }));
     expect(voice.file).toBe("entity file");
+    expect(voice.files).toBe("entity files");
+    expect(voice.Files).toBe("Entity files");
     expect(voice.aFile).toBe("an entity file");
     expect(voice.attribute).toBe("attribute");
     expect(voice.tree).toBe("data tree");
     expect(voice.tag("box")).toBe("`<box>`");
+  });
+
+  describe("the file noun, in both numbers", () => {
+    it("a string gives the plural by adding `s`", () => {
+      const voice = voiceOf(dialectWith({ file: "Kit file" }));
+      expect(voice).toMatchObject({
+        file: "Kit file",
+        files: "Kit files",
+        Files: "Kit files",
+        aFile: "a Kit file",
+      });
+    });
+
+    it("capitalises the first letter of the plural only, and keeps a dialect noun's own case", () => {
+      const lower = voiceOf(dialectWith({ file: "page file" }));
+      expect(lower.files).toBe("page files");
+      expect(lower.Files).toBe("Page files");
+      const mixed = voiceOf(dialectWith({ file: "iOS file" }));
+      expect(mixed.files).toBe("iOS files");
+      expect(mixed.Files).toBe("IOS files");
+      const upper = voiceOf(dialectWith({ file: "Kit file" }));
+      expect(upper.files).toBe("Kit files");
+      expect(upper.Files).toBe("Kit files");
+    });
+
+    it("an object states an irregular plural", () => {
+      const voice = voiceOf(
+        dialectWith({ file: { one: "directory", many: "directories" } }),
+      );
+      expect(voice).toMatchObject({
+        file: "directory",
+        files: "directories",
+        Files: "Directories",
+        aFile: "a directory",
+      });
+    });
+
+    it("an object without `article` picks it from the first letter", () => {
+      expect(
+        voiceOf(dialectWith({ file: { one: "index", many: "indices" } })).aFile,
+      ).toBe("an index");
+      expect(
+        voiceOf(dialectWith({ file: { one: "tree", many: "trees" } })).aFile,
+      ).toBe("a tree");
+    });
+
+    it("`article` overrides the first letter, both ways", () => {
+      expect(
+        voiceOf(
+          dialectWith({
+            file: { one: "hour file", many: "hour files", article: "an" },
+          }),
+        ).aFile,
+      ).toBe("an hour file");
+      expect(
+        voiceOf(
+          dialectWith({
+            file: { one: "user file", many: "user files", article: "a" },
+          }),
+        ).aFile,
+      ).toBe("a user file");
+    });
+
+    it("`article` does not touch the plural or the singular", () => {
+      const voice = voiceOf(
+        dialectWith({
+          file: { one: "hour file", many: "hour files", article: "an" },
+        }),
+      );
+      expect(voice.file).toBe("hour file");
+      expect(voice.files).toBe("hour files");
+      expect(voice.Files).toBe("Hour files");
+    });
+
+    it("`tree` is accepted and unused: stating it changes no message", () => {
+      const stated = voiceOf(
+        dialectWith({ file: "Kit file", tree: "Kit tree" }),
+      );
+      expect(stated.tree).toBe("Kit tree");
+      expect(
+        messages(
+          "<!doctype html>\n",
+          dialectWith({ file: "Kit file", tree: "Kit tree" }),
+        ),
+      ).toEqual(
+        messages("<!doctype html>\n", dialectWith({ file: "Kit file" })),
+      );
+      expect(
+        messages(
+          "<!doctype html>\n",
+          dialectWith({ file: "Kit file", tree: "Kit tree" }),
+        )[0],
+      ).not.toContain("tree");
+    });
   });
 
   describe("the article", () => {
@@ -518,7 +697,7 @@ describe("a formatTag that breaks its contract", () => {
     expect(
       messages("<!doctype html>\n", dialectWith({ formatTag: () => "x" })),
     ).toEqual([
-      "`x` means nothing in a data file; the data tree describes tags and data, not a page",
+      "`x` means nothing in a data file; data files describe tags and data, not a page",
     ]);
   });
 });
@@ -625,7 +804,7 @@ describe("what formatTag is handed", () => {
     const [message] = messages("<${cond ? A : B}/>\n", dialect);
     // MX's words keep their example; the dialect sees the real source.
     expect(message).toBe(
-      `a dynamic tag (\`<\${expr}>\`) has no name; the data tree is static and needs one`,
+      `a dynamic tag (\`<\${expr}>\`) has no name; data files are static, so they need one`,
     );
     expect(seen).toEqual([{ name: "cond ? A : B", form: "dynamic" }]);
   });
@@ -729,6 +908,14 @@ describe("load validation", () => {
     expect(
       refusal({ attribute: { one: "item", many: "items", article: "an" } }),
     ).toBeUndefined();
+    expect(refusal({ file: "Kit file" })).toBeUndefined();
+    expect(
+      refusal({ file: { one: "index", many: "indices", article: "an" } }),
+    ).toBeUndefined();
+    expect(
+      refusal({ file: { one: "directory", many: "directories" } }),
+    ).toBeUndefined();
+    expect(refusal({ tree: "Kit file" })).toBeUndefined();
   });
 
   for (const [what, vocabulary, message] of [
@@ -776,6 +963,66 @@ describe("load validation", () => {
       "a file noun with a backtick",
       { file: "a`b" },
       '`dialect.messageVocabulary.file` must be a non-empty single-line string without backticks, got "a`b"',
+    ],
+    [
+      "a file object without `many`",
+      { file: { one: "index" } },
+      "`dialect.messageVocabulary.file.many` must be a non-empty single-line string without backticks, got undefined",
+    ],
+    [
+      "a file object without `one`",
+      { file: { many: "indices" } },
+      "`dialect.messageVocabulary.file.one` must be a non-empty single-line string without backticks, got undefined",
+    ],
+    [
+      "an empty file `one`",
+      { file: { one: "", many: "files" } },
+      '`dialect.messageVocabulary.file.one` must be a non-empty single-line string without backticks, got ""',
+    ],
+    [
+      "a blank file `many`",
+      { file: { one: "file", many: "  " } },
+      '`dialect.messageVocabulary.file.many` must be a non-empty single-line string without backticks, got "  "',
+    ],
+    [
+      "a multi-line file `many`",
+      { file: { one: "file", many: "a\nb" } },
+      '`dialect.messageVocabulary.file.many` must be a non-empty single-line string without backticks, got "a\\nb"',
+    ],
+    [
+      "a file `one` with a backtick",
+      { file: { one: "a`b", many: "ab" } },
+      '`dialect.messageVocabulary.file.one` must be a non-empty single-line string without backticks, got "a`b"',
+    ],
+    [
+      "a file `many` that is not a string",
+      { file: { one: "file", many: 2 } },
+      "`dialect.messageVocabulary.file.many` must be a non-empty single-line string without backticks, got 2",
+    ],
+    [
+      "a file article that is neither a nor an",
+      { file: { one: "file", many: "files", article: "the" } },
+      '`dialect.messageVocabulary.file.article` must be "a" or "an", got "the"',
+    ],
+    [
+      "an unknown file noun field",
+      { file: { one: "file", many: "files", plural: "x" } },
+      "`dialect.messageVocabulary.file.plural` is not a field of the file noun (one, many, article)",
+    ],
+    [
+      "a file noun that is a number",
+      { file: 5 },
+      '`dialect.messageVocabulary.file` must be a string, or an object `{ one, many, article? }`, such as `{ one: "index file", many: "index files" }`, got 5',
+    ],
+    [
+      "a file noun that is null",
+      { file: null },
+      '`dialect.messageVocabulary.file` must be a string, or an object `{ one, many, article? }`, such as `{ one: "index file", many: "index files" }`, got null',
+    ],
+    [
+      "a file noun that is an array",
+      { file: ["a", "b"] },
+      '`dialect.messageVocabulary.file` must be a string, or an object `{ one, many, article? }`, such as `{ one: "index file", many: "index files" }`, got ["a","b"]',
     ],
     [
       "a formatTag that is not a function",

@@ -55,16 +55,14 @@ entity
 
 const IF = {
   severity: "error",
-  message:
-    "the data tree is static; this file's consumer does not evaluate `<if>`",
+  message: "Data files are static, so they do not evaluate `<if>`",
   line: 4,
   column: 2,
   code: "MX_STRUCTURAL_CONSTRUCT",
 } as const;
 const IMPORT = {
   severity: "error",
-  message:
-    "the data tree is static; this file's consumer does not evaluate `import`",
+  message: "Data files are static, so they do not evaluate `import`",
   line: 1,
   column: 0,
   code: "MX_STRUCTURAL_CONSTRUCT",

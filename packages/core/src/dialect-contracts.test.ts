@@ -647,7 +647,7 @@ describe("R3: precedence, one fixture per source", () => {
       {
         code: "MX_NOT_IN_DATA_FILE",
         message:
-          "`<Card>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Card as CardRef }`) or set `bindingsCallTags: false` in the dialect",
+          "`<Card>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Card as CardRef }`) or set `bindingsCallTags: false` in the dialect",
         line: 2,
         column: 0,
       },

@@ -193,7 +193,7 @@ describe("the refusal names the tag", () => {
       {
         code: "MX_NOT_IN_DATA_FILE",
         message:
-          "`<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
+          "`<Task>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
         line: 2,
         column: 0,
       },
@@ -207,7 +207,7 @@ describe("the refusal names the tag", () => {
       {},
     );
     expect(result.diagnostics.map((d) => d.message)).toEqual([
-      "`<Task>` is bound in this file, so it is a dynamic tag; the data tree is static and needs a name. Rename the binding (for an import, `import { Task as TaskRef }`)",
+      "`<Task>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`)",
     ]);
   });
 
@@ -225,7 +225,7 @@ describe("the refusal names the tag", () => {
     const result = brief("<${x}/>\n", lexi());
     expect(result.diagnostics.map((d) => d.message)).toEqual([
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX syntax in a message.
-      "a dynamic tag (`<${expr}>`) has no name; the data tree is static and needs one",
+      "a dynamic tag (`<${expr}>`) has no name; data files are static, so they need one",
     ]);
   });
 });

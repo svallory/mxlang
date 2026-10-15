@@ -17,8 +17,7 @@
  *
  * With `structural: "reject"` the pass-through structural constructs (text,
  * `${}`, `<if>`/`<for>`/`<const>`, `import`/`export`/`static`) each become a
- * positioned error, "the data tree is static; this file's consumer does not
- * evaluate `<if>`". With `unknownTags: "reject"` every authored tag with no
+ * positioned error, "Data files are static, so they do not evaluate `<if>`". With `unknownTags: "reject"` every authored tag with no
  * contract is one.
  *
  * The span guarantee is checked in the same walk: a node, attribute or
@@ -99,7 +98,7 @@ export interface CheckOptions {
 
 /** The dynamic-tag reject, shared by `Component` and an unusable tag name. */
 function dynamicTagMessage(voice: Voice, source: string): string {
-  return `a dynamic tag (${voice.dynamicTag(source, undefined, "expr")}) has no name; the ${voice.tree} is static and needs one`;
+  return `a dynamic tag (${voice.dynamicTag(source, undefined, "expr")}) has no name; ${voice.files} are static, so they need one`;
 }
 
 /**
@@ -113,7 +112,7 @@ function boundDynamicTagMessage(
   dialectId?: string,
   trigger?: TagTrigger,
 ): string {
-  const base = `${voice.tag(name, trigger)} is bound in this file, so it is a dynamic tag; the ${voice.tree} is static and needs a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`)`;
+  const base = `${voice.tag(name, trigger)} is bound in this file, so it is a dynamic tag; ${voice.files} are static, so they need a name. Rename the binding (for an import, \`import { ${name} as ${name}Ref }\`)`;
   return dialectId === undefined
     ? base
     : `${base} or set \`bindingsCallTags: false\` in the dialect`;
@@ -121,7 +120,7 @@ function boundDynamicTagMessage(
 
 /** The fixed structural-reject message (the 131 addendum's item 1). */
 function structuralMessage(construct: string, voice: Voice): string {
-  return `the ${voice.tree} is static; this file's consumer does not evaluate ${construct}`;
+  return `${voice.Files} are static, so they do not evaluate ${construct}`;
 }
 
 /**
@@ -509,7 +508,7 @@ function checkTag(tag: DelegatedTag<unknown>): void {
           tag.loc,
           nameEndOf(tag),
           () =>
-            `tag variable \`/${tag.var}\` on ${activeVoice.tag(tag.name, tag.trigger)}: the ${activeVoice.tree} is static; a binding without evaluation means nothing`,
+            `tag variable \`/${tag.var}\` on ${activeVoice.tag(tag.name, tag.trigger)}: ${activeVoice.files} are static, so a binding without evaluation means nothing`,
         ),
         tag.loc,
         nameEndOf(tag),
@@ -702,7 +701,7 @@ function checkNode(node: IrNode): void {
           node.loc,
           keywordEnd(node.loc, "!doctype"),
           () =>
-            `${activeVoice.tag("!doctype")} means nothing in ${activeVoice.aFile}; the ${activeVoice.tree} describes tags and data, not a page`,
+            `${activeVoice.tag("!doctype")} means nothing in ${activeVoice.aFile}; ${activeVoice.files} describe tags and data, not a page`,
         ),
         node.loc,
         keywordEnd(node.loc, "!doctype"),

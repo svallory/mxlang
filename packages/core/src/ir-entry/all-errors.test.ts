@@ -101,7 +101,7 @@ describe("every error is reported", () => {
       [8, 0],
     ]);
     expect(diagnostics[0]?.message).toBe(
-      "the data tree is static; this file's consumer does not evaluate `import`",
+      "Data files are static, so they do not evaluate `import`",
     );
   });
 
@@ -132,7 +132,7 @@ describe("every error is reported", () => {
     ]);
     expect(diagnostics[0]?.message).toMatch(/^a dynamic tag/);
     expect(diagnostics[1]?.message).toMatch(/^`<foo>` is not a known tag/);
-    expect(diagnostics[2]?.message).toMatch(/^the data tree is static/);
+    expect(diagnostics[2]?.message).toMatch(/^Data files are static/);
   });
 
   it("lists the unknown tags beside a core lowering error", () => {
@@ -437,7 +437,7 @@ describe("an error inside an unknown tag is labelled, never dropped (decision 16
       }),
     ).toEqual([
       `1:0 ${UNKNOWN("foo")}`,
-      `2:2 the data tree is static; this file's consumer does not evaluate \`<if>\`${inside("foo")}`,
+      `2:2 Data files are static, so they do not evaluate \`<if>\`${inside("foo")}`,
       `4:0 ${UNKNOWN("bar")}`,
     ]);
   });

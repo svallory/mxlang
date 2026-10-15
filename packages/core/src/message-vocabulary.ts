@@ -3,7 +3,7 @@
  *
  * A message that a dialect file's author reaches with the dialect's own tags
  * and attributes names three things in MX's words: an "attribute", the "data
- * file" and its "data tree", and a tag as `<name>`. {@link Voice} is the one
+ * file" (and its plural, "data files"), and a tag as `<name>`. {@link Voice} is the one
  * place those words live: the message builders in the IR entry checks, the
  * contract validators and the generic lowering take a `Voice` and splice its
  * words, and {@link MX_VOICE} (the default) spells every message exactly as it
@@ -64,9 +64,16 @@ export interface Voice {
   readonly attributeTagCompound: string;
   /** `data file` */
   readonly file: string;
-  /** `a data file` (article by first letter) */
+  /** `data files` */
+  readonly files: string;
+  /** `Data files`, for the start of a sentence. */
+  readonly Files: string;
+  /** `a data file`: the article the dialect states or the noun's first letter picks. */
   readonly aFile: string;
-  /** `data tree` */
+  /**
+   * `data tree`. Unused: no message reads it any more (they say "<Files> are
+   * static, so ..."); kept while `MessageVocabulary.tree` is still accepted.
+   */
   readonly tree: string;
   /**
    * A tag in backticks, as the dialect spells it (`` `<member>` `` by
@@ -121,7 +128,14 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
   const one = vocabulary?.attribute?.one ?? "attribute";
   const many = vocabulary?.attribute?.many ?? "attributes";
   const article = vocabulary?.attribute?.article ?? articleFor(one);
-  const file = vocabulary?.file ?? "data file";
+  const stated = vocabulary?.file;
+  const file =
+    typeof stated === "object" ? stated.one : (stated ?? "data file");
+  const files = typeof stated === "object" ? stated.many : `${file}s`;
+  const fileArticle =
+    typeof stated === "object"
+      ? (stated.article ?? articleFor(file))
+      : articleFor(file);
   const tree = vocabulary?.tree ?? "data tree";
   const format = vocabulary?.formatTag;
   const spell = (tag: MessageTag, example?: string): string => {
@@ -169,7 +183,9 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
     attributeTags: `${one} tags`,
     attributeTagCompound: `${one}-tag`,
     file,
-    aFile: `${articleFor(file)} ${file}`,
+    files,
+    Files: capitalized(files),
+    aFile: `${fileArticle} ${file}`,
     tree,
     tag: (name, trigger) => marked(name, "tag", trigger),
     attrTag: (name, trigger) => marked(name, "attributeTag", trigger),

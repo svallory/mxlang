@@ -157,7 +157,7 @@ Always rejected, each with a positioned message: `<define>` and calls to it, `<r
 
 No dialect tag may be named `if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static` or `try`: core consumes those names first.
 
-The messages still say "data tree" (``the data tree is static; this file's consumer does not evaluate `<if>` ``). They are kept byte for byte from `parseData`, so a dialect that matched them keeps working; a wording change waits for the dialect API.
+The messages say "data file" (``Data files are static, so they do not evaluate `<if>` ``). A dialect states its own noun, singular and plural, with `messageVocabulary.file`; see [Your own words in core's messages](/custom-tags/dialects/).
 
 ## Dialects
 
