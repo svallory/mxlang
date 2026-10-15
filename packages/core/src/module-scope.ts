@@ -413,6 +413,8 @@ interface Declaration {
   readonly signature: boolean;
   /** `const enum`: it merges with another `const enum` only. */
   readonly constEnum: boolean;
+  /** Declared with `let` (not `const`): stock Marko's scope tells them apart beside a `declare`. */
+  readonly isLet: boolean;
 }
 
 type DeclarationKind =
@@ -496,13 +498,29 @@ function statementDeclarations(file: Node): StatementDeclarations {
         signature: extra.ambient !== true,
       });
     }
+    // A name with a type (`d: number`) spans only its letters in a diagnostic.
+    const nameOnly =
+      id.typeAnnotation && id.loc
+        ? {
+            ...id,
+            end: id.start + id.name.length,
+            loc: {
+              ...id.loc,
+              end: {
+                ...id.loc.start,
+                column: id.loc.start.column + id.name.length,
+              },
+            },
+          }
+        : id;
     values.push({
       name: id.name,
       kind,
-      id,
+      id: nameOnly,
       ambient: false,
       signature: false,
       constEnum: false,
+      isLet: false,
       ...extra,
     });
   };
@@ -532,7 +550,10 @@ function statementDeclarations(file: Node): StatementDeclarations {
           for (const id of Object.values<Node>(
             types.getBindingIdentifiers(declarator.id),
           )) {
-            add("lexical", id, { ambient: statement.declare === true });
+            add("lexical", id, {
+              ambient: statement.declare === true,
+              isLet: statement.kind === "let",
+            });
           }
         }
         return;
@@ -616,11 +637,14 @@ function statementDeclarations(file: Node): StatementDeclarations {
 /**
  * May `next` be declared after `earlier`, which already bind its name at run
  * time? Only two `var`s, and what the TypeScript strip leaves as one binding:
- * an enum with an enum (of the same constness) or a namespace, a namespace
- * after a function, class, enum or namespace, and a function after a
- * namespace. Ambient declarations and bodiless signatures bind nothing and
- * never get here; TypeScript's own ordering and overload errors (TS2434,
- * TS2384, TS2300) are left to the type checker.
+ * an enum with an enum (of the same constness) or a namespace, and a namespace
+ * after a function, class, enum or namespace. A namespace before a function or
+ * class of its name is refused: the emitted TypeScript does not load under Bun,
+ * esbuild or `tsc` (`var N` beside `function N`), and under Babel's strip a
+ * class is read before it is initialised. A `declare`d function, class or
+ * namespace and a bodiless signature bind nothing and never get here;
+ * TypeScript's own ordering and overload errors (TS2300, TS2384, TS2434) are
+ * left to the type checker.
  */
 function merges(earlier: readonly Declaration[], next: Declaration): boolean {
   switch (next.kind) {
@@ -636,15 +660,50 @@ function merges(earlier: readonly Declaration[], next: Declaration): boolean {
       return earlier.every((d) =>
         ["function", "class", "enum", "namespace"].includes(d.kind),
       );
-    case "function":
-      // The strip leaves `function N` and the namespace's `N || (N = {})` on
-      // one binding, and a function is hoisted. A class is not: the namespace
-      // reads `N` before the class is initialised, so a class after a
-      // namespace throws when the module runs.
-      return earlier.every((d) => d.kind === "namespace");
     default:
       return false;
   }
+}
+
+/** Does `d` take part in the declare-order table below (a `declare const`, `let` or `var`)? */
+function declaredBinding(d: Declaration): boolean {
+  return d.ambient && (d.kind === "lexical" || d.kind === "var");
+}
+
+/**
+ * Does stock Marko refuse `second` after `first` when one of them is a `declare
+ * const`, `declare let` or `declare var`? Babel's scope registers those, but
+ * not as one rule: the table is what stock 6.4.4 answers for every pair
+ * (`scratch/reports/review-583-r2.md` and the r3 probe), and MX matches it,
+ * at the second name, because the compile would otherwise accept what stock
+ * refuses. A `declare function`, `class`, `enum` or `namespace` is not in it.
+ */
+function declareClash(first: Declaration, second: Declaration): boolean {
+  const lexical = (d: Declaration): boolean =>
+    d.kind === "lexical" || d.kind === "class" || d.kind === "import";
+  const varLike = (d: Declaration): boolean =>
+    d.kind === "var" || d.kind === "function";
+  if (first.kind === "namespace" || first.kind === "enum") return false;
+  if (second.kind === "namespace" || second.kind === "enum") return false;
+  if (first.ambient && first.kind === "lexical") {
+    return lexical(second) || varLike(second);
+  }
+  if (first.ambient && first.kind === "var") {
+    // `declare var` then: a `let`, a class, a `declare let`; not a `const`.
+    return (
+      (second.kind === "lexical" && second.isLet) || second.kind === "class"
+    );
+  }
+  if (second.ambient && second.kind === "lexical") {
+    if (lexical(first)) return true;
+    // `var`, a function, `declare var` before a `declare const` are fine.
+    return second.isLet && varLike(first);
+  }
+  if (second.ambient && second.kind === "var") {
+    // `declare var` after a `var` or function is fine; after a lexical, not.
+    return lexical(first);
+  }
+  return false;
 }
 
 /** 1-based `line:column`, as an editor shows a position. */
@@ -679,17 +738,33 @@ function bindingErrors(
   for (const { statement, parsed: p } of parsed) {
     if (!p) continue;
     for (const next of p.declared.values) {
-      // An ambient declaration and a bodiless signature bind nothing at run time.
-      if (next.ambient || next.signature) continue;
+      // A bodiless signature, and a `declare`d function, class, enum or
+      // namespace, bind nothing and stock accepts them beside anything.
+      if (next.signature) continue;
+      if (next.ambient && !declaredBinding(next)) continue;
       const earlier = declared.get(next.name);
       if (!earlier) {
         declared.set(next.name, [next]);
-      } else if (merges(earlier, next)) {
+        continue;
+      }
+      // A `declare const`, `let` or `var` beside another declaration follows
+      // stock's table; two run-time bindings follow `merges`.
+      const clash = earlier.find((d) =>
+        declaredBinding(d) || declaredBinding(next)
+          ? declareClash(d, next)
+          : false,
+      );
+      const real = earlier.filter((d) => !d.ambient);
+      if (
+        !clash &&
+        (declaredBinding(next) || real.length === 0 || merges(real, next))
+      ) {
         earlier.push(next);
       } else {
+        const first = clash ?? (real[0] as Declaration);
         record(statement, {
           code: DUPLICATE_DECLARATION_CODE,
-          message: `Duplicate declaration "${next.name}": it is already declared at ${whereIs((earlier[0] as Declaration).id)}. The \`import\`, \`static\`, \`server\`, \`client\` and \`export\` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two \`var\`s, TypeScript's overloads, enums and namespaces merge).`,
+          message: `Duplicate declaration "${next.name}": it is already declared at ${whereIs(first.id)}. The \`import\`, \`static\`, \`server\`, \`client\` and \`export\` statements share one module scope, so a name is declared once. Rename one of them, or merge them (two \`var\`s, TypeScript's overloads, enums and namespaces merge).`,
           at: next.id,
         });
       }

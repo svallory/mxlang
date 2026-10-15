@@ -312,21 +312,23 @@ source order: "Duplicate declaration "x": it is already declared at 1:8. …".
 The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
 merges, and so do the merges TypeScript accepts: an enum with an enum (of the
 same constness) or after a namespace, overload signatures followed by one more
-function, a namespace after a function, class, enum or namespace, a function
-after a namespace, and the same with `declare`. A type-only name (`type`, `interface`, an `import type`, a
+function, a namespace after a function, class, enum or namespace, and the same
+with `declare`. A type-only name (`type`, `interface`, an `import type`, a
 namespace holding only types) shares only the value space it does not occupy.
 Six forms stock Marko compiles are refused too, because the module they
 produce does not load (`function` twice, `function` with `var`, `var` with
 `import`, `function` with `const`, `export function` with `const`, and a
-namespace holding values before a `class` of the same name, which reads the
-class before it is initialised); that is one row of `divergences.md`. Only
-bindings that exist at run time collide: a `declare` declaration and a
-function signature without a body bind nothing once the TypeScript strip has
-run, so `declare function f` beside `function f`, `declare class C` beside
-`class C` and `declare var v` beside `const v` compile, and the conflicts only
-TypeScript reports (TS2300, TS2384, TS2434, TS2451) are left to `mx-tsc`. That
-includes `declare const d` beside `const d`, `var d` or `let d`, and an `import`
-beside a `declare const` of its name, which stock Marko refuses and MX compiles. An export list name that no module statement declares,
+namespace holding values before a `function` or `class` of its name: Bun,
+esbuild and `tsc` emit `var N` beside `function N`, and a class is read before
+it is initialised); that is one row of `divergences.md`. Only bindings that
+exist at run time collide: a `declare function`, `class`, `enum` or
+`namespace` and a function signature without a body bind nothing once the
+TypeScript strip has run, so they compile beside a real declaration, and the
+conflicts only TypeScript reports (TS2300, TS2384, TS2434, TS2451) are left to
+`mx-tsc`. A `declare const`, `let` or `var` follows stock Marko's own answers,
+which depend on the order: `declare const d` beside `const d`, `var d` or
+`let d`, and an `import` beside it, are refused as in stock, while `declare var
+v` then `const v` compiles. An export list name that no module statement declares,
 at any position, is refused at the name, `MX_UNDECLARED_EXPORT`: "Export 'q' is
 not defined in module: …". A value that only `declare` introduces
 (`static declare const d: number` beside `static export { d }`, and likewise

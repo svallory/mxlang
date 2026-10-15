@@ -7,10 +7,12 @@
  *
  * - two `var`s of a name are fine;
  * - so are the merges TypeScript itself accepts (enum with enum or namespace,
- *   a namespace after a function, class, enum or namespace, a function after a
- *   namespace; a `declare` declaration or a bodiless signature binds nothing at
- *   run time, so it never collides, and TypeScript's own conflicts (TS2300,
- *   TS2384, TS2434, TS2451) are mx-tsc's);
+ *   a namespace after a function, class, enum or namespace; a `declare`
+ *   function, class, enum or namespace and a bodiless signature bind nothing at
+ *   run time, so they never collide, and TypeScript's own conflicts (TS2300,
+ *   TS2384, TS2434, TS2451) are mx-tsc's; a namespace with values before a
+ *   function or class of its name does not load, so it is refused; a `declare
+ *   const`, `let` or `var` follows stock Marko's own, order-dependent table);
  * - a type-only name (`type`, `interface`, `import type`) is not a value, so it
  *   never collides;
  * - any other second declaration is refused at its name with
@@ -558,10 +560,6 @@ describe("TypeScript's merges", () => {
     // ordering and overload errors (TS2300, TS2384, TS2434, TS2451) are
     // mx-tsc's.
     [
-      "a namespace with values before a function",
-      "static namespace N { export const a = 1 }\nstatic function N() {}",
-    ],
-    [
       "an implementation + a bodiless signature",
       "static function f(a: any) {}\nstatic function f(a: string): void;",
     ],
@@ -572,10 +570,6 @@ describe("TypeScript's merges", () => {
     [
       "a declare function + its implementation",
       "static declare function f(): void\nstatic function f() {}",
-    ],
-    [
-      "a signature + a namespace + its implementation",
-      "static function f(a: string): void;\nstatic namespace f { export const a = 1 }\nstatic function f(a: any) {}",
     ],
     [
       "a signature + a declare namespace + its implementation",
@@ -589,15 +583,6 @@ describe("TypeScript's merges", () => {
       "a declare var + a const",
       "static declare var v: number\nstatic const v = 1",
     ],
-    [
-      "a declare const + a const",
-      "static declare const d: number\nstatic const d = 1",
-    ],
-    [
-      "a const + a declare var",
-      "static const v = 1\nstatic declare var v: number",
-    ],
-    ["a declare let + a let", "static declare let d: number\nstatic let d = 1"],
     [
       "a function + a declare function",
       "static function f() {}\nstatic declare function f(): void",
@@ -630,37 +615,37 @@ describe("TypeScript's merges", () => {
       "a declare enum + a const",
       "static declare enum E { A }\nstatic const E = 1",
     ],
-    // Stock refuses these four with "Duplicate declaration" (Babel's scope counts
-    // the `declare`); the strip erases it, so MX compiles them (divergences.md).
-    [
-      "a declare const + a var",
-      "static declare const d: number\nstatic var d = 1",
-    ],
-    [
-      "a declare const + a let",
-      "static declare const d: number\nstatic let d = 1",
-    ],
-    [
-      "an import + a declare const",
-      'import x from "./x"\nstatic declare const x: number',
-    ],
-    [
-      "a declare const + an import",
-      'static declare const x: number\nimport x from "./x"',
-    ],
-    [
-      "a declare const in one block + a const in another",
-      "static { declare const d: number }\nserver { const d = 1 }",
-    ],
   ];
   it.each(merges)("%s compiles", (_label, source) => {
     expectCompiles(source);
   });
 
   const refused: [string, string, string, number, number][] = [
-    // Stock's strip puts the namespace's `N || (N = {})` before the class, which
-    // throws "Cannot access 'N' before initialization" when the module runs. A
-    // function is hoisted, so a namespace before one loads and is not here.
+    // A namespace with values before a function or class of its name does not
+    // load once the TypeScript is stripped by Bun, esbuild or tsc (`var N` beside
+    // `function N`), and Babel's strip reads the class before it is initialised.
+    // Stock compiles all of them (divergences.md).
+    [
+      "a namespace with values before a function",
+      "static namespace N { export const a = 1 }\nstatic function N() {}",
+      "N",
+      2,
+      16,
+    ],
+    [
+      "a namespace with values before a function in one block",
+      "static {\n  namespace f { export const x = 1 }\n  function f() {}\n}",
+      "f",
+      3,
+      11,
+    ],
+    [
+      "a signature + a namespace + its implementation",
+      "static function f(a: string): void;\nstatic namespace f { export const x = 1 }\nstatic function f(a: any) {}",
+      "f",
+      3,
+      16,
+    ],
     [
       "a namespace before the class it would merge with",
       "static namespace C { export const a = 1 }\nstatic class C {}",
@@ -715,6 +700,64 @@ describe("TypeScript's merges", () => {
   ];
   it.each(refused)("%s is refused", (_label, source, name, line, column) => {
     expectRefused(source, DUPLICATE, name, line, column);
+  });
+});
+
+describe("a declare const, let or var beside another declaration follows stock Marko", () => {
+  // Babel's scope registers `declare const`, `let` and `var`, and not as one
+  // rule: stock 6.4.4 refuses some orders and compiles others. Every pair below
+  // was run through stock (`Duplicate declaration` at the second name), and MX
+  // refuses exactly those, at the same position; the rest compile (the strip
+  // erases the `declare`). A `declare function`, `class` and `namespace` is
+  // accepted beside anything.
+  const kinds: Record<string, string> = {
+    const: "static const x = 1",
+    let: "static let x = 1",
+    var: "static var x = 1",
+    fn: "static function x() {}",
+    cls: "static class x {}",
+    ns: "static namespace x { export const a = 1 }",
+    imp: 'import x from "./x"',
+    dconst: "static declare const x: number",
+    dlet: "static declare let x: number",
+    dvar: "static declare var x: number",
+    dfn: "static declare function x(): void",
+    dclass: "static declare class x {}",
+    dns: "static declare namespace x { const a: number }",
+    sig: "static function x(): void",
+  };
+  const stockRefuses = new Set(
+    `const>dconst const>dlet const>dvar let>dconst let>dlet let>dvar var>dlet fn>dlet cls>dconst cls>dlet cls>dvar imp>dconst imp>dlet imp>dvar dconst>const dconst>let dconst>var dconst>fn dconst>cls dconst>imp dconst>dconst dconst>dlet dconst>dvar dlet>const dlet>let dlet>var dlet>fn dlet>cls dlet>imp dlet>dconst dlet>dlet dlet>dvar dvar>let dvar>cls dvar>dlet`.split(
+      " ",
+    ),
+  );
+  const declares = new Set(["dconst", "dlet", "dvar"]);
+  const pairs: [string, string, string][] = [];
+  for (const first of Object.keys(kinds)) {
+    for (const second of Object.keys(kinds)) {
+      if (declares.has(first) || declares.has(second)) {
+        pairs.push([`${first} > ${second}`, first, second]);
+      }
+    }
+  }
+  it.each(pairs)("%s", (_label, first, second) => {
+    const source = `${kinds[first]}\n${kinds[second]}`;
+    if (stockRefuses.has(`${first}>${second}`)) {
+      const column = (kinds[second] as string).search(/\bx\b/);
+      expectRefused(source, DUPLICATE, "x", 2, column);
+    } else {
+      expectCompiles(source);
+    }
+  });
+
+  it("refuses one in a block beside a real one in another, at the second name", () => {
+    expectRefused(
+      "static { declare const d: number }\nserver { const d = 1 }",
+      DUPLICATE,
+      "d",
+      2,
+      15,
+    );
   });
 });
 
