@@ -123,6 +123,114 @@ const ROWS: [label: string, source: string, expected: Omit<Found, "text">[]][] =
       ],
     ],
     [
+      "id that is a string literal alone",
+      '<div#${"lit"}/>\n',
+      [
+        {
+          name: "id",
+          kind: "dynamic",
+          code: '"lit"',
+          span: { sourceStart: 7, sourceEnd: 12 },
+        },
+      ],
+    ],
+    [
+      "id that is a single-quoted string literal alone",
+      "<div#${'lit'}/>\n",
+      [
+        {
+          name: "id",
+          kind: "dynamic",
+          code: "'lit'",
+          span: { sourceStart: 7, sourceEnd: 12 },
+        },
+      ],
+    ],
+    [
+      "id that is a template literal alone",
+      "<div#${`lit`}/>\n",
+      [
+        {
+          name: "id",
+          kind: "dynamic",
+          code: "`lit`",
+          span: { sourceStart: 7, sourceEnd: 12 },
+        },
+      ],
+    ],
+    [
+      "class that is a string literal alone",
+      '<div.${"lit"}/>\n',
+      [
+        {
+          name: "class",
+          kind: "dynamic",
+          code: '"lit"',
+          span: { sourceStart: 7, sourceEnd: 12 },
+        },
+      ],
+    ],
+    [
+      "concise id that is a string literal alone",
+      'div#${"lit"}\n',
+      [
+        {
+          name: "id",
+          kind: "dynamic",
+          code: '"lit"',
+          span: { sourceStart: 6, sourceEnd: 11 },
+        },
+      ],
+    ],
+    [
+      "concise class that is a string literal alone, with a body",
+      'div.${"lit"} -- text\n',
+      [
+        {
+          name: "class",
+          kind: "dynamic",
+          code: '"lit"',
+          span: { sourceStart: 6, sourceEnd: 11 },
+        },
+      ],
+    ],
+    [
+      "two class words that are string literals alone",
+      '<div.${"a"}.${"b"}/>\n',
+      [
+        {
+          name: "class",
+          kind: "dynamic",
+          code: "[`a`, `b`]",
+          span: { sourceStart: 5, sourceEnd: 18 },
+        },
+      ],
+    ],
+    [
+      "a string literal class word and a static word",
+      '<div.${"lit"}.b/>\n',
+      [
+        {
+          name: "class",
+          kind: "dynamic",
+          code: '[`lit`, "b"]',
+          span: { sourceStart: 5, sourceEnd: 15 },
+        },
+      ],
+    ],
+    [
+      "a string literal class in a multi-line tag",
+      '<div.${"lit"}\n  title="t"\n/>\n',
+      [
+        {
+          name: "class",
+          kind: "dynamic",
+          code: '"lit"',
+          span: { sourceStart: 7, sourceEnd: 12 },
+        },
+      ],
+    ],
+    [
       "class, placeholder last",
       "<div.a${y}/>\n",
       [
