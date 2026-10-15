@@ -762,7 +762,7 @@ element, so the attribute would be discarded and the placeholder was never read.
 is positioned at the attribute (a shorthand at its own spelling) or at the `${…}` (its
 whole range). For an attribute its text says to use `<html-script>`, the tag for a native
 html `<script>` element, which keeps its attributes and interpolates its body (on every
-target but Angular, whose templates cannot hold a `<script>` element and refuse the tag); for a
+target but Angular, whose templates cannot hold a `<script>` element and refuse the tag; MX does not read `$global.cspNonce`, so a nonce is set only by an explicit `nonce=` attribute); for a
 placeholder it says to use the value directly (`x`, not `${x}`), to write it through a
 template literal inside a string, or to use `<html-script>`. A `${…}` inside a template
 literal in the body (`` `${x}` ``) is the script's own and is not a placeholder. The

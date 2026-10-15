@@ -48,7 +48,7 @@ For `<script>` that means its body is script text and its only attribute is its 
 | Astro | `<script is:inline …attrs set:html={…} />`: `is:inline` keeps the element where it is instead of bundling it |
 | Angular | a compile error at the tag: Angular's template compiler removes every `<script>` element. Load the script from `index.html` or the `scripts` array of `angular.json`, or create it in the component with the DOM API |
 
-Marko also adds a `nonce` from the render's `$global.cspNonce`. MX has no render global, so no target invents one: write `nonce=` yourself and it is kept as any attribute is. On Preact, React and Hono the body is read as markup: an element, an `<if>` or a comment in it is refused with an error, because it would otherwise be dropped from the script (put markup-like text inside a string placeholder, `${"<b>hi</b>"}`), and a body loses its leading and trailing whitespace. The html target, Solid and Astro read the body as raw text, as Marko does.
+Marko also adds a `nonce` from the render's `$global.cspNonce`. MX does not read `$global.cspNonce` and no target writes a `nonce` for you: the way to set one is an explicit `nonce=` attribute on the tag (a spread that carries `nonce` works too), which is kept as any attribute is. On Preact, React and Hono the body is read as markup: an element, an `<if>` or a comment in it is refused with an error, because it would otherwise be dropped from the script (put markup-like text inside a string placeholder, `${"<b>hi</b>"}`), and a body loses its leading and trailing whitespace. The html target, Solid and Astro read the body as raw text, as Marko does.
 
 ### Opting into `strict`
 
