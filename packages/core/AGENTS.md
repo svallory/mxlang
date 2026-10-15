@@ -1136,8 +1136,13 @@ Five facts worth knowing before editing it:
 - **Which IR nodes carry spans** (all `span?: SourceSpan`, UTF-16 code-unit
   offsets into the file being compiled, always optional and absent on
   synthesized nodes): `Expr.span` (the expression's authored text); `Attr`
-  `nameSpan` (zero-width at the `=` for a default attribute) and a static
-  attr's `valueSpan` (quotes included); `DelegatedTag`, `Element`,
+  `nameSpan` (zero-width at the `=` for a default attribute), a static
+  attr's `valueSpan` (quotes included), and a dynamic, bound, event or spread
+  attr's `valueSpan` (the value as written, wrapper included: `(x)`, `x!`,
+  `x as T`; `value.span` is the bare `x`, so a wrapped value is the two
+  differing; `writtenValueSpan` in `lower.ts` computes it from the pre-strip
+  root `mx-parse.ts` records in `strippedValueRoots`; `Attr.span` ends where it
+  ends); `DelegatedTag`, `Element`,
   `Component` and `AttributeTag` `nameSpan` + whole-tag `span` (opening tag,
   body and closing tag); `For`/`Define` `paramSpans`; `Define.nameSpan`;
   and — added by core-ir-spans — `Text.span` (the authored text, which

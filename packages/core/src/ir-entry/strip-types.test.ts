@@ -428,7 +428,7 @@ describe("`stripTypes: false` and core's own checks", () => {
     },
   );
 
-  it("an attribute's span ends at the operand either way, so with `false` it no longer contains its value's span", () => {
+  it("an attribute's span ends at the written value either way, wrapper included", () => {
     const spans = (stripTypes: boolean) => {
       const { ir } = lowerSource("<x a=(1 as number)/>\n", "/f.mx", {
         stripTypes,
@@ -448,13 +448,14 @@ describe("`stripTypes: false` and core's own checks", () => {
       const attr = tag?.attrs[0];
       return { attr: attr?.span, value: attr?.value.span };
     };
-    // `a=(1`: [3,7) in both. The value is `1` by default, `1 as number` with `false`.
+    // `a=(1 as number)`: [3,18) in both. The value is `1` by default and
+    // `1 as number` with `false`.
     expect(spans(true)).toEqual({
-      attr: { sourceStart: 3, sourceEnd: 7 },
+      attr: { sourceStart: 3, sourceEnd: 18 },
       value: { sourceStart: 6, sourceEnd: 7 },
     });
     expect(spans(false)).toEqual({
-      attr: { sourceStart: 3, sourceEnd: 7 },
+      attr: { sourceStart: 3, sourceEnd: 18 },
       value: { sourceStart: 6, sourceEnd: 17 },
     });
   });

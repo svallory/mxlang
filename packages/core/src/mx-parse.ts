@@ -23,7 +23,7 @@
  */
 import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
-import { strippedMethodTypeParams } from "./attr-fields.ts";
+import { strippedMethodTypeParams, strippedValueRoots } from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { codedError, type Node, type TranslateError } from "./core.ts";
 import {
@@ -1152,6 +1152,9 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
   if (node == null) return;
   switch (container.type) {
     case "MxExpression": {
+      if (typeof node.start === "number" && typeof node.end === "number") {
+        strippedValueRoots.set(container, { start: node.start, end: node.end });
+      }
       const [statement] = stripProgram([t.expressionStatement(node)]);
       container.node = statement?.expression ?? node;
       return;

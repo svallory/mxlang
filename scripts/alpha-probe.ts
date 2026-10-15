@@ -198,10 +198,10 @@ if (!same(member, ["x"])) fail("x=a.b .c is not one attribute (stock member acce
 const split = lowerSource("<div x=a.b .c/>\\n", "/t.mx").ir?.body[0]?.tag.attrs.map((a) => a.name + "=" + (a.value?.code ?? a.value));
 if (!same(split, ["x=a.b .c"])) fail("x=a.b .c did not reach the IR as one attribute x holding the member access a.b .c: " + JSON.stringify(split));
 
-// alpha.18: stable codes reach IrDiagnostic.code; IR_VERSION is 4; the tag-file cache can be cleared.
+// alpha.18: stable codes reach IrDiagnostic.code; IR_VERSION is 5; the tag-file cache can be cleared.
 if (unknown.diagnostics[0].code !== "MX_UNKNOWN_TAG") fail("the unknown tag has no MX_UNKNOWN_TAG code: " + JSON.stringify(unknown.diagnostics));
 const core = await import("@mxlang/core");
-if (core.IR_VERSION !== 4) fail("IR_VERSION is " + core.IR_VERSION + ", expected 4");
+if (core.IR_VERSION !== 5) fail("IR_VERSION is " + core.IR_VERSION + ", expected 5");
 if (typeof core.clearTagFileCache !== "function") fail("clearTagFileCache is not exported");
 // alpha.19: a dialect's explainUnknownTag replaces the unknown-tag diagnostic with its own error.
 const explained = lowerSource("<resorce/>\\n", "/probe/explained.mx", { ...options, dialect: { id: "probe", name: "Probe", table: {}, explainUnknownTag: (tag) => ({ message: "did you mean <resource>? (" + tag.name + ")", code: "PROBE_TYPO" }) } });

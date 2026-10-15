@@ -39,6 +39,11 @@ type SpannedObject<T> = {
 } & ("span" extends keyof T ? { span: SourceSpan } : unknown);
 
 type StaticAttr = Extract<Attr, { kind: "static" }>;
+/** The kinds that hold a written `Expr` value, each with a `valueSpan`. */
+type ExprValuedAttr = Extract<
+  Attr,
+  { kind: "dynamic" | "bound" | "event" | "spread" }
+>;
 type ImportNode = Extract<IrNode, { kind: "Import" }>;
 
 /**
@@ -51,7 +56,10 @@ type ImportNode = Extract<IrNode, { kind: "Import" }>;
  * zero-width one at the name's end; an attribute a contract `default` added to
  * a contract-only tag has an empty `span`, `nameSpan` and value span at the end
  * of the tag's name, and an empty `span` is what tells it from an authored
- * one), and an `Import` its `from` and `names`. Other optional spans
+ * one), a dynamic, bound, event or spread attribute its `valueSpan` (the value
+ * as written, wrapper included; `value.span` when the attribute carries no
+ * other, and an empty one at the end of the tag's name on a contract
+ * `default`), and an `Import` its `from` and `names`. Other optional spans
  * (`bodySpan`, `paramSpans`) stay optional. @unstable
  */
 export type Spanned<T> = T extends SourceSpan
@@ -67,7 +75,7 @@ export type Spanned<T> = T extends SourceSpan
           ? SpannedObject<T> & { nameSpan: SourceSpan; args: Spanned<Expr>[] }
           : T extends AttributeTag
             ? SpannedObject<T> & { nameSpan: SourceSpan }
-            : T extends StaticAttr
+            : T extends StaticAttr | ExprValuedAttr
               ? SpannedObject<T> & { valueSpan: SourceSpan }
               : T extends ImportNode
                 ? SpannedObject<T> & {
@@ -103,11 +111,32 @@ function withoutTrailingNewline(span: SourceSpan, source: string): SourceSpan {
     : { sourceStart: span.sourceStart, sourceEnd: end };
 }
 
+const EXPR_VALUED_KINDS = new Set(["dynamic", "bound", "event", "spread"]);
+
+/** Is `record` an `Attr` whose value is an `Expr` (not a tag target or a for-source)? */
+function isExprValuedAttr(record: Record<string, unknown>): record is Record<
+  string,
+  unknown
+> & {
+  valueSpan?: SourceSpan;
+  value: Expr;
+} {
+  const value = record.value as { code?: unknown } | null | undefined;
+  return (
+    EXPR_VALUED_KINDS.has(record.kind as string) &&
+    typeof value === "object" &&
+    value !== null &&
+    typeof value.code === "string"
+  );
+}
+
 /**
  * The IR `lowerSource` returns: a copy of the checked `ir` (the lowered one
  * may be frozen, and is core's), with each `DelegatedTag`'s and
  * `AttributeTag`'s span trimmed of its trailing line terminator and every
- * `DelegatedTag.args` present (`[]` when the tag has none).
+ * `DelegatedTag.args` present (`[]` when the tag has none) and every dynamic,
+ * bound, event and spread attribute's `valueSpan` present (`value.span` when
+ * the lowering set none).
  */
 export function finishIr(ir: Ir, source: string): SpannedIr {
   const copy = cloneIr(ir);
@@ -126,6 +155,12 @@ export function finishIr(ir: Ir, source: string): SpannedIr {
       if (record.kind === "DelegatedTag") {
         (tag as DelegatedTag<unknown>).args ??= [];
       }
+    }
+    // An attribute built with no written-value span of its own (a dialect's
+    // `dynamicAttr`, a transform's literal) has its value's span: the value
+    // was not wrapped as far as anyone can tell. Core's own lowering sets it.
+    if (isExprValuedAttr(record) && !record.valueSpan) {
+      record.valueSpan = record.value.span;
     }
     for (const [key, child] of Object.entries(record)) {
       if (key === "node" || key === "paramNodes" || key === "data") continue;

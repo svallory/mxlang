@@ -93,6 +93,19 @@ export function attrValueOf(ctx: Ctx, attr: Node): Node {
  */
 export const strippedMethodTypeParams = new WeakSet<object>();
 
+/**
+ * The outermost node of each `MxExpression` as the parser built it, before
+ * `stripMxTypes` replaced it: `x as T`, `x!`, `<T>x`, `x satisfies T` are
+ * gone from the container's node afterwards, and this keeps where they
+ * ended (`start` and `end`, file-absolute). Lowering reads it for an
+ * attribute's `valueSpan`; absent for a container the strip never ran on
+ * (its node is then the root).
+ */
+export const strippedValueRoots = new WeakMap<
+  object,
+  { start: number; end: number }
+>();
+
 export function methodFunctionOf(ctx: Ctx, method: Node): Node {
   const statements = payloadOf(method.body);
   const params = payloadOf(method.params);

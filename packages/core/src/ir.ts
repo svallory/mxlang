@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 4;
+export const IR_VERSION = 5;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -253,9 +253,39 @@ export interface AttrArgs {
  * the end of the tag's name, in the IR `lowerSource` returns and in the
  * compile path alike. An authored attribute's `span` is never empty, so
  * `span.sourceStart === span.sourceEnd` marks the attribute as not written.
+ *
+ * It ends where the written value ends, wrapper included: the `)` of
+ * `a=(x)`, the `T` of `a=x as T` (`AttrValueSpan.valueSpan` is that value).
  */
 export interface AttrSpan {
   span?: SourceSpan;
+}
+
+/**
+ * File-absolute UTF-16 code-unit span of a dynamic, bound, event or spread
+ * attribute's value **as written**, wrapper included: the parentheses of
+ * `(x)`, the `<T>` of a concise `<T>x`, the `!` of `x!`, the `as T` of
+ * `x as T`, the `satisfies T` of `x satisfies T`, nested wrappers and the
+ * comments between them (`((x as T)!)`). The default lowering strips those
+ * wrappers, so `value` is the bare `x` and `value.span` covers only it; a
+ * consumer that has to refuse a wrapped value (a reference that must be a
+ * plain identifier) detects one by `valueSpan` differing from `value.span`.
+ * A plain value has the two equal. The same convention as the static kind's
+ * `valueSpan` (the literal, quotes included).
+ *
+ * For a spread it covers the expression after the `...`. For a method
+ * attribute (`onLoad(e) { … }`) it is the method, which is `value.span`.
+ * With `stripTypes: false` the wrapper stays in `value.node` and
+ * `value.span` already covers the type assertion, so the two differ only by
+ * the parentheses.
+ *
+ * Always present on a `SpannedIr` attribute (`lowerSource`): an attribute a
+ * contract `default` added to a contract-only tag has an empty one at the end
+ * of the tag's name, like its `span`. `undefined` only for an attribute built
+ * with no source.
+ */
+export interface AttrValueSpan {
+  valueSpan?: SourceSpan;
 }
 
 export interface AttrSugar {
@@ -334,6 +364,7 @@ export type Attr =
       nameSpan: SourceSpan;
     } & IrBase &
       AttrSpan &
+      AttrValueSpan &
       AttrSugar &
       AttrArgs)
   /**
@@ -355,6 +386,7 @@ export type Attr =
       nameSpan: SourceSpan;
     } & IrBase &
       AttrSpan &
+      AttrValueSpan &
       AttrSugar &
       AttrArgs)
   /**
@@ -382,9 +414,10 @@ export type Attr =
       nameSpan: SourceSpan;
     } & IrBase &
       AttrSpan &
+      AttrValueSpan &
       AttrSugar &
       AttrArgs)
-  | ({ kind: "spread"; value: Expr } & IrBase & AttrSpan);
+  | ({ kind: "spread"; value: Expr } & IrBase & AttrSpan & AttrValueSpan);
 
 /**
  * A block of children a host emits as a callable unit: an attribute tag's

@@ -3678,6 +3678,7 @@ function spanDefaultedAttrs(
         ...attr,
         nameSpan: at,
         span: at,
+        valueSpan: at,
         value: { ...attr.value, span: at },
       };
     }

@@ -39,6 +39,7 @@ import {
   isBoundAttr,
   isDefaultAttr,
   isMethodAttr,
+  strippedValueRoots,
 } from "./attr-fields.ts";
 import { attrLabel } from "./attr-label.ts";
 import {
@@ -1546,6 +1547,14 @@ function lowerAttr(
   if (args && lowered.kind !== "spread") {
     lowered.args = args.map((arg: Node) => exprOf(ctx, arg));
   }
+  if (
+    lowered.kind === "dynamic" ||
+    lowered.kind === "bound" ||
+    lowered.kind === "event"
+  ) {
+    const valueSpan = writtenValueSpan(ctx.source, attr, lowered.value.span);
+    if (valueSpan) lowered.valueSpan = valueSpan;
+  }
   if (lowered.kind !== "spread") {
     // The parsed `MxArguments`' `outer` runs `(` through `)` (ast §3.4); the
     // argument expressions alone would end the span at the last argument
@@ -1556,24 +1565,20 @@ function lowerAttr(
       typeof outer?.start === "number" && typeof outer?.end === "number"
         ? { sourceStart: outer.start, sourceEnd: outer.end }
         : undefined;
-    // With `stripTypes: false` the value is still wrapped in its assertion
-    // (`(x as T)`), whose span runs on to the `T`. The default ends the
-    // attribute at the operand, and a check's error `end` reads this span, so
-    // the end is the operand's either way.
-    const written =
-      lowered.kind === "dynamic" || lowered.kind === "bound"
-        ? lowered.value.node
-        : undefined;
-    const operand = withoutTsWrappers(written);
-    const span = wholeAttrSpan(
-      lowered,
-      argsSpan,
-      operand && operand !== written
-        ? nodeSpan(ctx, operand).sourceEnd
-        : undefined,
-    );
+    const span = wholeAttrSpan(lowered, argsSpan);
     if (span) {
-      span.sourceEnd = closeValueParens(ctx.source, lowered, span, argsSpan);
+      // A static value's `valueSpan` is the literal; the parentheses written
+      // around it are still part of the attribute. An expression value's
+      // `valueSpan` already is the written value, parentheses included.
+      if (lowered.kind === "static") {
+        // The literal can carry a wrapper too (`a=("x" as const)`), which the
+        // attribute still includes; its `valueSpan` stays the literal.
+        const written = writtenValueSpan(ctx.source, attr, lowered.valueSpan);
+        span.sourceEnd = Math.max(
+          closeValueParens(ctx.source, lowered, span, argsSpan),
+          written?.sourceEnd ?? 0,
+        );
+      }
       lowered.span = span;
     }
   }
@@ -1581,9 +1586,71 @@ function lowerAttr(
 }
 
 /**
- * Where a named attribute ends once the `)` that close a parenthesised value
- * are in: the value's own span leaves them out (`a=(\n  1\n)` ends at the
- * `1`). The parentheses opened between the name (or its arguments) and the
+ * The span of an attribute's value as written (`AttrValueSpan.valueSpan`),
+ * wrapper included: from the container's start (`(`, `<T>`) through the end
+ * of the outermost wrapper the default lowering strips from the node (`x!`,
+ * `x as T`, `x satisfies T`, nested) and the `)` that close the parentheses
+ * opened before it. The container's own range is not used for the end: it
+ * runs on over a trailing comment (`a=x /* c *\/`), which is not part of the
+ * value. The wrapper's end is the root recorded before the strip
+ * (`strippedValueRoots`), the node itself when nothing was stripped.
+ *
+ * `value.span` when the attribute has no parsed expression container (a
+ * method, a claimed node, one built by hand); `undefined` when the value has
+ * no source at all.
+ */
+function writtenValueSpan(
+  source: string,
+  attr: Node,
+  bare: SourceSpan | undefined,
+): SourceSpan | undefined {
+  if (!bare) return undefined;
+  const container = attr?.value;
+  if (container?.type !== "MxExpression") return bare;
+  const root = strippedValueRoots.get(container) ?? container.node;
+  if (
+    typeof container.start !== "number" ||
+    typeof root?.start !== "number" ||
+    typeof root?.end !== "number"
+  ) {
+    return bare;
+  }
+  const start = skipTrivia(source, container.start);
+  if (start > root.start) return bare;
+  let open = 0;
+  for (let at = start; at < root.start; ) {
+    const skipped = skipTrivia(source, at);
+    if (skipped > at) at = skipped;
+    else {
+      if (source[at] === "(") open++;
+      at++;
+    }
+  }
+  return {
+    sourceStart: Math.min(start, bare.sourceStart),
+    sourceEnd: Math.max(closeParens(source, root.end, open), bare.sourceEnd),
+  };
+}
+
+/**
+ * The offset after up to `open` closing parentheses that follow `end`, with
+ * whitespace and comments allowed before each. Stops at the first character
+ * that is not one, so a trailing comment with no `)` after it is left out.
+ */
+function closeParens(source: string, end: number, open: number): number {
+  let closed = end;
+  for (let level = 0; level < open; level++) {
+    const at = skipTrivia(source, closed);
+    if (source[at] !== ")") break;
+    closed = at + 1;
+  }
+  return closed;
+}
+
+/**
+ * Where a static attribute ends once the `)` that close a parenthesised value
+ * are in: the literal's own span leaves them out (`a=("x")` ends at the
+ * `"x"`). The parentheses opened between the name (or its arguments) and the
  * value are counted, comments skipped, and one `)` per level is taken after
  * the value, with whitespace and comments between. A trailing comment that is
  * not followed by a `)` is not part of the attribute, and nothing changes
@@ -1592,21 +1659,16 @@ function lowerAttr(
  */
 function closeValueParens(
   source: string,
-  attr: Exclude<Attr, { kind: "spread" }>,
+  attr: Extract<Attr, { kind: "static" }>,
   span: SourceSpan,
   argsSpan?: SourceSpan,
 ): number {
-  const value =
-    attr.kind === "static"
-      ? attr.valueSpan
-      : attr.kind === "boolean"
-        ? undefined
-        : attr.value.span;
+  const value = attr.valueSpan;
   if (!value) return span.sourceEnd;
-  let from = Math.max(attr.nameSpan?.sourceEnd ?? 0, argsSpan?.sourceEnd ?? 0);
-  if (attr.kind === "bound" && attr.refinement?.span) {
-    from = Math.max(from, attr.refinement.span.sourceEnd);
-  }
+  const from = Math.max(
+    attr.nameSpan?.sourceEnd ?? 0,
+    argsSpan?.sourceEnd ?? 0,
+  );
   let open = 0;
   for (let at = from; at < value.sourceStart; ) {
     const skipped = skipTrivia(source, at);
@@ -1616,13 +1678,7 @@ function closeValueParens(
       at++;
     }
   }
-  let end = span.sourceEnd;
-  for (let level = 0; level < open; level++) {
-    const at = skipTrivia(source, end);
-    if (source[at] !== ")") break;
-    end = at + 1;
-  }
-  return end;
+  return closeParens(source, span.sourceEnd, open);
 }
 
 /** The offset after the whitespace and comments that start at `at`. */
@@ -1653,7 +1709,6 @@ function skipTrivia(source: string, at: number): number {
 function wholeAttrSpan(
   attr: Exclude<Attr, { kind: "spread" }>,
   argsSpan?: SourceSpan,
-  valueEnd?: number,
 ): SourceSpan | undefined {
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;
@@ -1671,13 +1726,9 @@ function wholeAttrSpan(
       ? attr.valueSpan
       : attr.kind === "boolean"
         ? attr.nameSpan
-        : attr.value.span;
+        : (attr.valueSpan ?? attr.value.span);
   if (!valueSpan) return undefined;
-  add(
-    valueEnd === undefined
-      ? valueSpan
-      : { sourceStart: valueSpan.sourceStart, sourceEnd: valueEnd },
-  );
+  add(valueSpan);
   if (attr.kind === "bound") add(attr.refinement?.span);
   for (const arg of attr.args ?? []) add(arg.span);
   add(argsSpan);
@@ -1720,11 +1771,14 @@ function lowerAttrNamed(
     // The parsed range is the authored `...expr`, which the expression's own
     // span leaves the `...` out of.
     const span = exprSpan(ctx, attr);
+    const value = exprOf(ctx, readValue());
+    const valueSpan = writtenValueSpan(ctx.source, attr, value.span);
     return {
       kind: "spread",
-      value: exprOf(ctx, readValue()),
+      value,
       loc,
       ...(span ? { span } : {}),
+      ...(valueSpan ? { valueSpan } : {}),
     };
   }
 
