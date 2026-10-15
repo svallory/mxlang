@@ -173,7 +173,10 @@ const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && 
  * instead reads a plain `{ tag, props }` object as an element, with its event
  * handlers and `dangerouslySetInnerHTML`, so JSON from a request could become
  * markup. A plain-prototype (or null-prototype) object is stringified like
- * Marko, unless Hono's own runtime made it. `hono/jsx` elements are class
+ * Marko, unless Hono's own runtime made it. A prototype that is itself data
+ * (`Object.assign({}, JSON.parse('{"__proto__":{…}}'))` sets the copy's
+ * prototype to the parsed object) does not make an object a class instance: only
+ * a prototype whose `constructor` is a function other than `Object` does. `hono/jsx` elements are class
  * instances, so they pass. `hono/jsx/dom` (its jsx runtime, `createElement`,
  * `cloneElement`, `Fragment`) builds plain `{ tag, type, props, key, ref }`
  * objects, and `createPortal` a plain `{ tag, props, key, e, p: 1 }`; both are
@@ -193,7 +196,7 @@ export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
     if (item === null || typeof item !== "object") return item;
     if (Array.isArray(item)) return item.some((entry: any) => entry !== null && typeof entry === "object") ? item.map(text) : item;
     const proto = Object.getPrototypeOf(item);
-    if (proto !== Object.prototype && proto !== null) return item;
+    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object) return item;
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
     if (${HONO_PORTAL_CHECK}) return item;
     if (${HONO_DOM_NODE_CHECK}) return item;
@@ -212,7 +215,8 @@ export type JsxNodeShape = "preact" | "react" | "hono";
  * object (and for an array of them); a JSX renderer reads one as an element
  * (`hono/jsx/dom` renders `{ tag, props }` with its `onerror`), throws on it
  * (React) or trips on a null-prototype one (Preact). A plain-prototype or
- * null-prototype object is therefore dropped (`null`) unless it is what the
+ * null-prototype object (or one whose prototype is data, see
+ * {@link JSX_TEXT_VALUE_EXPRESSION}) is therefore dropped (`null`) unless it is what the
  * renderer itself builds, recognised by something JSON cannot carry:
  * - React: a symbol `$$typeof` (`"react.element"` as a string is data);
  * - Preact: an own `constructor` that is `undefined` (`createVNode`'s marker;
@@ -241,7 +245,7 @@ export function jsxRenderableExpression(shape: JsxNodeShape): string {
       return next.some((entry: any, index: number) => entry !== item[index]) ? next : item;
     }
     const proto = Object.getPrototypeOf(item);
-    if (proto !== Object.prototype && proto !== null) return item;
+    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object) return item;
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
     return ${check} ? item : null;
   };

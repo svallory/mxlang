@@ -35,6 +35,8 @@ const inputs = {
   toString: () => ({ x: { toString: () => "<b>own</b>" } }),
   valueOf: () => ({ x: { valueOf: () => "<u>v</u>" } }),
   nullProto: () => ({ x: Object.assign(Object.create(null), { a: 1 }) }),
+  protoGadget: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"z":1},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
+  protoGadgetCtor: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"constructor":null},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
   primitives: () => ({ a: "s<", b: 0, c: null, d: undefined, e: false, f: [1, "x"] }),
   node: () => ({ x: jsx("i", {}, "node") }),
   nodes: () => ({ x: [jsx("i", {}, "a"), "-", jsx("b", {}, jsx("u", {}, "c"))] }),
@@ -124,6 +126,8 @@ const CASES: Record<string, CaseSpec> = {
   toString: { source: "<p>${input.x}</p>", input: "toString" },
   valueOf: { source: "<p>${input.x}</p>", input: "valueOf" },
   nullProto: { source: "<p>${input.x}</p>", input: "nullProto" },
+  protoGadget: { source: "<p>${input.x}</p>", input: "protoGadget" },
+  protoGadgetCtor: { source: "<p>${input.x}</p>", input: "protoGadgetCtor" },
   primitives: {
     source:
       "<p>${input.a}|${input.b}|${input.c}|${input.d}|${input.e}|${input.f}</p>",
@@ -276,6 +280,10 @@ describe("JSON-shaped data in a text placeholder (Hono client and server)", () =
   });
   it("stringifies a null-prototype object", () => {
     expect(at("nullProto").client).toBe("<p>[object Object]</p>");
+  });
+  it("stringifies a copy whose prototype is attacker data (Object.assign of a __proto__ key)", () => {
+    expect(at("protoGadget").client).toBe("<p>[object Object]</p>");
+    expect(at("protoGadgetCtor").client).toBe("<p>[object Object]</p>");
   });
 });
 

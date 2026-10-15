@@ -1,5 +1,3 @@
-import type { JsxNodeShape } from "./attribute-normalize.ts";
-
 /**
  * The knobs that separate Preact from React, isolated from the emitter.
  *
@@ -52,7 +50,7 @@ export interface JsxDialect {
    * absent). A plain object that is none of them is data and renders nothing,
    * as in Marko; see `jsxRenderableExpression`.
    */
-  nodeShape?: JsxNodeShape;
+  nodeShape?: "preact" | "react" | "hono";
   /**
    * How a native `<textarea>`'s content (Marko renders `value` as content) is
    * handed to the renderer. `"children"` (Preact, Hono) passes a text child;
