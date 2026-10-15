@@ -29,11 +29,11 @@ import type { Dialect, MessageVocabulary } from "./syntax-table.ts";
 // ---------------------------------------------------------------------------
 // Fixtures
 
-/** Mesh's real settings, under a generic name (core knows no Mesh). */
+/** A dialect's settings: an option for an attribute, a Kit file for a data file. */
 const optionVocabulary: MessageVocabulary = {
   attribute: { one: "option", many: "options" },
-  file: "Mesh file",
-  tree: "Mesh file",
+  file: "Kit file",
+  tree: "Kit file",
   formatTag: ({ name, trigger }) => (trigger ? trigger.text : name),
 };
 
@@ -179,7 +179,7 @@ const ROWS: readonly Row[] = [
     source: 'import x from "y"\n',
     group: "ir-entry",
     mx: "Data files are static, so they do not evaluate `import`",
-    option: "Mesh files are static, so they do not evaluate `import`",
+    option: "Kit files are static, so they do not evaluate `import`",
   },
   {
     name: "a macro in a data file",
@@ -187,7 +187,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<define>` is a render-time macro: data files are static, so they cannot expand it; inline the content at each use",
     option:
-      "`<define>` is a render-time macro: Mesh files are static, so they cannot expand it; inline the content at each use",
+      "`<define>` is a render-time macro: Kit files are static, so they cannot expand it; inline the content at each use",
   },
   {
     name: "a return in a data file",
@@ -195,7 +195,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
     option:
-      "`<return>` needs the evaluated mode: Mesh files are static, so they have no value to return",
+      "`<return>` needs the evaluated mode: Kit files are static, so they have no value to return",
   },
   {
     name: "a tag variable in a data file",
@@ -204,7 +204,7 @@ const ROWS: readonly Row[] = [
     options: { structural: "reject" },
     mx: "tag variable `/v` on `<x>`: data files are static, so a binding without evaluation means nothing",
     option:
-      "tag variable `/v` on `x`: Mesh files are static, so a binding without evaluation means nothing",
+      "tag variable `/v` on `x`: Kit files are static, so a binding without evaluation means nothing",
   },
   {
     name: "a doctype in a data file (the file noun, both numbers)",
@@ -212,7 +212,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<!doctype>` means nothing in a data file; data files describe tags and data, not a page",
     option:
-      "`!doctype` means nothing in a Mesh file; Mesh files describe tags and data, not a page",
+      "`!doctype` means nothing in a Kit file; Kit files describe tags and data, not a page",
   },
   {
     name: "a dynamic tag (form: dynamic, name = the expression source `x`)",
@@ -220,7 +220,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: `a dynamic tag (\`<\${expr}>\`) has no name; data files are static, so they need one`,
     option:
-      "a dynamic tag (`x`) has no name; Mesh files are static, so they need one",
+      "a dynamic tag (`x`) has no name; Kit files are static, so they need one",
   },
   {
     name: "a capitalized tag the file binds",
@@ -229,7 +229,7 @@ const ROWS: readonly Row[] = [
     options: { structural: "pass" },
     mx: "`<Task>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
     option:
-      "`Task` is bound in this file, so it is a dynamic tag; Mesh files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
+      "`Task` is bound in this file, so it is a dynamic tag; Kit files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect",
   },
 ];
 
@@ -261,10 +261,10 @@ describe("messages in the dialect's words (the optionVocabulary column)", () => 
   }
 
   it('reads "data file" in both numbers without breaking the sentence', () => {
-    // "a Mesh file" (singular) and "Mesh files" (plural), in the same message.
+    // "a Kit file" (singular) and "Kit files" (plural), in the same message.
     const [message] = messages("<!doctype html>\n", optionDialect);
     expect(message).toBe(
-      "`!doctype` means nothing in a Mesh file; Mesh files describe tags and data, not a page",
+      "`!doctype` means nothing in a Kit file; Kit files describe tags and data, not a page",
     );
     expect(message).not.toMatch(/data (file|tree)/);
   });
@@ -389,11 +389,11 @@ describe("voiceOf", () => {
       attributeTag: "option tag",
       attributeTags: "option tags",
       attributeTagCompound: "option-tag",
-      file: "Mesh file",
-      files: "Mesh files",
-      Files: "Mesh files",
-      aFile: "a Mesh file",
-      tree: "Mesh file",
+      file: "Kit file",
+      files: "Kit files",
+      Files: "Kit files",
+      aFile: "a Kit file",
+      tree: "Kit file",
     });
   });
 
@@ -425,7 +425,7 @@ describe("voiceOf", () => {
       expect(lower.Files).toBe("Page files");
       const mixed = voiceOf(dialectWith({ file: "iOS file" }));
       expect(mixed.files).toBe("iOS files");
-      expect(mixed.Files).toBe("IOS files");
+      expect(mixed.Files).toBe("iOS files");
       const upper = voiceOf(dialectWith({ file: "Kit file" }));
       expect(upper.files).toBe("Kit files");
       expect(upper.Files).toBe("Kit files");

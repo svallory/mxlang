@@ -17,8 +17,8 @@
  *
  * With `structural: "reject"` the pass-through structural constructs (text,
  * `${}`, `<if>`/`<for>`/`<const>`, `import`/`export`/`static`) each become a
- * positioned error, "Data files are static, so they do not evaluate `<if>`". With `unknownTags: "reject"` every authored tag with no
- * contract is one.
+ * positioned error, "Data files are static, so they do not evaluate `<if>`".
+ * With `unknownTags: "reject"` every authored tag with no contract is one.
  *
  * The span guarantee is checked in the same walk: a node, attribute or
  * expression the returned IR promises a span for (`SpannedIr`) and that has

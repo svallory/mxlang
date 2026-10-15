@@ -115,6 +115,15 @@ function capitalized(noun: string): string {
   return noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
+/**
+ * `noun` with its first letter upper-cased for the start of a sentence, unless
+ * the noun already has a capital after its first letter ("iOS file"): that is
+ * the dialect's own spelling.
+ */
+function sentenceStart(noun: string): string {
+  return /^\S[^\s]*[A-Z]/.test(noun) ? noun : capitalized(noun);
+}
+
 function describe(value: unknown): string {
   if (value === null) return "null";
   if (Array.isArray(value)) return "an array";
@@ -184,7 +193,7 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
     attributeTagCompound: `${one}-tag`,
     file,
     files,
-    Files: capitalized(files),
+    Files: sentenceStart(files),
     aFile: `${fileArticle} ${file}`,
     tree,
     tag: (name, trigger) => marked(name, "tag", trigger),
