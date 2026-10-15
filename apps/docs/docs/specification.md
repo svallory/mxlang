@@ -324,7 +324,9 @@ bindings that exist at run time collide: a `declare` declaration and a
 function signature without a body bind nothing once the TypeScript strip has
 run, so `declare function f` beside `function f`, `declare class C` beside
 `class C` and `declare var v` beside `const v` compile, and the conflicts only
-TypeScript reports (TS2300, TS2384, TS2434, TS2451) are left to `mx-tsc`. An export list name that no module statement declares,
+TypeScript reports (TS2300, TS2384, TS2434, TS2451) are left to `mx-tsc`. That
+includes `declare const d` beside `const d`, `var d` or `let d`, and an `import`
+beside a `declare const` of its name, which stock Marko refuses and MX compiles. An export list name that no module statement declares,
 at any position, is refused at the name, `MX_UNDECLARED_EXPORT`: "Export 'q' is
 not defined in module: …". A value that only `declare` introduces
 (`static declare const d: number` beside `static export { d }`, and likewise

@@ -630,6 +630,24 @@ describe("TypeScript's merges", () => {
       "a declare enum + a const",
       "static declare enum E { A }\nstatic const E = 1",
     ],
+    // Stock refuses these four with "Duplicate declaration" (Babel's scope counts
+    // the `declare`); the strip erases it, so MX compiles them (divergences.md).
+    [
+      "a declare const + a var",
+      "static declare const d: number\nstatic var d = 1",
+    ],
+    [
+      "a declare const + a let",
+      "static declare const d: number\nstatic let d = 1",
+    ],
+    [
+      "an import + a declare const",
+      'import x from "./x"\nstatic declare const x: number',
+    ],
+    [
+      "a declare const + an import",
+      'static declare const x: number\nimport x from "./x"',
+    ],
     [
       "a declare const in one block + a const in another",
       "static { declare const d: number }\nserver { const d = 1 }",
