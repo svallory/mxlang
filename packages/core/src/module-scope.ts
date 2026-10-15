@@ -432,6 +432,11 @@ interface StatementDeclarations {
   readonly names: ReadonlySet<string>;
   /** The local names of the statement's export lists (`export { q }`). */
   readonly exports: readonly Node[];
+  /** Value names only a `declare` or a bodiless signature introduces, by the first such name node. */
+  readonly erased: ReadonlyMap<
+    string,
+    { readonly id: Node; readonly signature: boolean }
+  >;
 }
 
 /** An error about one module statement. */
@@ -473,6 +478,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
   const values: Declaration[] = [];
   const names = new Set<string>();
   const exports: Node[] = [];
+  const erased = new Map<string, { id: Node; signature: boolean }>();
   const add = (
     kind: DeclarationKind,
     id: Node,
@@ -480,7 +486,16 @@ function statementDeclarations(file: Node): StatementDeclarations {
   ): void => {
     // An ambient value (`declare const d`) is erased with the TypeScript
     // strip, so an export list naming only it names nothing at run time.
-    if (extra.ambient !== true) names.add(id.name);
+    // A signature is not a declaration either: without an implementation the
+    // name binds nothing at run time.
+    if (extra.ambient !== true && extra.signature !== true) {
+      names.add(id.name);
+    } else if (!erased.has(id.name)) {
+      erased.set(id.name, {
+        id,
+        signature: extra.ambient !== true,
+      });
+    }
     values.push({
       name: id.name,
       kind,
@@ -595,17 +610,21 @@ function statementDeclarations(file: Node): StatementDeclarations {
     },
   });
   values.sort((a, b) => a.id.start - b.id.start);
-  return { values, names, exports };
+  return { values, names, exports, erased };
 }
 
 /**
  * May `next` be declared after `earlier`, which already declare its name?
  * Only two `var`s, and what TypeScript merges: enum with enum or namespace
  * (a `const enum` only with another), a namespace after a function, class,
- * enum or namespace, and the signatures of an overloaded function followed
- * by one more, all `declare`d or none.
+ * enum or namespace, a function or class after a namespace (TS2434 applies
+ * only when both are non-ambient: a `declare`d side lifts it), and the
+ * signatures of an overloaded function followed by one more, all `declare`d
+ * or none.
  */
 function merges(earlier: readonly Declaration[], next: Declaration): boolean {
+  const afterNamespace = (d: Declaration): boolean =>
+    d.kind === "namespace" && (d.ambient || next.ambient);
   switch (next.kind) {
     case "var":
       return earlier.every((d) => d.kind === "var");
@@ -619,11 +638,20 @@ function merges(earlier: readonly Declaration[], next: Declaration): boolean {
       return earlier.every((d) =>
         ["function", "class", "enum", "namespace"].includes(d.kind),
       );
-    case "function":
-      return earlier.every(
-        (d) =>
-          d.kind === "function" && d.signature && d.ambient === next.ambient,
-      );
+    case "function": {
+      // A namespace between a signature and what follows it parts them
+      // (TS2391), so a namespace may only come before the first function.
+      let seenFunction = false;
+      return earlier.every((d) => {
+        if (d.kind === "function") {
+          seenFunction = true;
+          return d.signature && d.ambient === next.ambient;
+        }
+        return !seenFunction && afterNamespace(d);
+      });
+    }
+    case "class":
+      return earlier.every(afterNamespace);
     default:
       return false;
   }
@@ -683,12 +711,24 @@ function bindingErrors(
     for (const { parsed: p } of parsed) {
       for (const name of p?.declared.names ?? []) all.add(name);
     }
+    const erased = new Map<string, { id: Node; signature: boolean }>();
+    for (const { parsed: p } of parsed) {
+      for (const [name, entry] of p?.declared.erased ?? []) {
+        if (!erased.has(name)) erased.set(name, entry);
+      }
+    }
     for (const { statement, parsed: p } of parsed) {
       for (const id of p?.declared.exports ?? []) {
         if (all.has(id.name)) continue;
+        const hidden = erased.get(id.name);
+        const why = hidden
+          ? hidden.signature
+            ? ` The name is only declared by the function signature at ${whereIs(hidden.id)}, which has no body, so nothing binds it at run time.`
+            : ` The name is only declared with \`declare\` at ${whereIs(hidden.id)}, which the TypeScript strip erases, so nothing binds it at run time.`
+          : "";
         record(statement, {
           code: UNDECLARED_EXPORT_CODE,
-          message: `Export '${id.name}' is not defined in module: no \`import\`, \`static\`, \`server\`, \`client\` or \`export\` statement declares it, so the module cannot load. Declare \`${id.name}\` in a module statement, or remove it from the export list.`,
+          message: `Export '${id.name}' is not defined in module: no \`import\`, \`static\`, \`server\`, \`client\` or \`export\` statement declares it, so the module cannot load.${why} Declare \`${id.name}\` in a module statement, or remove it from the export list.`,
           at: id,
         });
       }

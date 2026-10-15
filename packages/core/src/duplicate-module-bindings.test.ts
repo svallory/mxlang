@@ -7,8 +7,9 @@
  *
  * - two `var`s of a name are fine;
  * - so are the merges TypeScript itself accepts (enum with enum or namespace,
- *   a namespace after a function, class, enum or namespace, function overloads,
- *   `declare` ones included);
+ *   a namespace after a function, class, enum or namespace, a function or class
+ *   after a namespace when either is `declare`d, function overloads, `declare`
+ *   ones included);
  * - a type-only name (`type`, `interface`, `import type`) is not a value, so it
  *   never collides;
  * - any other second declaration is refused at its name with
@@ -16,8 +17,10 @@
  *
  * An export list (`export { q }`) naming a binding no module statement
  * declares is refused at the name with `MX_UNDECLARED_EXPORT`: the module it
- * would make cannot load. Declared anywhere counts, before or after it, type
- * or value, ambient or not. A re-export and a type export bind nothing local.
+ * would make cannot load. Declared anywhere counts, before or after it: a
+ * type, or a value that survives the TypeScript strip. A value only `declare`
+ * introduces, or only a bodiless function signature, is erased, so it does not
+ * count. A re-export and a type export bind nothing local.
  *
  * Every row was probed on the stock parser (Marko 6.4.4) and through node
  * (`probes/duplicate-module-bindings-7cfaa606/`); positions below are
@@ -509,6 +512,46 @@ describe("TypeScript's merges", () => {
       "static declare namespace N { const a: number }\nstatic declare namespace N { const b: number }",
     ],
     [
+      "declare namespace + function",
+      "static declare namespace N { const a: number }\nstatic function N() {}",
+    ],
+    [
+      "declare namespace + class",
+      "static declare namespace N { const a: number }\nstatic class N {}",
+    ],
+    [
+      "declare namespace + declare function",
+      "static declare namespace N { const a: number }\nstatic declare function N(): void",
+    ],
+    [
+      "declare namespace + two declare function overloads",
+      "static declare namespace N { const a: number }\nstatic declare function N(): void\nstatic declare function N(a: number): void",
+    ],
+    [
+      "declare namespace + overloads + implementation",
+      "static declare namespace N { const a: number }\nstatic function N(a: string): void;\nstatic function N(a: any) {}",
+    ],
+    [
+      "namespace with values + declare function",
+      "static namespace N { export const a = 1 }\nstatic declare function N(): void",
+    ],
+    [
+      "namespace with values + declare class",
+      "static namespace N { export const a = 1 }\nstatic declare class N {}",
+    ],
+    [
+      "declare namespace + function in one block",
+      "static {\n  declare namespace f { const x: number }\n  function f() {}\n}",
+    ],
+    [
+      "declare namespace + function across blocks and keywords",
+      "static { declare namespace f { const x: number } }\nserver function f() {}",
+    ],
+    [
+      "export declare namespace + export function",
+      "export declare namespace f { const x: number }\nexport function f() {}",
+    ],
+    [
       "a namespace of types only + a function",
       "static namespace N { type T = 1 }\nstatic function N() {}",
     ],
@@ -575,6 +618,27 @@ describe("TypeScript's merges", () => {
       "a function + a namespace + a function",
       "static function f(a: string): void;\nstatic namespace f { export const a = 1 }\nstatic function f(a: any) {}",
       "f",
+      3,
+      16,
+    ],
+    [
+      "a declare namespace between a signature and its implementation",
+      "static function f(a: string): void;\nstatic declare namespace f { const x: number }\nstatic function f(a: any) {}",
+      "f",
+      3,
+      16,
+    ],
+    [
+      "a declare namespace + two classes",
+      "static declare namespace C { const a: number }\nstatic class C {}\nstatic class C {}",
+      "C",
+      3,
+      13,
+    ],
+    [
+      "a declare namespace + a class + a function",
+      "static declare namespace C { const a: number }\nstatic class C {}\nstatic function C() {}",
+      "C",
       3,
       16,
     ],
@@ -690,6 +754,15 @@ describe("an export list names a declared binding", () => {
       2,
       16,
     ],
+    // A signature with no body binds nothing (Node: "Export 'f' is not
+    // defined in module"; tsc: TS2391).
+    [
+      "an overload signature with no implementation",
+      "static function f(a: string): void;\nstatic export { f }",
+      "f",
+      2,
+      16,
+    ],
     [
       "an ambient class",
       "static declare class C {}\nstatic export { C }",
@@ -763,8 +836,44 @@ describe("an export list names a declared binding", () => {
     },
   );
 
+  it("says where an ambient-only name is declared", () => {
+    const error = expectRefused(
+      "static declare const d: number\nstatic export { d }",
+      UNDECLARED,
+      "d",
+      2,
+      16,
+    );
+    expect(error.message).toContain(
+      "only declared with `declare` at 1:22, which the TypeScript strip erases",
+    );
+  });
+
+  it("says where a signature-only name is declared", () => {
+    const error = expectRefused(
+      "static function f(a: string): void;\nstatic export { f }",
+      UNDECLARED,
+      "f",
+      2,
+      16,
+    );
+    expect(error.message).toContain(
+      "only declared by the function signature at 1:17, which has no body",
+    );
+  });
+
+  it("names no earlier declaration for a name nothing declares", () => {
+    const error = expectRefused("static export { q }", UNDECLARED, "q", 1, 16);
+    expect(error.message).not.toContain("only declared");
+  });
+
   const compiles: [string, string][] = [
     ["declared later", "static export { q }\nstatic const q = 1"],
+    [
+      "an overload signature with its implementation",
+      "static function f(a: string): void;\nstatic function f(a: any) {}\nstatic export { f }",
+    ],
+
     ["declared later, top level export", "export { q }\nstatic const q = 1"],
     ["declared earlier", "static const q = 1\nstatic export { q }"],
     [

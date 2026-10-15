@@ -312,13 +312,16 @@ source order: "Duplicate declaration "x": it is already declared at 1:8. …".
 The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
 merges, and so do the merges TypeScript accepts: an enum with an enum (of the
 same constness) or after a namespace, overload signatures followed by one more
-function, a namespace after a function, class, enum or namespace, and the same
-with `declare`. A type-only name (`type`, `interface`, an `import type`, a
+function, a namespace after a function, class, enum or namespace, a function or
+class after a namespace when either is `declare`d, and the same with `declare`. A type-only name (`type`, `interface`, an `import type`, a
 namespace holding only types) shares only the value space it does not occupy.
-Five forms stock Marko compiles are refused too, because the module they
-produce does not load (`function` twice, `function` with `var`, `var` with
-`import`, `function` with `const`, `export function` with `const`); that is one
-row of `divergences.md`. An export list name that no module statement declares,
+Some pairs stock Marko compiles are refused too, because the module they
+produce does not load or TypeScript refuses them (`function` twice, `function`
+with `var`, `var` with `import`, `function` with `const`, `export function`
+with `const`, `declare function` twice or beside its implementation, `declare
+class` twice or beside a `class`, a `declare var` beside a `const`, and a
+namespace holding values before the function or class it would merge with);
+that is one row of `divergences.md`. An export list name that no module statement declares,
 at any position, is refused at the name, `MX_UNDECLARED_EXPORT`: "Export 'q' is
 not defined in module: …". A value that only `declare` introduces
 (`static declare const d: number` beside `static export { d }`, and likewise
