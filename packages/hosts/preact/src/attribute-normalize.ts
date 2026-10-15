@@ -176,8 +176,8 @@ const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && 
  * null-prototype one, which Marko fails on, prints `[object Object]`, unless
  * Hono's own runtime made it. A prototype that is itself data
  * (`Object.assign({}, JSON.parse('{"__proto__":{…}}'))` sets the copy's
- * prototype to the parsed object) does not make an object a class instance: only
- * a prototype whose `constructor` is a function other than `Object` does. `hono/jsx` elements are class
+ * prototype to the parsed object, or to an array) does not make an object a class instance: only
+ * a prototype whose `constructor` is a function other than `Object` or `Array` does. `hono/jsx` elements are class
  * instances, so they pass. `hono/jsx/dom` (its jsx runtime, `createElement`,
  * `cloneElement`, `Fragment`) builds plain `{ tag, type, props, key, ref }`
  * objects, and `createPortal` a plain `{ tag, props, key, e, p: 1 }`; both are
@@ -197,7 +197,7 @@ export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
     if (item === null || typeof item !== "object") return item;
     if (Array.isArray(item)) return item.some((entry: any) => entry !== null && typeof entry === "object") ? item.map(text) : item;
     const proto = Object.getPrototypeOf(item);
-    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object) return item;
+    if (proto !== Object.prototype && proto !== null && typeof proto.constructor === "function" && proto.constructor !== Object && proto.constructor !== Array) return item;
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
     if (${HONO_PORTAL_CHECK}) return item;
     if (${HONO_DOM_NODE_CHECK}) return item;

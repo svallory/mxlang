@@ -37,6 +37,10 @@ const inputs = {
   nullProto: () => ({ x: Object.assign(Object.create(null), { a: 1 }) }),
   protoGadget: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"z":1},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
   protoGadgetCtor: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"constructor":null},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
+  // An array as the copy's prototype: its constructor is Array, not a data object.
+  arrayProtoGadget: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":[],"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
+  arrayProtoGadgetDeep: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"__proto__":[]},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
+  arrayHoldingArrayProtoGadget: () => ({ x: [Object.assign({}, JSON.parse('{"__proto__":[],"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}'))] }),
   primitives: () => ({ a: "s<", b: 0, c: null, d: undefined, e: false, f: [1, "x"] }),
   node: () => ({ x: jsx("i", {}, "node") }),
   nodes: () => ({ x: [jsx("i", {}, "a"), "-", jsx("b", {}, jsx("u", {}, "c"))] }),
@@ -128,6 +132,20 @@ const CASES: Record<string, CaseSpec> = {
   nullProto: { source: "<p>${input.x}</p>", input: "nullProto" },
   protoGadget: { source: "<p>${input.x}</p>", input: "protoGadget" },
   protoGadgetCtor: { source: "<p>${input.x}</p>", input: "protoGadgetCtor" },
+  arrayProtoGadget: { source: "<p>${input.x}</p>", input: "arrayProtoGadget" },
+  arrayProtoGadgetDeep: {
+    source: "<p>${input.x}</p>",
+    input: "arrayProtoGadgetDeep",
+  },
+  arrayHoldingArrayProtoGadget: {
+    source: "<p>${input.x}</p>",
+    input: "arrayHoldingArrayProtoGadget",
+  },
+  arrayProtoGadgetLone: { source: "${input.x}", input: "arrayProtoGadget" },
+  arrayHoldingArrayProtoGadgetLone: {
+    source: "${input.x}",
+    input: "arrayHoldingArrayProtoGadget",
+  },
   primitives: {
     source:
       "<p>${input.a}|${input.b}|${input.c}|${input.d}|${input.e}|${input.f}</p>",
@@ -284,6 +302,29 @@ describe("JSON-shaped data in a text placeholder (Hono client and server)", () =
   it("stringifies a copy whose prototype is attacker data (Object.assign of a __proto__ key)", () => {
     expect(at("protoGadget").client).toBe("<p>[object Object]</p>");
     expect(at("protoGadgetCtor").client).toBe("<p>[object Object]</p>");
+  });
+  it("stringifies a copy whose prototype is an array, alone and in an array", () => {
+    // Marko's value + "": an array prototype prints as the array's join, "".
+    expect(at("arrayProtoGadget").errors).toEqual([]);
+    expect(at("arrayProtoGadget").injected).toBe(0);
+    expect(at("arrayProtoGadget").client).toBe("<p></p>");
+    expect(at("arrayHoldingArrayProtoGadget").injected).toBe(0);
+    expect(at("arrayHoldingArrayProtoGadget").client).toBe("<p></p>");
+  });
+  it("renders no element for the same copies as the only content of a template", () => {
+    for (const name of [
+      "arrayProtoGadgetLone",
+      "arrayHoldingArrayProtoGadgetLone",
+    ]) {
+      expect(at(name).errors).toEqual([]);
+      expect(at(name).injected).toBe(0);
+      expect(at(name).client).toBe("");
+      expect(html(at(name).server)).toBe("");
+    }
+  });
+  it("stringifies a copy whose prototype is a plain object that holds an array-prototype key", () => {
+    expect(at("arrayProtoGadgetDeep").injected).toBe(0);
+    expect(at("arrayProtoGadgetDeep").client).toBe("<p>[object Object]</p>");
   });
 });
 
