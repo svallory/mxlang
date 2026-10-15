@@ -135,10 +135,11 @@ symbols that carry them:
 | non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`, `isUnicodeSpaceCode`) and its callers in `core/Parser.ts`, `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9, 10 and 13 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
 | Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the trigger look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
 | a `//` comment in a text tag's open tag; a close tag with no open tag, or after a tag that never got its name | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`, `ensureExpectedCloseTag`) | the parser does not throw (below) |
+| the bad-indentation message: `Line indentation does not match indentation of previous line` (stock 5.18.0 omits the "not") | `states/CONCISE_HTML_CONTENT.ts` (`CONCISE_HTML_CONTENT.parse`) | stock's wording is a typo; code `MX_PARSE_INVALID_INDENTATION` and the position are unchanged |
 
 The bun patch `patches/htmljs-parser@5.18.0.patch`, which `@marko/compiler`'s
-npm copy still runs under in this repository, carries only the `??` / `?.` skip and the non-ASCII word and Unicode
-whitespace look-behinds (`PROVENANCE.md`); the corpus and
+npm copy still runs under in this repository, carries only the `??` / `?.` skip, the non-ASCII word and Unicode
+whitespace look-behinds and the corrected bad-indentation message (`PROVENANCE.md`); the corpus and
 `corpus-equivalence.test.ts` hold the three builds together.
 
 **The parser does not throw** (the language lead, 2026-10-06, recorded with decision

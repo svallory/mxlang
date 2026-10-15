@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index dc727aef1e94c2a42a93d9e897a89cd5518f0907..bf6666fbda16e928d85805c0aa61aa64d8084d59 100644
+index dc727aef1e94c2a42a93d9e897a89cd5518f0907..c4b10da0fbbc23a51e06633e0f8f6e9674cffa86 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -145,8 +145,14 @@ var Parser = class {
@@ -134,6 +134,15 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..bf6666fbda16e928d85805c0aa61aa64
      return parser.emitError(
        closeTag,
        0,
+@@ -896,7 +904,7 @@ var CONCISE_HTML_CONTENT = {
+           this.emitError(
+             this.pos,
+             7,
+-            "Line indentation does match indentation of previous line"
++            "Line indentation does not match indentation of previous line"
+           );
+           return;
+         }
 @@ -1119,7 +1127,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
@@ -332,7 +341,7 @@ index dc727aef1e94c2a42a93d9e897a89cd5518f0907..bf6666fbda16e928d85805c0aa61aa64
    return code === 62;
  }
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b1965098243de1dcdac07ce88ef50991ca702bfa 100644
+index 8afb14db555b8df8a5b9f5e1c29bad5080125709..8b2bfd2070de85be0d42f6ab33ca6e9125e5b256 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -118,8 +118,14 @@ var Parser = class {
@@ -467,6 +476,15 @@ index 8afb14db555b8df8a5b9f5e1c29bad5080125709..b1965098243de1dcdac07ce88ef50991
      return parser.emitError(
        closeTag,
        0,
+@@ -869,7 +877,7 @@ var CONCISE_HTML_CONTENT = {
+           this.emitError(
+             this.pos,
+             7,
+-            "Line indentation does match indentation of previous line"
++            "Line indentation does not match indentation of previous line"
+           );
+           return;
+         }
 @@ -1092,7 +1100,7 @@ var shouldTerminate = () => !1, unaryKeywords = [
            let wasExpression = !1;
            if (expression.operators) {
