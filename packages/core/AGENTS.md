@@ -1146,7 +1146,9 @@ Five facts worth knowing before editing it:
   after the sigil while its `code` is the template literal (or array) core
   built over it, so `code` is not the slice of its span (a static `.a.b` is
   the same: value `"a b"`, span over `a.b`). Only a shorthand class beside an
-  authored `class` attribute stays spanless; `lowerSource` rejects that one.
+  authored `class` attribute, or a class a dialect trigger placed
+  (`ctx.shorthand`) and merged into one, stays spanless; `lowerSource`
+  rejects those.
 - **Lowering reads both ASTs until PR 6 (parser port PR 4, decision 158).**
   Node kinds are tested through `isTagNode`/`isTextNode`/`isCommentNode`/
   `isAttributeNode`/`isSpreadAttributeNode`/`isMxAttributeTag` (core.ts),

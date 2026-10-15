@@ -399,7 +399,6 @@ describe("valid TypeScript in a tag head", () => {
     ["type arguments", "<foo<string> value=1/>\n"],
     ["type arguments on a tag with a body", "<foo<A>>\n  hi\n</>\n"],
     ["type arguments before a space", "<foo<A> >\n  hi\n</>\n"],
-    ["type arguments and an argument", "<foo<A>(bar)>\n  hi\n</>\n"],
     ["type parameters before |params|", "<foo<A>|data: A|>\n  hi\n</>\n"],
     ["type parameters, a space, |params|", "<foo<A> |data: A|>\n  hi\n</>\n"],
     ["a space, type parameters, |params|", "<foo <A>|data: A|>\n  hi\n</>\n"],

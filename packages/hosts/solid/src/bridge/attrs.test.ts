@@ -95,6 +95,39 @@ describe("class shorthand", () => {
     );
   });
 
+  // A shorthand with a placeholder and no authored `class` is an array core
+  // builds over the shorthand's own source (it has a span), not the
+  // spanless fold of `.card class=value`.
+  it.each([
+    ["a static word then a placeholder word", "<div.b.a${y}>y</div>"],
+    ["a static word then a placeholder alone", "<div.a.${y}>y</div>"],
+    ["a placeholder word then a static word", "<div.a${y}.b>y</div>"],
+  ])(
+    "lowers a shorthand class array with a placeholder: %s",
+    (_name, markup) => {
+      const attrs = attrsOf(`const el = ${markup};`);
+      expect(attrs).toHaveLength(1);
+      const attr = attrs[0] as {
+        name: { name: string };
+        value: {
+          type: string;
+          expression: { type: string; elements: unknown[] };
+        };
+      };
+      expect(attr.name.name).toBe("class");
+      expect(attr.value.type).toBe("JSXExpressionContainer");
+      expect(attr.value.expression.type).toBe("ArrayExpression");
+      expect(attr.value.expression.elements).toHaveLength(2);
+    },
+  );
+
+  it("still refuses a shorthand class beside a non-string class", () => {
+    expectSyntaxError(
+      () => parseMx("const el = <div.a class=y>y</div>;"),
+      "combine shorthand with a string class or use class={...}",
+    );
+  });
+
   it("resolves a repeated `class` last-wins, emitting class once", () => {
     // `<div.card class="x" class={c: on()}>`: core resolves the repeated name
     // to its last occurrence (decision 135), as Marko 6.4.4 does: the earlier
