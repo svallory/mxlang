@@ -158,6 +158,25 @@ describe("a dialect's table", () => {
     expect(resolveSyntax(join(dir, PAGE))).toBe(defaultSyntax());
   });
 
+  it("`tagShorthands` is true in the default row; an overlay of true is the default row", () => {
+    expect(defaultSyntax().tagShorthands).toBe(true);
+    dialect(dir, { tagShorthands: true });
+    expect(resolveSyntax(join(dir, PAGE))).toBe(defaultSyntax());
+  });
+
+  it("`tagShorthands: false` is its own frozen, interned table with its own hash", () => {
+    dialect(join(dir, "a"), { tagShorthands: false });
+    dialect(join(dir, "b"), { tagShorthands: false });
+    const a = resolveSyntax(join(dir, "a", PAGE));
+    expect(a).not.toBe(defaultSyntax());
+    expect(resolveSyntax(join(dir, "b", PAGE))).toBe(a);
+    expect(a.tagShorthands).toBe(false);
+    expect(Object.isFrozen(a)).toBe(true);
+    expect(syntaxHash(a)).not.toBe(syntaxHash(defaultSyntax()));
+    // Every other field is the default row's.
+    expect({ ...a, tagShorthands: true }).toEqual(defaultSyntax());
+  });
+
   it.each([
     [{ tagTypes: { div: 0 } }, "tag types are taglib-owned"],
     [{ triggers: [] }, "`table.triggers` is not a syntax table field"],
@@ -166,6 +185,9 @@ describe("a dialect's table", () => {
       '`table.lineTriggers[0].chars` (trigger "member"): lineTriggers may not be armed on "<"',
     ],
     [{ concise: false }, "`table.concise`: turning concise mode off"],
+    [{ tagShorthands: "no" }, "`table.tagShorthands`"],
+    [{ tagShorthands: 0 }, "`table.tagShorthands`"],
+    [{ tagShorthands: null }, "`table.tagShorthands`"],
   ])("refuses %j in the dialect file", (value, message) => {
     dialect(dir, value, { tags: "tags" });
     const error = caught(() => resolveSyntax(join(dir, PAGE)));

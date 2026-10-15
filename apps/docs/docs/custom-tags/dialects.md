@@ -103,6 +103,26 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 - **`.mx` files are unaffected.** They route to no dialect.
 - **A wrong value** is an error in your module, like a wrong `tagRules`: `` `structural` must be "pass" or "reject" ``.
 
+## Dotted tag names: `table.tagShorthands`
+
+A `.mx` tag head has the `#id` and `.class` shorthands and an implicit `div`, so `billing.InvoiceVoided` is a `billing` tag with the class `InvoiceVoided`. A dialect whose tags are JSX-style member names turns them off in its syntax table:
+
+```ts
+export default {
+  table: { tagShorthands: false },
+  tagRules: "none",
+  contracts: { events: { children: { "*": {} } } },
+} satisfies Partial<Dialect>;
+```
+
+`tagShorthands` is `@unstable` and defaults to `true`. With `false`:
+
+- A `.` continues the tag name, in concise lines and in HTML: `billing.InvoiceVoided` is one tag with that name (a wildcard `children["*"]` entry matches it as any other name), and `</billing.InvoiceVoided>` closes it. A closing tag must carry the whole name.
+- A `#` anywhere in a tag head is `MX_NO_TAG_SHORTHAND`, positioned at the `#`. So is a head that starts with `.` or `#` (the implicit `div`), positioned at that character.
+- A name that ends in `.`, has `..`, or has a `.` right after a `${…}` is `MX_INVALID_TAG_NAME`, positioned at the dots.
+
+The value must be a boolean: anything else is an error in your module (`` `tagShorthands` is a boolean ``). It is part of the table's identity, so a table with `false` and one with `true` never share a parse. Only the tag head changes. An attribute tag's head follows the same rule: `<@a.b/>` is the attribute tag `a.b` (by default it reads as `@a` with the class `b`), and `<@a#b/>` is `MX_NO_TAG_SHORTHAND`. Attribute names and `${…}` placeholders read as before. A `.` before a `${…}` is allowed, so `a.${x}` is a dynamic tag name.
+
 ## Names an import may share with a tag: `bindingsCallTags`
 
 In a `.mx` file, a capitalized tag whose name is bound in the file (an `import`, a `<const>`, a `<define>`, a loop or define parameter) is always a call of that binding. It wins over a contract of the same name and over a wildcard `children["*"]` entry. In a data file that call is a dynamic tag, which a static tree refuses, so a dialect whose files import a value and also name a tag after it (`import { Task } from "./task"` beside `<Task k="a"/>`) fails with `MX_NOT_IN_DATA_FILE`.

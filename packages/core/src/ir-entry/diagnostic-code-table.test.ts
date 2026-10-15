@@ -470,6 +470,9 @@ const ROWS: Row[] = [
   lowerRow("MX_TAG_NAME_MISSING", ",\n", 1, 0),
   lowerRow("MX_EXPECTED_SINGLE_EXPRESSION", "<x b=${1 2}/>\n", 1, 6),
   lowerRow("MX_RESERVED_TAG_NAME", "<% x %>\n", 1, 1),
+  lowerRow("MX_NO_TAG_SHORTHAND", "div\n  p#main\n", 2, 3, {
+    dialect: { id: "plain", name: "Plain", table: { tagShorthands: false } },
+  }),
   lowerRow("MX_STATEMENT_IN_HTML_MODE", "<static const x = 1/>\n", 1, 1),
   lowerRow("MX_INPUT_ENDS_IN_DELIMITER", "div(a\n", 1, 3),
   lowerRow(

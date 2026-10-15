@@ -471,8 +471,11 @@ class FrontEnd {
     this.tagTypes = withStatementKeywords(
       given ??
         this.prior?.tagTypes ??
-        buildTagTypes(this.source, this.options.statementKeywords, (name) =>
-          this.shapeOf(name),
+        buildTagTypes(
+          this.source,
+          this.options.statementKeywords,
+          (name) => this.shapeOf(name),
+          base.tagShorthands !== false,
         ),
       this.options.statementKeywords,
     );

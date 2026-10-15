@@ -281,6 +281,18 @@ isn't MX-specific syntax to avoid — it isn't Marko syntax at all. Marko's own 
 
 There's no MX behavior to document here because no `.mx` file using the colon-modifier form compiles in the first place.
 
+## A tag shorthand where the dialect turned them off
+
+A dialect whose syntax table sets `tagShorthands: false` has no `#id` and `.class` shorthands and no implicit `div`. Its tag names are plain dotted names, as in JSX: `billing.InvoiceVoided` is one tag, and `</billing.InvoiceVoided>` closes it. Three things are errors in such a file, each positioned at the character that is wrong:
+
+| Source | Code | Why |
+|---|---|---|
+| `p#main`, `<p#main>` | `MX_NO_TAG_SHORTHAND` at the `#` | there is no `#id` shorthand; write `id="main"` |
+| `.card`, `#main` as a head | `MX_NO_TAG_SHORTHAND` at the first character | there is no implicit `div`; name the tag and write the class as an attribute |
+| `a.`, `a..b`, `${x}.y` | `MX_INVALID_TAG_NAME` at the `.` | a `.` must be followed by a name part, and cannot follow a `${…}` |
+
+A file in the default `.mx` grammar never sees these errors: `tagShorthands` is `true` there.
+
 ## An ambiguous `>` in an attribute value
 
 A `>` preceded by whitespace ends the tag, so a comparison written bare in an attribute value splits the tag in a way you did not intend:

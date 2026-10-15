@@ -103,7 +103,9 @@ export type MxErrorCode =
   | "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE"
   | "MX_TAG_TYPES_MISMATCH"
   | "MX_INPUT_ENDS_IN_DELIMITER"
-  | "MX_FRONT_END_INTERNAL";
+  | "MX_FRONT_END_INTERNAL"
+  | "MX_NO_TAG_SHORTHAND"
+  | "MX_INVALID_TAG_NAME";
 
 /**
  * A syntax-table trigger (decision 182; ast §4.4): `&status` in an expression

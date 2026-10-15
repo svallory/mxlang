@@ -166,7 +166,10 @@ it("MxErrorCode's MX_* members are the front-end rows of ast §3.13", () => {
     (m) => m[1] ?? "",
   );
   expect(table).toHaveLength(8);
-  expect(new Set(declared)).toEqual(new Set(table));
+  // The two `MX_` codes the template parser itself reports (`tagShorthands:
+  // false`) are members too, but not front-end rows: they stop the parse.
+  const templateReported = ["MX_NO_TAG_SHORTHAND", "MX_INVALID_TAG_NAME"];
+  expect(new Set(declared)).toEqual(new Set([...table, ...templateReported]));
   expect(table).toContain("MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE");
   expect(table).toContain("MX_INPUT_ENDS_IN_DELIMITER");
 });

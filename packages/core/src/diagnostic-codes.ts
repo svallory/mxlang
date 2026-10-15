@@ -242,6 +242,13 @@ export const UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE_CODE =
   "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE";
 /** Tag type arguments that do not match the tag's type parameters. */
 export const TAG_TYPES_MISMATCH_CODE = "MX_TAG_TYPES_MISMATCH";
+/**
+ * A `#id` or `.class` shorthand, or an implicit `div`, in a file whose
+ * dialect set `tagShorthands: false` (the syntax table field). Positioned at
+ * the `#` or the leading `.`. A trailing or doubled `.`, or a `.` right after
+ * a `${…}` in such a file, is `MX_INVALID_TAG_NAME`.
+ */
+export const NO_TAG_SHORTHAND_CODE = "MX_NO_TAG_SHORTHAND";
 /** Input that ends inside a concise open delimiter. */
 export const INPUT_ENDS_IN_DELIMITER_CODE = "MX_INPUT_ENDS_IN_DELIMITER";
 /** An internal error of the front end. */
@@ -308,6 +315,10 @@ const FRONT_END_CODES: ReadonlySet<string> = new Set([
   TAG_TYPES_MISMATCH_CODE,
   INPUT_ENDS_IN_DELIMITER_CODE,
   FRONT_END_INTERNAL_CODE,
+  NO_TAG_SHORTHAND_CODE,
+  // The template parser reports it for `tagShorthands: false`; lowering
+  // raises the same code for a local variable named as a tag.
+  INVALID_TAG_NAME_CODE,
 ]);
 
 const TEMPLATE_CODES: ReadonlySet<string> = new Set(TEMPLATE_PARSE_ERRORS);
@@ -660,6 +671,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         ],
         [RESERVED_TAG_NAME_CODE, "a tag name the front end reserves"],
         [
+          NO_TAG_SHORTHAND_CODE,
+          "a `#id` or `.class` shorthand where the dialect turned tag shorthands off",
+        ],
+        [
           ATTRIBUTE_TAG_AT_ROOT_CODE,
           "an attribute tag at the root of the file",
         ],
@@ -828,6 +843,7 @@ export type MxDiagnosticCode =
   | typeof TAG_NAME_MISSING_CODE
   | typeof STATEMENT_IN_HTML_MODE_CODE
   | typeof RESERVED_TAG_NAME_CODE
+  | typeof NO_TAG_SHORTHAND_CODE
   | typeof ATTRIBUTE_TAG_AT_ROOT_CODE
   | typeof UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE_CODE
   | typeof TAG_TYPES_MISMATCH_CODE

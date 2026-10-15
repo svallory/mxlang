@@ -869,7 +869,7 @@ same point (`[C]chunk-src.js:6080`, the `tagDef` lookup in `onOpenTagName`).
 | Field | Type | Opt. | Meaning |
 |---|---|---|---|
 | `type` | `"MxParseError"` | no | |
-| `code` | `string` | no | a stable code: htmljs codes by name (`INVALID_ATTRIBUTE_VALUE`, `MISMATCHED_CLOSING_TAG`, … `[H]util/error-code.d.ts`, 31 codes, 0-30), `BABEL_<reasonCode>` for an expression sub-parse failure, `MX_<NAME>` for front-end rules |
+| `code` | `string` | no | a stable code: htmljs codes by name (`INVALID_ATTRIBUTE_VALUE`, `MISMATCHED_CLOSING_TAG`, … `[H]util/error-code.d.ts`, 31 codes, 0-30), `BABEL_<reasonCode>` for an expression sub-parse failure, `MX_<NAME>` for front-end rules, and the two `MX_` codes of a template error below (`MX_NO_TAG_SHORTHAND`, `MX_INVALID_TAG_NAME`) |
 | `origin` | `"template" \| "expression" \| "front-end"` | no | which of the three produced it |
 | `message` | `string` | no | one line, no code frame, no ANSI |
 | `start`, `end` | `number` | no | the node's own range (`MxNodeBase`, §3.0): what to underline; for an expression error the precise point when Babel reports one (Marko's `errorLoc`, bounded to the source range as `getBoundedRange` does, `[C]chunk-src.js:1040-1050`) |
@@ -883,7 +883,13 @@ Three producers, with different consequences:
    (`Parser.parse`), so no event follows `onError`: no close events for
    open tags, no further text. One parse therefore yields **at most one**
    template error. (Marko throws on it, `[C]chunk-src.js:5975-5984`, so MX
-   today gets no tree at all.)
+   today gets no tree at all.) Two template errors carry an `MX_` code,
+   because they are a language rule, not a parser state: with a syntax table
+   `tagShorthands: false`, a `#` in a tag head, or a head that starts with `.`
+   or `#`, is `MX_NO_TAG_SHORTHAND` (at that character), and a `.` that
+   leaves an empty part of a dotted tag name (`a.`, `a..b`, a `.` right
+   after a `${…}`) is `MX_INVALID_TAG_NAME` (at the dot or the run of dots).
+   Their `origin` is `"template"`; they are not in the front-end table below.
 2. **Expression sub-parses** fail per container and do not stop the template
    parse (Marko's `tryParse` returns a `MarkoParseError` and continues,
    `[C]chunk-src.js:1009-1015`). There may be any number. When an attribute

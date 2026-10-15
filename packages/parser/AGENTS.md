@@ -50,6 +50,15 @@ Babel's "Unexpected token" at the `:`; `::` in a name is part of the name).
 Atoms are a dialect feature: a dialect arms an expression row on `:` whose
 hook returns a `StringLiteral` marked `extra.mxAtom`, which core records and
 splices.
+`tagShorthands: false` (`@unstable`, default `true`) removes the tag head's
+`#id`/`.class` shorthands and the implicit `div`: `states/TAG_NAME.ts` lets a
+`.` continue the name (`billing.InvoiceVoided` is one name, concise and HTML,
+and the front end's pre-scan `tag-types.ts` agrees), and reports
+`MX_NO_TAG_SHORTHAND` (a `#`, or a head starting with `.`/`#`) and
+`MX_INVALID_TAG_NAME` (a trailing or doubled `.`, a `.` after a `${…}`) as
+template errors named `MX_*` in `error-code.ts`, so `parse.ts` hands them on
+unchanged. Tests: `src/template/mx-tag-shorthands.test.ts`,
+`src/frontend/tag-shorthands.test.ts`.
 `src/template/test-support/sugar-rows.ts` holds layer-2 rows that express the
 atoms and the name sugars as a dialect would (test fixtures, run by
 `src/template/mx-sugar-module.test.ts` over the corpora of

@@ -529,7 +529,18 @@ Five facts worth knowing before editing it:
   `table` is overlaid on `DEFAULT_SYNTAX`, validated with the template
   parser's `validateSyntaxTable` (`tagTypes` refused as taglib-owned),
   deep-frozen and interned by `syntaxHash` (sha256 of canonical JSON),
-  cached per manifest read. `compileSource`, `parseFragment` and
+  cached per manifest read. `tagShorthands` (`@unstable`, optional, `true`
+  in `DEFAULT_ROW`; `false` for a dialect whose tag names are JSX member
+  names) is one such table field, validated by the parser's
+  `validateSyntaxTable` and carried by `syntaxHash`: with `false`, a `.`
+  continues the tag name (`billing.InvoiceVoided`, concise and HTML), a `#`
+  in a tag head or a head starting with `.`/`#` is `MX_NO_TAG_SHORTHAND`
+  (`NO_TAG_SHORTHAND_CODE`) at the character, and a trailing or doubled `.`
+  or a `.` after a `${…}` is `MX_INVALID_TAG_NAME`. Both reach core as
+  template-origin errors the parser names itself, so
+  `parseDiagnosticCode` passes them through (`FRONT_END_CODES`) and
+  `mx-parse.ts` is unchanged. Tests: `src/ir-entry/tag-shorthands.test.ts`.
+  `compileSource`, `parseFragment` and
   `lowerSource` take an explicit `dialect` option (a dialect
   or a bare table) that wins, validated once per deep-frozen object
   (`explicitSyntaxOf`/`explicitSyntax`; `isDeepFrozen` gates the caches keyed on the option; one that is not

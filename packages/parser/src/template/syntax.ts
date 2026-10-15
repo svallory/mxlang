@@ -82,6 +82,17 @@ export interface SyntaxTable {
   readonly filter: { readonly open: string; readonly close: string } | null;
   /** Concise mode; turned off only by a language (layer 3), never by a project. */
   readonly concise: boolean;
+  /**
+   * Whether `.class` and `#id` are shorthands in a tag head
+   * (and a head that starts with one an implicit `div`). `true` (the
+   * default, also when omitted) is Marko's grammar. `false` is the JSX
+   * member-tag reading: a `.` continues the tag name (`billing.InvoiceVoided`
+   * is one tag), a `#` in a tag head is `MX_NO_TAG_SHORTHAND`, so is a head
+   * that starts with `.` or `#`, and a `.` that leaves an empty part (a
+   * trailing `.`, `..`, a `.` right after a `${…}`) is `MX_INVALID_TAG_NAME`.
+   * Attribute-position `#x`/`.x` are table rows, not this field. @unstable
+   */
+  readonly tagShorthands?: boolean;
   /** Armed where an operand is expected, in every expression that arms triggers. */
   readonly expressionTriggers: readonly Trigger[];
   /** Armed on the first character of an attribute name. */
@@ -124,6 +135,7 @@ export const DEFAULT_SYNTAX: SyntaxTable = Object.freeze({
   blockTag: null,
   filter: null,
   concise: true,
+  tagShorthands: true,
   expressionTriggers: Object.freeze([]),
   attributeTriggers: Object.freeze([]),
   lineTriggers: Object.freeze([]),
@@ -272,6 +284,11 @@ function validate(
   }
   if (typeof table.concise !== "boolean")
     fail("concise", "`concise` is a boolean");
+  if (
+    table.tagShorthands !== undefined &&
+    typeof table.tagShorthands !== "boolean"
+  )
+    fail("tagShorthands", "`tagShorthands` is a boolean");
   if (table.expressionLanguage !== "ts") {
     fail(
       "expressionLanguage",
@@ -730,6 +747,8 @@ export interface CompiledSyntax {
   /** The first characters of `blockTag.open` and `filter.open`, which stop HTML content's text run (empty on the default row). */
   readonly contentStops: readonly number[];
   readonly tagTypes: ReadonlyMap<string, TagTypeValue>;
+  /** `tagShorthands`: false reads `.` as part of a tag name and refuses `#` (see `SyntaxTable`). */
+  readonly tagShorthands: boolean;
 }
 
 export interface Delimiters {
@@ -754,6 +773,7 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   filter: null,
   contentStops: Object.freeze([]),
   tagTypes: new Map(),
+  tagShorthands: true,
 });
 compiled.set(DEFAULT_SYNTAX, DEFAULT_COMPILED);
 
@@ -826,6 +846,7 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
       d ? [d.open.charCodeAt(0)] : [],
     ),
     tagTypes: new Map(Object.entries(table.tagTypes)),
+    tagShorthands: table.tagShorthands !== false,
   };
   compiled.set(table, result);
   return result;

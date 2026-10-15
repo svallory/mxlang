@@ -787,6 +787,7 @@ describe("the default row", () => {
       textTriggers: [],
       tagTypes: {},
       expressionLanguage: "ts",
+      tagShorthands: true,
     });
     expect(validateSyntaxTable(DEFAULT_SYNTAX)).toEqual([]);
   });

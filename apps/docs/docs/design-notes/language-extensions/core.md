@@ -49,6 +49,7 @@ interface SyntaxTable {
   blockTag: { open: string; close: string } | null;      // null on the default row
   filter: { open: string; close: string } | null;        // null on the default row
   concise: boolean;                                      // true on the default row
+  tagShorthands?: boolean;                               // true on the default row; false: no #id, .class or implicit div, a `.` continues the tag name
   expressionTriggers: Trigger[];                         // empty on the default row
   attributeTriggers: Trigger[];                          // empty on the default row
   lineTriggers: Trigger[];                               // empty on the default row; start of a tagless concise line

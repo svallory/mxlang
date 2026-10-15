@@ -4279,6 +4279,7 @@ host, a target or a dialect.
 | `MX_TAG_NAME_MISSING` | error | a line that continues attributes with no tag to continue |
 | `MX_STATEMENT_IN_HTML_MODE` | error | a statement keyword where the body is HTML |
 | `MX_RESERVED_TAG_NAME` | error | a tag name the front end reserves |
+| `MX_NO_TAG_SHORTHAND` | error | a `#id` or `.class` shorthand where the dialect turned tag shorthands off |
 | `MX_ATTRIBUTE_TAG_AT_ROOT` | error | an attribute tag at the root of the file |
 | `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | error | an unescaped `${` in a quoted attribute value |
 | `MX_TAG_TYPES_MISMATCH` | error | tag type arguments that do not match the tag's type parameters |
@@ -4437,6 +4438,7 @@ interface SyntaxTable {
   blockTag: { open: string; close: string } | null;    // null on the default row
   filter: { open: string; close: string } | null;      // null on the default row
   concise: boolean;                                    // true on the default row
+  tagShorthands?: boolean;                             // true on the default row (@unstable)
   expressionTriggers: Trigger[];
   attributeTriggers: Trigger[];
   lineTriggers: Trigger[];                             // addendum 1
@@ -4520,6 +4522,13 @@ the field path and, for a trigger, its `id`:
   three `open` strings may not be equal or one a prefix of another.
 - `concise` is a boolean, `inlineScript` is `null` or `{ trigger }` with a
   non-empty string, `expressionLanguage` is `"ts"`.
+- `tagShorthands` is a boolean when stated (`@unstable`). `false` removes the
+  `#id` and `.class` shorthands and the implicit `div` from a tag head: a `.`
+  continues the tag name, so `billing.InvoiceVoided` is one tag (concise and
+  HTML, and `</billing.InvoiceVoided>` closes it); a `#` in a tag head, and a
+  head that starts with `.` or `#`, is `MX_NO_TAG_SHORTHAND` at that character;
+  a trailing `.`, a doubled `..` and a `.` right after a `${…}` are
+  `MX_INVALID_TAG_NAME`. The default is `true`, which changes no file.
 - A trigger is an object with a non-empty `id` (unique within its list), a valid
   `standIn`, a valid `node` (`{ call }` carries a non-empty string; `{ type,
   dialect }` two non-empty strings and no `call`, and only in an attribute or line

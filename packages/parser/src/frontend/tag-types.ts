@@ -32,10 +32,16 @@ function startsName(code: number): boolean {
 
 /**
  * Where a tag name starting at `start` ends: `TAG_NAME`'s terminators, in
- * concise mode (`;`, `[`) or in HTML mode (`>`). `.`/`#` start a shorthand,
- * `${` a dynamic name.
+ * concise mode (`;`, `[`) or in HTML mode (`>`). `.`/`#` start a shorthand
+ * (with `tagShorthands: false`, `#` still ends the scan, as it is refused,
+ * and `.` continues the name), `${` a dynamic name.
  */
-function nameEnd(source: string, start: number, concise: boolean): number {
+function nameEnd(
+  source: string,
+  start: number,
+  concise: boolean,
+  shorthands: boolean,
+): number {
   for (let at = start; at < source.length; at++) {
     const code = source.charCodeAt(at);
     if (
@@ -46,7 +52,7 @@ function nameEnd(source: string, start: number, concise: boolean): number {
       code === 124 || // |
       code === 60 || // <
       code === 44 || // ,
-      code === 46 || // .
+      (shorthands && code === 46) || // .
       code === 35 || // #
       (code === 58 && source.charCodeAt(at + 1) === 61) || // :=
       (code === 36 && source.charCodeAt(at + 1) === 123) || // ${
@@ -64,14 +70,14 @@ function nameEnd(source: string, start: number, concise: boolean): number {
  * of one `tagShape` call per distinct word). A run of `]` inside one name
  * (`a]b]c`, HTML mode) is the one shape that rescans.
  */
-export function candidateNames(source: string): Set<string> {
+export function candidateNames(source: string, shorthands = true): Set<string> {
   // An unnamed tag (`<.c/>`, `,div`) is typed by the empty name.
   const names = new Set<string>([""]);
   for (let start = 0; start < source.length; start++) {
     if (start > 0 && !startsName(source.charCodeAt(start - 1))) continue;
     if (startsName(source.charCodeAt(start))) continue;
     for (const concise of [true, false]) {
-      const end = nameEnd(source, start, concise);
+      const end = nameEnd(source, start, concise, shorthands);
       if (end > start) names.add(source.slice(start, end));
     }
   }
@@ -109,10 +115,11 @@ export function buildTagTypes(
   source: string,
   statementKeywords: ReadonlySet<MxStatementKeyword>,
   shapeOf: (name: string) => MxBodyMode,
+  shorthands = true,
 ): Record<string, TagTypeValue> {
   // No prototype: a tag may be named `__proto__` or `constructor`.
   const table: Record<string, TagTypeValue> = Object.create(null);
-  for (const name of candidateNames(source)) {
+  for (const name of candidateNames(source, shorthands)) {
     if (name.startsWith("@")) continue;
     const type = statementKeywords.has(name as MxStatementKeyword)
       ? TagType.statement

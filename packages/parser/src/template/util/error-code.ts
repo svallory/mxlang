@@ -32,3 +32,7 @@ export const INVALID_HTML_COMMENT = 30;
 // MX (decision 182): an unclosed syntax-table block tag or filter.
 export const MALFORMED_BLOCK_TAG = 31;
 export const MALFORMED_FILTER = 32;
+// MX: `tagShorthands: false` (a syntax table field). They are named for the
+// stable codes core reports (`MX_NO_TAG_SHORTHAND`, `MX_INVALID_TAG_NAME`).
+export const MX_NO_TAG_SHORTHAND = 33;
+export const MX_INVALID_TAG_NAME = 34;

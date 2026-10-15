@@ -143,6 +143,17 @@ export interface SyntaxTable {
   readonly blockTag: { readonly open: string; readonly close: string } | null;
   readonly filter: { readonly open: string; readonly close: string } | null;
   readonly concise: boolean;
+  /**
+   * Whether a tag head has the `#id` and `.class` shorthands
+   * and the implicit `div`. Default `true`. With `false`, a `.` continues the
+   * tag name (`billing.InvoiceVoided` is one tag, concise and HTML, and
+   * `</billing.InvoiceVoided>` closes it); a `#` anywhere in a tag head, and a
+   * head that starts with `.` or `#`, is `MX_NO_TAG_SHORTHAND` at that
+   * character; a trailing `.`, a doubled `..` or a `.` right after a `${…}`
+   * is `MX_INVALID_TAG_NAME`. Omitted means `true`. Carried through
+   * `syntaxHash`. @unstable
+   */
+  readonly tagShorthands?: boolean;
   readonly expressionTriggers: readonly Trigger[];
   readonly attributeTriggers: readonly Trigger[];
   readonly lineTriggers: readonly Trigger[];
@@ -648,6 +659,7 @@ const MANIFEST_FIELDS = new Set([
   "blockTag",
   "filter",
   "concise",
+  "tagShorthands",
   "expressionTriggers",
   "attributeTriggers",
   "lineTriggers",
@@ -696,6 +708,7 @@ const DEFAULT_ROW: SyntaxTable = deepFreeze({
   blockTag: null,
   filter: null,
   concise: true,
+  tagShorthands: true,
   expressionTriggers: [],
   attributeTriggers: [],
   lineTriggers: [],
