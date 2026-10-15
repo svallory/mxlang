@@ -268,7 +268,7 @@ describe("a literal innerHTML= or outerHTML= is an escaped lowercase attribute",
 
   it("is not renamed on a component", async () => {
     const Box = (props: { innerHTML?: string }) =>
-      jsx("i", {}, props.innerHTML);
+      jsx("i", {}, props.innerHTML ?? "");
     expect(
       await renderMx("<${input.C} innerHTML=input.h/>", { C: Box, h: "t" }),
     ).toBe("<i>t</i>");
