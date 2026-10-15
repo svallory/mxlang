@@ -614,17 +614,15 @@ function statementDeclarations(file: Node): StatementDeclarations {
 }
 
 /**
- * May `next` be declared after `earlier`, which already declare its name?
- * Only two `var`s, and what TypeScript merges: enum with enum or namespace
- * (a `const enum` only with another), a namespace after a function, class,
- * enum or namespace, a function or class after a namespace (TS2434 applies
- * only when both are non-ambient: a `declare`d side lifts it), and the
- * signatures of an overloaded function followed by one more, all `declare`d
- * or none.
+ * May `next` be declared after `earlier`, which already bind its name at run
+ * time? Only two `var`s, and what the TypeScript strip leaves as one binding:
+ * an enum with an enum (of the same constness) or a namespace, a namespace
+ * after a function, class, enum or namespace, and a function after a
+ * namespace. Ambient declarations and bodiless signatures bind nothing and
+ * never get here; TypeScript's own ordering and overload errors (TS2434,
+ * TS2384, TS2300) are left to the type checker.
  */
 function merges(earlier: readonly Declaration[], next: Declaration): boolean {
-  const afterNamespace = (d: Declaration): boolean =>
-    d.kind === "namespace" && (d.ambient || next.ambient);
   switch (next.kind) {
     case "var":
       return earlier.every((d) => d.kind === "var");
@@ -638,20 +636,12 @@ function merges(earlier: readonly Declaration[], next: Declaration): boolean {
       return earlier.every((d) =>
         ["function", "class", "enum", "namespace"].includes(d.kind),
       );
-    case "function": {
-      // A namespace between a signature and what follows it parts them
-      // (TS2391), so a namespace may only come before the first function.
-      let seenFunction = false;
-      return earlier.every((d) => {
-        if (d.kind === "function") {
-          seenFunction = true;
-          return d.signature && d.ambient === next.ambient;
-        }
-        return !seenFunction && afterNamespace(d);
-      });
-    }
-    case "class":
-      return earlier.every(afterNamespace);
+    case "function":
+      // The strip leaves `function N` and the namespace's `N || (N = {})` on
+      // one binding, and a function is hoisted. A class is not: the namespace
+      // reads `N` before the class is initialised, so a class after a
+      // namespace throws when the module runs.
+      return earlier.every((d) => d.kind === "namespace");
     default:
       return false;
   }
@@ -689,6 +679,8 @@ function bindingErrors(
   for (const { statement, parsed: p } of parsed) {
     if (!p) continue;
     for (const next of p.declared.values) {
+      // An ambient declaration and a bodiless signature bind nothing at run time.
+      if (next.ambient || next.signature) continue;
       const earlier = declared.get(next.name);
       if (!earlier) {
         declared.set(next.name, [next]);

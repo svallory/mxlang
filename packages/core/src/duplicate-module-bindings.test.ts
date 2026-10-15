@@ -7,9 +7,10 @@
  *
  * - two `var`s of a name are fine;
  * - so are the merges TypeScript itself accepts (enum with enum or namespace,
- *   a namespace after a function, class, enum or namespace, a function or class
- *   after a namespace when either is `declare`d, function overloads, `declare`
- *   ones included);
+ *   a namespace after a function, class, enum or namespace, a function after a
+ *   namespace; a `declare` declaration or a bodiless signature binds nothing at
+ *   run time, so it never collides, and TypeScript's own conflicts (TS2300,
+ *   TS2384, TS2434, TS2451) are mx-tsc's);
  * - a type-only name (`type`, `interface`, `import type`) is not a value, so it
  *   never collides;
  * - any other second declaration is refused at its name with
@@ -224,13 +225,6 @@ describe("a module name declared twice is refused at the second declaration", ()
       "static export const + server const",
       "static export const q = 1\nserver const q = 2",
       "q",
-      2,
-      13,
-    ],
-    [
-      "static declare const + static const",
-      "static declare const d: number\nstatic const d = 1",
-      "d",
       2,
       13,
     ],
@@ -559,19 +553,96 @@ describe("TypeScript's merges", () => {
       "a namespace of types only + a const",
       "static namespace N { type T = 1 }\nstatic const N = 1",
     ],
+    // Ambient declarations and bodiless signatures bind nothing once the
+    // strip has run, so only a real binding collides. TypeScript's own
+    // ordering and overload errors (TS2300, TS2384, TS2434, TS2451) are
+    // mx-tsc's.
+    [
+      "a namespace with values before a function",
+      "static namespace N { export const a = 1 }\nstatic function N() {}",
+    ],
+    [
+      "an implementation + a bodiless signature",
+      "static function f(a: any) {}\nstatic function f(a: string): void;",
+    ],
+    [
+      "an overload signature + a declare function",
+      "static function f(a: string): void;\nstatic declare function f(): void",
+    ],
+    [
+      "a declare function + its implementation",
+      "static declare function f(): void\nstatic function f() {}",
+    ],
+    [
+      "a signature + a namespace + its implementation",
+      "static function f(a: string): void;\nstatic namespace f { export const a = 1 }\nstatic function f(a: any) {}",
+    ],
+    [
+      "a signature + a declare namespace + its implementation",
+      "static function f(a: string): void;\nstatic declare namespace f { const x: number }\nstatic function f(a: any) {}",
+    ],
+    [
+      "a declare namespace with values + a const",
+      "static declare namespace N { const a: number }\nstatic const N = 1",
+    ],
+    [
+      "a declare var + a const",
+      "static declare var v: number\nstatic const v = 1",
+    ],
+    [
+      "a declare const + a const",
+      "static declare const d: number\nstatic const d = 1",
+    ],
+    [
+      "a const + a declare var",
+      "static const v = 1\nstatic declare var v: number",
+    ],
+    ["a declare let + a let", "static declare let d: number\nstatic let d = 1"],
+    [
+      "a function + a declare function",
+      "static function f() {}\nstatic declare function f(): void",
+    ],
+    [
+      "a declare class + a class",
+      "static declare class C {}\nstatic class C {}",
+    ],
+    [
+      "a class + a declare class",
+      "static class C {}\nstatic declare class C {}",
+    ],
+    [
+      "a declare class twice",
+      "static declare class C {}\nstatic declare class C {}",
+    ],
+    [
+      "a const + a declare namespace with values",
+      "static const N = 1\nstatic declare namespace N { const a: number }",
+    ],
+    [
+      "a declare function + a const",
+      "static declare function f(): void\nstatic const f = 1",
+    ],
+    [
+      "a bodiless signature + a const",
+      "static function f(): void\nstatic const f = 1",
+    ],
+    [
+      "a declare enum + a const",
+      "static declare enum E { A }\nstatic const E = 1",
+    ],
+    [
+      "a declare const in one block + a const in another",
+      "static { declare const d: number }\nserver { const d = 1 }",
+    ],
   ];
   it.each(merges)("%s compiles", (_label, source) => {
     expectCompiles(source);
   });
 
   const refused: [string, string, string, number, number][] = [
-    [
-      "a namespace before the function it would merge with",
-      "static namespace N { export const a = 1 }\nstatic function N() {}",
-      "N",
-      2,
-      16,
-    ],
+    // Stock's strip puts the namespace's `N || (N = {})` before the class, which
+    // throws "Cannot access 'N' before initialization" when the module runs. A
+    // function is hoisted, so a namespace before one loads and is not here.
     [
       "a namespace before the class it would merge with",
       "static namespace C { export const a = 1 }\nstatic class C {}",
@@ -587,45 +658,10 @@ describe("TypeScript's merges", () => {
       12,
     ],
     [
-      "an implementation + another signature",
-      "static function f(a: any) {}\nstatic function f(a: string): void;",
-      "f",
-      2,
-      16,
-    ],
-    [
       "an implementation + another implementation",
       "static function f(a: any) {}\nstatic function f(a: string) {}",
       "f",
       2,
-      16,
-    ],
-    [
-      "an overload signature + a declare function",
-      "static function f(a: string): void;\nstatic declare function f(): void",
-      "f",
-      2,
-      24,
-    ],
-    [
-      "a declare function + its implementation",
-      "static declare function f(): void\nstatic function f() {}",
-      "f",
-      2,
-      16,
-    ],
-    [
-      "a function + a namespace + a function",
-      "static function f(a: string): void;\nstatic namespace f { export const a = 1 }\nstatic function f(a: any) {}",
-      "f",
-      3,
-      16,
-    ],
-    [
-      "a declare namespace between a signature and its implementation",
-      "static function f(a: string): void;\nstatic declare namespace f { const x: number }\nstatic function f(a: any) {}",
-      "f",
-      3,
       16,
     ],
     [
@@ -655,20 +691,6 @@ describe("TypeScript's merges", () => {
       "a namespace with values + a const",
       "static namespace N { export const a = 1 }\nstatic const N = 1",
       "N",
-      2,
-      13,
-    ],
-    [
-      "a declare namespace with values + a const",
-      "static declare namespace N { const a: number }\nstatic const N = 1",
-      "N",
-      2,
-      13,
-    ],
-    [
-      "a declare var + a const",
-      "static declare var v: number\nstatic const v = 1",
-      "v",
       2,
       13,
     ],
