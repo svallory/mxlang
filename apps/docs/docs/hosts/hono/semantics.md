@@ -27,6 +27,12 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 | `<define/Row\|p\|>` | a local function, called as `Row(p)` |
 | `<try>` | `MxErrorBoundary` (around `hono/jsx`'s `ErrorBoundary`) and `Suspense`, both from `@mxlang/host-hono/runtime` |
 
+## Data in a text placeholder
+
+`${expr}` holding a plain object (JSON from a request, say) prints `[object Object]`, as Marko does, on the server and in the browser. `hono/jsx/dom` would otherwise read a plain `{ tag, props }` object as an element, with its event handlers and `dangerouslySetInnerHTML`, so MX turns a plain object into text before it reaches the renderer, wherever the placeholder is: in a body, an `<if>`/`<else>` branch, a `<for>` body, a component or render-prop body, `<@catch>` or `<@placeholder>`. An own `toString()` or `valueOf()` is used, as in Marko, and the text is escaped.
+
+What Hono built itself is left alone: elements from `hono/jsx`, nodes from the `hono/jsx/dom` runtime (`jsx`, `createElement`, `cloneElement`, `Fragment`), portals from `createPortal`, strings, numbers and arrays of them. The plain objects the dom runtime builds are recognised by an own `key` and `ref` (with `ref` equal to `props.ref`) that JSON cannot produce, so data from `JSON.parse` is never taken for one. (A node written with `ref={null}` and a `key` is not recognised and prints as text.) Data decoded by a library that keeps `undefined` (`devalue`, `superjson`, `structuredClone`) can look like such a node, so do not pass it to a text placeholder. To render markup, build an element or write `$!{html}`.
+
 ## Element or component?
 
 MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.

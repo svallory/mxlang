@@ -71,6 +71,7 @@ function failure(source: string): {
 }
 
 const RAW = "<b>x</b>";
+const NODE = jsx("i", {}, "node");
 
 describe("a spread key that names raw HTML is an escaped attribute", () => {
   it.each([
@@ -288,4 +289,96 @@ describe("a spread's object value says how to write raw HTML", () => {
       );
     },
   );
+});
+
+describe("a plain object in a text interpolation prints as Marko prints it", () => {
+  const DATA = { tag: "img", type: "img", props: { onerror: "x" }, t: RAW };
+
+  it("stringifies JSON-shaped data, escaped", async () => {
+    expect(await renderMx("<p>${input.x}</p>", { x: DATA })).toBe(
+      "<p>[object Object]</p>",
+    );
+  });
+
+  it("honours the object's own toString, escaped", async () => {
+    const html = await renderMx("<p>${input.x}</p>", {
+      x: { toString: () => RAW },
+    });
+    expect(html).toMatch(/^<p>&lt;b(&gt;|>)x&lt;\/b(&gt;|>)<\/p>$/);
+  });
+
+  it("stringifies a null-prototype object", async () => {
+    const x = Object.assign(Object.create(null), { a: 1 });
+    expect(await renderMx("<p>${input.x}</p>", { x })).toBe(
+      "<p>[object Object]</p>",
+    );
+  });
+
+  it("maps an array that holds an object", async () => {
+    expect(await renderMx("<p>${input.x}</p>", { x: ["a", DATA] })).toBe(
+      "<p>a[object Object]</p>",
+    );
+  });
+
+  it("leaves primitives and a renderer-made node alone", async () => {
+    expect(
+      await renderMx("<p>${input.a}|${input.b}|${input.c}|${input.d}</p>", {
+        a: "s",
+        b: 0,
+        c: null,
+        d: undefined,
+      }),
+    ).toBe("<p>s|0||</p>");
+    expect(await renderMx("<p>${input.x}</p>", { x: NODE })).toBe(
+      "<p><i>node</i></p>",
+    );
+    expect(await renderMx("<p>${input.x}</p>", { x: [NODE, "!"] })).toBe(
+      "<p><i>node</i>!</p>",
+    );
+  });
+});
+
+describe("the text-placeholder guard in the emitted module", () => {
+  it("wraps a placeholder that may hold an object, and nothing else", () => {
+    const { code } = compileHonoMx(
+      '<p>${input.x}|${"s"}|${1}|${`t`}|${null}</p>',
+      "/x/App.mx",
+    );
+    expect(code).toContain("{__mxTextValue(input.x)}");
+    expect(code.match(/__mxTextValue\(/g)).toHaveLength(1);
+  });
+
+  it.each([
+    ["an <if> branch", "<p><if=input.c>${input.x}</if></p>"],
+    ["an <else> branch", "<p><if=input.c>a</if><else>${input.x}</else></p>"],
+    ["a <for> body", "<ul><for|i| of=input.l>${i}</for></ul>"],
+    ["a component body", "<const/C=input.C/>\n<C>${input.x}</C>"],
+    ["a render-prop body", "<const/C=input.C/>\n<C|v|>${v}</C>"],
+    ["a <@catch> body", "<try><p>a</p><@catch|e|>${input.x}</@catch></try>"],
+    [
+      "a <@placeholder> body",
+      "<try><p>a</p><@placeholder>${input.x}</@placeholder></try>",
+    ],
+  ])("wraps a lone placeholder as %s", (_name, source) => {
+    const { code } = compileHonoMx(source, "/x/App.mx");
+    expect(code.match(/__mxTextValue\(/g)).toHaveLength(1);
+  });
+
+  it("keeps a comma expression as one argument", () => {
+    for (const source of [
+      "<p>${(0, input.x)}</p>",
+      "<p>${0, input.x}</p>",
+      "<p><if=input.c>${(0, input.x)}</if></p>",
+    ]) {
+      const { code } = compileHonoMx(source, "/x/App.mx");
+      expect(code).toContain("__mxTextValue((0, input.x))");
+      expect(code).not.toContain("__mxTextValue(0, input.x)");
+    }
+  });
+
+  it("is not emitted for a module without a placeholder", () => {
+    expect(compileHonoMx("<p>text</p>", "/x/App.mx").code).not.toContain(
+      "__mxTextValue",
+    );
+  });
 });

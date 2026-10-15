@@ -44,6 +44,10 @@ Keep `from`, `to`, `until` and `step` pure (a signal, a literal or a memo): they
 
 MX passes a component's body as `props.children`, so a hand-written Solid component called from MX, and a `.solid.mx` component called from TSX, both work. In a `.solid.mx` file you read `props.children`, as in any Solid component.
 
+## Data in a text placeholder
+
+Pass only strings, numbers or nodes to `${expr}`. On Solid's server renderer a rendered node is a plain `{ t: ... }` object, and `@solidjs/web` writes its `t` unescaped, exactly as in hand-written Solid. An object of that shape that came from JSON (`{ t: "<b>x</b>" }`) is therefore written as markup, where Marko prints `[object Object]`. MX cannot tell such an object from a real node, because `${props.children}` and a component's return value have the same shape, so this stays open until Solid marks its rendered nodes. Never pass request data in an object to a text placeholder on Solid SSR; pick the field you want to print.
+
 ## Attribute tags
 
 Solid's renderable is an accessor, `() => JSX.Element`, and that is what an attribute tag delivers.

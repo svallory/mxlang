@@ -159,6 +159,42 @@ export const JSX_SCRIPT_TEXT_EXPRESSION = `(...parts: unknown[]): string =>
     .replace(/<(\\/?script|!--)/gi, "\\\\u003C$1")`;
 
 /**
+ * What a `${expr}` placeholder hands the renderer (`textObjectGuard` dialects,
+ * Hono). Stock Marko prints a plain object in text as `[object Object]`
+ * (`value + ""`, so an own `toString`/`valueOf` is honoured); `hono/jsx/dom`
+ * instead reads a plain `{ tag, props }` object as an element, with its event
+ * handlers and `dangerouslySetInnerHTML`, so JSON from a request could become
+ * markup. A plain-prototype (or null-prototype) object is stringified like
+ * Marko, unless Hono's own runtime made it. `hono/jsx` elements are class
+ * instances, so they pass. `hono/jsx/dom` (its jsx runtime, `createElement`,
+ * `cloneElement`, `Fragment`) builds plain `{ tag, type, props, key, ref }`
+ * objects, and `createPortal` a plain `{ tag, props, key, e, p: 1 }`; both are
+ * recognised by what JSON cannot carry:
+ * - a dom node has an own `key` and an own `ref` with `ref === props.ref`, where
+ *   `ref` is `undefined`, a function or a shared object (JSON has no `undefined`,
+ *   no function, and no shared reference), or `null` together with a `key` that
+ *   is `undefined`; a node with `ref={null}` and a real key is not recognised;
+ * - a portal has `p === 1` and `e` a DOM node.
+ * Limit: a decoder that keeps `undefined` (`devalue`, `superjson`,
+ * `structuredClone`) can build a node-shaped object; data decoded that way
+ * must not reach a text placeholder. An array is mapped when it holds an
+ * object. A body is rendered as `<${input.content}/>`, never as text.
+ */
+export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
+  const text = (item: any): any => {
+    if (item === null || typeof item !== "object") return item;
+    if (Array.isArray(item)) return item.some((entry: any) => entry !== null && typeof entry === "object") ? item.map(text) : item;
+    const proto = Object.getPrototypeOf(item);
+    if (proto !== Object.prototype && proto !== null) return item;
+    const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
+    if (item.p === 1 && typeof Node !== "undefined" && item.e instanceof Node) return item;
+    if (own("key") && own("ref") && item.props !== null && typeof item.props === "object" && item.ref === item.props.ref && (item.ref === undefined || typeof item.ref === "function" || (item.ref !== null && typeof item.ref === "object") || (item.ref === null && item.key === undefined))) return item;
+    try { return item + ""; } catch { return "[object Object]"; }
+  };
+  return text(value);
+}`;
+
+/**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
  * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
  * and a leading newline doubled because the HTML parser drops a textarea's

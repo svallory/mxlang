@@ -82,6 +82,10 @@ Anything Preact cannot express fails the build with the construct and its line; 
 
 MX calls a component with `children`, the JSX way, so hand-written Preact components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
 
+## Data in a text placeholder
+
+`${expr}` holding a plain object (JSON from a request, say) renders nothing on Preact, where Marko prints `[object Object]`. Preact drops an object that is not a vnode, and it never reads one as markup, so MX leaves the value as it is. Pass a string, a number or a vnode, or call `JSON.stringify` yourself to print data.
+
 ## Attribute tags on your own components
 
 Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-preact`. A renderable is `ComponentChildren`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call. [AttrTag](/language/attr-tag/) has a hand-written Preact component and a worked example.

@@ -1,8 +1,8 @@
-import { useState } from "hono/jsx";
+import { useState } from "hono/jsx";const __mxTextValue = (value: any): any => {const text = (item: any): any => {if (item === null || typeof item !== "object") return item;if (Array.isArray(item)) return item.some((entry: any) => entry !== null && typeof entry === "object") ? item.map(text) : item;const proto = Object.getPrototypeOf(item);if (proto !== Object.prototype && proto !== null) return item;const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);if (item.p === 1 && typeof Node !== "undefined" && item.e instanceof Node) return item;if (own("key") && own("ref") && item.props !== null && typeof item.props === "object" && item.ref === item.props.ref && (item.ref === undefined || typeof item.ref === "function" || item.ref !== null && typeof item.ref === "object" || item.ref === null && item.key === undefined)) return item;try {return item + "";} catch {return "[object Object]";}};return text(value);};
 
 export default function Page() {
   const [count, setCount] = useState(0);
   return <>
-    <><button type="button" onClick={function () {setCount(count + 1);}}>clicked {count}</button></>
+    <><button type="button" onClick={function () {setCount(count + 1);}}>clicked {__mxTextValue(count)}</button></>
   </>;
 }

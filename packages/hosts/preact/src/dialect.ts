@@ -39,6 +39,13 @@ export interface JsxDialect {
    */
   reactBooleanAttributes?: boolean;
   /**
+   * Wrap a `${expr}` placeholder in `__mxTextValue`, which prints a plain
+   * object as `[object Object]` like Marko. Needed where the renderer reads a
+   * plain object as a node (`hono/jsx/dom` renders `{ tag, props }` as an
+   * element); Preact drops such an object and React throws on it.
+   */
+  textObjectGuard?: boolean;
+  /**
    * How a native `<textarea>`'s content (Marko renders `value` as content) is
    * handed to the renderer. `"children"` (Preact, Hono) passes a text child;
    * `"value"` (React) passes the controlled `value` prop, which react-dom

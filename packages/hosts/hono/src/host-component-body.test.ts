@@ -33,8 +33,14 @@ const D = "$";
 const BOX = 'import { Box } from "./box.tsx";\n';
 const FRAGMENT = 'import { Fragment } from "hono/jsx";\n';
 
+/** These tests pin the emitted JSX shape; the placeholder guard is pinned in `raw-html-spread.test.ts`. */
+const unguard = (code: string): string =>
+  code.replace(
+    /__mxTextValue\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g,
+    (_call, inner: string) => (inner.startsWith("{") ? `(${inner})` : inner),
+  );
 const compile = (source: string): string =>
-  compileHonoMx(source, "/fixtures/host-body.mx").code;
+  unguard(compileHonoMx(source, "/fixtures/host-body.mx").code);
 
 /** What the component returns: the one `return (<>…</>);` of the module. */
 function returned(code: string): string {

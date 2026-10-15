@@ -29,6 +29,7 @@ export const honoDialect: JsxDialect = {
   eventPropNames: honoEventPropNames,
   closedEventPropNames: true,
   hookModules: ["hono/jsx"],
+  textObjectGuard: true,
 };
 
 /** Resolve-time policy shared structurally with Preact/React, Hono diagnostics. */

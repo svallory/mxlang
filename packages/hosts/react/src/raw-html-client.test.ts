@@ -22,6 +22,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
 const RAW = "<b>x</b>";
+/** JSON data in the shape of a Hono node, a Preact vnode and a React element. */
+const OBJECT = {
+  tag: "img",
+  type: "img",
+  props: {
+    src: "x",
+    onerror: "alert(1)",
+    dangerouslySetInnerHTML: { __html: "<i>raw</i>" },
+  },
+};
 let scratch = "";
 
 const CLIENT = `
@@ -43,17 +53,23 @@ for (const { file, input } of cases) {
   const mod = await import(file);
   const client = document.createElement("div");
   document.body.append(client);
-  flushSync(() => createRoot(client).render(createElement(mod.default, input)));
-  const server = renderToString(createElement(mod.default, input));
+  const errors = [];
+  const rootOptions = { onUncaughtError: (error) => errors.push(String(error && error.message)), onRecoverableError: () => {} };
+  const attempt = (fn) => { try { fn(); } catch (error) { errors.push(String(error && error.message)); } };
+  attempt(() => flushSync(() => createRoot(client, rootOptions).render(createElement(mod.default, input))));
+  let server = "";
+  attempt(() => { server = renderToString(createElement(mod.default, input)); });
   const hydrated = document.createElement("div");
   hydrated.innerHTML = server;
   document.body.append(hydrated);
-  flushSync(() => { hydrateRoot(hydrated, createElement(mod.default, input)); });
+  attempt(() => flushSync(() => { hydrateRoot(hydrated, createElement(mod.default, input), rootOptions); }));
   await new Promise((resolve) => setTimeout(resolve, 20));
   out.push({
     client: client.innerHTML,
     hydrated: hydrated.innerHTML,
     elements: [...client.querySelectorAll("b"), ...hydrated.querySelectorAll("b")].length,
+    injected: [...client.querySelectorAll("img, i, [onerror]"), ...hydrated.querySelectorAll("img, i, [onerror]")].length,
+    errors,
   });
 }
 console.log(JSON.stringify(out));
@@ -71,11 +87,18 @@ const SOURCES = {
     "<section><div ...{ dangerouslySetInnerHTML: input.h }/></section>",
   spreadCustom: "<section><my-el ...{ innerHTML: input.h }/></section>",
   rawChild: "<section><div>$!{input.h}</div></section>",
+  objectChild: "<section><div>${input.x}</div></section>",
 } as const;
 
 let results: Record<
   keyof typeof SOURCES,
-  { client: string; hydrated: string; elements: number }
+  {
+    client: string;
+    hydrated: string;
+    elements: number;
+    injected: number;
+    errors: string[];
+  }
 >;
 
 beforeAll(() => {
@@ -98,7 +121,7 @@ beforeAll(() => {
   const cases = Object.entries(SOURCES).map(([name, source]) => {
     const file = join(scratch, `${name}.tsx`);
     writeFileSync(file, compileReactMx(source, file).code);
-    return { file, input: { h: RAW, tag: "article" } };
+    return { file, input: { h: RAW, tag: "article", x: OBJECT } };
   });
   const entry = join(scratch, "run.mjs");
   writeFileSync(entry, CLIENT);
@@ -139,5 +162,19 @@ describe("React client render and hydration never write markup from innerHTML or
       "<section><div><b>x</b></div></section>",
     );
     expect(results.rawChild.elements).toBeGreaterThan(0);
+  });
+});
+
+describe("a plain object in a text interpolation is never a node", () => {
+  it("renders no element and no markup from JSON-shaped data", () => {
+    const { injected, elements } = results.objectChild;
+    expect(injected).toBe(0);
+    expect(elements).toBe(0);
+  });
+
+  it("is refused by React itself, which throws on an object child", () => {
+    expect(results.objectChild.errors.join(" ")).toContain(
+      "Objects are not valid as a React child",
+    );
   });
 });

@@ -245,7 +245,7 @@ describe("Hono dialect", () => {
       'import { MxErrorBoundary as __mxErrorBoundary } from "@mxlang/host-hono/runtime";',
     );
     expect(code).toContain(
-      "<__mxErrorBoundary fallback={(error) => <p>{error.message}</p>}>{() => (<><Risky />",
+      "<__mxErrorBoundary fallback={(error) => <p>{__mxTextValue(error.message)}</p>}>{() => (<><Risky />",
     );
     expect(code).toContain("</>)}</__mxErrorBoundary>");
   });

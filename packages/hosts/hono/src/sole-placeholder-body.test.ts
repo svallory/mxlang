@@ -25,8 +25,14 @@ const DEF = `<define/Box|{ content }|><b><${D}{content}/></b></define>\n`;
 const DEF_ARGS = `<define/Box|{ content }|><b><${D}{content}(5)/></b></define>\n`;
 const IMP = 'import Bar from "./bar.mx"\n';
 
+/** These tests pin the emitted JSX shape; the placeholder guard is pinned in `raw-html-spread.test.ts`. */
+const unguard = (code: string): string =>
+  code.replace(
+    /__mxTextValue\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g,
+    "$1",
+  );
 const compile = (source: string): string =>
-  compileHonoMx(source, "/fixtures/sole.mx").code;
+  unguard(compileHonoMx(source, "/fixtures/sole.mx").code);
 
 /** What the component returns: the one `return (<>…</>);` of the module. */
 function returned(code: string): string {

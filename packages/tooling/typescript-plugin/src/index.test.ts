@@ -2747,7 +2747,7 @@ describe("MX language plugin", {
     const generated = virtual.snapshot.getText(0, virtual.snapshot.getLength());
     expect(generated).toContain("/** @jsxImportSource hono/jsx */");
     expect(generated).toContain(
-      '<label class="title" for="title">{input.title}</label>',
+      '<label class="title" for="title">{__mxTextValue(input.title)}</label>',
     );
     expect(virtual.mappings.length).toBeGreaterThan(0);
     expect(plugin.getSyntaxError(honoFile)).toBeUndefined();

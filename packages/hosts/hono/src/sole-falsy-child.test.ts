@@ -28,8 +28,14 @@ const DEF = `<define/Box|{ content }|><b><${D}{content}/></b></define>\n`;
 const EACH = `<define/Each|{ content }|><i><${D}{content}(0)/></i></define>\n`;
 const X = '<const/X="em"/>\n';
 
+/** These tests pin the emitted JSX shape; the placeholder guard is pinned in `raw-html-spread.test.ts`. */
+const unguard = (code: string): string =>
+  code.replace(
+    /__mxTextValue\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/g,
+    "$1",
+  );
 const compile = (source: string): string =>
-  compileHonoMx(source, "/fixtures/zero.mx").code;
+  unguard(compileHonoMx(source, "/fixtures/zero.mx").code);
 
 /** The one line of the module that matches `pattern`. */
 function line(code: string, pattern: RegExp): string {

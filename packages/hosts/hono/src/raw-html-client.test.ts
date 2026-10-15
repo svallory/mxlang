@@ -22,6 +22,16 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
 const RAW = "<b>x</b>";
+/** JSON data in the shape of a Hono node, a Preact vnode and a React element. */
+const OBJECT = {
+  tag: "img",
+  type: "img",
+  props: {
+    src: "x",
+    onerror: "alert(1)",
+    dangerouslySetInnerHTML: { __html: "<i>raw</i>" },
+  },
+};
 let scratch = "";
 
 const CLIENT = `
@@ -39,14 +49,19 @@ for (const { file, input } of cases) {
   const mod = await import(file);
   const client = document.createElement("div");
   document.body.append(client);
-  render(jsx(mod.default, input), client);
-  const server = String(renderToString(jsx(mod.default, input)));
+  const errors = [];
+  const attempt = (fn) => { try { fn(); } catch (error) { errors.push(String(error && error.message)); } };
+  attempt(() => render(jsx(mod.default, input), client));
+  let server = "";
+  attempt(() => { server = String(renderToString(jsx(mod.default, input))); });
   const parsed = document.createElement("div");
   parsed.innerHTML = server;
   out.push({
     client: client.innerHTML,
     parsed: parsed.innerHTML,
     elements: [...client.querySelectorAll("b"), ...parsed.querySelectorAll("b")].length,
+    injected: [...client.querySelectorAll("img, i, [onerror]"), ...parsed.querySelectorAll("img, i, [onerror]")].length,
+    errors,
   });
 }
 console.log(JSON.stringify(out));
@@ -64,11 +79,18 @@ const SOURCES = {
     "<section><div ...{ dangerouslySetInnerHTML: input.h }/></section>",
   spreadCustom: "<section><my-el ...{ innerHTML: input.h }/></section>",
   rawChild: "<section><div>$!{input.h}</div></section>",
+  objectChild: "<section><div>${input.x}</div></section>",
 } as const;
 
 let results: Record<
   keyof typeof SOURCES,
-  { client: string; parsed: string; elements: number }
+  {
+    client: string;
+    parsed: string;
+    elements: number;
+    injected: number;
+    errors: string[];
+  }
 >;
 
 beforeAll(() => {
@@ -94,7 +116,7 @@ beforeAll(() => {
   const cases = Object.entries(SOURCES).map(([name, source]) => {
     const file = join(scratch, `${name}.tsx`);
     writeFileSync(file, compileHonoMx(source, file).code);
-    return { file, input: { h: RAW, tag: "article" } };
+    return { file, input: { h: RAW, tag: "article", x: OBJECT } };
   });
   const entry = join(scratch, "run.mjs");
   writeFileSync(entry, CLIENT);
@@ -135,5 +157,17 @@ describe("Hono client render and server markup never write markup from innerHTML
       "<section><div><b>x</b></div></section>",
     );
     expect(results.rawChild.elements).toBeGreaterThan(0);
+  });
+});
+
+describe("a plain object in a text interpolation is never a node", () => {
+  it("renders no element and no markup from JSON-shaped data", () => {
+    const { injected, elements } = results.objectChild;
+    expect(injected).toBe(0);
+    expect(elements).toBe(0);
+  });
+
+  it("keeps the surrounding element", () => {
+    expect(results.objectChild.client).toMatch(/^<section><div>/);
   });
 });

@@ -86,6 +86,10 @@ A suspension (`use(promise)`, a thrown promise) written in the body is not an er
 
 MX calls a component with `children`, the JSX way, so hand-written React components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
 
+## Data in a text placeholder
+
+`${expr}` holding a plain object (JSON from a request, say) throws on React ("Objects are not valid as a React child"), where Marko prints `[object Object]`. React never reads such an object as markup, so MX leaves the value as it is. Pass a string, a number or an element, or call `JSON.stringify` yourself to print data.
+
 ## Attribute tags on your own components
 
 Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-react`. A renderable is a `ReactNode`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call, which is how `<Suspense><@fallback>…</@fallback></Suspense>` works on a library component. See [AttrTag](/language/attr-tag/).

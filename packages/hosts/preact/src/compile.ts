@@ -38,6 +38,7 @@ import {
 import {
   JSX_ATTRIBUTE_SPREAD_EXPRESSION,
   JSX_SCRIPT_TEXT_EXPRESSION,
+  JSX_TEXT_VALUE_EXPRESSION,
   jsxAttrValueExpression,
   jsxTextareaContentExpression,
   jsxTextareaPropsExpression,
@@ -196,6 +197,11 @@ export function attributeHelpers(
     helpers.push({
       binding: "__mxScriptText",
       code: `const __mxScriptText = ${JSX_SCRIPT_TEXT_EXPRESSION};`,
+    });
+  if (text.includes("__mxTextValue("))
+    helpers.push({
+      binding: "__mxTextValue",
+      code: `const __mxTextValue = ${JSX_TEXT_VALUE_EXPRESSION};`,
     });
   if (text.includes("__mxTextareaContent(") || text.includes("__mxTextarea("))
     helpers.push({

@@ -819,8 +819,8 @@ export class PreactEmitter implements Emitter<string> {
     if (content.length === 1) {
       const only = content[0] as IrNode;
       if (only.kind === "Interpolation" && only.escaped) {
-        if (slot) return mappedExpr(only.expr);
-        const lone = concatMapped("{", mappedExpr(only.expr), "}");
+        if (slot) return this.#textValue(only);
+        const lone = concatMapped("{", this.#textValue(only), "}");
         LONE_VALUE_BODIES.add(lone);
         return lone;
       }
@@ -1814,11 +1814,36 @@ export class PreactEmitter implements Emitter<string> {
     this.#out.push(concatMapped(escapeText(node.value, this.#decodeText)));
   }
 
+  /**
+   * The expression a text placeholder hands the renderer. A dialect with
+   * `textObjectGuard` (Hono) wraps one that may hold an object in
+   * `__mxTextValue`, so a plain object prints as text, as Marko prints it. Every
+   * path that emits a placeholder's expression goes through here: the
+   * interpolation itself and a lone placeholder used as a branch, loop, body,
+   * render-prop, `<@catch>` or `<@placeholder>` value.
+   */
+  #textValue(node: Extract<IrNode, { kind: "Interpolation" }>): MappedCode {
+    const primitive =
+      !this.#dialect.textObjectGuard ||
+      node.expr.shape === "string" ||
+      [
+        "NumericLiteral",
+        "BooleanLiteral",
+        "NullLiteral",
+        "TemplateLiteral",
+      ].includes(node.expr.node?.type ?? "");
+    if (primitive) return mappedExpr(node.expr);
+    // A sequence (`${0, x}`) is one argument, not two.
+    return node.expr.node?.type === "SequenceExpression"
+      ? concatMapped("__mxTextValue((", mappedExpr(node.expr), "))")
+      : concatMapped("__mxTextValue(", mappedExpr(node.expr), ")");
+  }
+
   interpolation(node: Extract<IrNode, { kind: "Interpolation" }>): void {
     if (!node.escaped) {
       fail("raw placeholder (`$!{…}`) must be the only child", node);
     }
-    this.#out.push(concatMapped("{", mappedExpr(node.expr), "}"));
+    this.#out.push(concatMapped("{", this.#textValue(node), "}"));
     this.#valueChildren++;
   }
 
@@ -2324,7 +2349,9 @@ export class PreactEmitter implements Emitter<string> {
     const body = this.#expression(children, undefined, true);
     const content = meaningful(children);
     const lone = content.length === 1 && content[0]?.kind === "Interpolation";
-    return lone && (body.code.startsWith("{") || body.code.includes(","))
+    return lone &&
+      !body.code.startsWith("__mxTextValue(") &&
+      (body.code.startsWith("{") || body.code.includes(","))
       ? concatMapped("(", body, ")")
       : body;
   }
