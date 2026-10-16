@@ -21,9 +21,9 @@ their phase-2 guards, and the LS supplies the compile itself. A `region` pipelin
 parser `print`. Both page and region calls pass `targets: lookupFor(policy)`;
 the descriptors forward it rather than narrowing cross-file `AttrTag` sources
 to their own package (decision 126 addendum). A descriptor without `load`
-stays silent for page compilation too — except that Angular branch. The registry policy wrapper continues
-staging/rejecting the data target. Hand-built policies bypass that staging,
-including a raw data policy; `diagnoseDocument`'s TSDoc documents that such a
+stays silent for page compilation too — except that Angular branch. There is no data
+target (`data` is a reserved name the registry refuses). Hand-built policies
+bypass the registry's policy wrapper; `diagnoseDocument`'s TSDoc documents that such a
 call is outside the supported language-server policy path.
 
 Both dist and VSIX builds inline the registry and descriptors: their lazy

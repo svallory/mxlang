@@ -17,9 +17,9 @@ of step 2 is still open). Two file kinds compile today:
 See `notes/investigations/angular-host-design.md` for the full design.
 
 MX (Markup eXtended) is a template language born from Marko: it takes
-Marko's syntax and brings it to wherever JSX lives today, MX 1.0 being a
-strict subset of Marko so every borrowed Marko tool keeps working. `.mx` is
-MX's only extension.
+Marko's syntax and brings it to wherever JSX lives today. Marko is the
+default for `.mx` where MX has no rule of its own, and every departure is
+recorded in `divergences.md`. `.mx` is MX's only template extension.
 
 `@mxlang/host-angular` compiles an MX (`.mx`) page template to a plain Angular
 template string — no runtime and no `@angular/*` code in the compiled

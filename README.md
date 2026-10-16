@@ -12,7 +12,7 @@ Custom tags let a project define its own portable markup vocabulary in `tags/x.m
 |---|---|---|
 | `packages/babel` | `@mxlang/babel` | Vendored `@babel/parser` fork with an injectable MX grammar hook (`mxHooks`); no MX logic of its own |
 | `packages/tsx-bridge` | `@mxlang/tsx-bridge` | MX in TypeScript: region discovery, `parse`/`print`, MX in expression position -> lowered JSX AST (the language); supplies the hooks to `@mxlang/babel` |
-| `packages/parser` | `@mxlang/parser` | MX's template parser and the front end that builds the MX AST |
+| `packages/parser` | `@mxlang/parser` | MX's template parser and the front end that builds the MX AST; a publishable package, private until its first publish |
 | `packages/tooling/babel-plugin` | `@mxlang/babel-plugin` | `parserOverride` -> parser; an optional adapter, lower priority than the Vite plugin |
 | `packages/tooling/typescript-plugin` | `@mxlang/typescript-plugin` | `@volar/typescript` plugin; virtual `.tsx` via `@babel/generator` source maps |
 | `packages/tooling/tsc` | `@mxlang/tsc` | `tsc` wrapper (`runTsc`) so CI type-checks `.solid.mx` |

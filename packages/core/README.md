@@ -71,9 +71,10 @@ current host's behavior — the parameter is opt-in, not a required change.
 
 ## The three stateful-tag hooks (decision 70)
 
-MX does not define `<let>`, `<effect>`, `<lifecycle>`, `<script>` or `:=` —
-those are framework territory, and mean whatever the host says (decision 71).
-The core gives a host exactly three capabilities, exercised through the
+`<let>`, `<lifecycle>`, `<script>` and `:=` are core language: core parses and
+checks them on every target, and each target lowers them to its own
+primitives or refuses them with a positioned error (`<effect>` is not an MX
+tag). The core gives a host exactly three capabilities, exercised through the
 resolver tests:
 
 **1. Tag handler — `isDelegatedTag` + `resolveDelegatedTag`.** The core offers every tag

@@ -54,14 +54,14 @@ Decision 68 retired the old `.mx` *dialect* (required explicit imports,
 `<fragment>`, required `export interface Input`, lowercase-by-scope) —
 `@mxlang/target-html` and `packages/mx-html` stay deleted, and those conventions do
 not come back. Decision 72 re-establishes `.mx` as MX's own **identity**,
-distinct from that dialect: MX is its own language with Marko as its origin,
-and MX 1.0 is a strict subset of Marko syntax — every MX 1.0 file is a valid
-Marko file with the same meaning for the structural core.
+distinct from that dialect: MX is its own language with Marko as its origin.
+Marko is the default where MX has no rule of its own; MX promises neither a
+subset nor a superset of Marko, and each departure is a `divergences.md` row.
 
 **Decision 2026-09-15 (Saulo) superseded decision 72's `.marko` alias**:
-no product path of MX accepts or advertises `.marko` any more — MX only
-supports the MX 1.0 subset of Marko syntax, so treating an arbitrary
-`.marko` file as MX would silently claim support it does not have. `.mx`
+no product path of MX accepts or advertises `.marko` any more: a `.marko`
+file is not an MX input, and treating one as MX would silently claim support
+MX does not promise. `.mx`
 (plus `.solid.mx` and `.astro.mx`, different file kinds) is the only template
 extension across every host loader (`@mxlang/target-html/bun`, `@mxlang/host-hono/bun`,
 `@mxlang/vite-plugin`), the language server, the TypeScript plugin/`mx-tsc`,

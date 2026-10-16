@@ -10,7 +10,7 @@ MX's own tree-sitter grammar (`.mx`): `marko-js/tree-sitter` at a pin plus
   `scripts/test.sh` fails when `src/` is stale.
 - The tests are `*.bun-test.mts` on purpose (not vitest). Run them with
   `bun run test`, which builds the wasm they load first.
-- The package is published (`@mxlang/tree-sitter-mx`): `prepack` builds
+- The package is published to Verdaccio only (`@mxlang/tree-sitter-mx`; it is not in the npmjs beta): `prepack` builds
   `tree-sitter-mx.wasm` and `highlight/ts/` (the TypeScript grammar the docmd
   plugin injects; `highlight/build-ts-grammar.sh`, needs network cold). The
   `/docmd` export is `highlight/mx-highlight.mjs`; its `.d.mts` is hand-written,

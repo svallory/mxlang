@@ -57,7 +57,10 @@ reasons, one per caret, so an aggregate callee's later reasons are not lost (`co
 the overlay frame comes from the callee source. `build-error-header.test.ts`
 uses the programmatic build API with a real discovered child syntax error.
 
-Historical implementation details below predate table dispatch.
+Historical implementation details below predate table dispatch. What they
+say about the plugin's role still holds: it is the primary integration, and
+the Babel `parserOverride` adapter (`@mxlang/babel-plugin`) is optional and
+lower priority.
 
 ## Vite plugin
 
@@ -161,7 +164,10 @@ filename: `transform` prints against the stripped path, and parse errors are
 re-raised with a Vite-shaped `loc` (`{ file, line, column }`) so the overlay
 points at the MX line.
 
-**`tags/*.marko` imports (audit case h18).** Every host's emitter writes
+**`tags/*.marko` imports (audit case h18).** Being removed: `.marko` is not
+an MX input, and a `.marko` file where a tag is looked up is a positioned
+error. This claim predates that rule and leaves with the code that still
+emits `.marko` tag imports. Every host's emitter writes
 Marko's own `import _badge from "./tags/badge.marko"` for a tag the scan found
 (#187), and nothing else in a Vite build handles `.marko` — rolldown parsed the
 raw file as JS ("Unexpected JSX expression"). `resolveId` therefore claims a

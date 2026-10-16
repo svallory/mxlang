@@ -31,7 +31,10 @@ Six facts worth knowing before editing it:
   `MxBadge` beside it. Since decision 164 a lowercase `import`/`<define>` is
   never called as a tag (core skips `isComponent` for it), so only a
   taglib-discovered lowercase tag reaches the alias; `index.test.ts` and
-  `attr-tag-round2.test.ts` pin it through a `tags/badge.marko` file.
+  `attr-tag-round2.test.ts` pin it through a `tags/badge.marko` file. That
+  fixture predates the rule that `.marko` is not an MX input (a `.marko` file
+  where a tag is looked up is a positioned error); it moves to a `.mx` tag
+  file with that change.
   **A capitalized tag resolves only when it genuinely resolves** (decision
   114 parity, `unresolved-tag-jsx-astro-angular`): `isComponent`
   (`emitter.ts`) used to fall back to a bare `isComponentName` (`/^[A-Z]/`)
@@ -136,7 +139,7 @@ it, so a bare Preact render would print `class` first. The golden is correct). F
 
 - The markup is the whole-file emitter's (`createRegionEmitter`, a
   `PreactEmitter` with a region sink); only the module assembly differs.
-  Runtime imports, synthesized tag imports and `tags/*.marko` aliases go back
+  Runtime imports, synthesized tag imports and tag aliases go back
   as `hoistedImports`, the attribute helpers and `__mxDynamic` as fixed-binding
   `hoistedDefines` (the bridge declares identical ones once per module).
 - A bridge-found region is **one root element** (a TSX `<>…</>` is not a

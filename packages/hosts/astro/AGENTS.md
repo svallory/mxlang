@@ -41,8 +41,8 @@ Four facts worth knowing before editing it:
   `${...}`, or the markup Astro rendered comes out escaped.
 - **The host compiles under `strictPolicy`**, so `<let>`, `<effect>`,
   `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>` and `<debug>`
-  are compile errors naming the construct (decision 71: stateful tags mean
-  whatever the host says, and this host has no reactive target at all;
+  are compile errors naming the construct (the reactive tags are core
+  language, and this host has no reactive target to lower them to;
   decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the
   same way). That required the one
   change to `@mxlang/vite-plugin` this package needed: a `strict?: boolean`

@@ -1,11 +1,10 @@
 # @mxlang/host-astro
 
 MX (Markup eXtended) is a template language born from Marko: it takes Marko's
-syntax and brings it to wherever JSX lives today, MX 1.0 being a strict subset
-of Marko so every borrowed Marko tool keeps working. `.mx` is MX's only
-extension — MX supports only the MX 1.0 subset of Marko syntax, so a real
-`.marko` file is not treated as MX; porting a Marko component that stays
-within the subset is a rename.
+syntax and brings it to wherever JSX lives today. Marko is the default for
+`.mx` where MX has no rule of its own, and every departure is recorded in
+`divergences.md`. `.mx` is MX's only template extension; a `.marko` file is
+not an MX input.
 
 `@mxlang/host-astro` is **the Astro host**: it renders `.mx` components inside an
 Astro project as static markup at build time. An MX component compiles to a
@@ -105,8 +104,8 @@ rather than to MX:
 `@mxlang/target-html`'s `strictPolicy`: it renders once, at build time, with no
 reactive runtime anywhere, so a construct that only means something with a
 runtime is a build error rather than markup that silently renders once and
-never updates (decision 71 — stateful tags mean whatever the host says;
-decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the same
+never updates (the reactive tags are core language, and a target that cannot
+express them refuses them; decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the same
 way, rather than the default policy's inert disposition).
 
 **`client:*` directives** on an MX component **fail the build**, naming the
