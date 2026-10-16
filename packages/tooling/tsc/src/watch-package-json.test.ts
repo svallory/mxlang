@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 import type ts from "typescript";
@@ -126,10 +126,19 @@ const MISMATCH_AT = (line: number) =>
   `package.json(${line},15): error TS80003: mx.target "react-jsx" belongs to host "react", but mx.host is "solid".`;
 const POINTER = "src/page.mx(1,1): error TS80001: target not resolved: see ";
 
-/** A one-page project whose `package.json` is `packageJson`; `build` makes it a `-b` one. */
+/**
+ * A one-page project whose `package.json` is `packageJson`, in a `project`
+ * directory of a temporary one (remove `dirname` of the result). TypeScript
+ * watches a `package.json` that is an affecting location of a file only when
+ * the path is deeper than the OS-root-like prefix it assumes: `/tmp/x/package.json`
+ * is not watched, `/tmp/x/project/package.json` is.
+ */
 function project(packageJson: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-pkgjson-"));
-  mkdirSync(join(dir, "src"));
+  const dir = join(
+    mkdtempSync(join(tmpdir(), "mx-tsc-watch-pkgjson-")),
+    "project",
+  );
+  mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(
     join(dir, "tsconfig.json"),
     JSON.stringify({
@@ -210,7 +219,7 @@ describe.each(MODES)(
           expect(fixed).toContain("Found 0 errors. Watching for file changes.");
         } finally {
           await watcher?.stop();
-          rmSync(dir, { recursive: true, force: true });
+          rmSync(dirname(dir), { recursive: true, force: true });
         }
       },
       CASE_MS,
@@ -243,7 +252,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         expect(fixed).toContain("Found 0 errors. Watching for file changes.");
       } finally {
         await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
+        rmSync(dirname(dir), { recursive: true, force: true });
       }
     },
     CASE_MS,
@@ -270,7 +279,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         expect(count(created)).toBe(2);
       } finally {
         await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
+        rmSync(dirname(dir), { recursive: true, force: true });
       }
     },
     CASE_MS,
@@ -304,7 +313,7 @@ describe("mx-tsc -w: more manifest changes", () => {
           );
         } finally {
           await watcher?.stop();
-          rmSync(dir, { recursive: true, force: true });
+          rmSync(dirname(dir), { recursive: true, force: true });
         }
       }
     },
@@ -327,7 +336,7 @@ describe("mx-tsc one-shot --pretty: the MX error count", () => {
       );
       return stripVTControlCharacters(result.stdout + result.stderr);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dirname(dir), { recursive: true, force: true });
     }
   }
 

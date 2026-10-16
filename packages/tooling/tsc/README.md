@@ -167,6 +167,11 @@ are counted in the summary.
   `package.json` is a watched input of the `.mx` files under it (editing,
   breaking, fixing or creating one rebuilds them), but a config file that
   chooses the host is not; restart the watcher after changing one.
+- **Watch, `-w -p`: a `package.json` close to the filesystem root is not
+  watched.** TypeScript does not watch a file that affects another when its
+  path is that shallow (`/app/package.json`, `/home/me/package.json`,
+  `C:\package.json`); a project one directory deeper is. `-b -w` has no such
+  limit. Restart the watcher after changing such a manifest.
 - **Watch: a file dropped from the program keeps its last MX error.** A file
   that leaves the program but stays on disk (for example when it no longer
   matches `include`) keeps printing its last MX error until the watcher is
