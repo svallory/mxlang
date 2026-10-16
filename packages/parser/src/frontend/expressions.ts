@@ -161,6 +161,186 @@ function boundedSpan(
     : { start: at.offset, end };
 }
 
+/** What one Babel run hands back: the container's node and, for statements, the program's extras. */
+interface BabelRun {
+  readonly node: unknown;
+  readonly directives?: readonly unknown[];
+  readonly innerComments?: readonly unknown[];
+  /** The errors a recovering run collected instead of throwing. */
+  readonly errors: readonly BabelError[];
+  /** The tree to search for stand-ins (the file, for statements). */
+  readonly root: unknown;
+}
+
+interface BabelError {
+  reasonCode: string;
+  message: string;
+  pos: number;
+  loc: { line: number; column: number; index?: number };
+}
+
+function runBabel(
+  code: string,
+  options: ParserOptions,
+  statements: boolean,
+): BabelRun {
+  let node: unknown;
+  let root: unknown;
+  let directives: readonly unknown[] | undefined;
+  let innerComments: readonly unknown[] | undefined;
+  let errors: readonly BabelError[];
+  if (statements) {
+    const file = babelParse(code, options) as unknown as {
+      program: {
+        body: unknown;
+        directives?: readonly unknown[];
+        innerComments?: readonly unknown[];
+      };
+      errors?: readonly BabelError[];
+    };
+    node = file.program.body;
+    root = file;
+    directives = file.program.directives;
+    innerComments = file.program.innerComments;
+    errors = file.errors ?? [];
+  } else {
+    node = parseExpression(code, options);
+    root = node;
+    errors = (node as { errors?: readonly BabelError[] }).errors ?? [];
+  }
+  // The fork's result carries the parse's own `comments`/`errors` on the
+  // root; today's tree carries neither on a payload, so neither does ours.
+  const payload = node as { comments?: unknown; errors?: unknown };
+  delete payload.comments;
+  delete payload.errors;
+  return { node, directives, innerComments, errors, root };
+}
+
+/**
+ * The reason codes of Babel's checks on the shape of what a stand-in stands
+ * for: `delete <identifier>` in strict mode, and an assignment, update,
+ * `for-in`/`for-of` or destructuring target that is not assignable (a
+ * number stand-in). Only these can be raised by a stand-in's shape alone.
+ */
+const STAND_IN_SENSITIVE: ReadonlySet<string> = new Set([
+  "StrictDelete",
+  "InvalidLhs",
+  "InvalidParenthesizedAssignment",
+  "InvalidRestAssignmentPattern",
+]);
+
+function isStandInSensitive(error: unknown): boolean {
+  const code = (error as { reasonCode?: unknown } | null)?.reasonCode;
+  return typeof code === "string" && STAND_IN_SENSITIVE.has(code);
+}
+
+/** The file-absolute `start:end` of each trigger the payload holds a stand-in for. */
+function standInSpans(
+  triggers: readonly SubParseTrigger[],
+  fileOffset: number,
+): ReadonlySet<string> {
+  return new Set(
+    triggers
+      .filter((trigger) => trigger.standIn !== "keep")
+      .map(
+        (trigger) =>
+          `${trigger.start + fileOffset}:${trigger.end + fileOffset}`,
+      ),
+  );
+}
+
+/** Where a node is assigned to or updated: the slots Babel checks for an assignable target. */
+const TARGET_SLOTS: Readonly<Record<string, readonly string[]>> = {
+  AssignmentExpression: ["left"],
+  AssignmentPattern: ["left"],
+  UpdateExpression: ["argument"],
+  ForInStatement: ["left"],
+  ForOfStatement: ["left"],
+  RestElement: ["argument"],
+  ArrayPattern: ["elements"],
+  ObjectProperty: ["value"],
+};
+
+/**
+ * The positions at which Babel's check can have been about a stand-in and
+ * nothing else: the start of a `delete` whose operand (parentheses unwrapped
+ * by Babel) is exactly a stand-in's node, and the start (or the opening
+ * parenthesis) of a stand-in node that sits in an assignment, update,
+ * `for-in`/`for-of` or destructuring target slot.
+ */
+function standInLeakPositions(
+  root: unknown,
+  spans: ReadonlySet<string>,
+): { deletes: ReadonlySet<number>; targets: ReadonlySet<number> } {
+  const deletes = new Set<number>();
+  const targets = new Set<number>();
+  const seen = new Set<unknown>();
+  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
+  const isStandIn = (node: any): boolean =>
+    node !== null &&
+    typeof node === "object" &&
+    (node.type === "Identifier" || node.type === "NumericLiteral") &&
+    spans.has(`${node.start}:${node.end}`);
+  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
+  const visit = (value: any): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value.type === "string") {
+      if (
+        value.type === "UnaryExpression" &&
+        value.operator === "delete" &&
+        isStandIn(value.argument)
+      )
+        deletes.add(value.start);
+      for (const slot of TARGET_SLOTS[value.type] ?? []) {
+        const operand = value[slot];
+        for (const item of Array.isArray(operand) ? operand : [operand]) {
+          if (!isStandIn(item)) continue;
+          targets.add(item.start);
+          if (typeof item.extra?.parenStart === "number")
+            targets.add(item.extra.parenStart);
+        }
+      }
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "loc" || key === "extra") continue;
+      visit(child);
+    }
+  };
+  visit(root);
+  return { deletes, targets };
+}
+
+/**
+ * Reparses a container that failed with a stand-in-sensitive check, letting
+ * Babel collect its recoverable errors. An error is dropped only when it is
+ * about a stand-in node itself; the first one left is thrown, as the first
+ * parse would have thrown it, so a real error in the user's own code keeps
+ * Babel's message and position. A run with nothing left is the container's
+ * tree. A fatal error of the reparse is thrown as is.
+ */
+function recoverPastStandIns(
+  code: string,
+  options: ParserOptions,
+  statements: boolean,
+  spans: ReadonlySet<string>,
+): BabelRun {
+  const run = runBabel(code, { ...options, errorRecovery: true }, statements);
+  if (run.errors.length === 0) return run;
+  const { deletes, targets } = standInLeakPositions(run.root, spans);
+  const real = run.errors.find((error) =>
+    error.reasonCode === "StrictDelete"
+      ? !deletes.has(error.pos)
+      : !(STAND_IN_SENSITIVE.has(error.reasonCode) && targets.has(error.pos)),
+  );
+  if (real) throw real;
+  return run;
+}
+
 /**
  * Parses one container. `text` is the authored slice, `at` the position of
  * its first character and `end` the file-absolute end of the slice;
@@ -192,21 +372,25 @@ export function subParse(
   let directives: readonly unknown[] | undefined;
   let innerComments: readonly unknown[] | undefined;
   try {
-    if (wrapper.statements) {
-      const program = babelParse(code, options).program as {
-        body: unknown;
-        directives?: readonly unknown[];
-        innerComments?: readonly unknown[];
-      };
-      node = program.body;
-      directives = program.directives;
-      innerComments = program.innerComments;
-    } else node = parseExpression(code, options);
-    // The fork's result carries the parse's own `comments`/`errors` on the
-    // root; today's tree carries neither on a payload, so neither does ours.
-    const root = node as { comments?: unknown; errors?: unknown };
-    delete root.comments;
-    delete root.errors;
+    let run: BabelRun;
+    try {
+      run = runBabel(code, options, wrapper.statements === true);
+    } catch (first) {
+      // A stand-in is shaped like an identifier or a number, so Babel's own
+      // checks on that shape (`delete <identifier>`, an assignment to a
+      // number) can fire for text the dialect lowers to something else.
+      // Only a failed parse with triggers and only those checks retry.
+      if (triggers.length === 0 || !isStandInSensitive(first)) throw first;
+      run = recoverPastStandIns(
+        code,
+        options,
+        wrapper.statements === true,
+        standInSpans(triggers, at.offset),
+      );
+    }
+    node = run.node;
+    directives = run.directives;
+    innerComments = run.innerComments;
   } catch (error) {
     const babel = error as {
       reasonCode: string;
