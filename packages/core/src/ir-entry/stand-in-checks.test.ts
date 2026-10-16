@@ -90,6 +90,23 @@ describe("an identifier stand-in", () => {
     expect(left).toEqual(right);
   });
 
+  it.each([
+    "&a++ = 3",
+    "(&a++) = 3",
+    "[&a++] = y",
+    "&a-- += 1",
+    "(&a = 1) = 2",
+  ])("`%s` is refused as its hand-written form is", (written) => {
+    const messages = (source: string) =>
+      lowerSource(`rule check=(() => { ${source} })\n`, "/v/entity.mx", {
+        dialect: memberSyntax,
+      }).diagnostics.map((d) => [d.message, d.offset]);
+    const refused = messages(written);
+    expect(refused).toHaveLength(1);
+    // Same text with the member spelled out: the same message at the same place.
+    expect(refused).toEqual(messages(written.replaceAll("&a", "_a")));
+  });
+
   it("a real `delete x` still reports Babel's message at the same place", () => {
     const result = lowerSource(
       "rule check=(() => { let x = 1; return delete x })\n",
@@ -106,6 +123,10 @@ describe("a number stand-in", () => {
   const forms: [string, string][] = [
     ["#3 = 2", "self.v3 = 2"],
     ["#3 += 2", "self.v3 += 2"],
+    ["#3 ||= 2", "self.v3 ||= 2"],
+    ["#3 ??= 2", "self.v3 ??= 2"],
+    ["#3 &&= 2", "self.v3 &&= 2"],
+    ["[(#3)] = y", "[(self.v3)] = y"],
     ["#3++", "self.v3++"],
     ["--#3", "--self.v3"],
     ["(#3) = 2", "(self.v3) = 2"],

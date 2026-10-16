@@ -216,6 +216,85 @@ describe("assignment to a number stand-in", () => {
   });
 });
 
+describe("an invalid target that merely contains a stand-in keeps its error", () => {
+  // `A` is the trigger: `&a` (identifier stand-in) or `#1` (number stand-in).
+  // Babel reports an error at the start of the node it rejects, and an
+  // ancestor of the stand-in (`A++ = 3`) starts where the stand-in does, so
+  // none of these may be taken for an error about the stand-in.
+  const ILHS = "Invalid left-hand side in ";
+  const PAREN = "Invalid parenthesized assignment pattern.";
+  const ROWS: [string, string, number][] = [
+    ["A++ = 3", `${ILHS}assignment expression.`, 0],
+    ["A-- += 1", `${ILHS}assignment expression.`, 0],
+    ["(A++) = 3", PAREN, 1],
+    ["[A++] = y", `${ILHS}array destructuring pattern.`, 1],
+    ["for (A++ of y) {}", `${ILHS}for-of statement.`, 5],
+    ["for (A++ in y) {}", `${ILHS}for-in statement.`, 5],
+    ["({b: A++} = y)", `${ILHS}object destructuring pattern.`, 5],
+    ["[...A++] = y", "Invalid rest operator's argument.", 4],
+    ["(A = 1) = 2", PAREN, 1],
+    ["(A += 1) = 2", PAREN, 1],
+    ["[(A = 1)] = y", PAREN, 2],
+    ["({b: (A = 1)} = y)", PAREN, 6],
+    ["for ((A = 1) of y) {}", PAREN, 6],
+    ["[...A++ = 1] = y", `${ILHS}assignment expression.`, 4],
+    ["A + 1 = 3", `${ILHS}assignment expression.`, 0],
+    ["-A = 2", `${ILHS}assignment expression.`, 0],
+    ["!A = 2", `${ILHS}assignment expression.`, 0],
+    ["[A + 1] = y", `${ILHS}array destructuring pattern.`, 1],
+    ["A.x++ = 1", `${ILHS}assignment expression.`, 0],
+  ];
+  const wrap = (row: string, text: string) =>
+    `x=() => { ${row.replaceAll("A", text)} }`;
+  const HEADER = "x=() => { ".length;
+  const shape = (row: string, syntax: SyntaxTable, text: string) =>
+    errorsOf(wrap(row, text), syntax).map(([, message, start]) => [
+      message,
+      start,
+    ]);
+
+  it.each(ROWS)("%s: identifier trigger", (row, message, offset) => {
+    const got = errorsOf(wrap(row, "&a"), WITH_MEMBER);
+    expect(got.length).toBeGreaterThan(0);
+    expect(got[0]?.[1]).toBe(message);
+    expect(got[0]?.[2]).toBe(HEADER + offset);
+    // The same text with no trigger (the stand-in's own spelling): main's error.
+    expect(got).toEqual(errorsOf(wrap(row, "_a"), DEFAULT_SYNTAX));
+  });
+
+  it.each(ROWS)("%s: number trigger", (row, message, offset) => {
+    const got = errorsOf(wrap(row, "#1"), WITH_NUMBER);
+    expect(got.length).toBeGreaterThan(0);
+    expect(got[0]?.[1]).toBe(message);
+    expect(got[0]?.[2]).toBe(HEADER + offset);
+    // The error is the one an identifier trigger gets for the same text.
+    expect(shape(row, WITH_NUMBER, "#1")).toEqual(
+      shape(row, WITH_MEMBER, "&a"),
+    );
+  });
+
+  it("`delete A = 1`: the assignment is the error, not the delete", () => {
+    for (const [syntax, text] of [
+      [WITH_MEMBER, "&a"],
+      [WITH_NUMBER, "#1"],
+    ] as const)
+      expect(errorsOf(wrap("delete A = 1", text), syntax)).toEqual([
+        ["BABEL_InvalidLhs", `${ILHS}assignment expression.`, HEADER],
+      ]);
+  });
+
+  it("an error about the user's own target beside a stand-in target is still reported", () => {
+    expect(errorsOf("x=() => { #1 = 1; 2++ }", WITH_NUMBER)).toHaveLength(1);
+    expect(errorsOf("x=() => { [#1, 2] = y }", WITH_NUMBER)).toEqual([
+      [
+        "BABEL_InvalidLhs",
+        "Invalid left-hand side in array destructuring pattern.",
+        "x=() => { [#1, ".length,
+      ],
+    ]);
+  });
+});
+
 describe("what the stand-in kind does not change", () => {
   it("`with` is the user's own statement and keeps its error", () => {
     expect(errorsOf("x=() => { with (&n) {} }", WITH_MEMBER)).toEqual([
@@ -245,6 +324,14 @@ describe("the reparse", () => {
     run("x=() => { let q; return delete q }", WITH_MEMBER);
     expect(calls()).toBe(1);
     run("x=() => { let q; return delete q }", DEFAULT_SYNTAX);
+    expect(calls()).toBe(2);
+  });
+
+  it("does not run for a target error when no number stand-in is present", () => {
+    // An identifier stand-in is always assignable, so it cannot be the cause.
+    expect(run("x=() => { &a++ = 3 }", WITH_MEMBER).errors).toHaveLength(1);
+    expect(calls()).toBe(1);
+    expect(run("x=() => { 1 = 3; @a }", table(KEEP)).errors).toHaveLength(1);
     expect(calls()).toBe(2);
   });
 

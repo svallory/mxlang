@@ -217,127 +217,193 @@ function runBabel(
 }
 
 /**
- * The reason codes of Babel's checks on the shape of what a stand-in stands
- * for: `delete <identifier>` in strict mode, and an assignment, update,
- * `for-in`/`for-of` or destructuring target that is not assignable (a
- * number stand-in). Only these can be raised by a stand-in's shape alone.
+ * The checks Babel makes on the shape of what a stand-in stands for, by
+ * reason code. `StrictDelete` (`delete <identifier>`) is about an identifier
+ * stand-in. An identifier is always assignable, so the other three, about an
+ * assignment, update, `for-in`/`for-of` or destructuring target that is not
+ * assignable, can be about a number stand-in only.
  */
-const STAND_IN_SENSITIVE: ReadonlySet<string> = new Set([
-  "StrictDelete",
+const DELETE_CODE = "StrictDelete";
+const TARGET_CODES: ReadonlySet<string> = new Set([
   "InvalidLhs",
   "InvalidParenthesizedAssignment",
   "InvalidRestAssignmentPattern",
 ]);
 
-function isStandInSensitive(error: unknown): boolean {
-  const code = (error as { reasonCode?: unknown } | null)?.reasonCode;
-  return typeof code === "string" && STAND_IN_SENSITIVE.has(code);
-}
+/** The file-absolute `start:end` of each stand-in the payload holds, with its shape. */
+type StandInSpans = ReadonlyMap<string, "identifier" | "number">;
 
-/** The file-absolute `start:end` of each trigger the payload holds a stand-in for. */
 function standInSpans(
   triggers: readonly SubParseTrigger[],
   fileOffset: number,
-): ReadonlySet<string> {
-  return new Set(
-    triggers
-      .filter((trigger) => trigger.standIn !== "keep")
-      .map(
-        (trigger) =>
-          `${trigger.start + fileOffset}:${trigger.end + fileOffset}`,
-      ),
-  );
+): StandInSpans {
+  const spans = new Map<string, "identifier" | "number">();
+  for (const trigger of triggers) {
+    if (trigger.standIn === "keep") continue;
+    spans.set(
+      `${trigger.start + fileOffset}:${trigger.end + fileOffset}`,
+      trigger.standIn,
+    );
+  }
+  return spans;
 }
 
-/** Where a node is assigned to or updated: the slots Babel checks for an assignable target. */
-const TARGET_SLOTS: Readonly<Record<string, readonly string[]>> = {
-  AssignmentExpression: ["left"],
-  AssignmentPattern: ["left"],
-  UpdateExpression: ["argument"],
-  ForInStatement: ["left"],
-  ForOfStatement: ["left"],
-  RestElement: ["argument"],
-  ArrayPattern: ["elements"],
-  ObjectProperty: ["value"],
-};
+/** Whether a first error is one a stand-in's shape could have raised, given the shapes this container holds. */
+function isStandInSensitive(error: unknown, spans: StandInSpans): boolean {
+  const code = (error as { reasonCode?: unknown } | null)?.reasonCode;
+  if (typeof code !== "string") return false;
+  if (code === DELETE_CODE) return spans.size > 0;
+  return TARGET_CODES.has(code) && [...spans.values()].includes("number");
+}
 
-/**
- * The positions at which Babel's check can have been about a stand-in and
- * nothing else: the start of a `delete` whose operand (parentheses unwrapped
- * by Babel) is exactly a stand-in's node, and the start (or the opening
- * parenthesis) of a stand-in node that sits in an assignment, update,
- * `for-in`/`for-of` or destructuring target slot.
- */
-function standInLeakPositions(
-  root: unknown,
-  spans: ReadonlySet<string>,
-): { deletes: ReadonlySet<number>; targets: ReadonlySet<number> } {
-  const deletes = new Set<number>();
-  const targets = new Set<number>();
+// biome-ignore lint/suspicious/noExplicitAny: Babel nodes, generically
+type AnyNode = any;
+
+/** Every node of the tree (comments and `extra` aside). */
+function nodesOf(root: unknown): AnyNode[] {
+  const nodes: AnyNode[] = [];
   const seen = new Set<unknown>();
-  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
-  const isStandIn = (node: any): boolean =>
-    node !== null &&
-    typeof node === "object" &&
-    (node.type === "Identifier" || node.type === "NumericLiteral") &&
-    spans.has(`${node.start}:${node.end}`);
-  // biome-ignore lint/suspicious/noExplicitAny: walks Babel nodes generically
-  const visit = (value: any): void => {
+  const visit = (value: AnyNode): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
     if (Array.isArray(value)) {
       for (const item of value) visit(item);
       return;
     }
-    if (typeof value.type === "string") {
-      if (
-        value.type === "UnaryExpression" &&
-        value.operator === "delete" &&
-        isStandIn(value.argument)
-      )
-        deletes.add(value.start);
-      for (const slot of TARGET_SLOTS[value.type] ?? []) {
-        const operand = value[slot];
-        for (const item of Array.isArray(operand) ? operand : [operand]) {
-          if (!isStandIn(item)) continue;
-          targets.add(item.start);
-          if (typeof item.extra?.parenStart === "number")
-            targets.add(item.extra.parenStart);
-        }
-      }
-    }
+    if (typeof value.type === "string") nodes.push(value);
     for (const [key, child] of Object.entries(value)) {
       if (key === "loc" || key === "extra") continue;
       visit(child);
     }
   };
   visit(root);
-  return { deletes, targets };
+  return nodes;
+}
+
+/** The nodes an `ancestor` of this type checks as assignment targets, a default or a rest unwrapped to the target it holds. */
+function targetsOf(ancestor: AnyNode): AnyNode[] {
+  const slots: AnyNode[] =
+    ancestor.type === "ArrayPattern"
+      ? ancestor.elements
+      : ancestor.type === "ObjectPattern"
+        ? ancestor.properties.map((property: AnyNode) =>
+            property.type === "ObjectProperty" ? property.value : property,
+          )
+        : [ancestor.left];
+  return slots.flatMap((slot) => {
+    let node = slot;
+    while (node?.type === "RestElement" || node?.type === "AssignmentPattern")
+      node = node.type === "RestElement" ? node.argument : node.left;
+    return node ? [node] : [];
+  });
 }
 
 /**
- * Reparses a container that failed with a stand-in-sensitive check, letting
- * Babel collect its recoverable errors. An error is dropped only when it is
- * about a stand-in node itself; the first one left is thrown, as the first
- * parse would have thrown it, so a real error in the user's own code keeps
- * Babel's message and position. A run with nothing left is the container's
- * tree. A fatal error of the reparse is thrown as is.
+ * Whether Babel's error is about a stand-in node itself and nothing else.
+ * Babel reports an error at the start of the node it rejects, and an
+ * ancestor (`#1++ = 3`, `(#1 = 1) = 2`) starts where its stand-in does, so a
+ * position alone is not enough: the rejected node is identified and must be
+ * the stand-in, by span.
+ *
+ * - `StrictDelete`: the `delete` that starts at the error has a stand-in as
+ *   its operand (Babel unwraps parentheses).
+ * - `InvalidLhs`: its `ancestor` names the node whose slot (`left`,
+ *   `argument`) Babel rejected, or only the kind of node (a pattern, a
+ *   `for-in`/`for-of` head), whose target starting at the error is the one.
+ * - `InvalidParenthesizedAssignment`: every parenthesized node starting at the
+ *   error is a stand-in.
+ * - `InvalidRestAssignmentPattern`: every rest argument starting at the error
+ *   is a stand-in.
+ */
+function isAboutStandIn(
+  error: { reasonCode: string; pos: number; details?: unknown },
+  nodes: readonly AnyNode[],
+  spans: StandInSpans,
+): boolean {
+  const isStandIn = (node: AnyNode, shape: "identifier" | "number") =>
+    node?.type === (shape === "number" ? "NumericLiteral" : "Identifier") &&
+    spans.get(`${node.start}:${node.end}`) === shape;
+  const allStandIns = (found: readonly AnyNode[]) =>
+    found.length > 0 && found.every((node) => isStandIn(node, "number"));
+  switch (error.reasonCode) {
+    case DELETE_CODE: {
+      const deletes = nodes.filter(
+        (node) =>
+          node.type === "UnaryExpression" &&
+          node.operator === "delete" &&
+          node.start === error.pos,
+      );
+      return (
+        deletes.length > 0 &&
+        deletes.every((node) => isStandIn(node.argument, "identifier"))
+      );
+    }
+    case "InvalidLhs": {
+      const ancestor = (error.details as { ancestor?: AnyNode } | undefined)
+        ?.ancestor;
+      switch (ancestor?.type) {
+        case "AssignmentExpression":
+        case "AssignmentPattern":
+          return isStandIn(ancestor.left, "number");
+        case "UpdateExpression":
+          return isStandIn(ancestor.argument, "number");
+        case "ArrayPattern":
+        case "ObjectPattern":
+        case "ForInStatement":
+        case "ForOfStatement":
+          return allStandIns(
+            nodes
+              .filter((node) => node.type === ancestor.type)
+              .flatMap(targetsOf)
+              .filter((node) => node.start === error.pos),
+          );
+        default:
+          return false;
+      }
+    }
+    case "InvalidParenthesizedAssignment":
+      return allStandIns(
+        nodes.filter(
+          (node) => node.extra?.parenthesized && node.start === error.pos,
+        ),
+      );
+    case "InvalidRestAssignmentPattern":
+      return allStandIns(
+        nodes
+          .filter(
+            (node) =>
+              node.type === "RestElement" && node.argument.start === error.pos,
+          )
+          .map((node) => node.argument),
+      );
+    default:
+      return false;
+  }
+}
+
+/**
+ * Reparses a container that failed with a check on a stand-in's shape,
+ * letting Babel collect its recoverable errors. An error is dropped only when
+ * it is about a stand-in node itself. If the first error was not dropped, the
+ * first parse's own error is thrown, byte for byte; otherwise the first one
+ * left. A run with nothing left is the container's tree. A fatal error of the
+ * reparse is thrown as is.
  */
 function recoverPastStandIns(
   code: string,
   options: ParserOptions,
   statements: boolean,
-  spans: ReadonlySet<string>,
+  spans: StandInSpans,
+  first: unknown,
 ): BabelRun {
   const run = runBabel(code, { ...options, errorRecovery: true }, statements);
   if (run.errors.length === 0) return run;
-  const { deletes, targets } = standInLeakPositions(run.root, spans);
-  const real = run.errors.find((error) =>
-    error.reasonCode === "StrictDelete"
-      ? !deletes.has(error.pos)
-      : !(STAND_IN_SENSITIVE.has(error.reasonCode) && targets.has(error.pos)),
+  const nodes = nodesOf(run.root);
+  const index = run.errors.findIndex(
+    (error) => !isAboutStandIn(error, nodes, spans),
   );
-  if (real) throw real;
+  if (index === 0) throw first;
+  if (index > 0) throw run.errors[index];
   return run;
 }
 
@@ -380,12 +446,14 @@ export function subParse(
       // checks on that shape (`delete <identifier>`, an assignment to a
       // number) can fire for text the dialect lowers to something else.
       // Only a failed parse with triggers and only those checks retry.
-      if (triggers.length === 0 || !isStandInSensitive(first)) throw first;
+      const spans = standInSpans(triggers, at.offset);
+      if (!isStandInSensitive(first, spans)) throw first;
       run = recoverPastStandIns(
         code,
         options,
         wrapper.statements === true,
-        standInSpans(triggers, at.offset),
+        spans,
+        first,
       );
     }
     node = run.node;
