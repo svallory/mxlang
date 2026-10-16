@@ -188,15 +188,15 @@ not a TypeScript diagnostic, and tsc counts only its own.
   error (`TS80003`, such as an `mx.target` that belongs to another host) is
   treated the same: printed with every build, the first included, and counted
   in the summary. A host-policy warning is printed with every build and is not
-  counted. Under `-w -p`, each `.mx` file re-resolves only its own host policy
-  when it compiles, so after you change a `package.json` the TS80003 line stays
-  until every `.mx` file under it has compiled again; restart the watcher to
-  re-read them all. A change that breaks a `package.json` is not reported until
-  a `.mx` file under it compiles.
+  counted. A `package.json` is an input of the `.mx` files under it: when you
+  change it, those files compile again on the rebuild it starts, so a break is
+  reported on that rebuild and a fix clears the TS80003 lines at once, with the
+  line number of the new text.
 - **One run.** The exit code is 1 when there is an MX error. tsc prints its
   `Found N errors` line only with `--pretty`, counts only its own diagnostics,
   and does not rewrite that count for MX errors, so with that line present the
-  MX errors follow it and end with a count of their own:
+  MX errors (a `TS80003` host-policy error among them) follow it and end with a
+  count of their own:
   `mx-tsc: Found 1 MX error (tsc's own error count does not include MX errors).`
   Without `--pretty` tsc prints no count, and neither does `mx-tsc`.
 

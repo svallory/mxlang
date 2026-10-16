@@ -163,11 +163,10 @@ are counted in the summary.
 
 ## Known limitations
 
-- **Watch: a `package.json` change is picked up per `.mx` file.** Under
-  `-w -p` each `.mx` file re-resolves its host policy only when it compiles, so
-  after you fix a `package.json` the TS80003 line stays until every `.mx` file
-  under it has compiled again (restart the watcher to re-read them all), and a
-  change that breaks one is not reported until a `.mx` file under it compiles.
+- **Watch: an `mx.config.*` or `.mxrc` change does not start a rebuild.** A
+  `package.json` is a watched input of the `.mx` files under it (editing,
+  breaking, fixing or creating one rebuilds them), but a config file that
+  chooses the host is not; restart the watcher after changing one.
 - **Watch: a file dropped from the program keeps its last MX error.** A file
   that leaves the program but stays on disk (for example when it no longer
   matches `include`) keeps printing its last MX error until the watcher is

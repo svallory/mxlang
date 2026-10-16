@@ -46,6 +46,7 @@ import {
   type PluginGeneration,
   trackGeneration,
 } from "./watch-compile.ts";
+import { trackPackageJsonInputs } from "./watch-package-json.ts";
 import {
   installWatchTemplatePass,
   rebuildActivity,
@@ -427,6 +428,7 @@ function runPatchedTsc(
   ngPlugins: NgProgram[],
   watchMode = false,
   generations?: PluginGeneration[],
+  solutionBuild = false,
 ): number {
   let tscExitCode = 0;
   approximateUnmappedInVolar();
@@ -437,13 +439,14 @@ function runPatchedTsc(
     tscExitCode = code ?? 0;
     throw stopped;
   }) as typeof process.exit;
+  const extensions = [
+    ...(astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS),
+    ...dialectExtensions.filter((extension) => extension !== ".mx"),
+  ];
   try {
     runTsc(
       resolveTscPath(),
-      [
-        ...(astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS),
-        ...dialectExtensions.filter((extension) => extension !== ".mx"),
-      ],
+      extensions,
       (typescript, options) => {
         addAmbientTypes(options);
         // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
@@ -491,6 +494,16 @@ function runPatchedTsc(
             // Runs before Volar copies the host and patches `getSourceFile` on
             // that copy, so every edit below lands on the host it copies from.
             virtualFilesInWatchRebuilds(options.host);
+            // Watch only: the manifests that decide a file's host are inputs
+            // of that file (see `watch-package-json.ts`).
+            if (watchMode) {
+              trackPackageJsonInputs(
+                typescript,
+                options.host,
+                extensions,
+                solutionBuild,
+              );
+            }
             // Watch only: marks that a rebuild is reading files, so a rebuild
             // whose summary the pass cannot recognize is said out loud.
             if (watchMode) rebuildActivity(options.host);
@@ -727,6 +740,7 @@ function runMxTscChecks(): number {
       ngPlugins,
       watchMode,
       generations,
+      build !== undefined,
     );
   } finally {
     tscCount.stop();
@@ -773,14 +787,6 @@ function runMxTscChecks(): number {
         .map((d) => [JSON.stringify(d), d] as const),
     ).values(),
   ];
-  // A watch run printed them from inside its first build's summary, counted in
-  // it, and prints the current ones again at every rebuild.
-  if (!watchRan) {
-    reportCompileDiagnostics(diagnostics);
-    // A watch run whose summary was not recognized (a localized tsc) cannot
-    // tell, so it says so.
-    if (watchMode || tscCount.seen()) reportCompileSummary(diagnostics);
-  }
   // Existing host warnings are non-fatal; invalid targets and mismatches
   // fail the run. A file two programs both compiled is reported once.
   const policyDiagnostics = [
@@ -790,8 +796,18 @@ function runMxTscChecks(): number {
         .map((d) => [`${d.file}\0${d.message}`, d] as const),
     ).values(),
   ];
-  // A watch run printed them from inside every build's summary, counted in it.
-  if (!watchRan) reportTargetPolicyDiagnostics(policyDiagnostics);
+  // A watch run printed them from inside its first build's summary, counted in
+  // it, and prints the current ones again at every rebuild; the host-policy
+  // ones go the same way, after them.
+  if (!watchRan) {
+    reportCompileDiagnostics(diagnostics);
+    reportTargetPolicyDiagnostics(policyDiagnostics);
+    // A watch run whose summary was not recognized (a localized tsc) cannot
+    // tell, so it says so.
+    if (watchMode || tscCount.seen()) {
+      reportCompileSummary(diagnostics, policyDiagnostics);
+    }
+  }
   const hasPolicyError = policyDiagnostics.some((d) => d.severity === "error");
   // A host whose `ambientTypes` threw: one error, the run went on without
   // that host's ambient files, and it fails. A watch run printed them from
@@ -979,8 +995,9 @@ function watchForCountLine(): { seen(): boolean; stop(): void } {
 /**
  * The count line of a one-shot run that printed a count of its own. tsc
  * counts only its own diagnostics, and under `--pretty` its count is a
- * per-file table `mx-tsc` does not rewrite, so a run with MX errors ends with
- * their own count, saying so;
+ * per-file table `mx-tsc` does not rewrite, so a run with MX errors (compile
+ * errors and host-policy errors, `TS80003`) ends with their own count, saying
+ * so;
  * without it an agent reading "Found 0 errors" or "Found 1 error" above the MX
  * errors would take the project for cleaner than it is. A run without tsc's
  * count line (no `--pretty`) has nothing to be misread against and prints none.
@@ -988,8 +1005,11 @@ function watchForCountLine(): { seen(): boolean; stop(): void } {
  */
 function reportCompileSummary(
   diagnostics: readonly MxCompileDiagnostic[],
+  policy: readonly TargetPolicyDiagnostic[],
 ): void {
-  const errors = countCompileErrors(diagnostics);
+  const errors =
+    countCompileErrors(diagnostics) +
+    policy.filter((diagnostic) => diagnostic.severity === "error").length;
   if (errors === 0) return;
   process.stderr.write(
     `mx-tsc: Found ${errors} MX ${errors === 1 ? "error" : "errors"} (tsc's own error count does not include MX errors).\n`,
