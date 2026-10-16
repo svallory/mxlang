@@ -551,6 +551,13 @@ export interface Ctx {
    * `lowerFilter`. Unset for a default-row file.
    */
   dialect?: Dialect;
+  /**
+   * Whether the file's syntax table has the `#id` / `.class` shorthands
+   * (`tagShorthands`), set by the trigger pass from the document's resolved
+   * table, which a bare-table `dialect` option sets without a dialect. Unset
+   * means `true`: the default row.
+   */
+  tagShorthands?: boolean;
   /** Resolved template path -> default import binding, authored or injected. */
   customTagImports?: Map<string, string>;
   /** Imports synthesized while lowering discovered template calls. */

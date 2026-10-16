@@ -1348,7 +1348,7 @@ const NOT_A_NAME_SHAPE = /^[$!]|[{}]/;
  */
 const FOREIGN_ATTR_HINTS: [
   RegExp,
-  (m: RegExpMatchArray, product: string) => string,
+  (m: RegExpMatchArray, product: string, hint: AttrHintContext) => string,
 ][] = [
   [
     /^\[\(([^()[\]]+)\)\]$/,
@@ -1365,8 +1365,15 @@ const FOREIGN_ATTR_HINTS: [
   ],
   [
     /^[#.]/,
-    () =>
-      "a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`",
+    (m, _mx, { voice, tagShorthands }) => {
+      const isId = m[0] === "#";
+      // With the shorthands off, the unspaced form is `MX_NO_TAG_SHORTHAND`,
+      // so the hint states that rule, in that diagnostic's words.
+      if (!tagShorthands) {
+        return `this file's dialect has no \`${isId ? "#id" : ".class"}\` shorthand; write \`${isId ? "id" : "class"}=\` as ${voice.anAttribute}`;
+      }
+      return `a \`#id\` or \`.class\` shorthand goes on the tag name with no space (${voice.tag("div#a")}, ${voice.tag("div.cls")}); otherwise write \`id=\` or \`class=\``;
+    },
   ],
   [
     /^\*/,
@@ -1374,6 +1381,13 @@ const FOREIGN_ATTR_HINTS: [
       `\`*…\` structural directives have no meaning in ${mx}; use \`<if=cond>\` / \`<for|item| of=list>\``,
   ],
 ];
+
+/** What a foreign-name hint reads off the file besides the product. */
+interface AttrHintContext {
+  readonly voice: Voice;
+  /** The file's syntax table has the `#id` / `.class` shorthands (`tagShorthands`, default `true`). */
+  readonly tagShorthands: boolean;
+}
 
 /**
  * The variable a scriptlet's first statement declares, when it declares one.
@@ -1399,10 +1413,15 @@ function declaredVariable(scriptlet: Node): ScriptletDeclaration | undefined {
     : undefined;
 }
 
-function foreignAttrHint(name: string, product: string, voice: Voice): string {
+function foreignAttrHint(
+  name: string,
+  product: string,
+  voice: Voice,
+  tagShorthands: boolean,
+): string {
   for (const [pattern, hint] of FOREIGN_ATTR_HINTS) {
     const match = name.match(pattern);
-    if (match) return hint(match, product);
+    if (match) return hint(match, product, { voice, tagShorthands });
   }
   return `${voice.anAttribute} name may use letters, digits and \`._:-\``;
 }
@@ -1804,7 +1823,7 @@ function lowerAttrNamed(
   ) {
     raise(
       INVALID_ATTRIBUTE_CODE,
-      `Invalid ${voiceOfCtx(ctx).attribute} name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx), voiceOfCtx(ctx))}`,
+      `Invalid ${voiceOfCtx(ctx).attribute} name \`${attr.name}\` — ${foreignAttrHint(attr.name, productOf(ctx), voiceOfCtx(ctx), ctx.tagShorthands !== false)}`,
       attr,
     );
   }

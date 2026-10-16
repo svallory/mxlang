@@ -148,6 +148,107 @@ describe("tagShorthands: false, the refused heads are positioned diagnostics", (
   });
 });
 
+/** What the default row says about a spaced `#id` / `.class` (byte-identical pins). */
+const DEFAULT_HINT =
+  "a `#id` or `.class` shorthand goes on the tag name with no space (`<div#a>`, `<div.cls>`); otherwise write `id=` or `class=`";
+
+describe("a spaced #id or .class in a tag head, by table", () => {
+  const ON: LowerSourceOptions = { dialect: { ...EVENTS, table: {} } };
+  const message = (source: string, options: LowerSourceOptions) => {
+    const { diagnostics } = lowerSource(source, "/w.events", options);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.code).toBe("MX_INVALID_ATTRIBUTE");
+    return diagnostics[0]?.message;
+  };
+  const SOURCES = (name: string): [string, string][] => [
+    ["concise", `events\n  div ${name}\n`],
+    ["HTML", `<events><div ${name}></div></events>\n`],
+    ["after a bare attribute", `<events><div k ${name}></div></events>\n`],
+  ];
+
+  describe.each(SOURCES("#a"))("%s, #a", (_form, source) => {
+    it("shorthands on: the hint points at the tag name (unchanged)", () => {
+      expect(message(source, ON)).toBe(
+        `Invalid attribute name \`#a\` — ${DEFAULT_HINT}`,
+      );
+    });
+    it("shorthands off: states the rule and the fix, no tag-name advice", () => {
+      expect(message(source, OPTIONS)).toBe(
+        "Invalid attribute name `#a` — this file's dialect has no `#id` shorthand; write `id=` as an attribute",
+      );
+    });
+  });
+
+  describe.each(SOURCES(".a"))("%s, .a", (_form, source) => {
+    it("shorthands on: the hint points at the tag name (unchanged)", () => {
+      expect(message(source, ON)).toBe(
+        `Invalid attribute name \`.a\` — ${DEFAULT_HINT}`,
+      );
+    });
+    it("shorthands off: states the rule and the fix, no tag-name advice", () => {
+      expect(message(source, OPTIONS)).toBe(
+        "Invalid attribute name `.a` — this file's dialect has no `.class` shorthand; write `class=` as an attribute",
+      );
+    });
+  });
+
+  describe.each(SOURCES("#a.b"))("%s, #a.b", (_form, source) => {
+    it("shorthands on (unchanged)", () => {
+      expect(message(source, ON)).toBe(
+        `Invalid attribute name \`#a.b\` — ${DEFAULT_HINT}`,
+      );
+    });
+    it("shorthands off: the leading character picks the shorthand named", () => {
+      expect(message(source, OPTIONS)).toBe(
+        "Invalid attribute name `#a.b` — this file's dialect has no `#id` shorthand; write `id=` as an attribute",
+      );
+    });
+  });
+
+  it("a bare table with the field off (no dialect) says the same", () => {
+    const table = Object.freeze({ ...defaultSyntax(), tagShorthands: false });
+    expect(message("a #x\n", { dialect: table })).toBe(
+      "Invalid attribute name `#x` — this file's dialect has no `#id` shorthand; write `id=` as an attribute",
+    );
+  });
+
+  it("the hint is not the unspaced form's diagnostic: that stays MX_NO_TAG_SHORTHAND", () => {
+    const { diagnostics } = lowerSource(
+      "events\n  div#a\n",
+      "/w.events",
+      OPTIONS,
+    );
+    expect(diagnostics.map((d) => d.code)).toEqual(["MX_NO_TAG_SHORTHAND"]);
+  });
+
+  describe("the file's voice", () => {
+    const voiced = (table: Dialect["table"]): LowerSourceOptions => ({
+      dialect: {
+        ...EVENTS,
+        table,
+        messageVocabulary: {
+          attribute: { one: "option", many: "options" },
+          formatTag: ({ name }) => name,
+        },
+      } as Dialect,
+    });
+
+    it("shorthands off: the noun is the dialect's (an option)", () => {
+      expect(
+        message("events\n  div .a\n", voiced({ tagShorthands: false })),
+      ).toBe(
+        "Invalid option name `.a` — this file's dialect has no `.class` shorthand; write `class=` as an option",
+      );
+    });
+
+    it("shorthands on: the tag examples are spelled by the dialect's formatTag", () => {
+      expect(message("events\n  div #a\n", voiced({}))).toBe(
+        "Invalid option name `#a` — a `#id` or `.class` shorthand goes on the tag name with no space (`div#a`, `div.cls`); otherwise write `id=` or `class=`",
+      );
+    });
+  });
+});
+
 describe("tagShorthands: the code and the hash", () => {
   it("MX_NO_TAG_SHORTHAND is in the catalogue under its exported name", () => {
     expect(NO_TAG_SHORTHAND_CODE).toBe("MX_NO_TAG_SHORTHAND");

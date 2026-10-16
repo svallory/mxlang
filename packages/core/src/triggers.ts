@@ -330,6 +330,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   const { table, dialect } = run.syntax;
   ctx.triggerSplices = run.splices;
   ctx.dialect = dialect;
+  ctx.tagShorthands = table.tagShorthands !== false;
   ctx.voice = voiceOf(dialect);
   if (dialect && !applied.has(ctx)) {
     applied.add(ctx);
