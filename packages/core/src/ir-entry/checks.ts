@@ -53,6 +53,7 @@ import type { SourceSpan } from "../mapping.ts";
 import {
   MX_VOICE,
   mxSpelling,
+  structuralMessage,
   type Voice,
   VoiceHookError,
 } from "../message-vocabulary.ts";
@@ -116,11 +117,6 @@ function boundDynamicTagMessage(
   return dialectId === undefined
     ? base
     : `${base} or set \`bindingsCallTags: false\` in the dialect`;
-}
-
-/** The fixed structural-reject message (the 131 addendum's item 1). */
-function structuralMessage(construct: string, voice: Voice): string {
-  return `${voice.Files} are static, so they do not evaluate ${construct}`;
 }
 
 /**

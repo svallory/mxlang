@@ -120,6 +120,7 @@ import {
   hasAttributeTagContract,
   isContractOnlyDelegated,
   isDeferredContract,
+  rejectStructuralBody,
   runAnalyzeHooks,
   runFinalizeHooks,
   setChildEnd,
@@ -5372,11 +5373,13 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
       if (name === "const" || name === "define" || name.startsWith("@"))
         continue;
       if (name === "for") {
-        tree.push({
-          kind: "ChildFor",
-          nodes: authoredChildTree(ctx, bodyChildren(node)),
-          loc,
-        });
+        tree.push(
+          ended({
+            kind: "ChildFor",
+            nodes: authoredChildTree(ctx, bodyChildren(node)),
+            loc,
+          }),
+        );
       } else if (name === "if") {
         const branches = [
           {
@@ -5406,7 +5409,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           index = cursor++;
           if (unconditional) break;
         }
-        tree.push({ kind: "ChildIf", branches, loc });
+        tree.push(ended({ kind: "ChildIf", branches, loc }));
       } else if (name === "else" || name === "else-if") {
         // An orphan branch still gets the usual positioned lowerer error.
         tree.push({
@@ -5418,6 +5421,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
             },
           ],
           loc,
+          orphan: true,
         });
       } else {
         rejectEffectTag(ctx, node, name);
@@ -5626,6 +5630,11 @@ function lowerCustomTag(
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
   const childTree = authoredChildTree(ctx, children);
+  // A transform may consume its body, so the IR check cannot be left to
+  // report a `for` or `if` in it.
+  if (ctx.structural === "reject" && definition.transform) {
+    rejectStructuralBody({ childTree }, voice);
+  }
   validateCustomTagChildren(
     definition,
     { name, loc: posOf(ctx, node), childTree, ...triggerOf(node) },

@@ -344,3 +344,97 @@ describe("structural: pass (or unset), a contract tag still sees what a for or i
     });
   });
 });
+
+describe("a tag whose transform consumes its body", () => {
+  // `eater` returns no nodes, so a `for` or `if` in its body never reaches the
+  // IR and the IR check cannot see it: the contract check reports it.
+  const eaters: Record<string, CustomTag> = {
+    ...customTags,
+    leaf: {},
+    eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
+    // No children contract at all.
+    bare: { transform: () => [] },
+  };
+  const run = (
+    source: string,
+    options: Parameters<typeof lowerSource>[2],
+  ): { ir: unknown; seen: unknown[] } => {
+    const result = lowerSource(source, "/t.mx", {
+      customTags: eaters,
+      ...options,
+    });
+    return {
+      ir: result.ir,
+      seen: result.diagnostics.map((d) => [
+        d.code,
+        d.line,
+        d.column,
+        d.message,
+      ]),
+    };
+  };
+  const reject = { structural: "reject", unknownTags: "reject" } as const;
+  const pass = { structural: "pass", unknownTags: "reject" } as const;
+
+  it.each([
+    [
+      "a for holding a tag the contract does not allow",
+      "<eater>\n  <for|x| of=[1]>\n    <box/>\n  </for>\n</eater>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR],
+    ],
+    [
+      "an if holding a tag that needs another parent",
+      "<eater>\n  <if=a>\n    <section/>\n  </if>\n</eater>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF],
+    ],
+    [
+      "a for holding a tag the contract allows",
+      "<eater>\n  <for|x| of=[1]>\n    <leaf/>\n  </for>\n</eater>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR],
+    ],
+    [
+      "an if, else-if and else: one error, at the if",
+      "<eater>\n  <if=a>\n    <box/>\n  </if>\n  <else-if=b>\n    <box/>\n  </else-if>\n  <else>\n    <box/>\n  </else>\n</eater>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF],
+    ],
+    [
+      "an empty for",
+      "<eater>\n  <for|x| of=[1]></for>\n</eater>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR],
+    ],
+    [
+      "a for in a transform tag with no children contract",
+      "<bare>\n  <for|x| of=[1]>\n    <box/>\n  </for>\n</bare>\n",
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR],
+    ],
+  ] as const)("reject: %s is the construct", (_label, source, want) => {
+    const { ir, seen: found } = run(source, reject);
+    expect(ir).toBeUndefined();
+    expect(found).toEqual([want]);
+    expect(want[3]).toMatch(/\bevaluate `<(for|if)>`$/);
+  });
+
+  it.each([
+    [
+      "a for holding a tag the contract does not allow",
+      "<eater>\n  <for|x| of=[1]>\n    <box/>\n  </for>\n</eater>\n",
+      [
+        "MX_TAG_NOT_ALLOWED",
+        3,
+        4,
+        "`<eater>`: `<box>` is not allowed here; allowed children: `<leaf>`",
+      ],
+    ],
+  ] as const)("pass: %s is still checked", (_label, source, want) => {
+    expect(run(source, pass).seen).toEqual([want]);
+  });
+
+  it("pass: a for holding an allowed tag is clean", () => {
+    const { ir, seen: found } = run(
+      "<eater>\n  <for|x| of=[1]>\n    <leaf/>\n  </for>\n</eater>\n",
+      pass,
+    );
+    expect(found).toEqual([]);
+    expect(ir).toBeDefined();
+  });
+});

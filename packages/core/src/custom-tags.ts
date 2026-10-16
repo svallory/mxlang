@@ -43,6 +43,7 @@ import {
   REPEATED_ATTRIBUTE_TAG_CODE,
   REPEATED_CHILD_CODE,
   reservedHookCodeMessage,
+  STRUCTURAL_CONSTRUCT_CODE,
   TAG_ERROR_CODE,
   TAG_HOOK_ERROR_CODE,
   TAG_NOT_ALLOWED_CODE,
@@ -73,6 +74,7 @@ import {
   MX_VOICE,
   type Owner,
   ownerText,
+  structuralMessage,
   type Voice,
   VoiceHookError,
   voiceOfCtx,
@@ -267,6 +269,8 @@ export type ChildNode =
       kind: "ChildIf";
       branches: Array<{ unconditional: boolean; nodes: ChildNode[] }>;
       loc: Position;
+      /** An `else` or `else-if` with no `if` before it: the lowerer reports that itself. */
+      orphan?: true;
     };
 
 /**
@@ -1815,6 +1819,48 @@ export function validateCustomTagParents(
   );
   endErrorAt(error, nameEnd);
   throw error;
+}
+
+/**
+ * Under `structural: "reject"`, a `for` or `if` written directly in the body
+ * of a tag with a `transform` is the error, reported here at the construct
+ * with the message the IR check gives. That check only sees constructs that
+ * reach the IR, and a transform may consume its body, so it cannot be left to
+ * report this one. The lowering fails here, so the IR check does not run and
+ * cannot report it a second time.
+ */
+export function rejectStructuralBody(
+  call: Pick<TagCall, "childTree">,
+  voice: Voice,
+): void {
+  for (const node of call.childTree ?? []) {
+    if (node.kind !== "ChildFor" && node.kind !== "ChildIf") continue;
+    if (node.kind === "ChildIf" && node.orphan) continue;
+    let error: TranslateError;
+    try {
+      error = codedError(
+        STRUCTURAL_CONSTRUCT_CODE,
+        structuralMessage(
+          voice.tag(node.kind === "ChildFor" ? "for" : "if"),
+          voice,
+        ),
+        node.loc.line,
+        node.loc.column,
+        node.loc.file,
+      );
+    } catch (hookFailure) {
+      if (!(hookFailure instanceof VoiceHookError)) throw hookFailure;
+      error = codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        hookFailure.message,
+        node.loc.line,
+        node.loc.column,
+        node.loc.file,
+      );
+    }
+    endErrorAt(error, childEnds.get(node));
+    throw error;
+  }
 }
 
 /** Validates authored children before any plain child is lowered. */
