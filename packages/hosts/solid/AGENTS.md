@@ -2,9 +2,11 @@
 
 ## Solid 2 target and pin policy
 
-The Solid host targets **Solid 2 only** — no Solid 1 lowering table, no dual target. Pins: `solid-js`, `@solidjs/web`, `@solidjs/babel-plugin`, `@solidjs/compiler` all at `2.0.0-rc.7`. `babel-preset-solid` and `vite-plugin-solid` are dead ends (renamed upstream).
+The Solid host targets **Solid 2 only** — no Solid 1 lowering table, no dual target. Pins: `solid-js`, `@solidjs/web`, `@solidjs/babel-plugin`, `@solidjs/compiler` all at `2.0.0-rc.7`, and `@solidjs/vite-plugin` at `3.0.0-next.41` (examples). `babel-preset-solid` and `vite-plugin-solid` are not used (renamed upstream).
 
-Solid 2 is pre-stable and RCs ship weekly. Policy: **pin one RC and stay on it**; re-sync the research note on each bump we choose to take, and do not chase every RC. See `README.md` "Solid 2 RC policy".
+Solid 2 is pre-stable and RCs ship weekly. Policy: **pin one RC and stay on it**. Moving to a newer RC is a deliberate choice that re-syncs the Solid 2 research note; do not chase every RC.
+
+Toolchain facts the host relies on: Solid 2's compilers keep `babel-preset-solid`'s option names (`generate: "dom" | "ssr" | "universal" | "dynamic"` plus `hydratable`; the oracle's variants are `dom` and `ssr-hydratable`), and MX never passes `@solidjs/compiler`'s documented `syntax` option, which rc.7 rejects at run time.
 
 Consequences encoded in the lowering table: `Index`/`Key`/`mxRange` are gone (one `For` with a `keyed` prop, plus `Repeat`); `classList` is gone (one `class` prop taking a string, object, or recursive array); `on:`/`oncapture:`/`attr:`/`bool:`/`use:` are parse errors with fix-it hints (only `prop:` survives); `<try>` lowers to `Errored`/`Loading`. Both compilers auto-import the builtIns (`For Show Switch Match Loading Reveal Portal Repeat Dynamic Errored`), and escaped block values additionally request `@solidjs/web`'s public `escape` helper through the region's hoisted-import channel. **That auto-import is Solid's own compiler stage** (`@solidjs/vite-plugin`'s native or Babel compiler), which never runs inside the type-check projection — see `packages/tooling/typescript-plugin/AGENTS.md`'s note on `appendSolidBuiltinImport` (`src/typecheck-module.ts`, this file kind's `completeTypecheckModule`), which supplies the same names there so `tsc`/tsserver can resolve them too.
 

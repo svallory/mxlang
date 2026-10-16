@@ -10,17 +10,19 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | Written | Emitted |
 |---|---|
 | `${expr}` | `{{ expr }}` |
+| `$!{expr}` | `<span [innerHTML]="expr">`, with a warning: Angular sanitizes the HTML, and the `<span>` is invalid where only certain children are allowed (`<tbody>`, `<select>`, `<ul>`) |
 | `<if>` / `<else if>` / `<else>` | `@if (…) { … } @else if (…) { … } @else { … }` |
 | `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { … }` |
 | `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue`, with `@let k` and `@let v` |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
+| `<${Comp} x=1/>`, or a tag named by a module-scope `const` | `<ng-container [ngComponentOutlet]="Comp" [ngComponentOutletInputs]="…">`; content and tag arguments are errors |
 | `<@name>` on an MX tag | `<ng-container ngProjectAs="[name]">` |
 | `onClick=f` | `(click)="__mxOn(f, this, $event)"` |
 | `attr=expr` on an element | `[attr]`, or `[attr.attr]`: see below |
 
-Give `<for>` a `by`: Angular requires `track`, and MX warns on a loop without one.
+Give `<for>` a `by`: Angular requires `track`. A loop without one emits `track $index`, and MX warns once per file, since reordering such a list re-renders its rows.
 
 ## Attributes: property or attribute binding?
 
@@ -58,7 +60,7 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 | `on-my-event=f` | `(my-event)="__mxOn(f, this, $event)"` |
 
 - **The handler is called with `(event, element)`**, as in Marko, and a handler that returns `false` prevents the default. A falsy handler (`onClick=(ready && save)`) does nothing.
-- **`this` is the component** (or the object the method was read from), where Marko's is the element. `element` is `$event.currentTarget`.
+- **`this` is the component** (or the object the method was read from), where Marko's is the element. `element` is `$event.currentTarget`, typed `EventTarget | null`.
 - **Custom events work**: Angular's binding takes any event name, so `on-my-event` is first-class here.
 - **Spell the DOM name.** `onDoubleClick` is not a DOM event; MX warns and emits `(doubleclick)` as written. Write `onDblClick`.
 - **On a component**, `onSelect=pick` binds the input `[onSelect]`. MX does not infer an `@Output()`.
@@ -70,4 +72,8 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 
 - **State and effects**: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<id>`, `<await>`, `<log>`, `<debug>`, `client` and `server` blocks, and `:=`. State belongs in the component class.
 - **`class:x`, `style:x`**: not MX syntax. Write an object for `class` or `style`. Angular's `attr.` prefix is not needed either: write the attribute plainly (`data-kind=x`) and MX picks the binding.
+- **`<return>` and tag variables (`<Tag/x>`)**: an Angular component has no channel to hand a value back to its caller. **`<try>`**: Angular has no template-level error boundary; handle the error in the component and render the fallback with `<if>`.
+- **A refined bound attribute on an optional chain** (`<input value:fn:=q?.a/>`): Marko compiles it with a nullish guard, but Angular's two-way binding needs a writable target, so the error says to bind a name or a member of one. The unrefined `value:=q?.a` emits `[(value)]="q?.a"`.
 - **`on:click`**: the error names `onClick`.
+
+Angular template syntax written as literal text (`{{ name }}`, `@if (x) {`, `@for`, `@let name = …;`) in any text node, `<pre>`, `<code>` and `<textarea>` included, compiles to literal text and gets a **warning** that points to the MX form (`${name}`, `<if>`, `<for>`, `<const>`) and to the escape for text you mean literally. Braces inside an expression attribute value or already escaped do not warn, and an `@` keyword warns only before real block syntax.

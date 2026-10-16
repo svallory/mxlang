@@ -15,13 +15,14 @@ Each MX region compiles to Solid 2 JSX at the same position in the file, and Sol
 | `$!{expr}` | `innerHTML={expr}`; it must be the only child |
 | A spread key named `innerHTML`, `outerHTML`, `textContent` or `innerText` | an escaped, lowercase attribute (never raw HTML), as Marko prints it; `prop:innerHTML`, `prop:outerHTML` and an object `children` are dropped; a literal `innerHTML=` on an element is a compile error, so write `$!{html}` |
 | `.cls`, `#id` | `class="cls"`, `id="id"`; beside any `class=` value it is `class={["cls", value]}`, shorthand first, as in Marko; a native element prints the joined string (numbers and `true` as text, falsy values skipped) |
+| `class={ a: on() }` | `class={{ a: on() }}` (no `classList`) |
 | `prop:name=value` | `prop:name={value}` |
 | a component | a JSX element; ordinary children are `props.children` |
 | `<Tag\|a, b\|>body</Tag>` | `<Tag>{(a, b) => body}</Tag>` |
 | `<@name>` on a component | the prop `name`, as an accessor |
 | `<if>` with one or two branches | `<Show when fallback>` |
 | `<if>` chain with three or more | `<Switch fallback><Match when>…</Match></Switch>` |
-| `<try>` | `<Loading fallback>`, inside `<Errored fallback>` when there is a `<@catch>`; Solid's `Errored` fallback receives an `ErrorAccessor` function, so the lowering calls it once and passes the result to an inner arrow whose parameter list is the author's `<@catch>` params verbatim — `<Errored fallback={(__mxErr, ...__mxArgs) => ((e, reset) => …)(__mxErr(), ...__mxArgs)}>`, so defaults, type annotations, destructuring and rest all stay valid (a param-less catch keeps a plain body fallback) |
+| `<try>` | `<Loading fallback>`, inside `<Errored fallback>` when there is a `<@catch>` (`<@catch\|e, reset\|>` may name the second parameter; there is no sugar for `<Reveal>`, write the component); Solid's `Errored` fallback receives an `ErrorAccessor` function, so the lowering calls it once and passes the result to an inner arrow whose parameter list is the author's `<@catch>` params verbatim — `<Errored fallback={(__mxErr, ...__mxArgs) => ((e, reset) => …)(__mxErr(), ...__mxArgs)}>`, so defaults, type annotations, destructuring and rest all stay valid (a param-less catch keeps a plain body fallback) |
 
 A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no declaration for it, it is a compile error at the tag: ``Unable to find entry point for custom tag `<uuid:id>`.`` and the fix. Write the name without the colon, or declare the tag from an [`mx.tags` directory](/custom-tags/discovery/) with `prefix: "uuid:"`. A prefix can produce a name only when the name ends in a file stem (a letter, digit or `_`, then letters, digits, `_` or `-`): the prefix is everything before that stem, so `<a:-x/>` is `prefix: "a:-"` with `x.mx`. A name that ends otherwise (`<uuid:/>`, `<a:b$/>`) is told only to write it without the colon. An import cannot bind a colon name and a `tags/` file name cannot spell one.
 
@@ -30,15 +31,20 @@ A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never
 | Written | Emitted |
 |---|---|
 | `<for\|item, i\| of=xs()>` | `<For each={xs()}>{(item, i) => …}</For>` |
+| `<for\|item, i\| of=xs() by=identity>` | `<For each={xs()}>…</For>`; `identity` needs no import |
 | `<for\|item, i\| of=xs() by="id">` | `<For each={xs()} keyed={x => x.id}>…</For>` |
+| `<for\|item, i\| of=xs() by=fn>` | `<For each={xs()} keyed={fn}>…</For>` |
 | `<for\|k, v\| in=obj()>` | `<For each={Object.entries(obj() ?? {})} keyed={e => e[0]}>…</For>` |
 | `<for\|i\| from=a to=b>` | `<Repeat count={(b) - (a) + 1} from={a}>{(i) => …}</Repeat>` |
 | `<for\|i\| from=a until=b>` | `<Repeat count={(b) - (a)} from={a}>…</Repeat>` |
-| `<for\|i\| from=a to=b step=s>` | `<Repeat count={N}>`, with `i` computed from the row index |
+| `<for\|i\| to=b>` | `<Repeat count={(b) - (0) + 1}>`: `from` is emitted only when you wrote it |
+| `<for\|i\| from=a to=b step=s>` | `<Repeat count={N}>`, with `i` computed as `a + k * s` from the row index `k` |
 
-With `by`, Solid hands the row and the index to the child as accessors. You still write `member.name`: MX rewrites each read to call the accessor, so it stays tracked.
+Without `by=`, rows are keyed by reference and the body receives plain values. Solid hands some parameters in as accessors: the index in the `of=` forms, both parameters under `by=`, and the `in=` entry. You still write `member.name`: MX rewrites each read to call the accessor (`member().name`), so it stays tracked. Assigning to such a parameter is a compile error.
 
-Keep `from`, `to`, `until` and `step` pure (a signal, a literal or a memo): they are read like any other Solid attribute. A `step` of `0` at run time renders no rows.
+When both bounds are numeric literals, `count` is folded to a literal.
+
+Keep `from`, `to`, `until` and `step` pure (a signal, a literal or a memo): they are read like any other Solid attribute, and a stepped range tracks its bounds like an unstepped one. Negative steps are allowed. A literal `step=0` is a compile error; a `step` that is `0` at run time renders no rows.
 
 ## Children
 
@@ -85,7 +91,7 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 
 ## Whole-file `.mx` on Solid
 
-A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host. In a whole-file component the body is `input.content`, Marko's name for it (an explicit `content=` prop wins over children), and `<if=input.content>` is true when a body was passed.
+A plain `.mx` compiles to a Solid component when `package.json` has `"mx": { "host": "solid" }` (or `mx.target: "solid-jsx"`). `.solid.mx` needs neither: its extension selects the host. In a whole-file component the body is `input.content`, Marko's name for it (an explicit `content=` prop wins over children), and `<if=input.content>` is true when a body was passed. Top-level `import` statements work as in a whole-file `.mx` on any other host, and the Vite plugin, the TypeScript plugin and the language server all compile the file as a Solid component, never as a region file or with the HTML target.
 
 ## How this is checked
 

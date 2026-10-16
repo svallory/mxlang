@@ -5,7 +5,7 @@ description: "The HostDeclarations interface a host implements, and the three ho
 
 # Declarations and hooks
 
-A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member answers a question the **resolver** asks while turning Marko's AST into IR — none of them emit anything. Emission is a separate interface, [`Emitter<Out>`](/architecture/core-and-hosts/), called later over the resolved IR.
+A target supplies one `HostDeclarations` object to `@mxlang/core`. Every member answers a question the **resolver** asks while turning the MX AST into IR — none of them emit anything. Emission is a separate interface, [`Emitter<Out>`](/architecture/core-and-hosts/), called later over the resolved IR.
 
 | Member | What it decides |
 | --- | --- |
@@ -29,11 +29,11 @@ A host supplies one `HostDeclarations` object to `@mxlang/core`. Every member an
 
 `Policy` still exists as a name, but only as a compatibility alias of `HostDeclarations`.
 
-Two patterns are worth noticing. The `reject*` hooks exist so a host phrases its own diagnostics: a Marko-parity target quotes Marko's own fix-it, which reads very differently from a generic "not supported here". And `isDelegatedTag`/`resolveDelegatedTag` replaced a single `emitSpecial` that decided by emitting and *then* returning true or false — declaring the claim up front is what lets the resolved `DelegatedTag` node carry the decision in its `data` slot, so the emitter never needs the original Marko node.
+Two patterns are worth noticing. The `reject*` hooks exist so a host phrases its own diagnostics: a Marko-parity target quotes Marko's own fix-it, which reads very differently from a generic "not supported here". And `isDelegatedTag`/`resolveDelegatedTag` replaced a single `emitSpecial` that decided by emitting and *then* returning true or false — declaring the claim up front is what lets the resolved `DelegatedTag` node carry the decision in its `data` slot, so the emitter never needs the original AST node.
 
 ## The three stateful-tag hooks
 
-MX itself defines no meaning for `<let>`, `<effect>`, `<lifecycle>`, `<script>`, or `:=` — those are framework territory, and each host that wants them gives them its own semantics through three capabilities the core provides.
+The reactive tags (`<let>`, `<lifecycle>`, `<script>`, `:=`) are core language with one meaning; each target lowers them to its framework's own state, or refuses what it cannot express. Core gives a target three capabilities for that lowering, and for any other tag a host handles itself.
 
 **1. The tag handler — `isDelegatedTag` / `resolveDelegatedTag`.** Every tag the core has no lowering of its own for is offered to the host by name before the core decides whether it's a component or an element; `isDelegatedTag` returning true claims it. The tag then resolves to the `DelegatedTag` IR kind — attributes, children, attribute tags, params and `var` already resolved — and `resolveDelegatedTag` stores whatever the host decided in its `data` slot, for the host's emitter to read. A host implements a stateful tag like `<signal/count=1/>` here.
 

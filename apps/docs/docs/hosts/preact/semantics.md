@@ -30,7 +30,7 @@ Preact has no control-flow components, so every structural tag becomes a plain J
 
 ## Element or component?
 
-MX follows Marko's rule, not JSX's capital letter: a tag is a component when a binding in scope or a [discovered custom tag](/custom-tags/discovery/) has that name, whatever its case. A `tags/badge.mx` makes `<badge/>` a component call. The other side of the rule: an import named like an element (`import { label } from "./i18n"`) turns `<label>` into a call of it. Rename the import.
+A lowercase tag is the native element, a [discovered custom tag](/custom-tags/discovery/) or a contract child, whatever else is in scope: a `tags/badge.mx` makes `<badge/>` a component call, and an import named like an element (`import { label } from "./i18n"`) leaves `<label>` the native element. A binding in scope is called as a component only when its name is PascalCase, or through a dynamic tag, `<${label}/>`. A lowercase tag named like an in-scope `<define>` or an import of a tag module is reported: a warning naming both spellings when the name is also an element or a registered tag, otherwise an error.
 
 A colon in a tag name is part of the name: `<uuid:id/>` is one custom tag, never a JSX namespace element. With no declaration for it, it is a compile error at the tag: ``Unable to find entry point for custom tag `<uuid:id>`.`` and the fix. Write the name without the colon, or declare the tag from an [`mx.tags` directory](/custom-tags/discovery/) with `prefix: "uuid:"`. A prefix can produce a name only when the name ends in a file stem (a letter, digit or `_`, then letters, digits, `_` or `-`): the prefix is everything before that stem, so `<a:-x/>` is `prefix: "a:-"` with `x.mx`. A name that ends otherwise (`<uuid:/>`, `<a:b$/>`) is told only to write it without the colon. An import cannot bind a colon name and a `tags/` file name cannot spell one.
 
@@ -80,7 +80,7 @@ Anything Preact cannot express fails the build with the construct and its line; 
 
 ## Children and `content`
 
-MX calls a component with `children`, the JSX way, so hand-written Preact components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
+MX calls a component with `children`, the JSX way, passing a body exactly as hand-written JSX would pass it, so hand-written Preact components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
 
 ## Data in a text placeholder
 

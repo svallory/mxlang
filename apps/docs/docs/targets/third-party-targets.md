@@ -98,7 +98,7 @@ resolveDefaultTag(node, parents: readonly DefaultTagParent[], context: DefaultTa
 **`contractDefaultTag(parents, context, builtins?)`** is the exported helper for rung 1: the nearest authored parent's declared `defaultTag` (reading attribute-tag declarations at any depth, skipping control flow by the tag's own definition, never climbing past a parent that declares none), or `undefined`. `builtins` lists names your target provides without a taglib entry. The same module exports `validateDefaultTag(name, scope)` (the reason a value is invalid, or `undefined`), used by the registry for every rung.
 ### A host with its own file kind
 
-A descriptor can name its own host and file kind. This is how Mesh ships `.mesh.mx` (decision 148): a package `@acme/mx-mesh` whose `load()` compile reads the file's IR with `lowerSource` (see [the core IR entry point](/architecture/ir-entry/)) and does whatever the dialect does with it. The IR entry point is a function of `@mxlang/core`, not a registered target, so the descriptor is not built on one.
+A descriptor can name its own host and file kind. For example, `@acme/mx-mesh` below is a package whose `load()` compile reads the file's IR with `lowerSource` (see [the core IR entry point](/architecture/ir-entry/)) and does whatever the dialect does with it. The IR entry point is a function of `@mxlang/core`, not a registered target, so the descriptor is not built on one.
 
 ```js
 // @acme/mx-mesh/index.cjs

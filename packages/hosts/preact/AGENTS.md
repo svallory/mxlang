@@ -147,6 +147,13 @@ it, so a bare Preact render would print `class` first. The golden is correct). F
   `<>{(() => { <defines> <var statements> return (<>…</>); })()}</>` so they
   still close over the surrounding component's `useState` values. Always a
   fragment: a bare call or `{…}` in JSX-child position prints as text.
+- A fragment MX synthesises (`<if>`, `<for>`, `<define>`, `<try>`, an
+  attribute-tag body) whose body is one value expression gets a second child,
+  `{null}` (`closeFragmentBody`), so Hono's `Fragment` keeps a lone `0`; the html
+  target is the reference there. The body of a tag that resolves to a host
+  component (`import { Fragment } from "hono/jsx"`, any value import called as a
+  tag) is passed exactly as hand-written JSX would pass it, so the host's own
+  child rules apply: never add `{null}` to it.
 - `<const>` is refused in a region (a hook there could be conditional), and
   module-level MX (`import`/`static`/`export`/`Input`/`<return>`) is reachable
   only through a direct call of the hook; both are positioned at the statement.

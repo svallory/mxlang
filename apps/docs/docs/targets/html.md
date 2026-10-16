@@ -1,13 +1,13 @@
 ---
 title: "HTML target"
-description: "Compile .mx and .marko templates to a plain (input) => string function, no runtime beyond an escape helper."
+description: "Compile .mx templates to a plain (input) => string function, no runtime beyond an escape helper."
 ---
 
 # HTML target
 
-The html target (`@mxlang/target-html`) is the vanilla MX target. It compiles an `.mx` file (or its `.marko` alias) to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper and a string-buffer sink. No scheduler, no signals, no hydration, no resume markers.
+The html target (`@mxlang/target-html`) is the vanilla MX target. It compiles an `.mx` file to a pure function: a JS/TS module whose default export is `(input) => string`, with no runtime beyond an `escape` helper and a string-buffer sink. No scheduler, no signals, no hydration, no resume markers.
 
-The generic half of the work — consuming Marko's AST, applying the structural lowerings, the string-emit model — lives in the shared core. This target supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
+The generic half of the work — parsing, applying the structural lowerings, resolving the IR — lives in the shared core. This target supplies the policy on top of it: which tags are inert and which are compile errors, component-versus-element resolution, structured `class`/`style` values, and its own integrations (a Bun loader, the `escape` runtime, a taglib).
 
 ## Selecting the host
 
@@ -15,8 +15,8 @@ HTML is a **hostless target**. Select it with `target: "html"` in
 [MX's config](/configuration/) (`"mx": { "target": "html" }` in `package.json`). `mx.host: "html"` remains a silent legacy alias;
 `mx.host: "translator"` retains its deprecation warning. An explicit HTML
 target beats dependency inference, and combining it with `mx.host: "solid"`
-is a positioned `target-host-mismatch` error (decisions 129/132;
-[spec §13.5](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection)).
+is a positioned `target-host-mismatch` error
+([spec §13.5](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection)).
 
 HTML is the only hostless target. A program that reads the markup as a tree
 calls `lowerSource` from `@mxlang/core` instead; see
@@ -32,13 +32,11 @@ plus an optional `content` thunk. Arrays are real arrays, and conditional and
 looped occurrences preserve source order. See [AttrTag](/language/attr-tag/)
 for declarations, fallback inference, errors, and compiled examples.
 
-Because MX 1.0 uses a strict subset of Marko syntax, this target compiles
-**stock Marko syntax**, not a parser dialect: tag discovery through taglibs
-and `tags/` directories, Marko's own HTML/SVG/MathML element registry, and
-Marko's component conventions. Consumer-declared `AttrTag` values deliberately
-differ from Marko's iterable record (decision 106); body-only untyped values
-remain compatible under decision 108. Templates outside that recorded
-divergence render the same bytes as Marko's own server render.
+This target renders what Marko's server render emits, minus resume markers.
+Tags are discovered from `tags/` directories and `mx.tags`, and elements are
+classified by MX's HTML, SVG and MathML element table. An attribute tag
+arrives as Marko's own attribute-tag record (see [AttrTag](/language/attr-tag/)).
+The differences from Marko that remain are rows in the divergence list.
 
 ```html
 <!-- greeting.mx -->
@@ -100,7 +98,7 @@ const { code } = compile(source, "greeting.mx");
 - `Out` — the sink type: `write(html: string)` and `toString()`
 - `TranslateError` — thrown for a construct with no lowering, carrying `line`/`column`
 
-`compile` is the supported entry. The package also exports a named `translator`, but it works only inside `compile`, `compileFile` and `build`; passing it to `@marko/compiler`'s `compileSync` directly throws "no compile in flight".
+`compile` is the supported entry. The package also exports a named `translator`, but it works only inside `compile`, `compileFile` and `build`; called on its own it throws "no compile in flight".
 
 ## `mx(source)`/`loadMx(path)`: no bundler, no manual caching
 
@@ -122,9 +120,9 @@ Node-only caveats: `stripTypeScriptTypes` prints one `ExperimentalWarning` per p
 
 ## Loaders
 
-Two loaders make `import page from "./page.mx"` (or `"./page.marko"`) resolve, one per runtime.
+Two loaders make `import page from "./page.mx"` resolve, one per runtime. Neither compiles a `.marko` file: `.marko` is not an MX input.
 
-**Bun** — `@mxlang/target-html/bun` is a plugin that intercepts `.mx` and `.marko` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
+**Bun** — `@mxlang/target-html/bun` is a plugin that intercepts `.mx` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
 
 ```toml
 # bunfig.toml
@@ -138,7 +136,7 @@ import markoPlugin from "@mxlang/target-html/bun";
 Bun.plugin(markoPlugin);
 ```
 
-**Vite** — `@mxlang/vite-plugin`'s `mx()` plugin handles `.mx` and `.marko` alongside `.solid.mx` by default:
+**Vite** — `@mxlang/vite-plugin`'s `mx()` plugin handles `.mx` alongside `.solid.mx` by default:
 
 ```typescript
 // vite.config.ts
@@ -253,7 +251,15 @@ function __mxRender(input: Input, __mxOut: __MxOut): void {
 }
 ```
 
-The body's output reaches the page only when the body finishes. When it throws, the partial output is dropped and the `catch` branch renders in its place, as Marko 6.4.4 does (before decision 155 this target kept the partial output). A `<try>` with neither `<@catch>` nor `<@placeholder>` is a compile error, as in Marko 6.4 (it would have no effect; Marko 6.3.51 rethrew from it at render time). A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
+The body's output reaches the page only when the body finishes. When it throws, the partial output is dropped and the `catch` branch renders in its place, as Marko 6.4.4 does. A `<try>` with neither `<@catch>` nor `<@placeholder>` is a compile error, as in Marko 6.4 (it would have no effect; Marko 6.3.51 rethrew from it at render time). A `<try>` carrying `<@placeholder>` is a compile error: showing a placeholder and then replacing it needs a second pass this target does not have.
+
+## Escaping and spreads
+
+Every string this target writes into an attribute goes through one escaping helper: dynamic values, static single-quoted values, spread keys and the merged shorthand `class`/`id`. A spread's attribute names are also validated against an attribute-name pattern, not only escaped.
+
+`escape()` treats its input as literal text: `&` becomes `&amp;`, so an already-escaped `&amp;` becomes `&amp;amp;`. Pass raw text, never pre-escaped HTML; use `$!{}` for markup you trust.
+
+**Spreading untrusted objects is not safe.** A spread writes every key as an attribute, so a key that is a real handler name (`onload`, `onerror`) renders a live inline handler, and `__proto__` passes as an attribute name. This boundary is documented, not closed: never spread an object whose keys an attacker controls; pick the attributes you want.
 
 ## Structured `class` and `style`
 

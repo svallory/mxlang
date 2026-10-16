@@ -145,7 +145,7 @@ For type errors in the editor, add `{ "name": "@mxlang/typescript-plugin" }` to 
 ## Two rules to know first
 
 - **Handlers are references or expression arrows.** Write `onClick=clear` or `onClick=(event => save(event))`. Angular templates have no statement bodies, so the method form `onClick() { … }` and a block-bodied arrow are compile errors here.
-- **Do not import a name that is also an element.** `import { input } from "@angular/core"` makes `<input>` a call of that function; use `@Input()` or alias the import.
+- **Give every `<for>` a `by`.** Angular requires `track`: `by=(item => item.id)` becomes `track item.id`. Without it MX emits `track $index` and warns.
 
 ## Go deeper
 
