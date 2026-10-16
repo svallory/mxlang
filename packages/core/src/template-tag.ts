@@ -32,6 +32,7 @@ import {
   type Voice,
   VoiceHookError,
   voiceOfCtx,
+  writesMxSyntax,
 } from "./message-vocabulary.ts";
 
 export interface TemplateTag {
@@ -1056,7 +1057,11 @@ export function routeTemplateCall(
       : call.loc;
     const error = codedError(
       INVALID_TAG_VAR_CODE,
-      `${callLabel(voice, call)} does not return a value; add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``,
+      `${callLabel(voice, call)} does not return a value; ${
+        writesMxSyntax(voice, "return")
+          ? `add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``
+          : `add ${voice.tag("return")} to ${tag.filename}`
+      }`,
       at.line,
       at.column,
       call.loc.file,

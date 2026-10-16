@@ -44,6 +44,21 @@ export function mxSpelling(tag: MessageTag): string {
   }
 }
 
+/**
+ * Does `voice` spell the built-in tag `name` the way MX does (`<name>`)? A
+ * message that shows a syntax example written in MX's tags (`<const/name=value/>`)
+ * shows it only then: a dialect that spells the tag otherwise does not write
+ * MX's syntax, so the example would teach a form its file's author cannot use,
+ * and the message states the rule without it.
+ */
+export function writesMxSyntax(
+  voice: Voice,
+  name: string,
+  trigger?: TagTrigger,
+): boolean {
+  return voice.tag(name, trigger) === `\`${mxSpelling({ name, form: "tag" })}\``;
+}
+
 /** The words a message splices. See the file header. */
 export interface Voice {
   /** `attribute` */

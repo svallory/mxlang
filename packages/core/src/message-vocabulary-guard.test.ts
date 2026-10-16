@@ -9,11 +9,15 @@
  *
  * - the noun `attribute`/`attributes` in a literal;
  * - a tag spelled by hand: a literal ending in `<` or `<@` before a `${…}`, or
- *   holding `<${`.
+ *   holding `<${`;
+ * - a built-in tag written as MX's `<name>` (`<if>`, `<const/x=…/>`, `<try>`):
+ *   a message names a built-in the way the file's dialect spells it
+ *   (`voice.tag(name)`), and shows an MX-syntax example only when that
+ *   spelling is MX's own (`writesMxSyntax`).
  *
- * A literal that is not a dialect-reachable message (MX's built-in tag text,
- * what a dialect's author reads at registration, an internal invariant, a
- * parser option name) is listed in `message-vocabulary-guard.allowlist.txt`
+ * A literal that is not a dialect-reachable message (what a dialect's author
+ * reads at registration, an internal invariant, a parser option name, an
+ * example shown only for MX's own spelling) is listed in `message-vocabulary-guard.allowlist.txt`
  * with the reason. The list is exact in both directions: a hit with no entry
  * fails, and an entry that matches no hit fails, so it cannot rot.
  */
@@ -43,7 +47,46 @@ const SCANNED = [
   "stock-parser.ts",
   "mx-parse.ts",
   "tag-file.ts",
+  "builtin-tags.ts",
+  "render-let-write.ts",
+  "tag-names.ts",
+  "attribute-value.ts",
 ] as const;
+
+/**
+ * The tags MX defines (a dialect may spell each differently): a literal that
+ * writes one as `<name` followed by a delimiter is a hit.
+ */
+const BUILTIN_TAGS = [
+  "if",
+  "else",
+  "else-if",
+  "for",
+  "while",
+  "const",
+  "let",
+  "define",
+  "return",
+  "effect",
+  "script",
+  "style",
+  "try",
+  "await",
+  "lifecycle",
+  "id",
+  "log",
+  "debug",
+  "show",
+  "html-comment",
+  "html-script",
+  "html-style",
+  "attrs",
+] as const;
+
+/** `<if>`, `<const/x=1/>`, `<for|item| of=…>`, `<else if=…>`, `<try`. */
+const MX_BUILTIN_TAG = new RegExp(
+  `<(?:${BUILTIN_TAGS.join("|")})(?![\\w-])`,
+);
 
 interface Hit {
   file: string;
@@ -110,6 +153,10 @@ function whyFlagged(parts: readonly string[], joined: string): string | null {
   if (/<@?\$\{…\}/.test(joined)) return `a hand-spelled tag \`<${HOLE}>\``;
   if (parts.some((part) => part.includes("<${"))) {
     return "a hand-spelled dynamic tag `<${`";
+  }
+  for (const part of parts) {
+    const found = MX_BUILTIN_TAG.exec(part);
+    if (found) return `a built-in tag written as MX's \`${found[0]}>\``;
   }
   return null;
 }
@@ -315,6 +362,41 @@ describe("message vocabulary guard", () => {
         1,
       );
       expect(unlisted(reverted, allow).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("flags a built-in tag written as MX's in lower.ts", () => {
+      const reverted = revert(
+        "lower.ts",
+        '`${tagText(ctx, "const", node)} without a value`',
+        "\"`<const>` without a value\"",
+        1,
+      );
+      const fresh = unlisted(reverted, allow);
+      expect(fresh.map((hit) => hit.text)).toEqual([
+        "`<const>` without a value",
+      ]);
+    });
+
+    it("flags a built-in tag written as MX's in a message another file builds", () => {
+      const reverted = revert(
+        "ir-entry/declarations.ts",
+        '${voice.tag("return")} needs the evaluated mode',
+        "\\`<return>\\` needs the evaluated mode",
+        1,
+      );
+      expect(unlisted(reverted, allow).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("tells a built-in from a custom tag of a similar name", () => {
+      const found = scanSource(
+        "a.ts",
+        "function f() { return ['`<for>`', '`<form>`', '`<if-else>`', '`<lifecycle/>`', '`<const/x=1/>`', '`<@catch>`', '`<entity>`']; }",
+      );
+      expect(found.map((hit) => hit.text)).toEqual([
+        "`<for>`",
+        "`<lifecycle/>`",
+        "`<const/x=1/>`",
+      ]);
     });
 
     it("lets an allowed example stand when nothing else in its literal is raw", () => {

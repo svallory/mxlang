@@ -56,8 +56,10 @@ import {
   MX_VOICE,
   type Owner,
   ownerText,
+  triggerOfNode,
   type Voice,
   voiceOfCtx,
+  writesMxSyntax,
 } from "./message-vocabulary.ts";
 import type { ModuleScope } from "./module-scope.ts";
 import type { Dialect } from "./syntax-table.ts";
@@ -1841,15 +1843,18 @@ export function hasContent(children: Node[]): boolean {
  * where Marko's `assertNoArgs` knows a hint. Everything else — and any tag
  * whose name is not statically known — gets Marko's plain sentence.
  */
-const TAG_ARGUMENTS_MESSAGES: Record<string, (name: string) => string> = {
-  if: (name) =>
-    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
-  "else-if": (name) =>
-    `Tag does not support arguments. Write the condition as a value attribute instead: \`<${name}=condition>\`.`,
-  else: () =>
-    "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`.",
-  await: (name) =>
-    `Tag does not support arguments. Write the promise as a value attribute and receive the result as a tag parameter instead: \`<${name}|result|=promise>\`.`,
+const TAG_ARGUMENTS_MESSAGES: Record<
+  string,
+  (name: string, voice: Voice, mxSyntax: boolean) => string
+> = {
+  if: (name, voice, mxSyntax) =>
+    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead${mxSyntax ? `: \`<${name}=condition>\`` : ""}.`,
+  "else-if": (name, voice, mxSyntax) =>
+    `Tag does not support arguments. Write the condition as a value ${voice.attribute} instead${mxSyntax ? `: \`<${name}=condition>\`` : ""}.`,
+  else: (_name, voice, mxSyntax) =>
+    `Tag does not support arguments. Write the condition as ${voice.anAttribute} instead${mxSyntax ? ": `<else if=condition>`" : ""}.`,
+  await: (name, voice, mxSyntax) =>
+    `Tag does not support arguments. Write the promise as a value ${voice.attribute} and receive the result as a tag parameter instead${mxSyntax ? `: \`<${name}|result|=promise>\`` : ""}.`,
 };
 
 function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
@@ -1880,7 +1885,15 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
     /`?<([^`>]+)>`?/.exec(what)?.[1] ||
     String(tagNameOf(node) ?? "");
   const message = TAG_ARGUMENTS_MESSAGES[name];
-  return message ? message(name) : "Tag does not support arguments.";
+  if (!message) return "Tag does not support arguments.";
+  // The condition's example is MX's syntax: shown only when the file spells
+  // the tag as MX does.
+  const voice = voiceOfCtx(ctx);
+  return message(
+    name,
+    voice,
+    writesMxSyntax(voice, name, triggerOfNode(node)),
+  );
 }
 
 function eventHandlerHint(ctx: Ctx, node: Node): string {
@@ -2126,7 +2139,7 @@ export function rejectInertShape(
   disposition: Extract<Disposition, { kind: "inert" }>,
 ): void {
   const voice = voiceOfCtx(ctx);
-  const label = voice.tag(name);
+  const label = voice.tag(name, triggerOfNode(node));
   rejectUnsupportedFields(ctx, node, label, {
     params: true,
     args: true,

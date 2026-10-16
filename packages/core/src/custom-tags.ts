@@ -551,7 +551,7 @@ function rebuildAttributeTagPlan(
         failAt(
           REPEATED_ATTRIBUTE_TAG_CODE,
           owner,
-          `${voice.attrTag(name)} may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may not appear inside ${voice.tag("for")} (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           occurrences[0]?.loc ?? { line: 0, column: 0 },
           nameEndOf(occurrences[0]),
           voice,
@@ -578,6 +578,20 @@ function rebuildAttributeTagPlan(
     };
   });
   return { attributeTagTree, attrTagProps };
+}
+
+const transformVoices = new WeakMap<TransformContext, Voice>();
+
+/**
+ * The voice of the file a transform runs for. Core-owned tags (`<try>`) spell
+ * their messages through it; it is not part of the public context.
+ */
+export function voiceOfTransform(ctx: TransformContext): Voice {
+  const voice = transformVoices.get(ctx);
+  if (voice === undefined) {
+    throw new Error("a transform context is built with its file's voice");
+  }
+  return voice;
 }
 
 export interface TransformContext {
@@ -3994,6 +4008,7 @@ export function transformCustomTag(
     gensym: (hint) => gensymFor(ctx, call.name, hint),
     store: storeFor(ctx, call.name),
   };
+  transformVoices.set(tagContext, voice);
 
   let result: IrNode[] | TagCall;
   try {
@@ -4005,6 +4020,16 @@ export function transformCustomTag(
       : routeTemplateCall(ctx, definition as TemplateBackedTag, observed.call);
   } catch (error) {
     if (isTranslateError(error)) throw error;
+    // A core-owned tag spelling its message through the dialect's `formatTag`.
+    if (error instanceof VoiceHookError) {
+      throw codedError(
+        DIALECT_HOOK_ERROR_CODE,
+        error.message,
+        call.loc.line,
+        call.loc.column,
+        call.loc.file,
+      );
+    }
     throw codedError(
       TAG_HOOK_ERROR_CODE,
       `${ownerText(owner)}: custom tag threw: ${error instanceof Error ? error.message : String(error)}`,

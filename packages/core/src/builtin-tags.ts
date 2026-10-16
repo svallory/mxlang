@@ -25,6 +25,7 @@ import {
   shadowedBuiltinMessage,
   type TagCall,
   type TransformContext,
+  voiceOfTransform,
 } from "./custom-tags.ts";
 import { INVALID_TRY_CODE, RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
 import type { IrNode } from "./ir.ts";
@@ -33,11 +34,14 @@ import type { IrNode } from "./ir.ts";
 const TRY = { code: INVALID_TRY_CODE } as const;
 
 function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
+  // Spelled when a message is built, so a valid file never calls the
+  // dialect's `formatTag` for it.
+  const voice = voiceOfTransform(ctx);
   if (call.params.length > 0) {
-    ctx.fail("tag params (`|a, b|`) on `<try>`", TRY);
+    ctx.fail(`tag params (\`|a, b|\`) on ${voice.tag("try")}`, TRY);
   }
   if (call.var !== null) {
-    ctx.fail("tag variable (`/name`) on `<try>`", TRY);
+    ctx.fail(`tag variable (\`/name\`) on ${voice.tag("try")}`, TRY);
   }
 
   // The declared `attributeTags` contract on this definition already rejects
@@ -48,7 +52,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
     (tag) => tag.name === "placeholder",
   );
   if (placeholder && placeholder.block.params.length > 0) {
-    ctx.fail("tag params (`|a, b|`) on `<@placeholder>`", {
+    ctx.fail(`tag params (\`|a, b|\`) on ${voice.attrTag("placeholder")}`, {
       at: placeholder.block.loc,
       code: INVALID_TRY_CODE,
     });
@@ -64,7 +68,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   }
   if (call.attributeTags.length === 0) {
     ctx.fail(
-      "needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+      `needs ${voice.attrTag("catch")} to handle errors or ${voice.attrTag("placeholder")} to show while its content is pending; without either it has no effect, so render its content directly`,
       TRY,
     );
   }

@@ -214,6 +214,7 @@ import {
   type Voice,
   VoiceHookError,
   voiceOfCtx,
+  writesMxSyntax as voiceWritesMxSyntax,
 } from "./message-vocabulary.ts";
 import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
 import {
@@ -704,7 +705,7 @@ function checkBindingWrites(
   }
   const write = findBindingWrite(node, rules, inFunction);
   if (!write) return;
-  raise(bindingWriteCode(write), bindingWriteMessage(write), write.node);
+  raise(bindingWriteCode(write), bindingWriteMessage(write, voiceOfCtx(ctx)), write.node);
 }
 
 /**
@@ -741,7 +742,7 @@ function checkScriptBodyWrites(ctx: Ctx, tag: Node): void {
   if (!program) return;
   const write = findBindingWrite(program, rules, true);
   if (!write) return;
-  raise(bindingWriteCode(write), bindingWriteMessage(write), write.node);
+  raise(bindingWriteCode(write), bindingWriteMessage(write, voiceOfCtx(ctx)), write.node);
 }
 
 /** Where a stale read can sit: what runs the body decides what the fix is. */
@@ -841,12 +842,16 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
   for (const candidate of tagAttributesOf(tag)) {
     if (isSpreadAttributeNode(candidate)) scriptSpreadsRefused.add(candidate);
   }
+  const voice = voiceOfCtx(ctx);
+  const scriptText = (): string => tagText(ctx, "script", tag);
   if (attr) {
+    // `<script>` in "a native html `<script>` element" is the HTML element,
+    // not the built-in; only the tag to write instead is spelled by the dialect.
     const fix = (what: string) =>
-      `the tag is client code, not an html element, so ${what} would be silently discarded. For a native html \`<script>\` element use \`<html-script>\``;
+      `the tag is client code, not an html element, so ${what} would be silently discarded. For a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`;
     if (isSpreadAttributeNode(attr)) {
       refuse(
-        `\`<script>\` does not support spread attributes: ${fix("a spread's keys")}`,
+        `${scriptText()} does not support spread ${voice.attributes}: ${fix("a spread's keys")}`,
         attr,
       );
     } else {
@@ -859,7 +864,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
         ? `${spelled || "value"}:=`
         : spelled || attrNameOf(attr);
       refuse(
-        `\`<script>\` does not support the \`${named}\` attribute: ${fix("the attribute")}`,
+        `${scriptText()} does not support the \`${named}\` ${voice.attribute}: ${fix(`the ${voice.attribute}`)}`,
         positioned
           ? attr
           : {
@@ -877,7 +882,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
   if (placeholder) {
     const message =
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
-      "A `<script>` body is JavaScript or TypeScript text, so a `${…}` placeholder in it is not supported. Use the value directly (`x`, not `${x}`), in a string through a template literal, or for a native html `<script>` element use `<html-script>`";
+      `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`;
     refuse(message, placeholder);
   }
 }
@@ -893,14 +898,18 @@ const scriptBodies = new WeakMap<Node, ScriptBody | null>();
  * CommonJS forms, which stock Marko's TypeScript transform refuses in a module.
  * Refused here with MX's own text, at the statement.
  */
-function commonJsStatementIn(program: Node): TranslateError | undefined {
+function commonJsStatementIn(
+  ctx: Ctx,
+  tag: Node,
+  program: Node,
+): TranslateError | undefined {
   for (const statement of program.body ?? []) {
     const form = commonJsFormOf(statement);
     const message =
       form === "import"
-        ? '`import x = require(...)` is a CommonJS form and is not read in a `<script>` body. Write `import x from "..."`'
+        ? `\`import x = require(...)\` is a CommonJS form and is not read in a ${tagText(ctx, "script", tag)} body. Write \`import x from "..."\``
         : form === "export"
-          ? "`export = value` is a CommonJS form and is not read in a `<script>` body. Write `export default value`"
+          ? `\`export = value\` is a CommonJS form and is not read in a ${tagText(ctx, "script", tag)} body. Write \`export default value\``
           : undefined;
     if (!message || !statement.loc) continue;
     const failure = codedError(
@@ -960,10 +969,10 @@ function scriptBodyOf(ctx: Ctx, tag: Node): ScriptBody | null {
         allowReturnOutsideFunction: true,
         jsx: false,
       }).program;
-      const commonJs = commonJsStatementIn(program);
+      const commonJs = commonJsStatementIn(ctx, tag, program);
       body = commonJs ? { failure: commonJs } : { program };
     } catch (error) {
-      body = { failure: scriptBodyFailure(text, at, error) };
+      body = { failure: scriptBodyFailure(ctx, tag, text, at, error) };
     }
   }
   scriptBodies.set(tag, body);
@@ -1003,6 +1012,8 @@ function checkScriptBodySyntax(ctx: Ctx, tag: Node): void {
  * plugin, and there is none to enable.
  */
 function scriptBodyFailure(
+  ctx: Ctx,
+  tag: Node,
   text: string,
   at: { line: number; column: number },
   error: unknown,
@@ -1024,7 +1035,7 @@ function scriptBodyFailure(
   const decorator = decoratorFailure(text, error, at);
   if (decorator) {
     return fail(
-      decoratorMessage("a `<script>` body"),
+      decoratorMessage(`a ${tagText(ctx, "script", tag)} body`),
       decorator.start,
       decorator.end,
     );
@@ -1039,7 +1050,7 @@ function scriptBodyFailure(
     ? { line: babel.loc.line, column: babel.loc.column }
     : at;
   if (isImportExportPlacement(error)) {
-    return fail(SCRIPT_IMPORT_EXPORT_PLACEMENT_MESSAGE, start);
+    return fail(scriptImportExportPlacementMessage(tagText(ctx, "script", tag)), start);
   }
   if (babel.reasonCode === "ImportAttributesUseAssert") {
     return fail(
@@ -1050,7 +1061,7 @@ function scriptBodyFailure(
   if (Array.isArray(babel.missingPlugin)) {
     const proposal = String(babel.missingPlugin[0] ?? "");
     return fail(
-      `This syntax${proposal ? ` (the \`${proposal}\` proposal)` : ""} is not read in a \`<script>\` body: its text is TypeScript, and a proposal that is not part of the language yet is not accepted. Write it with standard syntax`,
+      `This syntax${proposal ? ` (the \`${proposal}\` proposal)` : ""} is not read in a ${tagText(ctx, "script", tag)} body: its text is TypeScript, and a proposal that is not part of the language yet is not accepted. Write it with standard syntax`,
       start,
     );
   }
@@ -1061,7 +1072,7 @@ function scriptBodyFailure(
   const jsx = firstJsxStart(text, { plugins: ["typescript"] });
   if (jsx) {
     return fail(
-      "JSX is not read in a `<script>` body: its text is TypeScript. Write the markup as a tag in the template, or in a `<define>`",
+      `JSX is not read in a ${tagText(ctx, "script", tag)} body: its text is TypeScript. Write the markup as a tag in the template, or in a ${tagText(ctx, "define")}`,
       {
         line: at.line + jsx.line - 1,
         column: jsx.line === 1 ? at.column + jsx.column : jsx.column,
@@ -1080,13 +1091,19 @@ function scriptBodyFailure(
  * What names the writer and the fix, per body: a handler can also move the
  * read into a `<script>`; a body that writes is not the place to move it to.
  */
-const STALE_WRITER: Record<StaleBodyKind, string> = {
-  handler: "this handler",
-  script: "this `<script>`",
-  hook: "this `<lifecycle>` hook",
-};
-const STALE_MOVE =
-  ", or move the check into a `<script>`, which runs after the write settles on every target";
+function staleWriter(ctx: Ctx, kind: StaleBodyKind, tag: Node): string {
+  switch (kind) {
+    case "handler":
+      return "this handler";
+    case "script":
+      return `this ${tagText(ctx, "script", tag)}`;
+    case "hook":
+      return `this ${tagText(ctx, "lifecycle", tag)} hook`;
+  }
+}
+function staleMove(ctx: Ctx): string {
+  return `, or move the check into a ${tagText(ctx, "script")}, which runs after the write settles on every target`;
+}
 
 /**
  * Rejects a body that reads a derived `<const>` after writing a `<let>` the
@@ -1109,7 +1126,7 @@ function checkStaleDerivedReads(ctx: Ctx, tag: Node): void {
     try {
       raise(
         STALE_DERIVED_READ_CODE,
-        `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which ${STALE_WRITER[kind]} wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly${kind === "handler" ? STALE_MOVE : ""}.`,
+        `\`${stale.name}\` is stale here: it derives from \`${stale.written}\`, which ${staleWriter(ctx, kind, tag)} wrote on line ${stale.write.loc?.start.line}. Compute from \`${stale.written}\` directly${kind === "handler" ? staleMove(ctx) : ""}.`,
         stale.read,
       );
     } catch (error) {
@@ -1377,8 +1394,16 @@ const FOREIGN_ATTR_HINTS: [
   ],
   [
     /^\*/,
-    (_m, mx) =>
-      `\`*…\` structural directives have no meaning in ${mx}; use \`<if=cond>\` / \`<for|item| of=list>\``,
+    (_m, mx, { voice }) => {
+      const ifTag = voice.tag("if");
+      const forTag = voice.tag("for");
+      // The example is MX's syntax: shown only when the file spells both tags as MX does.
+      const instead =
+        voiceWritesMxSyntax(voice, "if") && voiceWritesMxSyntax(voice, "for")
+          ? "`<if=cond>` / `<for|item| of=list>`"
+          : `${ifTag} / ${forTag}`;
+      return `\`*…\` structural directives have no meaning in ${mx}; use ${instead}`;
+    },
   ],
 ];
 
@@ -2683,7 +2708,7 @@ function planAttributeTags(
         );
         raise(
           REPEATED_ATTRIBUTE_TAG_CODE,
-          `${voice.attrTag(name)} may not appear inside \`<for>\` (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
+          `${voice.attrTag(name)} may not appear inside ${tagText(ctx, "for")} (\`${name}\` is declared \`AttrTag\`, not \`AttrTag[]\`)`,
           loop
             ? { loc: { start: loop.loc, end: forNameEnd(ctx, loop) } }
             : ownerNode,
@@ -2711,7 +2736,7 @@ function planAttributeTags(
         );
         raise(
           MISSING_ATTRIBUTE_TAG_CODE,
-          `${voice.attrTag(name)} is required but not provided on every \`<if>\` path`,
+          `${voice.attrTag(name)} is required but not provided on every ${tagText(ctx, "if")} path`,
           conditional ? { loc: { start: conditional.loc } } : ownerNode,
         );
       }
@@ -2903,7 +2928,7 @@ function lowerAttributeFor(
 ): AttributeTagNode {
   requireAttrTagsV2(
     ctx,
-    () => `${voiceOfCtx(ctx).attributeTags} inside \`<for>\``,
+    () => `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "for", node)}`,
     "aren't",
     node,
   );
@@ -2932,7 +2957,7 @@ function lowerAttributeIf(
   const first = siblings[index];
   requireAttrTagsV2(
     ctx,
-    () => `${voiceOfCtx(ctx).attributeTags} inside \`<if>\``,
+    () => `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "if", first)}`,
     "aren't",
     first,
   );
@@ -3210,9 +3235,15 @@ function lowerIfChain(
 ): [IrNode, number] {
   const node = children[index];
   validateBoundAttributes(ctx, node);
-  rejectUnsupportedFields(ctx, node, "`<if>`");
+  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "if", node));
   const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!cond) raise(INVALID_IF_CODE, "`<if>` without a condition", node);
+  if (!cond) {
+    raise(
+      INVALID_IF_CODE,
+      `${tagText(ctx, "if", node)} without a condition`,
+      node,
+    );
+  }
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
   // shadow the host's binding for the code that follows the chain.
@@ -3340,7 +3371,7 @@ function findLoopParamRead(
  * the offending name, as Marko does, instead of surviving to a host's own
  * type error at a generated position or to a render-time ReferenceError.
  */
-function rejectLoopParamInBy(node: Node, by: Node): void {
+function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   const { types } = coreBabel();
   const names = new Set<string>();
   for (const param of tagParamsOf(node)) {
@@ -3356,7 +3387,12 @@ function rejectLoopParamInBy(node: Node, by: Node): void {
   if (!read) return;
   raise(
     INVALID_FOR_CODE,
-    `The \`by=\` attribute is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
+    `The \`by=\` ${voiceOfCtx(ctx).attribute} is evaluated before the loop runs, so \`${read.name}\` is not in scope.${mxExample(
+      ctx,
+      "for",
+      node,
+      ` Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
+    )}`,
     read,
   );
 }
@@ -3375,7 +3411,7 @@ function lowerForHead(
   allowAttributeTags = false,
 ): ForHead {
   validateBoundAttributes(ctx, node);
-  rejectUnsupportedFields(ctx, node, "`<for>`", {
+  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "for", node), {
     params: true,
     attributeTags: allowAttributeTags,
   });
@@ -3388,7 +3424,12 @@ function lowerForHead(
   if (params.length === 0) {
     raise(
       INVALID_FOR_CODE,
-      "`<for>` needs tag params: `<for|item| of=…>`",
+      `${tagText(ctx, "for", node)} needs tag params${mxExample(
+        ctx,
+        "for",
+        node,
+        ": `<for|item| of=…>`",
+      )}`,
       node,
     );
   }
@@ -3412,13 +3453,18 @@ function lowerForHead(
   if (keyAttr) {
     raise(
       INVALID_FOR_CODE,
-      `The \`<for>\` tag keys items with the \`by=\` attribute, not \`key=\`. ${
-        of
-          ? 'Use `by="propName"` or `by=(item, index) => key`'
-          : inAttr
-            ? "Use `by=(key, value) => key`"
-            : "Use `by=(num) => key`"
-      }.`,
+      `The ${tagText(ctx, "for", node)} tag keys items with the \`by=\` ${voiceOfCtx(ctx).attribute}, not \`key=\`.${mxExample(
+        ctx,
+        "for",
+        node,
+        ` ${
+          of
+            ? 'Use `by="propName"` or `by=(item, index) => key`'
+            : inAttr
+              ? "Use `by=(key, value) => key`"
+              : "Use `by=(num) => key`"
+        }.`,
+      )}`,
       keyAttr,
     );
   }
@@ -3429,21 +3475,37 @@ function lowerForHead(
   if (combos > 1) {
     raise(
       INVALID_FOR_CODE,
-      "`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
+      `${tagText(ctx, "for", node)} with more than one of \`of=\`, \`in=\`, \`from=\`/\`to=\`/\`until=\``,
       node,
     );
   }
   if (to && until)
-    raise(INVALID_FOR_CODE, "`<for>` with both `to=` and `until=`", node);
+    raise(
+      INVALID_FOR_CODE,
+      `${tagText(ctx, "for", node)} with both \`to=\` and \`until=\``,
+      node,
+    );
   if (step && !(to || until)) {
-    raise(INVALID_FOR_CODE, "`<for step=...>` is only valid on a range", step);
+    raise(
+      INVALID_FOR_CODE,
+      `${
+        writesMxSyntax(ctx, "for", node)
+          ? "`<for step=...>`"
+          : `\`step=\` on ${tagText(ctx, "for", node)}`
+      } is only valid on a range`,
+      step,
+    );
   }
 
   const requireValue = (attr: Node | undefined, label: string): void => {
     if (attr && !hasExpressionValue(attr)) {
       raise(
         INVALID_FOR_CODE,
-        `\`<for ${label}=...>\` requires an expression value`,
+        `${
+          writesMxSyntax(ctx, "for", node)
+            ? `\`<for ${label}=...>\``
+            : `\`${label}=\` on ${tagText(ctx, "for", node)}`
+        } requires an expression value`,
         attr,
       );
     }
@@ -3455,7 +3517,7 @@ function lowerForHead(
   requireValue(until, "until");
   requireValue(step, "step");
   requireValue(by, "by");
-  if (by) rejectLoopParamInBy(node, by);
+  if (by) rejectLoopParamInBy(ctx, node, by);
 
   let source: ForSource;
   if (of) {
@@ -3474,7 +3536,7 @@ function lowerForHead(
   } else {
     raise(
       INVALID_FOR_CODE,
-      "`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`",
+      `${tagText(ctx, "for", node)} requires \`of=\`, \`in=\`, or \`from=\`/\`to=\`/\`until=\``,
       node,
     );
   }
@@ -3488,9 +3550,13 @@ function lowerForHead(
   if (!of && byValue?.type === "StringLiteral") {
     raise(
       INVALID_FOR_CODE,
-      `The \`<for>\` tag only supports a string \`by\` key with \`of\`; use a \`by=(${
-        inAttr ? "key, value" : "index"
-      }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`,
+      `The ${tagText(ctx, "for", node)} tag only supports a string \`by\` key with \`of\`; ${
+        writesMxSyntax(ctx, "for", node)
+          ? `use a \`by=(${
+              inAttr ? "key, value" : "index"
+            }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`
+          : "the other forms call \`by\` as a function."
+      }`,
       byValue,
     );
   }
@@ -3529,17 +3595,37 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   if (!tagVarOf(node)) {
     raise(
       INVALID_CONST_CODE,
-      "`<const>` without a variable name (write `<const/name=value/>`)",
+      `${tagText(ctx, "const", node)} without a variable name${mxExample(
+        ctx,
+        "const",
+        node,
+        " (write `<const/name=value/>`)",
+      )}`,
       node,
     );
   }
-  rejectUnsupportedFields(ctx, node, "`<const>`", { var: true });
+  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "const", node), {
+    var: true,
+  });
   // Dispatched by the core, before any host sees the tag, so the binding check
   // has to happen here or a host's rule would silently apply to `<let>` and not
   // to `<const>`.
-  ctx.declarations.checkBinding?.(tagVarOf(node), "`<const>`");
+  // The host spells `what` into its refusal, so it gets the label as the
+  // dialect spells it (only the files that bind a `<const>` reach this).
+  if (ctx.declarations.checkBinding) {
+    ctx.declarations.checkBinding(
+      tagVarOf(node),
+      voicedAt(node, () => tagText(ctx, "const", node)),
+    );
+  }
   const value = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!value) raise(INVALID_CONST_CODE, "`<const>` without a value", node);
+  if (!value) {
+    raise(
+      INVALID_CONST_CODE,
+      `${tagText(ctx, "const", node)} without a value`,
+      node,
+    );
+  }
 
   const name = declName(ctx, tagVarOf(node));
   // The initializer is evaluated *before* the binding exists, so a registered
@@ -3732,7 +3818,7 @@ function rejectDynamicTagVarWithoutReturn(
   }
   raise(
     INVALID_TAG_VAR_CODE,
-    `${voiceOfCtx(ctx).tag(binding)} does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+    `${voiceOfCtx(ctx).tag(binding)} does not return a value; ${addReturnHint(ctx, "the imported file")}`,
     tagVarOf(node),
   );
 }
@@ -3935,11 +4021,19 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   if (!tagVarOf(node)) {
     raise(
       INVALID_DEFINE_CODE,
-      "`<define>` without a name (write `<define/name>`)",
+      `${tagText(ctx, "define", node)} without a name${mxExample(
+        ctx,
+        "define",
+        node,
+        " (write `<define/name>`)",
+      )}`,
       node,
     );
   }
-  rejectUnsupportedFields(ctx, node, "`<define>`", { var: true, params: true });
+  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "define", node), {
+    var: true,
+    params: true,
+  });
 
   const name = declName(ctx, tagVarOf(node));
   const params = paramsOf(ctx, node);
@@ -3992,7 +4086,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
-    attrs: dropContentAttrBesideBody(ctx, attrs, children.length > 0),
+    attrs: dropContentAttrBesideBody(ctx, node, attrs, children.length > 0),
     children: [...hoisted, ...children],
     loc,
   };
@@ -4008,6 +4102,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
  */
 function dropContentAttrBesideBody(
   ctx: Ctx,
+  node: Node,
   attrs: Attr[],
   hasBody: boolean,
 ): Attr[] {
@@ -4025,8 +4120,7 @@ function dropContentAttrBesideBody(
     ),
   );
   warn(ctx, {
-    message:
-      "`content` is the body of a `<define>` that has one, so this attribute is dropped; rename it, or remove the body",
+    message: `\`content\` is the body of a ${tagText(ctx, "define", node)} that has one, so this ${voiceOfCtx(ctx).attribute} is dropped; rename it, or remove the body`,
     line: at.line,
     column: at.column,
     end: { line: end.line, column: end.column },
@@ -4288,7 +4382,7 @@ function rejectInvalidStatement(
       const at = place(jsx);
       const failure = codedError(
         INVALID_STATEMENT_CODE,
-        `JSX is not read inside a \`${keyword}\` statement: its text is TypeScript. Write the markup as a tag in the template, or in a \`<define>\``,
+        `JSX is not read inside a \`${keyword}\` statement: its text is TypeScript. Write the markup as a tag in the template, or in a ${tagText(ctx, "define")}`,
         at.line,
         at.column,
       );
@@ -4428,8 +4522,9 @@ const IMPORT_EXPORT_PLACEMENT_MESSAGE =
   "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
 
 /** The same refusal in a `<script>` body, where the body's own statements are the module's. */
-const SCRIPT_IMPORT_EXPORT_PLACEMENT_MESSAGE =
-  "An `import` or `export` in a `<script>` body must be one of the body's own statements, not inside a block, an `if` or a function; move it out to the top of the `<script>` body.";
+function scriptImportExportPlacementMessage(script: string): string {
+  return `An \`import\` or \`export\` in a ${script} body must be one of the body's own statements, not inside a block, an \`if\` or a function; move it out to the top of the ${script} body.`;
+}
 
 /** Is `error` Babel's refusal of an `import` or `export` below the module's top level? */
 function isImportExportPlacement(error: unknown): boolean {
@@ -4881,12 +4976,13 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
  * would be conditional or scoped, so it is refused there rather than lowered.
  */
 function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
-  rejectUnsupportedFields(ctx, node, "`<return>`");
+  const returnTag = (): string => tagText(ctx, "return", node);
+  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "return", node));
 
   if (bodyChildren(node).length) {
     raise(
       INVALID_RETURN_CODE,
-      "`<return>` does not support body content",
+      `${returnTag()} does not support body content`,
       node,
     );
   }
@@ -4895,7 +4991,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
     if (isSpreadAttributeNode(attr)) {
       raise(
         INVALID_RETURN_CODE,
-        "`<return>` does not support spread attributes",
+        `${returnTag()} does not support spread ${voiceOfCtx(ctx).attributes}`,
         attr,
       );
     }
@@ -4911,15 +5007,15 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
       raise(
         INVALID_RETURN_CODE,
         attrName === "valueChange"
-          ? `\`<return>\` does not support the \`valueChange\` attribute; ${productOf(ctx)} returns a value only, with no two-way channel`
-          : `\`<return>\` does not support the \`${attrName}\` attribute`,
+          ? `${returnTag()} does not support the \`valueChange\` ${voiceOfCtx(ctx).attribute}; ${productOf(ctx)} returns a value only, with no two-way channel`
+          : `${returnTag()} does not support the \`${attrName}\` ${voiceOfCtx(ctx).attribute}`,
         attr,
       );
     }
     if (valueAttr)
       raise(
         DUPLICATE_VALUE_ATTRIBUTE_CODE,
-        "Invalid duplicate value attribute.",
+        `Invalid duplicate value ${voiceOfCtx(ctx).attribute}.`,
         attr,
       );
     valueAttr = attr;
@@ -4928,7 +5024,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   if (!valueAttr) {
     raise(
       INVALID_RETURN_CODE,
-      "`<return>` requires a `value=` attribute",
+      `${returnTag()} requires a \`value=\` ${voiceOfCtx(ctx).attribute}`,
       node,
     );
   }
@@ -4936,7 +5032,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   if (nested) {
     raise(
       INVALID_RETURN_CODE,
-      "`<return>` must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested",
+      `${returnTag()} must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested`,
       node,
     );
   }
@@ -4944,7 +5040,7 @@ function lowerReturn(ctx: Ctx, node: Node, nested: boolean): IrNode {
   if (ctx.returnValue) {
     raise(
       INVALID_RETURN_CODE,
-      "cannot have multiple `<return>` tags for the template",
+      `cannot have multiple ${returnTag()} tags for the template`,
       node,
     );
   }
@@ -4996,7 +5092,7 @@ function validateCustomAttributeTagBodies(
       if (controlName) {
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
-          `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside \`<${controlName}>\`; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
+          `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside ${tagText(ctx, controlName, node)}; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
           tagNameSpanOf(tag) ?? tag,
         );
       }
@@ -5118,6 +5214,44 @@ function triggerOf(node: Node): { trigger: TagTrigger } | undefined {
 function tagText(ctx: Ctx, name: string, node?: Node): string {
   if (name === DYNAMIC_OWNER) return `\`<${name}>\``;
   return voiceOfCtx(ctx).tag(name, node ? triggerOf(node)?.trigger : undefined);
+}
+
+/**
+ * A built-in tag as an owner label, spelled by the file's dialect when a
+ * message needs it (the chain is lazy: a valid file never calls `formatTag`).
+ */
+function builtinOwner(ctx: Ctx, name: string, node: Node): Owner {
+  return lazyOwner(() => voicedAt(node, () => tagText(ctx, name, node)));
+}
+
+/** Does the file spell the built-in tag `name` as MX does? See {@link voiceWritesMxSyntax}. */
+function writesMxSyntax(ctx: Ctx, name: string, node?: Node): boolean {
+  return voiceWritesMxSyntax(
+    voiceOfCtx(ctx),
+    name,
+    node ? triggerOf(node)?.trigger : undefined,
+  );
+}
+
+/**
+ * "add `<return value=…/>` to X to bind it with `/var`": the sentence that
+ * tells a call's author what the callee lacks. MX's syntax example is shown
+ * only when the file writes MX's tags; otherwise it names the tag and stops.
+ */
+function addReturnHint(ctx: Ctx, target: string): string {
+  return writesMxSyntax(ctx, "return")
+    ? `add \`<return value=…/>\` to ${target} to bind it with \`/var\``
+    : `add ${tagText(ctx, "return")} to ${target}`;
+}
+
+/** `example` (MX-syntax text for a message) when the file writes MX's syntax, else nothing. */
+function mxExample(
+  ctx: Ctx,
+  name: string,
+  node: Node | undefined,
+  example: string,
+): string {
+  return writesMxSyntax(ctx, name, node) ? example : "";
 }
 
 /** An owner label (`name`, or `@name` for an attribute tag) as a message spells it. */
@@ -5458,7 +5592,7 @@ function lowerCustomTag(
   if (!isBuiltin && tagVarOf(node) && !hasTemplate(definition)) {
     raise(
       INVALID_TAG_VAR_CODE,
-      `\`/var\` on ${ownerText(label)} is not supported: it has no template, so it has no \`<return>\` to bind`,
+      `\`/var\` on ${ownerText(label)} is not supported: it has no template, so it has no ${tagText(ctx, "return")} to bind`,
       tagVarOf(node),
     );
   }
@@ -5582,7 +5716,7 @@ function lowerComponent(
   if (tagVarOf(node) && returnShape === "none") {
     raise(
       INVALID_TAG_VAR_CODE,
-      `${tagText(ctx, targetName(target), node)} does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``,
+      `${tagText(ctx, targetName(target), node)} does not return a value; ${addReturnHint(ctx, "the imported file")}`,
       tagVarOf(node),
     );
   }
@@ -5828,8 +5962,9 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
  * reserved and is not a tag. `<script>` is the one construct for code that
  * runs after render.
  */
-const EFFECT_TAG_MESSAGE =
-  "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.";
+function effectTagMessage(ctx: Ctx, node: Node): string {
+  return `${tagText(ctx, "effect", node)} is not an MX tag. Use ${tagText(ctx, "script")}: its body runs after render and again when a value it reads changes.`;
+}
 
 /**
  * `<effect>` is not a tag, bodied or not, on any target (`lowerSource` and the
@@ -5853,11 +5988,12 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
     return;
   }
   const at = tagNameSpanOf(node) ?? node.name ?? node;
-  const fixes = effectRenameFixes(node);
+  const message = effectTagMessage(ctx, node);
+  const fixes = effectRenameFixes(node, tagText(ctx, "script"));
   if (fixes !== undefined) {
-    raiseWithFixes(RESERVED_EFFECT_TAG_CODE, EFFECT_TAG_MESSAGE, at, fixes);
+    raiseWithFixes(RESERVED_EFFECT_TAG_CODE, message, at, fixes);
   }
-  raise(RESERVED_EFFECT_TAG_CODE, EFFECT_TAG_MESSAGE, at);
+  raise(RESERVED_EFFECT_TAG_CODE, message, at);
 }
 
 /**
@@ -5867,7 +6003,10 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
  * so they get the one edit. `undefined` when the tag carries no offsets (not
  * an MX node) or a name that is not plain text in the source.
  */
-function effectRenameFixes(node: Node): readonly IrDiagnosticFix[] | undefined {
+function effectRenameFixes(
+  node: Node,
+  script: string,
+): readonly IrDiagnosticFix[] | undefined {
   const name = node?.name;
   if (name?.kind !== "static") return undefined;
   const open = name.span;
@@ -5881,7 +6020,7 @@ function effectRenameFixes(node: Node): readonly IrDiagnosticFix[] | undefined {
   if (typeof close?.start === "number" && typeof close.end === "number") {
     edits.push({ offset: close.start, end: close.end, newText: "script" });
   }
-  return [{ title: "Rename to `<script>`", edits }];
+  return [{ title: `Rename to ${script}`, edits }];
 }
 
 /**
@@ -6070,7 +6209,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         break;
       return raise(
         UNSUPPORTED_CONSTRUCT_CODE,
-        `\`class { … }\` is not supported in ${productOf(ctx)}: a component class has no equivalent on any target — write a function component, or put the state in \`<let>\`/\`static\` code`,
+        `\`class { … }\` is not supported in ${productOf(ctx)}: a component class has no equivalent on any target — write a function component, or put the state in ${tagText(ctx, "let")}/\`static\` code`,
         node,
       );
     case "for":
@@ -6082,17 +6221,22 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     case "return":
       return lowerReturn(ctx, node, ctx.returnDepth !== 0);
     case "else": {
-      const label = attrByName(node, "if") ? "else if" : "else";
+      // MX writes `else if=…` as `<else if>`; a dialect's spelling is of the tag, `else`.
+      const spelled = tagText(ctx, "else", node);
+      const label =
+        attrByName(node, "if") && writesMxSyntax(ctx, "else", node)
+          ? "`<else if>`"
+          : spelled;
       return raise(
         INVALID_IF_CODE,
-        `\`<${label}>\` without a preceding \`<if>\``,
+        `${label} without a preceding ${tagText(ctx, "if")}`,
         node,
       );
     }
     case "else-if":
       return raise(
         INVALID_IF_CODE,
-        `\`<${name}>\` without a preceding \`<if>\``,
+        `${tagText(ctx, name, node)} without a preceding ${tagText(ctx, "if")}`,
         node,
       );
   }
@@ -6350,7 +6494,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       UNBOUND_COMPONENT_CODE,
       capitalBinding(ctx, name)
         ? `${tagText(ctx, name, node)} is bound in this file, but ${ctx.dialect?.name} files never call a binding as a tag (\`bindingsCallTags: false\`), and no \`${name}\` tag is registered: register one, or call the binding as \`<\${${name}}>\``
-        : `${tagText(ctx, name, node)} has no matching import or \`<define>\` in scope; a capitalized tag is always a component call`,
+        : `${tagText(ctx, name, node)} has no matching import or ${tagText(ctx, "define")} in scope; a capitalized tag is always a component call`,
       node,
     );
   }
@@ -6367,7 +6511,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       UNKNOWN_TAG_CODE,
       lowercaseBinding
         ? `unknown tag ${tagText(ctx, name, node)}: not an HTML element, and a lowercase tag never calls the \`${name}\` binding in scope. Rename it \`${name.charAt(0).toUpperCase()}${name.slice(1)}\` or write \`<\${${name}}>\``
-        : `unknown tag ${tagText(ctx, name, node)}: not an HTML element, and no matching import or \`<define>\` is in scope`,
+        : `unknown tag ${tagText(ctx, name, node)}: not an HTML element, and no matching import or ${tagText(ctx, "define")} is in scope`,
       node,
     );
   }
@@ -6737,7 +6881,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           case "MxScriptlet":
             raise(
               UNSUPPORTED_CONSTRUCT_CODE,
-              `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations)}`,
+              `scriptlets (\`$ statement\`) are not supported in ${productOf(ctx)}${scriptletSentence(declaredVariable(child), ctx.declarations, voiceOfCtx(ctx))}`,
               child,
             );
             break;

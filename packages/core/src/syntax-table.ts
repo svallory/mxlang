@@ -462,11 +462,12 @@ export interface MessageTag {
 /**
  * The words core's messages use for a dialect's files where MX's own would
  * read wrong. Every member is optional; MX's wording is the default, so a
- * dialect that sets none keeps every message as it is. Core words only the
- * messages a dialect file's author reaches with the dialect's own tags and
- * attributes; a message about MX's built-in tags (`<for>`, `<script>`, ...)
- * and the text a dialect author reads when a contract is registered keep MX's
- * words. @unstable
+ * dialect that sets none keeps every message as it is. Core words the messages
+ * a dialect file's author reaches, including those about MX's built-in tags
+ * (`<for>`, `<script>`, ...): they name the tag through `formatTag` like any
+ * other, and a syntax example written in MX's tags (`<const/name=value/>`) is
+ * shown only when the file spells that tag as MX does. The text a dialect
+ * author reads when a contract is registered keeps MX's words. @unstable
  */
 export interface MessageVocabulary {
   /**

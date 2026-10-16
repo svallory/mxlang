@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { declaredBinding, hintParseError } from "./parse-error-hints.ts";
+import { MX_VOICE } from "./message-vocabulary.ts";
 
 const REASON = 'Unexpected token, expected "{"';
 
@@ -28,7 +29,7 @@ describe("hintParseError on an aggregate", () => {
     const first = entry(1, 5, "t.mx:1:6");
     const second = entry(2, 14, "t.mx:2:15");
     const error = aggregate([first, second]);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     const frames = error.message
       .split("\n")
       .filter((line) => line.includes("^"));
@@ -88,7 +89,7 @@ describe("decision 174: shorthand parse errors", () => {
   it("a `/` before a non-identifier names the class shorthand, not the tag variable", () => {
     const source = "<div.w-1/2/>";
     const error = parseError(source, TAG_VARIABLE, 9);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     expect(error.label).toContain("`2` is not more class");
     expect(error.label).toContain('class="…"');
     expect(error.label).not.toContain("is not a valid [tag variable]");
@@ -98,7 +99,7 @@ describe("decision 174: shorthand parse errors", () => {
   it("leaves a tag-variable error with no shorthand `/` alone", () => {
     const source = "<div x/2/>";
     const error = parseError(source, TAG_VARIABLE, 7);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     expect(error.label).toBe(TAG_VARIABLE);
   });
 
@@ -113,7 +114,7 @@ describe("decision 174: shorthand parse errors", () => {
     "%s: Marko's group text becomes the shorthand message",
     (source, column, label) => {
       const error = parseError(source, label, column);
-      hintParseError(error, source);
+      hintParseError(error, source, undefined, MX_VOICE);
       expect(error.label).toContain("a class or id shorthand cannot hold");
       expect(error.label).toContain('class="…"');
       expect(error.label).not.toContain("Mismatched");
@@ -125,7 +126,7 @@ describe("decision 174: shorthand parse errors", () => {
     const source = "<div x=[1]></div>";
     const label = 'Mismatched group. A closing "]" character was found.';
     const error = parseError(source, label, 9);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     expect(error.label).toBe(label);
   });
 
@@ -133,14 +134,14 @@ describe("decision 174: shorthand parse errors", () => {
     const source = "<div.a x=[1]/>";
     const label = 'Mismatched group. A closing "]" character was found.';
     const error = parseError(source, label, 11);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     expect(error.label).toBe(label);
   });
 
   it("leaves a tag-variable error alone when the `.` sits in an attribute value", () => {
     const source = '<div title="a.b" x/2/>';
     const error = parseError(source, TAG_VARIABLE, 19);
-    hintParseError(error, source);
+    hintParseError(error, source, undefined, MX_VOICE);
     expect(error.label).toBe(TAG_VARIABLE);
   });
 
@@ -156,7 +157,7 @@ describe("decision 174: shorthand parse errors", () => {
       [first.message, second.message].join("\n"),
     ) as Error & { errors: Error[] };
     aggregate.errors = [first, second];
-    hintParseError(aggregate, source);
+    hintParseError(aggregate, source, undefined, MX_VOICE);
     expect(first.label).toContain("a class or id shorthand cannot hold");
     expect(second.label).toContain("a class or id shorthand cannot hold");
     expect(aggregate.message).not.toContain("Mismatched group");

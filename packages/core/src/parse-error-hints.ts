@@ -14,6 +14,11 @@
  */
 
 import type { HostDeclarations } from "./declarations.ts";
+import {
+  type Voice,
+  VoiceHookError,
+  writesMxSyntax,
+} from "./message-vocabulary.ts";
 
 // With colours on (CI, FORCE_COLOR) Marko wraps the reason in escape codes that
 // run to the end of the line, so allow SGR sequences after the reason.
@@ -25,18 +30,32 @@ type Located = Error & {
   errors?: unknown[];
 };
 
-/** What to write instead of a scriptlet that declares `name`, core's default. */
-const DEFAULT_REPLACEMENT = (name: string, keyword: "const" | "let" | "var") =>
-  `declare a value with \`<${keyword === "const" ? "const" : "let"}/${name}=…/>\``;
+/**
+ * What to write instead of a scriptlet that declares `name`, core's default:
+ * the declaring tag in the file's own spelling. The example is MX's syntax, so
+ * it is shown only when the file spells the tag as MX does.
+ */
+const defaultReplacement = (
+  name: string,
+  keyword: "const" | "let" | "var",
+  voice: Voice,
+) => {
+  const tag = keyword === "const" ? "const" : "let";
+  return writesMxSyntax(voice, tag)
+    ? `declare a value with \`<${tag}/${name}=…/>\``
+    : `declare a value with ${voice.tag(tag)}`;
+};
 
 /**
  * What to write when the statement declares no variable (a call, an
  * assignment, a class, an import, a destructuring): true on every host,
- * since `<const>` is core's and a module statement can always live outside
+ * since the value tag is core's and a module statement can always live outside
  * the template.
  */
-const GENERIC_REPLACEMENT =
-  "a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template";
+const genericReplacement = (voice: Voice) =>
+  writesMxSyntax(voice, "const")
+    ? "a template holds values, not statements: write a value with `<const/x=…/>`, or move the statement out of the template"
+    : `a template holds values, not statements: write a value with ${voice.tag("const")}, or move the statement out of the template`;
 
 export type ScriptletDeclaration = {
   name: string;
@@ -56,12 +75,13 @@ const TAG_VARIABLE_REASON =
  */
 export function scriptletSentence(
   binding: ScriptletDeclaration | undefined,
-  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+  declarations: Pick<HostDeclarations, "scriptletReplacement"> | undefined,
+  voice: Voice,
 ): string {
-  if (!binding) return `; ${GENERIC_REPLACEMENT}`;
-  const replacement = (
-    declarations?.scriptletReplacement ?? DEFAULT_REPLACEMENT
-  )(binding.name, binding.keyword);
+  if (!binding) return `; ${genericReplacement(voice)}`;
+  const replacement = declarations?.scriptletReplacement
+    ? declarations.scriptletReplacement(binding.name, binding.keyword)
+    : defaultReplacement(binding.name, binding.keyword, voice);
   return replacement ? `; ${replacement}` : "";
 }
 
@@ -129,7 +149,8 @@ function hintFor(
   reason: string,
   source: string,
   at: { line: number; column: number; index?: number },
-  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+  declarations: Pick<HostDeclarations, "scriptletReplacement"> | undefined,
+  voice: Voice,
 ): string | null {
   const offset = at.index ?? offsetOf(source, at.line, at.column);
   if (offset < 0) return null;
@@ -152,7 +173,7 @@ function hintFor(
   const text = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
   const scriptlet = text.match(/^\s*\$\s+(\S.*)$/);
   if (scriptlet && !insideBraces(source, lineStart)) {
-    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredBinding(scriptlet[1] ?? ""), declarations)}`;
+    return `scriptlets (\`$ …\`) are not supported${scriptletSentence(declaredBinding(scriptlet[1] ?? ""), declarations, voice)}`;
   }
   return null;
 }
@@ -257,12 +278,21 @@ function setMessage(error: Error, message: string): void {
 function hintOne(
   error: Located,
   source: string,
-  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+  declarations: Pick<HostDeclarations, "scriptletReplacement"> | undefined,
+  voice: Voice,
 ): string | null {
   const reason = typeof error.label === "string" ? error.label : null;
   const at = error.loc?.start;
   if (!reason || !at) return null;
-  const hint = hintFor(reason, source, at, declarations);
+  let hint: string | null;
+  try {
+    hint = hintFor(reason, source, at, declarations, voice);
+  } catch (thrown) {
+    // The parse error is the one to report; a dialect's broken `formatTag`
+    // surfaces when the file is lowered, not by costing the author this hint.
+    if (thrown instanceof VoiceHookError) return null;
+    throw thrown;
+  }
   if (!hint) return null;
   setMessage(error, appendToReason(error.message, reason, hint, at));
   error.label = `${reason}; ${hint}`;
@@ -277,13 +307,14 @@ function hintOne(
 export function hintParseError(
   error: unknown,
   source: string,
-  declarations?: Pick<HostDeclarations, "scriptletReplacement">,
+  declarations: Pick<HostDeclarations, "scriptletReplacement"> | undefined,
+  voice: Voice,
 ): void {
   if (!(error instanceof Error)) return;
   const aggregate = error as Located;
   rewriteShorthandGroup(aggregate, source);
   if (rewriteTagVariableShorthand(aggregate, source)) return;
-  hintOne(aggregate, source, declarations);
+  hintOne(aggregate, source, declarations, voice);
   for (const entry of aggregate.errors ?? []) {
     if (typeof (entry as Located | null)?.message !== "string") continue;
     const reason = (entry as Located).label;
@@ -292,7 +323,7 @@ export function hintParseError(
       setMessage(aggregate, aggregate.message.replace(reason, groupSentence));
     }
     rewriteTagVariableShorthand(entry as Located, source);
-    const hint = hintOne(entry as Located, source, declarations);
+    const hint = hintOne(entry as Located, source, declarations, voice);
     if (hint && typeof reason === "string") {
       setMessage(
         aggregate,

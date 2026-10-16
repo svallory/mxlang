@@ -40,9 +40,16 @@ export const RESERVED_NAMES = [
   "try",
 ] as const;
 
-/** The reserved-name message, for a name used as a tag. */
-export function reservedNameMessage(name: string): string {
-  return `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+/**
+ * The reserved-name message, for a name used as a tag. `spell` writes a
+ * built-in tag's name the way the file does (a voice's `tag`); the registration
+ * checks, which name MX's own tag files, keep MX's `<name>`.
+ */
+export function reservedNameMessage(
+  name: string,
+  spell: (tag: string) => string = (tag) => `\`<${tag}>\``,
+): string {
+  return `${spell(name)} cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and ${spell("try")} before a target sees them`;
 }
 
 /**

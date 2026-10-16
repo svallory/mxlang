@@ -618,7 +618,12 @@ export function compileSource(
     const recorded = isTranslateError(error) ? error.errors : undefined;
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);
-    hintParseError(error, source, filePolicy);
+    hintParseError(
+      error,
+      source,
+      filePolicy,
+      voiceOf(resolvedSyntax.dialect),
+    );
     // A failure inside a tag's `|params|` becomes a positioned MX error.
     const thrown = tagParamError(error, source) ?? error;
     if (recorded && thrown === error && isTranslateError(error)) {

@@ -45,6 +45,7 @@
 import { coreBabel } from "./babel.ts";
 import type { Node, WriteGuard } from "./core.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
+import type { Voice } from "./message-vocabulary.ts";
 import {
   LET_LOOP_ASSIGNMENT_CODE,
   LET_WRITE_BEFORE_DECLARATION_CODE,
@@ -245,23 +246,36 @@ export function bindingWriteCode(write: BindingWrite): MxDiagnosticCode {
   }
 }
 
-/** The message of a refused write: the rule and the fix. */
-export function bindingWriteMessage(write: BindingWrite): string {
+/**
+ * The message of a refused write: the rule and the fix, with each built-in
+ * tag spelled in the file's voice.
+ */
+export function bindingWriteMessage(
+  write: BindingWrite,
+  voice: Voice,
+): string {
   const name = `\`${write.name}\``;
+  const [letTag, constTag, forTag, defineTag, scriptTag] = [
+    "let",
+    "const",
+    "for",
+    "define",
+    "script",
+  ].map((tag) => voice.tag(tag));
   switch (write.reason) {
     case "let-render":
-      return `${name} is a \`<let>\` and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+      return `${name} is a ${letTag} and cannot be written while the template renders. Write it in an event handler or a ${scriptTag} body, or derive a value with ${constTag}.`;
     case "let-below":
-      return `${name} is a \`<let>\` declared below this write, and a \`<let>\` can only be written below its declaration. Move the \`<let>\` above this code.`;
+      return `${name} is a ${letTag} declared below this write, and a ${letTag} can only be written below its declaration. Move the ${letTag} above this code.`;
     case "let-loop":
-      return `${name} is a \`<let>\`, so a \`for...${write.loop}\` cannot assign to it. Loop into a local variable and assign ${name} from it instead.`;
+      return `${name} is a ${letTag}, so a \`for...${write.loop}\` cannot assign to it. Loop into a local variable and assign ${name} from it instead.`;
     case "const":
-      return `${name} is a \`<const>\` and cannot be written. Keep a value that changes in a \`<let>\` and write that in an event handler or a \`<script>\` body, or derive a new value with another \`<const>\`.`;
+      return `${name} is a ${constTag} and cannot be written. Keep a value that changes in a ${letTag} and write that in an event handler or a ${scriptTag} body, or derive a new value with another ${constTag}.`;
     case "for":
-      return `${name} is a \`<for>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
+      return `${name} is a ${forTag} parameter and cannot be written. Keep a value that changes in a ${letTag}, or derive a new value with a ${constTag}.`;
     case "define":
-      return `${name} is a \`<define>\` parameter and cannot be written while the template renders. Write it in an event handler or a \`<script>\` body, or derive a value with \`<const>\`.`;
+      return `${name} is a ${defineTag} parameter and cannot be written while the template renders. Write it in an event handler or a ${scriptTag} body, or derive a value with ${constTag}.`;
     case "define-plain":
-      return `${name} is a \`<define>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
+      return `${name} is a ${defineTag} parameter and cannot be written. Keep a value that changes in a ${letTag}, or derive a new value with a ${constTag}.`;
   }
 }

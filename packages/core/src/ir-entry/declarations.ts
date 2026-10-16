@@ -95,18 +95,24 @@ export function entryDeclarations(
       tags: {
         else: {
           kind: "error",
-          reason: reservedNameMessage("else"),
           code: NOT_IN_DATA_FILE_CODE,
+          get reason() {
+            return reservedNameMessage("else", (tag) => voice.tag(tag));
+          },
         },
         "else-if": {
           kind: "error",
-          reason: reservedNameMessage("else-if"),
           code: NOT_IN_DATA_FILE_CODE,
+          get reason() {
+            return reservedNameMessage("else-if", (tag) => voice.tag(tag));
+          },
         },
         try: {
           kind: "error",
-          reason: reservedNameMessage("try"),
           code: NOT_IN_DATA_FILE_CODE,
+          get reason() {
+            return reservedNameMessage("try", (tag) => voice.tag(tag));
+          },
         },
         define: {
           kind: "error",
@@ -114,14 +120,14 @@ export function entryDeclarations(
           // Read when the tag is rejected, so a `formatTag` that breaks its
           // contract is the lowering's error at this tag, not the build's.
           get reason() {
-            return `\`<define>\` is a render-time macro: ${voice.files} are static, so they cannot expand it; inline the content at each use`;
+            return `${voice.tag("define")} is a render-time macro: ${voice.files} are static, so they cannot expand it; inline the content at each use`;
           },
         },
         return: {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
           get reason() {
-            return `\`<return>\` needs the evaluated mode: ${voice.files} are static, so they have no value to return`;
+            return `${voice.tag("return")} needs the evaluated mode: ${voice.files} are static, so they have no value to return`;
           },
         },
       },

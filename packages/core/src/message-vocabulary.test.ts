@@ -16,6 +16,8 @@ import type { CustomTag } from "./custom-tags.ts";
 import { validateCustomTagChildren } from "./custom-tags.ts";
 import { DIALECT_HOOK_ERROR_CODE } from "./diagnostic-codes.ts";
 import memberSyntax from "./fixtures/syntax/member-fixture.ts";
+import { compileSource } from "./compile.ts";
+import type { Policy } from "./declarations.ts";
 import { type LowerSourceOptions, lowerSource } from "./ir-entry/index.ts";
 import {
   articleFor,
@@ -23,8 +25,10 @@ import {
   mxSpelling,
   VoiceHookError,
   voiceOf,
+  writesMxSyntax,
 } from "./message-vocabulary.ts";
 import type { Dialect, MessageVocabulary } from "./syntax-table.ts";
+import { lookup } from "./test-targets.ts";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -187,7 +191,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<define>` is a render-time macro: data files are static, so they cannot expand it; inline the content at each use",
     option:
-      "`<define>` is a render-time macro: Kit files are static, so they cannot expand it; inline the content at each use",
+      "`define` is a render-time macro: Kit files are static, so they cannot expand it; inline the content at each use",
   },
   {
     name: "a return in a data file",
@@ -195,7 +199,7 @@ const ROWS: readonly Row[] = [
     group: "ir-entry",
     mx: "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
     option:
-      "`<return>` needs the evaluated mode: Kit files are static, so they have no value to return",
+      "`return` needs the evaluated mode: Kit files are static, so they have no value to return",
   },
   {
     name: "a tag variable in a data file",
@@ -338,6 +342,601 @@ describe("messages in the dialect's words (the optionVocabulary column)", () => 
     ).toEqual([
       "`<attributes>`: `<member>` is not allowed here; allowed children: `<string>`",
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The built-in tags: a message names `<if>`, `<for>`, `<const>`, `<try>`... the
+// way the file's dialect spells them, and shows an MX-syntax example only when
+// that spelling is MX's own.
+
+interface BuiltinRow {
+  readonly name: string;
+  readonly source: string;
+  /** Every message of the file, MX's words byte for byte. */
+  readonly mx: readonly string[];
+  /** The same under `optionVocabulary`: the tag as `formatTag` spells it, no MX example. */
+  readonly option: readonly string[];
+}
+
+/** The built-ins a data file's entry point lowers (core's own checks). */
+const BUILTIN_ROWS: readonly BuiltinRow[] = [
+  {
+    name: "`if` without a condition",
+    source: 'if\n  entity name="e"\n',
+    mx: ["`<if>` without a condition"],
+    option: ["`if` without a condition"],
+  },
+  {
+    name: "`if` with tag params",
+    source: "if|a|=x\n  entity\n",
+    mx: [
+      "tag params `|...|` on `<if>` are not supported in a standalone template",
+    ],
+    option: [
+      "tag params `|...|` on `if` are not supported in a standalone template",
+    ],
+  },
+  {
+    name: "`if` with a tag variable",
+    source: "if/v=x\n  entity\n",
+    mx: [
+      "tag variable `/v` on `<if>` is not supported in a standalone template",
+    ],
+    option: [
+      "tag variable `/v` on `if` is not supported in a standalone template",
+    ],
+  },
+  {
+    name: "`else` and `try` in a data file name each other and the structural names",
+    source: "else\n  entity\n",
+    mx: [
+      "`<else>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
+    ],
+    option: [
+      "`else` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+    ],
+  },
+  {
+    name: "`else-if` in a data file",
+    source: "else-if=x\n  entity\n",
+    mx: [
+      "`<else-if>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
+    ],
+    option: [
+      "`else-if` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+    ],
+  },
+  {
+    name: "`try` in a data file",
+    source: "try\n  entity\n",
+    mx: [
+      "`<try>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
+    ],
+    option: [
+      "`try` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+    ],
+  },
+  {
+    name: "`else` with tag params",
+    source: 'if=x\n  entity name="e"\nelse|a|\n  entity name="e"\n',
+    mx: [
+      "tag params `|...|` on `<else>` are not supported in a standalone template",
+    ],
+    option: [
+      "tag params `|...|` on `else` are not supported in a standalone template",
+    ],
+  },
+  {
+    name: "`for` without params (the MX example is dropped for a dialect)",
+    source: "for\n  entity\n",
+    mx: ["`<for>` needs tag params: `<for|item| of=…>`"],
+    option: ["`for` needs tag params"],
+  },
+  {
+    name: "`for` without a range",
+    source: "for|i|\n  entity\n",
+    mx: ["`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`"],
+    option: ["`for` requires `of=`, `in=`, or `from=`/`to=`/`until=`"],
+  },
+  {
+    name: "`for` with `key=` (the attribute noun, and no MX example)",
+    source: "for|i| of=x key=1\n  entity\n",
+    mx: [
+      'The `<for>` tag keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`.',
+    ],
+    option: ["The `for` tag keys items with the `by=` option, not `key=`."],
+  },
+  {
+    name: "`for` with two ranges",
+    source: "for|i| of=x in=y\n  entity\n",
+    mx: [
+      "`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
+    ],
+    option: ["`for` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`"],
+  },
+  {
+    name: "`for` with `to=` and `until=`",
+    source: "for|i| to=1 until=2\n  entity\n",
+    mx: ["`<for>` with both `to=` and `until=`"],
+    option: ["`for` with both `to=` and `until=`"],
+  },
+  {
+    name: "`for` with `step=` off a range",
+    source: "for|i| of=x step=2\n  entity\n",
+    mx: ["`<for step=...>` is only valid on a range"],
+    option: ["`step=` on `for` is only valid on a range"],
+  },
+  {
+    name: "`for` with a string `by` off `of`",
+    source: 'for|i| in=x by="a"\n  entity\n',
+    mx: [
+      "The `<for>` tag only supports a string `by` key with `of`; use a `by=(key, value) => ...` function for `<for in>`.",
+    ],
+    option: [
+      "The `for` tag only supports a string `by` key with `of`; the other forms call `by` as a function.",
+    ],
+  },
+  {
+    name: "`for of` without a value",
+    source: "for|i| of\n  entity\n",
+    mx: ["`<for of=...>` requires an expression value"],
+    option: ["`of=` on `for` requires an expression value"],
+  },
+  {
+    name: "`const` without a name (the MX example is dropped for a dialect)",
+    source: "const\n",
+    mx: ["`<const>` without a variable name (write `<const/name=value/>`)"],
+    option: ["`const` without a variable name"],
+  },
+  {
+    name: "`const` without a value",
+    source: "const/x\n",
+    mx: ["`<const>` without a value"],
+    option: ["`const` without a value"],
+  },
+  {
+    name: "`const` with an unknown attribute",
+    source: "const/x=1 foo=1\n",
+    mx: ["The `<const>` tag only supports the `value=` attribute."],
+    option: ["The `const` tag only supports the `value=` option."],
+  },
+  {
+    name: "`const` with tag params",
+    source: "const/x|a|=1\n",
+    mx: [
+      "tag params `|...|` on `<const>` are not supported in a standalone template",
+    ],
+    option: [
+      "tag params `|...|` on `const` are not supported in a standalone template",
+    ],
+  },
+  {
+    name: "`define` with params",
+    source: "define/x|a|=1\n",
+    mx: [
+      "`<define>` is a render-time macro: data files are static, so they cannot expand it; inline the content at each use",
+    ],
+    option: [
+      "`define` is a render-time macro: Kit files are static, so they cannot expand it; inline the content at each use",
+    ],
+  },
+  {
+    name: "`return` with a spread",
+    source: "return value=1 ...x\n",
+    mx: [
+      "`<return>` needs the evaluated mode: data files are static, so they have no value to return",
+    ],
+    option: [
+      "`return` needs the evaluated mode: Kit files are static, so they have no value to return",
+    ],
+  },
+  {
+    name: "`effect`, which MX does not have (and is then unknown)",
+    source: "effect\n",
+    mx: [
+      "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.",
+      "`<effect>` is not a known tag in the `member` dialect",
+    ],
+    option: [
+      "`effect` is not an MX tag. Use `script`: its body runs after render and again when a value it reads changes.",
+      "`effect` is not a known tag in the `member` dialect",
+    ],
+  },
+  {
+    name: "`script` with a spread (the html element stays an html element)",
+    source: "script ...x\n",
+    mx: [
+      "`<script>` is not a known tag in the `member` dialect",
+      "`<script>` does not support spread attributes: the tag is client code, not an html element, so a spread's keys would be silently discarded. For a native html `<script>` element use `<html-script>` (inside the unknown tag `<script>`; may resolve once it is declared)",
+    ],
+    option: [
+      "`script` is not a known tag in the `member` dialect",
+      "`script` does not support spread options: the tag is client code, not an html element, so a spread's keys would be silently discarded. For a native html `<script>` element use `html-script` (inside the unknown tag `script`; may resolve once it is declared)",
+    ],
+  },
+  {
+    name: "a tag variable on `id`",
+    source: "id/x foo=1\n",
+    mx: [
+      "tag variable `/x` on `<id>`: data files are static, so a binding without evaluation means nothing",
+      "`<id>` is not a known tag in the `member` dialect",
+    ],
+    option: [
+      "tag variable `/x` on `id`: Kit files are static, so a binding without evaluation means nothing",
+      "`id` is not a known tag in the `member` dialect",
+    ],
+  },
+  {
+    name: "`class { }` points at `let` (the MX example needs MX's spelling)",
+    source: "class { }\n",
+    mx: [
+      "`class { … }` is not supported in member: a component class has no equivalent on any target — write a function component, or put the state in `<let>`/`static` code",
+    ],
+    option: [
+      "`class { … }` is not supported in member: a component class has no equivalent on any target — write a function component, or put the state in `let`/`static` code",
+    ],
+  },
+  {
+    name: "a `<let>` written while the template renders",
+    source: "let/x=1\nconst/y=(x = 2)\n",
+    mx: [
+      "`<let>` is not a known tag in the `member` dialect",
+      "`x` is a `<let>` and cannot be written while the template renders. Write it in an event handler or a `<script>` body, or derive a value with `<const>`.",
+    ],
+    option: [
+      "`let` is not a known tag in the `member` dialect",
+      "`x` is a `let` and cannot be written while the template renders. Write it in an event handler or a `script` body, or derive a value with `const`.",
+    ],
+  },
+  {
+    name: "a `<const>` written",
+    source: "const/c=1\nconst/y=(c = 2)\n",
+    mx: [
+      "`c` is a `<const>` and cannot be written. Keep a value that changes in a `<let>` and write that in an event handler or a `<script>` body, or derive a new value with another `<const>`.",
+    ],
+    option: [
+      "`c` is a `const` and cannot be written. Keep a value that changes in a `let` and write that in an event handler or a `script` body, or derive a new value with another `const`.",
+    ],
+  },
+  {
+    name: "a `<for>` parameter written",
+    source: "for|i| of=x\n  const/z=(i = 1)\n",
+    mx: [
+      "`i` is a `<for>` parameter and cannot be written. Keep a value that changes in a `<let>`, or derive a new value with a `<const>`.",
+    ],
+    option: [
+      "`i` is a `for` parameter and cannot be written. Keep a value that changes in a `let`, or derive a new value with a `const`.",
+    ],
+  },
+  {
+    name: "a tag variable on a tag with no template (the `return` it lacks)",
+    source: "entity/v\n",
+    mx: [
+      "`/var` on `<entity>` is not supported: it has no template, so it has no `<return>` to bind",
+    ],
+    option: [
+      "`/var` on `entity` is not supported: it has no template, so it has no `return` to bind",
+    ],
+  },
+  {
+    name: "an attribute tag inside `for` (the control tag is spelled, the noun is the dialect's)",
+    source: "card\n  for|i| of=x\n    @head\n",
+    mx: [
+      "`<card>`: attribute tag `<@head>` may not appear inside `<for>`; registered custom tags cannot preserve attribute-tag control flow",
+    ],
+    option: [
+      "`card`: option tag `head` may not appear inside `for`; registered custom tags cannot preserve option-tag control flow",
+    ],
+  },
+  {
+    name: "an attribute tag inside `if`",
+    source: "card\n  if=x\n    @head\n",
+    mx: [
+      "`<card>`: attribute tag `<@head>` may not appear inside `<if>`; registered custom tags cannot preserve attribute-tag control flow",
+    ],
+    option: [
+      "`card`: option tag `head` may not appear inside `if`; registered custom tags cannot preserve option-tag control flow",
+    ],
+  },
+];
+
+describe("built-in tag names in messages", () => {
+  describe("data files (the IR entry)", () => {
+    for (const row of BUILTIN_ROWS) {
+      it(`MX's words: ${row.name}`, () => {
+        for (const dialect of [noVocabulary, dialectWith({})]) {
+          expect(messages(row.source, dialect)).toEqual([...row.mx]);
+        }
+      });
+
+      it(`the dialect's words: ${row.name}`, () => {
+        expect(messages(row.source, optionDialect)).toEqual([...row.option]);
+      });
+    }
+  });
+});
+
+/** A template file's policy: `try` is the built-in tag the host delegates. */
+const templatePolicy: Policy = {
+  tags: {},
+  isElement: () => true,
+  isComponent: (name, ctx) => ctx.defines.has(name),
+  isDelegatedTag: (name) => name === "try",
+  resolveDelegatedTag: (name) => ({ name }),
+};
+
+/** The error message `source` fails with when compiled as a template under `dialect`. */
+function templateError(source: string, dialect: Dialect): string {
+  try {
+    compileSource(source, "/tmp/mx-core-test/a.mx", templatePolicy, {
+      customTags: {},
+      targets: lookup,
+      tagDiscoveryDirs: [],
+      dialect,
+      emitIr: () => "",
+    });
+  } catch (error) {
+    return (error as Error).message.split("\n")[0] ?? "";
+  }
+  throw new Error(`compiled without an error: ${JSON.stringify(source)}`);
+}
+
+interface TemplateRow {
+  readonly name: string;
+  readonly source: string;
+  readonly mx: string;
+  readonly option: string;
+}
+
+/** The built-ins a template file lowers (the generic lowering). */
+const TEMPLATE_ROWS: readonly TemplateRow[] = [
+  {
+    name: "`try` with neither `@catch` nor `@placeholder`",
+    source: "try\n  p\n",
+    mx: "`<try>`: needs `<@catch>` to handle errors or `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+    option:
+      "`try`: needs `catch` to handle errors or `placeholder` to show while its content is pending; without either it has no effect, so render its content directly",
+  },
+  {
+    name: "`try` with tag params",
+    source: "try|a|\n  p\n  @catch\n    p\n",
+    mx: "`<try>`: tag params (`|a, b|`) on `<try>`",
+    option: "`try`: tag params (`|a, b|`) on `try`",
+  },
+  {
+    name: "`try` with a tag variable",
+    source: "try/v\n  p\n  @catch\n    p\n",
+    mx: "`<try>`: tag variable (`/name`) on `<try>`",
+    option: "`try`: tag variable (`/name`) on `try`",
+  },
+  {
+    name: "`try` without a body",
+    source: "try\n  @catch\n",
+    mx: "`<try>`: requires body content",
+    option: "`try`: requires body content",
+  },
+  {
+    name: "`@placeholder` with params",
+    source: "try\n  p\n  @placeholder|a|\n    p\n",
+    mx: "`<try>`: tag params (`|a, b|`) on `<@placeholder>`",
+    option: "`try`: tag params (`|a, b|`) on `placeholder`",
+  },
+  {
+    name: "`if` with an argument (the example is MX's syntax)",
+    source: "if(x)\n  p\n",
+    mx: "Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`.",
+    option:
+      "Tag does not support arguments. Write the condition as a value option instead.",
+  },
+  {
+    name: "`await` with an argument",
+    source: "await(x)\n",
+    mx: "Tag does not support arguments. Write the promise as a value attribute and receive the result as a tag parameter instead: `<await|result|=promise>`.",
+    option:
+      "Tag does not support arguments. Write the promise as a value option and receive the result as a tag parameter instead.",
+  },
+  {
+    name: "`await` with tag params",
+    source: "await|r|=x\n  p\n",
+    mx: "tag params `|...|` on `<await>` are not supported in a standalone template",
+    option:
+      "tag params `|...|` on `await` are not supported in a standalone template",
+  },
+  {
+    name: "`else if` without an `if`",
+    source: "else if=x\n  p\n",
+    mx: "`<else if>` without a preceding `<if>`",
+    option: "`else` without a preceding `if`",
+  },
+  {
+    name: "`else` without an `if`",
+    source: "else\n  p\n",
+    mx: "`<else>` without a preceding `<if>`",
+    option: "`else` without a preceding `if`",
+  },
+  {
+    name: "`return` without a value",
+    source: "return\n",
+    mx: "`<return>` requires a `value=` attribute",
+    option: "`return` requires a `value=` option",
+  },
+  {
+    name: "`return` with `valueChange`",
+    source: "return value=1 valueChange=x\n",
+    mx: "`<return>` does not support the `valueChange` attribute; member returns a value only, with no two-way channel",
+    option:
+      "`return` does not support the `valueChange` option; member returns a value only, with no two-way channel",
+  },
+  {
+    name: "`effect`",
+    source: "effect\n",
+    mx: "`<effect>` is not an MX tag. Use `<script>`: its body runs after render and again when a value it reads changes.",
+    option:
+      "`effect` is not an MX tag. Use `script`: its body runs after render and again when a value it reads changes.",
+  },
+  {
+    name: "`script` with a spread",
+    source: "script ...x\n",
+    mx: "`<script>` does not support spread attributes: the tag is client code, not an html element, so a spread's keys would be silently discarded. For a native html `<script>` element use `<html-script>`",
+    option:
+      "`script` does not support spread options: the tag is client code, not an html element, so a spread's keys would be silently discarded. For a native html `<script>` element use `html-script`",
+  },
+  {
+    name: "a tag variable on `id`",
+    source: "id/x foo=1\n",
+    mx: "tag variable `/x` on `<id>` is not supported in a standalone template",
+    option:
+      "tag variable `/x` on `id` is not supported in a standalone template",
+  },
+];
+
+describe("built-in tag names in messages (template files)", () => {
+  for (const row of TEMPLATE_ROWS) {
+    it(`MX's words: ${row.name}`, () => {
+      expect(templateError(row.source, noVocabulary)).toBe(row.mx);
+      expect(templateError(row.source, dialectWith({}))).toBe(row.mx);
+    });
+
+    it(`the dialect's words: ${row.name}`, () => {
+      expect(templateError(row.source, optionDialect)).toBe(row.option);
+    });
+  }
+
+  it("a dialect that spells a built-in as MX does keeps the MX example", () => {
+    const mxSpelled = dialectWith({
+      formatTag: ({ name }: { name: string }) => `<${name}>`,
+    });
+    expect(templateError("const\n", mxSpelled)).toBe(
+      "`<const>` without a variable name (write `<const/name=value/>`)",
+    );
+    // One built-in spelled otherwise does not turn the other examples off.
+    const onlyConst = dialectWith({
+      formatTag: ({ name }: { name: string }) =>
+        name === "const" ? "val" : `<${name}>`,
+    });
+    expect(templateError("const\n", onlyConst)).toBe(
+      "`val` without a variable name",
+    );
+    expect(templateError("for\n  p\n", onlyConst)).toBe(
+      "`<for>` needs tag params: `<for|item| of=…>`",
+    );
+  });
+
+  it("calls the dialect's formatTag with the built-in's name and no trigger", () => {
+    const calls: Array<[string, string, boolean]> = [];
+    const spy = dialectWith({
+      formatTag: ({
+        name,
+        form,
+        trigger,
+      }: {
+        name: string;
+        form: string;
+        trigger?: unknown;
+      }) => {
+        calls.push([name, form, trigger !== undefined]);
+        return name;
+      },
+    });
+    templateError("const\n", spy);
+    expect(calls).toContainEqual(["const", "tag", false]);
+  });
+
+  it("names a built-in a trigger made by what the user wrote", () => {
+    // A line trigger that stands for a `const` tag with no variable name.
+    const ASK = Object.freeze({
+      id: "ask",
+      chars: "?",
+      match: "\\?[a-z]+",
+      standIn: "identifier",
+      node: Object.freeze({ call: "ask" }),
+    });
+    const asking = {
+      ...memberSyntax,
+      name: "asking",
+      table: Object.freeze({
+        ...memberSyntax.table,
+        lineTriggers: [...(memberSyntax.table?.lineTriggers ?? []), ASK],
+      }),
+      lowerTrigger(id: string, text: string, span: unknown, ctx: any) {
+        if (id === "ask") return ctx.child("const", []);
+        return (memberSyntax.lowerTrigger as any)(id, text, span, ctx);
+      },
+      messageVocabulary: optionVocabulary,
+    } as Dialect;
+    expect(templateError("?x\n", asking)).toBe("`?x` without a variable name");
+    const plain = { ...asking, messageVocabulary: undefined } as Dialect;
+    expect(templateError("?x\n", plain)).toBe(
+      "`<const>` without a variable name (write `<const/name=value/>`)",
+    );
+  });
+
+  it("does not call formatTag for a built-in when the file is valid", () => {
+    let calls = 0;
+    const counting = dialectWith({
+      formatTag: ({ name }: { name: string }) => {
+        calls++;
+        return name;
+      },
+    });
+    compileSource(
+      "const/x=1\nif=x\n  p\nfor|i| of=[1]\n  p\ntry\n  p\n  @catch\n    p\n",
+      "/tmp/mx-core-test/a.mx",
+      templatePolicy,
+      {
+        customTags: {},
+        targets: lookup,
+        tagDiscoveryDirs: [],
+        dialect: counting,
+        emitIr: () => "",
+      },
+    );
+    expect(calls).toBe(0);
+  });
+
+  it("reports a formatTag that throws while a built-in message is spelled", () => {
+    const broken = dialectWith({
+      formatTag: () => {
+        throw new Error("boom");
+      },
+    });
+    for (const source of ["const\n", "try\n  p\n", "else\n  p\n"]) {
+      let thrown: unknown;
+      try {
+        compileSource(source, "/tmp/mx-core-test/a.mx", templatePolicy, {
+          customTags: {},
+          targets: lookup,
+          tagDiscoveryDirs: [],
+          dialect: broken,
+          emitIr: () => "",
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      expect((thrown as Error | undefined)?.message, source).toContain(
+        "`messageVocabulary.formatTag` threw while spelling",
+      );
+    }
+  });
+});
+
+describe("writesMxSyntax", () => {
+  it("is true for MX's voice and for a dialect that spells the tag as MX does", () => {
+    expect(writesMxSyntax(MX_VOICE, "const")).toBe(true);
+    expect(
+      writesMxSyntax(
+        voiceOf(dialectWith({ formatTag: ({ name }: any) => `<${name}>` })),
+        "const",
+      ),
+    ).toBe(true);
+  });
+
+  it("is false when the dialect spells the tag otherwise, or by a trigger", () => {
+    const voice = voiceOf(optionDialect);
+    expect(writesMxSyntax(voice, "const")).toBe(false);
+    const trigger = { id: "ask", span: { start: 0, end: 2 }, text: "?x" };
+    expect(writesMxSyntax(voice, "const", trigger)).toBe(false);
   });
 });
 
@@ -829,11 +1428,12 @@ describe("what formatTag is handed", () => {
     expect(seen.every((tag) => tag.form === "tag")).toBe(true);
   });
 
-  it("built-in tags keep MX's words and never reach formatTag", () => {
+  it("a built-in tag arrives as form tag, named as MX names it", () => {
+    // A `formatTag` with no spelling (`undefined`) leaves MX's own.
     const { seen, dialect } = record();
     const [message] = messages('entity name="e"\n  define/x\n', dialect);
     expect(message).toContain("`<define>` is a render-time macro");
-    expect(seen.map((tag) => tag.name)).not.toContain("define");
+    expect(seen).toContainEqual({ name: "define", form: "tag" });
   });
 });
 
@@ -1190,7 +1790,7 @@ const HOOK_ROWS: readonly HookRow[] = [
     source: 'entity name="e"\n  $ var x = 1\n',
     mx: "scriptlets (`$ statement`) are not supported in member; declare a value with `<let/x=…/>`",
     option:
-      "scriptlets (`$ statement`) are not supported in member; declare a value with `<let/x=…/>`",
+      "scriptlets (`$ statement`) are not supported in member; declare a value with `let`",
   },
 ];
 
