@@ -42,6 +42,7 @@ import {
   triggerOfNode,
   type Voice,
   VoiceHookError,
+  writesMxSyntax,
 } from "../message-vocabulary.ts";
 import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
@@ -59,6 +60,40 @@ export const DEFAULT_TAG = "object";
 
 /** The names provided without a tag-table entry: what `builtinTags` declares. */
 const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
+
+/**
+ * Does `voice` say nothing different from MX's own words for the names the
+ * reserved-name messages use? A vocabulary that states nothing (`{}`) is MX's
+ * voice, so a file under it reads MX's message byte for byte.
+ */
+function speaksMx(voice: Voice, name: string): boolean {
+  return (
+    voice.attribute === MX_VOICE.attribute &&
+    voice.attributes === MX_VOICE.attributes &&
+    voice.file === MX_VOICE.file &&
+    voice.files === MX_VOICE.files &&
+    ["if", "else-if", name].every((tag) => writesMxSyntax(voice, tag))
+  );
+}
+
+/**
+ * Why `name` (`else`, `else-if` or `try`) cannot be a line head in a data
+ * file. In MX's voice the message is the one the registration checks use. In
+ * a dialect's, its author wrote a line head, not a data tag: the message names
+ * the tag through the voice, says what to write instead, and has no MX noun
+ * ("core", "target", "data tag"). It does not list the other structural names:
+ * they are not what this file's author got wrong, and a dialect may spell or
+ * hide them, so a list would teach heads the file may not have.
+ */
+function reservedInFileMessage(name: string, voice: Voice): string {
+  if (speaksMx(voice, name)) {
+    return reservedNameMessage(name, (tag) => voice.tag(tag));
+  }
+  if (name === "try") {
+    return `${voice.tag(name)} cannot be used in ${voice.aFile}: ${voice.Files} are static, so they have no render errors to catch; write its content directly`;
+  }
+  return `${voice.tag(name)} has no ${voice.tag("if")} or ${voice.tag("else-if")} before it: put it right after one`;
+}
 
 const byNatives = new WeakMap<NativeTags, WeakMap<Voice, HostDeclarations>>();
 
@@ -97,21 +132,21 @@ export function entryDeclarations(
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
           get reason() {
-            return reservedNameMessage("else", (tag) => voice.tag(tag));
+            return reservedInFileMessage("else", voice);
           },
         },
         "else-if": {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
           get reason() {
-            return reservedNameMessage("else-if", (tag) => voice.tag(tag));
+            return reservedInFileMessage("else-if", voice);
           },
         },
         try: {
           kind: "error",
           code: NOT_IN_DATA_FILE_CODE,
           get reason() {
-            return reservedNameMessage("try", (tag) => voice.tag(tag));
+            return reservedInFileMessage("try", voice);
           },
         },
         define: {

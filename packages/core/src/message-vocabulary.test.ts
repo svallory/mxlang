@@ -27,7 +27,9 @@ import {
   voiceOf,
   writesMxSyntax,
 } from "./message-vocabulary.ts";
+import { reservedRefusal } from "./scan.ts";
 import type { Dialect, MessageVocabulary } from "./syntax-table.ts";
+import { reservedNameMessage } from "./tag-names.ts";
 import type { TemplateBackedTag } from "./template-tag.ts";
 import { lookup } from "./test-targets.ts";
 
@@ -389,13 +391,13 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     ],
   },
   {
-    name: "`else` and `try` in a data file name each other and the structural names",
+    name: "`else` with no `if` before it in a data file",
     source: "else\n  entity\n",
     mx: [
       "`<else>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
     option: [
-      "`else` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+      "`else` has no `if` or `else-if` before it: put it right after one",
     ],
   },
   {
@@ -405,7 +407,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
       "`<else-if>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
     option: [
-      "`else-if` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+      "`else-if` has no `if` or `else-if` before it: put it right after one",
     ],
   },
   {
@@ -415,7 +417,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
       "`<try>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
     option: [
-      "`try` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `try` before a target sees them",
+      "`try` cannot be used in a Kit file: Kit files are static, so they have no render errors to catch; write its content directly",
     ],
   },
   {
@@ -656,6 +658,96 @@ describe("built-in tag names in messages", () => {
       it(`the dialect's words: ${row.name}`, () => {
         expect(messages(row.source, optionDialect)).toEqual([...row.option]);
       });
+    }
+  });
+});
+
+// The reserved structural names in a data file: a file author wrote a line
+// head, so the message names it through the voice and says what to do. The
+// registration checks (a tag file, `mx.contracts`, `customTags`) address the
+// author of a tag source and keep MX's words whatever the dialect says.
+
+const MX_LIST =
+  "`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`";
+
+/** A dialect that spells every tag `:name`, to show each name goes through `formatTag`. */
+const colonDialect = dialectWith({
+  file: "Kit file",
+  formatTag: ({ name }: { name: string }) => `:${name}`,
+});
+
+describe("a reserved structural name in a data file", () => {
+  const MX_INTERNAL = /\b(core|target|data tag)\b/;
+
+  it("an orphan `else` names the tags it needs through the voice", () => {
+    expect(messages("else\n  entity\n", colonDialect)).toEqual([
+      "`:else` has no `:if` or `:else-if` before it: put it right after one",
+    ]);
+  });
+
+  it("an `else` after an `else` is orphaned too", () => {
+    expect(
+      messages(
+        'if=x\n  entity name="e"\nelse\n  entity name="e"\nelse\n  entity name="e"\n',
+        colonDialect,
+      ),
+    ).toEqual([
+      "`:else` has no `:if` or `:else-if` before it: put it right after one",
+    ]);
+  });
+
+  it("an orphan `else-if` names the tags it needs through the voice", () => {
+    expect(messages("else-if=x\n  entity\n", colonDialect)).toEqual([
+      "`:else-if` has no `:if` or `:else-if` before it: put it right after one",
+    ]);
+  });
+
+  it("`try` says what a data file cannot do and what to write instead", () => {
+    expect(messages("try\n  entity\n", colonDialect)).toEqual([
+      "`:try` cannot be used in a Kit file: Kit files are static, so they have no render errors to catch; write its content directly",
+    ]);
+  });
+
+  it("uses none of MX's internal nouns, whatever the vocabulary states", () => {
+    for (const dialect of [
+      optionDialect,
+      colonDialect,
+      dialectWith({ attribute: { one: "option", many: "options" } }),
+    ]) {
+      for (const source of [
+        "else\n  entity\n",
+        "else-if=x\n  entity\n",
+        "try\n  entity\n",
+      ]) {
+        for (const message of messages(source, dialect)) {
+          expect(message).not.toMatch(MX_INTERNAL);
+        }
+      }
+    }
+  });
+
+  it("a dialect that states only an attribute noun still gets the file author's wording", () => {
+    expect(
+      messages(
+        "else\n  entity\n",
+        dialectWith({ attribute: { one: "option", many: "options" } }),
+      ),
+    ).toEqual([
+      "`<else>` has no `<if>` or `<else-if>` before it: put it right after one",
+    ]);
+  });
+
+  it("registration keeps MX's words for every dialect", () => {
+    const tail = `it is reserved — core consumes the structural names (${MX_LIST}) and \`<try>\` before a target sees them`;
+    for (const name of ["else", "else-if", "try"]) {
+      const expected = `\`<${name}>\` cannot name a data tag: ${tail}`;
+      expect(reservedNameMessage(name)).toBe(expected);
+      for (const discovery of [
+        { name: "MX", reservedTags: [] },
+        { name: "Kit", reservedTags: ["card"] },
+      ]) {
+        expect(reservedRefusal(name, discovery, "a tag file")).toBe(expected);
+      }
     }
   });
 });
