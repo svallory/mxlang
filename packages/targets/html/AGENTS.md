@@ -94,10 +94,21 @@ per statement, in source order with the `static` blocks), as stock Marko 6.4.4's
 server module does, so a template read of one renders `undefined` instead of
 throwing (`clientDeclaredNames` in `translate.ts` follows Babel's
 `getBindingIdentifiers` order, outer scope only). Under `typeCheck` (the
-tooling projection, never the module that runs) a `client` statement emits its
-own code instead of the `var`, so its declarations have their declared types
-and an error in it has a position; the runtime module and its bytes are
-unchanged. Both statements carry the span of their code
+tooling projection, never the module that runs) a `client` statement is typed in
+two views (`clientProjection` in `translate.ts`, the `"statement"` case in
+`emitter.ts`). The server view declares each name `var q: undefined; void [q];`
+and exports nothing, so a template read of a client name and an importer of a
+client export are errors, as the server render sees them. The client view puts
+the statement's code, with `export` stripped, in an uncalled
+`async function __mxClient`, so hover, completions and errors inside it keep
+the declared types and an error has a position. Imports, interfaces, type
+aliases, namespaces and `declare` forms stay at module level (types must
+resolve there); `export {..}`, re-exports and `export default` are dropped. A
+top-level `return` is repeated after the module, mapped to the keyword, because
+the function would hide its TS1108. Known limit: a `client import` of another
+module's client export is TS2614 (that module's one projection is its server
+view); a hoisted type cannot name a client class or enum. The runtime module and
+its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
 recorded mapping, so `mx-tsc` and the editor report an error inside one at the
 authored token, not at 1:1. A

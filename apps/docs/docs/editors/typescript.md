@@ -209,6 +209,17 @@ two check *TypeScript* and report nothing about host policy. Run both: an
 editor can register several servers and several tsserver plugins against one
 file kind, which is how ESLint and TypeScript already coexist.
 
+## `client` names
+
+A `client` statement runs in the browser, so on the server the module that renders sees its names as `undefined` and exports none of them. The type-check follows that:
+
+- A template read of a client name is `undefined`: `client let q = 1` then `${q.toFixed(2)}` reports `'q' is possibly 'undefined'`, and a client function or class cannot be called in the template.
+- A client export is not an export of the module. `import { x } from "./ca.mx"` of a `client export const x` reports `TS2614`, from a `.mx` file (plain, `static` or `server` import) and from a `.ts` file alike. A `server` or `static` export stays importable.
+- Inside client code (a handler, a `client` block, a later `client` statement) the names keep their declared types, and hover and completions show them.
+- A top-level `return` in a `client` block is reported (`TS1108`) at the `return`.
+
+Known limit: a `client import` of another module's client export reports `TS2614`, because the type-check reads that module as the server sees it.
+
 ## Mapping Coverage
 
 The TypeScript plugin provides robust position mapping back to your original source:
