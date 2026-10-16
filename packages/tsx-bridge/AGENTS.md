@@ -44,6 +44,10 @@ Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering 
   collides too.
 - **Tag params (`|a, b|`) come before `=value`.** `<if|u|=user()>`, not `<if=user()|u|>` — the latter parses but folds `|u|` into the condition expression and reports no params, matching `<for|item, i| of=...>`'s own order. `notes/solidmx-spec.md` §5.1 writes `<if=user()|u|>` as loose prose; the real grammar is params-first.
 
+## Testing `print`: compare ASTs
+
+A test of `print`/`printAst` output against an expected program compares ASTs (parse both, positions stripped), never normalized text: `retainLines` keeps generated lines aligned with the source, so the printed text cannot match a hand-formatted twin. The oracle is different: it compares compiled output as text.
+
 ## `.mx` is the only template extension (decisions 72, 2026-09-15)
 
 Decision 68 retired the old `.mx` *dialect* (required explicit imports,

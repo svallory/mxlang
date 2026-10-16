@@ -9,7 +9,7 @@ description: "@mxlang/language-server: diagnostics-only, for what a host's polic
 
 ## Scope: diagnostics only
 
-It does exactly one thing: watch `.mx`, `.marko`, and region documents (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), compile or parse each one through its host, and publish one diagnostic per positioned error. No completion, no hover, no go-to-definition, no formatting, no semantic tokens — Marko's own language server already provides those features for `.mx`/`.marko`, and this server is meant to run *alongside* it, not replace it. Running two language servers against one file type is an ordinary pattern in both VS Code and Zed (the same way ESLint and TypeScript's own server coexist).
+It does exactly one thing: watch `.mx` and region documents (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), compile or parse each one through its host, and publish one diagnostic per positioned error. No completion, no hover, no go-to-definition, no formatting, no semantic tokens — Marko's own language server already provides those features for `.mx`, and this server is meant to run *alongside* it, not replace it. Running two language servers against one file type is an ordinary pattern in both VS Code and Zed (the same way ESLint and TypeScript's own server coexist).
 
 ## Why it exists
 

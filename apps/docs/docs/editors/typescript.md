@@ -5,7 +5,7 @@ description: "Type-check Solid, whole-file MX, and AstroMX in editors and CI."
 
 # TypeScript
 
-TypeScript cannot parse a `.solid.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` module, a whole-file `.mx` / `.marko`
+TypeScript cannot parse a `.solid.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` module, a whole-file `.mx`
 template, or an AstroMX `.astro.mx` file. Without help, an editor cannot derive
 their exports and an import is unresolved. MX projects the source to the
 host's generated TypeScript and keeps diagnostics mapped to the original file.
@@ -17,6 +17,10 @@ never disagree about whether a file compiles:
 | --- | --- | --- |
 | Editors | `@mxlang/typescript-plugin` | inside tsserver |
 | CI | `@mxlang/tsc` (`mx-tsc`) | on the command line |
+
+Both take the project's own TypeScript as a peer, `>=5.9.0 <7`. TypeScript 7,
+the Go port, cannot load tsserver plugins, so MX stays on TypeScript 5.9 and 6
+until TypeScript 7 ships an extension API.
 
 Both project each MX file to its lowered TS/TSX and type-check that, mapping
 diagnostics back to the original file — at the exact column, not the start of
@@ -238,6 +242,8 @@ The TypeScript plugin provides robust position mapping back to your original sou
 
 - **Component tags and attributes:** When you pass an incorrect prop type, the error highlights the exact attribute name or value in the `.mx` or region (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`) file, not a location in the compiled output.
 - **Hoisted blocks:** Type errors inside `static` blocks or `import` statements are mapped correctly despite being hoisted to the top of the generated module.
+- **Event handlers on the JSX hosts (Preact, React, Hono):** a handler is checked against the host's own `JSX.IntrinsicElements` type for that element and event, so a mistyped handler is an error at its attribute and a valid `onKeyDown=(e) => …` is not. A DOM-typed handler that plain TSX rejects there (`(e: MouseEvent)` on React and Hono) is an error too. A non-event prop on an intrinsic element (`<input maxLength="x">`) reports its type error at the attribute name. Unknown props, custom elements and dynamic tags are not checked.
+- **A diagnostic with no mapping:** it is never dropped. It is reported at the nearest mapped span around it; see [the specification](/specification/) ("A diagnostic with no source mapping is never dropped") for the wording it carries.
 
 ### Known Gaps
 

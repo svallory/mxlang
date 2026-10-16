@@ -17,7 +17,7 @@ code --install-extension mxlang.vsix
 ## Highlighting
 
 The extension provides:
-- **MX (`.mx`, `.marko`)**: Full highlighting powered by the official Marko TextMate grammar.
+- **MX (`.mx`)**: Full highlighting from MX's TextMate grammar (`source.mx`), built on the Marko extension's grammar, which VS Code installs with this extension. A dialect's files get the grammar fragments the dialect contributes.
 - **AstroMX (`.astro.mx`)**: Highlighting for the Astro frontmatter and delegates the body to the Marko grammar.
 - **Solid (`.solid.mx`)**: Highlighting as `source.tsx`. *Note: True grammar injection for MX regions within Solid is not feasible via regex alone, so `.solid.mx` falls back to standard TSX highlighting for now.*
 - **ReactMX (`.react.mx`), PreactMX (`.preact.mx`) and HonoMX (`.hono.mx`)**: Highlighting as `source.tsx`, the same fallback as Solid. Each is a TypeScript module with MX regions (language ids `reactmx`, `preactmx`, `honomx`), and a file of that kind is no longer treated as a plain `.mx`. See [React](/hosts/react/), [Preact](/hosts/preact/) and [Hono](/hosts/hono/).

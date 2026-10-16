@@ -6,7 +6,7 @@
 
 Backends (`compile.ts`'s `backend: "babel" | "native"`):
 
-- `babel` — `@solidjs/babel-plugin`, the `babel-preset-solid` successor, over a Babel JSX AST via `parserOverride`.
+- `babel` — `@solidjs/babel-plugin`, the `babel-preset-solid` successor, over a Babel JSX AST via `parserOverride`. A `parserOverride` replaces only the parse step, so it cannot share a Babel pass with the Solid plugin: MX's AST is printed back to JSX text in its own pass and the Solid plugin re-parses it, two `transformSync` calls.
 - `native` — `@solidjs/compiler`, Solid's Oxc compiler and `@solidjs/vite-plugin`'s default. Its only entry point is `transform(code, options)` over **source text**, so MX reaches it by printing its lowered AST back to JSX text first. Both backends must pass: they are separate codegen implementations.
 
 Variant names are unchanged from Solid 1 (`generate: "dom" | "ssr"` plus `hydratable`) — both 2.0 packages document the same spelling.

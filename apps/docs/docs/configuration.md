@@ -92,7 +92,8 @@ A dialect's tag rules and its name belong to the dialect, so MX's config cannot
 set them: `tagRules` at the top level, and `tagRules` or `name` under a
 dialect's id, are errors at their key. Which dialect handles which extension
 (`extensions`) is the one dialect fact the config overrides. Everything else
-under a dialect's id is that dialect's to read.
+under a dialect's id is that dialect's to read: the dialect ships a TypeScript
+type and a JSON schema for the settings it exposes there.
 
 `dialect` is not a setting. It is a dialect package's identity block in that
 package's own `package.json` (see [Writing a dialect](/custom-tags/dialects/)),
@@ -158,3 +159,7 @@ the disk for it. `provideMxConfig(projectRoot, undefined)` removes it again.
 `findMxConfig(dir)` answers which config applies to a directory and where it
 came from; `isMxConfigFile(path)` tells a watcher whether a changed file is
 one of the places above.
+
+This is how a dialect keeps MX out of its users' sight: it reads its own config
+file, generates MX's config from it and passes that in, so its users never
+write an MX config.

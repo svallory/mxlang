@@ -5,7 +5,7 @@ description: "The normative contract between a parser/lowering and the emitters:
 
 # IR specification
 
-This page is the normative description of the IR that `@mxlang/core` produces and every emitter consumes. It is the written interface between the two halves of the compiler: a **lowering** (today `packages/core/src/lower.ts`, over Marko's parser) produces an `Ir`; an **emitter** (a host or target) consumes it and never sees a parser node. Someone writing a new lowering should be able to build one from this page alone, without reading an emitter.
+This page is the normative description of the IR that `@mxlang/core` produces and every emitter consumes. It is the written interface between the two halves of the compiler: a **lowering** (today `packages/core/src/lower.ts`, over MX's own front end, `@mxlang/parser`) produces an `Ir`; an **emitter** (a host or target) consumes it and never sees a parser node. Someone writing a new lowering should be able to build one from this page alone, without reading an emitter.
 
 [The IR](/architecture/ir/) is the prose introduction. This page is the contract. Where they disagree, this page wins, and the disagreement is a bug in the prose.
 
@@ -17,7 +17,7 @@ The key words **must**, **must not**, **may** and **should** are used in the RFC
 
 The IR is not the parser's output. It is the result of a parse **plus** a sequence of resolution steps, several of which consult the host. A new lowering must perform every step below, in this order, or produce the same result by other means.
 
-`compileSource` (`compile.ts`) parses the whole file with `@marko/compiler` and, in the translator's `Program.exit`, builds a `Ctx` and calls `lower(ctx, body)` once, then hands the result to the host's required `HostOptions.emitIr(ir, ctx)`. `parseFragment` (`fragment.ts`) is the same parse for a substring of a larger file, with positions shifted (section 3.4). `lower()` (`lower.ts`) then runs:
+`compileSource` (`compile.ts`) parses the whole file with MX's front end (`parseMx`, the MX AST of `@mxlang/babel`) and, in the translator's `Program.exit`, builds a `Ctx` and calls `lower(ctx, body)` once, then hands the result to the host's required `HostOptions.emitIr(ir, ctx)`. `parseFragment` (`fragment.ts`) is the same parse for a substring of a larger file, with positions shifted (section 3.4). `lower()` (`lower.ts`) then runs:
 
 1. **Tree rewrites, before any tag name is read** (`resolveUnnamedTags`, `default-tag.ts`). Top-down over the parsed tree, per tag:
    1. **Shorthand** (`shorthand.ts` `rewriteShorthands`): the tag-adjacent `#id` and `.class` become the `id`/`class` attributes the author would otherwise have written, as in Marko. The rewritten attribute remembers its token as `sugarLabel`, which becomes `Attr.sugar` (section 6). A `:` in a tag head is part of the tag name or the shorthand part; core splits nothing at it.
@@ -118,7 +118,7 @@ When MX is a region inside another file (a `.solid.mx` region, found by `package
 - `baseOffset` is the number of units before the fragment; `baseLine` is zero-based (the number of `\n` before it); `baseColumn` is zero-based (units between the last `\n` and the fragment);
 - `baseLine === 0` requires `baseOffset === baseColumn`; `baseLine >= 1` requires `baseOffset >= baseLine + baseColumn`. `assertBaseContract` rejects anything else.
 
-Line/column positions shift by `baseLine` (and by `baseColumn` on the fragment's first line only); index positions shift by `baseOffset`. Shared position objects are shifted once (the walk dedupes them). A thrown parse error's position is on the exception and is shifted separately. A host that also reads positions through a padded copy of the file must pad it as the "padding contract" in `fragment.ts` describes, or line/column and index positions disagree. Pinned by `fragment.test.ts`.
+Line/column positions shift by `baseLine` (and by `baseColumn` on the fragment's first line only); index positions shift by `baseOffset`. Shared position objects are shifted once (the walk dedupes them). A thrown parse error's position is on the exception and is shifted separately. A host never builds that padded copy or the base by hand: core's `positionRegionSource(region, at, { wrapper?, filename? })` returns a region's padded source and its base position from one call (the "padding contract" in `fragment.ts`), and the Solid and Angular hosts use it. `parseFragment` throws a positioned error on a base that breaks the invariant above, and no host clamps a base to hide one. Pinned by `fragment.test.ts`.
 
 A new lowering over its own parser has no reason to reproduce the shift mechanics, but it must produce the same result: every `loc` and every span in the IR is measured against the enclosing file.
 
@@ -456,14 +456,15 @@ A host whose output has a returning unit invoked as a plain function also refuse
 
 ## 11. Stability and adding a node
 
-**Public.** `@mxlang/core` exports the IR types `Attr`, `AttributeTag`, `AttributeTagNode`, `AttrTagProp`, `Block`, `Branch`, `ComponentTarget`, `DelegatedTag`, `Expr`, `ExprShape`, `ForHead`, `ForSource`, `Ir`, `IrNode`, `Position`; `SourceSpan`, `GeneratedMapping`, `MappedCode` and the mapping helpers; `Emitter`, `drive`, `emit`; `lower`, `lowerChildren`, `expressionShape`. `AttrSugar` and `IrBase` are not exported by name (they reach consumers only inside `Attr` and each node). None of the IR types is marked `@unstable`; the only `@unstable` surface in core is the target contract (`target-descriptor.ts`, `target-loader.ts`, `descriptorVersion: 0`). The package is `0.1.0-alpha.1`, so no semver guarantee applies yet.
+**Public.** `@mxlang/core` exports the IR types `Attr`, `AttributeTag`, `AttributeTagNode`, `AttrTagProp`, `Block`, `Branch`, `ComponentTarget`, `DelegatedTag`, `Expr`, `ExprShape`, `ForHead`, `ForSource`, `Ir`, `IrNode`, `Position`; `SourceSpan`, `GeneratedMapping`, `MappedCode` and the mapping helpers; `Emitter`, `drive`, `emit`; `lower`, `lowerChildren`, `expressionShape`. `AttrSugar` and `IrBase` are not exported by name (they reach consumers only inside `Attr` and each node). The IR is public and `@unstable`, as are the target contract (`target-descriptor.ts`, `target-loader.ts`, `descriptorVersion: 0`) and core's IR entry point ([`lowerSource`/`lowerFile`](/architecture/ir-entry/)); nothing is frozen before a release candidate.
 
-**Rules for changing the IR** (decisions 79 and 80):
+**Rules for changing the IR:**
 
-- The kind set is **closed** in MX 1: structural core plus "component call". A new construct with compile-time meaning becomes an IR kind (or a field on one) only when every host must emit it differently; host-owned constructs travel as `DelegatedTag` with their decision in `data`.
+- Core's kind set is **closed**: structural core plus "component call". A new construct with compile-time meaning becomes an IR kind (or a field on one) only when every host must emit it differently; host-owned constructs travel as `DelegatedTag` with their decision in `data`. A dialect adds node types only by registering them in core's one node-type registry (keyed `dialect:Type`, core being `mx:`), and their `lower` returns IR of registered kinds. There is no generic payload kind and no opaque node.
 - Adding a kind means adding it to `IrNode`, to `Emitter` (a required method) and to `drive`'s switch. Because `drive`'s `default` narrows to `never`, the compiler then fails every emitter until each one **handles or rejects** the kind; no emitter may ignore it. A direct walker (a dialect reading `lowerSource`'s IR) must handle it or throw.
-- User-defined compile-time tags (decision 80, MX 2) must produce IR, not host output: input IR in, IR out, positions preserved, run in core before emitters. That is what `transform` already is for custom tags. No opaque "user node" every host must handle is admitted.
+- Custom tags must produce IR, not host output: input IR in, IR out, positions preserved, run in core before emitters. That is what `transform` already is for custom tags. No opaque "user node" every host must handle is admitted.
 - A new optional field must document its absence (synthesized or not applicable); a new span field follows section 3.
+- The IR keeps an encoding a C-compatible front end can produce (node kinds as an enumeration, nodes expressible as a flat table), so the front end can move to native code later without an API change.
 
 ## 12. Worked example
 
