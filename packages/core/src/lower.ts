@@ -138,6 +138,7 @@ import {
   invalidDefaultTagHint,
   resolveUnnamedTags,
 } from "./default-tag.ts";
+import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
 import {
   DEFINE_CONTENT_DROPPED_CODE,
   DEFINE_EXTRA_PARAMS_CODE,
@@ -823,38 +824,131 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  *   modified value (`value:=x`, `value:no-update=x`) and a spread. The tag is
  *   client code that html does not emit, so `async`, `src`, `type`, `id`, a
  *   `#id`/`.class` shorthand and the rest were discarded.
+ * - a head form the tag has no use for: arguments (`<script(x)>`), params
+ *   (`<script|x|>`), a tag variable (`<script/x>`), a second value
+ *   (`<script value=a value=b>`) and a value next to a body
+ *   (`<script value=a>code</script>`). One is reported, the first of those and
+ *   the attributes above in the order stock checks them: arguments, params,
+ *   variable, then the attributes and values in the order they were written,
+ *   then a body next to a value.
  * - a `${…}` placeholder in the body, in code or inside a quoted string. The
  *   body is script text, and a placeholder in it was never read. Inside a
  *   template literal the `${…}` is the script's own and is not a placeholder.
  *
- * Both name `<html-script>`, the tag for a native html `<script>` element. The
- * first of each is reported, as stock reports it. When the walk collects errors
- * they are recorded and the tag keeps lowering; otherwise the first throws.
+ * The attribute and the variable name `<html-script>`, the tag for a native
+ * html `<script>` element, as does the placeholder. The head error and the
+ * placeholder are reported together. When the walk collects errors they are
+ * recorded and the tag keeps lowering; otherwise the first throws.
  */
 function checkScriptShape(ctx: Ctx, tag: Node): void {
   if (!isRawTextScript(ctx, tag)) return;
-  const refuse = (message: string, at: Node) => {
+  const refuse = (
+    message: string,
+    at: Node,
+    code: MxDiagnosticCode = INERT_TAG_SHAPE_CODE,
+  ) => {
     try {
-      raise(INERT_TAG_SHAPE_CODE, message, at);
+      raise(code, message, at);
     } catch (error) {
       if (!ctx.errors || !isTranslateError(error)) throw error;
       positionError(ctx, error);
       ctx.errors.push(error);
     }
   };
-  const attr = tagAttributesOf(tag).find(
-    (candidate: Node) =>
+  // The attributes in the order they were written: the parser rewrites a
+  // `#id` / `.class` shorthand after the plain attributes, so `#a.b` arrives as
+  // `class` then `id`, and the first one in the file is what stock reports.
+  const written = (candidate: Node): number =>
+    tagAttrNameSpan(ctx, candidate, tag).sourceStart;
+  const inSourceOrder = [...tagAttributesOf(tag)].sort((a, b) => {
+    const [x, y] = [written(a), written(b)];
+    return Number.isFinite(x) && Number.isFinite(y) ? x - y : 0;
+  });
+  // The first attribute that is not the tag's own value, or the second value,
+  // whichever was written first.
+  let attr: Node | undefined;
+  let duplicate: Node | undefined;
+  let valueSeen = false;
+  for (const candidate of inSourceOrder) {
+    if (
       isSpreadAttributeNode(candidate) ||
       isBoundAttr(candidate) ||
       candidate.modifier != null ||
-      !(attrNameOf(candidate) === "value" || isDefaultAttr(candidate)),
-  );
+      !(attrNameOf(candidate) === "value" || isDefaultAttr(candidate))
+    ) {
+      attr = candidate;
+      break;
+    }
+    if (valueSeen) {
+      duplicate = candidate;
+      break;
+    }
+    valueSeen = true;
+  }
   for (const candidate of tagAttributesOf(tag)) {
     if (isSpreadAttributeNode(candidate)) scriptSpreadsRefused.add(candidate);
   }
   const voice = voiceOfCtx(ctx);
   const scriptText = (): string => tagText(ctx, "script", tag);
-  if (attr) {
+  // Where a list of tag parts starts and ends, as stock's `assertNoArgs` and
+  // its params check report it: at the first to the last.
+  const around = (parts: readonly Node[]) => ({
+    loc: {
+      start: positionAtOffset(ctx, nodeSpan(ctx, parts[0] as Node).sourceStart),
+      end: positionAtOffset(
+        ctx,
+        nodeSpan(ctx, parts[parts.length - 1] as Node).sourceEnd,
+      ),
+    },
+  });
+  const args = tagArgsOf(tag) ?? [];
+  const params = tagParamsOf(tag);
+  const variable = tagVarOf(tag);
+  const placeholder = bodyChildren(tag).find(
+    (child: Node) =>
+      child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
+  );
+  // The body is the tag's value when it holds any text: whitespace is none. A
+  // body with a placeholder is refused for that, as stock does.
+  const hasBodyText =
+    !placeholder &&
+    bodyChildren(tag).some(
+      (child: Node) =>
+        isTextNode(child) && String(child.value ?? "").trim() !== "",
+    );
+  // One head error is reported, the one stock reports first: arguments, then
+  // parameters, then the variable, then the attributes and values in the order
+  // they were written, then a body next to a value.
+  if (args.length > 0) {
+    refuse(
+      `Tag does not support arguments. A ${scriptText()} tag takes none: remove the \`(…)\`, and write the code as the body or the value as \`value=…\``,
+      around(args),
+    );
+  } else if (params.length > 0) {
+    refuse(
+      `Tag does not support parameters. A ${scriptText()} tag takes none: remove the \`|…|\``,
+      around(params),
+    );
+  } else if (variable) {
+    refuse(
+      // `<script>` in "a native html `<script>` element" is the HTML element,
+      // not the built-in; only the tag to write instead is spelled by the dialect.
+      `${scriptText()} does not support a tag variable reference. For a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`,
+      around([variable]),
+    );
+  } else if (duplicate) {
+    refuse(
+      `Invalid duplicate value ${voice.attribute}.`,
+      duplicate,
+      DUPLICATE_VALUE_ATTRIBUTE_CODE,
+    );
+  } else if (!attr && valueSeen && hasBodyText) {
+    refuse(
+      `Invalid duplicate value ${voice.attribute}. A ${scriptText()} body is its value: write the body or \`value=…\`, not both`,
+      tag,
+      DUPLICATE_VALUE_ATTRIBUTE_CODE,
+    );
+  } else if (attr) {
     // `<script>` in "a native html `<script>` element" is the HTML element,
     // not the built-in; only the tag to write instead is spelled by the dialect.
     const fix = (what: string) =>
@@ -885,10 +979,6 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
       );
     }
   }
-  const placeholder = bodyChildren(tag).find(
-    (child: Node) =>
-      child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
-  );
   if (placeholder) {
     const message =
       // biome-ignore lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template

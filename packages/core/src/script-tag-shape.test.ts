@@ -10,9 +10,16 @@
  * MX's columns are 0-based, one less):
  * `scratch/reports/probes/script-and-export-equals-7cfaa606/` and
  * `scratch/reports/script-tag-attrs-and-placeholder.md`.
+ *
+ * It also refuses the head forms stock refuses and MX read past: arguments,
+ * params, a tag variable, a second value and a value next to a body. Probed on
+ * the stock parser with `packages/stock-marko` (`stockMarkoCompile`), whose
+ * positions are 0-based columns, as here.
  */
 import { describe, expect, it } from "vitest";
+import memberSyntax from "./fixtures/syntax/member-fixture.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import type { Dialect } from "./syntax-table.ts";
 
 const CODE = "MX_INERT_TAG_SHAPE";
 
@@ -534,5 +541,441 @@ describe("where `<script>` is not the built-in tag", () => {
       });
       expect(diagnostics.filter((d) => d.code === CODE)).toEqual([]);
     }
+  });
+});
+
+const DUPLICATE = "MX_DUPLICATE_VALUE_ATTRIBUTE";
+const NATIVE = "For a native html `<script>` element use `<html-script>`";
+const ARGUMENTS =
+  "Tag does not support arguments. A `<script>` tag takes none: remove the `(…)`, and write the code as the body or the value as `value=…`";
+const PARAMETERS =
+  "Tag does not support parameters. A `<script>` tag takes none: remove the `|…|`";
+const VARIABLE = `\`<script>\` does not support a tag variable reference. ${NATIVE}`;
+const DUPLICATE_VALUE = "Invalid duplicate value attribute.";
+const VALUE_AND_BODY = `${DUPLICATE_VALUE} A \`<script>\` body is its value: write the body or \`value=…\`, not both`;
+
+type HeadRefusal = Refusal & { code: string };
+
+/**
+ * The head forms stock refuses. Stock's position is the first argument, the
+ * first param, the variable, the second value, or the tag for a value next to
+ * a body; its message is the sentence at the front of ours.
+ */
+const HEAD_FORMS: [string, string, HeadRefusal][] = [
+  [
+    "arguments",
+    page("<script(x, y)>"),
+    {
+      code: CODE,
+      message: ARGUMENTS,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 12 },
+    },
+  ],
+  [
+    "arguments, self-closed",
+    "<div/>\n<script(x)/>\n",
+    {
+      code: CODE,
+      message: ARGUMENTS,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "arguments on a concise script",
+    "div\nscript(x) -- a();\n",
+    {
+      code: CODE,
+      message: ARGUMENTS,
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 8 },
+    },
+  ],
+  [
+    "params",
+    page("<script|x, y|>"),
+    {
+      code: CODE,
+      message: PARAMETERS,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 12 },
+    },
+  ],
+  [
+    "params on a concise script",
+    "div\nscript|x| -- a();\n",
+    {
+      code: CODE,
+      message: PARAMETERS,
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 8 },
+    },
+  ],
+  [
+    "a tag variable",
+    page("<script/x>"),
+    {
+      code: CODE,
+      message: VARIABLE,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "a tag variable, self-closed",
+    "<div/>\n<script/x/>\n",
+    {
+      code: CODE,
+      message: VARIABLE,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "a destructured tag variable",
+    "<div/>\n<script/{ a, b }/>\n",
+    {
+      code: CODE,
+      message: VARIABLE,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 16 },
+    },
+  ],
+  [
+    "a tag variable on a concise script",
+    "div\nscript/x -- a();\n",
+    {
+      code: CODE,
+      message: VARIABLE,
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 8 },
+    },
+  ],
+  [
+    "a value and a body",
+    page("<script value=() => a()>"),
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "the default value and a body",
+    page("<script=x>"),
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a method value and a body",
+    page("<script() { a() }>"),
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a comment as the body",
+    "<div/>\n<script value=x>\n  // c\n</script>\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a body on a concise script",
+    "div\nscript value=x -- a();\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 6 },
+    },
+  ],
+  [
+    "a value and a concise block body",
+    "div\nscript value=x\n  --\n  a();\n  --\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 6 },
+    },
+  ],
+  [
+    "two values",
+    "<div/>\n<script value=x value=y/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 16,
+      end: { line: 2, column: 23 },
+    },
+  ],
+  [
+    "three values, the second one is reported",
+    "<div/>\n<script value=1 value=2 value=3/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 16,
+      end: { line: 2, column: 23 },
+    },
+  ],
+  [
+    "the default value and a named one",
+    "<div/>\n<script=x value=y/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 10,
+      end: { line: 2, column: 17 },
+    },
+  ],
+  [
+    "a method value and a named one",
+    "<div/>\n<script() { a() } value=x/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 18,
+      end: { line: 2, column: 25 },
+    },
+  ],
+  [
+    "two values on a concise script",
+    "div\nscript value=x value=y\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 15,
+      end: { line: 2, column: 22 },
+    },
+  ],
+  // Which one stock reports when a tag has several: arguments, then params,
+  // then the variable, then the attributes and values as written, then a body.
+  [
+    "arguments before params",
+    page("<script(z)|y|>"),
+    {
+      code: CODE,
+      message: ARGUMENTS,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "params before the variable",
+    page("<script/x|y|>"),
+    {
+      code: CODE,
+      message: PARAMETERS,
+      line: 2,
+      column: 10,
+      end: { line: 2, column: 11 },
+    },
+  ],
+  [
+    "the variable before a second value",
+    page("<script/x value=1 value=2>"),
+    {
+      code: CODE,
+      message: VARIABLE,
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "a second value before an attribute written after it",
+    "<div/>\n<script value=1 value=2 async/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 16,
+      end: { line: 2, column: 23 },
+    },
+  ],
+  [
+    "an attribute before a second value written after it",
+    "<div/>\n<script async value=1 value=2/>\n",
+    {
+      code: CODE,
+      message: attributeMessage("async"),
+      line: 2,
+      column: 8,
+      end: { line: 2, column: 13 },
+    },
+  ],
+  [
+    "an attribute before a body next to a value",
+    page("<script value=1 async>"),
+    {
+      code: CODE,
+      message: attributeMessage("async"),
+      line: 2,
+      column: 16,
+      end: { line: 2, column: 21 },
+    },
+  ],
+  // The earliest shorthand, not the one the parser rewrites first.
+  [
+    "the id of #a.b, written first",
+    page("<script#a.b>"),
+    {
+      code: CODE,
+      message: attributeMessage("#a"),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 9 },
+    },
+  ],
+  [
+    "the id of a concise script#a.b",
+    "div\nscript#a.b -- a();\n",
+    {
+      code: CODE,
+      message: attributeMessage("#a"),
+      line: 2,
+      column: 6,
+      end: { line: 2, column: 8 },
+    },
+  ],
+  [
+    "the class of .b#a, written first",
+    page("<script.b#a>"),
+    {
+      code: CODE,
+      message: attributeMessage(".b"),
+      line: 2,
+      column: 7,
+      end: { line: 2, column: 9 },
+    },
+  ],
+];
+
+describe("a built-in <script> with a head form stock refuses", () => {
+  it.each(HEAD_FORMS)("%s", (_label, source, expected) => {
+    const { ir, diagnostics } = lower(source);
+    expect(ir).toBeUndefined();
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: expected.code,
+      message: expected.message,
+      line: expected.line,
+      column: expected.column,
+      end: expected.end,
+    });
+  });
+
+  it("reports a head form and a placeholder of one <script> together", () => {
+    const { diagnostics } = lower(page("<script/x>", "a(${x});"));
+    expect(diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      [CODE, 2, 8],
+      [CODE, 3, 4],
+    ]);
+  });
+
+  it("reports a placeholder, not a value next to a body, when the body has one", () => {
+    const { diagnostics } = lower(page("<script value=x>", "a(${x});"));
+    expect(diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      [CODE, 3, 4],
+    ]);
+  });
+
+  it("records every refused <script> and keeps lowering", () => {
+    const { diagnostics } = lower(
+      "<div/>\n<script/x></script>\n<script|y|></script>\n<script value=1 value=2/>\n<script>\nok();\n</script>\n",
+    );
+    expect(diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      [CODE, 2, 8],
+      [CODE, 3, 8],
+      [DUPLICATE, 4, 16],
+    ]);
+  });
+
+  it("refuses the head forms of a script inside a <for> and an <if>", () => {
+    for (const source of [
+      "<for|x| of=[1]>\n  <script/y></script>\n</for>\n",
+      "<if=true>\n  <script value=1>\n    a();\n  </script>\n</if>\n",
+    ]) {
+      expect(lower(source).diagnostics).toHaveLength(1);
+    }
+  });
+
+  it("names the tag as the dialect spells it", () => {
+    const dialect = {
+      ...memberSyntax,
+      name: "member",
+      messageVocabulary: {
+        attribute: { one: "option", many: "options" },
+        file: "Kit file",
+        tree: "Kit file",
+        formatTag: ({ name }: { name: string }) => name,
+      },
+    } as Dialect;
+    const [variable] = lowerSource("div\nscript/x -- a();\n", "/f/t.mx", {
+      tagRules: "html",
+      structural: "pass",
+      dialect,
+    }).diagnostics;
+    expect(variable?.message).toBe(
+      "`script` does not support a tag variable reference. For a native html `<script>` element use `html-script`",
+    );
+    const [body] = lowerSource("div\nscript value=x -- a();\n", "/f/t.mx", {
+      tagRules: "html",
+      structural: "pass",
+      dialect,
+    }).diagnostics;
+    expect(body?.message).toBe(
+      "Invalid duplicate value option. A `script` body is its value: write the body or `value=…`, not both",
+    );
+  });
+});
+
+describe("a built-in <script> with a value or a body, not both, is not refused", () => {
+  it.each([
+    ["a body", page("<script>")],
+    ["a value", "<div/>\n<script value=x/>\n"],
+    ["a value and an empty body", "<div/>\n<script value=x></script>\n"],
+    ["a value and a blank body", "<div/>\n<script value=x>\n  \n</script>\n"],
+    ["a method and no body", "<div/>\n<script() { a() }/>\n"],
+    ["empty arguments", page("<script()>")],
+    ["empty params", page("<script||>")],
+    ["a concise value", "div\nscript value=x\n"],
+  ])("%s", (_label, source) => {
+    expect(lower(source).diagnostics).toEqual([]);
   });
 });

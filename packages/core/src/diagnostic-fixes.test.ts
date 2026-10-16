@@ -50,14 +50,16 @@ const FORMS: Array<[string, string, string[], string[]]> = [
     "bodied with a method",
     "<effect() { go() }>x</effect>",
     ["effect", "effect"],
-    [],
+    // `<script() { go() }>x</script>`: the method is the value, and the body
+    // is a second one.
+    ["MX_DUPLICATE_VALUE_ATTRIBUTE"],
   ],
   [
     "bodied with a variable",
     "<effect/x>y</effect>",
     ["effect", "effect"],
-    // `<script/x>`: a tag variable is not allowed in a data file.
-    ["MX_NOT_IN_DATA_FILE"],
+    // `<script/x>`: `script` takes no tag variable.
+    ["MX_INERT_TAG_SHAPE"],
   ],
   ["a `</>` close", "<effect>go()</>", ["effect"], []],
   ["self-closing", "<effect/>", ["effect"], []],

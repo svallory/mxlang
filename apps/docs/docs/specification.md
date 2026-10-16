@@ -766,7 +766,18 @@ target but Angular, whose templates cannot hold a `<script>` element and refuse 
 placeholder it says to use the value directly (`x`, not `${x}`), to write it through a
 template literal inside a string, or to use `<html-script>`. A `${…}` inside a template
 literal in the body (`` `${x}` ``) is the script's own and is not a placeholder. The
-first attribute and the first placeholder of a tag are reported. Only the built-in
+first attribute and the first placeholder of a tag are reported.
+
+A built-in `<script>` also takes no arguments (`<script(x)>`), no params (`<script|x|>`)
+and no tag variable (`<script/x>`), and its value is written once: a second value
+(`<script value=a value=b>`), or a value next to a body (`<script value=a>code</script>`,
+where the body is the value), is `MX_DUPLICATE_VALUE_ATTRIBUTE`, as for `<let>` and
+`<return>`. The arguments, params and variable are `MX_INERT_TAG_SHAPE`, reported at the
+first argument, the first param or the variable, a second value at that value, and a value
+next to a body at the tag. One of these is reported per tag, in the order Marko checks
+them: arguments, params, variable, then the attributes and values in the order they were
+written, then a body next to a value. Empty `()` and `||` write nothing and are accepted.
+Only the built-in
 `<script>` is checked: not `<html-script>`, not a `<script>` a caller registered as a
 custom tag, and not a `<script>` under the `none` tag-rules preset, where it is an
 ordinary tag.
@@ -4223,7 +4234,7 @@ host, a target or a dialect.
 | `MX_REPEATED_ATTRIBUTE_TAG` | error | a single attribute tag given twice, or inside `<for>` |
 | `MX_INVALID_CALLEE_INPUT` | error | a callee's `Input` that cannot be read |
 | `MX_UNSUPPORTED_CONSTRUCT` | error | a construct the target or the product cannot express |
-| `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing; an attribute (other than its value) or a `${…}` placeholder on a built-in `<script>` |
+| `MX_INERT_TAG_SHAPE` | error | a spread, attribute or body on a tag that emits nothing; an attribute (other than its value), arguments, params, a tag variable or a `${…}` placeholder on a built-in `<script>` |
 | `MX_RESERVED_EFFECT_TAG` | error | `<effect>` on a target, which is not a tag; `<script>` runs a body after render |
 | `MX_UNSUPPORTED_MARKO_FILE` | error | a `.marko` file used as a tag or an import |
 | `MX_INVALID_SHORTHAND` | error | a bad `#id`/`.class` shorthand |
