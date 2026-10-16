@@ -5,6 +5,7 @@ import * as core from "@mxlang/core";
 import {
   type CustomTag,
   type DialectEmit,
+  flattenErrors,
   isTranslateError,
   otherErrorsText,
   type TargetPolicyDiagnostic,
@@ -743,6 +744,28 @@ function markoPosition(
   );
   if (!match) return undefined;
   return { line: Number(match[1]), column: Math.max(0, Number(match[2]) - 1) };
+}
+
+/**
+ * The text a build appends to the first parse error so the file's other parse
+ * errors are not lost, in the shape of core's `otherErrorsText`: a count, then
+ * one line per error with its 1-based `file:line:column`. Empty when there are
+ * none. An error with no position in its message is listed without one.
+ */
+function parseErrorsText(errors: readonly unknown[], source: string): string {
+  if (errors.length === 0) return "";
+  const lines = errors.map((each) => {
+    if (!isMarkoCompileError(each))
+      return `  ${String((each as Error)?.message ?? each)}`;
+    const position = markoPosition(each);
+    const file = typeof each.loc?.file === "string" ? each.loc.file : source;
+    const reason =
+      typeof each.label === "string"
+        ? stripVTControlCharacters(each.label)
+        : each.message;
+    return `  ${position ? `${file}:${position.line}:${position.column + 1}: ` : ""}${reason}`;
+  });
+  return `\n\n${errors.length} more error${errors.length === 1 ? "" : "s"} in this file:\n${lines.join("\n")}`;
 }
 
 /**
@@ -1572,10 +1595,19 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         });
         recordDependencies(source, [...dependencies]);
         return { code: printed, map };
-      } catch (err) {
+      } catch (thrown) {
         // Policy errors already carry package.json coordinates (this.error
         // may wrap them). Other scan/compile errors need the locator below.
-        if (policyErrorRaised || refused) throw err;
+        if (policyErrorRaised || refused) throw thrown;
+        // A page with several parse errors throws one `CompileErrors`
+        // aggregate with no position of its own. A build throws one error, so
+        // the first is located and the others ride in its message. A
+        // `TranslateError` carries its others itself (below).
+        const parsed = isTranslateError(thrown)
+          ? [thrown]
+          : flattenErrors(thrown);
+        const err: unknown = parsed[0] ?? thrown;
+        const furtherParseErrors = parsed.slice(1);
         // A `TranslateError` raised while compiling a tag template
         // (`tags/x.mx`) carries `.file`, the template's own path (spec §2's
         // third position rule), never a `.loc` — so `isSyntaxError` is
@@ -1629,9 +1661,14 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // used to print `page.mx.tsx:undefined:undefined`.
         if (isMarkoCompileError(err)) {
           const position = markoPosition(err);
-          if (!position) throw err;
+          if (!position) throw thrown;
           const errorFile =
             typeof err.loc?.file === "string" ? err.loc.file : source;
+          const reason =
+            typeof err.label === "string"
+              ? stripVTControlCharacters(err.label)
+              : undefined;
+          const further = parseErrorsText(furtherParseErrors, source);
           throw locate(err, {
             file: errorFile,
             ...position,
@@ -1642,13 +1679,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             // rest. Both carry kleur's SGR runs under FORCE_COLOR, and the
             // build log prints `message` verbatim, so the label is stripped.
             message:
-              typeof err.label === "string"
-                ? stripVTControlCharacters(err.label)
-                : undefined,
+              further === "" ? reason : `${reason ?? err.message}${further}`,
           });
         }
 
-        if (!isSyntaxError(err) || !err.loc) throw err;
+        if (!isSyntaxError(err) || !err.loc) throw thrown;
 
         // Babel appends its own 1-based `(line:column)` to the message while
         // `loc.column` is 0-based. Leaving both in place shows the reader two

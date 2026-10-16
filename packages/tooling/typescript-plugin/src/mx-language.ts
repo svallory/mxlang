@@ -4,11 +4,11 @@ import {
   type CustomTag,
   dropOwnParserPosition,
   type Expr,
+  flattenErrors,
   type GeneratedMapping,
   type HostDeclarations,
   type Ir,
   type IrNode,
-  isTranslateError,
   lower,
   type MxWarning,
   newCtx,
@@ -230,13 +230,11 @@ export function createMxLanguagePlugin(
             [],
           );
         }
-        // Decision 162: core reports every error of the file, the first one
-        // being the thrown error itself. Each becomes its own diagnostic; the
-        // syntax error the plugin exposes stays the first local one.
-        const causes =
-          isTranslateError(cause) && cause.errors?.length
-            ? cause.errors
-            : [cause];
+        // Core reports every error of the file: the thrown error carries them
+        // (`TranslateError.errors`), or it is an aggregate of the parse errors
+        // (`CompileErrors`). Each becomes its own diagnostic; the syntax error
+        // the plugin exposes stays the first local one.
+        const causes = flattenErrors(cause);
         const diagnostics: MxCompileDiagnostic[] = [];
         const templateDiagnostics = new Map<string, MxCompileDiagnostic[]>();
         let firstSyntaxError: MxSyntaxError | undefined;

@@ -110,6 +110,32 @@ describe("a failing vite build names the authored file, not the virtual id", () 
       expect(plain(error.message)).not.toContain("at ../");
     },
   );
+  it.each(["html", "preact"])(
+    "for a page with two parse errors on the %s host: the header names the first, the message lists the other",
+    async (host) => {
+      const error = await buildError(
+        `aggregate-${host}`,
+        "<div x=(1+)/>\n<span x=(2+)/>\n",
+        host,
+      );
+      expect(header(error.message)).toBe(
+        `[plugin mx] ${authored(`aggregate-${host}`)}:1:11`,
+      );
+      const text = plain(error.message);
+      expect(text).toContain("Unexpected token");
+      expect(text).toContain("1 more error in this file:");
+      expect(text).toContain(`${authored(`aggregate-${host}`)}:2:12`);
+      expect(text).not.toContain("CompileErrors");
+    },
+  );
+  it("keeps the single parse error as it was", async () => {
+    const error = await buildError("single-parse", "<div x=(1+)/>\n");
+    expect(header(error.message)).toBe(
+      `[plugin mx] ${authored("single-parse")}:1:11`,
+    );
+    expect(plain(error.message)).not.toContain("more error");
+  });
+
   it("for a Marko CompileError in a JSX-host .mx", async () => {
     const error = await buildError("compile", "<div>hello\n");
     // Exact: the header is the authored absolute path and printed coordinates

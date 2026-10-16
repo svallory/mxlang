@@ -56,3 +56,43 @@ it(
   },
   SPAWN_TIMEOUT_MS,
 );
+
+it(
+  "prints each error of a file with two parse errors, with its own code and position",
+  () => {
+    const dir = mkdtempSync(join(here, ".tmp-error-recovery-aggregate-"));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        '{"name":"x","mx":{"host":"html"}}',
+      );
+      writeFileSync(
+        join(dir, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+            target: "ESNext",
+            module: "ESNext",
+            moduleResolution: "bundler",
+            allowArbitraryExtensions: true,
+          },
+          include: ["page.mx"],
+        }),
+      );
+      writeFileSync(join(dir, "page.mx"), "<div x=(1+)/>\n<span x=(2+)/>\n");
+      const result = run(mxTsc, ["--noEmit", "--pretty", "false", "-p", dir]);
+      expect(result.status).not.toBe(0);
+      expect(result.output).toContain(
+        "page.mx(1,11): error MX_PARSE_EXPRESSION",
+      );
+      expect(result.output).toContain(
+        "page.mx(2,12): error MX_PARSE_EXPRESSION",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  SPAWN_TIMEOUT_MS,
+);

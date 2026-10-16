@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ts from "typescript";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";
 
 // Three independent errors: a scriptlet, an `<if>` without a condition, CDATA.
@@ -45,4 +45,56 @@ it("reports every error of a file as its own diagnostic (decision 162)", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Two parse errors reach the plugin as one `CompileErrors` aggregate, which has
+// no position or code of its own: each of its errors is a diagnostic.
+function compileDiagnosticsOf(source: string) {
+  const dir = mkdtempSync(join(tmpdir(), "mx-plugin-aggregate-"));
+  try {
+    writeFileSync(
+      join(dir, "package.json"),
+      '{"name":"x","mx":{"host":"html"}}',
+    );
+    const file = join(dir, "page.mx");
+    const plugin = createMxLanguagePlugin(ts);
+    plugin.createVirtualCode?.(
+      file,
+      MX_LANGUAGE_ID,
+      ts.ScriptSnapshot.fromString(source),
+      { getAssociatedScript: () => undefined },
+    );
+    return {
+      diagnostics: plugin.getCompileDiagnostics(file),
+      syntaxError: plugin.getSyntaxError(file),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("a file with several parse errors (a CompileErrors aggregate)", () => {
+  it("reports each error at its own range with its own code", () => {
+    const source = "<div x=(1+)/>\n<span x=(2+)/>\n";
+    const { diagnostics, syntaxError } = compileDiagnosticsOf(source);
+    expect(
+      diagnostics.map((d) => [d.offset, d.length, d.diagnosticCode]),
+    ).toEqual([
+      [10, 1, "MX_PARSE_EXPRESSION"],
+      [source.indexOf("2+") + 2, 1, "MX_PARSE_EXPRESSION"],
+    ]);
+    expect(diagnostics.every((d) => d.category === "error")).toBe(true);
+    // Each message is its own error's reason, not the whole aggregate's text.
+    for (const diagnostic of diagnostics) {
+      expect(diagnostic.message.match(/Unexpected token/g)).toHaveLength(1);
+    }
+    expect(syntaxError?.message.match(/Unexpected token/g)).toHaveLength(1);
+  });
+
+  it("keeps the single-error case as it was", () => {
+    const { diagnostics } = compileDiagnosticsOf("<div x=(1+)/>\n");
+    expect(
+      diagnostics.map((d) => [d.offset, d.length, d.diagnosticCode]),
+    ).toEqual([[10, 1, "MX_PARSE_EXPRESSION"]]);
+  });
 });

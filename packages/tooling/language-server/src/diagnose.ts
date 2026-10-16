@@ -13,6 +13,7 @@ import * as core from "@mxlang/core";
 import {
   type CustomTag,
   dropOwnParserPosition,
+  flattenErrors,
   type IrDiagnosticFix,
   isTranslateError,
   type MxWarning,
@@ -638,10 +639,10 @@ export function diagnoseDocument(
       for (const dependency of error.dependencies ?? [])
         dependencies?.add(dependency);
     }
-    // Decision 162: core reports every error of the file; the thrown error is
-    // the first of them. Each one is its own diagnostic.
-    const all =
-      isTranslateError(error) && error.errors?.length ? error.errors : [error];
+    // Core reports every error of the file: the thrown error carries them
+    // (`TranslateError.errors`), or it is an aggregate of the parse errors
+    // (`CompileErrors`). Each one is its own diagnostic.
+    const all = flattenErrors(error);
     const found: Diagnostic[] = [];
     for (const each of all) {
       const diagnostics = errorDiagnostics(each);
