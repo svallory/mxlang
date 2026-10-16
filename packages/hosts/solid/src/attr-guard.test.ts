@@ -1,6 +1,7 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import {
@@ -17,6 +18,8 @@ import {
   TEXTAREA_OMIT_HELPER,
 } from "./attr-guard.ts";
 import { compileSolidMx, compileSolidUnit } from "./index.ts";
+
+const execFileAsync = promisify(execFile);
 
 const packageRoot = new URL("..", import.meta.url).pathname;
 
@@ -291,21 +294,27 @@ function compileCase(
 
 // A render that throws leaves Solid's global scheduler half-flushed, so every
 // DOM case gets its own process; SSR cases share one.
-function runAll(generate: "ssr" | "dom"): Record<string, Outcome> {
+async function runAll(
+  generate: "ssr" | "dom",
+): Promise<Record<string, Outcome>> {
   if (generate === "dom") {
-    return Object.fromEntries(
-      Object.keys(CASES).flatMap((name) =>
-        Object.entries(runNames(generate, [name])),
-      ),
-    );
+    const out: Record<string, Outcome> = {};
+    for (const name of Object.keys(CASES)) {
+      Object.assign(out, await runNames(generate, [name]));
+    }
+    return out;
   }
   return runNames(generate, Object.keys(CASES));
 }
 
-function runNames(
+// The runner processes are awaited, never `execFileSync`: the hook runs 67-162 s
+// in a full gate, and a synchronous wait held the worker's event loop for all of
+// it, so vitest's `onTaskUpdate` RPC reply (birpc's fixed 60 s limit) could not
+// be read and the run failed with `Timeout calling "onTaskUpdate"` (#390).
+async function runNames(
   generate: "ssr" | "dom",
   names: string[],
-): Record<string, Outcome> {
+): Promise<Record<string, Outcome>> {
   const dir = mkdtempSync(join(packageRoot, ".attr-guard-tmp-"));
   try {
     names.forEach((name, index) => {
@@ -350,7 +359,7 @@ function runNames(
             "process.stdout.write(JSON.stringify(out));",
           ];
     writeFileSync(join(dir, "run.mjs"), runner.join("\n"));
-    const stdout = execFileSync(
+    const { stdout } = await execFileAsync(
       "bun",
       [
         "run",
@@ -365,9 +374,13 @@ function runNames(
   }
 }
 
-beforeAll(() => {
-  outcomes.ssr = runAll("ssr");
-  outcomes.dom = runAll("dom");
+// Measured in 27 full-gate runs since 2026-10-15 (82 tests): attr-guard.test.ts
+// takes 67-162 s, nearly all of it this hook. At 37-74 tests the 60 s default
+// failed 5 of 143 gate runs that include this file. 240 s is 1.5x the worst
+// measured file time; a hang still fails.
+beforeAll(async () => {
+  outcomes.ssr = await runAll("ssr");
+  outcomes.dom = await runAll("dom");
 }, 240_000);
 
 /** The markup outside attribute values: the DOM serializer leaves `<` raw inside a quoted attribute, so only an element would show here. */
