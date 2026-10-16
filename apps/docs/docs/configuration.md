@@ -38,7 +38,7 @@ project first: the nearest directory, from the file being compiled upward,
 that holds a `package.json`. It then checks these places in that directory
 only, in this order, and the first one that holds a config wins:
 
-1. `package.json`, under the `mx` key
+1. `package.json`, under the `mx` key (there is no `mxlang` key and no legacy location)
 2. `.mxrc` (YAML or JSON)
 3. `.mxrc.json`, `.mxrc.yaml`, `.mxrc.yml`, `.mxrc.js`, `.mxrc.ts`, `.mxrc.cjs`, `.mxrc.mjs`
 4. the same names under `.config/`: `.config/mxrc`, `.config/mxrc.json`, …
@@ -73,7 +73,7 @@ directory, or for a file under `.config/`, the directory that holds `.config/`.
 
 | Key | What it sets |
 | --- | --- |
-| `target` | The target the project compiles to (`html`, `solid-jsx`, `react-jsx`, …, or a target package). See [Host and target selection](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection). |
+| `target` | The target the project compiles to (`html`, `solid-jsx`, `react-jsx`, …, or a target package; the four `*-jsx` names fold into one `jsx` target with the frameworks as its hosts, see the specification's §13.5). See [Host and target selection](/specification/#the-mx-language-13-host-semantics-table-135-host-and-target-selection). |
 | `host` | A host, which selects its default target. `host` and `target` are read the same way in every format; if both are set they must agree. |
 | `strict` | The strict policy for the selected target. |
 | `tags` | Extra tag directories. See [Discovery](/custom-tags/discovery/). |

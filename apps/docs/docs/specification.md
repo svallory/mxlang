@@ -128,7 +128,7 @@ Consequences that settle most "is this legal" questions without a new ruling:
 
 ## 1. File kinds
 
-MX compiles four file kinds. They are **different kinds, not variants**: the
+MX compiles five file kinds. They are **different kinds, not variants**: the
 extension selects a compilation model, not a flavour of one language.
 
 | Extension | What it is | Compiles to | Status |
@@ -166,7 +166,7 @@ that makes region files behave differently everywhere it matters:
 **`.mx` is the only template extension.** No product path accepts or advertises
 `.marko`. Every loader — the Bun
 loaders, `@mxlang/vite-plugin`, the language server, the TypeScript plugin,
-`mx-tsc`, the editor extensions — accepts `.mx`, the region kinds (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`) and `.astro.mx` only,
+`mx-tsc`, the editor extensions — accepts `.mx`, the region kinds (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`), `.ng.mx` and `.astro.mx` only,
 and `mx()`/`mxAstro()` **reject** `.marko` in their `extensions` option.
 
 Porting a Marko component that uses no construct MX departs from is therefore
@@ -488,7 +488,7 @@ declares the names it declares at its own top level (`client { let q = 1 }`
 leaves `var q;`, with no initializer; an `import` declares its local names, and
 `client export const y = 1` declares `y`), exactly as Marko's server render does, so
 `${typeof q}` renders `undefined` rather than failing; on every other host it is
-an error (§14).
+an error (see "Statement tags on every target", §2).
 
 **Decisions:** 65, 67a, 68, 70, 71, 72, 95(3), 97(d), 97(j).
 
@@ -940,7 +940,7 @@ DOM properties, Solid's client `style`), the difference is a row in
 every host except Angular, as Marko's debug build does, and
 `<textarea value=x/>` renders the value as the element's content.
 
-On html, Preact, React, Hono and Astro, an ordinary native attribute
+On html, Preact, React, Hono, Solid and Astro, an ordinary native attribute
 whose object value cannot be coerced to a useful string fails **at render
 time**, matching Marko 6.4.4's debug-runtime assertion. This always-on guard
 is stricter than optimized Marko output, which renders plain objects as
@@ -1112,8 +1112,8 @@ always writes `div` there, because it has one host. MX resolves the name by
 vocabulary, so where `div` means nothing (a dialect read through `lowerSource`, §13.7)
 the shorthand is still meaningful.
 
-**The empty-name rule.** Marko's parser writes `div` into the AST but leaves the
-name's source span empty, which no authored name has. Core recognises that,
+**The empty-name rule.** The parser writes `div` into the AST for an unnamed
+tag but leaves the name's source span empty, which no authored name has. Core recognises that,
 asks the target once per unnamed tag, and from then on lowers an ordinary tag of
 the answered name. `<div#x>` is not an unnamed tag (the name is written), and a
 dynamic name (`<${tag}.a>`) is not either.
@@ -1201,7 +1201,7 @@ with the same reasons and code, at that call. The reasons:
 | ``mx.html.defaultTag is a number, expected a tag name string`` (also `an empty string`, `an array`, …) | the package value is not a non-empty string |
 | ``` `<my-list>`: `defaultTag` must be a tag name string, got … ``` | a contract's value is not a non-empty string (a registration error of the contract) |
 | ``` `<nope>` is not a tag reachable from this package ``` | no element of the target and no custom tag by that name |
-| ``` `<await>` is not an element of this target ``` | a name the lookup knows, but that is Marko core or translator vocabulary, not an element of this target (`await`, `try`, `define`; on data, every html name) |
+| ``` `<await>` is not an element of this target ``` | a name the lookup knows, but that is Marko core or translator vocabulary, not an element of this target (`await`, `try`, `define`) |
 | ``` `<input>` is a void tag, not a plain tag ``` | `openTagOnly`; also `a text tag` (`title`, `textarea`, `script`, `style`), `a statement tag` (`import`, `export`, `static`, `class`), `a control-flow tag` (`if`, `else`, `else-if`, `for`) and `a whitespace-preserving tag` (`pre`) |
 | ``` `defaultTag` in the contract of `<my-list>` is not allowed: host `…` does not permit per-tag default tags ``` | a contract declares one, but the target's declarations set `allowContractDefaultTag: false` |
 
@@ -1221,8 +1221,7 @@ What counts as an element is per target:
 - **JSX hosts (`solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx`) and
   `angular-template`:** the same set, plus a dashed custom-element name such as
   `sl-card`, because there an unknown dashed name compiles to a native element.
-- **data:** `object` and the package's custom tags. Every html name, `div`
-  included, is rejected.
+  The four JSX names select the hosts of the one `jsx` target (§13.5).
 
 A custom tag reachable from the package (a `tags/` file, a sidecar, an
 `mx.contracts` entry) is valid on every target as long as it parses as a plain
@@ -2086,15 +2085,11 @@ the lowercase-unresolved-element (existing) case — one hook, reported before
 either fallback, so a Marko-parity host gets Marko's exact wording either way
 and a host with none keeps the messages in the table above unchanged.
 
-Before this, `@mxlang/host-solid`'s `isComponent` was a bare `/^[A-Z]/` test with
-no resolvability check (`solid-attr-tag-resolvability` — filed from a code
-review, TODO `solid-unresolved-component-tag`): an unresolvable PascalCase tag
-silently lowered as an ordinary component call and printed a bare JSX
-reference to a binding nothing declares — a runtime `ReferenceError` on
-Solid's target, not a compile error. `@mxlang/host-solid`'s `isComponent` now
-returns `true` only when the name resolves, and the operator's ruling
-(2026-09-28) extends what "resolves" means for a `.solid.mx` region beyond
-what Marko itself has a concept for, since Marko has neither a host-native-
+`@mxlang/host-solid`'s `isComponent` returns `true` only when the name
+resolves, never by casing alone, so an unresolvable PascalCase tag is a
+compile error rather than a bare JSX reference to a binding nothing declares.
+For a `.solid.mx` region, "resolves" reaches beyond what Marko itself has a
+concept for, since Marko has neither a host-native-
 JSX-passthrough construct nor a "spliced into someone else's module"
 construct:
 
@@ -2122,32 +2117,25 @@ Everything else reaches Marko's own error. Solid has no taglib-backed
 `.solid.mx` region is a fragment compile, not a whole-Marko-file parse), so
 that route never applies here.
 
-**Extended to Preact, React, Hono and Astro (`unresolved-tag-jsx-astro-angular`,
-firstmate scope: preact/react/hono/astro, Angular out).** Before this, the
-shared JSX emitter's (`@mxlang/host-preact`, reused by `@mxlang/host-react`/
-`@mxlang/host-hono`) `isComponent` fell back to a bare `isComponentName`
-(`/^[A-Z]/`) test whenever the taglib lookup found nothing, and `@mxlang/host-astro`'s
-`isComponent` was that bare test outright — so `<TotallyUndefined/>` (no
-import, binding, or taglib entry) silently emitted a JSX component reference
-to nothing on all four hosts, a runtime error rather than Marko's compile
-error. Both now resolve a capitalized tag only when it genuinely resolves,
-each supplying `rejectUnknownTag` (Marko's own wording) for the fallthrough:
+**Preact, React, Hono and Astro.** The shared JSX emitter's `isComponent`
+(`@mxlang/host-preact`, reused by `@mxlang/host-react`/`@mxlang/host-hono`)
+and `@mxlang/host-astro`'s resolve a capitalized tag only when it genuinely
+resolves, never by casing alone, so `<TotallyUndefined/>` (no import, binding,
+or taglib entry) is a compile error on all four hosts. Each supplies
+`rejectUnknownTag` (Marko's own wording) for the fallthrough:
 
 - **Preact/React/Hono** (whole-file `.mx`, real MX-level `import`/`<define>`/
   `<const>` statements): `ctx.imports`/`ctx.defines` — already populated by
   `lower.ts`'s own `lowerStatement`/`fileLocalBinding` for an MX-level
-  binding — or a taglib entry. No new binding source; the fallback simply
-  changed from `isComponentName(name)` to `false`.
+  binding — or a taglib entry. There is no other binding source; the
+  fallback is `false`, never a casing test.
 - **Astro** (`.astro.mx`): a `.astro.mx` template body has no MX-level
   `import`/`<define>`/`<const>` of its own — Astro's local-component form
-  *is* a `---` fence import — so `lowerAstroMx` now parses the fence's own
+  *is* a `---` fence import — so `lowerAstroMx` parses the fence's own
   top-level value bindings (`@mxlang/tsx-bridge`'s `sourceBindings`, the same
   reader `.solid.mx`'s `moduleBindings` extension above uses) and feeds them
-  into `ctx.imports` before lowering, the operator-ruling extension pattern
-  decision 114 already established for `.solid.mx`'s larger scope. A `.astro.mx`
-  file previously had no way to resolve a component at all through core's
-  precedence order (no taglib, no MX-level binding), so every capitalized tag
-  used to resolve purely by casing; a discovered/registered custom tag is
+  into `ctx.imports` before lowering, the same extension `.solid.mx`'s
+  larger scope uses. A discovered/registered custom tag is
   unaffected (checked earlier in `lower.ts`'s precedence order, before
   `isComponent` is ever asked).
 
@@ -2182,14 +2170,10 @@ worth recording:
   emitted module needs.
 
 **A type-only import never resolves a tag, in a whole-file `.mx` on any
-host either** (decision 114/115). `@mxlang/core`'s `importBindings` used to
-return every specifier of an `import` statement with no check of
-`importKind`, so `import type Widget from "./widget.mx"` bound `Widget` the
-same as a value import and `<Widget/>` silently lowered to a component call
-— a runtime `ReferenceError`, not Marko's compile error, on every host. Fixed
-at the shared root: `Ctx.imports` (what every host's `isComponent` and
-core's own file-local-binding check consult) now holds value bindings only;
-a new `Ctx.importedNames` (every binding, type or value) serves the two
+host either.** `Ctx.imports` (what every host's `isComponent` and core's own
+file-local-binding check consult) holds value bindings only, so
+`import type Widget from "./widget.mx"` binds no runtime value and `<Widget/>`
+is the unresolved-tag compile error on every host. `Ctx.importedNames` (every binding, type or value) serves the two
 readers that need the older, unfiltered meaning — `needsAttrTagImport`'s "is
 `AttrTag` already imported" check and the self-export collision check. The
 import statement is still emitted verbatim either way. Mirrors
@@ -2213,20 +2197,19 @@ row in §13.1's dynamic-tag entry.
 |---|---|
 | `dynamic tag name is not supported in a standalone template` | Superseded — this fired at the `lowerTag` stage for a tagged dynamic tag no host claimed; core no longer produces it there. A host's own emitter may still reject a dynamic-target `Component` in its own words (§13.1). |
 
-**Decision 116: a capitalized value import that isn't a `.marko`/`.mx`
-default import lowers as a dynamic tag, not a direct call.** Measured (TODO
+**A capitalized value import that isn't a `.mx` default import lowers as a
+dynamic tag, not a direct call.** Measured (TODO
 `value-import-as-tag-parity`): Marko 6.4.4 compiles *every* capitalized
 local-import tag to `_dynamic_tag`, regardless of source. At runtime, a
 string renders as an element and a real Marko-template value is invoked as a
 component; anything else — a plain function, a plain object, `undefined`,
-`null` — renders only the tag's own body content. MX previously routed
-*every* capitalized value import straight to a direct call (§7's step 5, a
-`Component` with `kind: "name"`), so a string, `undefined`, `null`, or a
-plain object threw `"X is not a function"` on every host instead.
+`null` — renders only the tag's own body content. MX does the same, so a
+string, `undefined`, `null`, or a plain object never throws
+`"X is not a function"`.
 
 The routing in step 5 is refined, and scoped to **import bindings only**:
-only a *default* import whose specifier ends in `.marko`/`.mx` — Marko's own
-statically-resolved component case (`tag-name-type.ts:174-196`) — still
+only a *default* import whose specifier ends in `.mx` — the counterpart of
+Marko's own statically-resolved component case (`tag-name-type.ts:174-196`) — still
 routes to a direct `kind: "name"` call. Every other capitalized value
 *import* (named, namespace, or a default from any other extension) now
 routes to `kind: "dynamic"` instead — the identical lowering an authored
@@ -2237,9 +2220,10 @@ specifically on `ctx.importSpecifiers` (populated only by an authored
 `.solid.mx` caller's surrounding module supplies), not on `ctx.imports` —
 the broader set step 5 already used, which also holds a module-scope
 `const`/`function`/`class`, a `<const>` binding, and a `<for>`/`<define>` tag
-param. **None of those route dynamic**: a locally declared component — the
-most common Solid authoring pattern — keeps its pre-existing direct call on
-every host, unchanged by this decision. The resolved target carries
+param. Those locals are classified by value instead (next paragraph): one
+whose value is statically a function, arrow, class or component keeps its
+direct call, and every other local routes dynamic. On every host a dynamic
+tag whose value is falsy renders only its body. The resolved target carries
 `valueImportBinding`, the binding's own name, so `readCalleeInput` can still
 resolve the callee's declared `Input` for typed attribute-tag checking even
 though the call now lowers dynamically, and a diagnostic on the call still
@@ -2302,39 +2286,36 @@ reference that failed only at Astro's own render time with an opaque
 case — a locally declared component) and a fence import are both entirely
 unaffected, and stay a direct call as before.
 
-**Fix: a host-recognized component object (React's `memo`/`forwardRef`/
+**A host-recognized component object (React's `memo`/`forwardRef`/
 `lazy`) reaching the dynamic path is treated as a component, not a plain
-data object.** Firstmate's follow-up: React's own `memo(Foo)`/`forwardRef(...)`
+data object.** React's own `memo(Foo)`/`forwardRef(...)`
 return plain *objects* (`{ $$typeof: Symbol(react.memo), ... }`), not
 functions — measured, and unlike `preact/compat`'s and `hono/jsx`'s own
 `memo`/`forwardRef` (both real functions) and Solid's `lazy` (also a real
-function). Before this fix, `mxDynamic` (the shared Preact/React/Hono JSX
-emitter's dynamic-tag helper) had no branch recognizing such an object: it
-fell through to the final `return props.content ? props.content() : target;`
-line and handed the bare object back as a JSX child, which React rejects
-("Objects are not valid as a React child"). Reachable both as a local
+function). Without a branch for such an object, `mxDynamic` (the shared
+Preact/React/Hono JSX emitter's dynamic-tag helper) would hand the bare object
+back as a JSX child, which React rejects ("Objects are not valid as a React
+child"). Reachable both as a local
 (`static const Comp = memo(Foo)`, already "unknown" under this decision's own
 classification — a `CallExpression` is never statically function-like) and,
 since decision 116's own import routing (#155), as a value import
 (`import Card from "./Card.tsx"` where `Card` is `export default memo(Foo)`).
 
-Fixed by widening `mxDynamic`'s "is this component-like" check with a new
+`mxDynamic`'s "is this component-like" check includes an
 `mxIsHostComponentObject(value)` helper — **allowlisted by the marker
 symbol's `description`** (`"react.memo"`/`"react.forward_ref"`/
 `"react.lazy"`), not merely "carries a `$$typeof` symbol": every React
 *element* (an ordinary already-rendered `<em/>`, not just a `memo`/
 `forwardRef` wrapper) also carries a `$$typeof` symbol
 (`Symbol(react.transitional.element)`/`Symbol(react.element)` depending on
-the React version) — a broader "any `$$typeof` symbol" check, tried first
-and caught by the executed suite before landing, misclassified an ordinary
-rendered element as a component and broke pre-existing dynamic-tag/
-attribute-tag tests (an already-rendered `<@head>H</@head>` body passed as
+the React version) — a broader "any `$$typeof` symbol" check would
+misclassify an ordinary rendered element as a component (an already-rendered `<@head>H</@head>` body passed as
 `<${head}/>` is exactly such an element). React's `memo`/`forwardRef`/`lazy`
 markers are plain `Symbol()`s, not `Symbol.for(...)`, so identity cannot be
 compared across a second React copy — the description string is the only
 stable cross-copy signal. Checked *before* decision 106's `.content`-guard,
 so a recognized object never reaches that guard (a plain data object never
-carries `$$typeof` at all). **This fix is React-specific in practice**: measured directly, neither
+carries `$$typeof` at all). **The check is React-specific in practice**: measured directly, neither
 Preact's own renderer (`preact-render-to-string`'s dispatcher, `typeof type
 == "function"` only) nor `hono/jsx`'s own `jsx()` runtime has any
 object-based component dispatch at all — a bare `<Comp/>` where `Comp` is
@@ -2554,10 +2535,10 @@ Conditional and looped attribute tags are part of MX.
 
 ### Declaration keys
 
-For a custom tag's declared attribute tags, the keys are MX's own names with **no
-Marko parity and no legacy aliases**: `literalOnly` (not
-`staticOnly`) and `repeatable` (not `repeated`). Unknown keys are rejected at
-registration (§13.1).
+For a custom tag's declared attributes and attribute tags, the keys are MX's own
+names with **no Marko parity and no legacy aliases**: `literalOnly` (not
+`staticOnly`) and `repeatable` (not `repeated`). An unknown key in an attribute
+or attribute-tag declaration is rejected at registration (§13.1).
 
 
 ---
@@ -3095,7 +3076,7 @@ their existing registration behavior.
 | Message | When |
 |---|---|
 | `` `<${name}>`: `${key}` is not allowed in `mx.contracts`; use a tag sidecar for hooks other than `analyze` and for templates `` | `transform`, `finalize` or `template`. |
-| `` Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template `` | A tag-level key no custom tag has: a misspelt `attributes`, say. One check serves a `customTags` entry, a sidecar (also in an `mx.tags` directory), an `mx.contracts` entry and a dialect's `contracts` entry. The allowed list is what the source accepts, plus the keys the file's syntax module claims (`contractFields`): `customTags` and sidecars accept `parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template`; an `mx.contracts` entry accepts the first seven (`transform`, `finalize` and `template` are named as not allowed there instead); a dialect's `contracts` entry accepts the first nine (`template` is named as not allowed there). The first unknown key, in the order the entry writes them, is the one reported. Positioned at the key in the sidecar or the `mx.contracts` module when it writes the entry as a literal, else the file's `1:0`; a `customTags` entry has no file, so the error has no position (a `lowerSource` diagnostic puts it at the source's `1:0`). A dialect's `contracts` entry carries `MX_INVALID_DIALECT_CONTRACT`, is positioned at `contracts.<name>` in the dialect's module (§13.9.3), and reads `` `contracts.card`: Unknown key "atributes" in the declaration of tag "card"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize ``. |
+| `` Unknown key "${key}" in the declaration of tag "${tagName}"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template `` | A tag-level key no custom tag has: a misspelt `attributes`, say. One check serves a `customTags` entry, a sidecar (also in an `mx.tags` directory), an `mx.contracts` entry and a dialect's `contracts` entry. The allowed list is what the source accepts, plus the keys the file's dialect claims (`contractFields`): `customTags` and sidecars accept `parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize, template`; an `mx.contracts` entry accepts the first seven (`transform`, `finalize` and `template` are named as not allowed there instead); a dialect's `contracts` entry accepts the first nine (`template` is named as not allowed there). The first unknown key, in the order the entry writes them, is the one reported. Positioned at the key in the sidecar or the `mx.contracts` module when it writes the entry as a literal, else the file's `1:0`; a `customTags` entry has no file, so the error has no position (a `lowerSource` diagnostic puts it at the source's `1:0`). A dialect's `contracts` entry carries `MX_INVALID_DIALECT_CONTRACT`, is positioned at `contracts.<name>` in the dialect's module (§13.9.3), and reads `` `contracts.card`: Unknown key "atributes" in the declaration of tag "card"; allowed: parseOptions, attributes, attributeTags, children, parents, defaultTag, analyze, transform, finalize ``. |
 | `` `<${name}>`.analyze must be a function `` | Non-function `analyze`. |
 
 | Message | When |
@@ -3643,7 +3624,7 @@ A diagnostic is the **author's** when the narrowing found its text spelled by
 the author, or when its generated range is inside, or directly next to,
 authored (mapped) code. An author's diagnostic carries the first marker: the
 error is theirs and the position is the enclosing construct. Every built-in file kind
-exposes its authored tags and attributes: whole-file `.mx` from the Marko parse
+exposes its authored tags and attributes: whole-file `.mx` from MX's parse
 of the file; a region file (`.solid.mx`, `.preact.mx`, `.react.mx`, `.hono.mx`
 and any other `.<host>.mx`) and `.ng.mx` from the parse of each MX region the
 compiler lowered, at the region's own file offset (a `.ng.mx` fragment's
@@ -3843,6 +3824,13 @@ Not merely in emitted syntax — in observable behavior:
 7. **Comments** are stripped on html/Solid/JSX and kept on `.astro.mx`/Angular.
 
 ### 13.5 Host and target selection
+
+> **One `jsx` target.** The Preact, React, Hono and Solid targets fold into
+> one `jsx` target, with `preact`, `react`, `hono` and `solid` as hosts built
+> on it (`builtOn: "jsx"`): the target owns the control-flow lowering, binding
+> reads and writes, and output flavour, and each host supplies handlers for
+> those hooks plus tag resolution and file kinds. The registry still lists
+> the four as `*-jsx` targets, and the names below select them.
 
 A **host** is a framework; a **target** is an output format (decisions 129/132).
 `@mxlang/core` reads the file's MX config ([Configuration](/configuration/):
@@ -4482,9 +4470,8 @@ own `strict` value, because that host has no other mode.
 ### 13.8 The html target: render entry and sink
 
 **Decision 155**, the Marko render model, for the html family (the html target,
-and Astro's `.mx` leaf components and pages, which use its emitter). The data
-target has no output and is unchanged; the JSX hosts return elements and keep
-their own `/var` mechanism.
+and Astro's `.mx` leaf components and pages, which use its emitter). The JSX
+hosts return elements and keep their own `/var` mechanism.
 
 A compiled unit has **two entries**:
 
