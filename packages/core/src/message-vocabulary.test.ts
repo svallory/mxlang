@@ -396,9 +396,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     mx: [
       "`<else>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
-    option: [
-      "`else` has no `if` or `else-if` before it: put it right after one",
-    ],
+    option: ["`else` must come right after `if` or `else-if`"],
   },
   {
     name: "`else-if` in a data file",
@@ -406,9 +404,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     mx: [
       "`<else-if>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
-    option: [
-      "`else-if` has no `if` or `else-if` before it: put it right after one",
-    ],
+    option: ["`else-if` must come right after `if` or `else-if`"],
   },
   {
     name: "`try` in a data file",
@@ -681,7 +677,7 @@ describe("a reserved structural name in a data file", () => {
 
   it("an orphan `else` names the tags it needs through the voice", () => {
     expect(messages("else\n  entity\n", colonDialect)).toEqual([
-      "`:else` has no `:if` or `:else-if` before it: put it right after one",
+      "`:else` must come right after `:if` or `:else-if`",
     ]);
   });
 
@@ -691,14 +687,12 @@ describe("a reserved structural name in a data file", () => {
         'if=x\n  entity name="e"\nelse\n  entity name="e"\nelse\n  entity name="e"\n',
         colonDialect,
       ),
-    ).toEqual([
-      "`:else` has no `:if` or `:else-if` before it: put it right after one",
-    ]);
+    ).toEqual(["`:else` must come right after `:if` or `:else-if`"]);
   });
 
   it("an orphan `else-if` names the tags it needs through the voice", () => {
     expect(messages("else-if=x\n  entity\n", colonDialect)).toEqual([
-      "`:else-if` has no `:if` or `:else-if` before it: put it right after one",
+      "`:else-if` must come right after `:if` or `:else-if`",
     ]);
   });
 
@@ -732,9 +726,36 @@ describe("a reserved structural name in a data file", () => {
         "else\n  entity\n",
         dialectWith({ attribute: { one: "option", many: "options" } }),
       ),
-    ).toEqual([
-      "`<else>` has no `<if>` or `<else-if>` before it: put it right after one",
+    ).toEqual(["`<else>` must come right after `<if>` or `<else-if>`"]);
+  });
+
+  it("a vocabulary that respells only the dialect's own tags is still a vocabulary", () => {
+    const own = dialectWith({
+      formatTag: ({ name }: { name: string }) =>
+        name === "entity" ? "ENTITY" : undefined,
+    });
+    expect(messages("else\n  entity\n", own)).toEqual([
+      "`<else>` must come right after `<if>` or `<else-if>`",
     ]);
+    expect(messages("try\n  entity\n", own)).toEqual([
+      "`<try>` cannot be used in a data file: Data files are static, so they have no render errors to catch; write its content directly",
+    ]);
+  });
+
+  it("a vocabulary that states none of the members a message reads keeps MX's words", () => {
+    for (const vocabulary of [{}, { tree: "Kit file" }]) {
+      const dialect = dialectWith(vocabulary);
+      for (const source of [
+        "else\n  entity\n",
+        "else-if=x\n  entity\n",
+        "try\n  entity\n",
+      ]) {
+        expect(messages(source, dialect)).toEqual(messages(source, undefined));
+        expect(messages(source, dialect)[0]).toContain(
+          "cannot name a data tag",
+        );
+      }
+    }
   });
 
   it("registration keeps MX's words for every dialect", () => {

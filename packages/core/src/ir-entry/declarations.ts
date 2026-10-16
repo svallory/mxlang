@@ -42,7 +42,6 @@ import {
   triggerOfNode,
   type Voice,
   VoiceHookError,
-  writesMxSyntax,
 } from "../message-vocabulary.ts";
 import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
@@ -62,21 +61,6 @@ export const DEFAULT_TAG = "object";
 const BUILTIN_TAGS: readonly string[] = [DEFAULT_TAG];
 
 /**
- * Does `voice` say nothing different from MX's own words for the names the
- * reserved-name messages use? A vocabulary that states nothing (`{}`) is MX's
- * voice, so a file under it reads MX's message byte for byte.
- */
-function speaksMx(voice: Voice, name: string): boolean {
-  return (
-    voice.attribute === MX_VOICE.attribute &&
-    voice.attributes === MX_VOICE.attributes &&
-    voice.file === MX_VOICE.file &&
-    voice.files === MX_VOICE.files &&
-    ["if", "else-if", name].every((tag) => writesMxSyntax(voice, tag))
-  );
-}
-
-/**
  * Why `name` (`else`, `else-if` or `try`) cannot be a line head in a data
  * file. In MX's voice the message is the one the registration checks use. In
  * a dialect's, its author wrote a line head, not a data tag: the message names
@@ -86,13 +70,13 @@ function speaksMx(voice: Voice, name: string): boolean {
  * hide them, so a list would teach heads the file may not have.
  */
 function reservedInFileMessage(name: string, voice: Voice): string {
-  if (speaksMx(voice, name)) {
+  if (voice === MX_VOICE) {
     return reservedNameMessage(name, (tag) => voice.tag(tag));
   }
   if (name === "try") {
     return `${voice.tag(name)} cannot be used in ${voice.aFile}: ${voice.Files} are static, so they have no render errors to catch; write its content directly`;
   }
-  return `${voice.tag(name)} has no ${voice.tag("if")} or ${voice.tag("else-if")} before it: put it right after one`;
+  return `${voice.tag(name)} must come right after ${voice.tag("if")} or ${voice.tag("else-if")}`;
 }
 
 const byNatives = new WeakMap<NativeTags, WeakMap<Voice, HostDeclarations>>();

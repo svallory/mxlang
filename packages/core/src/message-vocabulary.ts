@@ -233,7 +233,17 @@ const voices = new WeakMap<object, Voice>();
  */
 export function voiceOf(dialect: Dialect | undefined): Voice {
   const vocabulary = dialect?.messageVocabulary;
-  if (!dialect || !vocabulary) return MX_VOICE;
+  // A vocabulary that states none of the members a message reads (`{}`, or
+  // only the unused `tree`) speaks exactly as MX's voice does.
+  if (
+    !dialect ||
+    !vocabulary ||
+    (vocabulary.attribute === undefined &&
+      vocabulary.file === undefined &&
+      vocabulary.formatTag === undefined)
+  ) {
+    return MX_VOICE;
+  }
   let voice = voices.get(dialect);
   if (voice === undefined) {
     voice = buildVoice(vocabulary);

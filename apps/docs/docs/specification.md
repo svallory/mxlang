@@ -4151,11 +4151,13 @@ class with no source span.
 `const`, `define`, `return`, `import`, `export`, `static` or **`try`**: core
 consumes these first. `else`, `else-if` and `try` outside their construct fail
 with ``` `<try>` cannot name a data tag: it is reserved — core consumes the structural names (…) and `<try>` before a target sees them ```.
-In a file of a dialect that states a `messageVocabulary`, the message is worded
-for the file's author instead: it names the tag through `formatTag`, uses none of
-those nouns and says what to do (``` `else` has no `if` or `else-if` before it: put it right after one ```;
-for `try`, that a data file is static and the content is written directly). The
-registration checks keep the wording above.
+In a file of a dialect whose `messageVocabulary` states an `attribute`, a `file`
+or a `formatTag`, the message is worded for the file's author instead: it names
+the tag through `formatTag`, uses none of those nouns and says what to do
+(``` `else` must come right after `if` or `else-if` ```; for `try`, that a data
+file is static and the content is written directly). A vocabulary that states
+none of those members, and a file with no dialect, keep the wording above, and
+so do the registration checks.
 
 **A definition that names a reserved tag is an error, never a throw.** The
 list is exported as `RESERVED_NAMES`; `class`, `client` and `server` are not on
