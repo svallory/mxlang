@@ -529,6 +529,27 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     expect(wrapper(code)).toContain("void [f];");
   });
 
+  it("reads a listed name once at the end of the function, and an exported const enum as a type", () => {
+    const { code } = project(
+      "client export { a, b as c };\nclient const a = 1;\nclient let b = 2;\nclient export const enum CE { A }\n<div/>\n",
+    );
+    const inside = wrapper(code);
+    expect(inside).toContain("void (null as unknown as [CE]);");
+    expect(inside).not.toContain("void [CE]");
+    // Last, after the declarations the list names (an export list is hoisted).
+    expect(inside.indexOf("void [a, b];")).toBeGreaterThan(
+      inside.indexOf("let b = 2;"),
+    );
+    // A name no client statement declares (here a `static` one) is not read.
+    expect(
+      wrapper(
+        project(
+          "static const s = 1;\nclient export { s };\nclient const a = 1;\n<div/>\n",
+        ).code,
+      ),
+    ).not.toContain("void [s]");
+  });
+
   it("hoists an import and a type out of the function, and declares neither as a value", () => {
     const { code } = project(
       'client import { a } from "./a.ts";\nclient interface P { n: number }\nclient const b = a;\n<div/>\n',

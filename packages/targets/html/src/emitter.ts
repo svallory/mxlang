@@ -128,6 +128,8 @@ interface State {
   }>;
   /** Under `typeCheck`, every name a `client` statement declares as `undefined`. */
   clientNames: string[];
+  /** Under `typeCheck`, the local names of `client export { … }` value lists. */
+  clientListed: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
   clientStart: number | undefined;
   /** Under `typeCheck`, each `return` that no function encloses in `client` code. */
@@ -178,6 +180,7 @@ export function createEmitter(
     clientTypes: [],
     clientTypeExports: [],
     clientNames: [],
+    clientListed: [],
     clientStart: undefined,
     clientReturns: [],
     indent: 1,
@@ -1458,6 +1461,7 @@ export function createEmitter(
             state.clientTypeExports.push({ list, start: data.start });
           }
           state.clientNames.push(...projection.serverNames);
+          state.clientListed.push(...projection.listed);
           if (
             data.start !== undefined &&
             (state.clientStart === undefined || data.start > state.clientStart)
@@ -1481,6 +1485,11 @@ export function createEmitter(
               piece.code.endsWith(";")
                 ? clientPiece(piece)
                 : concatMapped(clientPiece(piece), ";"),
+            );
+          }
+          for (const name of projection.exportedTypes) {
+            state.clientBody.push(
+              concatMapped(`void (null as unknown as [${name}]);`),
             );
           }
           if (projection.exported.length > 0) {
@@ -1723,7 +1732,18 @@ function placeClientCode(state: State): void {
       start,
     });
   }
-  const body = [...inScope, ...state.clientBody];
+  // `client export { a }` reads `a` where it ends, whichever side of the
+  // declaration it stands on (an export list is hoisted).
+  const listedValues = [...new Set(state.clientListed)].filter((name) =>
+    state.clientNames.includes(name),
+  );
+  const body = [
+    ...inScope,
+    ...state.clientBody,
+    ...(listedValues.length > 0
+      ? [concatMapped(`void [${listedValues.join(", ")}];`)]
+      : []),
+  ];
   if (body.length === 0) return;
   state.moduleHoisted.push({
     code: concatMapped(

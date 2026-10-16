@@ -399,6 +399,10 @@ export interface ClientTypeExport {
  *   keeps (a type has no run-time side);
  * - `body` is everything else, with `export` removed, for the function the
  *   module calls where its last `client` statement stands;
+ * - `listed` are the names an `export { a }` list of the statement names; the
+ *   function reads those that some `client` statement declares, at its end;
+ * - `exportedTypes` are its exported `const enum`s, read once as a type (a
+ *   `const enum` has no value to read);
  * - `exported` are the names the statement exports, read once in that function
  *   so `noUnusedLocals` does not flag a name the author exports;
  * - `returns` are the `return` statements outside every function: a client
@@ -409,8 +413,12 @@ export interface ClientProjection {
   hoisted: ClientPiece[];
   types: ClientType[];
   typeExports: ClientTypeExport[];
+  /** Local names of `export { a, b }` lists of values. */
+  listed: string[];
   body: ClientPiece[];
   exported: string[];
+  /** Exported `const enum`s: they have no value to read, only a type. */
+  exportedTypes: string[];
   returns: SourceSpan[];
 }
 
@@ -436,54 +444,78 @@ function leftmostName(node: Node | null | undefined): string | undefined {
  */
 function referencedNames(declaration: Node): string[] {
   const reads = new Set<string>();
-  const bound = new Set<string>();
-  const walk = (node: unknown): void => {
+  const paramName = (parameter: Node | undefined): string | undefined =>
+    typeof parameter?.name === "string"
+      ? parameter.name
+      : parameter?.name?.name;
+  /** The `infer X` names under `node`. */
+  const inferred = (node: unknown, found: string[] = []): string[] => {
+    if (!node || typeof node !== "object") return found;
+    if (Array.isArray(node)) {
+      for (const child of node) inferred(child, found);
+      return found;
+    }
+    const current = node as Node;
+    if (current.type === "TSInferType") {
+      const name = paramName(current.typeParameter);
+      if (name) found.push(name);
+    }
+    for (const [key, value] of Object.entries(current)) {
+      if (key === "loc" || key === "extra" || key.endsWith("Comments"))
+        continue;
+      inferred(value, found);
+    }
+    return found;
+  };
+  // `scope` holds the type parameters the enclosing nodes bind: a name in it
+  // is that parameter where it is read, not the client value of the same name.
+  const walk = (node: unknown, scope: ReadonlySet<string>): void => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
-      for (const child of node) walk(child);
+      for (const child of node) walk(child, scope);
       return;
     }
     const current = node as Node;
+    let inner = scope;
+    const bind = (names: Array<string | undefined>) => {
+      const added = names.filter((name): name is string => !!name);
+      if (added.length > 0) inner = new Set([...inner, ...added]);
+    };
+    bind((current.typeParameters?.params ?? []).map(paramName));
+    if (current.type === "TSMappedType") {
+      bind([paramName(current.typeParameter ?? current.key)]);
+    }
+    if (current.type === "TSConditionalType") {
+      bind(inferred(current.extendsType));
+    }
+    const read = (name: string | undefined) => {
+      if (name && !inner.has(name)) reads.add(name);
+    };
     switch (current.type) {
-      case "TSTypeReference": {
-        const name = leftmostName(current.typeName);
-        if (name) reads.add(name);
+      case "TSTypeReference":
+        read(leftmostName(current.typeName));
         break;
-      }
-      case "TSTypeQuery": {
-        const name = leftmostName(current.exprName);
-        if (name) reads.add(name);
+      case "TSTypeQuery":
+        read(leftmostName(current.exprName));
         break;
-      }
       case "TSExpressionWithTypeArguments":
-      case "TSInterfaceHeritage": {
-        const name = leftmostName(current.expression);
-        if (name) reads.add(name);
+      case "TSInterfaceHeritage":
+        read(leftmostName(current.expression));
         break;
-      }
-      case "TSTypeParameter": {
-        const name =
-          typeof current.name === "string" ? current.name : current.name?.name;
-        if (name) bound.add(name);
-        break;
-      }
       case "TSPropertySignature":
       case "TSMethodSignature":
         // A name, unless computed: `[key]: T` reads `key`.
-        if (current.computed) {
-          const name = leftmostName(current.key);
-          if (name) reads.add(name);
-        }
+        if (current.computed) read(leftmostName(current.key));
         break;
     }
     for (const [key, value] of Object.entries(current)) {
       if (key === "loc" || key === "extra" || key.endsWith("Comments"))
         continue;
-      walk(value);
+      walk(value, inner);
     }
   };
-  walk(declaration);
-  return [...reads].filter((name) => !bound.has(name));
+  walk(declaration, new Set());
+  return [...reads];
 }
 
 const FUNCTION_NODES = new Set([
@@ -531,8 +563,10 @@ function clientProjection(
   const hoisted: ClientPiece[] = [];
   const types: ClientType[] = [];
   const typeExports: ClientTypeExport[] = [];
+  const listed: string[] = [];
   const body: ClientPiece[] = [];
   const exported: string[] = [];
+  const exportedTypes: string[] = [];
   const hoistedNodes: Node[] = [];
   const text = (node: Node) => ({
     code: code.slice(node.start, node.end),
@@ -614,11 +648,19 @@ function clientProjection(
               piece: piece(specifier.start, specifier.end),
             })),
           });
+        } else {
+          for (const specifier of statement.specifiers ?? []) {
+            const name = specifier.local?.name;
+            if (typeof name === "string") listed.push(name);
+          }
         }
         return;
       }
       inner = statement.declaration;
       exported.push(...clientDeclaredNames([inner]));
+      if (inner.type === "TSEnumDeclaration" && inner.const && !inner.declare) {
+        exportedTypes.push(inner.id.name);
+      }
     } else if (statement.type === "ExportAllDeclaration") {
       hoisted.push(...reexportImports(statement, serial));
       return;
@@ -660,8 +702,10 @@ function clientProjection(
     hoisted,
     types,
     typeExports,
+    listed,
     body,
     exported: exported.filter((name) => !taken.has(name)),
+    exportedTypes,
     returns: topLevelReturns(statements).map((start) => ({
       sourceStart: (base ?? 0) + start,
       sourceEnd: (base ?? 0) + start + "return".length,

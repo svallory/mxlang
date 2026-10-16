@@ -385,4 +385,33 @@ describe("mx-tsc: an exported client name is not an unused local", {
       project.dispose();
     }
   });
+
+  it("noUnusedLocals stays quiet about a listed or const-enum export", () => {
+    const project = runProject(
+      {
+        "listed.mx":
+          "client const a = 1;\nclient let b = 2;\nclient export { a, b as c };\n<div/>\n",
+        "const-enum.mx": "client export const enum CE { A }\n<div/>\n",
+      },
+      { noUnusedLocals: true },
+    );
+    try {
+      expect(project.linesOf("listed.mx")).toEqual([]);
+      expect(project.linesOf("const-enum.mx")).toEqual([]);
+    } finally {
+      project.dispose();
+    }
+  });
+
+  it("a type parameter shadows a client name only where it is in scope", () => {
+    const project = runProject({
+      "shadow.mx":
+        "client class C {}\nclient export type T = { a: <C>(x: C) => C; b: C };\nclient export type U<C> = { a: C };\n<div/>\n",
+    });
+    try {
+      expect(project.linesOf("shadow.mx")).toEqual([]);
+    } finally {
+      project.dispose();
+    }
+  });
 });
