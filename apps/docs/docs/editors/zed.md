@@ -7,7 +7,7 @@ description: "The mxlang Zed extension: MX, Solid, AngularMX, and AstroMX langua
 
 The `mxlang` extension ships seven languages:
 
-- **MX** (`.mx`) — MX's own tree-sitter grammar: Marko's grammar plus the `:name` sugar and `#id`/`.class`/`:name` in attribute position ([ADR 146](/design-notes/adr-name-sugar/)). Until decision 146, `.mx` rode Marko's grammar and queries unmodified (decision 72); MX syntax is now a superset of Marko's, so MX owns its grammar. It is named `mx`, so it coexists with the official Marko extension's `marko` grammar.
+- **MX** (`.mx`) — MX's own tree-sitter grammar, which follows MX's syntax: Marko's syntax by default, with MX's own rules where `divergences.md` records them. It is named `mx`, so it coexists with the official Marko extension's `marko` grammar. The grammar still highlights the `:name` sugar and the spaced `#id`/`.class` forms; those are a dialect's syntax and leave core's grammar with the atom removal.
 - **Solid** (`.solid.mx`) — its own grammar, a patched TypeScript/TSX grammar with MX recognized in expression position.
 - **ReactMX** (`.react.mx`), **PreactMX** (`.preact.mx`) and **HonoMX** (`.hono.mx`) — TSX with MX regions, on Solid's grammar unchanged for the same reason AngularMX reuses it. Each has its own language name, so the language server and the diagnostics follow the host.
 - **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses Solid's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.

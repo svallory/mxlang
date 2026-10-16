@@ -139,15 +139,15 @@ Four Marko facts that are easy to get wrong (all measured against
   line comment are told apart by re-reading the source at the node's `loc`.
 
 `@mxlang/target-html`'s translator (`translate.ts`'s dispatch) decides
-component-vs-HTML dispatch by **in-scope binding, not case**: a tag name
-matching an `import`, a `<define>`, or a tag Marko discovered via taglib/
-`tags/` is a component call whatever its case; anything else is an HTML
-element (Marko's own registry) whatever its case, hyphenated custom elements
-included. This is Marko's own rule (custom tags are lowercase there), not an
-MX invention. `import layout from "./layout.marko"` then `<layout>` calls the
-component; `<my-widget>` with no matching binding stays a literal element. A
-capitalized tag with no matching binding is a compile error, not a literal
-element — no HTML element is ever capitalized. Import binding names are
+component-vs-HTML dispatch by **what the tag resolves to, not by case alone**:
+a capitalized tag matching an import binding, a `<define>`, or a tag found by
+MX's `tags/` discovery is a component call; a lowercase tag is never an
+import binding (a lowercase import is not a tag) and is either a discovered
+tag or an HTML element. A tag that resolves to nothing is a compile error
+whatever its case: an unresolved PascalCase tag (no HTML element is ever
+capitalized) and an unresolved hyphenated tag such as `<my-widget>` both
+refuse to compile, as in Marko. `.marko` files are not an MX input, so no
+import of one names a tag. Import binding names are
 extracted by parsing the hoisted import line with `parseBabel` (default,
 namespace, named, aliased, and combined forms), not by regex. An unbound
 *lowercase* tag that is neither hyphenated nor a real HTML/SVG/MathML element
@@ -166,6 +166,11 @@ under load (CI, or several agents/verifiers at once, routinely push the run
 well past 500ms with no regression — measured at 1150ms on a passing run). The
 elapsed time is always logged as `[perf] …` whether or not it passes, so a real
 regression stays visible either way.
+
+Only the wall-clock budget is soft. The early-abort assertion in the same
+file ("stops walking at the root tag's close", which proves the walk stops at
+the root close instead of scanning the trailing TypeScript) always fails
+hard, with or without `MX_PERF_STRICT`.
 
 To turn the budget into a gate, set the variable:
 

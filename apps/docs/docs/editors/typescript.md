@@ -19,8 +19,9 @@ never disagree about whether a file compiles:
 | CI | `@mxlang/tsc` (`mx-tsc`) | on the command line |
 
 Both take the project's own TypeScript as a peer, `>=5.9.0 <7`. TypeScript 7,
-the Go port, cannot load tsserver plugins, so MX stays on TypeScript 5.9 and 6
-until TypeScript 7 ships an extension API.
+the Go port, cannot load tsserver plugins, so MX stays on TypeScript 5.9 and 6,
+with no fork or vendoring of TypeScript, and revisits when TypeScript 7.1 ships
+its extension API. MX 2 stays TypeScript as well.
 
 Both project each MX file to its lowered TS/TSX and type-check that, mapping
 diagnostics back to the original file — at the exact column, not the start of
