@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { declaredBinding, hintParseError } from "./parse-error-hints.ts";
 import { MX_VOICE } from "./message-vocabulary.ts";
+import { declaredBinding, hintParseError } from "./parse-error-hints.ts";
 
 const REASON = 'Unexpected token, expected "{"';
 

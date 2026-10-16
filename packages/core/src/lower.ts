@@ -705,7 +705,11 @@ function checkBindingWrites(
   }
   const write = findBindingWrite(node, rules, inFunction);
   if (!write) return;
-  raise(bindingWriteCode(write), bindingWriteMessage(write, voiceOfCtx(ctx)), write.node);
+  raise(
+    bindingWriteCode(write),
+    bindingWriteMessage(write, voiceOfCtx(ctx)),
+    write.node,
+  );
 }
 
 /**
@@ -742,7 +746,11 @@ function checkScriptBodyWrites(ctx: Ctx, tag: Node): void {
   if (!program) return;
   const write = findBindingWrite(program, rules, true);
   if (!write) return;
-  raise(bindingWriteCode(write), bindingWriteMessage(write, voiceOfCtx(ctx)), write.node);
+  raise(
+    bindingWriteCode(write),
+    bindingWriteMessage(write, voiceOfCtx(ctx)),
+    write.node,
+  );
 }
 
 /** Where a stale read can sit: what runs the body decides what the fix is. */
@@ -1050,7 +1058,10 @@ function scriptBodyFailure(
     ? { line: babel.loc.line, column: babel.loc.column }
     : at;
   if (isImportExportPlacement(error)) {
-    return fail(scriptImportExportPlacementMessage(tagText(ctx, "script", tag)), start);
+    return fail(
+      scriptImportExportPlacementMessage(tagText(ctx, "script", tag)),
+      start,
+    );
   }
   if (babel.reasonCode === "ImportAttributesUseAssert") {
     return fail(
@@ -2928,7 +2939,8 @@ function lowerAttributeFor(
 ): AttributeTagNode {
   requireAttrTagsV2(
     ctx,
-    () => `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "for", node)}`,
+    () =>
+      `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "for", node)}`,
     "aren't",
     node,
   );
@@ -2957,7 +2969,8 @@ function lowerAttributeIf(
   const first = siblings[index];
   requireAttrTagsV2(
     ctx,
-    () => `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "if", first)}`,
+    () =>
+      `${voiceOfCtx(ctx).attributeTags} inside ${tagText(ctx, "if", first)}`,
     "aren't",
     first,
   );
@@ -3555,7 +3568,7 @@ function lowerForHead(
           ? `use a \`by=(${
               inAttr ? "key, value" : "index"
             }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`
-          : "the other forms call \`by\` as a function."
+          : "the other forms call `by` as a function."
       }`,
       byValue,
     );

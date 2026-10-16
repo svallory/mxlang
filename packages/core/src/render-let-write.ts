@@ -45,13 +45,13 @@
 import { coreBabel } from "./babel.ts";
 import type { Node, WriteGuard } from "./core.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
-import type { Voice } from "./message-vocabulary.ts";
 import {
   LET_LOOP_ASSIGNMENT_CODE,
   LET_WRITE_BEFORE_DECLARATION_CODE,
   LET_WRITE_IN_RENDER_CODE,
   READONLY_BINDING_WRITE_CODE,
 } from "./diagnostic-codes.ts";
+import type { Voice } from "./message-vocabulary.ts";
 
 /** Why a write is refused. */
 export type WriteReason =
@@ -250,10 +250,7 @@ export function bindingWriteCode(write: BindingWrite): MxDiagnosticCode {
  * The message of a refused write: the rule and the fix, with each built-in
  * tag spelled in the file's voice.
  */
-export function bindingWriteMessage(
-  write: BindingWrite,
-  voice: Voice,
-): string {
+export function bindingWriteMessage(write: BindingWrite, voice: Voice): string {
   const name = `\`${write.name}\``;
   const [letTag, constTag, forTag, defineTag, scriptTag] = [
     "let",

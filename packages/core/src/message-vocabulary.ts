@@ -56,7 +56,9 @@ export function writesMxSyntax(
   name: string,
   trigger?: TagTrigger,
 ): boolean {
-  return voice.tag(name, trigger) === `\`${mxSpelling({ name, form: "tag" })}\``;
+  return (
+    voice.tag(name, trigger) === `\`${mxSpelling({ name, form: "tag" })}\``
+  );
 }
 
 /** The words a message splices. See the file header. */

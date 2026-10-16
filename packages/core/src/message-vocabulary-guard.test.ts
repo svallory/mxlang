@@ -84,9 +84,7 @@ const BUILTIN_TAGS = [
 ] as const;
 
 /** `<if>`, `<const/x=1/>`, `<for|item| of=…>`, `<else if=…>`, `<try`. */
-const MX_BUILTIN_TAG = new RegExp(
-  `<(?:${BUILTIN_TAGS.join("|")})(?![\\w-])`,
-);
+const MX_BUILTIN_TAG = new RegExp(`<(?:${BUILTIN_TAGS.join("|")})(?![\\w-])`);
 
 interface Hit {
   file: string;
@@ -368,7 +366,7 @@ describe("message vocabulary guard", () => {
       const reverted = revert(
         "lower.ts",
         '`${tagText(ctx, "const", node)} without a value`',
-        "\"`<const>` without a value\"",
+        '"`<const>` without a value"',
         1,
       );
       const fresh = unlisted(reverted, allow);

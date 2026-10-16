@@ -12,12 +12,12 @@
  * `optionVocabulary` is a fixture, not any real dialect.
  */
 import { describe, expect, it } from "vitest";
+import { compileSource } from "./compile.ts";
 import type { CustomTag } from "./custom-tags.ts";
 import { validateCustomTagChildren } from "./custom-tags.ts";
+import type { Policy } from "./declarations.ts";
 import { DIALECT_HOOK_ERROR_CODE } from "./diagnostic-codes.ts";
 import memberSyntax from "./fixtures/syntax/member-fixture.ts";
-import { compileSource } from "./compile.ts";
-import type { Policy } from "./declarations.ts";
 import { type LowerSourceOptions, lowerSource } from "./ir-entry/index.ts";
 import {
   articleFor,
@@ -450,10 +450,10 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`for` with two ranges",
     source: "for|i| of=x in=y\n  entity\n",
-    mx: [
-      "`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
+    mx: ["`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`"],
+    option: [
+      "`for` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
     ],
-    option: ["`for` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`"],
   },
   {
     name: "`for` with `to=` and `until=`",

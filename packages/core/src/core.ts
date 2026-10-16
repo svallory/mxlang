@@ -1889,11 +1889,7 @@ function tagArgumentsMessage(ctx: Ctx, node: Node, what: string): string {
   // The condition's example is MX's syntax: shown only when the file spells
   // the tag as MX does.
   const voice = voiceOfCtx(ctx);
-  return message(
-    name,
-    voice,
-    writesMxSyntax(voice, name, triggerOfNode(node)),
-  );
+  return message(name, voice, writesMxSyntax(voice, name, triggerOfNode(node)));
 }
 
 function eventHandlerHint(ctx: Ctx, node: Node): string {
