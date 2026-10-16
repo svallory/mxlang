@@ -988,3 +988,105 @@ describe("Solid SSR render: falsy dynamic tag names (Marko parity)", () => {
     expect(html).toBe("<ul></ul>");
   });
 });
+
+describe("Solid SSR render: a shorthand class with a placeholder beside class=", () => {
+  const setup = 'const y = "yy"; const z = "zz";';
+  const classOf = (html: string) => html.match(/<div class="([^"]*)"/)?.[1];
+
+  // Each row renders the class string stock Marko and the other hosts render:
+  // shorthand parts first (placeholders in place), then the explicit `class=`,
+  // one space apart. A static string stays its own entry, so the order holds.
+  it.each([
+    [
+      "a static word, a placeholder, a string",
+      '<div.a.${y} class="c"/>',
+      "a yy c",
+    ],
+    ["a placeholder alone, a string", '<div.${y} class="c"/>', "yy c"],
+    [
+      "a placeholder then a static word, a string",
+      '<div.${y}.b class="c"/>',
+      "yy b c",
+    ],
+    [
+      "a static word, a placeholder, a static word",
+      '<div.a.${y}.b class="c"/>',
+      "a yy b c",
+    ],
+    [
+      "a static word then a placeholder word",
+      '<div.b.a${y} class="c"/>',
+      "b ayy c",
+    ],
+    [
+      "a placeholder word then a static word",
+      '<div.a${y}.b class="c"/>',
+      "ayy b c",
+    ],
+    [
+      "concise: a static word, a placeholder, a string",
+      'div.a.${y} class="c"',
+      "a yy c",
+    ],
+    ["concise: a placeholder alone, a string", 'div.${y} class="c"', "yy c"],
+  ])(
+    "merges the shorthand with a static string class: %s",
+    (_name, markup, expected) => {
+      expect(classOf(renderApp(markup, setup))).toBe(expected);
+    },
+  );
+
+  it.each([
+    [
+      "a static word, a placeholder, an object",
+      "<div.a.${y} class={k: true, m: false}/>",
+      "a yy k",
+    ],
+    [
+      "concise: a static word, a placeholder, an object",
+      "div.a.${y} class={k: true, m: false}",
+      "a yy k",
+    ],
+    ["a static word, an object", "<div.a class={k: true, m: false}/>", "a k"],
+  ])(
+    "merges the shorthand with an object literal class: %s",
+    (_name, markup, expected) => {
+      expect(classOf(renderApp(markup, setup))).toBe(expected);
+    },
+  );
+
+  // The spec table rules a shorthand beside any other dynamic `class=` a parse
+  // error, and the Solid host refuses it with that message. These two rows pin
+  // what compiles today, not a settled rule: `.${y} class=z` is the open
+  // question (decision 9 versus stock Marko, which merges every form), and
+  // Solid compiles it because its first array entry is a placeholder. Its
+  // output is correct (stock renders `yy zz` too), so it is pinned here; if the
+  // ruling changes, this row and the refusals below move with it.
+  it("renders a placeholder-first shorthand beside a dynamic class as stock does", () => {
+    expect(classOf(renderApp("<div.${y} class=z/>", setup))).toBe("yy zz");
+    expect(classOf(renderApp("div.${y} class=z", setup))).toBe("yy zz");
+  });
+
+  it.each([
+    ["a static word, a placeholder, an identifier", "<div.a.${y} class=z/>"],
+    [
+      "a static word, a placeholder, a ternary",
+      '<div.a.${y} class=(z ? "on" : "off")/>',
+    ],
+    [
+      "a static word, a placeholder, a template literal",
+      "<div.a.${y} class=`c ${z}`/>",
+    ],
+    [
+      "concise: a static word, a placeholder, an identifier",
+      "div.a.${y} class=z",
+    ],
+  ])(
+    "still refuses a static-first shorthand beside another dynamic class: %s",
+    (_name, markup) => {
+      expect(() => renderApp(markup, setup)).toThrow(
+        "combine shorthand with a string class or use class={...}",
+      );
+    },
+  );
+});

@@ -1401,12 +1401,16 @@ function renderAttrs(
     if (attr.kind !== "dynamic" || attr.value.shape !== "array") return false;
     const array = attr.value.node;
     // Marko folds `.card class=value` into a synthetic array whose own `loc`
-    // is absent. Solid accepts that fold only when the explicit value is an
-    // object literal; a real authored array has a location and remains valid.
+    // is absent, the explicit value last (`.a.${y} class=v` is `["a", y, v]`).
+    // Solid accepts that fold only when the explicit value is a static string
+    // or an object literal; a real authored array has a location and remains
+    // valid.
+    const explicit = array.elements?.[array.elements.length - 1];
     return (
       !array.loc &&
       array.elements?.[0]?.type === "StringLiteral" &&
-      array.elements?.[1]?.type !== "ObjectExpression"
+      explicit?.type !== "StringLiteral" &&
+      explicit?.type !== "ObjectExpression"
     );
   });
   if (invalidShorthandMerge) {
