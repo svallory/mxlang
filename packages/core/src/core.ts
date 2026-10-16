@@ -375,6 +375,13 @@ export interface Ctx {
    * `length - 1` sits directly under a construct when that number is here.
    */
   structuralOpen?: number[];
+  /**
+   * Under `structural: "reject"`: how many tags with a `transform` are being
+   * lowered around the current node. Such a transform may consume what is
+   * inside the tag, so a `for` or `if` there never reaches the IR and is
+   * reported where it is lowered.
+   */
+  transformDepth?: number;
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
   /** The Marko nodes behind `authoredAncestors`, same order (a module's scopes, through `LoweredUnit`). */

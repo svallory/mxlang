@@ -242,12 +242,12 @@ export function voiceOf(dialect: Dialect | undefined): Voice {
   return voice;
 }
 
-/** The voice of the file being lowered, as `productOf` reads its product. */
 /** The fixed structural-reject message: `construct` is already spelled. */
 export function structuralMessage(construct: string, voice: Voice): string {
   return `${voice.Files} are static, so they do not evaluate ${construct}`;
 }
 
+/** The voice of the file being lowered, as `productOf` reads its product. */
 export function voiceOfCtx(ctx: Ctx): Voice {
   return ctx.voice ?? MX_VOICE;
 }

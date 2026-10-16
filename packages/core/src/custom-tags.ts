@@ -1836,31 +1836,43 @@ export function rejectStructuralBody(
   for (const node of call.childTree ?? []) {
     if (node.kind !== "ChildFor" && node.kind !== "ChildIf") continue;
     if (node.kind === "ChildIf" && node.orphan) continue;
-    let error: TranslateError;
-    try {
-      error = codedError(
-        STRUCTURAL_CONSTRUCT_CODE,
-        structuralMessage(
-          voice.tag(node.kind === "ChildFor" ? "for" : "if"),
-          voice,
-        ),
-        node.loc.line,
-        node.loc.column,
-        node.loc.file,
-      );
-    } catch (hookFailure) {
-      if (!(hookFailure instanceof VoiceHookError)) throw hookFailure;
-      error = codedError(
-        DIALECT_HOOK_ERROR_CODE,
-        hookFailure.message,
-        node.loc.line,
-        node.loc.column,
-        node.loc.file,
-      );
-    }
-    endErrorAt(error, childEnds.get(node));
-    throw error;
+    throw structuralConstructError(
+      node.kind === "ChildFor" ? "for" : "if",
+      node.loc,
+      voice,
+      childEnds.get(node),
+    );
   }
+}
+
+/** The structural-reject error for a `for` or `if` at `loc`, ending at `end`. */
+export function structuralConstructError(
+  keyword: "for" | "if",
+  loc: Position,
+  voice: Voice,
+  end: number | undefined,
+): TranslateError {
+  let error: TranslateError;
+  try {
+    error = codedError(
+      STRUCTURAL_CONSTRUCT_CODE,
+      structuralMessage(voice.tag(keyword), voice),
+      loc.line,
+      loc.column,
+      loc.file,
+    );
+  } catch (hookFailure) {
+    if (!(hookFailure instanceof VoiceHookError)) throw hookFailure;
+    error = codedError(
+      DIALECT_HOOK_ERROR_CODE,
+      hookFailure.message,
+      loc.line,
+      loc.column,
+      loc.file,
+    );
+  }
+  endErrorAt(error, end);
+  return error;
 }
 
 /** Validates authored children before any plain child is lowered. */

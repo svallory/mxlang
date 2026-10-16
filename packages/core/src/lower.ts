@@ -126,6 +126,7 @@ import {
   setChildEnd,
   setChildOffset,
   shadowedBuiltinMessage,
+  structuralConstructError,
   type TagCall,
   transformCustomTag,
   validateCustomTagChildren,
@@ -5558,6 +5559,28 @@ function lowerCustomTag(
   isBuiltin = false,
   wildcard?: WildcardMatch,
 ): IrNode[] {
+  // A registered tag's transform may consume what is inside the tag, so under
+  // `structural: "reject"` a `for` or `if` anywhere in it is reported where
+  // it is lowered (see {@link insideStructural}).
+  if (ctx.structural !== "reject" || isBuiltin || !definition.transform) {
+    return lowerCustomTagBody(ctx, node, name, definition, isBuiltin, wildcard);
+  }
+  ctx.transformDepth = (ctx.transformDepth ?? 0) + 1;
+  try {
+    return lowerCustomTagBody(ctx, node, name, definition, isBuiltin, wildcard);
+  } finally {
+    ctx.transformDepth = (ctx.transformDepth ?? 1) - 1;
+  }
+}
+
+function lowerCustomTagBody(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+  definition: CustomTag,
+  isBuiltin = false,
+  wildcard?: WildcardMatch,
+): IrNode[] {
   raiseDeferredContract(ctx, node, name, definition);
   rejectBadRefinements(ctx, node);
   const alias = wildcard ? aliasOf(ctx, node, wildcard) : undefined;
@@ -5632,17 +5655,26 @@ function lowerCustomTag(
   const childTree = authoredChildTree(ctx, children);
   // A transform may consume its body, so the IR check cannot be left to
   // report a `for` or `if` in it.
-  if (ctx.structural === "reject" && definition.transform) {
-    rejectStructuralBody({ childTree }, voice);
-  }
-  validateCustomTagChildren(
-    definition,
-    { name, loc: posOf(ctx, node), childTree, ...triggerOf(node) },
-    label,
-    blameEndOffset(node),
-    voice,
-    ctx.structural === "reject",
+  const rejected = firstFailure(() => {
+    if (ctx.structural === "reject" && definition.transform) {
+      rejectStructuralBody({ childTree }, voice);
+    }
+  });
+  const contract = firstFailure(() =>
+    validateCustomTagChildren(
+      definition,
+      { name, loc: posOf(ctx, node), childTree, ...triggerOf(node) },
+      label,
+      blameEndOffset(node),
+      voice,
+      ctx.structural === "reject",
+    ),
   );
+  // Both are about the body; the one written first is the one reported.
+  const failure = [rejected, contract]
+    .filter((error) => error !== undefined)
+    .sort((a, b) => a.line - b.line || a.column - b.column)[0];
+  if (failure) throw failure;
   const handsToHost =
     !isBuiltin &&
     !definition.transform &&
@@ -5941,8 +5973,23 @@ function rejectUncalledParameterizedAttributeTag(
  * under it does not report that it is in the wrong place: the construct is
  * already the error (see {@link underStructural}).
  */
-function insideStructural<T>(ctx: Ctx, lower: () => T): T {
+function insideStructural<T>(
+  ctx: Ctx,
+  node: Node,
+  keyword: "for" | "if",
+  lower: () => T,
+): T {
   if (ctx.structural !== "reject") return lower();
+  // Inside a tag whose transform may consume its body the IR check cannot see
+  // the construct, so it is the error here.
+  if ((ctx.transformDepth ?? 0) > 0) {
+    throw structuralConstructError(
+      keyword,
+      posOf(ctx, node),
+      voiceOfCtx(ctx),
+      blameEndOffset(node),
+    );
+  }
   const open = ctx.structuralOpen ?? [];
   ctx.structuralOpen = open;
   open.push(ctx.authoredAncestors?.length ?? 0);
@@ -5951,6 +5998,17 @@ function insideStructural<T>(ctx: Ctx, lower: () => T): T {
   } finally {
     open.pop();
   }
+}
+
+/** The error `run` throws, if it throws one; any other failure is rethrown. */
+function firstFailure(run: () => void): TranslateError | undefined {
+  try {
+    run();
+  } catch (error) {
+    if (isTranslateError(error)) return error;
+    throw error;
+  }
+  return undefined;
 }
 
 /** Is a `for` or `if` rejected by `structural` between the tag being lowered and its authored parent? */
@@ -5983,7 +6041,9 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const name = hasStaticName(node) ? String(tagNameOf(node)) : `\${…}`;
   // If/else branches lower through lowerIfChain; for lowers through this entry.
   if (name === "for")
-    return insideStructural(ctx, () => lowerAuthoredTag(ctx, node));
+    return insideStructural(ctx, node, "for", () =>
+      lowerAuthoredTag(ctx, node),
+    );
   // One identity per tag (decision 147): a wildcard child is its canonical
   // tag to every `parents` check below it.
   const pop = pushAuthoredAncestor(
@@ -6810,7 +6870,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       if (isTagNode(child) && tagNameOf(child) === "if") {
         const lowered = recover(ctx, () =>
           voicedAt(child, () =>
-            insideStructural(ctx, () => lowerIfChain(ctx, children, index)),
+            insideStructural(ctx, child, "if", () =>
+              lowerIfChain(ctx, children, index),
+            ),
           ),
         );
         if (lowered) {
@@ -7104,6 +7166,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.authoredAncestors = [];
   ctx.authoredAncestorNodes = [];
   ctx.structuralOpen = [];
+  ctx.transformDepth = 0;
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
@@ -7341,6 +7404,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   deferredContractErrors: "fresh",
   // Set by name below.
   structuralOpen: "explicit",
+  transformDepth: "explicit",
   authoredAncestors: "explicit",
   authoredAncestorNodes: "explicit",
   unnamedTagsResolved: "explicit",
@@ -7397,6 +7461,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   scratch.authoredAncestors = [];
   scratch.authoredAncestorNodes = [];
   scratch.structuralOpen = [];
+  scratch.transformDepth = 0;
   // `lower` already resolved this tree; the scratch walk must not redo it.
   scratch.unnamedTagsResolved = true;
   // -1, exactly as `lower` sets it, because this walk enters through

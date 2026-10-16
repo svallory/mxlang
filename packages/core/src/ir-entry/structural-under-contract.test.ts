@@ -474,4 +474,87 @@ describe("a tag whose transform consumes its body", () => {
       ).toEqual([want]);
     });
   });
+  describe("deeper than the direct body of a transforming tag", () => {
+    const deep = (structural: "pass" | "reject") =>
+      ({
+        ...memberSyntax,
+        name: "member",
+        structural,
+        unknownTags: "reject",
+        contracts: {
+          eater: {
+            children: { string: {}, inner: {} },
+            attributeTags: { meta: { children: { string: {} } } },
+            transform: () => [],
+          },
+          inner: { children: { string: {} } },
+          string: {},
+          box: {},
+        },
+      }) as unknown as NonNullable<
+        Parameters<typeof lowerSource>[2]
+      >["dialect"];
+    const found = (source: string, structural: "pass" | "reject") => {
+      const result = lowerSource(source, "/t.mx", {
+        dialect: deep(structural),
+      });
+      return result.diagnostics.map((d) => [
+        d.code,
+        d.line,
+        d.column,
+        d.message,
+      ]);
+    };
+    const nested =
+      "<eater>\n  <inner>\n    <for|x| of=[1]>\n      <box/>\n    </for>\n  </inner>\n</eater>\n";
+    const meta =
+      "<eater>\n  <@meta>\n    <for|x| of=[1]>\n      <box/>\n    </for>\n  </@meta>\n</eater>\n";
+
+    it.each([
+      [
+        "a for in a contract tag inside the transforming tag",
+        nested,
+        3,
+        4,
+        FOR,
+      ],
+      ["a for in an attribute tag of the transforming tag", meta, 3, 4, FOR],
+      [
+        "an if in a contract tag inside the transforming tag",
+        nested.replace("<for|x| of=[1]>", "<if=a>").replace("</for>", "</if>"),
+        3,
+        4,
+        IF,
+      ],
+    ] as const)("reject: %s is the construct", (_l, source, line, col, msg) => {
+      expect(found(source, "reject")).toEqual([
+        ["MX_STRUCTURAL_CONSTRUCT", line, col, msg],
+      ]);
+    });
+
+    it("pass: the contract still checks what the for holds", () => {
+      expect(found(nested, "pass").map((d) => d[0])).toEqual([
+        "MX_TAG_NOT_ALLOWED",
+      ]);
+      expect(found(meta, "pass").map((d) => d[0])).toContain(
+        "MX_TAG_NOT_ALLOWED",
+      );
+    });
+
+    it("reports the earlier of a disallowed child and a construct in the body", () => {
+      expect(
+        found("<eater>\n  <box/>\n  <for|x| of=[1]/>\n</eater>\n", "reject"),
+      ).toEqual([
+        [
+          "MX_TAG_NOT_ALLOWED",
+          2,
+          2,
+          "`<eater>`: `<box>` is not allowed here; allowed children: `<string>`, `<inner>`",
+        ],
+      ]);
+      expect(
+        found("<eater>\n  <for|x| of=[1]/>\n  <box/>\n</eater>\n", "reject"),
+      ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR]]);
+    });
+  });
 });
