@@ -1401,17 +1401,33 @@ function renderAttrs(
     if (attr.kind !== "dynamic" || attr.value.shape !== "array") return false;
     const array = attr.value.node;
     // Marko folds `.card class=value` into a synthetic array whose own `loc`
-    // is absent, the explicit value last (`.a.${y} class=v` is `["a", y, v]`).
-    // Solid accepts that fold only when the explicit value is a static string
-    // or an object literal; a real authored array has a location and remains
-    // valid.
-    const explicit = array.elements?.[array.elements.length - 1];
-    return (
-      !array.loc &&
-      array.elements?.[0]?.type === "StringLiteral" &&
-      explicit?.type !== "StringLiteral" &&
-      explicit?.type !== "ObjectExpression"
+    // is absent: the shorthand parts first (they sit in the tag name, before
+    // the attribute) and the explicit value after them. An authored array
+    // `class=[a, b]` is spliced into the fold element by element, so the fold
+    // alone cannot say what was written. Judge the authored value: it merges
+    // only when it is exactly one static string or object literal, written
+    // right after `class=` (an array puts its `[` there, so its first element
+    // starts one character later) and not inside `[...]`. Anything else (an
+    // identifier, a call, an array, `[]`, a spaced `class = "c"`) is the error
+    // Solid has always given.
+    const elements: ({ type: string; start?: number | null } | null)[] =
+      array.elements ?? [];
+    const explicit = elements.filter(
+      (element) =>
+        element?.start != null &&
+        attr.nameSpan !== undefined &&
+        element.start >= attr.nameSpan.sourceEnd,
     );
+    const only = explicit[0];
+    // Kept from before: a second element that is an object literal merged
+    // already (`.a class={k: true}`, and an array whose first entry is one).
+    const merges =
+      elements[1]?.type === "ObjectExpression" ||
+      (explicit.length === 1 &&
+        (only?.type === "StringLiteral" || only?.type === "ObjectExpression") &&
+        attr.nameSpan !== undefined &&
+        only.start === attr.nameSpan.sourceEnd + 1);
+    return !array.loc && elements[0]?.type === "StringLiteral" && !merges;
   });
   if (invalidShorthandMerge) {
     fail(

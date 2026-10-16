@@ -1081,6 +1081,27 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
       "concise: a static word, a placeholder, an identifier",
       "div.a.${y} class=z",
     ],
+    ["a static word, a one-string array", '<div.a class=["x"]/>'],
+    ["two static words, a one-string array", '<div.a.b class=["x"]/>'],
+    [
+      "a static word, a placeholder, a one-string array",
+      '<div.a.${y} class=["x"]/>',
+    ],
+    [
+      "a static word, a placeholder, an array with an identifier",
+      '<div.a.${y} class=[z, "w"]/>',
+    ],
+    [
+      "a static word, an array with an identifier first",
+      '<div.a class=[z, "w"]/>',
+    ],
+    [
+      "a static word, an array with an identifier last",
+      '<div.a class=["w", z]/>',
+    ],
+    ["a static word, an array of one identifier", "<div.a class=[z]/>"],
+    ["a static word, an empty array", "<div.a class=[]/>"],
+    ["concise: a static word, a one-string array", 'div.a class=["x"]'],
   ])(
     "still refuses a static-first shorthand beside another dynamic class: %s",
     (_name, markup) => {
