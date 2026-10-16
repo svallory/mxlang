@@ -369,8 +369,17 @@ export interface ClientType {
   piece: ClientPiece;
   /** The declaration without `export`. */
   bodyPiece: ClientPiece;
-  /** Every identifier the declaration mentions, apart from property names. */
+  /** Every name the declaration reads from the scope around it. */
   refs: string[];
+  /** Written `client export interface …`. */
+  exported: boolean;
+  /** Type parameters, so a read of the type can fill them. */
+  arity: number;
+}
+
+/** `client export type { P, Q as R }`: each specifier names a type. */
+export interface ClientTypeExport {
+  specifiers: Array<{ local: string; piece: ClientPiece }>;
 }
 
 /**
@@ -399,32 +408,82 @@ export interface ClientProjection {
   serverNames: string[];
   hoisted: ClientPiece[];
   types: ClientType[];
+  typeExports: ClientTypeExport[];
   body: ClientPiece[];
   exported: string[];
   returns: SourceSpan[];
 }
 
-/** Every identifier under `node`, but not the name of a type's property. */
-function identifiersIn(node: unknown, found: Set<string> = new Set()) {
-  if (!node || typeof node !== "object") return found;
-  if (Array.isArray(node)) {
-    for (const child of node) identifiersIn(child, found);
-    return found;
+/** The leftmost identifier of `A`, `A.B`, `a.b.c`: the name a reference reads. */
+function leftmostName(node: Node | null | undefined): string | undefined {
+  let current = node;
+  while (current) {
+    if (current.type === "Identifier") return current.name;
+    if (current.type === "TSQualifiedName") current = current.left;
+    else if (current.type === "MemberExpression") current = current.object;
+    else return undefined;
   }
-  const { type } = node as Node;
-  if (type === "Identifier") found.add((node as Node).name);
-  for (const [key, value] of Object.entries(node)) {
-    if (key === "loc" || key === "extra" || key.endsWith("Comments")) continue;
-    if (
-      key === "key" &&
-      (type === "TSPropertySignature" || type === "TSMethodSignature") &&
-      !(node as Node).computed
-    ) {
-      continue;
+  return undefined;
+}
+
+/**
+ * The names a type declaration reads from the scope around it: the leftmost
+ * name of each type reference, `typeof` query and heritage clause, and of a
+ * computed key. A parameter, an index-signature key, a property name and a
+ * qualified name's right side only name something; a type parameter the
+ * declaration binds (its own, a mapped type's key, an `infer`) is not read
+ * from outside.
+ */
+function referencedNames(declaration: Node): string[] {
+  const reads = new Set<string>();
+  const bound = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child);
+      return;
     }
-    identifiersIn(value, found);
-  }
-  return found;
+    const current = node as Node;
+    switch (current.type) {
+      case "TSTypeReference": {
+        const name = leftmostName(current.typeName);
+        if (name) reads.add(name);
+        break;
+      }
+      case "TSTypeQuery": {
+        const name = leftmostName(current.exprName);
+        if (name) reads.add(name);
+        break;
+      }
+      case "TSExpressionWithTypeArguments":
+      case "TSInterfaceHeritage": {
+        const name = leftmostName(current.expression);
+        if (name) reads.add(name);
+        break;
+      }
+      case "TSTypeParameter": {
+        const name =
+          typeof current.name === "string" ? current.name : current.name?.name;
+        if (name) bound.add(name);
+        break;
+      }
+      case "TSPropertySignature":
+      case "TSMethodSignature":
+        // A name, unless computed: `[key]: T` reads `key`.
+        if (current.computed) {
+          const name = leftmostName(current.key);
+          if (name) reads.add(name);
+        }
+        break;
+    }
+    for (const [key, value] of Object.entries(current)) {
+      if (key === "loc" || key === "extra" || key.endsWith("Comments"))
+        continue;
+      walk(value);
+    }
+  };
+  walk(declaration);
+  return [...reads].filter((name) => !bound.has(name));
 }
 
 const FUNCTION_NODES = new Set([
@@ -471,6 +530,7 @@ function clientProjection(
   });
   const hoisted: ClientPiece[] = [];
   const types: ClientType[] = [];
+  const typeExports: ClientTypeExport[] = [];
   const body: ClientPiece[] = [];
   const exported: string[] = [];
   const hoistedNodes: Node[] = [];
@@ -548,7 +608,12 @@ function clientProjection(
         // `export type { P }` of a type stays; `export { y }` of a value is
         // not an export of the server module.
         if (statement.exportKind === "type") {
-          hoisted.push(piece(statement.start, statement.end));
+          typeExports.push({
+            specifiers: (statement.specifiers ?? []).map((specifier: Node) => ({
+              local: specifier.local?.name ?? specifier.local?.value ?? "",
+              piece: piece(specifier.start, specifier.end),
+            })),
+          });
         }
         return;
       }
@@ -572,9 +637,9 @@ function clientProjection(
         name: inner.id.name,
         piece: piece(statement.start, statement.end),
         bodyPiece: piece(inner.start, statement.end),
-        refs: [...identifiersIn(inner)].filter(
-          (name) => name !== inner.id.name,
-        ),
+        refs: referencedNames(inner).filter((name) => name !== inner.id.name),
+        exported: statement !== inner,
+        arity: inner.typeParameters?.params?.length ?? 0,
       });
       return;
     }
@@ -594,6 +659,7 @@ function clientProjection(
     ),
     hoisted,
     types,
+    typeExports,
     body,
     exported: exported.filter((name) => !taken.has(name)),
     returns: topLevelReturns(statements).map((start) => ({

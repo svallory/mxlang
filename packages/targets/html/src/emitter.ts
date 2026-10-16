@@ -60,7 +60,12 @@ import {
   quote,
   TranslateError,
 } from "@mxlang/core";
-import type { ClientPiece, ClientType, DelegatedTagData } from "./translate.ts";
+import type {
+  ClientPiece,
+  ClientType,
+  ClientTypeExport,
+  DelegatedTagData,
+} from "./translate.ts";
 import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
 
 const INDENT = "  ";
@@ -116,6 +121,11 @@ interface State {
   clientBody: MappedCode[];
   /** Under `typeCheck`, the interfaces and type aliases of `client` statements. */
   clientTypes: Array<{ type: ClientType; start: number | undefined }>;
+  /** Under `typeCheck`, the `export type { … }` lists of `client` statements. */
+  clientTypeExports: Array<{
+    list: ClientTypeExport;
+    start: number | undefined;
+  }>;
   /** Under `typeCheck`, every name a `client` statement declares as `undefined`. */
   clientNames: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
@@ -166,6 +176,7 @@ export function createEmitter(
     moduleHoisted: [],
     clientBody: [],
     clientTypes: [],
+    clientTypeExports: [],
     clientNames: [],
     clientStart: undefined,
     clientReturns: [],
@@ -1443,6 +1454,9 @@ export function createEmitter(
           for (const type of projection.types) {
             state.clientTypes.push({ type, start: data.start });
           }
+          for (const list of projection.typeExports) {
+            state.clientTypeExports.push({ list, start: data.start });
+          }
           state.clientNames.push(...projection.serverNames);
           if (
             data.start !== undefined &&
@@ -1670,10 +1684,44 @@ function placeClientCode(state: State): void {
       changed = true;
     }
   }
+  const movedNames = new Set([...moved].map((type) => type.name));
+  const listed = new Set(
+    state.clientTypeExports.flatMap(({ list }) =>
+      list.specifiers.map((specifier) => specifier.local),
+    ),
+  );
   const inScope: MappedCode[] = [];
   for (const { type, start } of state.clientTypes) {
-    if (moved.has(type)) inScope.push(clientPiece(type.bodyPiece));
-    else state.moduleHoisted.push({ code: clientPiece(type.piece), start });
+    if (moved.has(type)) {
+      inScope.push(clientPiece(type.bodyPiece));
+      // Exported in the source, so unread here would be `noUnusedLocals`
+      // noise the author never had.
+      if (type.exported || listed.has(type.name)) {
+        const fill =
+          type.arity > 0 ? `<${"any, ".repeat(type.arity - 1)}any>` : "";
+        inScope.push(
+          concatMapped(`void (null as unknown as [${type.name}${fill}]);`),
+        );
+      }
+    } else state.moduleHoisted.push({ code: clientPiece(type.piece), start });
+  }
+  // A type in the client scope is not an export of the module.
+  for (const { list, start } of state.clientTypeExports) {
+    const kept = list.specifiers.filter(
+      (specifier) => !movedNames.has(specifier.local),
+    );
+    if (kept.length === 0) continue;
+    state.moduleHoisted.push({
+      code: concatMapped(
+        "export type { ",
+        ...kept.flatMap((specifier, index) => [
+          ...(index > 0 ? [", "] : []),
+          clientPiece(specifier.piece),
+        ]),
+        " };",
+      ),
+      start,
+    });
   }
   const body = [...inScope, ...state.clientBody];
   if (body.length === 0) return;

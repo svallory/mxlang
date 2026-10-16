@@ -695,4 +695,72 @@ describe("html typeCheck: the server view and the client code of a `client` stat
       ).toBe(true);
     }
   });
+
+  it("does not take a parameter, key, own type parameter or qualified name for a mention", () => {
+    const { code } = project(
+      [
+        "client let value = 0;",
+        "client const items = [1];",
+        'client const key = "a";',
+        "client const T = 1;",
+        "client const Event = 1;",
+        "client type Handler = (value: number) => void;",
+        "client interface Api { load(items: number[]): void }",
+        "client interface Bag { [key: string]: number }",
+        "client type Box<T> = { v: T };",
+        "client type H = (e: globalThis.Event) => void;",
+        "<div/>",
+        "",
+      ].join("\n"),
+    );
+    const before = beforeWrapper(code);
+    for (const stays of [
+      "type Handler",
+      "interface Api",
+      "interface Bag",
+      "type Box<T>",
+      "type H =",
+    ]) {
+      expect(before, stays).toContain(stays);
+      expect(wrapper(code), stays).not.toContain(stays);
+    }
+  });
+
+  it("moves a computed key's name, a heritage clause and a qualified root into the client scope", () => {
+    const { code } = project(
+      [
+        'client const k = "a";',
+        "client class A {}",
+        "client const ns = { T: 1 };",
+        "client interface I { [k]: number }",
+        "client interface J extends A {}",
+        "client type Q = typeof ns.T;",
+        "<div/>",
+        "",
+      ].join("\n"),
+    );
+    for (const moved of ["interface I", "interface J", "type Q"]) {
+      expect(wrapper(code), moved).toContain(moved);
+      expect(beforeWrapper(code), moved).not.toContain(moved);
+    }
+  });
+
+  it("reads a moved exported type once, and leaves it out of the `export type` list", () => {
+    const { code } = project(
+      [
+        "client class C {}",
+        "client export interface P<T, U> { c: C; t: T; u: U }",
+        "client interface Q { c: C }",
+        "client interface R { n: number }",
+        "client export type { Q, R };",
+        "<div/>",
+        "",
+      ].join("\n"),
+    );
+    expect(wrapper(code)).toContain("void (null as unknown as [P<any, any>]);");
+    expect(wrapper(code)).toContain("void (null as unknown as [Q]);");
+    expect(wrapper(code)).not.toContain("[R]");
+    expect(beforeWrapper(code)).toContain("export type { R };");
+    expect(beforeWrapper(code)).not.toMatch(/export type \{[^}]*Q/);
+  });
 });

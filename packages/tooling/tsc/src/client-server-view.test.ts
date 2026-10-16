@@ -151,6 +151,22 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "client class C {}\nclient interface P { c: C }\nclient type W = { p: P };\nclient const w: W = { p: { c: new C() } };\n<div/>\n",
     "type-property-name.mx":
       "client let n = 1;\nclient interface P { n: number }\nexport interface Input { p?: P }\nclient const p: P = { n };\n<div/>\n",
+    // A name a type only declares or looks up on another is not a mention of
+    // a client value of the same name.
+    "type-param-name.mx":
+      "client let value = 0;\nclient type Handler = (value: number) => void;\nexport interface Input { onChange?: Handler }\n<div/>\n",
+    "type-method-param.mx":
+      "client const items = [1];\nclient interface Api { load(items: number[]): void }\nexport interface Input { api?: Api }\n<div/>\n",
+    "type-index-key.mx":
+      'client const key = "a";\nclient interface Bag { [key: string]: number }\nexport interface Input { bag?: Bag }\n<div/>\n',
+    "type-own-parameter.mx":
+      "client const T = 1;\nclient type Box<T> = { v: T };\nexport interface Input { box?: Box<number> }\n<div/>\n",
+    "type-qualified-name.mx":
+      "client const Event = 1;\nclient type H = (e: globalThis.Event) => void;\nexport interface Input { h?: H }\n<div/>\n",
+    "type-read-by-static.mx":
+      "client let value = 0;\nclient type Handler = (value: number) => void;\nstatic const h: Handler = () => {};\n<div/>\n",
+    "type-moved-listed.mx":
+      "client class C {}\nclient interface P { c: C }\nclient export type { P };\n<div/>\n",
     // Known limit: a type of the page's own `Input` reads module level, where a
     // client class or enum is `undefined`.
     "limit-input-type.mx":
@@ -168,8 +184,8 @@ describe("mx-tsc types a client name as undefined for the server view", {
       'import type { P, K } from "./ct.mx";\nserver const v: [P?, K?] = [];\n<div/>\n',
     // Client code runs in the order the author wrote the module.
     "tdz-static.mx": "client const z = st + 1;\nstatic const st = 1;\n<div/>\n",
-    // Known limit: an earlier client statement reading a `static` name declared
-    // between two client statements is not reported.
+    // Known limit: a client statement reading a `static` name declared after it
+    // but before a later client statement is not reported.
     "limit-tdz-between.mx":
       "client const a = st;\nstatic const st = 1;\nclient const b = 2;\n<div/>\n",
     "edge-this.mx": "client console.log(this);\n<div/>\n",
@@ -245,6 +261,13 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "type-returntype.mx",
     "type-chain.mx",
     "type-property-name.mx",
+    "type-param-name.mx",
+    "type-method-param.mx",
+    "type-index-key.mx",
+    "type-own-parameter.mx",
+    "type-qualified-name.mx",
+    "type-read-by-static.mx",
+    "type-moved-listed.mx",
     "imp-types.ts",
     "imp-types.mx",
     "edge-this.mx",
@@ -350,11 +373,14 @@ describe("mx-tsc: an exported client name is not an unused local", {
         "exports.mx":
           'client export const x = 1;\nclient export function f() {}\nclient export { one } from "./one.ts";\nclient export * from "./one.ts";\n<div/>\n',
         "one.ts": "export const one = 1;\n",
+        "moved-export.mx":
+          "client class C {}\nclient export interface P<T> { c: C; t: T }\nclient interface Q { c: C }\nclient export type { Q };\n<div/>\n",
       },
       { noUnusedLocals: true },
     );
     try {
       expect(project.linesOf("exports.mx")).toEqual([]);
+      expect(project.linesOf("moved-export.mx")).toEqual([]);
     } finally {
       project.dispose();
     }

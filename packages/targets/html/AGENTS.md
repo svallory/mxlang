@@ -104,9 +104,13 @@ calls where its last `client` statement stands (`placeClientCode` in
 `emitter.ts`; TypeScript reports a use before declaration inside a called
 arrow, not inside a function nothing calls, and `this` is the module's). Imports,
 namespaces and `declare` forms stay at module level, `export` removed;
-interfaces and type aliases stay at module level with their `export`, unless they mention a client value (an
-identifier among the statements' `serverNames`, a type moved that way
-included): those move into the arrow, `export` removed. `client export … from`
+interfaces and type aliases stay at module level with their `export`, unless they mention a client value (a
+type reference, `typeof` query, heritage clause or computed key whose leftmost
+name is among the statements' `serverNames`, a type moved that way included;
+`referencedNames` in `translate.ts`; parameters, property and index keys and
+the type's own type parameters are not mentions): those move into the arrow,
+`export` removed, read once there when they were exported, and left out of an
+`export type { … }` list. `client export … from`
 becomes an `import` of the module and the asked names, bound to `_mxReexport…`
 names nothing reads (the `_` keeps `noUnusedLocals` quiet), mapped piece by
 piece; `export {..}` of values and `export default` are dropped. A top-level
@@ -114,8 +118,9 @@ piece; `export {..}` of values and `export default` are dropped. A top-level
 would hide its TS1108. Known limits: a `client import` of another module's
 client export is TS2614 (that module's one projection is its server view); a
 top-level type (`Input`) cannot name a client class or enum; a namespace body
-reading a client value is `undefined`; an earlier `client` statement reading a
-`static` declared between two later ones is not reported; a template read of a
+reading a client value is `undefined`; a `client` statement reading a `static` or
+`server` name declared after it but before a later `client` statement is not
+reported; a template read of a
 client name is not linked to its declaration for definition and rename. The
 runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
