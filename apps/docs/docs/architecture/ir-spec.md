@@ -148,6 +148,11 @@ interface Atom {
 }
 ```
 
+> **Being replaced.** `Atom`, `Expr.atoms`, `extra.mxAtom` (`MxAtomMark`)
+> and the static attribute's `atom` field describe the IR as it ships today.
+> Atoms are a dialect feature, not core: they leave core with the atom
+> removal, and none of them is stable API.
+
 | Field | Contract |
 | --- | --- |
 | `code` | The expression's source text, ready to emit. **Sliced from the authored source**, not printed back from the AST (`core.ts` `expr()`): type arguments and every authored detail survive (`lower.test.ts` › "binding scopes are per JS block" › "type arguments survive the non-empty binding registry path"). Two exceptions: when the host has registered bindings (`ctx.bindings.register`, decision 70), free references to those names are rewritten in the sliced text (`count` → `count()`); when the parser node has no offsets, the node is printed with Marko's own Babel generator (`printExpression`). |
@@ -157,7 +162,7 @@ interface Atom {
 | `unrewrittenCode?` | `code` as it was before a rewrite changed it (`rewrite-codes.ts` `rewriteCodes`, e.g. Solid's accessor reads `i` → `i()`): set by that rewrite only when it changed `code`, so it is absent when no read was rewritten. It is the authored text with each atom as its string literal (an atom `~q` is `"q"`, one character longer), not a slice of the source: `mappedExpr` maps it to `span` through `atomMappings`, or one to one when the lengths match, then diffs it against `code` token by token and leaves inserted text unmapped. The diff trims the common prefix and suffix, and past `MAX_DIFF_CELLS` (about 2000 x 2000 tokens) maps the changed middle as one run. Read by every host that maps expressions through `mappedExpr` (today Solid). Pinned by `solid/src/expression-mappings.test.ts` (rewritten reads keep exact columns). |
 | `bodySpan?` | The authored `{ … }` block of an attribute method shorthand (`onClick() { … }`, `async onClick<T>(…) { … }`), whose `code` is the `function` expression the compiler printed for it; absent for every other expression, an authored `function` expression included. Set in `lower.ts` (`methodBodySpan`) from the method node's own body position, which Marko gives as the text between the braces, so it is widened onto them. `bodySource` is its authored text. A host that emits the printed function maps its head as generated text and diffs the printed body against `bodySource` token by token (`mappedRewrite`), so a reformatted body (`{ go() }` printed as `{ go(); }`) or one with rewritten reads still maps. Read by Solid's `mappedValue`, which splits the printed function at its parsed body (`printedBodyStart`). Pinned by `tsc` `expression-values-solid-typecheck.test.ts` (an error in a method body, async, generic or nested, reports at its authored column). |
 | `file` | Reserved. Nothing in `packages/core` sets it today; a tag unit compiles under its own `Ctx`, so its spans are already absolute in its own file. |
-| `atoms` | The atoms a dialect built inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[~a]` is `["a"]` under a dialect whose atoms are `~name`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atom-marks.test.ts`). In `node`, each atom is the `StringLiteral` the dialect's hook returned, whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). That node shape is **public API** of `@mxlang/core` (addendum 1, item 1): a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
+| `atoms` | The atoms a dialect built inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[~a]` is `["a"]` under a dialect whose atoms are `~name`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atom-marks.test.ts`). In `node`, each atom is the `StringLiteral` the dialect's hook returned, whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). Until the atom removal, a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
 
 **The `node` contract (decision 166, addendum 3).** `Expr.node`, `For.paramNodes` and the tag-author API's `attr.value.node` are expression nodes in `@mxlang/babel`'s vocabulary (Babel 7.29 shapes), with file-absolute positions, and they are read-only: an emitter that edits one copies first with `cloneIr` (E21). A `node` is `null` in two cases only: a value core built itself (section 2.2), and, after the MX2 port, an expression that failed to parse. A host treats `null` as "no structure" and never dereferences it unchecked. No host parses source text to recover structure, and core offers no re-parse helper.
 
@@ -306,7 +311,7 @@ This is decision 79's narrow escape hatch: every host-owned construct (`<try>`, 
 
 ## 6. `Attr`
 
-Every attribute has an optional `span`, the whole attribute (section 3.3). Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the decision-146 token, `:email`, when the attribute came from sugar).
+Every attribute has an optional `span`, the whole attribute (section 3.3). (The `static` kind's `atom` field leaves core with the atom removal; see the note in section 4.) Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the decision-146 token, `:email`, when the attribute came from sugar).
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
@@ -333,6 +338,13 @@ Pinned overall by `lower.test.ts` › "Attr separates static, dynamic, bound and
 `{ hasParams: boolean, params: string[], children, loc }`: a child list a host emits as a callable unit — a component's `content`, an attribute tag's `block`. `params` are the block's tag params as source text; `hasParams` distinguishes `<Tag||>` (true, `params: []`) from no pipes. Params shadow host bindings inside `children` only. A host with no render-prop form rejects non-empty `params` itself; core resolves the shape and does not decide whether the target can express it.
 
 ## 8. Attribute tags
+
+> **Being replaced.** This section describes attribute tags as they ship
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members ([specification §8](/specification/) is normative): cardinality
+> stops depending on the callee's `Input`, and the three views below,
+> `attrTagProps`, `callee-input.ts` (which moves to tooling) and the v2 gate
+> leave the build path. This section is rewritten with that change.
 
 A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry **three synchronized views** of their `<@name>` tags (decisions 106–108):
 

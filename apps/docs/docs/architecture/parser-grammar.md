@@ -10,10 +10,12 @@ into tags, attributes, values, bodies, placeholders, scriptlets and text, in
 HTML mode, concise mode, and the delimited blocks. It is written to be
 implementable and testable, not to be read as a tutorial.
 
-It is **a draft for review by the language lead**, who owns language design. Where the
-language spec, the decision log and `divergences.md` disagree or are silent, the
-disagreement is recorded in [Open questions for the language lead](#the-parser-grammar-open-questions-for-the-language-lead)
-rather than resolved here. Nothing in this document decides syntax.
+Its tables with a **Probes** column are normative, and each row is pinned by
+the probes it cites ([Method](#the-parser-grammar-method-the-tables-and-the-probes-are-the-specification)).
+Its prose is informative. Where the language spec and `divergences.md` disagree
+or are silent, the disagreement is recorded in
+[Open questions for the language lead](#the-parser-grammar-open-questions-for-the-language-lead)
+rather than resolved in prose.
 
 ## Status, sources of truth and method
 
@@ -31,15 +33,15 @@ Decision 158 (2026-10-05) fixes the delivery plan:
   modifier split as the name**" (decision 170, amended by decision 163
   addendum 12: the split at the last `:` is carried as `modifier` + `modifierSpan`
   fields, and `name`/`nameSpan` cover the head before that colon),
-  and makes shorthands, atoms, attribute tags, wildcard children,
-  `defaultTag` and `<return>` first-class nodes with native positions.
-- The Marko compiler front end is **not copied** (158.2, superseding 157
-  addenda 2 and 4 on that point). `@marko/compiler` stays an npm dependency
-  only until the MX AST and the ported lowering land. 158.2 kept "decision 151
-  §1" (the stock-parser diagnostic) for that interim, but decision 159 then
-  made core's build bundle `@marko/compiler`'s parse layer with
-  `htmljs-parser` aliased to the in-repo template parser, so "a registry
-  install of core parses with MX's rules" (OQ 15).
+  and gives shorthands, attribute tags, `defaultTag` and `<return>` native
+  positions. Attribute tags are `@`-prefixed child tags, not a container.
+  Wildcard children are **not** an AST node, and atoms are not part of the
+  MX AST: they are a dialect feature built on the parser's triggers.
+- The Marko compiler front end is **not copied**, and `@marko/compiler` is
+  dropped: core reads only the MX AST. Until that removal lands, core's build
+  bundles `@marko/compiler`'s parse layer with `htmljs-parser` aliased to the
+  in-repo template parser, so a registry install of core already parses with
+  MX's rules (OQ 15).
 - Packages (158.3): `@mxlang/parser` is the template parser (`src/template/`,
   derived from htmljs-parser) and, when it exists, the front end from parser
   events to the MX AST; `@mxlang/babel` is the vendored Babel fork with the MX
@@ -59,12 +61,14 @@ Sources of truth, in this order:
 
 1. the language spec, `apps/docs/docs/specification.md` (cited as *spec §N* with
    the subsection heading);
-2. the decision log, `notes/decisions-2026-09-10.md` (cited as *decision N* and
-   its addenda);
-3. `divergences.md` at the repository root, cited by its **row heading**, because
+2. `divergences.md` at the repository root, cited by its **row heading**, because
    its rows carry no numbers (for example *divergence row "A non-ASCII letter or digit
    is part of a word in the template parser's look-behinds; stock's word test is
    ASCII-only."*), plus `fixtures/divergences.md`.
+
+Older passages cite *decision N*. That refers to the project's archived
+decision log, kept for history only; the rule itself is stated in the spec or
+in this document's tables.
 
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
@@ -83,7 +87,11 @@ Decision 165 fixes what in this document is normative:
   cites the probes that pin it.
 - **Informative:** everything else, which is all prose and every table
   without a Probes column. It explains the tables and links them; it states
-  no rule of its own.
+  no rule of its own, and it never quantifies ("always", "every", "never"
+  belong in a table row with probes).
+
+A review of this page checks that each normative row has a passing probe and
+that no normative claim lives in prose.
 
 A **probe** is one input, the options handed to the parser, and the parser's
 whole ordered event list for it: every event with its ranges and the text

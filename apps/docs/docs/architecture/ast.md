@@ -1,20 +1,20 @@
 ---
 title: "The MX AST"
-description: "Draft catalogue of MX2's own syntax tree: Marko's AST as it is today, the accommodations removed, the MX node types, and how they map to parser events and to the IR."
+description: "Catalogue of MX's own syntax tree: where it departs from Marko's AST, the MX node types, and how they map to parser events and to the IR."
 ---
 
 # The MX AST
 
-> **Status: draft for review** (decisions 158 and 163). Owners: mx-lead (IR,
-> lowering) and native-parser (parser, node types). The MX AST, its front end
-> and the ported lowering are not implemented yet. Section 1 describes what
-> exists today; sections 2 to 9 are the proposal, and where they describe
-> today's code (the IR's atoms in §4.3, the shorthand merge in §6.1a, today's
-> statement and error behaviour) they say so. Every statement about Marko,
+> **Status.** This page states the MX AST as MX defines it. Section 1
+> describes Marko's AST, the starting point; sections 2 to 9 specify the MX
+> node types, their positions and errors, and how the front end and lowering
+> use them. Where a section describes interim code that the AST replaces (the
+> IR's atoms in §4.3, which leave core with the atom removal, and the
+> shorthand merge in §6.1a), it says so. Every statement about Marko,
 > htmljs-parser or the current code cites the file and symbol it was read
 > from (Marko's installed bundle by line), or a probe that was run.
 
-Decision 158 gives MX2 its own syntax tree: node types defined in MX's Babel
+MX has its own syntax tree: node types defined in MX's Babel
 fork (`@mxlang/babel`), built by a front end in `@mxlang/parser` from the
 template parser's events, and read directly by `lower()` in `@mxlang/core`.
 This page is the catalogue those three pieces are built from.
@@ -1569,7 +1569,7 @@ The AST carries, and no IR kind reads:
 |---|---|---|
 | Custom-tag sidecars, L2 hooks (decision 87) | IR: a `TagCall` of `Attr[]`, `Block`, `AttributeTag[]` | `packages/core/src/custom-tags.ts` |
 | Sidecar `parseOptions` | neither; they configure the parse | `custom-tags.ts` `customTagTaglib` (only `text`, `preserveWhitespace` reach the parser) |
-| L3 raw hooks (decision 87(b): Marko's exact signatures, MX 1 only) | would see Marko's AST; **not implemented** | no `raw` field in `custom-tags.ts` (the only `raw` match is a comment in `IrBuilders`) |
+| L3 raw hooks | none: custom tags have two layers and no third, so no hook sees a parser AST | no `raw` field in `custom-tags.ts` (the only `raw` match is a comment in `IrBuilders`) |
 | User tag macros (decision 80) | IR in, IR out, by design | decision 80 text |
 | Host **emitters** (`Emitter<Out>`), first- and third-party (decision 148) | IR only | `packages/core/AGENTS.md`, opening section ("A host then emits from that IR and never walks a Marko node"); IR spec §5.13 |
 | Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes** today (Marko's); after the port a narrow view built by lowering, never `Mx*` nodes | the table below |
