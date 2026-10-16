@@ -68,7 +68,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
   }
   if (call.attributeTags.length === 0) {
     ctx.fail(
-      `needs ${voice.attrTag("catch")} to handle errors or ${voice.attrTag("placeholder")} to show while its content is pending; without either it has no effect, so render its content directly`,
+      `needs a ${voice.attrTag("catch")} to handle errors or a ${voice.attrTag("placeholder")} to show while its content is pending; without either it has no effect, so render its content directly`,
       TRY,
     );
   }

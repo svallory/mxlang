@@ -694,9 +694,9 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
   {
     name: "`try` with neither `@catch` nor `@placeholder`",
     source: "try\n  p\n",
-    mx: "`<try>`: needs `<@catch>` to handle errors or `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+    mx: "`<try>`: needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
     option:
-      "`try`: needs `catch` to handle errors or `placeholder` to show while its content is pending; without either it has no effect, so render its content directly",
+      "`try`: needs a `catch` to handle errors or a `placeholder` to show while its content is pending; without either it has no effect, so render its content directly",
   },
   {
     name: "`try` with tag params",
@@ -935,7 +935,11 @@ describe("writesMxSyntax", () => {
   it("is false when the dialect spells the tag otherwise, or by a trigger", () => {
     const voice = voiceOf(optionDialect);
     expect(writesMxSyntax(voice, "const")).toBe(false);
-    const trigger = { id: "ask", span: { start: 0, end: 2 }, text: "?x" };
+    const trigger = {
+      id: "ask",
+      span: { sourceStart: 0, sourceEnd: 2 },
+      text: "?x",
+    };
     expect(writesMxSyntax(voice, "const", trigger)).toBe(false);
   });
 });
