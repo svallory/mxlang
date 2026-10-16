@@ -89,7 +89,8 @@ describe("a client name in the server view", { timeout: 60_000 }, () => {
   });
 
   it("completions after a client name in the client scope are the declared type's", () => {
-    const source = "client let q = 1;\nclient const r = q.toFixed(1);\n<div/>\n";
+    const source =
+      "client let q = 1;\nclient const r = q.toFixed(1);\n<div/>\n";
     const svc = service({ [FILE]: source });
     svc.getSemanticDiagnostics(CONSUMER);
     const completions = svc.getCompletionsAtPosition(
