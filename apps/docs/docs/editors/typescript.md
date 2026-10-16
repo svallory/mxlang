@@ -192,6 +192,12 @@ not a TypeScript diagnostic, and tsc counts only its own.
   change it, those files compile again on the rebuild it starts, so a break is
   reported on that rebuild and a fix clears the TS80003 lines at once, with the
   line number of the new text.
+  Two limits: an `mx.config.*` or `.mxrc` change does not start a rebuild
+  (restart the watcher), and under `-w -p` a `package.json` close to the
+  filesystem root is not watched, because TypeScript refuses to watch such a
+  path (on Linux and macOS, a manifest in `/app`, `/app/x`, `/tmp/x` or
+  `/home/me` is not watched, one in `/home/me/project` is; `-b -w` has no such
+  limit).
 - **One run.** The exit code is 1 when there is an MX error. tsc prints its
   `Found N errors` line only with `--pretty`, counts only its own diagnostics,
   and does not rewrite that count for MX errors, so with that line present the

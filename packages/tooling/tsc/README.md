@@ -169,9 +169,13 @@ are counted in the summary.
   chooses the host is not; restart the watcher after changing one.
 - **Watch, `-w -p`: a `package.json` close to the filesystem root is not
   watched.** TypeScript does not watch a file that affects another when its
-  path is that shallow (`/app/package.json`, `/home/me/package.json`,
-  `C:\package.json`); a project one directory deeper is. `-b -w` has no such
-  limit. Restart the watcher after changing such a manifest.
+  path is that shallow: on Linux and macOS the manifest's directory has to be
+  at least three levels below the root (`/home/me/project/package.json` is
+  watched; `/app/package.json`, `/app/x/package.json`, `/tmp/x/package.json`
+  and `/home/me/package.json` are not; `/workspaces/<name>` is deep enough); on
+  Windows only a manifest in the drive root (`C:\package.json`) is refused, and
+  under `C:\Users` the directory has to be two levels below it
+  (`C:\Users\me\project`). `-b -w` has no such limit. Restart the watcher after changing such a manifest.
 - **Watch: a file dropped from the program keeps its last MX error.** A file
   that leaves the program but stays on disk (for example when it no longer
   matches `include`) keeps printing its last MX error until the watcher is
