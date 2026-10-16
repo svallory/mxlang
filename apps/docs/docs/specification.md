@@ -771,8 +771,8 @@ first attribute and the first placeholder of a tag are reported.
 A built-in `<script>` also takes no arguments (`<script(x)>`), no params (`<script|x|>`)
 and no tag variable (`<script/x>`), and its value is written once: a second value
 (`<script value=a value=b>`, also when the second is bound: `value:=b`), or a value next
-to a body with statements (`<script value=a>code()</script>`, where the body is the value;
-a body of comments or a `'use strict'` directive alone has none), is `MX_DUPLICATE_VALUE_ATTRIBUTE`, as for `<let>` and
+to a body (`<script value=a>code()</script>`, where the body is the value; whitespace or a
+`'use strict'` directive alone is no body, a comment is one), is `MX_DUPLICATE_VALUE_ATTRIBUTE`, as for `<let>` and
 `<return>`. The arguments, params and variable are `MX_INERT_TAG_SHAPE`, reported at the
 first argument, the first param or the variable, a second value at that value, and a value
 next to a body at the tag. One of these is reported per tag, in the order Marko checks

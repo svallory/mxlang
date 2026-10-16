@@ -695,6 +695,39 @@ const HEAD_FORMS: [string, string, HeadRefusal][] = [
     },
   ],
   [
+    "a value and a line comment as the body",
+    "<div/>\n<script value=x>\n  // c\n</script>\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a block comment as the body",
+    "<div/>\n<script value=x>/* c */</script>\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a concise comment block as the body",
+    "div\nscript value=x\n  --\n  // c\n  --\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 6 },
+    },
+  ],
+  [
     "a value and an empty statement as the body",
     "<div/>\n<script value=x>;</script>\n",
     {
@@ -1017,22 +1050,14 @@ describe("a built-in <script> with a value or a body, not both, is not refused",
     ["empty arguments", page("<script()>")],
     ["empty params", page("<script||>")],
     ["a concise value", "div\nscript value=x\n"],
-    // Stock counts statements: a comment or a directive is not a body.
-    [
-      "a value and a line comment",
-      "<div/>\n<script value=x>\n  // c\n</script>\n",
-    ],
-    [
-      "a value and a block comment",
-      "<div/>\n<script value=x>/* c */</script>\n",
-    ],
+    // Stock counts statements and comments: a directive alone is not a body.
     [
       "a value and a directive",
       "<div/>\n<script value=x>'use strict'</script>\n",
     ],
     [
-      "a value and a concise comment block",
-      "div\nscript value=x\n  --\n  // c\n  --\n",
+      "a value and a directive with a trailing comment",
+      "<div/>\n<script value=x>'use strict' // c</script>\n",
     ],
   ])("%s", (_label, source) => {
     expect(lower(source).diagnostics).toEqual([]);

@@ -827,8 +827,8 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  * - a head form the tag has no use for: arguments (`<script(x)>`), params
  *   (`<script|x|>`), a tag variable (`<script/x>`), a second value
  *   (`<script value=a value=b>`, also when the second is bound) and a value
- *   next to a body with statements (`<script value=a>code()</script>`). One is reported, the first of those and
- *   the attributes above in the order stock checks them: arguments, params,
+ *   next to a body (`<script value=a>code()</script>`; a comment counts as a body, a lone directive does not).
+ *   One is reported, the first of those and the attributes above in the order stock checks them: arguments, params,
  *   variable, then the attributes and values in the order they were written,
  *   then a body next to a value.
  * - a `${…}` placeholder in the body, in code or inside a quoted string. The
@@ -910,10 +910,13 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     (child: Node) =>
       child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
   );
-  // The body is the tag's value when it holds statements, as stock counts
-  // them: a comment, a directive (`'use strict'`) or whitespace is none, and a
-  // body that does not parse or holds a placeholder is refused for that.
-  const hasStatements = (scriptProgramOf(ctx, tag)?.body?.length ?? 0) > 0;
+  // The body is the tag's value when it holds statements or comments, as stock
+  // counts it: whitespace and a directive (`'use strict'`) alone are none, and
+  // a body that does not parse or holds a placeholder is refused for that.
+  const program = scriptProgramOf(ctx, tag);
+  const hasStatements =
+    (program?.body?.length ?? 0) > 0 ||
+    (program?.innerComments?.length ?? 0) > 0;
   // One head error is reported, the one stock reports first: arguments, then
   // parameters, then the variable, then the attributes and values in the order
   // they were written, then a body next to a value.
