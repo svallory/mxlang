@@ -1,0 +1,5 @@
+---
+packages: [core]
+kind: Fixed
+---
+A dialect's `messageVocabulary` and product name now apply to every message of a file whose contracts have an `analyze` hook. Before, such a file lowered twice and the first walk, whose errors become the file's, ran without the dialect's words, so a dialect that calls an attribute an "option" and spells a tag as the user wrote it got MX's wording from every contract check and from the lowering that follows it. For example `<string>`: unknown attribute `bogus` is now `string`: unknown option `bogus`; the same holds for `<attributes>`: `<member>` is not allowed here, a tag outside its `parents`, a repeated child or attribute tag, a missing required child or attribute, "or in an attribute value" in the CDATA message, Invalid attribute name `a?b`, and the language name in "scriptlets are not supported in …". A file with no hook, with only `transform` or `finalize` hooks, or with no dialect reads exactly as before, and `ctx.fail` from any hook already named its owner in the dialect's words.

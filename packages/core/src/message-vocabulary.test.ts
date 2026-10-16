@@ -1035,3 +1035,232 @@ describe("load validation", () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Hook presence does not change the words. A contract with an `analyze`,
+// `transform` or `finalize` hook reads its messages in the dialect's words
+// exactly like one without: the same file, the same message, whichever hooks
+// the contracts carry. (An `analyze` hook makes the lowering walk the file
+// twice, the first time on a scratch context, and its errors are the file's.)
+
+type HookSet = Partial<Pick<CustomTag, "analyze" | "transform" | "finalize">>;
+
+const HOOKS: Readonly<Record<string, HookSet>> = {
+  none: {},
+  analyze: { analyze: () => {} },
+  transform: { transform: () => [] },
+  // `finalize` alone is a contract error: it needs a call site to collect from.
+  finalize: { transform: () => [], finalize: () => [] },
+  "analyze + transform + finalize": {
+    analyze: () => {},
+    transform: () => [],
+    finalize: () => [],
+  },
+};
+
+const hookContracts = {
+  ...contracts,
+  entity: {
+    attributes: { name: { type: "string", required: true } },
+    children: { attributes: {}, member: {}, string: {}, leaf: {} },
+  },
+  leaf: { parents: ["entity"] },
+  need: { children: { string: { required: true } } },
+  solo: { children: { string: {} } },
+} as unknown as Record<string, CustomTag>;
+
+function withHooks(hooks: HookSet): LowerSourceOptions {
+  return {
+    ...OPTIONS,
+    customTags: Object.fromEntries(
+      Object.entries(hookContracts).map(([name, contract]) => [
+        name,
+        { ...contract, ...hooks },
+      ]),
+    ),
+  };
+}
+
+interface HookRow {
+  readonly group:
+    | "attributes"
+    | "children"
+    | "parents"
+    | "cardinality"
+    | "CDATA"
+    | "lowering";
+  readonly name: string;
+  readonly source: string;
+  readonly mx: string;
+  readonly option: string;
+}
+
+const HOOK_ROWS: readonly HookRow[] = [
+  {
+    group: "attributes",
+    name: "an unknown attribute",
+    source: 'entity name="e"\n  string name="a" bogus=1\n',
+    mx: "`<string>`: unknown attribute `bogus`",
+    option: "`string`: unknown option `bogus`",
+  },
+  {
+    group: "attributes",
+    name: "a missing required attribute",
+    source: 'entity name="e"\n  string min=1\n',
+    mx: "`<string>`: missing required attribute `name`",
+    option: "`string`: missing required option `name`",
+  },
+  {
+    group: "attributes",
+    name: "an attribute of the wrong type",
+    source: 'entity name="e"\n  string name="a" min="x"\n',
+    mx: "`<string>`: attribute `min` must be number, got string",
+    option: "`string`: option `min` must be number, got string",
+  },
+  {
+    group: "children",
+    name: "a child that is not allowed",
+    source: 'entity name="e"\n  attributes\n    member name="t"\n',
+    mx: "`<attributes>`: `<member>` is not allowed here; allowed children: `<string>`",
+    option:
+      "`attributes`: `member` is not allowed here; allowed children: `string`",
+  },
+  {
+    group: "children",
+    name: "a trigger-made child that is not allowed (the authored text)",
+    source: 'entity name="e"\n  attributes\n    &title\n',
+    mx: "`<attributes>`: `<member>` is not allowed here; allowed children: `<string>`",
+    option:
+      "`attributes`: `&title` is not allowed here; allowed children: `string`",
+  },
+  {
+    group: "children",
+    name: "a missing required child",
+    source: "need\n",
+    mx: "`<need>`: missing required child `<string>`",
+    option: "`need`: missing required child `string`",
+  },
+  {
+    group: "parents",
+    name: "a tag outside its parents",
+    source: "leaf\n",
+    mx: "`<leaf>` must be inside `<entity>`; found at the top level",
+    option: "`leaf` must be inside `entity`; found at the top level",
+  },
+  {
+    group: "cardinality",
+    name: "a child repeated",
+    source: 'solo\n  string name="a"\n  string name="b"\n',
+    mx: "`<solo>`: `<string>` may not be repeated",
+    option: "`solo`: `string` may not be repeated",
+  },
+  {
+    group: "cardinality",
+    name: "an attribute tag repeated",
+    source: "card\n  @head\n  @head\n",
+    mx: "`<card>`: attribute tag `<@head>` may not be repeated",
+    option: "`card`: option tag `head` may not be repeated",
+  },
+  {
+    group: "CDATA",
+    name: "a CDATA section (the fix names an attribute value)",
+    source: 'entity name="e"\n  <![CDATA[x]]>\n',
+    mx: `\`<![CDATA[…]]>\` is not supported: write the text inline, as \`\${"…"}\` when it must stay raw, or in an attribute value`,
+    option: `\`<![CDATA[…]]>\` is not supported: write the text inline, as \`\${"…"}\` when it must stay raw, or in an option value`,
+  },
+  {
+    group: "lowering",
+    name: "an invalid attribute name",
+    source: 'entity name="e"\n  string name="a" a?b=1\n',
+    mx: "Invalid attribute name `a?b` — an attribute name may use letters, digits and `._:-`",
+    option:
+      "Invalid option name `a?b` — an option name may use letters, digits and `._:-`",
+  },
+  {
+    group: "lowering",
+    name: "a duplicate attribute",
+    source: 'entity name="e"\n  string name="a" name="b"\n',
+    mx: "duplicate attribute `name`: the later one at 2:19 wins, so this one is dropped",
+    option:
+      "duplicate option `name`: the later one at 2:19 wins, so this one is dropped",
+  },
+  {
+    group: "lowering",
+    name: "a scriptlet (the product name is the dialect's, not MX)",
+    source: 'entity name="e"\n  $ var x = 1\n',
+    mx: "scriptlets (`$ statement`) are not supported in member; declare a value with `<let/x=…/>`",
+    option:
+      "scriptlets (`$ statement`) are not supported in member; declare a value with `<let/x=…/>`",
+  },
+];
+
+describe("hook presence does not change the words of a message", () => {
+  for (const [hookName, hooks] of Object.entries(HOOKS)) {
+    describe(`contracts with ${hookName === "none" ? "no hook" : hookName}`, () => {
+      const options = withHooks(hooks);
+      for (const row of HOOK_ROWS) {
+        it(`${row.group}: ${row.name}`, () => {
+          // MX's words: no vocabulary, or a dialect that states none.
+          expect(messages(row.source, noVocabulary, options)).toEqual([row.mx]);
+          expect(messages(row.source, dialectWith({}), options)).toEqual([
+            row.mx,
+          ]);
+          // The dialect's words.
+          expect(messages(row.source, optionDialect, options)).toEqual([
+            row.option,
+          ]);
+        });
+      }
+    });
+  }
+});
+
+describe("ctx.fail names its owner in the dialect's words, whichever hook calls it", () => {
+  const failing = (hooks: HookSet): LowerSourceOptions => ({
+    ...OPTIONS,
+    customTags: {
+      ...hookContracts,
+      boom: hooks,
+    } as unknown as Record<string, CustomTag>,
+  });
+  const cases: Record<string, HookSet> = {
+    "an analyze hook": {
+      analyze: (_calls, ctx) => ctx.fail("it broke"),
+    },
+    "a transform hook": {
+      transform: (_call, ctx) => ctx.fail("it broke"),
+    },
+    "a transform hook, with an analyze hook beside it": {
+      analyze: () => {},
+      transform: (_call, ctx) => ctx.fail("it broke"),
+    },
+  };
+  for (const [name, hooks] of Object.entries(cases)) {
+    it(name, () => {
+      const options = failing(hooks);
+      expect(messages("boom\n", noVocabulary, options)).toEqual([
+        "`<boom>`: it broke",
+      ]);
+      expect(messages("boom\n", optionDialect, options)).toEqual([
+        "`boom`: it broke",
+      ]);
+    });
+  }
+
+  it("a transform's ctx.fail in a file where another tag has an analyze hook", () => {
+    const options: LowerSourceOptions = {
+      ...OPTIONS,
+      customTags: {
+        ...hookContracts,
+        entity: { ...hookContracts.entity, analyze: () => {} },
+        boom: {
+          transform: (_call: unknown, ctx: { fail(message: string): never }) =>
+            ctx.fail("it broke"),
+        },
+      } as unknown as Record<string, CustomTag>,
+    };
+    expect(messages("boom\n", optionDialect, options)).toEqual([
+      "`boom`: it broke",
+    ]);
+  });
+});

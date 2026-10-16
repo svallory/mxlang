@@ -7100,6 +7100,12 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   // the real one (intended: a hook is a pure function of the node, and an
   // error in a node it lowers is the file's whichever walk reaches it first).
   scratch.dialect = ctx.dialect;
+  // The file's words and product name, for the same reason: this walk's
+  // errors are thrown as the file's, and `voiceOfCtx`/`productOf` read an unset
+  // field as MX's own, so a scratch `Ctx` that left them behind spelled every
+  // message of a file with an `analyze` hook in MX's words, not the dialect's.
+  scratch.voice = ctx.voice;
+  scratch.productName = ctx.productName;
   // Mirrors the parent: this walk is the same file, so whether it emits a
   // module is the same answer.
   scratch.emitsModule = ctx.emitsModule;
