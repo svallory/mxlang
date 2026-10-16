@@ -7062,6 +7062,85 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
 }
 
 /**
+ * How the scratch `Ctx` of the `analyze` pre-pass gets each `Ctx` field:
+ *
+ * - `inherit`: copied from the file's own `Ctx` (the walk only reads it, or
+ *   shares it by reference on purpose);
+ * - `fresh`: the scratch walk's own (`newCtx` makes it, or the walk writes it
+ *   and the real pass writes it again);
+ * - `explicit`: set by name in `runCustomTagAnalyze`.
+ *
+ * Exhaustive over `keyof Ctx`, so a field added to `Ctx` does not typecheck
+ * until it is classified here: a file with an `analyze` hook cannot lose the
+ * new field's effect on a message, a refusal or the `TagCall` again.
+ */
+const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
+  // The file and the host.
+  source: "fresh",
+  filename: "fresh",
+  lines: "fresh",
+  generate: "fresh",
+  declarations: "fresh",
+  tagTable: "fresh",
+  targets: "fresh",
+  calleeInputFor: "inherit",
+  ownInput: "inherit",
+  tagRules: "inherit",
+  customTags: "inherit",
+  customTagGensym: "inherit",
+  customTagStores: "inherit",
+  emitsModule: "inherit",
+  unsupportedIn: "inherit",
+  productName: "inherit",
+  voice: "inherit",
+  dialect: "inherit",
+  defaultTag: "inherit",
+  atoms: "inherit",
+  triggerSplices: "inherit",
+  atomsRecorded: "inherit",
+  dependencies: "inherit",
+  resolveImport: "inherit",
+  // The walk's own, discarded with it.
+  prelude: "fresh",
+  hoist: "fresh",
+  bindings: "fresh",
+  defines: "fresh",
+  imports: "fresh",
+  importedNames: "fresh",
+  importSpecifiers: "fresh",
+  importDefaultFromMarkoOrMx: "fresh",
+  unknownLocalValue: "fresh",
+  staticBindings: "fresh",
+  bindingSites: "fresh",
+  afterLower: "fresh",
+  customTagImports: "fresh",
+  customTagImportNodes: "fresh",
+  returnValue: "fresh",
+  tagVars: "fresh",
+  tagVarBlock: "fresh",
+  tagVarShadowed: "fresh",
+  renderLets: "fresh",
+  writeGuards: "fresh",
+  laterLets: "fresh",
+  derivedConsts: "fresh",
+  moduleScope: "fresh",
+  tagVarBlockSeq: "fresh",
+  exportName: "fresh",
+  customTagsUsed: "fresh",
+  contractFacts: "fresh",
+  contractDerived: "fresh",
+  deferredContractErrors: "fresh",
+  // Set by name below.
+  authoredAncestors: "explicit",
+  authoredAncestorNodes: "explicit",
+  unnamedTagsResolved: "explicit",
+  returnDepth: "explicit",
+  warnings: "explicit",
+  errors: "explicit",
+  customTagAnalyzePass: "explicit",
+};
+
+/**
  * Walks the body once on a scratch `Ctx`, then runs every `analyze`.
  *
  * The scratch `Ctx` is the whole trick. It shares what a lower needs to read —
@@ -7091,28 +7170,24 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
     ctx.filename,
     ctx.targets,
   );
-  scratch.customTags = customTags;
-  scratch.tagRules = ctx.tagRules;
-  // The file's dialect: a call's checks read the keys it claims and the
-  // wording it gives (`describeAttribute`), and this walk's errors are the
-  // file's. The same dialect also reaches `lowerBlockTag` and `lowerFilter`
-  // here, so a file with an `analyze` hook runs them in this walk as well as
-  // the real one (intended: a hook is a pure function of the node, and an
-  // error in a node it lowers is the file's whichever walk reaches it first).
-  scratch.dialect = ctx.dialect;
-  // The file's words and product name, for the same reason: this walk's
-  // errors are thrown as the file's, and `voiceOfCtx`/`productOf` read an unset
-  // field as MX's own, so a scratch `Ctx` that left them behind spelled every
-  // message of a file with an `analyze` hook in MX's words, not the dialect's.
-  scratch.voice = ctx.voice;
-  scratch.productName = ctx.productName;
-  // Mirrors the parent: this walk is the same file, so whether it emits a
-  // module is the same answer.
-  scratch.emitsModule = ctx.emitsModule;
+  // Every field the walk only reads comes from the real `Ctx`, chosen by
+  // {@link SCRATCH_HANDOFF}. The file's words (`voice`, `productName`), its
+  // dialect, its trigger splices and atoms, what the host set (`resolveImport`,
+  // `unsupportedIn`, `defaultTag`) and its dependency set are the file's: this
+  // walk's errors are thrown as the file's, and `analyze` is handed the very
+  // `TagCall` its `transform` will receive.
+  ctx.dependencies ??= new Set();
+  const scratchFields = scratch as unknown as Record<string, unknown>;
+  const realFields = ctx as unknown as Record<string, unknown>;
+  for (const key of Object.keys(SCRATCH_HANDOFF) as (keyof Ctx)[]) {
+    if (SCRATCH_HANDOFF[key] === "inherit")
+      scratchFields[key] = realFields[key];
+  }
+  // `lowerTemplate` starts every file at the authored root; so does this walk.
+  scratch.authoredAncestors = [];
+  scratch.authoredAncestorNodes = [];
   // `lower` already resolved this tree; the scratch walk must not redo it.
   scratch.unnamedTagsResolved = true;
-  scratch.customTagStores = ctx.customTagStores;
-  scratch.customTagGensym = ctx.customTagGensym;
   // -1, exactly as `lower` sets it, because this walk enters through
   // `lowerChildren` rather than through `lower`: the body's own child list
   // then sits at depth 0, the one position `<return>` is legal in. Left

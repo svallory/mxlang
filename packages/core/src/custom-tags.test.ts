@@ -3,10 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { compileSource } from "./compile.ts";
-import { TranslateError } from "./core.ts";
+import { newCtx, TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
+import memberSyntax from "./fixtures/syntax/member-fixture.ts";
+import { parseFragment } from "./fragment.ts";
 import type { Attr, AttributeTag, Ir, IrNode } from "./ir.ts";
+import { lowerSource } from "./ir-entry/index.ts";
+import { lower } from "./lower.ts";
 import { resetTemplateCache } from "./template-tag.ts";
 import { lookup } from "./test-targets.ts";
 
@@ -2946,5 +2950,146 @@ describe("builders take spans from `from`", () => {
     expect(tag.tag.nameSpan).toEqual({ sourceStart: 1, sourceEnd: 5 });
     expect(tag.tag.span).toEqual({ sourceStart: 0, sourceEnd: 7 });
     expect(tag.tag.loc).toEqual({ line: 1, column: 0 });
+  });
+});
+
+/**
+ * The `analyze` pre-pass walks the file on a scratch `Ctx` whose errors are the
+ * file's and whose calls are the ones `analyze` sees. Each case below is the
+ * same file twice, once with an unrelated tag that has an `analyze` hook
+ * registered and once without; the file must read, refuse and report the same.
+ */
+describe("the analyze pre-pass sees the file as the real pass does", () => {
+  const unusedAnalyze: CustomTag = { analyze() {} };
+
+  function inDir<T>(files: Record<string, string>, run: (dir: string) => T): T {
+    const dir = mkdtempSync(join(tmpdir(), "mx-analyze-prepass-"));
+    try {
+      for (const [name, text] of Object.entries(files)) {
+        writeFileSync(join(dir, name), text);
+      }
+      return run(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  const messageOf = (run: () => unknown): string => {
+    try {
+      run();
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return "(no error)";
+  };
+
+  it("names the place the host set in `unsupportedIn`", () => {
+    const lowerRegion = (customTags: Record<string, CustomTag>) =>
+      messageOf(() => {
+        const source = "<p/x>text</p>\n";
+        const { body } = parseFragment(source, {
+          filename: "/v/a.mx",
+          customTags,
+          targets: lookup,
+        });
+        const ctx = newCtx(
+          source,
+          () => "",
+          fakeDeclarations(),
+          undefined,
+          "/v/a.mx",
+          lookup,
+        );
+        ctx.customTags = customTags;
+        ctx.unsupportedIn = "a `.demo.mx` region";
+        lower(ctx, body);
+      });
+    const plain = lowerRegion({});
+    expect(plain).toBe(
+      "tag variable `/x` on `<p>` is not supported in a `.demo.mx` region",
+    );
+    expect(lowerRegion({ other: unusedAnalyze })).toBe(plain);
+  });
+
+  it("resolves an aliased import through the host's `resolveImport`", () => {
+    inDir({ "counter.mx": "<return value=1/>\n" }, (dir) => {
+      const compile = (customTags: Record<string, CustomTag>) =>
+        messageOf(() =>
+          compileSource(
+            'import Counter from "@/counter.mx"\n<Counter/x/>\n',
+            join(dir, "a.mx"),
+            fakeDeclarations(),
+            {
+              customTags,
+              targets: lookup,
+              tagDiscoveryDirs: [],
+              resolveImport: (specifier) =>
+                specifier.startsWith("@/")
+                  ? join(dir, specifier.slice(2))
+                  : undefined,
+              emitIr: () => "",
+            },
+          ),
+        );
+      expect(compile({})).toBe("(no error)");
+      expect(compile({ other: unusedAnalyze })).toBe("(no error)");
+    });
+  });
+
+  it("reports the callees of a failed compile", () => {
+    inDir({ "counter.mx": "<return value=1/>\n" }, (dir) => {
+      const dependencies = (customTags: Record<string, CustomTag>) => {
+        try {
+          compileSource(
+            'import Counter from "./counter.mx"\n<Counter/x/>\n<item bogus=1/>\n',
+            join(dir, "a.mx"),
+            fakeDeclarations(),
+            {
+              customTags,
+              targets: lookup,
+              tagDiscoveryDirs: [],
+              emitIr: () => "",
+            },
+          );
+        } catch (error) {
+          return {
+            message: (error as Error).message,
+            deps: (error as TranslateError).dependencies,
+          };
+        }
+        throw new Error("the compile did not fail");
+      };
+      const item: CustomTag = { attributes: {}, transform: () => [] };
+      const plain = dependencies({ item });
+      expect(plain.message).toContain("accepts no attributes");
+      expect(plain.deps).toEqual([join(dir, "counter.mx")]);
+      expect(dependencies({ item, other: unusedAnalyze })).toEqual(plain);
+    });
+  });
+
+  it("hands analyze the code a trigger lowered to, as transform gets it", () => {
+    const seen: Record<string, unknown> = {};
+    const codeOf = (call: TagCall) =>
+      call.attrs.map((attr) =>
+        attr.kind === "dynamic" ? attr.value.code : undefined,
+      );
+    const item: CustomTag = {
+      attributes: { label: {} },
+      analyze(calls) {
+        seen.analyze = codeOf(calls[0] as TagCall);
+      },
+      transform(call) {
+        seen.transform = codeOf(call);
+        return [];
+      },
+    };
+    lowerSource("item label=&title\n", "/v/a.mx", {
+      customTags: { item },
+      structural: "pass",
+      unknownTags: "reject",
+      dialect: { ...memberSyntax, name: "member" },
+    });
+    expect(seen.transform).toEqual(["self.title"]);
+    expect(seen.analyze).toEqual(seen.transform);
   });
 });
