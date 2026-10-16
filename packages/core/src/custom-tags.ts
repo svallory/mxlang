@@ -1824,6 +1824,7 @@ export function validateCustomTagChildren(
   givenOwner?: Owner,
   nameEnd?: number,
   voice: Voice = MX_VOICE,
+  rejectsStructural = false,
 ): void {
   if (!definition.children) return;
   const owner: Owner =
@@ -1896,8 +1897,13 @@ export function validateCustomTagChildren(
       : allowedNames() === "none"
         ? "it accepts no child tags"
         : `it accepts only the child tags ${allowedNames()}`;
+  // Under `structural: "reject"` a `for` or `if` is the error: what it holds
+  // is not checked against the contract, so that error is the one reported.
   const collect = (nodes: readonly ChildNode[]): void => {
     for (const node of nodes) {
+      if (node.kind === "ChildFor" || node.kind === "ChildIf") {
+        if (rejectsStructural) continue;
+      }
       if (node.kind === "ChildFor") collect(node.nodes);
       else if (node.kind === "ChildIf") {
         for (const branch of node.branches) collect(branch.nodes);
@@ -1972,8 +1978,16 @@ export function validateCustomTagChildren(
   collect(tree);
   // One identity per tag (ADR 147): a wildcard child counts under its
   // canonical name against that name's explicit entry.
+  // A rejected construct holds no child that counts as repeated or as the one
+  // a required child needs.
+  const counted = rejectsStructural
+    ? tree.filter((node) => node.kind !== "ChildFor" && node.kind !== "ChildIf")
+    : tree;
   for (const [name, declaration] of explicit) {
-    const range = attributeTagOccurrenceRange(tree, name);
+    const range = attributeTagOccurrenceRange(counted, name);
+    const inRejected =
+      rejectsStructural &&
+      attributeTagOccurrenceRange(tree, name).max > range.max;
     if (declaration.repeatable !== true && range.max > 1) {
       const occurrences = leaves.filter(
         (node) => (node.kind === "ChildTag" ? node.name : "#text") === name,
@@ -1992,7 +2006,7 @@ export function validateCustomTagChildren(
         repeated ? childEnds.get(repeated) : nameEnd,
       );
     }
-    if (declaration.required && range.min === 0) {
+    if (declaration.required && range.min === 0 && !inRejected) {
       failForOwner(
         MISSING_CHILD_CODE,
         owner,
@@ -2331,6 +2345,8 @@ export interface ClaimContext {
   defer(error: TranslateError): void;
   /** The words of the file's dialect in the messages; MX's own when absent. */
   voice?: Voice;
+  /** The file's `structural` mode, when it is decided. */
+  structural?: "pass" | "reject";
 }
 
 /** Does the declaration use a key the file's dialect claims? */
@@ -2383,7 +2399,14 @@ export function validateCustomTagCall(
 ): void {
   const voice = claims?.voice ?? MX_VOICE;
   const owner = lazyOwner(() => tagLabelAt(call, voice));
-  validateCustomTagChildren(definition, call, owner, nameEndOf(call), voice);
+  validateCustomTagChildren(
+    definition,
+    call,
+    owner,
+    nameEndOf(call),
+    voice,
+    claims?.structural === "reject",
+  );
   if (definition.parseOptions?.openTagOnly && call.content) {
     failForOwner(
       CONTENT_NOT_ALLOWED_CODE,
@@ -3921,6 +3944,7 @@ export function transformCustomTag(
   validateCustomTagCall(definition, call, (offset) => positionAt(ctx, offset), {
     voice,
     claimed: claimedFields(ctx.dialect),
+    structural: ctx.structural,
     defer: (error) => {
       ctx.deferredContractErrors ??= [];
       ctx.deferredContractErrors.push(error);

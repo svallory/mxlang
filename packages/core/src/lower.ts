@@ -5136,6 +5136,7 @@ function validateCustomAttributeTagBodies(
         nestedOwner,
         blameEndOffset(tag),
         voice,
+        ctx.structural === "reject",
       );
     }
     validateCustomAttributeTagBodies(
@@ -5562,16 +5563,20 @@ function lowerCustomTag(
       tagLabel(name, alias, voice, triggerOf(node)?.trigger),
     ),
   );
-  validateCustomTagParents(
-    definition,
-    name,
-    posOf(ctx, node),
-    ctx.authoredAncestors?.at(-2) ?? "#root",
-    label,
-    blameEndOffset(node),
-    voice,
-    triggerOf(node)?.trigger,
-  );
+  // A tag under a `for` or `if` that `structural` rejects: the construct is
+  // the error, and the parent it is transparent to is not one to report.
+  if (!underStructural(ctx)) {
+    validateCustomTagParents(
+      definition,
+      name,
+      posOf(ctx, node),
+      ctx.authoredAncestors?.at(-2) ?? "#root",
+      label,
+      blameEndOffset(node),
+      voice,
+      triggerOf(node)?.trigger,
+    );
+  }
   if (wildcard) rejectNearExplicitChild(ctx, node, wildcard, label);
   rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
@@ -5627,6 +5632,7 @@ function lowerCustomTag(
     label,
     blameEndOffset(node),
     voice,
+    ctx.structural === "reject",
   );
   const handsToHost =
     !isBuiltin &&
@@ -5920,6 +5926,30 @@ function rejectUncalledParameterizedAttributeTag(
   );
 }
 
+/**
+ * Runs `lower` for the body of a `for` or `if`. Under
+ * `structural: "reject"` the construct is open meanwhile, so a tag directly
+ * under it does not report that it is in the wrong place: the construct is
+ * already the error (see {@link underStructural}).
+ */
+function insideStructural<T>(ctx: Ctx, lower: () => T): T {
+  if (ctx.structural !== "reject") return lower();
+  const open = ctx.structuralOpen ?? [];
+  ctx.structuralOpen = open;
+  open.push(ctx.authoredAncestors?.length ?? 0);
+  try {
+    return lower();
+  } finally {
+    open.pop();
+  }
+}
+
+/** Is a `for` or `if` rejected by `structural` between the tag being lowered and its authored parent? */
+function underStructural(ctx: Ctx): boolean {
+  const depth = (ctx.authoredAncestors?.length ?? 0) - 1;
+  return ctx.structuralOpen?.includes(depth) ?? false;
+}
+
 /** Stack authored names only, never synthesized transform output; unwind even on errors. */
 function pushAuthoredAncestor(ctx: Ctx, name: string, node: Node): () => void {
   ctx.authoredAncestors ??= [];
@@ -5943,7 +5973,8 @@ function strayAttributeTagMessage(ctx: Ctx, name: string): string {
 function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const name = hasStaticName(node) ? String(tagNameOf(node)) : `\${…}`;
   // If/else branches lower through lowerIfChain; for lowers through this entry.
-  if (name === "for") return lowerAuthoredTag(ctx, node);
+  if (name === "for")
+    return insideStructural(ctx, () => lowerAuthoredTag(ctx, node));
   // One identity per tag (decision 147): a wildcard child is its canonical
   // tag to every `parents` check below it.
   const pop = pushAuthoredAncestor(
@@ -6769,7 +6800,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
 
       if (isTagNode(child) && tagNameOf(child) === "if") {
         const lowered = recover(ctx, () =>
-          voicedAt(child, () => lowerIfChain(ctx, children, index)),
+          voicedAt(child, () =>
+            insideStructural(ctx, () => lowerIfChain(ctx, children, index)),
+          ),
         );
         if (lowered) {
           out.push(lowered[0]);
@@ -7061,6 +7094,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
   ctx.authoredAncestorNodes = [];
+  ctx.structuralOpen = [];
   const ownInputCode: string[] = [];
   const ownInputAux: string[] = [];
   for (const node of body) {
@@ -7250,6 +7284,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   calleeInputFor: "inherit",
   ownInput: "inherit",
   tagRules: "inherit",
+  structural: "inherit",
   customTags: "inherit",
   customTagGensym: "inherit",
   customTagStores: "inherit",
@@ -7296,6 +7331,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   contractDerived: "fresh",
   deferredContractErrors: "fresh",
   // Set by name below.
+  structuralOpen: "explicit",
   authoredAncestors: "explicit",
   authoredAncestorNodes: "explicit",
   unnamedTagsResolved: "explicit",
@@ -7351,6 +7387,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   // `lowerTemplate` starts every file at the authored root; so does this walk.
   scratch.authoredAncestors = [];
   scratch.authoredAncestorNodes = [];
+  scratch.structuralOpen = [];
   // `lower` already resolved this tree; the scratch walk must not redo it.
   scratch.unnamedTagsResolved = true;
   // -1, exactly as `lower` sets it, because this walk enters through

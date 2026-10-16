@@ -27,6 +27,7 @@ import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import {
   compileSource,
   type HostOptions,
+  structuralDecided,
   tagRulesDecided,
 } from "../compile.ts";
 import { claimedFields } from "../contract-fields.ts";
@@ -620,6 +621,7 @@ function lowerResolved(
     // `rules` is already this file's preset (`presetOf`): the call's
     // `tagRules` wins over the dialect's, so the compile must not re-pick.
     tagRulesDecided.set(host, presetOf(options, dialectOnce));
+    structuralDecided.set(host, modes.structural);
     compileSource(source, filename, declarations, host);
   } catch (error) {
     const reject = modes.unknownTags === "reject";

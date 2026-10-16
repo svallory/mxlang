@@ -223,6 +223,7 @@ let current: {
   policy: Policy;
   tagTable?: TagTable;
   tagRules?: TagRulesPreset;
+  structural?: "pass" | "reject";
   postEmit?: (code: string) => string;
   emitIr: (ir: Ir, ctx: Ctx) => string;
   customTags?: Readonly<Record<string, CustomTag>>;
@@ -309,6 +310,7 @@ function translatorClaiming(
           );
           ctx.customTags = state.customTags;
           ctx.tagRules = state.tagRules;
+          ctx.structural = state.structural;
           ctx.defaultTag = state.defaultTag;
           ctx.warnings = state.warnings;
           ctx.productName = state.productName;
@@ -460,6 +462,14 @@ export function parseMxDocument(
  */
 export const tagRulesDecided = new WeakMap<HostOptions, TagRulesPreset>();
 
+/**
+ * Host options whose file is checked with `structural: "reject"`: the IR
+ * entry's effective mode (its option, else the dialect's). Absent, the
+ * lowering does not know the mode and checks as it always did. Internal: not
+ * exported from the package.
+ */
+export const structuralDecided = new WeakMap<HostOptions, "pass" | "reject">();
+
 /** `preset`'s rules over the target's native elements (none under `none`). */
 function rulesUnder(preset: TagRulesPreset, policy: Policy): TagRules {
   return tagRulesPreset(preset, policy.nativeTags);
@@ -557,6 +567,7 @@ export function compileSource(
     // file reach it as `customTags`, never by a directory walk here.
     tagTable: lookup,
     tagRules: fileRules,
+    structural: structuralDecided.get(host),
   };
 
   const previous = current;

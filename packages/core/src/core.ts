@@ -361,6 +361,20 @@ export interface WriteGuard {
 }
 
 export interface Ctx {
+  /**
+   * The file's `structural` mode, when the caller decided one (the IR entry
+   * point). Under `"reject"` a `for` or `if` is itself an error, so a check
+   * that only fails because control flow is transparent (a child the parent
+   * does not allow, a repeated or missing child, a tag with the wrong parent)
+   * stays quiet about what the construct holds.
+   */
+  structural?: "pass" | "reject";
+  /**
+   * Under `structural: "reject"`: `authoredAncestors.length` when each open
+   * `for`/`if` was entered. A tag whose parent is the ancestor at
+   * `length - 1` sits directly under a construct when that number is here.
+   */
+  structuralOpen?: number[];
   /** Authored tag ancestors, innermost last; control flow is transparent and units start empty. */
   authoredAncestors?: string[];
   /** The Marko nodes behind `authoredAncestors`, same order (a module's scopes, through `LoweredUnit`). */
