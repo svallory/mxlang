@@ -30,6 +30,13 @@
  *   with the same text and a new version instead: Volar compiles it again
  *   (resolving the host anew, replacing the file's policy diagnostics and its
  *   projection) and the program's builder type-checks it again.
+ *
+ * Three things of TypeScript's are used that its public typings do not
+ * declare: `getPackageScopeForPath` and `getTemporaryModuleResolutionState`
+ * (under `-b -w`, to put the manifests in the package-info cache the solution
+ * builder watches) and `SourceFile.version` (to hand Volar and the builder a
+ * new object). All three exist across the supported range (`>=5.9.0 <7`);
+ * `watch-package-json.test.ts` fails if one goes away.
  */
 
 import { statSync } from "node:fs";
@@ -146,10 +153,24 @@ function recordInResolutionCache(
   }
 }
 
+/** A source file with the `version` the program builder requires (TypeScript-internal). */
+interface VersionedSourceFile extends ts.SourceFile {
+  version: string;
+}
+
 /**
  * Makes the manifests that decide an `.mx` file's host inputs of that file in a
  * watch run (see the module comment). `extensions` are the file endings the
  * language plugins compile. Idempotent per host.
+ *
+ * The wrapper is installed as an accessor on `getSourceFile`, not as a plain
+ * function. Under `tsc -b -w` the solution builder swaps that property on every
+ * build cycle (`enableCache` puts a caching function over it, `disableCache`
+ * puts the previous one back), and Volar runs `setup` only when the root files
+ * or the options change, so a plain function is dropped after the first cycle
+ * and nothing puts it back. The accessor wraps whatever is assigned (and keeps
+ * a function of its own as it is), so every program the builder makes reads
+ * its files through it.
  */
 export function trackPackageJsonInputs(
   typescript: typeof ts,
@@ -164,45 +185,69 @@ export function trackPackageJsonInputs(
   marked[WRAPPED] = true;
 
   const views = new Map<string, CompiledView>();
+  /** The source files made here, so a second layer (a cache over this one) leaves them be. */
+  const made = new WeakSet<ts.SourceFile>();
+  /** The functions made by `wrap`, so assigning one back does not wrap it again. */
+  const wrappers = new WeakSet<object>();
   let revision = 0;
 
-  host.getSourceFile = (fileName, languageVersionOrOptions, ...rest) => {
-    const source = getSourceFile(fileName, languageVersionOrOptions, ...rest);
-    if (
-      !source ||
-      !extensions.some((extension) => fileName.endsWith(extension))
-    ) {
-      return source;
-    }
-    const inputs = packageJsonInputs(fileName);
-    if (solutionBuild) recordInResolutionCache(typescript, host, fileName);
-    if (typeof languageVersionOrOptions === "object") {
-      // `createProgram` reads this back off the object it passed in.
-      const options = languageVersionOrOptions as {
-        packageJsonLocations?: string[];
-      };
-      options.packageJsonLocations = [
-        ...new Set([...(options.packageJsonLocations ?? []), ...inputs]),
-      ];
-    }
-    const stamp = stampOf(inputs);
-    const known = views.get(fileName);
-    if (!known || known.source !== source) {
-      views.set(fileName, { source, stamp, view: source });
-      return source;
-    }
-    if (known.stamp === stamp) return known.view;
-    // A manifest changed since this file was handed out. Same text, new
-    // object, new version: Volar compiles it again and the builder re-checks it.
-    const fresh = typescript.createSourceFile(
+  type GetSourceFile = ts.CompilerHost["getSourceFile"];
+  const wrap = (inner: GetSourceFile): GetSourceFile => {
+    const wrapper: GetSourceFile = (
       fileName,
-      source.text,
       languageVersionOrOptions,
-      false,
-    );
-    (fresh as unknown as { version: string }).version =
-      `${(source as { version?: string }).version ?? ""}+package.json:${++revision}`;
-    views.set(fileName, { source, stamp, view: fresh });
-    return fresh;
+      ...rest
+    ) => {
+      const source = inner(fileName, languageVersionOrOptions, ...rest);
+      if (
+        !source ||
+        made.has(source) ||
+        !extensions.some((extension) => fileName.endsWith(extension))
+      ) {
+        return source;
+      }
+      const inputs = packageJsonInputs(fileName);
+      if (solutionBuild) recordInResolutionCache(typescript, host, fileName);
+      if (typeof languageVersionOrOptions === "object") {
+        // `createProgram` reads this back off the object it passed in.
+        const options = languageVersionOrOptions as {
+          packageJsonLocations?: string[];
+        };
+        options.packageJsonLocations = [
+          ...new Set([...(options.packageJsonLocations ?? []), ...inputs]),
+        ];
+      }
+      const stamp = stampOf(inputs);
+      const known = views.get(fileName);
+      if (!known || known.source !== source) {
+        views.set(fileName, { source, stamp, view: source });
+        return source;
+      }
+      if (known.stamp === stamp) return known.view;
+      // A manifest changed since this file was handed out. Same text, new
+      // object, new version: Volar compiles it again and the builder re-checks it.
+      const fresh = typescript.createSourceFile(
+        fileName,
+        source.text,
+        languageVersionOrOptions,
+        false,
+      ) as VersionedSourceFile;
+      fresh.version = `${(source as Partial<VersionedSourceFile>).version ?? ""}+package.json:${++revision}`;
+      made.add(fresh);
+      views.set(fileName, { source, stamp, view: fresh });
+      return fresh;
+    };
+    wrappers.add(wrapper);
+    return wrapper;
   };
+
+  let current = wrap(getSourceFile);
+  Object.defineProperty(host, "getSourceFile", {
+    configurable: true,
+    enumerable: true,
+    get: () => current,
+    set: (next: GetSourceFile) => {
+      current = wrappers.has(next) ? next : wrap(next);
+    },
+  });
 }
