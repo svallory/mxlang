@@ -895,7 +895,7 @@ has it.
 | Dynamic | `value=expr` | |
 | Boolean | `disabled` | Inherited from Marko; no MX decision |
 | Spread | `...props` | Accepted on elements without diagnostic |
-| Bound (`:=`) | `value:=count` | **Stateful** — host-defined (§14) |
+| Bound (`:=`) | `value:=count` | **Stateful** — core language, lowered by each target (§11) |
 | Modifier | `class:active=on` | **Not Marko syntax** — see below |
 | Namespaced name | `:foo=y`, `value:foo=y` | Marko's own attribute named `value:foo` — see below |
 | Method | `onClick() { … }` | Event handler — host-defined, see below |
@@ -2079,7 +2079,7 @@ PascalCase name with no scope binding and no resolvable child file sets
 `custom-tag.ts:398-429`'s positioned `` Unable to find entry point for custom
 tag `<Name>`. ``) and by live compile — identical wording for a self-closing
 tag, a tag with a body, and a tag with an attribute. `lower.ts`'s step 5/9
-guards (above) now call `ctx.declarations.rejectUnknownTag?.(name, node, ctx)`
+guards (above) call `ctx.declarations.rejectUnknownTag?.(name, node, ctx)`
 before their own fallback message, for **both** the PascalCase (step 9) and
 the lowercase-unresolved-element (existing) case — one hook, reported before
 either fallback, so a Marko-parity host gets Marko's exact wording either way
@@ -2145,17 +2145,13 @@ Type-only fence imports are excluded the same way `sourceBindings`/
 runtime value, so `<Widget/>` on any of these four hosts is Marko's unresolved-
 tag error, not a silent reference.
 
-**Extended to Angular** (the `angular-host` follow-up decision 114 always
-named, PR #113's branch). `@mxlang/host-angular`'s `isComponent` was a bare
-`/^[A-Z]/` test too, but its fallthrough was softer than a bare reference:
-an unresolved capitalized tag emitted `<mx-totally-undefined>` plus the
-step-1 "add this import yourself" warning, which told the author a tag
-nothing resolves was one import away from working. It now resolves a
+**Angular.** `@mxlang/host-angular`'s `isComponent` resolves a
 capitalized tag only through `ctx.imports`/`ctx.defines` or a non-element
 taglib entry, and supplies `rejectUnknownTag` with Marko's wording, so
 `<TotallyUndefined/>` is the same positioned compile error as on every
-other host, in a page `.mx` and in a `.ng.mx` region alike. Two consequences
-worth recording:
+other host, in a page `.mx` and in a `.ng.mx` region alike; it never emits a
+placeholder element with an "add this import yourself" warning for a tag
+nothing resolves. Two consequences:
 
 - Decision 116's routing landed while this host's component dispatch still
   called `Component.target.kind === "dynamic"` unreachable. A capitalized
@@ -2207,18 +2203,17 @@ component; anything else — a plain function, a plain object, `undefined`,
 string, `undefined`, `null`, or a plain object never throws
 `"X is not a function"`.
 
-The routing in step 5 is refined, and scoped to **import bindings only**:
-only a *default* import whose specifier ends in `.mx` — the counterpart of
-Marko's own statically-resolved component case (`tag-name-type.ts:174-196`) — still
-routes to a direct `kind: "name"` call. Every other capitalized value
-*import* (named, namespace, or a default from any other extension) now
-routes to `kind: "dynamic"` instead — the identical lowering an authored
+For **import bindings**, only a *default* import whose specifier ends in
+`.mx` — the counterpart of Marko's own statically-resolved component case
+(`tag-name-type.ts:174-196`) — routes to a direct `kind: "name"` call. Every
+other capitalized value *import* (named, namespace, or a default from any
+other extension) routes to `kind: "dynamic"` — the identical lowering an authored
 `<${expr}/>` already produces above, so every host's existing dynamic-tag
 emitter handles it with no host-side routing change (decision 79). Gated
 specifically on `ctx.importSpecifiers` (populated only by an authored
 `import` statement or, on Solid, the `importSpecifiers` a real
 `.solid.mx` caller's surrounding module supplies), not on `ctx.imports` —
-the broader set step 5 already used, which also holds a module-scope
+the broader set step 5 uses, which also holds a module-scope
 `const`/`function`/`class`, a `<const>` binding, and a `<for>`/`<define>` tag
 param. Those locals are classified by value instead (next paragraph): one
 whose value is statically a function, arrow, class or component keeps its
@@ -2226,15 +2221,12 @@ direct call, and every other local routes dynamic. On every host a dynamic
 tag whose value is falsy renders only its body. The resolved target carries
 `valueImportBinding`, the binding's own name, so `readCalleeInput` can still
 resolve the callee's declared `Input` for typed attribute-tag checking even
-though the call now lowers dynamically, and a diagnostic on the call still
+though the call lowers dynamically, and a diagnostic on the call still
 names the tag the author wrote rather than "dynamic tag".
 
-**Local extension of decision 116 (firstmate's ruling, recorded under this
-same decision number in `notes/decisions-2026-09-10.md`; TODO
-`local-value-as-tag-parity`):** the gap above is closed for every
-*non-import* PascalCase local too — a `static`/module-scope declaration, a
-`<const>` binding, a `<for>`/`<define>` tag param. Rather than mirror
-decision 116's own import-only rule (routing *every* local dynamic would
+**Locals.** Every *non-import* PascalCase local — a `static`/module-scope
+declaration, a `<const>` binding, a `<for>`/`<define>` tag param — follows
+the same Marko behaviour. Rather than mirror the import-only rule (routing *every* local dynamic would
 change the most common Solid module-scope-component pattern), core instead
 classifies each local's value:
 
@@ -2343,15 +2335,13 @@ real renderer there either. (The `.content` guard belongs to the outgoing
 attribute-tag model and is being replaced with it: under Marko's record, §8,
 an attribute tag's value has the record's shape on every target.)
 
-Two per-host consequences, both fixed in the same task: html's
-`renderDynamic` returned `""` outright for a falsy target, discarding the
-tag's body content — now returns `props.content?.() ?? ""`, matching Marko.
-Solid's `#dynamicComponent` had the identical bug in its own falsy-target
-branch, additionally exposed a pre-existing gap where a region whose entire
-content is one dynamic tag failed to re-parse (its compiled JSX
-child-expression-container braces are not a standalone expression on their
-own) — the parser bridge now retries with those braces stripped on a parse
-failure. `@mxlang/tsx-bridge`'s module-scope scan gained a parallel
+Per host: html's `renderDynamic` returns `props.content?.() ?? ""` for a
+falsy target, keeping the tag's body content as Marko does, and Solid's
+`#dynamicComponent` does the same in its falsy-target branch. A region whose
+entire content is one dynamic tag compiles to JSX whose child-expression-
+container braces are not a standalone expression, so the parser bridge
+retries with those braces stripped on a parse failure.
+`@mxlang/tsx-bridge`'s module-scope scan keeps a parallel
 `importDefaultFromMarkoOrMx` set (§7's precedence text above), threaded the
 same way `moduleBindings`/`importSpecifiers` already are, so a real
 `.solid.mx` file's routing matches a unit test's.
@@ -4139,7 +4129,7 @@ read throws, as `readFileSync` does.
 | `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``Data files are static, so they do not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the dialect's `imports`, else the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
 | `unknownTags` | `"allow"`, `"reject"` (default: the dialect's `unknownTags`, else `"allow"`) | `"allow"` is the open set of decision 131: a tag with no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) and is not the built-in `object`, a positioned error at the tag: ``` `<opem>` is not a known tag: no contract for it was given; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). A file of a dialect names the dialect by its id in place of `no contract for it was given`: ``` `<opem>` is not a known tag in the `recipes` dialect; did you mean `<open>`? ```, because its vocabulary is the dialect's `contracts`, its tag directories and whatever the caller passed, and the tag is in none of them. The code and the position are the same. Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
-| `stripTypes` | `boolean` (default `true`) | `true` erases TypeScript from the nodes before the source lowers: an arrow's annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (`node`, `span` and `code` are the operand's). `Expr.code` is sliced from the source either way. `false` keeps the authored TypeScript in the nodes a dialect's `nodeType.lower`, contract hooks and `afterLower` see. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks. An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. A tag-file hook's `ctx.lower` takes the option and does not inherit the outer call's value |
+| `stripTypes` | `boolean` (default `true`) | `true` erases TypeScript from the nodes before the source lowers: an arrow's annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (`node`, `span` and `code` are the operand's). `Expr.code` is sliced from the source either way. `false` keeps the authored TypeScript in the nodes a dialect's `nodeType.lower`, contract hooks and `afterLower` see. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks (the `atom` and `member` checks leave core with the atom removal, §13.9). An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. A tag-file hook's `ctx.lower` takes the option and does not inherit the outer call's value |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
 **Fixes (`fixes`, `@unstable`).** A diagnostic may carry `fixes?: readonly { title: string; edits: readonly { offset: number; end: number; newText: string }[] }[]`: each entry is one way to resolve it, `title` the words a tool shows for it and `edits` the changes it makes. `offset` and `end` are UTF-16 code-unit offsets into the same text the diagnostic's `offset` indexes: the lowered file, or, for a diagnostic that `file` places in another file (where `offset` is `-1`), that file's text. `end` is exclusive (`offset` equal to `end` inserts). The edits of one fix are all against the original text and never overlap, so replacing every `[offset, end)` range by its `newText` gives the fixed source, in whatever order they are applied, and a tool applies a fix whole or not at all. A rule sets `fixes` only when it knows the exact repair; `MX_RESERVED_EFFECT_TAG` does, with one fix, "Rename to `<script>`", whose edits rename the open tag and, when it has a close tag with a name, the close tag (a self-closing tag, a concise tag and a `</>` close have the open name only). A host's "not supported" error for `<effect>`, and the strict policy's, offer none. Wherever a diagnostic is re-raised with its `code` and `end`, its `fixes` travel with them in the same coordinates (`TranslateError.fixes`; a region or `.astro.mx` error keeps the whole file's offsets, as it does for `offset`); the language server offers each fix as a quick fix, the TypeScript plugin answers tsserver's code-fix request with it, and `mx-tsc` prints each on a `fix:` line under the diagnostic. The field and its types (`IrDiagnosticFix`, `IrDiagnosticEdit`) may change in a minor release.

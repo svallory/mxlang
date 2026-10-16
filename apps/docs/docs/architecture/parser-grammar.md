@@ -43,8 +43,8 @@ Decision 158 (2026-10-05) fixes the delivery plan:
   in-repo template parser, so a registry install of core already parses with
   MX's rules (OQ 15).
 - Packages (158.3): `@mxlang/parser` is the template parser (`src/template/`,
-  derived from htmljs-parser) and, when it exists, the front end from parser
-  events to the MX AST; `@mxlang/babel` is the vendored Babel fork with the MX
+  derived from htmljs-parser) and the front end from parser events to the MX
+  AST; `@mxlang/babel` is the vendored Babel fork with the MX
   node types; `@mxlang/tsx-bridge` is the MX-region bridge. There is no
   `@mxlang/compiler` package: `@mxlang/core` plus the host emitters are the
   compiler.
