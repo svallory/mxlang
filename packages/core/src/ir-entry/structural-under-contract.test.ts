@@ -437,4 +437,41 @@ describe("a tag whose transform consumes its body", () => {
     expect(found).toEqual([]);
     expect(ir).toBeDefined();
   });
+  describe("declared through the dialect's contracts", () => {
+    const dialect = {
+      ...memberSyntax,
+      name: "member",
+      structural: "reject",
+      unknownTags: "reject",
+      contracts: {
+        eater: {
+          children: { leaf: { repeatable: true } },
+          transform: () => [],
+        },
+        leaf: {},
+        box: {},
+        section: { parents: ["entity"] },
+        entity: {},
+      },
+    } as unknown as NonNullable<Parameters<typeof lowerSource>[2]>["dialect"];
+
+    it.each([
+      [
+        "a for holding a tag the contract does not allow",
+        "<eater>\n  <for|x| of=[1]>\n    <box/>\n  </for>\n</eater>\n",
+        ["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR],
+      ],
+      [
+        "an if holding a tag that needs another parent",
+        "<eater>\n  <if=a>\n    <section/>\n  </if>\n</eater>\n",
+        ["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF],
+      ],
+    ] as const)("%s", (_label, source, want) => {
+      const result = lowerSource(source, "/t.mx", { dialect });
+      expect(result.ir).toBeUndefined();
+      expect(
+        result.diagnostics.map((d) => [d.code, d.line, d.column, d.message]),
+      ).toEqual([want]);
+    });
+  });
 });
