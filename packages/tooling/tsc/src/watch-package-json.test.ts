@@ -228,6 +228,7 @@ describe.each(MODES)(
 );
 
 describe("mx-tsc -w: more manifest changes", () => {
+  const args = ["-w", "-p", "tsconfig.json"];
   it(
     "reports a manifest that stops parsing, and stops once it parses again",
     async () => {
@@ -235,7 +236,7 @@ describe("mx-tsc -w: more manifest changes", () => {
       let watcher: Watcher | undefined;
       try {
         const manifest = join(dir, "package.json");
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+        watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
 
         const broken = await watcher.cycle(() =>
@@ -267,7 +268,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         const sub = join(dir, "src", "sub");
         mkdirSync(sub);
         writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+        watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
 
         const created = await watcher.cycle(() =>
@@ -296,7 +297,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         let watcher: Watcher | undefined;
         try {
           const manifest = join(dir, "package.json");
-          watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+          watcher = watchIn(dir, args);
           const first = await watcher.cycle();
           expect(count(first)).toBe(errors);
 
@@ -315,6 +316,104 @@ describe("mx-tsc -w: more manifest changes", () => {
           await watcher?.stop();
           rmSync(dirname(dir), { recursive: true, force: true });
         }
+      }
+    },
+    CASE_MS,
+  );
+});
+
+// Each -b build cycle swaps the compiler host's getSourceFile; the watch has to survive that.
+// (-w -p never swaps it, and these sequences take a minute each, so only -b -w runs them.)
+describe("mx-tsc -b -w: the manifest watch across build cycles", () => {
+  const args = ["-b", "-w", "tsconfig.json"];
+  it(
+    "keeps watching the manifest after source files were added",
+    async () => {
+      const dir = project(VALID);
+      let watcher: Watcher | undefined;
+      try {
+        const manifest = join(dir, "package.json");
+        watcher = watchIn(dir, args);
+        expect(await watcher.cycle()).toContain("Found 0 errors.");
+
+        // Each new file changes the root names, and the program is made anew.
+        for (const name of ["a.ts", "b.ts"]) {
+          const added = await watcher.cycle(() =>
+            writeFileSync(join(dir, "src", name), "export const x = 1;\n"),
+          );
+          expect(added).toContain("Found 0 errors.");
+        }
+
+        const broken = await watcher.cycle(() =>
+          writeFileSync(manifest, MISMATCH),
+        );
+        expect(policyLines(broken)).toEqual([
+          expect.stringContaining(MISMATCH_AT(5)),
+        ]);
+        expect(count(broken)).toBe(2);
+
+        const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+        expect(policyLines(fixed)).toEqual([]);
+        expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+      } finally {
+        await watcher?.stop();
+        rmSync(dirname(dir), { recursive: true, force: true });
+      }
+    },
+    CASE_MS,
+  );
+
+  it(
+    "keeps watching the manifest after a nearer one was created and deleted, and after the project's own was deleted",
+    async () => {
+      const dir = project(VALID);
+      let watcher: Watcher | undefined;
+      try {
+        const manifest = join(dir, "package.json");
+        const sub = join(dir, "src", "sub");
+        mkdirSync(sub);
+        writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
+        watcher = watchIn(dir, args);
+        expect(await watcher.cycle()).toContain("Found 0 errors.");
+
+        const created = await watcher.cycle(() =>
+          writeFileSync(join(sub, "package.json"), MISMATCH),
+        );
+        expect(policyLines(created)).toEqual([
+          expect.stringContaining("src/sub/package.json(5,15): error TS80003"),
+        ]);
+
+        const deleted = await watcher.cycle(() =>
+          rmSync(join(sub, "package.json")),
+        );
+        expect(policyLines(deleted)).toEqual([]);
+        expect(deleted).toContain("Found 0 errors.");
+
+        // The project's own manifest still decides `src/page.mx`.
+        const broken = await watcher.cycle(() =>
+          writeFileSync(manifest, MISMATCH),
+        );
+        expect(policyLines(broken)).toEqual([
+          expect.stringContaining(MISMATCH_AT(5)),
+        ]);
+
+        const removed = await watcher.cycle(() => rmSync(manifest));
+        expect(policyLines(removed)).toEqual([]);
+        expect(removed).toContain("Found 0 errors.");
+
+        const back = await watcher.cycle(() =>
+          writeFileSync(manifest, MISMATCH),
+        );
+        expect(policyLines(back)).toEqual([
+          expect.stringContaining(MISMATCH_AT(5)),
+        ]);
+
+        const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+        expect(policyLines(fixed)).toEqual([]);
+        expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+      } finally {
+        await watcher?.stop();
+        rmSync(dirname(dir), { recursive: true, force: true });
       }
     },
     CASE_MS,
@@ -493,6 +592,40 @@ describe("trackPackageJsonInputs", () => {
       const edited = { text: "<p>edited</p>\n", version: "v2" };
       sources.set(page, edited);
       expect(get(page)).toBe(edited);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("wraps a getSourceFile assigned later, as each -b build cycle does, and never wraps its own twice", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-pkgjson-unit-"));
+    try {
+      const manifest = join(dir, "package.json");
+      writeFileSync(manifest, VALID);
+      const page = join(dir, "page.mx");
+      const { host, sources, options } = fakeHost();
+      sources.set(page, { text: "<p>ok</p>\n", version: "v1" });
+      const original = host.getSourceFile;
+      trackPackageJsonInputs(typescript, host as never, [".mx"]);
+      const mine = host.getSourceFile;
+
+      // The builder swaps in its caching function, then puts the original back.
+      host.getSourceFile = (name, option) => original(name, option);
+      options.length = 0;
+      host.getSourceFile(page, {});
+      expect(options.at(-1)?.packageJsonLocations).toContain(
+        manifest.replaceAll("\\", "/"),
+      );
+      host.getSourceFile = original;
+      options.length = 0;
+      host.getSourceFile(page, {});
+      expect(options.at(-1)?.packageJsonLocations).toContain(
+        manifest.replaceAll("\\", "/"),
+      );
+
+      // Handing our own function back is not wrapped again.
+      host.getSourceFile = mine;
+      expect(host.getSourceFile).toBe(mine);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
