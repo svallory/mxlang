@@ -23,7 +23,7 @@ history, no rejected options.
 
 | Out | Why | Report |
 |---|---|---|
-| **L3** raw hooks (`raw.parse`, `raw.transform`, `statement`/`rawOpenTag`/`controlFlow`) | Deferred. **L3 is the trigger for forking the parser**: Marko's runtime node names would leak into user code, so the fork registers `Mx*` node types *before* L3 ships | §II.8 |
+| **L3** raw hooks (`raw.parse`, `raw.transform`, `statement`/`rawOpenTag`/`controlFlow`) | Not part of MX: there is no third layer. A sidecar's `transform` reads only the MX AST through `MxNodeHandle`; `resolve` is reserved | §II.8 |
 | `migrate` | Needs a source-printing output mode MX does not have | §II.7.7 #2 |
 | `types` (call-site typing) | Slot reserved in the contract, unbuilt | §II.7.2, Q6 |
 | `description` / `autocomplete` / `deprecated` | No consumer: the LS advertises only `textDocumentSync` | §II.7.1 |

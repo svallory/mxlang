@@ -53,17 +53,17 @@ If a caller supplies body content and the template never reads `input.content`, 
 
 ## Attribute tags
 
-Place `<@name>` content through `input.<name>`:
+`<@name>` reaches the template as `input.<name>`, Marko's attribute-tag record: the tag's attributes plus `content`, its body. A repeated tag iterates every occurrence in source order:
 
 ```mx
-<ul><${input.item}/></ul>
+<ul><for|item| of=input.item><li><${item.content}/></li></for></ul>
 ```
-
-Repeated attribute tags remain repeated and preserve their order:
 
 ```mx
 <list><@item>one</@item><@item>two</@item></list>
 ```
+
+The record also has `map`, `filter`, `length`, `at` and `toArray`; see [AttrTag](/language/attr-tag/).
 
 An attribute tag the template never reads produces a warning naming it. `<@content>` is rejected, because it would collide with the body slot. Attribute-tag declarations and repeat/required checks belong in an optional [sidecar](/custom-tags/sidecars/).
 

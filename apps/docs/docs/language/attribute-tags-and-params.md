@@ -28,7 +28,7 @@ Inside any tag's body, a child written as `<@name>...</@name>` becomes a named p
 ```html
 <define/Card|{ content, header }|>
   <div class="card">
-    <div class="card-header">$!{header()}</div>
+    <div class="card-header">$!{header.content()}</div>
     <div class="card-body">$!{content()}</div>
   </div>
 </define>
@@ -39,30 +39,13 @@ Inside any tag's body, a child written as `<@name>...</@name>` becomes a named p
 </Card>
 ```
 
-A call passes one attribute object to the first parameter (decision 160), so `|{ content, header }|` destructures it; a second parameter never receives an attribute. This passes `header` as a separate prop from `content` — the ordinary children (`<p>...</p>`) become the parent's `children`/`content`. Add params the same way tag params work: `<@footer|year|>© ${year}</@footer>` becomes a prop that is itself a function of `year`.
+A call passes one attribute object to the first parameter, so `|{ content, header }|` destructures it; a second parameter never receives an attribute. This passes `header` as a separate prop from `content` — the ordinary children (`<p>...</p>`) become the parent's `children`/`content`. Add params the same way tag params work: `<@footer|year|>© ${year}</@footer>` gives `footer.content` as a function of `year`.
 
 Props are emitted in a fixed order: the parent tag's own attributes first, in source order, then its attribute-tag children, in source order.
 
-### Declaring cardinality and shape
+### The value: one record
 
-A component's exported `Input` declares each attribute-tag prop with the host's `AttrTag` type:
-
-```ts
-export interface Input {
-  header?: AttrTag<{ as: "renderable" }>;
-  item: AttrTag<{ attrs: { id: string } }>[];
-}
-```
-
-An optional or required `AttrTag` is singular; `AttrTag[]` is an array. The default `data` shape is `{ ...attrs, ...nestedTags, content }`. `content` is the host's renderable, or a render function when the tag declares `params`. `as: "renderable"` passes the body itself (or that render function) and therefore cannot carry attributes or nested tags. The dedicated [AttrTag guide](/language/attr-tag/) covers every config field, exact cardinality errors, Input resolution, host value types, nested tags, and worked examples.
-
-For an untyped, unresolved, or dynamic callee, MX infers a fallback (decision 108). A property is renderable when none of its occurrences anywhere in `<if>`/`<for>` control flow has attributes or nested attribute tags. If any occurrence has either, all occurrences use the data shape. Cardinality is still singular when at most one occurrence can be selected on a path, and an array for repeats or loops. A declared `Input` remains authoritative and still defaults to data.
-
-### Repeating the same name
-
-Writing `<@name>` more than once on the same call is allowed when the callee accepts an array: a repeat is not last-wins — each host receives every occurrence. A declared singular prop rejects a repeat; a declared array receives every occurrence in source order and receives `[]` when none is taken. The untyped fallback uses an array when a name repeats or appears inside `<for>`.
-
-MX's declared arrays and data values deliberately differ from Marko's iterable attribute-tag record (decision 106). Body-only fallback values align with Marko again under decision 108, while repeated fallback values remain real arrays.
+`header` above is Marko's attribute-tag record: an object holding the tag's attributes as own properties plus `content`, its body. A repeated `<@name>` is not last-wins: the callee receives one record that iterates every occurrence in source order (`<for|tab| of=input.tab>`), while a property read sees the first. MX adds `map`, `filter`, `length`, `at` and `toArray` on the record's prototype. An absent attribute tag is `undefined`. The shape never depends on the callee's types; its `Input` types the value with `AttrTag` for the type checker. The [AttrTag guide](/language/attr-tag/) covers the record, the type, host value types, nested tags and worked examples.
 
 A **custom tag** with its own declared `attributeTags` schema (a `.tag.ts` sidecar) can restrict repeats: unless its declaration marks the tag `repeatable`, a second `<@name>` is `` `<@name>` may not be repeated ``. This restriction is opt-in per custom tag, not a general rule — an ordinary component call (an `import`ed or `<define>`d one, with no declared schema) always allows a repeat.
 
@@ -72,12 +55,10 @@ An attribute tag whose name is already taken — by an explicit attribute on the
 
 | Written | Error |
 |---|---|
-| a singular `<@name>` twice | `` `<@name>` may appear at most once (`name` is declared `AttrTag`, not `AttrTag[]`) `` |
 | a custom tag's non-repeatable `<@name>` twice | `` attribute tag `<@name>` may not be repeated `` |
 | `<@name>` whose name is already an attribute on the parent | `` attribute tag `@name` collides with attribute `name` `` |
 | `<@children>` beside ordinary children | `` attribute tag `@children` collides with the parent's ordinary children `` |
 | authored `content=` on `<@name>` | `` `content` is reserved on an attribute tag; it names the body `` |
-| attributes or nested tags on a declared `as: "renderable"` tag | `` `<@name>` is renderable in `<Owner>`; it can't take attributes or nested attribute tags `` |
 | attribute tags mixed with ordinary content inside one control-flow body | `Cannot have attribute tags and body content under a control flow tag.` |
 
 A spread attribute is not treated as a collision — `<Layout ...props><@id>x</@id></Layout>` is fine, since the collision check only knows the parent's explicitly written attribute names, not what a spread might contain at runtime. This matches how JSX treats `{...props} id="x"`.

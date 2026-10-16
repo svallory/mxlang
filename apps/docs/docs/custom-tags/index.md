@@ -18,7 +18,7 @@ Custom tags do not add an IR kind and cannot inspect the active host. An emitter
 
 The layers compose. Put both files beside each other when a template needs declarations or a small amount of compile-time logic. A declaration-only sidecar adds validation and parse options while the call still routes to the template. A sidecar with `transform` takes control: it may build its own IR, or hand the call back to its template with `ctx.build.template(call)`.
 
-Raw parser hooks are a later layer, deferred until after MX 1.x. They are not part of the current custom-tag API.
+There is no third layer: MX has no raw hooks with Marko's parser signatures, and it reads neither `marko.json` nor `marko-tag.json`. Tag configuration is MX's own, under `tags` in [MX's config](/configuration/). A tag hook produces IR, never target output, and runs in core before the emitters, so no target ever sees the tag. A `.marko` file is not a tag: one found in a `tags/` directory, or imported and used as a tag, is a positioned error that tells you to convert it to `.mx`.
 
 ## Thirty seconds to a tag
 

@@ -5,6 +5,12 @@ description: "Declare named blocks with explicit cardinality, data or renderable
 
 # AttrTag
 
+> **Being replaced.** This guide describes the `AttrTag` config that ships
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members ([specification §8](/specification/) is normative). The guide is
+> rewritten together with that change, because the test suite compiles its
+> examples.
+
 An attribute tag is a named block inside a component call. `<@tab>` becomes
 the `tab` property received by the component, while ordinary children remain
 the component's `content` (or JSX `children`). The callee owns the contract:

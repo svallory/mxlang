@@ -16,7 +16,7 @@ Within the collected directories, the nearest definition of a name wins. A tag n
 - `tags/x.mx` defines the L1 template `<x>`.
 - `tags/x.tag.ts` defines the L2 sidecar `<x>`.
 
-Both files may exist in the same directory and compose into one definition. Other files in `tags/` are ignored.
+Both files may exist in the same directory and compose into one definition. Other files in `tags/` are ignored, except a `.marko` file: `.marko` is not an MX input, so `tags/x.marko` (or `tags/x/index.marko`) is a positioned error telling you to convert it to `.mx`, never a tag.
 
 ## Package tag directories
 
@@ -59,6 +59,7 @@ From highest to lowest:
 1. A definition passed explicitly in the compiler's `customTags` map.
 2. Local `tags/` directories, nearest directory first.
 3. `mx.tags` entries, in array order.
+4. `mx.contracts` modules, in array order (see [Contract packages](/custom-tags/contract-packages/)).
 
 An ordinary in-scope component binding is resolved before the discovered custom-tag map. Within discovery, an earlier winner is not merged with a same-named file from a lower-precedence directory.
 
@@ -108,5 +109,7 @@ A file that tries to redefine a core-owned name such as `try` is omitted with an
 ## Filename rules
 
 Case is significant and preserved: `tags/Icon.tag.ts` defines `<Icon>`, not `<icon>`. A name must match `^[A-Za-z0-9_][A-Za-z0-9_.-]*$`. Dotfiles are skipped; other invalid tag filenames produce a positioned diagnostic.
+
+A dotted name is rejected, not indexed, because `<icon.small/>` parses as tag `icon` with class `small` and no call could reach it. A `<base>.<word>.mx` whose `<word>` is a host file-kind segment (`x.ng.mx`, `x.solid.mx`, `x.astro.mx`) gets "`x.ng.mx` is a host module file, not a tag template"; any other dotted file is left out of the tag map with a positioned diagnostic asking you to rename it without the dot.
 
 Only `.mx` is a tag-template extension. A `.solid.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` file is a TypeScript module containing MX regions, not a template definition, and placing one under a scanned tag directory is an error rather than a silent ignore.

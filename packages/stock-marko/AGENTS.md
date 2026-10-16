@@ -5,6 +5,9 @@ It holds the stock, unpatched `htmljs-parser` 5.18.0 and proves — by
 running both parsers over identical inputs — where the root `patchedDependencies`
 patch diverges MX's parser from the published build.
 
+It is a probe tool only. Core never probes for, loads or diagnoses a stock
+`htmljs-parser`: MX's own front end is the only parser in every product path.
+
 ## Source identity (decision 157.3)
 
 - `vendor/htmljs-parser-5.18.0.tgz`: the published npm tarball
