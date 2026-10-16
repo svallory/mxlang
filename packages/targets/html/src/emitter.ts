@@ -60,7 +60,7 @@ import {
   quote,
   TranslateError,
 } from "@mxlang/core";
-import type { ClientPiece, DelegatedTagData } from "./translate.ts";
+import type { ClientPiece, ClientType, DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
 
 const INDENT = "  ";
@@ -110,10 +110,16 @@ interface State {
   moduleHoisted: Array<{ code: MappedCode; start: number | undefined }>;
   /**
    * Under `typeCheck`, the code of every `client` statement: one function the
-   * module declares and never calls, so a client name is typed there and is
-   * `undefined` everywhere else (the server view).
+   * module calls where its last `client` statement stands, so a client name
+   * is typed there and is `undefined` everywhere else (the server view).
    */
   clientBody: MappedCode[];
+  /** Under `typeCheck`, the interfaces and type aliases of `client` statements. */
+  clientTypes: Array<{ type: ClientType; start: number | undefined }>;
+  /** Under `typeCheck`, every name a `client` statement declares as `undefined`. */
+  clientNames: string[];
+  /** Under `typeCheck`, where the last `client` statement stands. */
+  clientStart: number | undefined;
   /** Under `typeCheck`, each `return` that no function encloses in `client` code. */
   clientReturns: MappedCode[];
   indent: number;
@@ -159,6 +165,9 @@ export function createEmitter(
     prelude: [],
     moduleHoisted: [],
     clientBody: [],
+    clientTypes: [],
+    clientNames: [],
+    clientStart: undefined,
     clientReturns: [],
     indent: 1,
     attrTagTemp: 0,
@@ -1431,6 +1440,16 @@ export function createEmitter(
           for (const hoisted of projection.hoisted) {
             lines.push(clientPiece(hoisted));
           }
+          for (const type of projection.types) {
+            state.clientTypes.push({ type, start: data.start });
+          }
+          state.clientNames.push(...projection.serverNames);
+          if (
+            data.start !== undefined &&
+            (state.clientStart === undefined || data.start > state.clientStart)
+          ) {
+            state.clientStart = data.start;
+          }
           if (lines.length > 0) {
             state.moduleHoisted.push({
               code: concatMapped(
@@ -1617,7 +1636,55 @@ export function createEmitter(
 
 /** One slice of a `client` statement's code, mapped to where the author wrote it. */
 function clientPiece(piece: ClientPiece): MappedCode {
+  if (piece.parts) {
+    return concatMapped(
+      ...piece.parts.map((part) => mapped(part.code, part.span ?? null)),
+    );
+  }
   return mapped(piece.code, piece.span ?? null);
+}
+
+/**
+ * Under `typeCheck`, decides where each interface and type alias of a `client`
+ * statement stands, and places the function that holds the client code.
+ *
+ * A type stays at module level (the template, `Input` and the importers of
+ * the page read it there) unless it mentions a client value, which is
+ * `undefined` there; it then moves into the client scope, with the types that
+ * mention it in turn. The function is called where the last `client` statement
+ * stands, in the order the author wrote the module, so a client statement
+ * that reads a `static` or `server` name declared after it is still reported
+ * as used before its declaration.
+ */
+function placeClientCode(state: State): void {
+  const blocked = new Set(state.clientNames);
+  const moved = new Set<ClientType>();
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const { type } of state.clientTypes) {
+      if (moved.has(type) || !type.refs.some((name) => blocked.has(name))) {
+        continue;
+      }
+      moved.add(type);
+      blocked.add(type.name);
+      changed = true;
+    }
+  }
+  const inScope: MappedCode[] = [];
+  for (const { type, start } of state.clientTypes) {
+    if (moved.has(type)) inScope.push(clientPiece(type.bodyPiece));
+    else state.moduleHoisted.push({ code: clientPiece(type.piece), start });
+  }
+  const body = [...inScope, ...state.clientBody];
+  if (body.length === 0) return;
+  state.moduleHoisted.push({
+    code: concatMapped(
+      "(async () => {\n",
+      ...body.map((code) => concatMapped(INDENT, code, "\n")),
+      "})();",
+    ),
+    start: state.clientStart,
+  });
 }
 
 /**
@@ -1692,6 +1759,7 @@ export function emitModuleWithMappings(
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${escapeFrom}";`);
   }
+  placeClientCode(emitter.state);
   const hoisted = [
     ...ir.imports.map((node) => node.code),
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
@@ -1699,16 +1767,6 @@ export function emitModuleWithMappings(
   const inputType = ir.tagMetadata.readsContent
     ? "Input & { content?: () => string }"
     : "Input";
-  if (emitter.state.clientBody.length > 0) {
-    // Never called: `void` reads it, so `noUnusedLocals` stays quiet. `async`
-    // lets `client` code await at its top level, as a module may.
-    hoisted.push(
-      "async function __mxClient() {",
-      ...emitter.state.clientBody.map((code) => concatMapped(INDENT, code)),
-      "}",
-      "void __mxClient;",
-    );
-  }
   if (hoisted.length > 0) lines.push("", ...hoisted);
   lines.push(
     "",

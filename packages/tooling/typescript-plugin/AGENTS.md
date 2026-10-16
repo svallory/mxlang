@@ -227,8 +227,8 @@ Four facts worth knowing before editing either:
   and under `typeCheck` projects a `client` statement in two views in place of
   the `var <names>;` it leaves at run time: `var q: undefined` at module level
   (the server view: a template read of a client name and an importer of a
-  client export are errors) and its own code in an uncalled `__mxClient`
-  function, so its errors are reported at the authored token and hover and
+  client export are errors) and its own code in an async arrow the module
+  calls where the last `client` statement stands, so its errors are reported at the authored token and hover and
   completions keep the declared types. A diagnostic outside every mapping is reported on the nearest
   enclosing tag or attribute (else 1:1) with a position marker appended, never
   dropped (decision 161; see the section below). Two consequences of the

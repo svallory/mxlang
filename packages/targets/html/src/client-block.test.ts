@@ -488,30 +488,30 @@ describe("html: the type-check projection of a `client` or `server` statement", 
 /**
  * Under `typeCheck` (the tooling projection, never the module that runs) the
  * module is the server view: a client name is `undefined`, none is exported,
- * and the client code is typed in a function that nothing calls.
+ * and the client code is typed in a function the module calls where the last
+ * `client` statement stands.
  */
 describe("html typeCheck: the server view and the client code of a `client` statement", () => {
   const project = (source: string) =>
     compile(source, "/f/t.mx", { typeCheck: true });
   const wrapper = (code: string) =>
     code.slice(
-      code.indexOf("async function __mxClient() {"),
-      code.indexOf("void __mxClient;"),
+      code.indexOf("(async () => {"),
+      code.indexOf("})();") + "})();".length,
     );
+  const beforeWrapper = (code: string) =>
+    code.slice(0, code.indexOf("(async () => {"));
 
   it("declares each name `undefined` and types the client code in a function", () => {
     const { code } = project("client let q = 1;\n<div>${q}</div>\n");
     expect(code).toContain("var q: undefined; void [q];");
-    expect(wrapper(code)).toBe(
-      "async function __mxClient() {\n  let q = 1;\n}\n",
-    );
-    expect(code).toContain("void __mxClient;");
+    expect(wrapper(code)).toBe("(async () => {\n  let q = 1;\n})();");
   });
 
   it("is the same module without `typeCheck`: only the `var`", () => {
     const { code } = compile("client let q = 1;\n<div/>\n", "/f/t.mx");
     expect(code).toContain("var q;");
-    expect(code).not.toContain("__mxClient");
+    expect(code).not.toContain("(async () => {");
     expect(code).not.toContain("undefined");
   });
 
@@ -533,7 +533,7 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     const { code } = project(
       'client import { a } from "./a.ts";\nclient interface P { n: number }\nclient const b = a;\n<div/>\n',
     );
-    const before = code.slice(0, code.indexOf("async function __mxClient"));
+    const before = beforeWrapper(code);
     expect(before).toContain('import { a } from "./a.ts"');
     expect(before).toContain("interface P { n: number }");
     expect(before).not.toContain("a: undefined");
@@ -594,5 +594,105 @@ describe("html typeCheck: the server view and the client code of a `client` stat
           source.slice(mapping.sourceStart, mapping.sourceEnd) === "return",
       ),
     ).toHaveLength(1);
+  });
+
+  it("keeps `export` on a type and drops it from a value", () => {
+    const { code } = project(
+      "client export interface P { n: number }\nclient export type K = keyof P;\nclient export const v = 1;\n<div/>\n",
+    );
+    const before = beforeWrapper(code);
+    expect(before).toContain("export interface P { n: number }");
+    expect(before).toContain("export type K = keyof P;");
+    expect(before).not.toMatch(/export (const|var) v/);
+    expect(wrapper(code)).toContain("const v = 1;");
+  });
+
+  it("keeps an `export type { P }` list of a type", () => {
+    const { code } = project(
+      "client interface P { n: number }\nclient export type { P };\n<div/>\n",
+    );
+    expect(beforeWrapper(code)).toContain("export type { P };");
+  });
+
+  it("keeps a type at module level unless it mentions a client value", () => {
+    const { code } = project(
+      [
+        "client class C {}",
+        "client interface P { c: C }",
+        "client interface Q { n: number }",
+        "client const cfg = { a: 1 };",
+        "client type Cfg = typeof cfg;",
+        "client type Wrapped = { p: P };",
+        "client interface R { n: number; cfg: number }",
+        "<div/>",
+        "",
+      ].join("\n"),
+    );
+    const before = beforeWrapper(code);
+    const inside = wrapper(code);
+    // Names a client class, a client value, and (in turn) a type that did.
+    for (const moved of [
+      "interface P { c: C }",
+      "type Cfg = typeof cfg;",
+      "type Wrapped = { p: P };",
+    ]) {
+      expect(inside, moved).toContain(moved);
+      expect(before, moved).not.toContain(moved);
+    }
+    // A property named like a client value is not a mention of it.
+    for (const stays of ["interface Q { n: number }", "interface R {"]) {
+      expect(before, stays).toContain(stays);
+      expect(inside, stays).not.toContain(stays);
+    }
+  });
+
+  it("calls the client code where the last client statement stands, among the statics", () => {
+    const { code } = project(
+      "client const z = st + 1;\nstatic const st = 1;\nclient const y = 2;\nstatic const after = 3;\n<div/>\n",
+    );
+    const at = (text: string) => code.indexOf(text);
+    expect(at("(async () => {")).toBeGreaterThan(at("const st = 1"));
+    expect(at("(async () => {")).toBeLessThan(at("const after = 3"));
+    expect(wrapper(code)).toContain("const z = st + 1;");
+    expect(wrapper(code)).toContain("const y = 2;");
+  });
+
+  it("projects `export … from` as imports nothing reads, mapped piece by piece", () => {
+    const source =
+      'client export { one as uno, type T } from "./one.ts";\nclient export * from "./two.ts";\nclient export * as ns from "./three.ts";\n<div/>\n';
+    const { code, mappings } = project(source);
+    const before = beforeWrapper(code);
+    expect(before).toMatch(
+      /import \{ one as _mxReexport\d+_0_100, type T as _mxReexport\d+_0_101 \} from "\.\/one\.ts";/,
+    );
+    expect(before).toMatch(
+      /import \* as _mxReexport\d+_0_0 from "\.\/two\.ts";/,
+    );
+    expect(before).toMatch(
+      /import \* as _mxReexport\d+_0_1 from "\.\/three\.ts";/,
+    );
+    expect(code).not.toMatch(/export (\{ one|\* from)/);
+    for (const mapping of mappings) {
+      expect(
+        code.slice(mapping.generatedStart, mapping.generatedEnd),
+        JSON.stringify(mapping),
+      ).toBe(source.slice(mapping.sourceStart, mapping.sourceEnd));
+    }
+    for (const text of [
+      "one",
+      "T",
+      '"./one.ts"',
+      '"./two.ts"',
+      '"./three.ts"',
+    ]) {
+      expect(
+        mappings.some(
+          (mapping) =>
+            source.slice(mapping.sourceStart, mapping.sourceEnd) === text &&
+            code.slice(mapping.generatedStart, mapping.generatedEnd) === text,
+        ),
+        text,
+      ).toBe(true);
+    }
   });
 });

@@ -118,7 +118,7 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "client const d = await Promise.resolve(1);\nclient const n: number = d;\n<div/>\n",
     "edge-import.mx":
       'client import { one as y } from "./one.ts";\nclient const n: number = y;\n<div/>\n',
-    "one.ts": "export const one = 1;\n",
+    "one.ts": "export const one = 1;\nexport type One = number;\n",
     "edge-types.mx":
       "client interface P { a: number }\nclient type K = keyof P;\nexport interface Input { p: P; k?: K }\n<div/>\n",
     "edge-namespace.mx":
@@ -137,6 +137,47 @@ describe("mx-tsc types a client name as undefined for the server view", {
     // lands: then the import is clean and `n` is checked against `number`.
     "limit-client-import.mx":
       'client import { x } from "./ca.mx";\nclient const n: number = x;\n<div/>\n',
+    // A type that names a client value is typed in the client scope; one that
+    // does not stays at module level.
+    "type-class.mx":
+      "client class C {}\nclient interface P { c: C }\nclient const p: P = { c: new C() };\n<div/>\n",
+    "type-enum.mx":
+      "client enum E { A }\nclient type T = E;\nclient const t: T = E.A;\n<div/>\n",
+    "type-typeof.mx":
+      "client const cfg = { a: 1 };\nclient type Cfg = typeof cfg;\nclient const c: Cfg = cfg;\n<div/>\n",
+    "type-returntype.mx":
+      "client function make() { return { a: 1 } }\nclient type M = ReturnType<typeof make>;\nclient const m: M = make();\n<div/>\n",
+    "type-chain.mx":
+      "client class C {}\nclient interface P { c: C }\nclient type W = { p: P };\nclient const w: W = { p: { c: new C() } };\n<div/>\n",
+    "type-property-name.mx":
+      "client let n = 1;\nclient interface P { n: number }\nexport interface Input { p?: P }\nclient const p: P = { n };\n<div/>\n",
+    // Known limit: a type of the page's own `Input` reads module level, where a
+    // client class or enum is `undefined`.
+    "limit-input-type.mx":
+      "client enum Mode { A, B }\nexport interface Input { mode: Mode }\n<div/>\n",
+    // Known limit: a namespace stays at module level, where a client value is
+    // `undefined`.
+    "limit-namespace.mx":
+      "client const base = 1;\nclient namespace N { export const a = base + 1 }\n<div/>\n",
+    // A client type export is still importable.
+    "ct.mx":
+      "client export interface P { n: number }\nclient export type K = keyof P;\n<div/>\n",
+    "imp-types.ts":
+      'import type { P, K } from "./ct.mx";\nexport const v: [P?, K?] = [];\n',
+    "imp-types.mx":
+      'import type { P, K } from "./ct.mx";\nserver const v: [P?, K?] = [];\n<div/>\n',
+    // Client code runs in the order the author wrote the module.
+    "tdz-static.mx": "client const z = st + 1;\nstatic const st = 1;\n<div/>\n",
+    // Known limit: an earlier client statement reading a `static` name declared
+    // between two client statements is not reported.
+    "limit-tdz-between.mx":
+      "client const a = st;\nstatic const st = 1;\nclient const b = 2;\n<div/>\n",
+    "edge-this.mx": "client console.log(this);\n<div/>\n",
+    // `client export … from` still checks the module and the names.
+    "reexport-ok.mx":
+      'client export { one } from "./one.ts";\nclient export * from "./one.ts";\nclient export * as ns from "./one.ts";\nclient export type { One } from "./one.ts";\n<div/>\n',
+    "reexport-name.mx": 'client export { nope } from "./one.ts";\n<div/>\n',
+    "reexport-module.mx": 'client export * from "./nope.ts";\n<div/>\n',
     // (e) the importers of `ca.mx`.
     "ca.mx": CA,
     "imp-plain.mx": 'import { x } from "./ca.mx";\n<div>${x}</div>\n',
@@ -198,6 +239,17 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "pin-static-name.mx",
     "pin-typeof.mx",
     "imp-server-names.mx",
+    "type-class.mx",
+    "type-enum.mx",
+    "type-typeof.mx",
+    "type-returntype.mx",
+    "type-chain.mx",
+    "type-property-name.mx",
+    "imp-types.ts",
+    "imp-types.mx",
+    "edge-this.mx",
+    "reexport-ok.mx",
+    "limit-tdz-between.mx",
   ])("%s stays clean", (file) => {
     expect(lines(file)).toEqual([]);
   });
@@ -250,6 +302,36 @@ describe("mx-tsc types a client name as undefined for the server view", {
     );
   });
 
+  it("tdz-static.mx: a client statement reading a later static is used before its declaration", () => {
+    const found = lines("tdz-static.mx");
+    expect(found[0]).toMatch(
+      /^tdz-static\.mx\(1,18\): error TS2448: Block-scoped variable 'st' used before its declaration\.$/,
+    );
+  });
+
+  it("reexport-name.mx and reexport-module.mx: an unknown name or module is reported at the author's token", () => {
+    expect(lines("reexport-name.mx")).toHaveLength(1);
+    expect(lines("reexport-name.mx")[0]).toMatch(
+      /^reexport-name\.mx\(1,17\): error TS2305: /,
+    );
+    expect(lines("reexport-module.mx")).toHaveLength(1);
+    expect(lines("reexport-module.mx")[0]).toMatch(
+      /^reexport-module\.mx\(1,22\): error TS2307: /,
+    );
+  });
+
+  it("limit-input-type.mx: KNOWN LIMIT, a top-level type naming a client enum is an error", () => {
+    const found = lines("limit-input-type.mx");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^limit-input-type\.mx\(2,32\): error TS2749/);
+  });
+
+  it("limit-namespace.mx: KNOWN LIMIT, a namespace reading a client value is an error", () => {
+    const found = lines("limit-namespace.mx");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^limit-namespace\.mx\(2,39\): error TS18048/);
+  });
+
   it("limit-client-import.mx: KNOWN LIMIT, a client import of a client export is TS2614", () => {
     const found = lines("limit-client-import.mx");
     expect(found).toHaveLength(1);
@@ -266,7 +348,8 @@ describe("mx-tsc: an exported client name is not an unused local", {
     const project = runProject(
       {
         "exports.mx":
-          "client export const x = 1;\nclient export function f() {}\n<div/>\n",
+          'client export const x = 1;\nclient export function f() {}\nclient export { one } from "./one.ts";\nclient export * from "./one.ts";\n<div/>\n',
+        "one.ts": "export const one = 1;\n",
       },
       { noUnusedLocals: true },
     );

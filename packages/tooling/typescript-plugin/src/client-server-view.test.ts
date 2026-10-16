@@ -103,6 +103,53 @@ describe("a client name in the server view", { timeout: 60_000 }, () => {
   });
 });
 
+describe("client code keeps its own scope and order", {
+  timeout: 60_000,
+}, () => {
+  it("a type that names a client class stays usable in client code", () => {
+    const source =
+      "client class C {}\nclient interface P { c: C }\nclient const p: P = { c: new C() };\n<div/>\n";
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
+
+  it("a type that names no client value is importable from a .ts file", () => {
+    const types =
+      "client export interface P { n: number }\nclient export type K = keyof P;\n<div/>\n";
+    const source =
+      'import type { P, K } from "./ct.mx";\nexport const v: [P?, K?] = [];\n';
+    expect(
+      errorsOf(
+        { "/project/ct.mx": types, "/project/other.ts": source },
+        "/project/other.ts",
+      ),
+    ).toEqual([]);
+  });
+
+  it("a client statement reading a later static is used before its declaration, at the read", () => {
+    const source = "client const z = st + 1;\nstatic const st = 1;\n<div/>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toContain(2448);
+    expect(found[0]?.start).toBe(source.indexOf("st +"));
+  });
+
+  it("a top-level this in client code is not an error", () => {
+    expect(
+      errorsOf({ [FILE]: "client console.log(this);\n<div/>\n" }, FILE),
+    ).toEqual([]);
+  });
+
+  it("client export … from still reports an unknown name, at the name", () => {
+    const source = 'client export { nope } from "./one.ts";\n<div/>\n';
+    const found = errorsOf(
+      { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
+      FILE,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.code).toBe(2305);
+    expect(found[0]?.start).toBe(source.indexOf("nope"));
+  });
+});
+
 describe("importing a client export", { timeout: 60_000 }, () => {
   const cases: Array<[string, string, string, string]> = [
     [

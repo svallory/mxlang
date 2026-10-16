@@ -348,6 +348,29 @@ function clientDeclaredNames(body: Node[]): string[] {
 export interface ClientPiece {
   code: string;
   span: SourceSpan | undefined;
+  /**
+   * The piece as separately mapped parts, for generated text that is not a
+   * slice of the source (`code` is then the parts joined, and `span` is
+   * unused). A part without a span is unmapped.
+   */
+  parts?: Array<{ code: string; span?: SourceSpan }>;
+}
+
+/**
+ * An interface or type alias of a `client` statement. It stands at module
+ * level (the server module declares it, and `Input`, the template and the
+ * importers of the page read it there) unless it names a client value, which
+ * is `undefined` there: the emitter then moves it into the client scope,
+ * where the value has its type (`bodyPiece`, without `export`).
+ */
+export interface ClientType {
+  name: string;
+  /** The declaration as written, `export` included. */
+  piece: ClientPiece;
+  /** The declaration without `export`. */
+  bodyPiece: ClientPiece;
+  /** Every identifier the declaration mentions, apart from property names. */
+  refs: string[];
 }
 
 /**
@@ -358,12 +381,15 @@ export interface ClientPiece {
  * and keeps the client code typed in a scope of its own:
  *
  * - `serverNames` are declared `var q: undefined;` at module level;
- * - `hoisted` are the statements a function body cannot hold, or that only the
- *   type checker reads: `import`s, `namespace`s, `declare` forms, interfaces
- *   and type aliases, with any `export` removed (a client name is not
- *   exported by the server module);
- * - `body` is everything else, with `export` removed, for a function that is
- *   never called;
+ * - `hoisted` are the statements a function body cannot hold: `import`s,
+ *   `namespace`s and `declare` forms, with any `export` removed (a client
+ *   name is not exported by the server module), and the `import` a
+ *   `client export … from` becomes, bound to a name nothing reads (the
+ *   module and the names it is asked for are still checked);
+ * - `types` are the interfaces and type aliases, which a type-only export of
+ *   keeps (a type has no run-time side);
+ * - `body` is everything else, with `export` removed, for the function the
+ *   module calls where its last `client` statement stands;
  * - `exported` are the names the statement exports, read once in that function
  *   so `noUnusedLocals` does not flag a name the author exports;
  * - `returns` are the `return` statements outside every function: a client
@@ -372,9 +398,33 @@ export interface ClientPiece {
 export interface ClientProjection {
   serverNames: string[];
   hoisted: ClientPiece[];
+  types: ClientType[];
   body: ClientPiece[];
   exported: string[];
   returns: SourceSpan[];
+}
+
+/** Every identifier under `node`, but not the name of a type's property. */
+function identifiersIn(node: unknown, found: Set<string> = new Set()) {
+  if (!node || typeof node !== "object") return found;
+  if (Array.isArray(node)) {
+    for (const child of node) identifiersIn(child, found);
+    return found;
+  }
+  const { type } = node as Node;
+  if (type === "Identifier") found.add((node as Node).name);
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "loc" || key === "extra" || key.endsWith("Comments")) continue;
+    if (
+      key === "key" &&
+      (type === "TSPropertySignature" || type === "TSMethodSignature") &&
+      !(node as Node).computed
+    ) {
+      continue;
+    }
+    identifiersIn(value, found);
+  }
+  return found;
 }
 
 const FUNCTION_NODES = new Set([
@@ -420,41 +470,130 @@ function clientProjection(
         : { sourceStart: base + start, sourceEnd: base + end },
   });
   const hoisted: ClientPiece[] = [];
+  const types: ClientType[] = [];
   const body: ClientPiece[] = [];
   const exported: string[] = [];
   const hoistedNodes: Node[] = [];
-  for (const statement of statements) {
+  const text = (node: Node) => ({
+    code: code.slice(node.start, node.end),
+    span:
+      base === undefined
+        ? undefined
+        : { sourceStart: base + node.start, sourceEnd: base + node.end },
+  });
+  const partsPiece = (parts: ClientPiece["parts"] & object): ClientPiece => ({
+    code: parts.map((part) => part.code).join(""),
+    span: undefined,
+    parts,
+  });
+  // `client export … from "m"` exports nothing the server module has, but the
+  // module and the names it is asked for must exist: `import` them as names
+  // nothing reads (a leading `_` keeps `noUnusedLocals` quiet).
+  const reexportImports = (statement: Node, serial: number): ClientPiece[] => {
+    const typeOnly = statement.exportKind === "type";
+    const from = text(statement.source);
+    const name = (index: number) =>
+      `_mxReexport${base ?? 0}_${serial}_${index}`;
+    if (statement.type === "ExportAllDeclaration") {
+      return [
+        partsPiece([
+          { code: `import ${typeOnly ? "type " : ""}* as ${name(0)} from ` },
+          from,
+          { code: ";" },
+        ]),
+      ];
+    }
+    const pieces: ClientPiece[] = [];
+    const named: Node[] = [];
+    for (const specifier of statement.specifiers ?? []) {
+      if (specifier.type === "ExportSpecifier") named.push(specifier);
+      else if (specifier.type === "ExportNamespaceSpecifier") {
+        pieces.push(
+          partsPiece([
+            {
+              code: `import ${typeOnly ? "type " : ""}* as ${name(pieces.length + 1)} from `,
+            },
+            from,
+            { code: ";" },
+          ]),
+        );
+      }
+    }
+    if (named.length > 0) {
+      const parts: NonNullable<ClientPiece["parts"]> = [
+        { code: `import ${typeOnly ? "type " : ""}{ ` },
+      ];
+      named.forEach((specifier, index) => {
+        if (index > 0) parts.push({ code: ", " });
+        if (specifier.exportKind === "type" && !typeOnly) {
+          parts.push({ code: "type " });
+        }
+        parts.push(text(specifier.local), {
+          code: ` as ${name(100 + index)}`,
+        });
+      });
+      parts.push({ code: " } from " }, from, { code: ";" });
+      pieces.push(partsPiece(parts));
+    }
+    return pieces;
+  };
+  statements.forEach((statement, serial) => {
     let inner = statement;
     if (statement.type === "ExportNamedDeclaration") {
-      // `export { y }` and `export … from` name no declaration: dropped.
-      if (!statement.declaration) continue;
+      if (statement.source) {
+        hoisted.push(...reexportImports(statement, serial));
+        return;
+      }
+      if (!statement.declaration) {
+        // `export type { P }` of a type stays; `export { y }` of a value is
+        // not an export of the server module.
+        if (statement.exportKind === "type") {
+          hoisted.push(piece(statement.start, statement.end));
+        }
+        return;
+      }
       inner = statement.declaration;
       exported.push(...clientDeclaredNames([inner]));
+    } else if (statement.type === "ExportAllDeclaration") {
+      hoisted.push(...reexportImports(statement, serial));
+      return;
     } else if (
-      // Core refuses a default export; the others name no declaration.
+      // Core refuses a default export; the other names no declaration.
       statement.type === "ExportDefaultDeclaration" ||
-      statement.type === "ExportAllDeclaration" ||
       statement.type === "TSExportAssignment"
     ) {
-      continue;
+      return;
+    }
+    if (
+      inner.type === "TSInterfaceDeclaration" ||
+      inner.type === "TSTypeAliasDeclaration"
+    ) {
+      types.push({
+        name: inner.id.name,
+        piece: piece(statement.start, statement.end),
+        bodyPiece: piece(inner.start, statement.end),
+        refs: [...identifiersIn(inner)].filter(
+          (name) => name !== inner.id.name,
+        ),
+      });
+      return;
     }
     const isHoisted =
       inner.type === "ImportDeclaration" ||
       inner.type === "TSImportEqualsDeclaration" ||
       inner.type === "TSModuleDeclaration" ||
-      inner.type === "TSInterfaceDeclaration" ||
-      inner.type === "TSTypeAliasDeclaration" ||
       inner.declare === true;
     const target = isHoisted ? hoisted : body;
     if (isHoisted) hoistedNodes.push(inner);
     target.push(piece(inner.start, statement.end));
-  }
+  });
   const taken = new Set(clientDeclaredNames(hoistedNodes));
   return {
     serverNames: clientDeclaredNames(statements).filter(
       (name) => !taken.has(name),
     ),
     hoisted,
+    types,
     body,
     exported: exported.filter((name) => !taken.has(name)),
     returns: topLevelReturns(statements).map((start) => ({

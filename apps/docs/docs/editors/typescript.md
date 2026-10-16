@@ -218,7 +218,13 @@ A `client` statement runs in the browser, so on the server the module that rende
 - Inside client code (a handler, a `client` block, a later `client` statement) the names keep their declared types, and hover and completions show them.
 - A top-level `return` in a `client` block is reported (`TS1108`) at the `return`.
 
-Known limit: a `client import` of another module's client export reports `TS2614`, because the type-check reads that module as the server sees it.
+Known limits:
+
+- A `client import` of another module's client export reports `TS2614`, because the type-check reads that module as the server sees it.
+- A client interface or type alias that names a client value (a class, an enum, a `const` through `typeof`) is checked in the client scope, so a type declared outside it, such as the page's own `export interface Input`, cannot name that class or enum, and `import type` of such a type from another file does not find it. A client type that names no client value is declared at module level and stays importable.
+- A client `namespace` is declared at module level, where a client value is `undefined`, so a namespace body that reads one reports `'base' is possibly 'undefined'`.
+- A `client` statement that reads a `static` or `server` name declared between two later `client` statements is not reported as used before its declaration; one that reads a name declared after the last `client` statement is.
+- From a template read of a client name, go-to-definition lands on the read, and rename or find-references on the client declaration do not include the template read.
 
 ## Mapping Coverage
 
