@@ -1073,7 +1073,7 @@ front — otherwise the attribute is emitted twice and the second wins.
 `style={{color: c()}}`. Any other `style=` expression is a parse error in MX 1.
 
 Name sugars (`:name` for `name="…"`, `#id` and `.class` among the attributes,
-a `:` in a tag head) are a syntax module's, such as Mesh's, not core's: core
+a `:` in a tag head) are a dialect's, such as Mesh's, not core's: core
 reads those forms as Marko does ([Attributes](/language/attributes/#attributes-a-colon-and-id-or-class-after-a-space)).
 
 ### `:name` in an expression
@@ -2054,11 +2054,12 @@ inside an `<if>` branch or a `<for>` body reverts to the registered custom tag
 immediately outside it. This closes the gap `custom-tags-import-precedence`
 (decision 93) left open.
 
-The html target's rule is stated by case only in the sense above: a tag matching an
-import, a `<define>`, or a taglib/`tags/` discovery is a component call; anything
-else is an HTML element whatever its case, hyphenated custom elements included.
-Solid keeps JSX's PascalCase-means-component convention, on a separate lowering
-path.
+The html target resolves a tag by what it matches, not by its case alone: a
+tag matching an import, a `<define>`, or a taglib/`tags/` discovery is a
+component call; a name the host recognises as an element is that element. Any
+other tag is an error, whatever its case: an unresolved PascalCase tag and an
+unresolved hyphenated tag both refuse to compile (below). Solid keeps JSX's
+PascalCase-means-component convention, on a separate lowering path.
 
 | Message | When |
 |---|---|
@@ -2357,7 +2358,9 @@ would break ordinary host interop. Decision 106's data-attribute-tag guard
 `<${x.content}/>` route) is unaffected and still fires for a value import
 reaching it this way — consistent with, not a new divergence from, decision
 106, since Marko itself would silently unwrap `.content` and then find no
-real renderer there either.
+real renderer there either. (The `.content` guard belongs to the outgoing
+attribute-tag model and is being replaced with it: under Marko's record, §8,
+an attribute tag's value has the record's shape on every target.)
 
 Two per-host consequences, both fixed in the same task: html's
 `renderDynamic` returned `""` outright for a falsy target, discarding the
@@ -3216,8 +3219,9 @@ render, and is in scope for the siblings after the tag only. Reading a tag's own
 variable inside that tag's content, or a native element variable (`<div/el>`)
 anywhere but a `<script>` body or an event handler, is a positioned compile
 error (a `divergences.md` row). How a target carries the value differs (below);
-on a native-component target a returning tag becomes a hook holding its state,
-effects and value plus a hoisted markup component (§13).
+on a native-component target that needs the split, a returning tag becomes a
+hook holding its state, effects and value plus a hoisted markup component
+("Native-component targets", §11).
 
 **Every rule is validated in the tag's own compilation.** That is what makes the
 signature one shape rather than `T | undefined` per path: a unit cannot see its
@@ -3473,10 +3477,13 @@ each such target lowers them:
   same way.
 - `<define>` is a local component.
 - `<await>` and `<try>` map to each framework's own async and error boundaries.
-- `<return>` keeps Marko's meaning: on a native-component target a returning
-  tag lowers to a hook (or composable) holding its state, effects and return
-  value, called in the parent's render, plus a hoisted markup component that
-  takes that state as props (see §10).
+- `<return>` keeps Marko's meaning. On React, Preact, Vue, Svelte, Angular
+  and Web Components a returning tag lowers to a hook (or composable) holding
+  its state, effects and return value, called in the parent's render, plus a
+  hoisted module-level markup component that takes that state as props (see
+  §10). A returning tag without markup is the hook alone. No compat store is
+  used. The Marko and Solid targets express a returning tag directly and need
+  no split; the html target keeps its returning units.
 
 A consumer of core can pass, reject or warn on seven syntax groups:
 `structural`, `imports`, `state`, `effects`, `async`, `boundary` and
@@ -3743,13 +3750,13 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `for in` | `Object.entries` loop | same | `<For each={Object.entries(o)} keyed={e=>e[0]}>`, reads via `mxEntry()` | `.map(([k,v])=>…)`, `key={k}` | `.map(([k,v])=>…)` | `\| keyvalue: null` + warning |
 | `for` range | `for (let i=a; i<=b; i++)` | same | `<Repeat count from>` | `Array.from({length}).map` | `Array.from({length}).map` | folded literal array |
 | `for` range + `step=` | **error** | error | `<Repeat>` with `i = from + k*step` | `Array.from` with computed length | error | folded literal array |
-| `define` | local render function | same | **error** — no local component form in a JSX expression | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.astro.mx` | `<ng-template #R let-p>` |
+| `define` | local render function | same | top-level `<define>` hoisted to a gensym'd module-scope function beside the hoisted imports, called as a plain function (§5.4); nested, or closing over a region-local value, is a positioned **error** | `const R = (p) => (<>…</>)` hoisted | **error** — extract to its own `.astro.mx` | `<ng-template #R let-p>` |
 | `const` | `const x = …` | same | **error** in a region | `const` at component-body top | **error** — declare it in the fence | `@let x = …;` |
 | `let` | initial value only | **error** (strict) | **error** — use `createSignal` | **error** — use `useState` | **error** | error — fixed 2026-09-17, `<let>`-specific message; was **the wrong error** (bug 1, only the generic `/var` field guard fired) |
 | `try` | **error** (no `<@catch>`; §6) | same | `<Loading>` | body inline | **error** | **error** |
 | `try` + `<@catch>` | `catch` block; the body renders into a buffered sub-sink, so a throw drops its partial output (§13.8) | same | `<Errored fallback>` | `MxErrorBoundary` (Preact/React/Hono; Hono's wraps `hono/jsx`'s `ErrorBoundary`), body passed as a thunk | error | error |
 | `try` + `<@placeholder>` | **error** — needs a second render pass | error | `<Loading fallback>` | `MxPlaceholder` / `Suspense`, nested **inside** the boundary | error | error |
-| `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | `.render(props)` returns `{ value, output }` (§13.3); `/var` top-level only; dynamic tags included (decision 155's render path, `dynamic-tag-var-silent-drop`) | same as Preact | same as Preact | **error** | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
+| `<return>` + `/var` | `render(input, out)` returns the value; `/var` in **any** scope, dynamic tags included (§13.8) | same | a generated `$mxReturn` callback prop the unit calls during setup; one-shot (§10) | `.render(props)` returns `{ value, output }` (§13.3); `/var` top-level only; dynamic tags included | renders through Astro's renderer, which unwraps the pair (§10) | error — fixed 2026-09-17 (page level; the tag-unit call site was already an error); was **accepted and silently dropped** (bug 8) |
 
 ### 13.2 Markup and attributes
 
@@ -3765,7 +3772,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
 | dynamic tag | `__mxRenderDynamic()` | `<Dynamic component>` | `__mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
-| repeated `<@item>` | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
+| repeated `<@item>` (today's shape; being replaced by Marko's record on every target, §8) | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
 | tag params | body block | child callback | render-prop child | same | same | **error** — Astro has no render-prop form | `let-x` |
 | `<!doctype>` | emitted | **error** | **error** | error | error | emitted | emitted + warning |
 | HTML comments | **stripped** (Marko parity) | stripped | stripped | stripped | stripped | **kept** | **kept** |
@@ -4562,7 +4569,12 @@ stay as the argument; this section states what is.
 
 **Atoms are rows of this table.** Core reads `:name` as Marko does (§4); a
 dialect that wants atoms builds them with an expression row and a value row whose
-hooks return a `StringLiteral` marked `extra.mxAtom` (§13.9.7).
+hooks return a `StringLiteral` marked `extra.mxAtom` (§13.9.5).
+
+> **Being replaced.** This section's atom text describes core's atom support as it ships
+> today. Atoms are a dialect feature (see "Atoms are a dialect feature",
+> §4): `Atom`, `MxAtomMark`, `extra.mxAtom` and the `atom` contract type leave
+> core with the atom removal, and none of them is stable API.
 
 #### 13.9.1 The table
 
@@ -5199,7 +5211,8 @@ UTF-16 range. `ctx` is frozen and offers exactly:
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
   attribute), a string, a `ctx.expression` result, or a whole-value
-  `{ kind: "atom" | "member", name, span? }`.
+  `{ kind: "atom" | "member", name, span? }`. (The `"atom"` form leaves core
+  with the atom removal; see the note at the top of §13.9.)
 - `ctx.child(tagName, attrs)`: a child tag of the enclosing block, built from
   `ctx.attribute` results. It goes through the normal tag path, so contracts and
   host declarations apply to it.
@@ -5257,6 +5270,11 @@ A `=value` is also lowered as an expression with its own triggers, and a member
 in a method body or in call arguments lowers like any other expression position.
 
 #### 13.9.6 The `"member"` contract type
+
+> **Being replaced.** The atom half of this section (the `"atom"` contract type, its column in the table below, and `values`, `pattern` and `ref` as atom keys) describes core's atom support as it ships
+> today. Atoms are a dialect feature (see "Atoms are a dialect feature",
+> §4): `Atom`, `MxAtomMark`, `extra.mxAtom` and the `atom` contract type leave
+> core with the atom removal, and none of them is stable API.
 
 A member is the whole-value reference a dialect produces for a sigil like
 Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
@@ -5424,7 +5442,8 @@ target emits, and which carries the claimed node as `node` (`DialectNode`),
 never set together with `atom` or `member`. An expression is the `Attr` that
 expression makes, as an expression written there would: a dynamic `Attr`
 with no `node`, or a static one for a literal (an atom-marked string literal
-gives a static `Attr` with `atom`). Any other result is ``the `<id>` trigger's `lower`
+gives a static `Attr` with `atom`, until the atom removal; see the note at the
+top of §13.9). Any other result is ``the `<id>` trigger's `lower`
 (node type `<key>`) must return a string or `ctx.expression(node)` for an
 attribute value``.
 
@@ -5490,10 +5509,8 @@ lowering yet" error, and never silently dropped.
 | Attribute tags on native elements | Marko rejects them | `divergences.md` |
 | `<fragment>` | Marko rejects it; multiple root nodes need no wrapper | `divergences.md` |
 | Unknown custom elements | Letting `<my-widget>` through as a literal element | `divergences.md` |
-| L3 raw hooks | Blocked on a vendored fork registering `Mx*` node types | 89c |
 | A non-JS parser | — | 74 |
 | An async `<try>`/`<await>` | "a later product" | 65 |
-| Scriptlets | Revisit when the reactive mode is built or killed | 54 |
 
 **MX 2 stays TypeScript** (decision 88). `whole-file-mx` is **closed**, not
 deferred (decision 85).
@@ -5502,13 +5519,6 @@ deferred (decision 85).
 
 ## 15. Open questions
 
-1. **Event attribute naming** (§4). No rule today; behavior differs per host by
-   accident. Blocked on `notes/investigations/dom-events.md`.
-2. **Dynamic tags** (§7). No decision fixes their behavior; hosts may claim them.
-   The attribute-tag-on-a-dynamic-tag silent drop on the html target (and on
-   Solid's own dynamic-tag path, which shares the bug) is fixed: both now
-   forward the attribute tags into the resolved target's props (decision
-   104, `attribute-tag-silent-drops`).
 3. **`--` text lines** (§3). Legal by inheritance, untested — no fixture.
 4. **`.solid.mx` as a final spelling** (§1). Left "for now" three times, never
    ruled on.
@@ -5516,6 +5526,14 @@ deferred (decision 85).
 
 ### Closed questions
 
+1. **Event attribute naming — closed.** §4 (event attributes) states the
+   rule; the per-host spelling is in each host's semantics page.
+2. **Dynamic tags — closed.** §7 fixes their behavior on every host: a
+   string target renders that element (with `args[0]` as its attributes when
+   called with arguments), a falsy target renders only the body, a component
+   or function target is called, and arguments combine with a body and
+   attribute tags as in Marko. Attribute tags on a dynamic tag are forwarded
+   into the resolved target's props on every host.
 8. **Attribute-tag cardinality and value shape — closed.** Every target
    passes Marko's attribute-tag record with MX's prototype members (§8); the
    callee's `Input` types the value and never changes the emitted shape.

@@ -1,11 +1,11 @@
 ---
 title: "Stateful tags"
-description: "Why <let>, <lifecycle>, and friends mean whatever the host says."
+description: "<let>, <lifecycle> and the other reactive tags: core language that each target lowers to its own primitives."
 ---
 
 # Stateful tags
 
-`<let>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, and the `:=` assignment operator are **not** part of the portable structural core. They're framework territory: MX's core provides three hooks a host can use to give these tags real meaning, and each host's `Policy` decides what happens.
+`<let>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, and the `:=` assignment operator are **core language**. Core parses and checks them on every target, and each target lowers them to its own framework's primitives; they are not tags a host defines. What differs per target is only whether it can express a construct: the html target renders the initial value, a native-component target compiles them to the framework's own state, and an embedded MX region inside a host's TypeScript leaves state to that TypeScript and refuses them with a positioned error naming what to write instead ([specification §11](/specification/)). Core's three policy hooks are how a target says which of these it expresses.
 
 `<effect>` is not an MX tag. On a target (`lowerSource` and the html targets) every form of it is a compile error, and the fix is `<script>`. The default policy and `lowerSource` say:
 
@@ -13,7 +13,7 @@ description: "Why <let>, <lifecycle>, and friends mean whatever the host says."
 
 The error is a target rule. On a host (embedded MX in Preact, React, Hono, Solid, Angular or Astro) `<effect>` stays one more unsupported tag, worded like every other: "`<effect>` is not supported in embedded MX on Preact." Under `{ strict: true }` the html target words it like its other reactive rows: "`<effect>` is a reactive effect and requires a runtime; this strict policy has no reactive target". A dialect that states the `none` tag rules keeps `effect` as an ordinary tag name.
 
-A template using `<let>` means something different depending on which host compiles it — the same way a piece of JSX means something different depending on which framework's compiler processes it. The structural tags in [Structural tags](/language/structural-tags/) are portable across hosts; stateful tags are not.
+A `<let>` means the same thing on every target that accepts it: a value the template reads, written by handlers and `<script>` bodies, with the page updating to match. The language errors below are core's and fire on every target, html and the JSX hosts included.
 
 A `<let>` is written in an event handler or a `<script>` body, never while the template renders: `${count++}`, `<p class=(count = 1)/>` or `<const/next=(count += 1)/>` is a compile error (`MX_LET_WRITE_IN_RENDER`), on the html default policy, with the fix in the message. Derive a value with `<const>` instead. A write inside a function that the template calls while it renders is not detected. A `<let>` is also written only below its declaration (`MX_LET_WRITE_BEFORE_DECLARATION`) and never by a `for...of` or `for...in` head (`MX_LET_LOOP_ASSIGNMENT`), and a `<const>`, a `<for>` parameter or a `<define>` parameter is not written while the template renders (`MX_READONLY_BINDING_WRITE`; bound as a plain name, it is not written in a handler or a `<script>` body either). See [Errors](/language/errors/).
 

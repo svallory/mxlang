@@ -51,13 +51,13 @@ If you are new to MX, read these five in order — about twenty minutes end to e
 2. [Interpolation and escaping](/language/interpolation/) — `${}` versus `$!{}`, and the whitespace rule that surprises people coming from JSX.
 3. [Custom tags](/custom-tags/) — define reusable project vocabulary without coupling it to a host.
 4. Pick your host and follow its install: [HTML](/targets/html/) for a plain string, [Astro](/hosts/astro/) for static markup, [React](/hosts/react/) or [Preact](/hosts/preact/) for components, [Hono](/hosts/hono/) for server JSX, [Solid](/hosts/solid/) for MX inside a Solid file.
-5. [Stateful tags](/language/stateful-tags/) — what `<let>` and friends mean, which is the one place hosts deliberately disagree.
+5. [Stateful tags](/language/stateful-tags/) — `<let>` and the other reactive tags, which every target lowers to its own primitives.
 
 Then set up your editor: [Zed](/editors/zed/), [VS Code](/editors/vscode/), and the [TypeScript](/editors/typescript/) integration that type-checks MX files.
 
 ## Reference
 
-- [Language](/language/structural-tags/) — the structural tags, attribute tags, interpolation, and what a host is free to define itself.
+- [Language](/language/structural-tags/) — the structural tags, attribute tags, interpolation, and the reactive tags.
 - [Custom tags](/custom-tags/reference/) — template and sidecar authoring, discovery, API types, and diagnostics.
 - [Architecture](/architecture/core-and-hosts/) — how the core and hosts fit together.
 - [Editors](/editors/zed/) — Zed, VS Code, and the diagnostics language server.
