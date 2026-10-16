@@ -826,8 +826,8 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  *   `#id`/`.class` shorthand and the rest were discarded.
  * - a head form the tag has no use for: arguments (`<script(x)>`), params
  *   (`<script|x|>`), a tag variable (`<script/x>`), a second value
- *   (`<script value=a value=b>`) and a value next to a body
- *   (`<script value=a>code</script>`). One is reported, the first of those and
+ *   (`<script value=a value=b>`, also when the second is bound) and a value
+ *   next to a body with statements (`<script value=a>code()</script>`). One is reported, the first of those and
  *   the attributes above in the order stock checks them: arguments, params,
  *   variable, then the attributes and values in the order they were written,
  *   then a body next to a value.
@@ -870,17 +870,19 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
   let duplicate: Node | undefined;
   let valueSeen = false;
   for (const candidate of inSourceOrder) {
-    if (
-      isSpreadAttributeNode(candidate) ||
-      isBoundAttr(candidate) ||
-      candidate.modifier != null ||
-      !(attrNameOf(candidate) === "value" || isDefaultAttr(candidate))
-    ) {
-      attr = candidate;
+    // A second `value` is the duplicate even when it is bound (`value:=y`):
+    // stock expands the bound value to `value` and `valueChange`, and its
+    // `value` meets the duplicate check first.
+    const isValue =
+      !isSpreadAttributeNode(candidate) &&
+      candidate.modifier == null &&
+      (attrNameOf(candidate) === "value" || isDefaultAttr(candidate));
+    if (isValue && valueSeen) {
+      duplicate = candidate;
       break;
     }
-    if (valueSeen) {
-      duplicate = candidate;
+    if (!isValue || isBoundAttr(candidate)) {
+      attr = candidate;
       break;
     }
     valueSeen = true;
@@ -908,14 +910,10 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     (child: Node) =>
       child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
   );
-  // The body is the tag's value when it holds any text: whitespace is none. A
-  // body with a placeholder is refused for that, as stock does.
-  const hasBodyText =
-    !placeholder &&
-    bodyChildren(tag).some(
-      (child: Node) =>
-        isTextNode(child) && String(child.value ?? "").trim() !== "",
-    );
+  // The body is the tag's value when it holds statements, as stock counts
+  // them: a comment, a directive (`'use strict'`) or whitespace is none, and a
+  // body that does not parse or holds a placeholder is refused for that.
+  const hasStatements = (scriptProgramOf(ctx, tag)?.body?.length ?? 0) > 0;
   // One head error is reported, the one stock reports first: arguments, then
   // parameters, then the variable, then the attributes and values in the order
   // they were written, then a body next to a value.
@@ -942,7 +940,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
       duplicate,
       DUPLICATE_VALUE_ATTRIBUTE_CODE,
     );
-  } else if (!attr && valueSeen && hasBodyText) {
+  } else if (!attr && valueSeen && hasStatements) {
     refuse(
       `Invalid duplicate value ${voice.attribute}. A ${scriptText()} body is its value: write the body or \`value=…\`, not both`,
       tag,

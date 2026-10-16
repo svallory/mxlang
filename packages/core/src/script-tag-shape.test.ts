@@ -695,8 +695,30 @@ const HEAD_FORMS: [string, string, HeadRefusal][] = [
     },
   ],
   [
-    "a value and a comment as the body",
-    "<div/>\n<script value=x>\n  // c\n</script>\n",
+    "a value and an empty statement as the body",
+    "<div/>\n<script value=x>;</script>\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a block as the body",
+    "<div/>\n<script value=x>{}</script>\n",
+    {
+      code: DUPLICATE,
+      message: VALUE_AND_BODY,
+      line: 2,
+      column: 0,
+      end: { line: 2, column: 7 },
+    },
+  ],
+  [
+    "a value and a directive with a statement as the body",
+    "<div/>\n<script value=x>'use strict'; a();</script>\n",
     {
       code: DUPLICATE,
       message: VALUE_AND_BODY,
@@ -736,6 +758,17 @@ const HEAD_FORMS: [string, string, HeadRefusal][] = [
       line: 2,
       column: 16,
       end: { line: 2, column: 23 },
+    },
+  ],
+  [
+    "a second value that is bound",
+    "<div/>\n<script value=x value:=y/>\n",
+    {
+      code: DUPLICATE,
+      message: DUPLICATE_VALUE,
+      line: 2,
+      column: 16,
+      end: { line: 2, column: 24 },
     },
   ],
   [
@@ -908,6 +941,15 @@ describe("a built-in <script> with a head form stock refuses", () => {
     ]);
   });
 
+  it("reports an html comment body once, as a body that does not parse", () => {
+    const { diagnostics } = lower(
+      "<div/>\n<script value=x><!-- c --></script>\n",
+    );
+    expect(diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_INVALID_STATEMENT", 2, 17],
+    ]);
+  });
+
   it("reports a placeholder, not a value next to a body, when the body has one", () => {
     const { diagnostics } = lower(page("<script value=x>", "a(${x});"));
     expect(diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
@@ -975,6 +1017,23 @@ describe("a built-in <script> with a value or a body, not both, is not refused",
     ["empty arguments", page("<script()>")],
     ["empty params", page("<script||>")],
     ["a concise value", "div\nscript value=x\n"],
+    // Stock counts statements: a comment or a directive is not a body.
+    [
+      "a value and a line comment",
+      "<div/>\n<script value=x>\n  // c\n</script>\n",
+    ],
+    [
+      "a value and a block comment",
+      "<div/>\n<script value=x>/* c */</script>\n",
+    ],
+    [
+      "a value and a directive",
+      "<div/>\n<script value=x>'use strict'</script>\n",
+    ],
+    [
+      "a value and a concise comment block",
+      "div\nscript value=x\n  --\n  // c\n  --\n",
+    ],
   ])("%s", (_label, source) => {
     expect(lower(source).diagnostics).toEqual([]);
   });
