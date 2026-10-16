@@ -152,9 +152,11 @@ const clientOnly: Record<string, Case> = {
     "client const { a } = { a: 1 };\nclient const n: string = a;\n<div/>\n",
     [TS2322("client-destructuring.mx(2,14)", "number", "string")],
   ],
+  // The template renders on the server, where `f` is `undefined`
+  // (`client-server-view.test.ts` pins the read).
   "client-function": [
-    "client function f(): number { return 1; }\n<div>${f()}</div>\n",
-    [],
+    "client function f(): number { return 1; }\nclient const n: string = f();\n<div/>\n",
+    [TS2322("client-function.mx(2,14)", "number", "string")],
   ],
 };
 
@@ -215,7 +217,7 @@ describe("mx-tsc under strict: a client declaration keeps its type", () => {
   // about the same declaration in a `.ts` file is what `mx-tsc` says here,
   // at the declared name.
   const plain = "var q;\nexport const read = () => q;\n";
-  const varPage = "client var q;\n<div>${q}</div>\n";
+  const varPage = "client var q;\nclient const read = () => q;\n<div/>\n";
   let project: (Project & { dispose: () => void }) | undefined;
   beforeAll(() => {
     project = runProject(

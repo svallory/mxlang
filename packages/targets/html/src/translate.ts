@@ -198,6 +198,39 @@ function statementCodeSpan(
   return { sourceStart, sourceEnd: sourceStart + code.length };
 }
 
+/** The top-level statements of a `client` statement's code, with Babel's offsets. */
+function parseClientStatements(code: string, at: Node): Node[] {
+  try {
+    return babelParser.parse(code, {
+      sourceType: "module",
+      // Marko's own sub-parse options, so any statement text Marko reads
+      // parses here too (a top-level `return`, `super`, `new.target`,
+      // `await`, an `import` or `export`). No decorators plugin: core's
+      // statement check refuses a decorator before this runs.
+      allowAwaitOutsideFunction: true,
+      allowImportExportEverywhere: true,
+      allowReturnOutsideFunction: true,
+      allowSuperOutsideMethod: true,
+      allowUndeclaredExports: true,
+      allowNewTargetOutsideFunction: true,
+      plugins: [
+        "objectRestSpread",
+        "classProperties",
+        "explicitResourceManagement",
+        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+      ],
+    }).program.body;
+  } catch (error) {
+    // Core has already checked this text, so a failure here is a gap between
+    // that check and this parse. Say so: declaring nothing would turn the
+    // template's own read of the name into a ReferenceError.
+    fail(
+      `the names this \`client\` statement declares could not be read: ${(error as Error).message}`,
+      at,
+    );
+  }
+}
+
 /**
  * The names a `client` block declares at its own top level, in the order
  * Marko emits them.
@@ -221,39 +254,9 @@ function statementCodeSpan(
  * form. A plain `enum` declares its name
  * where stock Marko refuses to compile it.
  */
-function clientDeclaredNames(code: string, at: Node): string[] {
-  let program: { body: Node[] };
-  try {
-    program = babelParser.parse(code, {
-      sourceType: "module",
-      // Marko's own sub-parse options, so any statement text Marko reads
-      // parses here too (a top-level `return`, `super`, `new.target`,
-      // `await`, an `import` or `export`). No decorators plugin: core's
-      // statement check refuses a decorator before this runs.
-      allowAwaitOutsideFunction: true,
-      allowImportExportEverywhere: true,
-      allowReturnOutsideFunction: true,
-      allowSuperOutsideMethod: true,
-      allowUndeclaredExports: true,
-      allowNewTargetOutsideFunction: true,
-      plugins: [
-        "objectRestSpread",
-        "classProperties",
-        "explicitResourceManagement",
-        ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
-      ],
-    }).program;
-  } catch (error) {
-    // Core has already checked this text, so a failure here is a gap between
-    // that check and this parse. Say so: declaring nothing would turn the
-    // template's own read of the name into a ReferenceError.
-    fail(
-      `the names this \`client\` statement declares could not be read: ${(error as Error).message}`,
-      at,
-    );
-  }
+function clientDeclaredNames(body: Node[]): string[] {
   const names = new Set<string>();
-  const queue: Array<Node | null | undefined> = [...program.body];
+  const queue: Array<Node | null | undefined> = [...body];
   for (let index = 0; index < queue.length; index++) {
     const node = queue[index];
     if (!node || typeof node !== "object" || node.declare) continue;
@@ -339,6 +342,126 @@ function clientDeclaredNames(code: string, at: Node): string[] {
     }
   }
   return [...names];
+}
+
+/** A slice of a `client` statement's code and where it stands in the source. */
+export interface ClientPiece {
+  code: string;
+  span: SourceSpan | undefined;
+}
+
+/**
+ * What the tooling projection (`typeCheck`) emits for one `client` statement.
+ *
+ * The server module declares a client name `var q;`, so a template read sees
+ * `undefined` and an importer finds no export. The projection types that view
+ * and keeps the client code typed in a scope of its own:
+ *
+ * - `serverNames` are declared `var q: undefined;` at module level;
+ * - `hoisted` are the statements a function body cannot hold, or that only the
+ *   type checker reads: `import`s, `namespace`s, `declare` forms, interfaces
+ *   and type aliases, with any `export` removed (a client name is not
+ *   exported by the server module);
+ * - `body` is everything else, with `export` removed, for a function that is
+ *   never called;
+ * - `exported` are the names the statement exports, read once in that function
+ *   so `noUnusedLocals` does not flag a name the author exports;
+ * - `returns` are the `return` statements outside every function: a client
+ *   module cannot load with one, and a function wrapper would hide the error.
+ */
+export interface ClientProjection {
+  serverNames: string[];
+  hoisted: ClientPiece[];
+  body: ClientPiece[];
+  exported: string[];
+  returns: SourceSpan[];
+}
+
+const FUNCTION_NODES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ObjectMethod",
+  "ClassMethod",
+  "ClassPrivateMethod",
+  "StaticBlock",
+  "TSDeclareFunction",
+  "TSDeclareMethod",
+]);
+
+/** Offsets of each `return` that no function body encloses. */
+function topLevelReturns(node: unknown, found: number[] = []): number[] {
+  if (!node || typeof node !== "object") return found;
+  if (Array.isArray(node)) {
+    for (const child of node) topLevelReturns(child, found);
+    return found;
+  }
+  const { type } = node as Node;
+  if (typeof type === "string" && FUNCTION_NODES.has(type)) return found;
+  if (type === "ReturnStatement") found.push((node as Node).start);
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "loc" || key === "extra" || key.endsWith("Comments")) continue;
+    topLevelReturns(value, found);
+  }
+  return found;
+}
+
+function clientProjection(
+  statements: Node[],
+  code: string,
+  span: SourceSpan | undefined,
+): ClientProjection {
+  const base = span?.sourceStart;
+  const piece = (start: number, end: number): ClientPiece => ({
+    code: code.slice(start, end),
+    span:
+      base === undefined
+        ? undefined
+        : { sourceStart: base + start, sourceEnd: base + end },
+  });
+  const hoisted: ClientPiece[] = [];
+  const body: ClientPiece[] = [];
+  const exported: string[] = [];
+  const hoistedNodes: Node[] = [];
+  for (const statement of statements) {
+    let inner = statement;
+    if (statement.type === "ExportNamedDeclaration") {
+      // `export { y }` and `export … from` name no declaration: dropped.
+      if (!statement.declaration) continue;
+      inner = statement.declaration;
+      exported.push(...clientDeclaredNames([inner]));
+    } else if (
+      // Core refuses a default export; the others name no declaration.
+      statement.type === "ExportDefaultDeclaration" ||
+      statement.type === "ExportAllDeclaration" ||
+      statement.type === "TSExportAssignment"
+    ) {
+      continue;
+    }
+    const isHoisted =
+      inner.type === "ImportDeclaration" ||
+      inner.type === "TSImportEqualsDeclaration" ||
+      inner.type === "TSModuleDeclaration" ||
+      inner.type === "TSInterfaceDeclaration" ||
+      inner.type === "TSTypeAliasDeclaration" ||
+      inner.declare === true;
+    const target = isHoisted ? hoisted : body;
+    if (isHoisted) hoistedNodes.push(inner);
+    target.push(piece(inner.start, statement.end));
+  }
+  const taken = new Set(clientDeclaredNames(hoistedNodes));
+  return {
+    serverNames: clientDeclaredNames(statements).filter(
+      (name) => !taken.has(name),
+    ),
+    hoisted,
+    body,
+    exported: exported.filter((name) => !taken.has(name)),
+    returns: topLevelReturns(statements).map((start) => ({
+      sourceStart: (base ?? 0) + start,
+      sourceEnd: (base ?? 0) + start + "return".length,
+    })),
+  };
 }
 
 /** Every identifier a binding pattern introduces. */
@@ -536,7 +659,7 @@ export type DelegatedTagData =
       code: string;
       start: number | undefined;
       span: SourceSpan | undefined;
-      typeCheck?: { code: string; span: SourceSpan | undefined };
+      typeCheck?: ClientProjection;
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -637,18 +760,21 @@ function resolveDelegatedTag(
     // stock Marko 6.4.4: only the block's own top-level declarations count.
     const text = sliceLoc(ctx, node.loc);
     const own = unwrapStatementBlock(text.trim().replace(/^client\s*/, ""));
-    const names = clientDeclaredNames(own, node);
+    const statements = parseClientStatements(own, node);
+    const names = clientDeclaredNames(statements);
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
       start: node.start,
       span: undefined,
-      // The projection keeps the statement itself: a declaration with its real
-      // type, an error at the author's token.
-      typeCheck: {
-        code: own,
-        span: statementCodeSpan(ctx, node, text, "client", own),
-      },
+      // The projection keeps the statement itself in a scope of its own: a
+      // declaration with its real type there, an error at the author's token,
+      // and `undefined` for the name in the server view.
+      typeCheck: clientProjection(
+        statements,
+        own,
+        statementCodeSpan(ctx, node, text, "client", own),
+      ),
     };
   }
 

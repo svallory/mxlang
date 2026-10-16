@@ -484,3 +484,115 @@ describe("html: the type-check projection of a `client` or `server` statement", 
     );
   });
 });
+
+/**
+ * Under `typeCheck` (the tooling projection, never the module that runs) the
+ * module is the server view: a client name is `undefined`, none is exported,
+ * and the client code is typed in a function that nothing calls.
+ */
+describe("html typeCheck: the server view and the client code of a `client` statement", () => {
+  const project = (source: string) =>
+    compile(source, "/f/t.mx", { typeCheck: true });
+  const wrapper = (code: string) =>
+    code.slice(
+      code.indexOf("async function __mxClient() {"),
+      code.indexOf("void __mxClient;"),
+    );
+
+  it("declares each name `undefined` and types the client code in a function", () => {
+    const { code } = project("client let q = 1;\n<div>${q}</div>\n");
+    expect(code).toContain("var q: undefined; void [q];");
+    expect(wrapper(code)).toBe(
+      "async function __mxClient() {\n  let q = 1;\n}\n",
+    );
+    expect(code).toContain("void __mxClient;");
+  });
+
+  it("is the same module without `typeCheck`: only the `var`", () => {
+    const { code } = compile("client let q = 1;\n<div/>\n", "/f/t.mx");
+    expect(code).toContain("var q;");
+    expect(code).not.toContain("__mxClient");
+    expect(code).not.toContain("undefined");
+  });
+
+  it("keeps a client export out of the module's exports", () => {
+    const { code } = project(
+      "client export const x = 1;\nclient export function f() {}\n<div/>\n",
+    );
+    expect(code).not.toMatch(/export (const x|function f)/);
+    expect(code).toContain("var x: undefined; void [x];");
+    expect(code).toContain("var f: undefined; void [f];");
+    expect(wrapper(code)).toContain("const x = 1;");
+    expect(wrapper(code)).toContain("function f() {};");
+    // Read once, so `noUnusedLocals` does not flag a name the author exports.
+    expect(wrapper(code)).toContain("void [x];");
+    expect(wrapper(code)).toContain("void [f];");
+  });
+
+  it("hoists an import and a type out of the function, and declares neither as a value", () => {
+    const { code } = project(
+      'client import { a } from "./a.ts";\nclient interface P { n: number }\nclient const b = a;\n<div/>\n',
+    );
+    const before = code.slice(0, code.indexOf("async function __mxClient"));
+    expect(before).toContain('import { a } from "./a.ts"');
+    expect(before).toContain("interface P { n: number }");
+    expect(before).not.toContain("a: undefined");
+    expect(wrapper(code)).toContain("const b = a;");
+    expect(wrapper(code)).not.toContain("import");
+    expect(before).toContain("var b: undefined;");
+  });
+
+  it("names a top-level `return` after the module, and not one inside a function", () => {
+    const top = project("client { return; }\n<div/>\n").code;
+    expect(top).toMatch(/export \{ __mxRender as render \};\nreturn;\n/);
+    const nested = project(
+      "client { const f = () => { return 1 }; }\n<div/>\n",
+    ).code;
+    expect(nested).not.toMatch(/render \};\nreturn;/);
+  });
+
+  it("maps every piece of client code to the text the author wrote", () => {
+    const source = [
+      'client import { a } from "./a.ts";',
+      "client interface P { n: number }",
+      "client export const x = 1,",
+      "  y = 2;",
+      "client {",
+      "  let z = a;",
+      "  if (z) return;",
+      "}",
+      "<div/>",
+      "",
+    ].join("\n");
+    const { code, mappings } = project(source);
+    expect(mappings.length).toBeGreaterThan(0);
+    for (const mapping of mappings) {
+      expect(
+        code.slice(mapping.generatedStart, mapping.generatedEnd),
+        JSON.stringify(mapping),
+      ).toBe(source.slice(mapping.sourceStart, mapping.sourceEnd));
+    }
+    for (const text of [
+      'import { a } from "./a.ts";',
+      "interface P { n: number }",
+      "const x = 1,\n  y = 2;",
+      "let z = a;",
+    ]) {
+      expect(
+        mappings.some(
+          (mapping) =>
+            source.slice(mapping.sourceStart, mapping.sourceEnd) === text &&
+            code.slice(mapping.generatedStart, mapping.generatedEnd) === text,
+        ),
+        text,
+      ).toBe(true);
+    }
+    // The `return` stands in the module once more, mapped to the keyword.
+    expect(
+      mappings.filter(
+        (mapping) =>
+          source.slice(mapping.sourceStart, mapping.sourceEnd) === "return",
+      ),
+    ).toHaveLength(1);
+  });
+});

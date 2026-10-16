@@ -60,7 +60,7 @@ import {
   quote,
   TranslateError,
 } from "@mxlang/core";
-import type { DelegatedTagData } from "./translate.ts";
+import type { ClientPiece, DelegatedTagData } from "./translate.ts";
 import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
 
 const INDENT = "  ";
@@ -108,6 +108,14 @@ interface State {
    * with the `static` blocks in the order they were written.
    */
   moduleHoisted: Array<{ code: MappedCode; start: number | undefined }>;
+  /**
+   * Under `typeCheck`, the code of every `client` statement: one function the
+   * module declares and never calls, so a client name is typed there and is
+   * `undefined` everywhere else (the server view).
+   */
+  clientBody: MappedCode[];
+  /** Under `typeCheck`, each `return` that no function encloses in `client` code. */
+  clientReturns: MappedCode[];
   indent: number;
   /** Serial for local arrays and source temporaries in attribute-tag loops. */
   attrTagTemp: number;
@@ -150,6 +158,8 @@ export function createEmitter(
     bodyMappings: [],
     prelude: [],
     moduleHoisted: [],
+    clientBody: [],
+    clientReturns: [],
     indent: 1,
     attrTagTemp: 0,
     sink: "__mxOut",
@@ -1404,14 +1414,55 @@ export function createEmitter(
         // render, so it runs — hoisting to module scope exactly as `static`
         // does. Classifying it as inert would silently drop a binding the rest
         // of the template reads.
-        // The tooling projection emits a `client` statement's own code (its
-        // declarations typed, its errors positioned); the module that runs
-        // keeps the `var` of its names.
-        const emitted =
-          options.typeCheck && data.typeCheck ? data.typeCheck : data;
-        if (emitted.code !== "") {
+        // The tooling projection types a `client` statement in two views: the
+        // server module (every name it declares is `undefined`, none is
+        // exported) and the client code, kept in a function of its own. The
+        // module that runs keeps the `var` of its names.
+        if (options.typeCheck && data.typeCheck) {
+          const projection = data.typeCheck;
+          const lines: Array<string | MappedCode> = [];
+          if (projection.serverNames.length > 0) {
+            // `void` reads the names, so `noUnusedLocals` does not flag a
+            // declaration the author never wrote.
+            lines.push(
+              `var ${projection.serverNames.map((name) => `${name}: undefined`).join(", ")}; void [${projection.serverNames.join(", ")}];`,
+            );
+          }
+          for (const hoisted of projection.hoisted) {
+            lines.push(clientPiece(hoisted));
+          }
+          if (lines.length > 0) {
+            state.moduleHoisted.push({
+              code: concatMapped(
+                ...lines.flatMap((line, index) =>
+                  index === 0 ? [line] : ["\n", line],
+                ),
+              ),
+              start: data.start,
+            });
+          }
+          for (const piece of projection.body) {
+            // A statement keeps its own `;`; one without gets it, so the
+            // next line cannot join it by automatic semicolon insertion.
+            state.clientBody.push(
+              piece.code.endsWith(";")
+                ? clientPiece(piece)
+                : concatMapped(clientPiece(piece), ";"),
+            );
+          }
+          if (projection.exported.length > 0) {
+            state.clientBody.push(
+              concatMapped(`void [${projection.exported.join(", ")}];`),
+            );
+          }
+          for (const span of projection.returns) {
+            state.clientReturns.push(concatMapped(mapped("return", span), ";"));
+          }
+          return;
+        }
+        if (data.code !== "") {
           state.moduleHoisted.push({
-            code: mapped(emitted.code, emitted.span ?? null),
+            code: mapped(data.code, data.span ?? null),
             start: data.start,
           });
         }
@@ -1564,6 +1615,11 @@ export function createEmitter(
   return emitter;
 }
 
+/** One slice of a `client` statement's code, mapped to where the author wrote it. */
+function clientPiece(piece: ClientPiece): MappedCode {
+  return mapped(piece.code, piece.span ?? null);
+}
+
 /**
  * The `static`/`export` statements and the host's own hoisted statements
  * (`server`, `client`) in the order the author wrote them, as Marko emits
@@ -1643,6 +1699,16 @@ export function emitModuleWithMappings(
   const inputType = ir.tagMetadata.readsContent
     ? "Input & { content?: () => string }"
     : "Input";
+  if (emitter.state.clientBody.length > 0) {
+    // Never called: `void` reads it, so `noUnusedLocals` stays quiet. `async`
+    // lets `client` code await at its top level, as a module may.
+    hoisted.push(
+      "async function __mxClient() {",
+      ...emitter.state.clientBody.map((code) => concatMapped(INDENT, code)),
+      "}",
+      "void __mxClient;",
+    );
+  }
   if (hoisted.length > 0) lines.push("", ...hoisted);
   lines.push(
     "",
@@ -1678,6 +1744,9 @@ export function emitModuleWithMappings(
     ...(ir.returnValue ? [`${INDENT}return ${ir.returnValue.code};`] : []),
     "}",
     "export { __mxRender as render };",
+    // A module cannot load with a top-level `return`; the function above would
+    // hide it, so each one stands here too, at the author's token.
+    ...emitter.state.clientReturns,
     "",
   );
   return concatMapped(
