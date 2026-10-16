@@ -3400,12 +3400,7 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   if (!read) return;
   raise(
     INVALID_FOR_CODE,
-    `The \`by=\` ${voiceOfCtx(ctx).attribute} is evaluated before the loop runs, so \`${read.name}\` is not in scope.${mxExample(
-      ctx,
-      "for",
-      node,
-      ` Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
-    )}`,
+    `The \`by=\` ${voiceOfCtx(ctx).attribute} is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
     read,
   );
 }
@@ -3466,18 +3461,13 @@ function lowerForHead(
   if (keyAttr) {
     raise(
       INVALID_FOR_CODE,
-      `The ${tagText(ctx, "for", node)} tag keys items with the \`by=\` ${voiceOfCtx(ctx).attribute}, not \`key=\`.${mxExample(
-        ctx,
-        "for",
-        node,
-        ` ${
-          of
-            ? 'Use `by="propName"` or `by=(item, index) => key`'
-            : inAttr
-              ? "Use `by=(key, value) => key`"
-              : "Use `by=(num) => key`"
-        }.`,
-      )}`,
+      `The ${tagText(ctx, "for", node)} tag keys items with the \`by=\` ${voiceOfCtx(ctx).attribute}, not \`key=\`. ${
+        of
+          ? 'Use `by="propName"` or `by=(item, index) => key`'
+          : inAttr
+            ? "Use `by=(key, value) => key`"
+            : "Use `by=(num) => key`"
+      }.`,
       keyAttr,
     );
   }
@@ -3623,13 +3613,11 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // Dispatched by the core, before any host sees the tag, so the binding check
   // has to happen here or a host's rule would silently apply to `<let>` and not
   // to `<const>`.
-  // The host spells `what` into its refusal, so it gets the label as the
-  // dialect spells it (only the files that bind a `<const>` reach this).
+  // `what` is a plain string of the host API, so it cannot be spelled when
+  // needed: it stays MX's `<const>` rather than call `formatTag` for every
+  // valid `<const>`. The host's refusal text is the host's.
   if (ctx.declarations.checkBinding) {
-    ctx.declarations.checkBinding(
-      tagVarOf(node),
-      voicedAt(node, () => tagText(ctx, "const", node)),
-    );
+    ctx.declarations.checkBinding(tagVarOf(node), "`<const>`");
   }
   const value = attrByName(node, "value") ?? tagAttributesOf(node)[0];
   if (!value) {
@@ -5254,7 +5242,7 @@ function writesMxSyntax(ctx: Ctx, name: string, node?: Node): boolean {
 function addReturnHint(ctx: Ctx, target: string): string {
   return writesMxSyntax(ctx, "return")
     ? `add \`<return value=…/>\` to ${target} to bind it with \`/var\``
-    : `add ${tagText(ctx, "return")} to ${target}`;
+    : `add a ${tagText(ctx, "return")} with a value to ${target} to bind it with \`/var\``;
 }
 
 /** `example` (MX-syntax text for a message) when the file writes MX's syntax, else nothing. */

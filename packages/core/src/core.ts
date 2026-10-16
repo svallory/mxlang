@@ -53,6 +53,7 @@ import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
+  lazyOwner,
   MX_VOICE,
   type Owner,
   ownerText,
@@ -2135,7 +2136,8 @@ export function rejectInertShape(
   disposition: Extract<Disposition, { kind: "inert" }>,
 ): void {
   const voice = voiceOfCtx(ctx);
-  const label = voice.tag(name, triggerOfNode(node));
+  // Spelled when a message needs it: a valid `<log=x/>` never calls `formatTag`.
+  const label = lazyOwner(() => voice.tag(name, triggerOfNode(node)));
   rejectUnsupportedFields(ctx, node, label, {
     params: true,
     args: true,
@@ -2147,7 +2149,7 @@ export function rejectInertShape(
       if (scriptSpreadsRefused.has(attr)) continue;
       raise(
         INERT_TAG_SHAPE_CODE,
-        `spread ${voice.attributes} on ${label} are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
+        `spread ${voice.attributes} on ${ownerText(label)} are not supported: the tag emits nothing, so a spread's keys would be silently discarded`,
         attr,
       );
     }
@@ -2160,7 +2162,7 @@ export function rejectInertShape(
       continue;
     raise(
       INERT_TAG_SHAPE_CODE,
-      `${label} does not support the \`${attrNameOf(attr)}\` ${voice.attribute}; it emits nothing, so the ${voice.attribute} would be silently discarded`,
+      `${ownerText(label)} does not support the \`${attrNameOf(attr)}\` ${voice.attribute}; it emits nothing, so the ${voice.attribute} would be silently discarded`,
       attr,
     );
   }
@@ -2169,7 +2171,7 @@ export function rejectInertShape(
   if (hasContent(bodyChildren(node))) {
     raise(
       INERT_TAG_SHAPE_CODE,
-      `${label} does not support body content; it emits nothing, so the body would be silently discarded`,
+      `${ownerText(label)} does not support body content; it emits nothing, so the body would be silently discarded`,
       node,
     );
   }

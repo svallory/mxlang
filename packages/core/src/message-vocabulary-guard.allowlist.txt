@@ -13,13 +13,14 @@
 # An entry that matches no hit fails the test, so a migrated site takes its
 # entry with it.
 #
-# Reasons come in five kinds:
+# Reasons come in six kinds:
 #   key       a contract or AST key name, not message text
 #   internal  an "IR invariant broken" error: an MX bug report, not a message a dialect's author or user reads
 #   html      text about an html element or a JavaScript feature that shares a word with an MX tag or noun (the html `<script>` element, import attributes), not the MX tag
 #   example   a syntax example the message shows; the example is written in MX's own syntax, and the message shows it only when the file spells the tag as MX does (`writesMxSyntax`)
 #   runtime   text in generated code, which runs with no dialect
 #   register  text for the dialect author at registration, not for the file's author
+#   host      text for the author of a target or host, or a string the host API takes; not for the file's author
 
 ir-entry/checks.ts :: checkAttr :: ==argument ${…} of attribute `${…}` -- internal: span invariant label
 ir-entry/checks.ts :: checkAttr :: ==spread attribute -- internal: span invariant label
@@ -72,7 +73,7 @@ lower.ts :: scriptBodyFailure :: Import attributes -- html: the JavaScript `impo
 lower.ts :: rejectAttributeTagArguments :: <@${…} value=1> -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowercaseBindingFix :: ==`<${${…}}${…}>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
 lower.ts :: localVariableTagMessage :: `<${${…}}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
-lower.ts :: lowerStatement :: parsed as a tag with attributes -- mx-tag: statement tags are MX built-ins
+lower.ts :: lowerStatement :: parsed as a tag with attributes -- host: addressed to the author of a target's translator, who names the statement tags in MX's words
 lower.ts :: tagText :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
 lower.ts :: ownerLabel :: ==`<${…}>` -- internal: the sentinel name of a dynamic target, which no dialect names
 lower.ts :: rejectUncalledParameterizedAttributeTag :: `<${${…}(/* arguments */)}/>` -- example: the suggested rewrite is written in MX's dynamic-tag syntax
@@ -97,6 +98,7 @@ lower.ts :: lowerForHead :: `<for|item| of=…>` -- example: the suggested rewri
 lower.ts :: lowerForHead :: `<for step=...>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerForHead :: `<for ${…}>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: requireValue :: `<for ${…}=...>` -- example: the suggested rewrite is written in MX's syntax
+lower.ts :: lowerConst :: ==`<const>` -- host: the `what` string of the host's `checkBinding`; a plain string of the public host API, so it cannot be spelled when needed and stays MX's rather than call `formatTag` for every valid `<const>`
 lower.ts :: lowerConst :: (write `<const/name=value/>`) -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerDefineChecked :: (write `<define/name>`) -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: addReturnHint :: add `<return value=…/>` to -- example: the suggested rewrite is written in MX's syntax

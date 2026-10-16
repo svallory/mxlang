@@ -727,8 +727,10 @@ Five facts worth knowing before editing it:
   (`voicedAt`/`spelledAtCall`/IR-entry `voiced`). `ChildTag.trigger` carries
   the authored text of a trigger-made child to `formatTag`. The funnels
   (`raise`, `failForOwner`, IR-entry `fail`, `warn`) still take finished
-  strings. MX's built-in tag text (T4) and registration text for the dialect
-  author (T5) keep MX's words. Tests: `src/message-vocabulary.test.ts`.
+  strings. Built-in tags are named through `formatTag` like any other tag,
+  and an MX-syntax example is shown only when the file spells the tag as MX
+  (`writesMxSyntax`); registration text for the dialect author (T5) keeps MX's
+  words. Tests: `src/message-vocabulary.test.ts`.
 - **A dialect ships its vocabulary as `Dialect.contracts` (`@unstable`;
   `src/dialect-contracts.ts`).** `checkDialectContracts` runs last in
   `checkModuleShape` (`syntax-table.ts`), so for a routed module and an

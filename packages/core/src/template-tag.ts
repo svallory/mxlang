@@ -1060,7 +1060,7 @@ export function routeTemplateCall(
       `${callLabel(voice, call)} does not return a value; ${
         writesMxSyntax(voice, "return")
           ? `add \`<return value=…/>\` to ${tag.filename} to bind it with \`/var\``
-          : `add ${voice.tag("return")} to ${tag.filename}`
+          : `add a ${voice.tag("return")} with a value to ${tag.filename} to bind it with \`/var\``
       }`,
       at.line,
       at.column,

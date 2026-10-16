@@ -28,6 +28,7 @@ import {
   writesMxSyntax,
 } from "./message-vocabulary.ts";
 import type { Dialect, MessageVocabulary } from "./syntax-table.ts";
+import type { TemplateBackedTag } from "./template-tag.ts";
 import { lookup } from "./test-targets.ts";
 
 // ---------------------------------------------------------------------------
@@ -440,12 +441,14 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     option: ["`for` requires `of=`, `in=`, or `from=`/`to=`/`until=`"],
   },
   {
-    name: "`for` with `key=` (the attribute noun, and no MX example)",
+    name: "`for` with `key=` (the attribute noun)",
     source: "for|i| of=x key=1\n  entity\n",
     mx: [
       'The `<for>` tag keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`.',
     ],
-    option: ["The `for` tag keys items with the `by=` option, not `key=`."],
+    option: [
+      'The `for` tag keys items with the `by=` option, not `key=`. Use `by="propName"` or `by=(item, index) => key`.',
+    ],
   },
   {
     name: "`for` with two ranges",
@@ -789,6 +792,13 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
     option:
       "tag variable `/x` on `id` is not supported in a standalone template",
   },
+  {
+    name: "`for` with a loop parameter in `by=` (the fix is kept: it is JavaScript)",
+    source: "for|i| of=[1] by=i\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => key`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => key`).',
+  },
 ];
 
 describe("built-in tag names in messages (template files)", () => {
@@ -873,26 +883,49 @@ describe("built-in tag names in messages (template files)", () => {
   });
 
   it("does not call formatTag for a built-in when the file is valid", () => {
-    let calls = 0;
-    const counting = dialectWith({
-      formatTag: ({ name }: { name: string }) => {
-        calls++;
-        return name;
-      },
-    });
-    compileSource(
-      "const/x=1\nif=x\n  p\nfor|i| of=[1]\n  p\ntry\n  p\n  @catch\n    p\n",
-      "/tmp/mx-core-test/a.mx",
-      templatePolicy,
-      {
+    const valid =
+      "const/x=1\nif=x\n  p\nfor|i| of=[1]\n  p\ntry\n  p\n  @catch\n    p\nlog=1\n";
+    // A host that checks bindings (the html target does) must not make a
+    // valid `<const>` spell its label: `what` is a plain string.
+    const policies: Array<[string, Policy]> = [
+      ["no checkBinding", templatePolicy],
+      ["checkBinding", { ...templatePolicy, checkBinding: () => {} }],
+    ];
+    for (const [label, policy] of policies) {
+      let calls = 0;
+      const counting = dialectWith({
+        formatTag: ({ name }: { name: string }) => {
+          calls++;
+          return name;
+        },
+      });
+      compileSource(valid, "/tmp/mx-core-test/a.mx", policy, {
         customTags: {},
         targets: lookup,
         tagDiscoveryDirs: [],
         dialect: counting,
         emitIr: () => "",
-      },
-    );
-    expect(calls).toBe(0);
+      });
+      expect(calls, label).toBe(0);
+
+      // A formatTag that would throw never gets the chance to.
+      const broken = dialectWith({
+        formatTag: () => {
+          throw new Error("boom");
+        },
+      });
+      expect(
+        () =>
+          compileSource(valid, "/tmp/mx-core-test/a.mx", policy, {
+            customTags: {},
+            targets: lookup,
+            tagDiscoveryDirs: [],
+            dialect: broken,
+            emitIr: () => "",
+          }),
+        label,
+      ).not.toThrow();
+    }
   });
 
   it("reports a formatTag that throws while a built-in message is spelled", () => {
@@ -918,6 +951,52 @@ describe("built-in tag names in messages (template files)", () => {
         "`messageVocabulary.formatTag` threw while spelling",
       );
     }
+  });
+});
+
+describe("the /var return hint", () => {
+  const tag: TemplateBackedTag = {
+    template: {
+      filename: "/tmp/mx-core-test/tags/plain.mx",
+      source: "<b>x</b>\n",
+    },
+  };
+  const hint = (dialect: Dialect | undefined): string => {
+    try {
+      compileSource(
+        "plain/x\n",
+        "/tmp/mx-core-test/a.mx",
+        {
+          ...templatePolicy,
+          isComponent: (name: string) => name === "plain",
+        },
+        {
+          customTags: { plain: tag },
+          targets: lookup,
+          tagDiscoveryDirs: [],
+          dialect,
+          emitIr: () => "",
+        },
+      );
+    } catch (error) {
+      return (error as Error).message;
+    }
+    return "";
+  };
+
+  it("shows MX's example for MX and for a dialect that spells return as MX does", () => {
+    const mx =
+      "`<plain>` does not return a value; add `<return value=…/>` to /tmp/mx-core-test/tags/plain.mx to bind it with `/var`";
+    expect(hint(undefined)).toBe(mx);
+    expect(
+      hint(dialectWith({ formatTag: ({ name }: any) => `<${name}>` })),
+    ).toBe(mx);
+  });
+
+  it("names the tag and keeps the fix when the dialect spells it otherwise", () => {
+    expect(hint(optionDialect)).toBe(
+      "`plain` does not return a value; add a `return` with a value to /tmp/mx-core-test/tags/plain.mx to bind it with `/var`",
+    );
   });
 });
 
