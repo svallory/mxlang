@@ -200,7 +200,7 @@ export function trackPackageJsonInputs(
       languageVersionOrOptions,
       false,
     );
-    (fresh as { version: string }).version =
+    (fresh as unknown as { version: string }).version =
       `${(source as { version?: string }).version ?? ""}+package.json:${++revision}`;
     views.set(fileName, { source, stamp, view: fresh });
     return fresh;
