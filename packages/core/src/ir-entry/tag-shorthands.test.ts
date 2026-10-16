@@ -221,6 +221,55 @@ describe("a spaced #id or .class in a tag head, by table", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["MX_NO_TAG_SHORTHAND"]);
   });
 
+  describe("a file with an `analyze` hook (the analyze walk reads the same table)", () => {
+    const withAnalyze = (table: Dialect["table"]): LowerSourceOptions => ({
+      dialect: {
+        ...EVENTS,
+        table,
+        contracts: {
+          events: { children: { "*": {} }, analyze() {} },
+        },
+      } as Dialect,
+    });
+    const OFF_ID =
+      "Invalid attribute name `#a` — this file's dialect has no `#id` shorthand; write `id=` as an attribute";
+
+    it.each([
+      ["concise", "events\n  div #a\n"],
+      ["HTML", "<events><div #a></div></events>\n"],
+    ])("shorthands off, %s: the new text", (_form, source) => {
+      expect(message(source, withAnalyze({ tagShorthands: false }))).toBe(
+        OFF_ID,
+      );
+    });
+
+    it("shorthands off, `.a`", () => {
+      expect(
+        message(
+          "<events><div .a></div></events>\n",
+          withAnalyze({ tagShorthands: false }),
+        ),
+      ).toBe(
+        "Invalid attribute name `.a` — this file's dialect has no `.class` shorthand; write `class=` as an attribute",
+      );
+    });
+
+    it("shorthands on: the default text (unchanged)", () => {
+      expect(message("events\n  div #a\n", withAnalyze({}))).toBe(
+        `Invalid attribute name \`#a\` — ${DEFAULT_HINT}`,
+      );
+    });
+
+    it("a bare off table with a custom tag that has an `analyze` hook", () => {
+      const table = Object.freeze({ ...defaultSyntax(), tagShorthands: false });
+      const { diagnostics } = lowerSource("div #a\nitem\n", "/w.events", {
+        dialect: table,
+        customTags: { item: { analyze() {} } },
+      } as LowerSourceOptions);
+      expect(diagnostics.map((d) => d.message)).toEqual([OFF_ID]);
+    });
+  });
+
   describe("the file's voice", () => {
     const voiced = (table: Dialect["table"]): LowerSourceOptions => ({
       dialect: {

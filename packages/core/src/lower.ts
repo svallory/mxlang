@@ -7113,6 +7113,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   productName: "inherit",
   voice: "inherit",
   dialect: "inherit",
+  tagShorthands: "inherit",
   defaultTag: "inherit",
   atoms: "inherit",
   triggerSplices: "inherit",
