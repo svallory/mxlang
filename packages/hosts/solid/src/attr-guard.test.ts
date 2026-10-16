@@ -375,7 +375,7 @@ async function runNames(
 }
 
 // Measured in 27 full-gate runs since 2026-10-15 (82 tests): attr-guard.test.ts
-// takes 67-162 s, nearly all of it this hook. At 37-74 tests the 60 s default
+// takes 67-162 s, nearly all of it this hook. At 37-74 tests the old 60 s limit
 // failed 5 of 143 gate runs that include this file. 240 s is 1.5x the worst
 // measured file time; a hang still fails.
 beforeAll(async () => {

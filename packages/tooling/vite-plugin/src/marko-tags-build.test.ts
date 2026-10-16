@@ -68,10 +68,12 @@ async function render(
 
 // gate-ontaskupdate-rpc-timeout: each test runs a `vite build` and imports the
 // bundle; the first also pays vite's cold start. Alone they take 1.1-2.5 s. In
-// 140 full-gate runs "renders input attributes and body content" took a median
-// 2.7 s (p95 4.6 s) and failed vitest's 5 s default in 15 of them (2026-10-13 to
-// 10-16); the other builds peaked at 3.7 s, one at 5.0 s. 30 s is ~5.7x the
-// worst measured time (5.27 s), and a real hang still fails.
+// full-gate runs "renders input attributes and body content" passed with a
+// median 2.7 s, p95 4.6 s, max 4.9 s, and failed vitest's 5 s default in 16 runs
+// (2026-10-13 to 10-16); those failures were cut at the 5 s limit, so their real
+// time is unknown. Two other builds also reached ~5 s ("finds tags/ up the
+// tree" 5020 ms, "builds the h18 shape" 4986 ms). 30 s is ~6x the passing max,
+// and a real hang still fails.
 describe("a .mx page calling a tags/*.mx tag, built with vite (audit case h18)", {
   timeout: 30_000,
 }, () => {
