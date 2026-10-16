@@ -22,7 +22,7 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "atom";
+    | "atom"; // leaves core with the atom removal
   items?: "string" | "number" | "boolean";
   required?: boolean;
   enum?: string[];
@@ -178,7 +178,7 @@ is a positioned compile error.
 | `gensym` | Produces a hygienic file-unique binding, optionally using a hint. |
 | `fail` | In `analyze` and `transform`: `fail(message, { at?, code? })` (or `fail(message, position)`) creates a positioned `TranslateError` carrying `code` as `diagnosticCode`; always write `throw ctx.fail(...)`. `finalize` has none. |
 | `hoist` | Moves code to the head of the nearest enclosing function. |
-| `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration a syntax module reads from `LoweredUnit.declared`. |
+| `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration a dialect reads from `LoweredUnit.declared`. |
 | `store` | Private per-tag, per-file state shared by `analyze`, `transform`, and `finalize`. |
 | `get` | Reads one typed store key. |
 | `set` | Writes one store key. |
@@ -209,9 +209,9 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | Trigger | Diagnostic form |
 | --- | --- |
 | A registration uses a core-owned name such as `try`. | `` `<name>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` |
-| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern` and `ref`, unless the file's syntax module claims the key through `contractFields` |
-| A `customTags` entry, sidecar, `mx.contracts` entry or dialect contract has an unknown tag-level key (e.g. `atributes`). | `Unknown key "KEY" in the declaration of tag "TAG"; allowed: parseOptions, attributes, …`, listing what that source accepts (an `mx.contracts` or dialect entry takes fewer keys than a sidecar). At the key in a sidecar or `mx.contracts` module; at `contracts.<name>` for a dialect, behind `` `contracts.<name>`: `` and with `MX_INVALID_DIALECT_CONTRACT`; a `customTags` entry has no position. Keys the file's syntax module claims through `contractFields` are allowed and listed. |
-| A tag declares `declares` and no syntax module claims it. | `` `<name>`: `declares` is not allowed: no syntax module claims it (`contractFields`) ``; `customTags`, a sidecar and `mx.contracts` all give this message |
+| An `attributes`/`attributeTags` declaration has an unknown key (e.g. the retired `staticOnly`/`repeated`). | `Unknown key "KEY" in the "NAME" attribute declaration of tag "TAG"; allowed: …`; this includes `values`, `pattern` and `ref`, unless the file's dialect claims the key through `contractFields` |
+| A `customTags` entry, sidecar, `mx.contracts` entry or dialect contract has an unknown tag-level key (e.g. `atributes`). | `Unknown key "KEY" in the declaration of tag "TAG"; allowed: parseOptions, attributes, …`, listing what that source accepts (an `mx.contracts` or dialect entry takes fewer keys than a sidecar). At the key in a sidecar or `mx.contracts` module; at `contracts.<name>` for a dialect, behind `` `contracts.<name>`: `` and with `MX_INVALID_DIALECT_CONTRACT`; a `customTags` entry has no position. Keys the file's dialect claims through `contractFields` are allowed and listed. |
+| A tag declares `declares` and no dialect claims it. | `` `<name>`: `declares` is not allowed: no syntax module claims it (`contractFields`) ``; `customTags`, a sidecar and `mx.contracts` all give this message |
 | A definition declares only `finalize`. | `` `<name>`: a custom tag that defines only `finalize` has no call site and nothing to collect… `` |
 | A called tag has neither a transform nor a template. | `` `<name>`: custom tag has neither a `transform` nor a template file… `` |
 | Nested custom-tag calls exceed 64. | `` `<name>`: custom tag expansion exceeded 64 nested invocations `` |
@@ -235,7 +235,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
 | An enum receives a non-string literal. | `` `<name>`: attribute `x` must be a string from …, got TYPE `` |
 | An enum string is not a member. | `` `<name>`: attribute `x` must be one of …, got VALUE `` |
-| A non-atom meets `type: "atom"`, or an atom meets another type. | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); a syntax module that claims a key words the suffix |
+| A non-atom meets `type: "atom"`, or an atom meets another type (until the atom removal takes `atom` out of core). | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); a dialect that claims a key words the suffix |
 | A required attribute is absent. | `` `<name>`: missing required attribute `x` `` |
 | A declared default is not a string, number, or boolean. | `` `<name>`: attribute `x` declares a `default` that … has no attribute spelling `` |
 

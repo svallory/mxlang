@@ -5,8 +5,14 @@ description: "How MX is extended at three layers: tags and contracts (layer 1), 
 
 # Language extensions
 
-**Status:** accepted design (decisions 182 to 184, 2026-10-07), not released.
-Layers 1 and 2 are planned; layer 3 is an idea kept reachable, not scheduled.
+**Status:** accepted design. Layers 1 and 2 are in MX: layer 1 is custom tags
+and contracts, layer 2 is dialects and their syntax tables (specification
+§13.9). Layer 3 is an idea kept reachable, not scheduled.
+
+> **Names in these pages.** A "syntax module" is now a **dialect**, found by
+> file extension (`mx.dialect`, [specification §13.9.2](/specification/));
+> `package.json#mx.syntax` is removed. The specification §13.9 states what
+> shipped; these pages keep the design argument.
 
 MX is extended at three layers. Each one uses the layer below it and adds
 nothing to the parser beyond what the layer below already allows.

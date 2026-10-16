@@ -25,6 +25,12 @@ ordinary unknown-target error.
 
 ## Attribute-tag values
 
+> **Being replaced.** This describes the attribute-tag shape that ships
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
+> cardinality stops depending on the `Input` declaration
+> ([specification §8](/specification/) is normative).
+
 Import `AttrTag` from `@mxlang/target-html` in hand-written TypeScript. A renderable
 attribute tag is a thunk `() => string`; params change it to
 `(...params) => string`. The default data shape carries attrs and nested tags

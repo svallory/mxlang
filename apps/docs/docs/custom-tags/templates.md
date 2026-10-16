@@ -63,7 +63,7 @@ If a caller supplies body content and the template never reads `input.content`, 
 <list><@item>one</@item><@item>two</@item></list>
 ```
 
-The record also has `map`, `filter`, `length`, `at` and `toArray`; see [AttrTag](/language/attr-tag/).
+The record also has `map`, `filter`, `length`, `at` and `toArray`; see [specification §8](/specification/).
 
 An attribute tag the template never reads produces a warning naming it. `<@content>` is rejected, because it would collide with the body slot. Attribute-tag declarations and repeat/required checks belong in an optional [sidecar](/custom-tags/sidecars/).
 

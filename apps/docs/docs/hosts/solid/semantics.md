@@ -56,6 +56,12 @@ Pass only strings, numbers or nodes to `${expr}`. On Solid's server renderer a r
 
 ## Attribute tags
 
+> **Being replaced.** This describes the attribute-tag shape that ships
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
+> cardinality stops depending on the `Input` declaration
+> ([specification §8](/specification/) is normative).
+
 Solid's renderable is an accessor, `() => JSX.Element`, and that is what an attribute tag delivers.
 
 ```tsx

@@ -1,12 +1,17 @@
 ---
 title: "Layer 2: syntax"
-description: "Project-scoped syntax extensions through the data-only syntax table: delimiters, triggers, block forms, filters, and the lowering hooks for the forms they add, and the hook that explains an unknown tag. Planned."
+description: "Project-scoped syntax extensions through the data-only syntax table: delimiters, triggers, block forms, filters, and the lowering hooks for the forms they add, and the hook that explains an unknown tag. In MX as dialects (specification §13.9)."
 ---
 
 # Layer 2: syntax
 
-**Status:** planned (decision 182). Lands on the parser port before it freezes
-(size M; L after).
+**Status:** in MX: layer 2 is dialects and their syntax tables, specified in
+[specification §13.9](/specification/). This page is the design argument.
+
+> **Names in these pages.** A "syntax module" is now a **dialect**, found by
+> file extension (`mx.dialect`, [specification §13.9.2](/specification/));
+> `package.json#mx.syntax` is removed. The specification §13.9 states what
+> shipped; these pages keep the design argument.
 
 Layer 2 lets a project, or a package it depends on, change what the parser
 recognises, through the [syntax table](/design-notes/language-extensions/core/#the-core-the-syntax-table)

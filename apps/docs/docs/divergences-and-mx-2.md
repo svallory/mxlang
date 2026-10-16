@@ -44,7 +44,8 @@ Marko's own record, iterable over every occurrence, with a hidden `rest`. MX
 adds `map`, `filter`, `length`, `at` and `toArray` on the record's prototype,
 so the record's own properties are unchanged and the extra members are never
 spread or serialized. An absent attribute tag is `undefined`, as in Marko. See
-the [AttrTag guide](/language/attr-tag/).
+[specification §8](/specification/); the [AttrTag guide](/language/attr-tag/)
+still describes the shape that ships today.
 
 ## Deferred to MX 2
 

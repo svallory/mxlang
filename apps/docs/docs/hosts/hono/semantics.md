@@ -76,6 +76,12 @@ The shared rules are in [Attributes](/language/attributes/#attributes-event-attr
 
 ## Attribute tags on your own components
 
+> **Being replaced.** This describes the attribute-tag shape that ships
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
+> cardinality stops depending on the `Input` declaration
+> ([specification §8](/specification/) is normative).
+
 Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-hono`. A renderable is a Hono `Child`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call. See [AttrTag](/language/attr-tag/).
 
 ## How this is checked

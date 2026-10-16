@@ -8,6 +8,11 @@ description: "What stays fixed under every extension layer: Marko's grammar on t
 **Status:** accepted design (decisions 183 and 184, 2026-10-07), not released. Marko behavior below
 was probed on marko 6.4.0, `@marko/compiler` 5.42.10, htmljs-parser 5.18.0.
 
+> **Names in these pages.** A "syntax module" is now a **dialect**, found by
+> file extension (`mx.dialect`, [specification §13.9.2](/specification/));
+> `package.json#mx.syntax` is removed. The specification §13.9 states what
+> shipped; these pages keep the design argument.
+
 The core is what every layer builds on and none may change: the parser and
 its default row, the IR, the lowering driver, and the runtime shapes the
 hosts share.

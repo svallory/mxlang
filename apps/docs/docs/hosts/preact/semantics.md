@@ -94,6 +94,12 @@ Preact's server renderer takes any object with no `constructor` for a vnode, so 
 
 ## Attribute tags on your own components
 
+> **Being replaced.** This describes the attribute-tag shape that ships
+> today. MX is moving to Marko's attribute-tag record with extra prototype
+> members (`map`, `filter`, `length`, `at`, `toArray`) on every target, so
+> cardinality stops depending on the `Input` declaration
+> ([specification §8](/specification/) is normative).
+
 Export an `Input` type from the component and mark the markup props with `AttrTag` from `@mxlang/host-preact`. A renderable is `ComponentChildren`; with `params` it is a function returning one; `AttrTag[]` is a real array. With no declaration, MX infers the shape from the call. [AttrTag](/language/attr-tag/) has a hand-written Preact component and a worked example.
 
 ## How this is checked
