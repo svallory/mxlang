@@ -890,6 +890,22 @@ describe("built-in tag names in messages (template files)", () => {
     const policies: Array<[string, Policy]> = [
       ["no checkBinding", templatePolicy],
       ["checkBinding", { ...templatePolicy, checkBinding: () => {} }],
+      // An inert `log` is the only way `rejectInertShape` runs on a valid
+      // `<log=1/>`: its label must not be spelled until a message needs it.
+      [
+        "inert log",
+        {
+          ...templatePolicy,
+          tags: {
+            log: {
+              kind: "inert",
+              reason: "a server render emits nothing for it",
+              body: "none",
+              attributes: "none",
+            },
+          },
+        } as Policy,
+      ],
     ];
     for (const [label, policy] of policies) {
       let calls = 0;
