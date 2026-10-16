@@ -44,7 +44,7 @@ import Card from "./tags/card.mx";
 template: <Card><@title>Team</@title></Card>,
 ```
 
-`<Card>` emits the tag's selector (`<mx-card>`), one `imports:` entry, and the import rewritten to the generated class. A tag under a `tags/` directory can also be called by its discovered name, `<card>`, with no import. The import must be a sole default import: `import A, { b } from "./x.mx"` used as `<A/>` is an error. An alias (`import Chip from "./badge.mx"`) emits `import { Badge as Chip }` and `imports: [Chip]`. A tag name bound to a module-scope `const` is a dynamic tag, rendered through `ngComponentOutlet`. See [MX tags](/hosts/angular/pages-and-tags/#angular-page-templates-mx-tags-and-the-cli-mx-tags).
+`<Card>` emits the tag's selector (`<mx-card>`), one `imports:` entry, and the import rewritten to the generated class. A tag under a `tags/` directory can also be called by its discovered name, `<card>`, with no import. The import must be a sole default import: `import A, { b } from "./x.mx"` used as `<A/>` is an error at the import, and so is a `.marko` default import used as a tag. Two imports of the same tag share one `imports:` entry, deduped by resolved path and class. An alias (`import Chip from "./badge.mx"`) emits `import { Badge as Chip }` and `imports: [Chip]`. A tag name bound to a module-scope `const` is a dynamic tag, rendered through `ngComponentOutlet`. See [MX tags](/hosts/angular/pages-and-tags/#angular-page-templates-mx-tags-and-the-cli-mx-tags).
 
 ## Event handlers
 

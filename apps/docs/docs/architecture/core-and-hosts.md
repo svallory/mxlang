@@ -49,6 +49,7 @@ The name `data` is reserved for a future evaluated target that compiles a file t
 | Expanding custom tags into ordinary IR | Defining the primitive a custom tag may request by name |
 | The front doors (`compileSource`, `parseFragment`, the IR entry point) | Structured attribute values (`class`, `style`), attribute order, modifiers |
 | The `escape` helper and positions on every IR node | Its own integrations: a Vite plugin, a Bun loader, a TypeScript plugin |
+| Language-level spelling hints for names authors bring from React or Angular, whose identifiers and messages name no framework | Hints that name the host's own framework and its equivalents |
 
 A construct is refused only because the target cannot express it, never because the implementation cannot yet ([the capability test](/specification/#the-mx-language-11-stateful-tags-the-capability-test)). See [Declarations and hooks](/architecture/policy-and-hooks/) for the contract a target implements.
 

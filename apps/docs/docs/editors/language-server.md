@@ -36,7 +36,7 @@ The Astro host always compiles under its strict policy — it has no non-strict 
 matching dependency packages are `@mxlang/target-html`, `@mxlang/host-astro`,
 `@mxlang/host-solid`, `@mxlang/host-preact` and `@mxlang/host-react`. (`"translator"` is
 accepted as a deprecated alias for `"html"` and warns.) A whole-file
-`.mx`/`.marko` document resolved to a host whose stateful tags are errors —
+`.mx` document resolved to a host whose stateful tags are errors —
 `solid`, `preact` and `react` among them — reports `<let>` and the rest as
 errors, each naming that framework's own primitive.
 

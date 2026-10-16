@@ -14,7 +14,7 @@ A `.ng.mx` file is checked twice, and both results point at the line you wrote.
 src/x.component.ng.mx(5,18): error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.
 ```
 
-Both run in `mx-tsc` and, through `@mxlang/typescript-plugin`, in the editor. They report what `ng build` reports: your `strictTemplates` and other `angularCompilerOptions` are honored, including through `extends`.
+Both run in `mx-tsc` and, through `@mxlang/typescript-plugin`, in the editor. They report what `ng build` reports: your `strictTemplates` and other `angularCompilerOptions` are passed to ngtsc unchanged, including through `extends`. When `strictTemplates` is unset, compiler-cli's own default applies (on in Angular 22.x).
 
 ## In CI: `mx-tsc`
 

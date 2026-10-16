@@ -29,10 +29,10 @@ Each package publishes its own README with install instructions, API surface, an
 
 Three rules this chain is built around:
 
-- **A check that can never fail is not a check.** Every gate in the chain is expected to be able to fail, and is proven to fail at least once against a deliberately broken input before it's trusted. A script that only prints success is a bug, not a safety net.
+- **A check that can never fail is not a check.** Every gate in the chain is expected to be able to fail, and is proven to fail at least once against a deliberately broken input before it's trusted. A script that only prints success is a bug, not a safety net: a script that prints "done X" is trusted only when its check asserts the observable consequence of X.
 - **Evidence, not vibes.** The coverage-verification step doesn't ask "does this package have test files" — it reads the actual output of the test run that just happened (a JSON report, or a marker file written only on success) and checks its timestamp is newer than the start of this verification run. A package can't be marked "tested" by leftover evidence from a previous run.
 - **Clean-clone proofs.** Anything that depends on generated or vendored files (a build step, a vendored grammar) is expected to work from a fresh clone with no manual setup step, and CI is what actually proves this — a green run on a contributor's machine with stale local state doesn't count. A gate that guards a consumer build clones `HEAD` and runs the consumer's exact build command.
-- **Drift paths are demonstrated.** A check that reports drift (a generated file out of date, a golden that changed) is shown producing a real diff on a deliberately drifted input. A verifier that counts things asserts a minimum, so zero matches fails.
+- **Drift paths are demonstrated.** A check that reports drift (a generated file out of date, a golden that changed) is shown producing a real diff on a deliberately drifted input. A verifier that counts things prints the count and asserts a minimum, so zero matches fails.
 
 ### Tests and claims
 

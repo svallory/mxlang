@@ -758,6 +758,13 @@ no MX decision.
 
 ## Whitespace at the parser level
 
+The rows in this document that read U+00A0 or another Unicode space as part of
+a name or value record the template parser's events. In the tag grammar the
+language's whitespace is Unicode's Pattern_White_Space set, and any other
+Unicode space character there is refused at its position with a message
+naming it ([Unicode in the parser](/architecture/unicode-in-the-parser/));
+expressions keep JavaScript's rule.
+
 The template parser reports text as raw source ranges (`htmlEOF`,
 `handleDelimitedBlockEOL`):
 
@@ -1139,6 +1146,13 @@ parameters arm triggers too. Tag
 shorthands and tag names are read by `TAG_NAME.parse`, not by a position.
 
 ### E1 — Attribute value, HTML mode
+
+Where the rows below read a spaced continuation such as `x=a.b .c` as one
+value, they describe the template parser's events today. The language rule
+for a sequence with two valid readings is in the specification (a parse error
+naming both unambiguous spellings, `x=(a.b) .c` or `x=a.b.c`; a word operator
+such as `in` or `as` after a value continues it), and it lands with the
+TypeScript-aware boundary.
 
 The value starts after the `=` or `:=` and the whitespace that follows it
 (`ATTRIBUTE.parse`, rows 5–6 of [Attributes](#the-parser-grammar-attributes)). Hard stops

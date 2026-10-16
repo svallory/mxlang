@@ -38,9 +38,11 @@ history, no rejected options.
   no IR kind and no emitter branch.
 - **Decision 80** — one definition works on every host: `H + M`, never `H × M`.
   A tag can never see which host it is compiling for.
-- **Subset rule** — no new syntax in MX 1. A custom tag call is syntactically an
+- **No new syntax for custom tags.** A custom tag call is syntactically an
   ordinary tag call; nothing in the parser, grammar, Prettier or tree-sitter
-  changes.
+  changes. (This build spec once called it the "subset rule"; MX makes no
+  subset promise. Marko is the default, and a divergence needs a
+  `divergences.md` row.)
 
 ---
 

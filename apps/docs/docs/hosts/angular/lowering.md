@@ -13,7 +13,7 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `$!{expr}` | `<span [innerHTML]="expr">`, with a warning: Angular sanitizes the HTML, and the `<span>` is invalid where only certain children are allowed (`<tbody>`, `<select>`, `<ul>`) |
 | `<if>` / `<else if>` / `<else>` | `@if (…) { … } @else if (…) { … } @else { … }` |
 | `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { … }` |
-| `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue`, with `@let k` and `@let v` |
+| `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue: null`, with `@let k` and `@let v`, plus a warning telling you to add `KeyValuePipe` to the component's imports |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
