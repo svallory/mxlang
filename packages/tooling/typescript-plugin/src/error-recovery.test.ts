@@ -91,6 +91,19 @@ describe("a file with several parse errors (a CompileErrors aggregate)", () => {
     expect(syntaxError?.message.match(/Unexpected token/g)).toHaveLength(1);
   });
 
+  it("reports an unclosed for with its cause first and the plugin's syntax error at the cause", () => {
+    const { diagnostics, syntaxError } = compileDiagnosticsOf(
+      "<for of=[1]|x|>\n</for>",
+    );
+    expect(
+      diagnostics.map((d) => [d.offset, d.length, d.diagnosticCode]),
+    ).toEqual([
+      [13, 2, "MX_PARSE_EXPRESSION"],
+      [0, 22, "MX_PARSE_MISSING_END_TAG"],
+    ]);
+    expect(syntaxError?.offset).toBe(13);
+  });
+
   it("keeps the single-error case as it was", () => {
     const { diagnostics } = compileDiagnosticsOf("<div x=(1+)/>\n");
     expect(

@@ -31,7 +31,12 @@ import {
   tagRulesDecided,
 } from "../compile.ts";
 import { claimedFields } from "../contract-fields.ts";
-import { codedError, type MxWarning, type TranslateError } from "../core.ts";
+import {
+  codedError,
+  flattenErrors,
+  type MxWarning,
+  type TranslateError,
+} from "../core.ts";
 import {
   type CustomTag,
   registrationView,
@@ -73,7 +78,6 @@ import {
 } from "./declarations.ts";
 import {
   errorDiagnostics,
-  flattenErrors,
   type IrDiagnostic,
   lineStartsOf,
   mergeDiagnostics,

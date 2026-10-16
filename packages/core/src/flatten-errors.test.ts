@@ -45,23 +45,14 @@ describe("flattenErrors", () => {
     expect(flattenErrors(aggregate([a, b]))).toEqual([a, b]);
   });
 
-  it("puts an aggregate's errors in source order", () => {
-    const late = parseError(30);
-    const early = parseError(2);
-    const middle = parseError(10);
-    expect(flattenErrors(aggregate([late, early, middle]))).toEqual([
-      early,
-      middle,
-      late,
-    ]);
-  });
-
-  it("keeps an aggregate's order when an error has no offset", () => {
-    const placed = parseError(30);
-    const unplaced = new Error("no loc");
-    expect(flattenErrors(aggregate([placed, unplaced]))).toEqual([
-      placed,
-      unplaced,
+  it("keeps the order core detected an aggregate's errors in, a cause before its cascade", () => {
+    // `<for of=[1]|x|>`: the expression error at offset 13 is the cause of the
+    // missing end tag at offset 0, which core detects at the end of input.
+    const cause = parseError(13);
+    const cascade = parseError(0);
+    expect(flattenErrors(aggregate([cause, cascade]))).toEqual([
+      cause,
+      cascade,
     ]);
   });
 

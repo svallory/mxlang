@@ -30,11 +30,11 @@ describe("a file with several parse errors (a CompileErrors aggregate)", () => {
     expect(unexpected).toEqual([]);
   });
 
-  it("publishes both errors of an unclosed for, in source order", () => {
+  it("publishes both errors of an unclosed for, the cause before its cascade", () => {
     const unexpected: unknown[] = [];
     expect(shapes("<for of=[1]|x|>\n</for>", unexpected)).toEqual([
-      ["MX_PARSE_MISSING_END_TAG", 0, 0, 1, 6],
       ["MX_PARSE_EXPRESSION", 0, 13, 0, 15],
+      ["MX_PARSE_MISSING_END_TAG", 0, 0, 1, 6],
     ]);
     expect(unexpected).toEqual([]);
   });

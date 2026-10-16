@@ -755,6 +755,9 @@ function markoPosition(
 function parseErrorsText(errors: readonly unknown[], source: string): string {
   if (errors.length === 0) return "";
   const lines = errors.map((each) => {
+    if (isTranslateError(each)) {
+      return `  ${each.file ?? source}:${each.line}:${each.column + 1}: ${each.message}`;
+    }
     if (!isMarkoCompileError(each))
       return `  ${String((each as Error)?.message ?? each)}`;
     const position = markoPosition(each);
@@ -1602,7 +1605,10 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
         // A page with several parse errors throws one `CompileErrors`
         // aggregate with no position of its own. A build throws one error, so
         // the first is located and the others ride in its message. A
-        // `TranslateError` carries its others itself (below).
+        // `TranslateError` carries its others itself (below). Core's
+        // aggregate holds only `CompileError`s today, so the branches below
+        // for a first error of another kind append the others the same way,
+        // with no test that could reach them.
         const parsed = isTranslateError(thrown)
           ? [thrown]
           : flattenErrors(thrown);
@@ -1640,7 +1646,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           const reason = reasons.length > 0 ? reasons.join("\n") : undefined;
           // A build throws one error; the file's other errors (decision 162)
           // ride in its message, so a fix-all pass sees them in one run.
-          const rest = otherErrorsText(err);
+          const rest =
+            otherErrorsText(err) + parseErrorsText(furtherParseErrors, source);
           const own =
             reason ??
             (err.message.startsWith(prefix)
@@ -1694,7 +1701,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
           line: err.loc.line,
           column: err.loc.column,
           source: code,
-          message: err.message.replace(/\s*\(\d+:\d+\)\s*$/, ""),
+          message:
+            err.message.replace(/\s*\(\d+:\d+\)\s*$/, "") +
+            parseErrorsText(furtherParseErrors, source),
         });
       }
     },

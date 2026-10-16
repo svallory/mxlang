@@ -128,6 +128,18 @@ describe("a failing vite build names the authored file, not the virtual id", () 
       expect(text).not.toContain("CompileErrors");
     },
   );
+  it("locates the cause of an unclosed for, not the missing end tag it leaves", async () => {
+    const error = await buildError(
+      "aggregate-for",
+      "<for of=[1]|x|>\n</for>",
+      "html",
+    );
+    expect(header(error.message)).toBe(
+      `[plugin mx] ${authored("aggregate-for")}:1:14`,
+    );
+    expect(plain(error.message)).toContain("1 more error in this file:");
+    expect(plain(error.message)).toContain('Missing ending "for" tag');
+  });
   it("keeps the single parse error as it was", async () => {
     const error = await buildError("single-parse", "<div x=(1+)/>\n");
     expect(header(error.message)).toBe(
@@ -191,6 +203,45 @@ describe("a failing vite build names the authored file, not the virtual id", () 
    * here because the build-side fix is a `buildEnd` rewrite, and a change that
    * broke the dev path would otherwise pass this suite.
    */
+  it("and the dev server locates the first of two parse errors, with its code", async () => {
+    write(
+      "dev-aggregate",
+      "package.json",
+      JSON.stringify({ name: "dev", type: "module", mx: { host: "html" } }),
+    );
+    write("dev-aggregate", "page.mx", "<div x=(1+)/>\n<span x=(2+)/>\n");
+    const projectRoot = join(root, "dev-aggregate");
+    const server = await createServer({
+      root: projectRoot,
+      configFile: false,
+      logLevel: "silent",
+      plugins: [mx()],
+      server: { middlewareMode: true, hmr: false, watch: null },
+      appType: "custom",
+    });
+    try {
+      const error = await server
+        .transformRequest("/page.mx", { ssr: true })
+        .then(
+          () => undefined,
+          (err: Error) => err,
+        );
+      const located = error as
+        | (Error & {
+            diagnosticCode?: string;
+            loc?: { line: number; column: number };
+          })
+        | undefined;
+      expect(located?.diagnosticCode).toBe("MX_PARSE_EXPRESSION");
+      expect(located?.loc).toMatchObject({ line: 1, column: 10 });
+      expect(plain(String(located?.message))).toContain(
+        `${authored("dev-aggregate")}:2:12`,
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   it("and the dev server still names the authored file", async () => {
     write(
       "dev",

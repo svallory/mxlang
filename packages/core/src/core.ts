@@ -910,6 +910,30 @@ export function otherErrorsText(error: TranslateError): string {
   return `\n\n${others.length} more error${others.length === 1 ? "" : "s"} in this file:\n${lines.join("\n")}`;
 }
 
+/**
+ * The errors one thrown value stands for: core's own list, or a
+ * `CompileErrors` aggregate (an `errors` array of positioned `CompileError`s,
+ * no position of its own) from a parse that recovered from several syntax
+ * errors. Every one of them is a diagnostic, so a tool that turns a thrown
+ * error into diagnostics calls this first. An aggregate's errors keep the
+ * order core detected them in, a cause before the missing end tag it leaves.
+ * One with no errors, or a `TranslateError` with an empty list, stands for
+ * itself, so a thrown error is never zero diagnostics.
+ *
+ * @unstable
+ */
+export function flattenErrors(error: unknown): unknown[] {
+  // Core's list holds the thrown error as its first entry, so it is read
+  // here, not recursed into.
+  if (isTranslateError(error)) {
+    return error.errors?.length ? [...error.errors] : [error];
+  }
+  const inner = (error as { errors?: unknown } | null)?.errors;
+  return Array.isArray(inner) && inner.length > 0
+    ? inner.flatMap(flattenErrors)
+    : [error];
+}
+
 /** Options of {@link fail}. @unstable */
 export interface FailOptions {
   /**

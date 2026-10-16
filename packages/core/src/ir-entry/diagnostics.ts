@@ -5,7 +5,7 @@
  */
 
 import { resolve } from "node:path";
-import { isTranslateError } from "../core.ts";
+import { flattenErrors, isTranslateError } from "../core.ts";
 import {
   EXPECTED_SINGLE_EXPRESSION_CODE,
   INTERNAL_ERROR_CODE,
@@ -300,40 +300,6 @@ function noPositionPrefix(error: unknown): string {
   return error instanceof Error && typeof label === "string" && label.length > 0
     ? UNPOSITIONED_PREFIX
     : INTERNAL_PREFIX;
-}
-
-/**
- * The errors one thrown value stands for: core's own list, or a
- * `CompileErrors` aggregate (an `errors` array of positioned `CompileError`s,
- * no position of its own) from a parse that recovered from several syntax
- * errors. Every one of them is a diagnostic, so a tool that turns a thrown
- * error into diagnostics calls this first. An aggregate's errors come in
- * source order; one with no errors, or a `TranslateError` with an empty list,
- * stands for itself, so a thrown error is never zero diagnostics.
- *
- * @unstable
- */
-export function flattenErrors(error: unknown): unknown[] {
-  // Core's list holds the thrown error as its first entry, so it is read
-  // here, not recursed into.
-  if (isTranslateError(error)) {
-    return error.errors?.length ? [...error.errors] : [error];
-  }
-  const inner = (error as { errors?: unknown } | null)?.errors;
-  return Array.isArray(inner) && inner.length > 0
-    ? inSourceOrder(inner).flatMap(flattenErrors)
-    : [error];
-}
-
-/** `errors` by start offset when every one carries it (a parse error does); otherwise as given. */
-function inSourceOrder(errors: unknown[]): unknown[] {
-  const at = (error: unknown): number | undefined => {
-    const index = (error as { loc?: { start?: { index?: unknown } } } | null)
-      ?.loc?.start?.index;
-    return typeof index === "number" ? index : undefined;
-  };
-  if (errors.some((error) => at(error) === undefined)) return errors;
-  return [...errors].sort((a, b) => (at(a) as number) - (at(b) as number));
 }
 
 /**

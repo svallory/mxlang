@@ -69,6 +69,7 @@ export {
   type FailOptions,
   fail,
   firstAttributeTag,
+  flattenErrors,
   hasContent,
   type ImportedName,
   importBindings,
@@ -242,7 +243,6 @@ export type {
   TagTrigger,
 } from "./ir.ts";
 export { IR_VERSION } from "./ir.ts";
-export { flattenErrors } from "./ir-entry/diagnostics.ts";
 /**
  * The IR entry point (decision 204): parse, lower, check and return core's
  * IR, for a consumer that interprets the tree itself (a dialect).
