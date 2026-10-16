@@ -3037,7 +3037,9 @@ function lowerAttributeFor(
     "aren't",
     node,
   );
-  const loop = lowerForHead(ctx, node, true);
+  const loop = asStructuralConstruct(ctx, node, "for", () =>
+    lowerForHead(ctx, node, true),
+  );
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, loop.bindings, paramGuards(node, "for"));
   const lowered = lowerAttributeTags(ctx, node, schema, true, false);
@@ -3340,16 +3342,24 @@ function lowerIfChain(
   index: number,
 ): [IrNode, number] {
   const node = children[index];
-  validateBoundAttributes(ctx, node);
-  rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "if", node));
-  const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
-  if (!cond) {
-    raise(
-      INVALID_IF_CODE,
-      `${tagText(ctx, "if", node)} without a condition`,
-      node,
-    );
-  }
+  // Under `structural: "reject"` a head that fails its checks is the construct,
+  // not a shape error: the file may not write an `if` in any form, so a hint on
+  // how to spell its condition would point at a form it cannot use either.
+  const headOf = <T>(check: () => T): T =>
+    asStructuralConstruct(ctx, node, "if", check);
+  const condition = headOf(() => {
+    validateBoundAttributes(ctx, node);
+    rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "if", node));
+    const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
+    if (!cond) {
+      raise(
+        INVALID_IF_CODE,
+        `${tagText(ctx, "if", node)} without a condition`,
+        node,
+      );
+    }
+    return exprOf(ctx, attrValueOf(ctx, cond));
+  });
 
   // Each branch is its own JS block: a `<const>` declared inside one does not
   // shadow the host's binding for the code that follows the chain.
@@ -3362,7 +3372,7 @@ function lowerIfChain(
 
   const branches: Branch[] = [
     {
-      condition: exprOf(ctx, attrValueOf(ctx, cond)),
+      condition,
       children: branchChildren(node),
       span: exprSpan(ctx, node),
       loc: posOf(ctx, node),
@@ -3390,29 +3400,34 @@ function lowerIfChain(
       break;
     }
 
-    validateBoundAttributes(ctx, child);
-    rejectUnsupportedFields(
-      ctx,
-      child,
-      lazyOwner(() =>
-        voicedAt(child, () => tagText(ctx, String(childName), child)),
-      ),
-    );
-    // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
-    // `<else-if=cond>` spells it as the tag's first (value) attribute.
-    const ifAttr =
-      childName === "else-if"
-        ? (attrByName(child, "value") ?? tagAttributesOf(child)[0])
-        : attrByName(child, "if");
+    // A branch's own shape error is the chain's construct too, reported once at
+    // the `if` that opens it.
+    const branchCondition = headOf(() => {
+      validateBoundAttributes(ctx, child);
+      rejectUnsupportedFields(
+        ctx,
+        child,
+        lazyOwner(() =>
+          voicedAt(child, () => tagText(ctx, String(childName), child)),
+        ),
+      );
+      // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
+      // `<else-if=cond>` spells it as the tag's first (value) attribute.
+      const ifAttr =
+        childName === "else-if"
+          ? (attrByName(child, "value") ?? tagAttributesOf(child)[0])
+          : attrByName(child, "if");
+      return ifAttr ? exprOf(ctx, attrValueOf(ctx, ifAttr)) : null;
+    });
     branches.push({
-      condition: ifAttr ? exprOf(ctx, attrValueOf(ctx, ifAttr)) : null,
+      condition: branchCondition,
       children: branchChildren(child),
       span: exprSpan(ctx, child),
       loc: posOf(ctx, child),
     });
     lastBranch = child;
     i++;
-    if (!ifAttr) break;
+    if (!branchCondition) break;
   }
 
   const startSpan = exprSpan(ctx, node);
@@ -3669,7 +3684,9 @@ function lowerForHead(
 }
 
 function lowerFor(ctx: Ctx, node: Node): IrNode {
-  const head = lowerForHead(ctx, node);
+  const head = asStructuralConstruct(ctx, node, "for", () =>
+    lowerForHead(ctx, node),
+  );
   // The loop body is a JS block, so a `<const>` inside it is confined to it.
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, head.bindings, paramGuards(node, "for"));
@@ -6088,6 +6105,33 @@ function insideStructural<T>(
     return lower();
   } finally {
     open.pop();
+  }
+}
+
+/**
+ * Runs the checks of a `for` or `if` head. Under `structural: "reject"` the
+ * construct is the error however it is written, so a head that fails a check
+ * (arguments, params, a missing or malformed value) is reported once as the
+ * construct, at `node`. Anywhere the construct is legal the check's own error
+ * stands.
+ */
+function asStructuralConstruct<T>(
+  ctx: Ctx,
+  node: Node,
+  keyword: "for" | "if",
+  check: () => T,
+): T {
+  if (ctx.structural !== "reject") return check();
+  try {
+    return check();
+  } catch (error) {
+    if (!isTranslateError(error)) throw error;
+    throw structuralConstructError(
+      keyword,
+      posOf(ctx, node),
+      voiceOfCtx(ctx),
+      blameEndOffset(node),
+    );
   }
 }
 

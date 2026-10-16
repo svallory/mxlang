@@ -644,15 +644,21 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
 
 describe("built-in tag names in messages", () => {
   describe("data files (the IR entry)", () => {
+    // A `for` or `if` with a refused head reports its shape error only where
+    // the construct is legal: under `structural: "reject"` it is the
+    // construct that is reported (structural-under-contract.test.ts).
+    const legal: LowerSourceOptions = { ...OPTIONS, structural: "pass" };
     for (const row of BUILTIN_ROWS) {
       it(`MX's words: ${row.name}`, () => {
         for (const dialect of [noVocabulary, dialectWith({})]) {
-          expect(messages(row.source, dialect)).toEqual([...row.mx]);
+          expect(messages(row.source, dialect, legal)).toEqual([...row.mx]);
         }
       });
 
       it(`the dialect's words: ${row.name}`, () => {
-        expect(messages(row.source, optionDialect)).toEqual([...row.option]);
+        expect(messages(row.source, optionDialect, legal)).toEqual([
+          ...row.option,
+        ]);
       });
     }
   });

@@ -558,3 +558,218 @@ describe("a tag whose transform consumes its body", () => {
     });
   });
 });
+
+describe("structural: reject, a for or if written with a head the construct would refuse", () => {
+  // The construct is the error however its head is written. A shape error of
+  // the head (arguments, params, a missing condition) would otherwise name a
+  // way to write the construct that this file cannot use either.
+  const reject = { structural: "reject", unknownTags: "reject" } as const;
+  const eaters: Record<string, CustomTag> = {
+    ...customTags,
+    leaf: {},
+    eater: {
+      children: { leaf: { repeatable: true }, inner: { repeatable: true } },
+      transform: () => [],
+    },
+    inner: { parents: ["eater"], children: { leaf: { repeatable: true } } },
+  };
+  const found = (
+    source: string,
+    options: Parameters<typeof lowerSource>[2],
+    tags: Record<string, CustomTag> = eaters,
+  ) => {
+    const result = lowerSource(source, "/t.mx", {
+      customTags: tags,
+      ...options,
+    });
+    expect(result.ir).toBeUndefined();
+    return result.diagnostics.map((d) => [d.code, d.line, d.column, d.message]);
+  };
+
+  // [label, the construct's lines, keyword]
+  const heads: ReadonlyArray<readonly [string, string, "for" | "if"]> = [
+    ["if(x)", "<if(x)>\n  <string/>\n</if>", "if"],
+    ["if(x) with an attribute", "<if(x) y=1>\n  <string/>\n</if>", "if"],
+    ["if(x) with no body", "<if(x)/>", "if"],
+    ["if with params", "<if|x|=a>\n  <string/>\n</if>", "if"],
+    ["if with params and arguments", "<if|x|(y)>\n  <string/>\n</if>", "if"],
+    ["if with no condition", "<if>\n  <string/>\n</if>", "if"],
+    [
+      "else-if(x) after an if",
+      "<if=a>\n  <string/>\n</if>\n<else-if(x)>\n  <string/>\n</else-if>",
+      "if",
+    ],
+    [
+      "else(x) after an if",
+      "<if=a>\n  <string/>\n</if>\n<else(x)>\n  <string/>\n</else>",
+      "if",
+    ],
+    [
+      "if(x) and else-if(x): one error, at the if",
+      "<if(x)>\n  <string/>\n</if>\n<else-if(x)>\n  <string/>\n</else-if>",
+      "if",
+    ],
+    ["for(x)", "<for(x)>\n  <string/>\n</for>", "for"],
+    ["for|x|(y)", "<for|x|(y)>\n  <string/>\n</for>", "for"],
+    ["for|x|(y) of=[1]", "<for|x|(y) of=[1]>\n  <string/>\n</for>", "for"],
+    ["for with no params", "<for>\n  <string/>\n</for>", "for"],
+    ["for|x| with no source", "<for|x|>\n  <string/>\n</for>", "for"],
+    ["for|x| with two sources", "<for|x| of=[1] in=o/>", "for"],
+  ];
+  const at = (keyword: "for" | "if") => (keyword === "for" ? FOR : IF);
+  const indent = (text: string, by: string) =>
+    text
+      .split("\n")
+      .map((line) => by + line)
+      .join("\n");
+
+  describe.each([
+    ["at the top level", (s: string) => s, 1, 0],
+    [
+      "directly under a closed parent",
+      (s: string) => `<entity>\n${indent(s, "  ")}\n</entity>`,
+      2,
+      2,
+    ],
+    [
+      "directly under a plain tag",
+      (s: string) => `<plain>\n${indent(s, "  ")}\n</plain>`,
+      2,
+      2,
+    ],
+    [
+      "two contracts deep",
+      (s: string) =>
+        `<entity>\n  <section>\n${indent(s, "    ")}\n  </section>\n</entity>`,
+      3,
+      4,
+    ],
+    [
+      "directly under a tag whose transform consumes its body",
+      (s: string) => `<eater>\n${indent(s, "  ")}\n</eater>`,
+      2,
+      2,
+    ],
+    [
+      "in a contract tag inside a tag whose transform consumes its body",
+      (s: string) =>
+        `<eater>\n  <inner>\n${indent(s, "    ")}\n  </inner>\n</eater>`,
+      3,
+      4,
+    ],
+  ])("%s", (_where, wrap, line, column) => {
+    it.each(heads)("%s is the construct, once", (_l, text, keyword) => {
+      const want = ["MX_STRUCTURAL_CONSTRUCT", line, column, at(keyword)];
+      const rows = found(`${wrap(text)}\n`, reject);
+      expect(rows).toEqual([want]);
+      expect(String(rows[0]?.[3])).toMatch(/\bevaluate `<(for|if)>`$/);
+    });
+  });
+
+  it.each([
+    ["if(x)", "entity\n  if(x)\n    string\n", "if"],
+    ["for|x|(y)", "entity\n  for|x|(y)\n    string\n", "for"],
+    [
+      "else-if(x)",
+      "entity\n  if=a\n    string\n  else-if(x)\n    string\n",
+      "if",
+    ],
+  ] as const)("concise %s is the construct, once", (_l, source, keyword) => {
+    expect(found(source, reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2, at(keyword)],
+    ]);
+  });
+
+  it("reports each construct that is shaped like one, in the dialect's own words", () => {
+    const dialect = {
+      ...memberSyntax,
+      name: "member",
+      structural: "reject",
+      unknownTags: "reject",
+    } as const;
+    expect(
+      found("<entity>\n  <if(x)/>\n</entity>\n", { dialect }, customTags),
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF]]);
+    expect(
+      found("<entity>\n  <for|x|(y)/>\n</entity>\n", { dialect }, customTags),
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, FOR]]);
+  });
+
+  it("keeps the shape error where the construct is legal: structural pass and unset", () => {
+    const IF_HINT =
+      "Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. For an event handler write `onX=handler`";
+    const ELSE_IF_HINT = IF_HINT.replace("<if=", "<else-if=");
+    const ELSE_HINT =
+      "Tag does not support arguments. Write the condition as an attribute instead: `<else if=condition>`. For an event handler write `onX=handler`";
+    const FOR_HINT =
+      "Tag does not support arguments. For an event handler write `onY=handler`";
+    for (const options of [
+      { structural: "pass", unknownTags: "reject" },
+      { unknownTags: "reject" },
+    ] as const) {
+      expect(found("<plain>\n  <if(x)/>\n</plain>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 2, 6, IF_HINT],
+      ]);
+      expect(found("<if(x)/>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 1, 4, IF_HINT],
+      ]);
+      expect(found("<if=a/>\n<else-if(x)/>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 2, 9, ELSE_IF_HINT],
+      ]);
+      expect(found("<if=a/>\n<else(x)/>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 2, 6, ELSE_HINT],
+      ]);
+      expect(found("<for|x|(y)/>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 1, 8, FOR_HINT],
+      ]);
+      expect(found("<plain>\n  <for|x|(y)/>\n</plain>\n", options)).toEqual([
+        ["MX_UNSUPPORTED_CONSTRUCT", 2, 10, FOR_HINT],
+      ]);
+      expect(found("<for/>\n", options)).toEqual([
+        [
+          "MX_INVALID_FOR",
+          1,
+          0,
+          "`<for>` needs tag params: `<for|item| of=…>`",
+        ],
+      ]);
+      expect(found("<if/>\n", options)).toEqual([
+        ["MX_INVALID_IF", 1, 0, "`<if>` without a condition"],
+      ]);
+      expect(found("<if|x|=a/>\n", options)).toEqual([
+        [
+          "MX_UNSUPPORTED_CONSTRUCT",
+          1,
+          0,
+          "tag params `|...|` on `<if>` are not supported in a standalone template",
+        ],
+      ]);
+    }
+  });
+
+  it("keeps MX's own hint with no contract, no dialect and no structural option", () => {
+    const result = lowerSource("<if(x)/>\n", "/t.mx", {});
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_UNSUPPORTED_CONSTRUCT", 1, 4],
+    ]);
+    expect(result.diagnostics[0]?.message).toBe(
+      "Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. For an event handler write `onX=handler`",
+    );
+    const loop = lowerSource("<for|x|(y)/>\n", "/t.mx", {});
+    expect(loop.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_UNSUPPORTED_CONSTRUCT", 1, 8],
+    ]);
+    expect(loop.diagnostics[0]?.message).toBe(
+      "Tag does not support arguments. For an event handler write `onY=handler`",
+    );
+  });
+
+  it("still reports a construct written well, and an error that is not the construct's head", () => {
+    expect(found("<if=a>\n  <string/>\n</if>\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+    ]);
+    expect(found("<entity>\n  <box/>\n</entity>\n", reject)[0]?.[0]).toBe(
+      "MX_TAG_NOT_ALLOWED",
+    );
+  });
+});
