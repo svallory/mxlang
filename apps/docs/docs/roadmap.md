@@ -1,22 +1,18 @@
 ---
 title: "Roadmap"
-description: "Phase 5 items and the MX 2 investigations."
+description: "What the MX 1 beta is, and what MX 2 adds."
 ---
 
 # Roadmap
 
-## Phase 5
+## MX 1 beta
 
-The final pieces of the MX 1.0 baseline:
+The MX 1 beta is the language and its hosts: `@mxlang/core`, which also exports the IR entry point for dialects and non-rendering consumers, and the host packages (`@mxlang/host-*`) with their editor and type-checking tooling. The html target is not part of the beta and stays private.
 
-- **Hono host:** A lightweight host for Hono targeting string emission, similar to HTML.
-- **Whole-file `.mx` components:** Expanding Solid and other reactive frameworks to support whole-file `.mx` rather than just `.solid.mx` regions. First question: why, versus "just use Marko"? Write the case for and against before any code.
-- **Custom tags:** L1 templates, L2 TypeScript sidecars, discovery, validation, IR transforms, and the `analyze`/`finalize` collecting pair are shipped. See [Custom tags](/custom-tags/).
-- **Editor tooling:** Prettier support by aliasing (with `prettier-plugin-marko`); ESLint plugin deferred. VS Code extension with TextMate grammars, LS client, and TS plugin contribution.
-- **Marketing:** Researching what made JSX, Astro and comparable cases popular. "Markup eXtended" name, site, the translator as the Pug successor, the Solid host as the JSX replacement; the Marko-team conversation with working hosts to show.
+Releases are `0.1.0-alpha.N` prereleases on the project's own registry until the first public publish. That publish is a plain `0.1.0` on npm, and it ships once MX 2 and the framework targets have landed. Every package's README notes that the API may change until 1.0.0.
 
-## MX 2 Investigations
+## MX 2
 
-Once MX 1.0 is stable and the documentation is complete, we will begin exploring MX 2. This includes tackling the items currently on the [Deferred to MX 2](/divergences-and-mx-2/) list (e.g., tag params on `<if>`, tag params on native HTML elements, etc.). Any syntax change in MX 2 will land in lockstep with its corresponding grammar and language server tooling so editors never break.
+MX 2 adds native-component targets: a framework's components compiled from MX directly, rather than MX regions lowered to the framework's JSX. It also takes up the items on the [Deferred to MX 2](/divergences-and-mx-2/) list (tag params on `<if>`, tag params on native HTML elements, and the rest). Any syntax change lands together with its grammar and language-server support, so editors never break.
 
-Custom-tag L3 raw parser hooks remain later work. The tag-resolution `resolve` hook is reserved for MX 2; neither is part of the current L1/L2 contract.
+Custom-tag L3 raw parser hooks are later work, and the tag-resolution `resolve` hook is reserved for MX 2; neither is part of the current L1/L2 contract.

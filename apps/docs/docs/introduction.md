@@ -1,20 +1,20 @@
 ---
 title: "Introduction"
-description: "What MX is, what it is not, and how the subset rule works."
+description: "What MX is, what it is not, and how it relates to Marko."
 ---
 
 # MX
 
-MX (Markup eXtended) is a template language born from Marko. It takes Marko's syntax — the syntax people already know from Marko — and brings it to wherever JSX lives today: React, Preact, Solid, Hono, Astro, and server-side HTML. MX itself defines the markup and the structural tags; each **host** decides what state, reactivity, and output mean.
+MX (Markup eXtended) is a language born from Marko. It takes Marko's syntax — the syntax people already know from Marko — and brings it to wherever JSX lives today: React, Preact, Solid, Hono, Astro, Angular, and server-side HTML. Markup is first-class syntax and control flow is closed, statically analyzable tags, on TypeScript, with no runtime attached. MX defines the language, including its reactive tags; each **target** decides how that language is expressed in its output.
 
-`.mx` is the official and only whole-template file extension. Porting a Marko component that stays within the MX 1.0 subset is a rename.
+`.mx` is the official and only whole-template file extension. Porting a Marko component that uses no construct MX departs from is a rename.
 
 ## What MX is
 
-- **The language.** A markup grammar plus a small set of structural tags: `<if>` / `<else if>` / `<else>`, every `<for>` form, attribute tags, tag params, `<define>`, `<const>`, `static`, `import`. These work identically on every host and render exactly the way Marko renders them.
+- **The language.** A markup grammar plus a small set of structural tags: `<if>` / `<else if>` / `<else>`, every `<for>` form, attribute tags, tag params, `<define>`, `<const>`, `static`, `import`. These work identically on every target. The reactive tags (`<let>` and friends) are core language too: each target lowers them to its own framework's primitives.
 - **Custom tags.** Define project vocabulary as an MX template or a TypeScript sidecar. Calls are discovered without imports and expand to ordinary IR before any emitter runs, so one definition works on all six hosts. Start with [Custom tags](/custom-tags/).
-- **The core.** One package (`@mxlang/core`) that consumes Marko's AST, applies structural and custom-tag lowerings, and exposes `HostDeclarations` plus hooks so a host can add its own stateful tags.
-- **Targets and hosts.** A target is a policy over the core; a host is a target plus the integration that makes it usable in a framework's ecosystem, where the component stays a native component of that framework and MX takes the place of its JSX or template (the [Hosts overview](/hosts/intro/) shows one side by side):
+- **The core.** One package (`@mxlang/core`) that lowers MX's own AST to a host-independent IR, applies structural and custom-tag lowerings, and exposes `HostDeclarations` plus generic hooks; it names no host or target.
+- **Targets and hosts.** A target is an output format a file compiles to (JSX, an Angular template, an Astro template, an HTML string), and targets are what gets registered. A host is a framework MX lives inside, built on one target: the component stays a native component of that framework and MX takes the place of its JSX or template (the [Hosts overview](/hosts/intro/) shows one side by side):
   - **HTML** (a [target](/targets/html/), not a host) — a `.mx` file compiles to a pure `(input) => string` function. No runtime, no framework.
   - **Astro** — `.astro.mx` is an Astro component with MX as its template; plain `.mx` components and pages render to static markup at build time, no islands, no client JavaScript.
   - **React, Preact, Hono** (`.react.mx`, `.preact.mx`, `.hono.mx`) — a TSX module with MX in JSX's position: the component function, its props and its hooks stay TypeScript, and each MX region compiles to a JSX expression. See [React](/hosts/react/), [Preact](/hosts/preact/) and [Hono](/hosts/hono/).
@@ -23,26 +23,25 @@ MX (Markup eXtended) is a template language born from Marko. It takes Marko's sy
 
 ## What MX is not
 
-- **Not a Marko runtime.** No resume, no serialized scope data, no `@marko/runtime-tags`. A host that wants client-side state uses its own framework's mechanisms. See [why MX has no resume](/design-notes/marko-runtime-modes/).
-- **Not a promise of portability for stateful templates.** A template using `<let>` means one thing on the html target (an error, unless explicitly allowed) and something else on a future reactive host — the same way JSX means something different depending on which framework compiles it. The structural core is portable; stateful tags are host-bound.
-- **Not a superset of Marko.** MX 1.0 is a strict *subset*.
+- **Not a runtime.** MX has no runtime of its own: compiled output may use a runtime the browser, the framework or a third party owns, never one MX owns. `@mxlang/compat-<target>` packages are shims over a framework's own runtime, not an MX runtime. No resume, no serialized scope data, no `@marko/runtime-tags`. See [why MX has no resume](/design-notes/marko-runtime-modes/).
+- **Not a promise that every target runs every tag.** The reactive tags mean the same thing everywhere, but a target with no reactivity cannot honour them: the html target renders their initial values, and the Astro host, which has no reactive target, rejects them.
+- **Not a Marko fork with a parity promise.** MX has its own parser and compiler; Marko is its default, not its contract.
 
-## The subset rule
+## MX and Marko
 
-Every MX 1.0 file is a valid Marko file, with the same meaning for the structural core. A host may *forbid* a tag it cannot honor — the Astro host rejects `<let>` because it has no reactive target — but no host may add syntax, attribute forms, or file conventions that Marko's own parser would reject. This lets MX reuse Marko's parser, formatting rules, and tree-sitter grammar while MX's own integrations keep the `.mx` identity and apply host policy.
+Marko is the default answer for `.mx`: where MX has no rule of its own, a
+construct means what it means in Marko. MX does not promise to be a subset or a
+superset of Marko. When MX departs from Marko it does so deliberately, and the
+departure is recorded with what changed, why, and the test that pins it. A host
+may *forbid* a tag it cannot honour (the Astro host rejects `<let>` because it
+has no reactive target), but no host adds syntax, attribute forms or file
+conventions; extending the language is a dialect's job. Custom tags use
+ordinary tag syntax and expand only after parsing.
 
-The rule holds until MX 2. From MX 2 on, MX may diverge from Marko, but only deliberately and one recorded step at a time. Custom tags do not break the rule: a call uses ordinary Marko tag syntax and expands only after parsing.
-
-## Divergence policy
-
-Every deliberate divergence from Marko is recorded in a table — what changed,
-why, and what test guards it — before it ships. Syntax divergences land only
-with the tooling they affect (grammar, formatter, language server). MX 1.0 uses
-Marko syntax unmodified; its one deliberate semantic divergence is the
-consumer-declared [AttrTag value shape](/language/attr-tag/#attrtag-marko-6-compared-with-mx).
-Two cases where the html target used to be more permissive than Marko were
-implementation bugs rather than divergences, and both are fixed — the
-Marko-parity oracle now reports no translator bugs.
+Only MX's own language on a web-UI target can diverge from Marko. A dialect is
+a language of its own built on MX's machinery, so what a dialect does is never
+a Marko divergence. See [Divergences & MX 2](/divergences-and-mx-2/) for the
+current list.
 
 ## Start here
 

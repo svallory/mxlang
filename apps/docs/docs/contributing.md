@@ -13,9 +13,9 @@ The repository is a Bun workspace with two workspace globs, `packages/*` and `ex
 |---|---|
 | `packages/babel` | A vendored `@babel/parser` fork whose MX grammar is injected through a hook interface. |
 | `packages/tsx-bridge` | MX in TypeScript: finds each MX region and lowers it to JSX through a host, for the Solid host. |
-| `packages/parser` | The htmljs-parser-derived template parser. Not used by core yet. |
-| `packages/core` | The Marko-node consumer every MX host is built on: structural lowerings, the IR, `HostDeclarations`, `Emitter<Out>`, three stateful-tag hooks, two front doors. |
-| `packages/targets/html` | The html target: `.mx`/`.marko` compile to a pure `(input) => string` function. |
+| `packages/parser` | MX's template parser and the front end that builds the MX AST. |
+| `packages/core` | The host-agnostic compiler every target and host is built on: reads the MX AST; structural lowerings, the IR, `HostDeclarations`, `Emitter<Out>`, the stateful-tag hooks. It names no host: a host that needs something from core gets a generic opt-in hook. |
+| `packages/targets/html` | The html target: a `.mx` file compiles to a module that renders to a string. |
 | `packages/hosts/astro` | The Astro host: components, pages, and `.astro.mx` templates, all rendered to static markup. |
 | `packages/tooling/language-server` | A diagnostics-only LSP server for MX hosts. |
 | `packages/editors/zed` | The Zed editor extension (three languages plus the language server registration). |
@@ -31,11 +31,26 @@ Three rules this chain is built around:
 
 - **A check that can never fail is not a check.** Every gate in the chain is expected to be able to fail, and is proven to fail at least once against a deliberately broken input before it's trusted. A script that only prints success is a bug, not a safety net.
 - **Evidence, not vibes.** The coverage-verification step doesn't ask "does this package have test files" — it reads the actual output of the test run that just happened (a JSON report, or a marker file written only on success) and checks its timestamp is newer than the start of this verification run. A package can't be marked "tested" by leftover evidence from a previous run.
-- **Clean-clone proofs.** Anything that depends on generated or vendored files (a build step, a vendored grammar) is expected to work from a fresh clone with no manual setup step, and CI is what actually proves this — a green run on a contributor's machine with stale local state doesn't count.
+- **Clean-clone proofs.** Anything that depends on generated or vendored files (a build step, a vendored grammar) is expected to work from a fresh clone with no manual setup step, and CI is what actually proves this — a green run on a contributor's machine with stale local state doesn't count. A gate that guards a consumer build clones `HEAD` and runs the consumer's exact build command.
+- **Drift paths are demonstrated.** A check that reports drift (a generated file out of date, a golden that changed) is shown producing a real diff on a deliberately drifted input. A verifier that counts things asserts a minimum, so zero matches fails.
+
+### Tests and claims
+
+- **Escaping tests assert exact HTML.** A test of escaping or attribute quoting compares the exact output string and reasons about it the way a browser tokenizes it, never with a loose `contains`.
+- **"Not supported" is verified.** Before a doc, an error message or a review says a construct is unsupported, run it through the compiler and show what happens.
+- **Verified means reproduced.** A claim about compiler behaviour in a PR, a review or a doc counts as verified only when it was reproduced by running the compiler on an input, not by reading the source.
+
+### When a host is done
+
+A host is done when its file kind works end to end in the editor, not only in the build: the TypeScript plugin type-checks it, and the language server reports its diagnostics, including the tags the host forbids.
 
 ## Changelog fragments
 
 A PR that changes package code — anything under `packages/*/src`, or a `packages/*/package.json` — adds a changelog fragment instead of editing a package CHANGELOG directly. A fragment is `changes/<slug>.md`, where `<slug>` is the branch name with `/` replaced by `-`, and holds front matter naming the packages it concerns (the short names the CHANGELOG headings use, e.g. `core`, `data`) and a `kind` (`Added`, `Changed`, `Fixed`, `Removed`), with the entry text as its body — one Markdown paragraph in the same style as the existing bullets. CI rejects a package-code PR with no fragment, unless its body carries a `no-changelog: <reason>` line; the diff is judged against the merge base, so a fresh landing on `main` cannot make an older PR fail. `bun run changelog:assemble` appends every fragment under each named package's `## Unreleased` section (creating the section when missing), in deterministic order, then deletes the fragments; with `--release <version>` it also renames `## Unreleased` to the version and date. Because fragments never touch the same lines, two open PRs no longer conflict at the top of every CHANGELOG.
+
+## Writing the docs
+
+The docs describe MX as decided, in the present tense, as if every decided feature were released: install lines and pages for packages and tools not yet published stay as written. A page needs no "not released yet" note; when one genuinely helps the reader, a page carries at most one. A docs gap means the docs differ from the decided shape, not from today's build; a page that describes a decided feature ahead of the code is correct, and the difference is tracked as code work. Docs never cite decision numbers or history ("previously", "since PR #"); they state what is.
 
 ## The docs site as a verify step
 
@@ -52,7 +67,7 @@ Each host is checked against real, working reference code rather than only again
 | `bun run oracle:preact` | The same 43 fixtures rendered with `preact-render-to-string` | 30 pass, 13 reasoned skips, 0 bugs |
 | `bun run oracle:react` | The same 43 fixtures rendered with `react-dom/server` | 30 pass, 13 reasoned skips, 0 bugs |
 
-`oracle` asks *does MX produce what a hand-written component would*. The other three ask *does the structural core still mean what Marko means* — the regression guard for the subset rule itself. A skip is a recorded, reasoned classification in the fixture's `meta.json`, not unfinished work; a run also fails if it processed too few fixtures, so a gate that silently does nothing cannot pass.
+`oracle` asks *does MX produce what a hand-written component would*. The other three ask *does the structural core still mean what Marko means* — the regression check on behaviour already recorded, not a parity requirement for new design. A skip is a recorded, reasoned classification in the fixture's `meta.json`, not unfinished work; a run also fails if it processed too few fixtures, so a gate that silently does nothing cannot pass.
 
 The three host oracles are CI jobs rather than part of `verify`: the Marko toolchain is a real install and memory cost.
 
