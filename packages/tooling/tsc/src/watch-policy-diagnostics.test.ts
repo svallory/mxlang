@@ -186,9 +186,10 @@ describe("mx-tsc -w host-policy diagnostics", () => {
 
         // Fixed: the page compiles again, resolves the host again, and the
         // error is gone from the line and from the count.
-        // The `package.json` write itself starts a rebuild that does not read
-        // the page again (so it may still report the old error); the page's
-        // edit is the rebuild that resolves the host anew.
+        // The `package.json` write itself starts a rebuild that compiles the
+        // page again (`watch-package-json.test.ts` pins that on its own); the
+        // loop below also takes the page's edit as a rebuild, so a rebuild the
+        // write races with does not fail this test.
         writeFileSync(join(dir, "package.json"), VALID);
         let fixed = await watcher.untilSummary(page);
         for (let n = 0; n < 3 && policyLines(fixed).length > 0; n++) {
