@@ -131,16 +131,25 @@ In HTML body text, `//` and `/*` start a comment only after ASCII whitespace. A 
 
 0.1.0-alpha.7 to 0.1.0-alpha.9 read these as comments, so the first input became a comment that swallowed `</p>` and ended in `Missing ending "p" tag`. That was a regression and is fixed.
 
-### Tag names and shorthands
+### Whitespace in the tag grammar
 
-The tag-name and shorthand states keep ASCII whitespace. `div\u00a0-- text` names the tag `div\u00a0--` and gives it the attribute `text`; `div.a\u00a0-- text` gives the tag `div` the class `a\u00a0--` and the attribute `text`. The unpatched parser reads both identically.
+> Not released yet: the parser on main still reads the characters below as
+> name characters, as stock does (`div\u00a0-- text` names the tag
+> `div\u00a0--`; `<div a\u00a0b/>` has one attribute `a\u00a0b`, g1538).
 
-| Input | stock | MX | Probe |
-| --- | --- | --- | --- |
-| `div\u00a0-- text\n` | tag `div\u00a0--`, `@text` | the same | none |
-| `div.a\u00a0-- text\n` | tag `div`, class `a\u00a0--`, `@text` | the same | none |
+In the tag grammar (between tags, attributes, names and shorthands, outside
+any expression), whitespace is Unicode's `Pattern_White_Space` set, the fixed
+set UAX #31 recommends for language syntax: tab, LF, VT, FF, CR, space,
+U+0085, U+200E, U+200F, U+2028 and U+2029. Any other Unicode space character
+there (U+00A0 no-break space, U+2000 to U+200A, U+3000 and the rest of
+category Zs, and U+FEFF) is refused at its position with an error that names
+the character and the plain space it looks like. So `div x\u00a0y` is an
+error at the no-break space, not one attribute named `x\u00a0y`. Expressions
+keep JavaScript's whitespace rule (the look-behinds above).
 
-Unicode whitespace does not separate attributes either: `<div a\u00a0b/>` has one attribute named `a\u00a0b` (g1538).
+Standard: UAX #31, "Pattern Syntax" (`Pattern_White_Space`). The unpatched
+parser and HTML read these characters as part of a name; the difference is a
+row in `divergences.md`.
 
 ### A spaced `:name` or `.name` after a value
 
@@ -158,7 +167,6 @@ MX has no rule that ends a value at a spaced `:` or `.` followed by a name: `x=a
 
 - MX's whitespace still counts 27 ASCII control characters that ECMAScript does not (U+0000 to U+0008 and U+000E to U+001F). This is inherited from htmljs-parser, whose `isWhitespaceCode` is `code <= 0x20` and carries the comment "this might be slightly non-conforming".
 - U+2028 and U+2029 are whitespace in the look-behinds but do not end a concise line.
-- The tag grammar's own tests (a character that ends an attribute name, a tag name or a shorthand) look at the current character and keep ASCII whitespace; the Unicode whitespace of this page applies only in the look-behinds and the concise ` --` rule above.
 - The word class has no table of its own; it follows the engine's Unicode property data. TypeScript's identifier tables follow Unicode 15.1 and Babel's 17.0, so a character added to `ID_Continue` after the engine's Unicode version is a non-word character here until the engine updates.
 - Not determined: how editors, formatters and language tools consume the attribute ranges that keep a trailing Unicode space.
 
@@ -168,6 +176,6 @@ The unpatched reference is htmljs-parser at tag v5.18.0 from its own repository,
 
 ## Sources
 
-- Decision 156 addenda 10 to 13 (the non-ASCII word and whitespace rules).
+- UAX #31, Unicode Identifier and Pattern Syntax: `Pattern_White_Space`.
 - ECMA-262, 16th edition (ES2025) and later: "White Space", "Line Terminators", "Names and Keywords".
 - The probe corpus and the grammar tables: [The parser grammar](/architecture/parser-grammar/).

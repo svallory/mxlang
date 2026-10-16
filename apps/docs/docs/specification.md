@@ -9,33 +9,22 @@ description: "The normative MX language specification — what every construct m
 Where this document and the code disagree, that is a bug in one of them and the
 disagreement gets filed, not resolved silently by a reader.
 
-Written 2026-09-17 by backfilling the code, `notes/decisions-2026-09-10.md`
-(entries 1–99), `worktrees/main/divergences.md`, `notes/specs/custom-tags.md`,
-`notes/solidmx-spec.md`, and the six docs-site language pages. Where the docs
-site and the code disagreed, **the code won** and the docs claim is recorded in
-[§16 Docs to fix](#the-mx-language-16-docs-to-fix) rather than repeated here.
-
 **This file lives in the repo at `apps/docs/docs/specification.md` and is served
-on the docs site at [`/specification/`](https://mx.saulo.tech/specification/).** The
-process rule that keeps it current is in the repo's `AGENTS.md` under "Language
-spec": a PR that changes syntax or semantics updates this file in the same
-change, citing the decision number; a decision entry that changes the language
-names the section it updates.
+on the docs site at [`/specification/`](https://mx.saulo.tech/specification/).**
+A PR that changes syntax or semantics updates this file in the same change; a
+ruling that changes the language is recorded by editing the section it changes.
 
 ## How to read this
-
-Three documents, three questions:
 
 | Document | Question |
 |---|---|
 | `apps/docs/docs/` (the docs site) | How do I use it? |
-| `notes/decisions-2026-09-10.md` | When and why did we choose it? |
 | **this file** | What does it mean? |
+| `divergences.md` (repo root) | Where does `.mx` depart from Marko, and why? |
 
-Each section carries **syntax** (as Marko's, with MX 1's subset stated),
-**semantics** (portable, or per host), **errors** (exact strings where the core
-owns them), the **decisions** that fixed it, and **open questions** where the
-answer genuinely is not settled.
+Each section carries **syntax**, **semantics** (portable, or per host),
+**errors** (exact strings where the core owns them) and **open questions**
+where the answer genuinely is not settled.
 
 ### Conventions
 
@@ -44,11 +33,9 @@ answer genuinely is not settled.
 - **Core-owned** means `@mxlang/core` raises it for every host. **Host-defined**
   means the host's `HostDeclarations` decides, and the host table says what each
   one chose.
-- "MX 1" is the current language. "MX 2" is the next major, where deliberate
-  divergence from Marko becomes permissible (decision 72).
-- Citations are decision numbers from `notes/decisions-2026-09-10.md`. That log
-  is **not monotonic** and has **two entries numbered 33**; this file cites them
-  as *33 (retarget finding)* and *33 (lead ruling)*.
+- "MX 1" is the current language. "MX 2" is the next major.
+- "decision N" in older passages refers to the project's archived decision
+  log, kept for history only. The rule stated in this file is what binds.
 
 ### Reserved generated identifiers
 
@@ -105,21 +92,37 @@ invents, not a claim about every identifier in emitted output.
 
 ### The governing rule
 
-> **MX 1.0 is a strict subset of Marko syntax.** Every MX 1.0 file is a valid
-> Marko file with the same meaning for the structural core. Hosts may only
-> *forbid* a tag they cannot honor — never add syntax, attribute forms, or file
-> conventions Marko's parser and language server would reject.
-> — decisions 71, 72; `divergences.md`
+> **Marko is the default answer for `.mx`.** Where MX has no rule of its own,
+> `.mx` syntax and meaning are Marko's (Marko 6). MX does not promise to be a
+> subset or a superset of Marko: a departure is allowed, but each one is
+> deliberate and has a row in `divergences.md` saying what differs, why, and
+> which test pins it.
 
-Two consequences that settle most "is this legal" questions without a new
-ruling:
+MX ("Markup eXtended") is its own language, born from Marko. Its parser and
+compiler are MX's own, written in TypeScript (`@mxlang/parser`, `@mxlang/core`
+and the host emitters); MX does not track Marko's releases, sends no patches
+upstream, and byte parity with Marko's output is not a requirement. The Marko
+oracles are regression checks on recorded behaviour, not a parity gate for new
+design.
+
+Consequences that settle most "is this legal" questions without a new ruling:
 
 1. **Syntax MX never decided is Marko's.** Boolean attributes, spread
-   attributes, `--` text lines, concise mode: MX inherits them by being a
-   subset. Their absence from the decision log is not a gap in the language.
-2. **`divergences.md` records zero deliberate divergences today.** Anything MX
-   rejects that Marko accepts is either a host forbidding what it cannot honor,
-   or a construct deferred to MX 2 with a row in that file.
+   attributes, `--` text lines, concise mode: MX inherits them. Their absence
+   from this file is not a gap in the language.
+2. **Anything `.mx` rejects or renders differently from Marko is either a host
+   forbidding what it cannot express, or a row in `divergences.md`.** A host may
+   forbid a tag it cannot honour; it never adds syntax, attribute forms or file
+   conventions. Extending the language is a dialect's job
+   (§13.9).
+3. **Only MX's own language on a web-UI target can diverge.** A Marko
+   divergence is a rule MX applies on a web-UI target or host (html, jsx and its
+   hosts, Angular, Astro) that contradicts Marko on the same source. Behaviour
+   that exists only under a dialect, the `none` tag-rules preset, core's IR
+   entry point or a non-web target is never a divergence and needs no row.
+4. **`.marko` files are not an MX input** (§1).
+   MX reads neither `marko.json` nor `marko-tag.json`, and `@marko/compiler` is
+   not part of the build; a stock Marko package is kept only for comparisons.
 
 ---
 
@@ -134,15 +137,18 @@ extension selects a compilation model, not a flavour of one language.
 | `.solid.mx` | A TypeScript module with **MX regions** in expression position | Solid 2 JSX text | Shipped |
 | `.astro.mx` | An Astro component whose template is MX | An `.astro` module | Shipped |
 | `.react.mx`, `.preact.mx`, `.hono.mx` | A TSX module with **MX regions** in expression position (decision 154) | A JSX expression per region, in the host's own JSX dialect | Shipped |
-| `.ng.mx` | An Angular region file | `.ts` with an inline `template` | **Not built** (decisions 96, 99) |
+| `.ng.mx` | An Angular TypeScript module whose `@Component` `template:` is an MX region | `.ts` with an inline `template` | Shipped |
+
+A host file kind's middle segment is the host's name (`.solid.mx`, `.astro.mx`,
+`.react.mx`, `.preact.mx`, `.hono.mx`); Angular's is `.ng.mx`.
 
 ### Whole files vs region files
 
-A **whole file** (`.mx`, `.astro.mx`) is parsed by `@marko/compiler` from the first
+A **whole file** (`.mx`, `.astro.mx`) is parsed by MX's own front end from the first
 byte. Its module level is real module scope, so `import`/`static`/`export`
 place statements there (§2).
 
-A **region file** (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`, and `.ng.mx` when built) is a TypeScript module
+A **region file** (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`, `.ng.mx`) is a TypeScript module
 in which `<` in expression position opens an MX region. The region is an
 *expression*, so it has **no module scope of its own**. This is the single fact
 that makes region files behave differently everywhere it matters:
@@ -158,13 +164,13 @@ that makes region files behave differently everywhere it matters:
 ### Extension policy
 
 **`.mx` is the only template extension.** No product path accepts or advertises
-`.marko` (decision 86, superseding decision 72's alias). Every loader — the Bun
+`.marko`. Every loader — the Bun
 loaders, `@mxlang/vite-plugin`, the language server, the TypeScript plugin,
 `mx-tsc`, the editor extensions — accepts `.mx`, the region kinds (`.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx`) and `.astro.mx` only,
 and `mx()`/`mxAstro()` **reject** `.marko` in their `extensions` option.
 
-Porting a Marko component that stays inside the MX 1 subset is therefore a
-rename. The reason the alias died: MX supports only the subset, so treating an
+Porting a Marko component that uses no construct MX departs from is therefore
+a rename. MX accepts no `.marko` alias because treating an
 arbitrary `.marko` file as MX would silently claim support MX does not have.
 
 One narrow exception, outside the product path:
@@ -178,7 +184,7 @@ One narrow exception, outside the product path:
 Core resolves tag names itself (decision 197): a compile runs no Marko tag
 lookup and reads no `marko.json`. Core's own `tags/` discovery can still find a
 `.marko` file for a tag call. That is not an MX input (decision 172): see
-"`.marko` files as tags" in §4.
+"`.marko` files as tags" in §9.2.
 
 ### Why an `.astro.mx` file cannot be a page
 
@@ -627,7 +633,7 @@ was not expected`), and a line in a concise region cannot start with a single
 hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
 `${expr}` line** for that line's own trap.
 
-Inherited from Marko under the subset rule: no MX decision fixes this. Concise
+Inherited from Marko under the governing rule: MX has no rule of its own here. Concise
 blocks are exercised in MX source by the landing page's example
 (`apps/docs/example/home-example.mx`, compiled on the html target and rendered
 by every docs build).
@@ -636,13 +642,12 @@ htmljs-parser's `CONCISE_HTML_CONTENT`/`HTML_CONTENT` states by compiling the
 snippets above and their variants on the html target; the behaviour is the
 parser's, and no host changes it.
 
-**Decisions:** none of its own — inherited under the subset rule (decisions 71,
-72).
+MX has no rule of its own here; the governing rule makes it Marko's.
 
 ### Text lines (`--`)
 
-Concise mode's delimited text block. Inherited from Marko under the subset rule;
-no MX decision fixes it. `--` lines are exercised by the angular oracle's
+Concise mode's delimited text block. Inherited from Marko under the governing
+rule; MX has no rule of its own here. `--` lines are exercised by the angular oracle's
 `text-*` fixtures (run by `oracle:angular` in CI) and by the landing page's
 example, which every docs build compiles and renders. The parser's own
 constraint, verbatim from htmljs-parser's `CONCISE_HTML_CONTENT`:
@@ -715,17 +720,16 @@ the app.
 
 ### Scriptlets
 
-`$ statement` is **rejected on every host**:
+Scriptlets (`$ statement`) are not part of MX, in any file kind and on any
+target:
 
 | Message | When |
 |---|---|
 | `scriptlets (\`$ statement\`) are not supported in MX; a template holds values, not statements: write a value with \`<const/x=…/>\`, or move the statement out of the template` | A `MarkoScriptlet` appears in any child list. A `$ const`, `$ let` or `$ var` declaration gets its host's replacement in place of the generic fix. Where the host has no mutable `<let>`, a `let` or `var` is told where the statement goes instead: out of the template, or into the code around it (the component, its class, the module or the `---` fence). The HTML target's strict mode, which rejects `<let>`, tells a `$ let` or `$ var` to declare the value with `<const>` instead. |
 
-Decision 54's reasoning: Marko 6's reactive compiler cannot assign a bare
-statement re-run, dependency, server/client or serialization semantics.
-Template mode's output *is* linear, so scriptlets would be sound there — but
-admitting them only there would fork the language. Revisit when the reactive
-mode is built or killed.
+A bare statement has no re-run, dependency, server/client or serialization
+meaning on a reactive target, and admitting it only where output is linear
+would fork the language.
 
 ### CDATA sections and XML declarations
 
@@ -860,8 +864,28 @@ core taglib name bound by an import.
 
 The HTML void elements —
 `area base br col embed hr img input link meta param source track wbr` — parse
-**without a slash**: `<input value=x>` is legal. A void tag written with a
-closing tag is a parse error (decision 13).
+**without a slash**: `<input value=x>` is legal. A void tag with children (or
+written with a closing tag) is an error. This is part of the HTML tag rules,
+which every web-UI target uses. The tag rules are a preset: a dialect that
+names a preset with them switched off (`none`,
+§13.7.3)
+lets these names take children like any other tag.
+
+### Attribute names
+
+An attribute name on an element or a custom tag follows Marko's grammar:
+`[a-z_][a-z0-9._:-]*`, case-insensitive. A name outside it (`[prop]`, `#ref`,
+`*ngIf`, `@foo`, `$foo`, `allow_nil?`) is a positioned error at the authored
+name, with a hint toward the host's own form:
+
+> ``Invalid attribute name `[(x)]` — two-way binding is written `x:=expr` ``
+
+Only a host with its own attribute syntax opts out, through the generic
+`acceptsForeignAttrNames` hook: the Angular host sets it, so `.ng.mx` passes
+Angular's attribute syntax through. No target or dialect may opt out for `?`:
+a trailing `?` in an attribute name is not allowed anywhere, and `?=` is
+reserved as a future MX attribute operator. `?` in tag names stays as Marko
+has it.
 
 ### Attribute forms
 
@@ -875,6 +899,16 @@ closing tag is a parse error (decision 13).
 | Modifier | `class:active=on` | **Not Marko syntax** — see below |
 | Namespaced name | `:foo=y`, `value:foo=y` | Marko's own attribute named `value:foo` — see below |
 | Method | `onClick() { … }` | Event handler — host-defined, see below |
+
+An unparenthesized value ends at whitespace that the expression does not
+continue. A word operator after the value continues it: `<div x=a in b/>`,
+`x=a instanceof B`, `x=a as T` and `x=a satisfies T` are each one attribute
+whose value is the whole expression, so the word is never read as an attribute
+name and is never checked against the tag's declared attributes. Where
+whitespace leaves a sequence with two valid readings, it is a parse error that
+names both unambiguous spellings (`x=a.b .c`: `x=(a.b) .c` or `x=a.b.c`; the
+ambiguous `>` error is the same rule); a sequence with only one valid reading
+takes it. Complex values are clearest in parentheses.
 
 On Preact, React and Hono, tooling checks named, non-event native-element
 props against the host's own JSX types and reports a mismatch at the authored
@@ -896,10 +930,15 @@ A direct or bound `<input checked=…>` emits presence for any value other
 than `null`, `undefined` or `false`; with spreads or a dynamic tag, `checked`
 uses the ordinary value writer. Dynamic native void tags emit no closing tag.
 Expressions are evaluated exactly once.
-These are measured Marko parity rules (decisions 65 and 67), not changes to
-core's host-independent attribute IR. Other hosts retain their native
-framework serializers; boolean, class/style and controlled-value differences
-remain host-specific compatibility gaps.
+These are measured Marko parity rules, not changes to core's host-independent
+attribute IR. Every other host renders primitive attribute values as Marko's
+html output does (booleans, `aria-*`/`data-*` given `false`, `class` and
+`style` primitives, `disabled`/`checked`), locked per host by its oracle; where
+a framework's own serializer cannot (React and Astro boolean presence, Angular
+DOM properties, Solid's client `style`), the difference is a row in
+`divergences.md`. An object value on a native attribute throws at render on
+every host except Angular, as Marko's debug build does, and
+`<textarea value=x/>` renders the value as the element's content.
 
 On html, Preact, React, Hono and Astro, an ordinary native attribute
 whose object value cannot be coerced to a useful string fails **at render
@@ -953,7 +992,9 @@ UTF-16 code units). Three occurrences give two warnings, each naming the last:
 
 The warning has the stable code `MX_DUPLICATE_ATTRIBUTE`. It is `MxWarning.code`
 and reaches `IrDiagnostic.code` (and so a data consumer's diagnostics), so a
-tool matches the rule, not the wording.
+tool matches the rule, not the wording. It surfaces in `mx-tsc` (as TS80002,
+exit code 0), in the Vite build and in the host compile APIs' warning lists.
+An `&amp;` in an attribute value is not a duplicate and stays silent.
 
 | Case | Result |
 |---|---|
@@ -972,10 +1013,13 @@ Spreads follow the same rule on a string-concatenating target: `@mxlang/target-h
 and `@mxlang/host-astro` make the object-merge precedence explicit (an explicit
 attribute written after a spread suppresses the spread's key, and a spread
 written after an explicit attribute suppresses that attribute), so a browser,
-which keeps the first duplicate, sees the survivor. This is tested by rendering.
+which keeps the first duplicate, sees the survivor. Spread precedence follows
+Marko 6.3.51 on every target: a spread excludes every name written after it,
+and those names win, so in `<div ...x id="p">` the explicit `id` wins. This is
+tested by rendering.
 
 The warning is an mx-only lint beyond Marko (which accepts ordinary duplicate
-attributes silently), recorded in `divergences.md`; decisions 133 and 135.
+attributes silently), recorded in `divergences.md`.
 
 A default method after another attribute is Marko's own reading too: the
 concise `run [after=1] (x) { go(x) }`, the comma forms `run a=1, (x) { go(x) }`
@@ -1042,21 +1086,15 @@ concise `a b=:x` are each "Unexpected token" at the `:`, and `<a b=x::y/>` is
 part of the name, as Marko reads it: `<a::b/>` is the tag `a::b`, and
 `<a x::y=1/>` is the attribute `x:` with the modifier `y`.
 
-**Atoms are a dialect feature.** A dialect (§13.9) that wants a value which
-represents itself (`mode=:strict` meaning `mode="strict"`) builds it with its
-own `expressionTriggers` and `valueTriggers` rows. Its hook returns a
-`StringLiteral` marked `extra.mxAtom = { span }`, and core records each
-marked literal and splices its string into `Expr.code`, so every target emits
-the string while the source text at `Expr.span` keeps the authored spelling. In the IR an attribute
-whose whole value is one atom is a `static` attribute carrying
-`atom: { kind: "atom", name, span }`; an atom nested in an expression is listed
-in `Expr.atoms` (see [the IR spec](/architecture/ir-spec/)).
-
-**Atoms in contracts.** A contract attribute declared `{ type: "atom" }`
-accepts a whole-value atom a dialect built, or a literal list of them. An
-atom where the contract says `string`, and a string where it says `atom`, are
-type errors; a member is not an atom either way. A dialect that builds
-atoms owns the rest: `values`, `pattern`, `ref` and `declares` are not core
+**Atoms are a dialect feature.** Core has no atom: no atom IR kind, no atom
+mark on a literal and no `atom` contract type. A dialect (§13.9) that wants a
+value which represents itself (`mode=:strict` meaning `mode="strict"`) registers
+its own node type for it in core's node-type registry (§13.9.9), such as a
+value-position `mesh:Atom`, whose `lower` returns an ordinary string literal, so
+every target emits the string while the source text at `Expr.span` keeps the
+authored spelling. Telling an atom from a string is the dialect's own check,
+in its `checkContract` and `afterLower`. The dialect owns the rest too:
+`values`, `pattern`, `ref` and `declares` are not core
 keys, and a dialect may claim them (and any other key core does not
 know) through `contractFields`, check them in `checkContract` and `afterLower`,
 and word core's shape error through `describeAttribute`. `ctx.declare` from
@@ -1265,7 +1303,10 @@ head with `value` (`babel-plugin/parser.js`, `onAttrName`). So `<div :foo="y"/>`
 is not a modifier at all: it is one attribute literally named `value:foo`,
 which Marko compiles and renders as `<div value:foo=y>`. The long spelling
 (`<div value:foo="y"/>`) is the same attribute, and `<div :foo:a="y"/>` is a
-parse error in both. An empty modifier still contributes its colon: `<div :/>`
+parse error in both. This is the reading of every `:`-led attribute in a file
+with no dialect (`<a :x=1>` is `value:x=1`); only a dialect that claims `:` for
+its own syntax gives it another meaning, and inside such a dialect a `:`-led
+name never becomes `value:name`. An empty modifier still contributes its colon: `<div :/>`
 means an attribute named `value:` with an empty value. The same preservation
 applies to any ordinary name: `<div x:/>` means `x:` with an empty value,
 `<div x: = "s"/>` means `x:` with value `"s"`, and `<div x: = expr/>`
@@ -1499,17 +1540,15 @@ runtime, so a host with no runtime rejects it:
 |---|---|
 | `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone MX renders once to a string` | The attribute has `arguments` or a `FunctionExpression` value and the host's `resolveAttributeMethod` declined it. |
 
-An attribute method can arrive in **two shapes** and both must be detected:
-`<button onClick() { … }>` has `arguments` falsy and the method body as the
-attribute's *value* (measured against 5.42.5). Attribute methods lower to
-block-body functions, never unwrapped (decision 11); a bare arrow is written
-`onClick=(() => f())`. A method shorthand is a `function` / `async function`
-expression on every target (decision 167, amending decision 11's arrow
-wording), built from parser positions, keeping its name, type parameters and
-its own `this` (`function (e) { … }`, `async function <T>(…) { … }`), so a
-generic method stays valid TSX. Solid and the Preact-family hosts (Preact,
-React, Hono) implement it. An authored `function`
-expression or arrow is emitted as written.
+An attribute value written as a method (`onClick() { … }`, `async load() { … }`,
+`pick<T>(x: T) { … }`) means a `function` or `async function` expression with
+that name, those type parameters and its own `this`, on every target. It is
+built from the parser's positions for the parameters and body, never by
+rewriting text (`function (e) { … }`, `async function <T>(…) { … }`), so a
+generic method stays valid TSX. An authored arrow or `function` value is
+emitted as written. A host that cannot express a function value at that
+position (Angular templates) states what it emits in the host table (§13), and
+a difference in `this` there is a `divergences.md` row.
 
 ### Attribute order
 
@@ -2173,11 +2212,6 @@ row in §13.1's dynamic-tag entry.
 |---|---|
 | `dynamic tag name is not supported in a standalone template` | Superseded — this fired at the `lowerTag` stage for a tagged dynamic tag no host claimed; core no longer produces it there. A host's own emitter may still reject a dynamic-target `Component` in its own words (§13.1). |
 
-> **Open question.** No decision fixes dynamic-tag behavior; the decision log
-> lists `<${x}>` only as a known gap. A host may claim it, and the lowercase-
-> import form `<${layout}/>` is Marko's own prescribed workaround for the
-> PascalCase rule.
-
 **Decision 116: a capitalized value import that isn't a `.marko`/`.mx`
 default import lowers as a dynamic tag, not a direct call.** Measured (TODO
 `value-import-as-tag-parity`): Marko 6.4.4 compiles *every* capitalized
@@ -2349,17 +2383,22 @@ same way `moduleBindings`/`importSpecifiers` already are, so a real
 > positioned error — silence is the one option the capability test (§11)
 > forbids. Filed in §13.6.
 
-> **A string-target dynamic tag called with arguments uses `args[0]` as its
-> input, not the call's own attributes (decision 112).** `<${expr}(a, b)/>`
-> where `expr` resolves to a tag-name string at run time renders with `a`
-> (`args[0]`, or `{}` if it is null/undefined) spread as attributes; `b` and
-> any further arguments are ignored; decision 109's trailing content/
-> attribute-tag props object (appended *after* the positional args) is not
-> `args[0]` either, so it is not read as input — content still renders,
-> since Marko threads it independently. Applies on every host, including
-> Solid (decisions 109 and 112 are disjoint — 109 governs a function/
-> component target, 112 only a string target). See §15 item 11 for the
-> full detail.
+**Tag arguments on a dynamic tag.** A dynamic tag `<${expr}(a, b)>` (like a
+`<define>` call, §5.4) may combine tag arguments with a body and attribute
+tags; arguments plus a plain attribute stay an error, as in Marko, and a named
+custom tag keeps Marko's single-argument rule. For a component or function
+target the call passes the arguments and then one trailing props object
+(`renderer(...args, props)`, the attribute tags by name plus `content`).
+html, Preact, React, Hono and Solid express this shape; Angular and Astro give
+a positioned error naming their own constraint.
+
+**A string-target dynamic tag called with arguments uses `args[0]` as its
+input**, on every host, Solid included: `<${expr}(a, b)/>` where `expr` is a
+tag-name string at run time renders the element with `a` (`{}` when it is
+null or undefined) spread as its attributes; `b` and further arguments are
+ignored, and the trailing props object is not read as input. Content still
+renders, threaded separately, and a string target with arguments that also
+gets attribute tags or content follows Marko exactly (§15 item 11).
 
 **Decisions:** 47/S11 (superseded by 65, swept by 68), 51, 79, 93, 94c, 112.
 
@@ -2368,8 +2407,7 @@ same way `moduleBindings`/`importSpecifiers` already are, so a real
 ## 8. Attribute tags and tag params
 
 Two **generic** rules applying to every tag Marko accepts them on — not
-control-tag special cases (decision 51). Decision 72's subset rule then removed
-the cases real Marko rejects.
+control-tag special cases. Where Marko rejects a placement, `.mx` rejects it too.
 
 ### Tag params: `<Tag|a, b|>`
 
@@ -2401,7 +2439,8 @@ deliberate divergence: Marko renders the element with the body. A `<define>`
 used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>`) does not
 receive the body yet on these hosts.
 
-**Params come before `=value`** (§5.2).
+**Params come right after the tag name, before any attribute or `=value`**:
+`<for|it, i| of=xs()>`, `<Show|user| when=currentUser>` (§5.2).
 
 ### Attribute tags: `<@name>`
 
@@ -2410,53 +2449,49 @@ of ordinary children. With params, `<@name|p|>` becomes a **function** prop.
 Ordinary children stay the child callback. Props are emitted in a fixed order:
 the parent's own attributes in source order, then attribute tags in source order.
 
-The callee's `Input` declares whether an attribute-tag value is `data` (the
-default) or `renderable`, and whether the prop is singular or an array
-(decision 106): `x?: AttrTag<C>` is 0..1, `x: AttrTag<C>` is exactly one on
-every path, and `x: AttrTag<C>[]` is 0..n and always receives a real array.
-`C` conforms to `AttrTagConfig` —
-`{ as?: "data" | "renderable"; attrs?: object; params?: readonly unknown[] }`.
-`attrs` may recursively contain `AttrTag` declarations. On the html target a
-renderable is `(...params) => string`, read with `<${input.head}/>`; data is
-the declared attributes and nested tag props plus
-`content?: (...params) => string`, read with
-`<${input.head.content}/>`.
+Every target passes the callee Marko's attribute-tag record. One `<@name>`
+gives an object holding its attributes as own properties plus `content` (the
+body, or a function of the params when the tag declares `|…|`), and
+`[Symbol.iterator]`; a repeated `<@name>` gives the first occurrence's record,
+with the later occurrences reachable through a hidden `rest` link, so
+iteration (`for of`, `[...x || []]`) yields every occurrence in source order
+while a property read (`x.title`) reads the first. An absent attribute tag is
+`undefined`. Nested attribute tags are records on their parent's record, by
+the same rule. Marko-written callee code (spread, `for of`, property reads)
+therefore runs unchanged.
 
-When the callee has no resolvable exported `Input` — including a dynamic
-callee — core infers the fallback shape from the whole control-flow tree
-(decision 108). The prop is `renderable` when none of its occurrences has
-attributes or nested attribute tags. If any occurrence has either, every
-occurrence for that prop is `data`, so branches and loop iterations never
-change its value shape. Fallback cardinality remains singular when at most one
-occurrence can be taken on a path and becomes an array for repeats or loops.
-An explicit `Input` is unchanged: its `as` still defaults to `data`.
+MX adds members on the record's **prototype**, never as own properties:
+`map`, `filter`, `length`, `at` and `toArray`. They are neither spread nor
+serialized, so own-property semantics are Marko's exactly. The `AttrTag<T>`
+type each host exports is a supertype of `Marko.AttrTag<T>`.
 
-Core reads `Input` syntactically from the same file or imported `.mx`, `.ts`,
-`.tsx`, and `.solid.mx` files. Script callees must export the name `Input`;
-`Props`, parameter annotations, and unexported declarations do not count.
-Literal aliases are followed recursively. Tools may provide synchronous
-`resolveImport`; an unresolved import warns and uses the fallback. A resolved
-unknown extension is also an untyped fallback and is never guessed to be MX or
-TypeScript.
+The value's shape never depends on the callee's types: core does not read the
+callee's `Input` to choose a cardinality or a shape, and the same call compiles
+to the same output whatever the callee declares. The callee's exported `Input`
+types the value for the type checker and the editor tools (`mx-tsc`, the
+language server, the TypeScript plugin), which report a mismatch as a type
+error. A contract opt-in that makes one attribute tag a real array
+(`attributeTags.x.repeat` in a sidecar) is reserved.
 
-On the Solid host both forms are reusable accessors. Data tags are read with
-`<${input.head.content}/>` and renderable tags with `<${input.head}/>`;
-parameterized forms pass arguments at that same dynamic call site, for example
-`<${input.head.content("Ada")}/>` or `<${input.head("Ada")}/>` respectively.
+> **Not released yet.** The record with MX's prototype members is the
+> specified behaviour; the released hosts still emit the earlier
+> `Input`-driven arrays and `data`/`renderable` shapes.
+
+On the Solid host `content` is a reusable accessor, read with
+`<${input.head.content}/>`; a parameterized body passes arguments at that same
+dynamic call site, for example `<${input.head.content("Ada")}/>`.
 Omitting those arguments is a positioned compile error. Escaped interpolation
 inside the accessor remains escaped during SSR and stays reactive text in the
 browser.
 
 Astro and Angular are projection hosts rather than value hosts. A singular
-attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection;
-`data` and `renderable` declarations select that same named content. Astro's
+attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection. Astro's
 `.mx` renderer exposes the slot thunk both directly and as `.content`;
 Angular exposes no class value at all and rewrites the callee's
-`${input.x()}`, `${input.x.content()}`, `<${input.x.content}/>` and renderable
-`<${input.x}/>` idioms (including optional chains) directly to `<ng-content>`.
+`${input.x.content()}` and `<${input.x.content}/>` idioms (including optional chains) directly to `<ng-content>`.
 Any other Angular read of a declared projection is a positioned error. Both
-hosts reject arrays, authored attributes, params, nested attribute tags, and
-bodiless `<@name/>` tags with positioned host errors. Mutually exclusive
+hosts reject repeated occurrences, authored attributes, params, nested
+attribute tags, and bodiless `<@name/>` tags with positioned host errors. Mutually exclusive
 conditional occurrences are supported and render only the taken projection.
 Attribute-tag names are stored with the leading `@` stripped, and their name span
 starts one character in so the `@` is excluded from diagnostics.
@@ -2476,13 +2511,6 @@ accepted, and arguments on the call itself (`<Foo(bar)/>`) keep their meaning.
 | `attribute tag \`@${name}\` collides with attribute \`${name}\`` | Name equals a non-spread attribute on the same parent. |
 | `attribute tag \`@children\` collides with the parent's ordinary children` | `<@children>` beside any ordinary child. |
 | `` `content` is reserved on an attribute tag; it names the body `` | An attribute tag authors `content=`, which is reserved for its body. |
-| `` `<@${name}>` may appear at most once (`${name}` is declared `AttrTag`, not `AttrTag[]`) `` | A declared singular occurs more than once on one path. |
-| `` `<@${name}>` may not appear inside `<for>` (`${name}` is declared `AttrTag`, not `AttrTag[]`) `` | A declared singular occurs in a loop. |
-| `` missing required attribute tag `<@${name}>` `` | A required singular is absent. |
-| `` `<@${name}>` is required but not provided on every `<if>` path `` | A required singular is conditional without coverage of every path. |
-| `` `<@${name}>` declares params in `<${owner}>`; add `|…|` `` | The declaration has a params tuple and the call omits tag params. |
-| `` `<@${name}>` declares no params in `<${owner}>`; remove `|…|` `` | The call authors tag params but the declaration has none. |
-| `` `<@${name}>` is renderable in `<${owner}>`; it can't take attributes or nested attribute tags `` | A renderable occurrence attempts to carry data. |
 | `` `<@${name}>` does not take arguments. Remove `(…)` and pass the value as an attribute (`<@${name} value=1>`) or as the tag's body. `` | An attribute tag is written with arguments, `<@${name}(…)>`. The range covers the arguments, first to last; code `MX_UNSUPPORTED_TAG_ARGUMENTS`. |
 | `Cannot have attribute tags and body content under a control flow tag.` | One `<if>`/`<for>` body mixes attribute tags with ordinary content. |
 | `attribute tag \`<${name}>\` is only valid directly inside a component call` | An `@`-named tag reached the general tag path. |
@@ -2494,41 +2522,15 @@ written names, not what a spread holds at runtime, matching JSX's
 
 `children` counts as a name, because ordinary children lower into that prop.
 
-### Repeated `<@name>` — final host behavior (decisions 104, 106 and 108)
+### Repeated `<@name>`
 
-Writing the same `<@name>` more than once on an **ordinary component call**
-(no declared `attributeTags` schema) is allowed — core keeps every
-occurrence, in source order, in `Component.attributeTags`; nothing at the
-core lowering layer rejects or collapses a repeat.
-
-Today's per-host value shape, factually, with no claim of Marko parity:
-
-- **HTML, Preact, React and Hono**: consumer-declared cardinality and shape are
-  implemented. An array
-  prop is always a real array, including `[]`; conditions contribute zero or
-  one value and loops push every iteration in source order. Nested attribute
-  tags use the same rules recursively. Untyped body-only props use decision
-  108's renderable fallback.
-- **Solid**: data content and renderables are reusable accessors
-  `() => SolidElement`; params add an outer function. Arrays, conditional
-  values, loops, and nested tags use the same core plan as the JSX hosts.
-- **Angular**: singular tags become `ngProjectAs` projections, including
-  conditional branches. Arrays are rejected because a projection is keyed by
-  selector. In a callee the four render idioms above become `<ng-content>`;
-  conditions, pass-throughs, property reads, and other value uses are errors.
-  An attribute-tag-only dynamic-tag body is also rejected because
-  `ngComponentOutlet` has no content-projection mechanism.
-- **Astro**: singular tags become named slots, including conditional branches.
-  Arrays are rejected because an Astro slot is keyed by name and its renderer
-  would silently keep only one occurrence.
-
-Declared cardinality and `data` values deliberately diverge from Marko's own
-`attrTag`/`attrTags` runtime shape (an iterable record whose property read hits
-the first occurrence). Decision 108 restores Marko-compatible bare renderables
-for untyped body-only tags while retaining MX arrays for fallback repeats. MX
-also passes every authored attribute, while Marko may tree-shake attributes the
-callee never reads. The user-facing side-by-side table and migration guidance
-are in [`/language/attr-tag/`](https://mx.saulo.tech/language/attr-tag/).
+Writing the same `<@name>` more than once on a component call is allowed:
+core keeps every occurrence, in source order, and the callee receives them as
+one record whose iteration yields each occurrence (above). A condition
+contributes zero or one occurrence and a loop one per iteration. Nothing
+collapses a repeat; it is never last-wins. Astro and Angular reject a repeat,
+because a slot or projection is keyed by name and would silently keep one
+occurrence.
 
 A **custom tag** with its own declared `attributeTags` schema restricts
 repeats: unless a name's declaration sets `repeatable: true`, a second
@@ -2545,33 +2547,40 @@ Both rejected by Marko, so both out of MX 1 (`divergences.md`):
 | Tag params on native elements (`<div\|x\|>`) | `Tag does not support parameters.` |
 | Attribute tags on native elements (`<div><@head>…</@head></div>`) | `Tag does not support nested attribute tags.` |
 
-Conditional and looped attribute tags are part of MX 1 under decision 106.
+Conditional and looped attribute tags are part of MX.
 
 ### Declaration keys
 
 For a custom tag's declared attribute tags, the keys are MX's own names with **no
-Marko parity and no legacy aliases** (decision 94a): `literalOnly` (not
+Marko parity and no legacy aliases**: `literalOnly` (not
 `staticOnly`) and `repeatable` (not `repeated`). Unknown keys are rejected at
 registration (§13.1).
 
-**Decisions:** 19, 28, 37, 51, 66, 70, 79, 94a, 95(1), 95(7), 96, 104, 106, 107, 108.
 
 ---
 
 ## 9. Custom tags
 
 Custom tags are **discovered, not configured**, and a template tag is a
-**compilation unit**, not an inlined fragment. Decision 95 settled the model;
-decisions 97 and 98 shipped it. The full feature spec is
-[`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/); this section is the language-level contract.
+**compilation unit**, not an inlined fragment. Custom tags are MX's own
+compile-time tags (Marko's term): a tag hook produces IR, never target output.
+It takes IR nodes and returns IR nodes with positions preserved, and it runs in
+core before the emitters, so every target keeps working and no target ever sees
+the tag. The full feature guide is [Custom tags](/custom-tags/); this section is
+the language-level contract.
 
 ### 9.1 Layers
 
-| Layer | What it is | Status |
-|---|---|---|
-| **L1** | `tags/x.mx` — a template, compiled as its own unit | Shipped |
-| **L2** | `x.tag.ts` — a sidecar with IR hooks over a `TagCall` | Shipped |
-| **L3** | Raw hooks with Marko's exact signatures | **Blocked**: ships only after a vendored fork registers `Mx*` node types (decision 89c), because Marko's runtime node names would otherwise leak into user code |
+| Layer | What it is |
+|---|---|
+| **L1** | `tags/x.mx` — a template, found by MX's own scan and compiled as its own unit |
+| **L2** | `x.tag.ts` — a sidecar with IR hooks over a call: `parseOptions`, `attributes`, `attributeTags`, `analyze`, `transform`, `finalize` (`migrate` is reserved) |
+
+There is no third layer of raw hooks with Marko's signatures. Tag configuration
+is MX's own: MX reads neither `marko.json` nor `marko-tag.json`; tag
+directories are configured under `tags` in MX's config file. The hook that
+replaces a call is named `transform`; `resolve` is reserved for a later
+Vite-style resolution hook.
 
 ### 9.2 Discovery
 
@@ -3201,6 +3210,15 @@ A template may end with `<return value=EXPR/>`: **value only**, no
 `valueChange` — MX deliberately subtracts Marko's two-way channel. At most one
 per template, at the **top level** only.
 
+`<return>` keeps Marko's meaning on every target: the tag variable at the call
+site (`<Counter/n/>`) equals `value`, set synchronously during the parent's
+render, and is in scope for the siblings after the tag only. Reading a tag's own
+variable inside that tag's content, or a native element variable (`<div/el>`)
+anywhere but a `<script>` body or an event handler, is a positioned compile
+error (a `divergences.md` row). How a target carries the value differs (below);
+on a native-component target a returning tag becomes a hook holding its state,
+effects and value plus a hoisted markup component (§13).
+
 **Every rule is validated in the tag's own compilation.** That is what makes the
 signature one shape rather than `T | undefined` per path: a unit cannot see its
 callers, so no call site can widen it. `<return>` in a *page* is legal and means
@@ -3350,15 +3368,17 @@ flips the assertion.
 
 ## 11. Stateful tags
 
-`<let>`, `<lifecycle>`, `<script>`, `<id>`, `client` blocks and `:=`
-are **not part of the portable structural core**. They are framework territory:
-core provides three hooks, and **each host's declarations decide what they mean**
-(decisions 70, 71).
-
-A template using `<let>` means something different depending on which host
-compiles it — the same way JSX means something different per framework. **Cost
-accepted explicitly:** templates using stateful tags are not portable across
-hosts.
+`<let>`, `<const>`, `<lifecycle>`, `<script>`, `<id>`, `client` blocks and `:=`
+are **core language**: core parses and checks them on every target, and each
+target lowers them to its own framework's primitives. They are not tags a host
+defines. What differs per target is only whether the target can express a
+construct: the html target renders the initial value (the capability test
+below), a native-component target compiles them to the framework's own state
+(see "Native-component targets"), and an embedded MX region inside a host's
+TypeScript leaves state to that TypeScript and refuses them with a positioned
+error naming what to write instead. The language errors about reactive tags
+(`<effect>`, a `<let>` write in render position, a stale derived read) are
+core's and fire on every target.
 
 ### The capability test
 
@@ -3427,9 +3447,10 @@ the same six constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `cli
 blocks, `<id>` — become errors naming the construct, for an author who wants
 "this template needs a reactive runtime" enforced at compile time.
 
-Decision 111 adds `<log>` and `<debug>` to the same `strict` error set:
-debug-only tooling, not reactive constructs, but a `strict` author gets the
-same named-construct error instead of the default policy's inert row.
+`<log>` and `<debug>` are in the same `strict` error set, with a positioned
+error naming the tag: they are debug-only tooling, not reactive constructs, but
+a `strict` author gets the same named-construct error instead of the default
+policy's inert row.
 
 The `input`-shadowing check (§5.6) is **not** `strict`-only.
 
@@ -3438,12 +3459,43 @@ than target capabilities: the explicit-import requirement, the
 `export interface Input` requirement, `<fragment>`, and lowercase-by-scope tag
 resolution.
 
+### Native-component targets
+
+Marko, Solid, React and Preact, Vue, Svelte, Angular and Web Components (Lit
+first) are compile targets that emit **one native component per `.mx` file**
+(Vue and Svelte are planned only). The reactive constructs live in core and
+each such target lowers them:
+
+- On a target whose hooks cannot run in loops or branches, a `<let>` declared in
+  a `<for>` or `<if>` body lowers to a child component in the same module,
+  keyed by the loop's `by=` and named after the owner plus the PascalCased
+  iteration variable. A returning tag under `<if>` or `<for>` is extracted the
+  same way.
+- `<define>` is a local component.
+- `<await>` and `<try>` map to each framework's own async and error boundaries.
+- `<return>` keeps Marko's meaning: on a native-component target a returning
+  tag lowers to a hook (or composable) holding its state, effects and return
+  value, called in the parent's render, plus a hoisted markup component that
+  takes that state as props (see §10).
+
+A consumer of core can pass, reject or warn on seven syntax groups:
+`structural`, `imports`, `state`, `effects`, `async`, `boundary` and
+`fragments`.
+
+> Not released yet: the native-component targets are MX 2 work, and of the
+> seven groups only `structural` and `imports` exist today (as `lowerSource`
+> options).
+
 ### No MX runtime
 
-Decision 82: **if an `.mx` file ever needs a client runtime, that runtime is
-Marko**, not Solid. A host may ship framework code an author would otherwise
-write by hand (Preact's `MxErrorBoundary`, for instance) — that is not an MX
-runtime, and a template using none of it imports none of it.
+MX has no runtime of its own. Compiled output may use a runtime the browser,
+the framework or a third party owns, never one MX owns, and MX never imports
+`@marko/runtime-tags`. Where a framework lacks a primitive a target needs, one
+small `@mxlang/compat-<target>` package fills that gap (none is needed for
+Marko or Solid 2); a compat package is a framework shim, not an MX runtime. A
+host may also ship framework code an author would otherwise write by hand
+(Preact's `MxErrorBoundary`, for instance), and a template using none of it
+imports none of it.
 
 **Decisions:** 54, 65, 67a, 68, 70, 71, 79, 82, 85.
 
@@ -3477,6 +3529,20 @@ Three position rules:
 expressions are already absolute against their own file. The one place a
 foreign file is attached is a `TranslateError` escaping a unit's metadata
 compile, re-thrown with the tag's filename.
+
+`parseFragment`, the region entry, throws a positioned `TranslateError` on an
+expression that fails to parse, as `compileSource` does; `parseFragmentNative`
+delegates to it rather than keeping a second path.
+
+**Lowering reports every error.** Core lowering does not stop at the first
+error: a tag that fails to lower is skipped with its subtree, so its children
+raise no cascading errors, and lowering continues with the next tag.
+`compileSource` then throws the first `TranslateError`, whose `.errors`
+(`TranslateError[]`) holds every error of the file ordered by position,
+`.errors[0]` being the thrown one; `flattenErrors(error)` turns any thrown
+value into that list. Every tool (mx-tsc, the language server, the TypeScript
+plugin, the Vite plugin) reports all of them. A file with no errors compiles byte-identically
+on every target whether or not this collection runs.
 
 ### One base for every printed position (ruling #227)
 
@@ -3712,9 +3778,9 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `<lifecycle>` | inert | error | error | error | error | error — fixed, was **literal element** |
 | `<script>` | inert (body `text`) | error | error | error | error | error — fixed, was **literal element** |
 | `<id>` | inert | error | field-guard error | error | error | error — fixed, was field-guard-only |
-| `<log>` / `<debug>` | inert | error — fixed 2026-09-28 (decision 111), was **inert** (bug 5) | **literal element** | **literal element** | **literal element** | error — fixed, was **literal element** |
-| `client` block | declares its names (`var q;`), runs nothing | error | **literal element** | error | error | error — fixed, was **literal element** |
-| `server` block | **runs**, hoists like `static` | **runs** | **literal element**, binding undefined | **literal element** | **literal element** | error — fixed, was **literal element** |
+| `<log>` / `<debug>` | inert | error | **literal element** | **literal element** | **literal element** | error — fixed, was **literal element** |
+| `client` statement | declares its names (`var q;`), runs nothing | error | error | error | error | error |
+| `server` statement | **runs**, hoists like `static` | **runs** | error | error | error | error |
 | `<await>` | error | error | field-guard error | error | error | error — fixed, was field-guard-only |
 
 **Only `@mxlang/target-html` and Angular have a complete tag-disposition table.**
@@ -3760,7 +3826,8 @@ Not merely in emitted syntax — in observable behavior:
    (`.astro.mx`), reference (Solid).
 3. **`:=`** is genuinely two-way only on Angular; renders one-way with no error
    on html; rejected everywhere else.
-4. **`server` blocks** execute on html and become junk markup everywhere else.
+4. **`server` statements** run on html and html-strict and are a positioned error
+   naming the statement and the target everywhere else (§2).
 5. **`<let>`** binds an initial value on html and errors everywhere else,
    Angular included (fixed 2026-09-17; was the wrong error, bug 1).
 6. **`<return>`** is a real value channel on html and the JSX hosts, a callback
@@ -3814,6 +3881,12 @@ wherever the config came from.
    non-strict. `@mxlang/core` and `peerDependencies` do not count (decision 124).
    An invalid target still hands on this fallback (or a resolved `mx.host`) so
    later diagnostics are not drowned, but it cannot produce a green build.
+
+A `package.json` that cannot be read as JSON and a bare unknown `mx.host` word
+are policy **warnings**, never errors, in every tool: each carries a required
+`code` (`malformed-package-json`, `unknown-host`) that consumers classify by,
+and `mx-tsc` prints them positioned in `package.json` without changing its exit
+code.
 
 `mx.strict` accompanies an explicitly selected target as it did an explicit
 host. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
@@ -4083,7 +4156,7 @@ required at every depth. A `DelegatedTag` and an `AttributeTag` also carry
 `nameSpan`, and a `DelegatedTag` always has `args` (`[]` without arguments).
 A `DelegatedTag` for a tag a dialect tag file defines carries `tag.definedIn`,
 the tag file's path (§9.2; `@unstable`).
-A static attribute always has `valueSpan` (an atom's and a member's included;
+A static attribute always has `valueSpan` (a member's included;
 `e=""` spans its quotes, and a bare colon name such as `x:foo`, whose value is
 `""`, has a zero-width one at the name's end), a dynamic, bound, event or
 spread attribute always has `valueSpan` (the value as written, wrapper
@@ -4107,7 +4180,7 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   (decision 147) is named by its canonical tag in `tag.name`, with the authored
   spelling in `tag.alias` (`{ authored, span, groups }`). A tag a dialect's
   `lowerTrigger` built carries `tag.trigger` (`{ id, span, text }`, §13.9.7).
-- **Attributes** are core's `Attr` kinds: `static` (a string literal, an atom, a
+- **Attributes** are core's `Attr` kinds: `static` (a string literal or a
   shorthand), `boolean`, `dynamic` (any expression, a method value included,
   whose `Expr.bodySpan` marks it), `bound` (`v:=x`) and `spread`. Only a string
   literal is `static`; nothing is evaluated.
@@ -5302,6 +5375,13 @@ decides whether the row is asked. `parse` returns the node's own fields, or
 `parse` is called once per trigger. With no row in any of the three positions
 (the default `.mx` row), nothing is asked.
 
+**What `lower` returns.** A node type's `lower` returns IR nodes of the kinds
+core's IR already has, built with the `ctx` constructors. Core has no generic
+payload kind and no opaque node that carries a dialect's data through the IR
+unread, and no dialect takes over the whole lowering: a dialect's meaning reaches
+its own tools through the IR it built from registered kinds, read back in
+`afterLower` or from `lowerSource`'s result.
+
 **Core's node types.** Core registers a `parse` for three of its types, and a
 row may name them:
 
@@ -5432,21 +5512,15 @@ deferred (decision 85).
 3. **`--` text lines** (§3). Legal by inheritance, untested — no fixture.
 4. **`.solid.mx` as a final spelling** (§1). Left "for now" three times, never
    ruled on.
-5. **File-local component bindings** (§7). `<const/Panel=…/>` and tag params do
-   not participate in the precedence check; only `import` and `<define>` do.
 6. **`style=` shorthand.** Only `class`/`#id` shorthand is decided.
-7. **Decisions pending Saulo's veto**, recorded in decision 93: decisions 90–92
-   and the custom-tags spec's substitution design. Decision 94d is explicitly
-   awaiting his ruling; decision 92 is marked "Saulo may veto"; decision 65's
-   policy statement is marked "lead's assumption, Saulo to confirm".
 
 ### Closed questions
 
-8. **Attribute-tag cardinality and value shape — closed by decisions 106–108.**
-   `Input` declares singular versus array and data versus renderable. Untyped,
-   unresolved, and dynamic callees use decision 108's body-only renderable
-   fallback; attributed or nested occurrences use data. Conditional and looped
-   attribute tags and recursive nested tags are part of MX 1.
+8. **Attribute-tag cardinality and value shape — closed.** Every target
+   passes Marko's attribute-tag record with MX's prototype members (§8); the
+   callee's `Input` types the value and never changes the emitted shape.
+   Conditional and looped attribute tags and recursive nested tags are part of
+   MX.
 9. **Arguments plus content on dynamic and `<define>` calls — closed by
    decision 109.** A dynamic `<${expr}>` tag or a `<define>` call now accepts
    the tag-argument form combined with a body or attribute tags, matching
@@ -5574,8 +5648,7 @@ custom-tags build spec is also on the site at `/design-notes/custom-tags/`.
 
 ## 17. Sources
 
-- `notes/decisions-2026-09-10.md` — decisions 1–99
-- `worktrees/main/divergences.md` — the subset rule, deferred-to-MX-2 table
+- `divergences.md` (repo root) — every departure from Marko, and the MX 2 deferred list
 - `worktrees/main/AGENTS.md` — per-package and per-host contracts
 - [`/design-notes/custom-tags/`](https://mx.saulo.tech/design-notes/custom-tags/) — the custom-tags feature spec
 - `notes/solidmx-spec.md` — Solid (note §5.1's `<if=cond|u|>` is wrong; see §5.2)

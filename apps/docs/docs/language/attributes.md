@@ -73,8 +73,10 @@ module, such as Mesh's, not to core.
 
 ### Shorthand parts that read wrong
 
-Three tag-adjacent shorthands would compile to something other than what they
-look like, so each is a positioned error with the way out:
+A shorthand part ends at whitespace, `.`, `#`, `/`, `(`, `=` or `>`, with no
+bracket-aware or Tailwind-aware reading; complex class names go in
+`class="…"`. Three tag-adjacent shorthands would compile to something other
+than what they look like, so each is a positioned error with the way out:
 
 | You write | You get |
 |---|---|
