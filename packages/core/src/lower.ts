@@ -2484,18 +2484,43 @@ function rejectArgsWithProps(
       argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
-  if (
-    tagAttributesOf(node).length === 0 &&
-    !containsAttributeTags(node) &&
-    !hasContent(bodyChildren(node))
-  ) {
-    return;
+  if (tagAttributesOf(node).length === 0 && !hasContent(bodyChildren(node))) {
+    // Stock does not count attribute tags as "attributes or body", so several
+    // or spread arguments beside them reach the multiple/spread rules first.
+    rejectMultipleOrSpreadArguments(ctx, node);
+    if (!containsAttributeTags(node)) return;
   }
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
     `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} or body present.`,
     argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
   );
+}
+
+/**
+ * A named custom tag takes one plain argument. Stock 6.4.4
+ * (`assertAttributesOrSingleArg`) refuses a second one over the second
+ * argument through the last, and a lone spread over the spread itself. A
+ * `<define>` call and a dynamic tag stay lenient: stock compiles
+ * `<Foo(a, b)/>` and `<${x}(...xs)/>` there.
+ */
+function rejectMultipleOrSpreadArguments(ctx: Ctx, node: Node): void {
+  const args = tagArgsOf(node) ?? [];
+  if (args.length > 1) {
+    raise(
+      UNSUPPORTED_TAG_ARGUMENTS_CODE,
+      "Tag does not support multiple arguments.",
+      argumentsBlame(ctx, args.slice(1), node),
+    );
+  }
+  const only = args[0];
+  if (only?.type === "SpreadElement") {
+    raise(
+      UNSUPPORTED_TAG_ARGUMENTS_CODE,
+      "Tag does not support spread arguments.",
+      argumentsBlame(ctx, [only], node),
+    );
+  }
 }
 
 /**

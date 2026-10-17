@@ -25,7 +25,7 @@ export const INVALID_ATTRIBUTE_CODE = "MX_INVALID_ATTRIBUTE";
 export const INVALID_BOUND_ATTRIBUTE_CODE = "MX_INVALID_BOUND_ATTRIBUTE";
 /** A second value attribute on a tag that takes one. */
 export const DUPLICATE_VALUE_ATTRIBUTE_CODE = "MX_DUPLICATE_VALUE_ATTRIBUTE";
-/** Tag arguments beside attributes or a body, where the call cannot take both. */
+/** Tag arguments the tag does not take: beside attributes or a body, several or a spread on a named custom tag, any on an attribute tag. */
 export const UNSUPPORTED_TAG_ARGUMENTS_CODE = "MX_UNSUPPORTED_TAG_ARGUMENTS";
 /** An expression lowering cannot read. */
 export const INVALID_EXPRESSION_CODE = "MX_INVALID_EXPRESSION";
@@ -469,7 +469,7 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         [DUPLICATE_VALUE_ATTRIBUTE_CODE, "a second value attribute"],
         [
           UNSUPPORTED_TAG_ARGUMENTS_CODE,
-          "tag arguments beside attributes or a body",
+          "tag arguments the tag does not take: beside attributes or a body, several or a spread on a named custom tag, any on an attribute tag",
         ],
         [INVALID_EXPRESSION_CODE, "an expression lowering cannot read"],
         [
