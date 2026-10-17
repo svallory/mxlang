@@ -1613,6 +1613,22 @@ function renamedMemberChain(
   return code.slice(bodyStart, start) + row + code.slice(end, bodyEnd);
 }
 
+/**
+ * Does `node` declare a name that Marko scopes to the body it is written in?
+ * A `<const>`, a `<define>`, or a tag call that binds its value (`/var`).
+ */
+function declaresName(node: IrNode): boolean {
+  switch (node.kind) {
+    case "Const":
+    case "Define":
+      return true;
+    case "Component":
+      return Boolean(node.var);
+    default:
+      return false;
+  }
+}
+
 /** Find control-flow cases through IR wrappers, never through a component. */
 function hasCaseDescendant(nodes: IrNode[]): boolean {
   return nodes.some((node) => {
@@ -2347,7 +2363,19 @@ class AngularEmitter implements Emitter<string> {
       node.name === "html-script";
     if (code) this.codeDepth++;
     if (node.name === "svg") this.svgDepth++;
-    for (const child of node.children) this.emitNode(child);
+    // Marko scopes a name a body declares to that body, an element's
+    // included. Angular scopes a `@let` (and a `#ref`) to the view, which an
+    // element does not open, so a `<const>` or `<define>` written straight in
+    // this body would be visible to the siblings and to what follows, and a
+    // second one of the same name would take the first's value. A body that
+    // declares gets a view of its own, the one `@if (true)` opens, the way an
+    // `<if>`/`<for>` body already has one.
+    const scoped = node.children.some(declaresName);
+    if (scoped) this.out.write("@if (true) {");
+    this.inScope([], () => {
+      for (const child of node.children) this.emitNode(child);
+    });
+    if (scoped) this.out.write("}");
     if (node.name === "svg") this.svgDepth--;
     if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
