@@ -4371,6 +4371,117 @@ describe("tag arguments are blamed over the whole list", () => {
     );
   });
 
+  describe("a named custom tag takes one plain argument", () => {
+    const panel = fakeDeclarations({
+      isComponent: (name) => name === "Panel",
+    });
+    const IMPORT = 'import Panel from "./panel.mx"\n';
+    const MULTIPLE = "Tag does not support multiple arguments.";
+    const SPREAD = "Tag does not support spread arguments.";
+
+    it("blames the second argument through the last for multiple arguments", () => {
+      blames(`${IMPORT}<Panel(a, §b¶)/>\n`, MULTIPLE, panel);
+      blames(`${IMPORT}<Panel(a, §b, c¶)/>\n`, MULTIPLE, panel);
+      blames(`${IMPORT}<Panel(a, §...xs¶)/>\n`, MULTIPLE, panel);
+      blames(`${IMPORT}<Panel(...xs, §b¶)/>\n`, MULTIPLE, panel);
+    });
+
+    it("blames the argument list over several lines and in the concise form", () => {
+      blames(`${IMPORT}<Panel(\n  a,\n  §b,\n  c¶\n)/>\n`, MULTIPLE, panel);
+      blames(`${IMPORT}Panel(a, §b¶)\n`, MULTIPLE, panel);
+    });
+
+    it("refuses a spread argument", () => {
+      blames(`${IMPORT}<Panel(§...xs¶)/>\n`, SPREAD, panel);
+      blames(`${IMPORT}<Panel(\n  §...xs¶\n)/>\n`, SPREAD, panel);
+      blames(`${IMPORT}Panel(§...xs¶)\n`, SPREAD, panel);
+    });
+
+    it("says arguments beside attributes or a body first, over the whole list", () => {
+      blames(
+        `${IMPORT}<Panel(§a, b¶) c=1/>\n`,
+        "Tag does not support arguments when attributes or body present.",
+        panel,
+      );
+      blames(
+        `${IMPORT}<Panel(§...xs¶)>body</Panel>\n`,
+        "Tag does not support arguments when attributes or body present.",
+        panel,
+      );
+    });
+
+    it("still takes one plain argument, an empty list, or a trailing comma", () => {
+      for (const call of [
+        "Panel(a)",
+        "Panel()",
+        "Panel(a,)",
+        "Panel(f(a, b))",
+      ]) {
+        expect(() => lowerSource(`${IMPORT}<${call}/>\n`, panel)).not.toThrow();
+      }
+    });
+
+    it("leaves a <define> call and a dynamic tag lenient, as stock does", () => {
+      for (const call of ["<Foo(a, b)/>", "<Foo(...xs)/>"]) {
+        expect(() =>
+          lowerSource(`<define/Foo|x|>hi</define>\n${call}\n`),
+        ).not.toThrow();
+      }
+      expect(() => lowerSource("<${input.fn}(a, b)/>\n")).not.toThrow();
+      expect(() => lowerSource("<${input.fn}(...xs)/>\n")).not.toThrow();
+    });
+  });
+
+  describe("an inert built-in tag takes no arguments", () => {
+    const inert = fakeDeclarations({
+      tags: {
+        id: { kind: "inert", reason: "id", attributes: "none", body: "none" },
+        log: { kind: "inert", reason: "log", attributes: "none", body: "none" },
+        debug: {
+          kind: "inert",
+          reason: "debug",
+          attributes: "none",
+          body: "none",
+        },
+        lifecycle: {
+          kind: "inert",
+          reason: "lifecycle",
+          attributes: "any",
+          body: "none",
+        },
+      },
+    });
+
+    it.each([
+      ["<id(§x¶)/>"],
+      ["<id(§x¶)/y/>"],
+      ["<id/y(§x¶)/>"],
+      ["<log(§x¶)/>"],
+      ["<log(§a, b¶)/>"],
+      ["<lifecycle(§x¶)/>"],
+      ["<lifecycle(§a, b¶)/>"],
+      ["<debug(§x¶)/>"],
+      ["<debug(§a, b¶)/>"],
+      ["<log(\n  §a,\n  b¶\n)/>"],
+      ["id(§x¶)"],
+      ["log(§a, b¶)"],
+      ["lifecycle(§x¶)"],
+      ["debug(§x¶)"],
+    ])("blames the arguments of %s", (marked) => {
+      blames(marked, "Tag does not support arguments.", inert);
+    });
+
+    it("accepts an empty argument list on any tag, as stock does", () => {
+      expect(() => lowerSource("<button ()>x</button>\n")).not.toThrow();
+    });
+
+    it("still takes an empty argument list and none", () => {
+      for (const source of ["<id/y/>", "<id()/y/>", "<log=1/>", "<debug/>"]) {
+        expect(() => lowerSource(source, inert)).not.toThrow();
+      }
+    });
+  });
+
   it("argumentsBlame falls back to the given node when an argument has no position", () => {
     const fallback = { type: "MarkoTag" } as Node;
     const ctx = { source: "x", lines: ["x"] } as unknown as Ctx;

@@ -2142,7 +2142,7 @@ export function rejectUnsupportedFields(
       first,
     );
   }
-  if (!allow.args && tagArgsOf(node)) {
+  if (!allow.args && (tagArgsOf(node)?.length ?? 0) > 0) {
     // Marko reports at the **argument** (`assertNoArgs`: `args[0].loc.start`,
     // `args.at(-1).loc.end`) — `<button (click)="go()">` puts the caret under
     // `click`, not under `<button`. Reporting at the tag points at the tag name
@@ -2212,9 +2212,11 @@ export function rejectInertShape(
   const voice = voiceOfCtx(ctx);
   // Spelled when a message needs it: a valid `<log=x/>` never calls `formatTag`.
   const label = lazyOwner(() => voice.tag(name, triggerOfNode(node)));
+  // No `args`: an inert tag takes none (stock `assertNoArgs`), so `<log(x)/>`
+  // is refused instead of compiling with `(x)` dropped. A `<script>`'s own
+  // shape check has already refused its arguments in its own words.
   rejectUnsupportedFields(ctx, node, label, {
     params: true,
-    args: true,
     var: true,
   });
 

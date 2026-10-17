@@ -337,6 +337,34 @@ describe("an inert tag is inert only in its declared shape", () => {
     expect(code).toContain('__mxOut.write("<p>a</p>")');
   });
 
+  it.each([
+    ["<log(x)/>", "log", 5, 6],
+    ["<log(a, b)/>", "log", 5, 9],
+    ["<id(x)/y/>", "id", 4, 5],
+    ["<lifecycle(a, b)/>", "lifecycle", 11, 15],
+    ["<debug(x)/>", "debug", 7, 8],
+  ])(
+    "rejects arguments on %s, over the argument list as Marko does",
+    (text, _name, column, end) => {
+      let error: any;
+      try {
+        compile(src(text), file);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message: "Tag does not support arguments.",
+        line: 1,
+        column,
+        end: { line: 1, column: end },
+      });
+    },
+  );
+
+  it("accepts an empty argument list on <id>", () => {
+    expect(() => compile(src("<id()/y/>"), file)).not.toThrow();
+  });
+
   it("rejects a spread on an inert tag", () => {
     expect(() => compile(src("<lifecycle ...input.attrs/>"), file)).toThrow(
       /spread attributes on `<lifecycle>` are not supported/,
