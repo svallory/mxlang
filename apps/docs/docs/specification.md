@@ -1371,7 +1371,7 @@ ordinary component call, not a contract-backed exemption.
 | `<div :foo/>` | attribute `value:foo` = `""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` | `value:foo=""` |
 | `<div prop:foo=y/>` | Solid's own `prop:` opt-in: a DOM **property** write, not an attribute | `prop:foo="y"` | `prop:foo={y}` | `prop:foo={y}` (property `foo`) | `prop:foo={y}` | `prop:foo="y"` |
 
-**Solid's `prop:` is Solid's own meaning, not MX's (lead ruling 47).** MX emits
+**Solid's `prop:` is Solid's own meaning, not MX's.** MX emits
 the name verbatim on every host — core never rewrites or rejects `prop:` as a
 modifier — and each host's runtime then decides. On Solid only, `prop:foo={y}`
 is Solid's own opt-in namespace and writes the element's **DOM property**
@@ -1565,7 +1565,7 @@ is the construct label, always backticked (`` `<if>` ``, `` `<for>` ``, …):
 | `type arguments on ${what} are not supported in a standalone template` |
 | `tag params \`\|...\|\` on ${what} are not supported in a standalone template` |
 
-Events are **open**.
+Event handling is an open question.
 
 ---
 
@@ -1744,7 +1744,7 @@ and a define whose only parameter is `...rest` called as `<D(1, 2)>x</D>` reads
 `rest = [1, 2, { content }]`. A call with no body and no attribute tags appends
 nothing. A rest parameter is never padded with `undefined`: when nothing fills
 it, it is the empty array, as in Marko.
-A define with no params still ignores the attributes. This is the language rule for every
+A define with no params still ignores the attributes. Passing one attribute object to the first parameter is the language rule for every
 target; Angular keeps its own call shape until `define-call-attrs-angular`
 lands.
 
@@ -1923,7 +1923,7 @@ construct label verbatim (`` "`<const>`" ``).
 A **tag param** named `input` (`<for|input|>`, `<define/R|input|>`) is
 **accepted**, because it opens a genuinely nested scope where an ordinary
 JavaScript shadow is correct — and Marko renders those. Rejecting them would be
-an implementation limit stated as a language rule, which the language rules forbid.
+an implementation limit stated as a language rule, which the capability test ([§11](#the-mx-language-11-stateful-tags-the-capability-test)) forbids.
 
 This check is **not** `strict`-only: a silently-broken input is a bug under
 either policy.
@@ -1962,7 +1962,7 @@ validator (§13.3).
 `<try>` is lowered with `isBuiltin`, which exempts it from the `hasContent`
 gate ordinary custom tags get: it is a structural pass-through wrapper and
 must reproduce the caller's body unchanged. `<try>  <@catch>…</@catch></try>` keeps its
-normalized space; the same rule also retains that space on ordinary component/custom-tag
+normalized space; the body-presence rule ([§3 "Body presence"](#the-mx-language-3-text-and-interpolation-whitespace)) also retains that space on ordinary component/custom-tag
 calls, rather than treating it as an absent body.
 
 Errors, all carrying the `` `<try>`:  `` prefix:
@@ -2401,7 +2401,7 @@ On the JSX hosts (preact, react, hono), a call with params that is routed as a
 props object (an imported component, `<${expr}>`, a call of a `<define>`
 written by name, a `<return>` unit) passes the function as the callee's
 `content`, and the callee calls it as `input.content(item, i)`, the shape
-Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06; it has no separate rule). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
+Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
 the empty string) renders the body called with no arguments, as Marko
 does. A literal string target
 (`<${"div"}|item|>`) is the compile error `Tag does not support parameters.`,
@@ -3086,7 +3086,7 @@ Attribute-tag parents use the same two-way cross-check: when `C.parents` names `
 
 Naming: the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
 
-**Contract-only tags (MX addition).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only whatever else it declares, `{}` included: an empty declaration is a contract for a tag with no attributes and no body rules, and a hooks-only definition is one too. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` Tag does not support arguments. ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a retained whitespace-only body is rejected with a positioned "does not accept content" error. The same rule makes retained normalized whitespace content on the `transform` path too: both paths reject same-line spaces, while newline indentation removed by Marko supplies no body. A tag that has a `transform` or a template otherwise keeps its existing contract semantics. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+**Contract-only tags (MX addition).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only whatever else it declares, `{}` included: an empty declaration is a contract for a tag with no attributes and no body rules, and a hooks-only definition is one too. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` Tag does not support arguments. ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a retained whitespace-only body is rejected with a positioned "does not accept content" error. The body-presence rule ([§3 "Body presence"](#the-mx-language-3-text-and-interpolation-whitespace)) makes retained normalized whitespace content on the `transform` path too: both paths reject same-line spaces, while newline indentation removed by Marko supplies no body. A tag that has a `transform` or a template otherwise keeps its existing contract semantics. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
 
 **Recursive attribute-tag contracts (MX addition).** `CustomTagAttributeTag` accepts `attributes?: Record<string, CustomTagAttribute>`, recursive `attributeTags?: CustomTagAttributeTags` (named entries plus the optional `"*"` wildcard entries, for attribute tags), and `children?: Record<string, CustomTagChild>`, alongside `required` and `repeatable`. Each declared map closes its own set; an omitted map on an extended declaration stays open. In particular, omitted `attributeTags` accepts undeclared nested attribute tags with attributes and further nesting, recursively, rather than applying the legacy body-only restriction. The shared attribute check enforces unknown names, required attributes, scalar types, expressions, `literalOnly`, enums, and E1's `array` / `function` / `items` rules at every depth. Spreads are rejected in a closed attribute map. Defaults on attribute-tag attributes are **not applied**, and never satisfy a required attribute.
 
@@ -4546,7 +4546,7 @@ interface SyntaxTable {
   tagShorthands?: boolean;                             // true on the default row (@unstable)
   expressionTriggers: Trigger[];
   attributeTriggers: Trigger[];
-  lineTriggers: Trigger[];                             // addendum 1
+  lineTriggers: Trigger[];
   valueTriggers?: Trigger[];                           // a whole attribute value
   textTriggers: Trigger[];
   tagTypes: Record<string, 0 | 1 | 2 | 3>;            // html, text, void, statement
@@ -4993,7 +4993,7 @@ syntax-table API; under the stock parser it is refused in the module file (``
 `htmljs-parser` has none ``).
 
 **`tagRules`** names the core tag-rule preset the dialect's files parse with
-(ruling 211). The dialect states it in its own module; every
+The dialect states it in its own module; every
 tool honours it for the dialect's files, and project config cannot change it. A
 dialect that states none gets `html`, the full rules. A file no dialect claims
 takes its preset from its target. Every compile entry reads it: `compileSource`
@@ -5295,7 +5295,7 @@ Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
 The sigil, the `member` id, the `self` receiver and the `member` tag are this
 dialect's choices, not core's. A project writes its own and publishes it as a
 dialect package (§13.9.2). Mesh's `&` replaces the "`:name` after a value" form
-(`belongs-to=:List :list`), which no layer-2 user needs (addendum 1).
+(`belongs-to=:List :list`), which no layer-2 user needs.
 
 #### 13.9.9 Node types
 

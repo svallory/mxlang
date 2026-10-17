@@ -256,7 +256,7 @@ the row says "not stated".
 | A7 | Attribute tags are moved out of the body into `tag.attributeTags`, with preceding comments (`[C]chunk-src.js:5915-5927`); a `controlFlow` tag holding attribute tags has its body and `attributeTags` swapped and is moved into the **parent's** `attributeTags`, with `body.attributeTags = true` (`[C]chunk-src.js:6194-6227`). The moved list is then re-sorted by `start` (`attributeTags.sort(sortByStart)`, `[C]chunk-src.js:6213`). Probe: `<Card><@head/><if=a><@item/></if></Card>` puts the `<if>` in `Card.attributeTags`. | Marko's translator compiles attribute tags as input properties of the parent; moving them at parse time saves a pass. | Lowering already re-derives structure: three synchronized views (`attributeTags`, `attributeTagTree`, `attrTagProps`) and source-order merging (`lower.ts` `mergeBySourceOffset`, `lowerAttributeTags`). The AST should show what was written, where it was written. | Attribute tags stay in `body` in source order as `MxAttributeTag` nodes; nothing moves (§3.7, §8 D2). |
 | A8 | Statement tags (`import`, `export`, `static`, `server`, `client`, `class`) are tags whose open tag is kept raw (`rawOpenTag`, `[C]chunk-src.js:6173-6177`) and whose meaning comes from the taglib (`core-tags.json`, `<import>` through `<class>`); without the taglib they parse as tags with garbage attributes (probe, §1.4). MX recovers the statement by slicing the source on `loc` (`lower.ts` `lowerStatement`, `lowerTemplate`) and regexes (`lower.ts` `lowerStatement`). Spec §2 documents the cost (`apps/docs/docs/specification.md` ("Syntax")). | Marko's grammar is tag-shaped at the top level; the translator gives the statement tags meaning. | They are TypeScript statements. MX needs the parsed statement, its keyword and its span. | `MxModuleStatement { keyword, statements }` with a parsed Babel statement list (§3.10). |
 | A9 | `MarkoClass` (`[C]babel.js:8152-8161`), a `Class`-aliased node. | Marko 5's class components. | MX has no class components; `class` is not a statement MX accepts (`lower.ts` `lowerStatement` rejects anything but `import`/`static`/`export`). | No node. `class { }` at the top level is an `MxModuleStatement { keyword: "class" }` that lowering rejects (§3.10), so the error keeps its position. |
-| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | The MX parser reports structured errors. MX needs every error as data: a code, a range, a message. Several template errors per parse would need parser recovery, which is ruled out for now (Q20). | `MxParseError { code, origin, message, start, end }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13). |
+| A10 | `MarkoParseError` is an `Expression` and `Statement` alias (`[C]babel.js:8070-8074`) put in place of the failed expression; `onError` from the template parser **throws** (`[C]chunk-src.js:5975-5984`). Two error channels, neither carries a code. | Lets the translator keep going until it reaches the bad expression, then throw. | MX requires structured errors from its parser. MX needs every error as data: a code, a range, a message. Several template errors per parse would need parser recovery, which is ruled out for now (Q20). | `MxParseError { code, origin, message, start, end }` in `MxDocument.errors`, and an `error` field on the expression container that failed (§3.13, §4). Expression and front-end errors no longer throw; a template-parser error still ends the parse (htmljs `emitError`), but the tree built so far is kept (§3.13); `compileSource` lowers no document with errors and reports them all (§3.13). |
 | A11 | Tag params and tag type parameters are stored on **`MarkoTagBody`** (`[C]chunk-src.js:6059`, `:6102`), not on the tag. | `MarkoTagBody` is the Babel scope that binds them (A1). | The params belong to the tag head the author wrote; scope is a lowering concern. | `MxTag.params`, `MxTag.typeParams` (§3.2). The body is a plain child list. |
 | A12 | Positions: Marko nodes get `start`/`end` and a `loc` without `index` (`withLoc`, `[C]chunk-src.js:5909-5914`), then lose `start`/`end` in the clone (`[C]chunk-src.js:6710`, `[C]babel.js:13217-13241`); Babel nodes keep `loc.index`. Position objects are shared between nodes (`packages/core/AGENTS.md`, `parseFragment` bullet). Fragments are shifted by a tree walk afterwards (`fragment.ts` `shiftNode`). `Program.end` is `code.length - 1` (`[C]chunk-src.js:6241`). | Babel's `File`/`loc` model; the clone is how the compiler hands the tree to Babel. | One numeric span on every node, file-relative, in UTF-16 units, with line/column computed on demand (§5). | `start`/`end` on every MX node; no `loc` stored (§5). |
 | A13 | Text is whitespace-normalized in the front end, with neighbour lookahead (`[C]chunk-src.js:5985-6037`); the node's `loc` is moved to the trimmed text. | Marko's HTML output rules. | MX needs both: the normalized value the IR's `Text.value` carries, and the authored span (`ir.ts` `ComponentTarget`). | `MxText { value, raw }` plus span (§3.8, §8 D6). |
@@ -1567,7 +1567,7 @@ The AST carries, and no IR kind reads:
 | Host **declarations** (`HostDeclarations` hooks), first- and third-party | **parser nodes** today (Marko's); after the port a narrow view built by lowering, never `Mx*` nodes | the table below |
 | The IR entry point's unknown-tag scan (first-party) | The MX AST (`parseMxDocument`; `scanAuthoredTags`, `packages/core/src/ir-entry/authored-tags.ts`) | — |
 
-**The view the hooks receive after the port** (ruling Q19, widened by addendum 1). The hooks are re-typed in the port change, but not to
+**The view the hooks receive after the port** (ruling Q19, widened field by field). The hooks are re-typed in the port change, but not to
 `Mx*` nodes: that would make the whole AST public API of `@mxlang/core`
 through third-party hosts, and every later AST edit a
 host-breaking change. Lowering builds a narrow view, as plain data, and hands
@@ -1675,7 +1675,7 @@ which starts at the first character after `/` (probe: `<let/x=1/>`,
 `<let/{ a: input }=1/>` and `<let/[b, input]: T=1/>` all start at offset 5,
 before any type annotation). html's `checkBinding` keeps calling the same
 function on the Babel pattern it already receives, which passes that pattern
-to `bindingSpan` and fails at its start, as today. (Addendum 4 item 1, applied
+to `bindingSpan` and fails at its start, as today. (Applied
 as option (a) by the lead.)
 
 `server` and `client` are `MxModuleStatement`s in the AST where the target's
@@ -1908,7 +1908,7 @@ rulings, with where the text now lives:
 
 | Q | Ruling, in short | Applied in |
 |---|---|---|
-| Q1 | follow the name-sugar rule as merged; `MxShorthand.operator`, `default` only in attribute position | §3.6 |
+| Q1 | follow the name-sugar default-value rule as merged; `MxShorthand.operator`, `default` only in attribute position | §3.6 |
 | Q2 | no raw text mode | §3.12 (unchanged) |
 | Q3, Q16 | describe atoms as shipped (`Expr.atoms`, `Attr.atom`, `extra.mxAtom = { span }`); a container has no `atoms` list | §4.3, §6.2 |
 | Q4 | `InputInterface` split in lowering, by payload type; `export type Input` stays an `Export` | §3.10, §6.1 |
@@ -1922,7 +1922,7 @@ rulings, with where the text now lives:
 | Q13 | plain Babel types in payloads; pin `@babel/{types,traverse,generator}` 7.29.7 with today's generator options; sub-parser node shapes equal to today's | §7.1 |
 | Q14 | `Expr.node: Node \| null` | §4.2 |
 | Q15 | IR spec §6 and §3.3 rows corrected to `value:foo` | `ir-spec.md` |
-| Q19 | hooks re-typed in the port to a narrow view, never `Mx*` nodes; addendum 1 widens the view field by field and adds an opaque handle for core's helpers | §6.4 |
+| Q19 | hooks re-typed in the port to a narrow view, never `Mx*` nodes; the view is widened field by field, with an opaque handle for core's helpers | §6.4 |
 | Q20 | no parser recovery; not lowered when incomplete; `compileSource` reports every error | §3.13 |
 | Q21 | element-shape table owned by the target descriptor, core default, one table two readers; `<title>`; unnamed tag = `"html"` | §3.12, §7.1 |
 | Q22 | drop `tagDiscoveryDirs` | §7.1 |

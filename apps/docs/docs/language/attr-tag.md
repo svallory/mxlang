@@ -355,7 +355,7 @@ import Tabs from "./Tabs.mx"
 | Repeated value | One iterable `attrTag`/`attrTags` record; a single tag is iterable too. | The `Input` property chooses one value or a real array. |
 | Attributes on repeats | Direct property reads expose the first occurrence's attributes; iteration reaches every occurrence. | Every array item owns its own attrs, nested tags, and `content`. |
 | Unused attributes | The compiler can tree-shake attributes the callee never reads. | Every authored attribute is passed. |
-| No declaration | Marko's runtime shape applies. | A bare renderable is used for body-only occurrences, data when any occurrence carries attrs/nested tags, and infers single versus array separately. |
+| No declaration | Marko's runtime shape applies. | MX uses a bare renderable for body-only occurrences, data when any occurrence carries attrs/nested tags, and infers single versus array separately. |
 
 For Marko authors migrating a component, declare every named block in
 `Input`. Use `AttrTag[]` anywhere Marko code iterated a tag, replace direct

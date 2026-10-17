@@ -29,8 +29,8 @@ The delivery plan:
 
 - MX2 defines **its own AST with its own node types** in `@mxlang/babel`. The
   design removes every accommodation made to fit Marko: it has
-  "no `markoTag` family inside a patched `@babel/types`" and "**no `value:`
-  modifier split as the name**" (the split at the last `:` is carried as `modifier` + `modifierSpan`
+  no `markoTag` family inside a patched `@babel/types` and **no `value:`
+  modifier split as the name** (the split at the last `:` is carried as `modifier` + `modifierSpan`
   fields, and `name`/`nameSpan` cover the head before that colon),
   and gives shorthands, attribute tags, `defaultTag` and `<return>` native
   positions. Attribute tags are `@`-prefixed child tags, not a container.
@@ -69,7 +69,7 @@ The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
 The name-sugar rules are implemented on `main` and are described here
-as they are, not as planned. The `:name` default-tag form lives in core; the sugar after a default value and the other parser-level forms live in
+as they are, not as planned. The sugar followed by `=value` or `(params) { body }` (`#id`, `.class`, `:name`) lives in core; the sugar after a single-atom default value and the after-value `:` rule live in
 the template parser. The template parser has no atom lexer: it reads `:name`
 as stock reads it, and atoms exist only as a dialect feature built on the
 parser's triggers ([Atoms](#the-parser-grammar-atoms)).
@@ -176,9 +176,11 @@ parser returns where an expression stopped yet (OQ 1).
 The language lead, who owns language design, ruled on 2026-10-05. The ruling is not
 yet written into the spec (OQ 22). Verbatim:
 
-> the language rule is the spec's whitespace rule ([ADR 146](/design-notes/adr-name-sugar/)); a
+> the language rule is the spec's whitespace rule (146 and its addenda); a
 > TS-aware boundary may only make an ambiguous case exact, never accept
 > something the spec rejects.
+
+Here "146" is [ADR 146](/design-notes/adr-name-sugar/).
 
 This document applies it as written and no more strongly:
 
@@ -187,7 +189,7 @@ This document applies it as written and no more strongly:
 - Where the spec's rule applies but its outcome turns on a fact only
   TypeScript's grammar supplies, the boundary **may** supply that fact.
 - Where the spec says nothing, the ruling does not decide. The default stands
-  by default until the language lead rules, and the case is listed as not
+  until the language lead rules, and the case is listed as not
   settled.
 
 The table in [Where a real TypeScript parser would end the value

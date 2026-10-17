@@ -5,7 +5,7 @@ description: "How a parent contract accepts unknown child tag names, validates t
 
 # ADR 147: wildcard children and tag aliases
 
-**Status:** accepted 2026-10-04 (the IR alias and the "no code in contracts" rule were settled in the same discussion). **Depends on:** contract extension E2 (`children`), ADR 145 (`defaultTag`), ADR 146 (`:name`). **Implementation:** one core PR, one data/docs PR.
+**Status:** accepted 2026-10-04 (the IR alias and the "no code in contracts" rule were settled at the same time). **Depends on:** contract extension E2 (`children`), ADR 145 (`defaultTag`), ADR 146 (`:name`). **Implementation:** one core PR, one data/docs PR.
 
 ## Context
 

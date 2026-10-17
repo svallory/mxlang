@@ -34,9 +34,9 @@ history, no rejected options.
 
 **Constraints that bound every decision here:**
 
-- **Hosts stay dumb emitters over the core IR. A custom tag adds
+- **Hosts stay dumb emitters over the core IR.** A custom tag adds
   no IR kind and no emitter branch.
-- **One definition works on every host: `H + M`, never `H × M`.
+- **One definition works on every host: `H + M`, never `H × M`.**
   A tag can never see which host it is compiling for.
 - **No new syntax for custom tags.** A custom tag call is syntactically an
   ordinary tag call; nothing in the parser, grammar, Prettier or tree-sitter

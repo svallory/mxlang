@@ -39,7 +39,7 @@ An atom is never read inside `static`, `import` or script blocks (scriptlets), w
 
 **Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) and an atom in object-key position (`{:a: 1}`) are positioned errors **detected by core, not by Babel**: the numeric stand-in (Parser approach) makes each of them valid JavaScript, so core finds them from the stand-in's atom mark. A computed key, `{[:a]: 1}`, is allowed. Comparison (`x === :a`), array and object elements, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions and settled points).
 
-A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the name-sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; the contract ruling says only "names may contain `-`".)
+A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the name-sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; the lead's 2026-10-05 atom ruling says only "names may contain `-`".)
 
 **Where a `:` starts an atom (proposed).** Only where an expression is expected: at the start of the value, or after an operator, punctuator or keyword. A `:` is never an atom after the end of an expression, after `.` or `?.`, or after `as`/`satisfies`. So `a ? b :c` is a ternary, `(x :number) => x` is a type annotation, and `a ? :b : :c` is a ternary of two atoms. Strings, template text (the `${}` parts are scanned), regular expressions (decided by the previous token) and comments are never scanned.
 
@@ -47,7 +47,7 @@ A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-
 
 **Placeholders** (mx-lead, 2026-10-05). A `${}` placeholder is an expression position wherever it appears, including `<script>`, `<style>` and `<textarea>` bodies; "script blocks" means TypeScript statement blocks (static, import, export, scriptlets). Placeholders in tag names and shorthands lex atoms. `::` is reported as the reserved token in attribute-name and tag-name position as well.
 
-**TypeScript markers win** (PR #342 review). A `?` right after a word or `]` (`a? :T`), a postfix `!` (`c ? a! :b`) and a type's closing `>` (`y as Array<T> :z`) end an operand whether or not whitespace comes before the `:`, so no atom starts there; `of` used as an identifier stays an identifier. `yield` and `await` are reserved words in a template, so a trigger arms after them as after any keyword operator (see addendum 3 for the one `yield :b` exception).
+**TypeScript markers win** (PR #342 review). A `?` right after a word or `]` (`a? :T`), a postfix `!` (`c ? a! :b`) and a type's closing `>` (`y as Array<T> :z`) end an operand whether or not whitespace comes before the `:`, so no atom starts there; `of` used as an identifier stays an identifier. `yield` and `await` are reserved words in a template, so a trigger arms after them as after any keyword operator (see "TypeScript's `:`" below for the one `yield :b` exception).
 
 **TypeScript's `:`** (mx-lead, 2026-10-05, PR #342 review round 5). A `:` that TypeScript could own in the current expression context is TypeScript's, at every nesting depth: in a group, a placeholder, a tag argument, a method body or a template's `${}` as at the top level of a value. A type argument list's closing `>` (`(c ? y as Array<T> :z)`, `${c ? a<b> :z}`: its `<` is written right after a word) and a run of postfix `!` (`a!!`, `a! !`) end an operand; a comparison or shift `>` (`a > :b`, `a < b > :c`, `a >> :b`) and a unary `!!` (`!!:a`) do not. A number is never followed by TypeScript's `?` marker, so `n === 1? :a : :b` is a ternary of two atoms. `await` and `yield` are operators wherever they stand (reserved words in a template; stock Marko rejects `c ? await : b`), except after a `.` (`a.await`), so a trigger may follow them: `f(await :b)`, `(yield :b)`, `{ k: await :b }`, `(c ? await :b : d)`. One exception: a `:` right after `yield` that follows a `?` or `:` is the ternary's colon, never an atom (`c ? yield :b` is `c ? (yield) : b` in a generator). A `&` or `%.` trigger after such a `yield` still arms (`c ? yield &a : 1`). A trigger written glued to a keyword (`await&a`) does not arm. `::` is the reserved token in a shorthand's static text too (`<div.a::b>`, `<div#a::b>`), but never inside a `${}` of a tag name or shorthand (`<${"a::b"}>` is legal: the tag name there is an expression).
 
@@ -57,7 +57,7 @@ An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is
 
 **An atom inside an expression**. Where an atom sits inside any expression, nested cases included (array element, object value, call argument, ternary branch, template placeholder, comparison, function body), the `Expr.node` Babel node is a `StringLiteral` whose `extra.mxAtom` is `{ span }`, the atom's own span. The node's value is the atom's name, so code that only reads strings still works, and code that cares checks `extra.mxAtom`. This node shape is **public API** of `@mxlang/core`, stable like the rest of the IR; the Parser approach section builds it, and Phase B PR 1 documents it in `apps/docs/docs/architecture/ir-spec.md`. A consumer that translates an expression (Mesh turns `filter=({ self }) => self.status === :sent` into SQL) recognises an atom by `extra.mxAtom` and reads its span from there.
 
-**Atom-ness survives the name sugar** (addendum 1, item 2). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The IR shape is one rule (addendum 1, item 10): **any attribute whose entire value is one atom is a `static` `Attr` with `atom { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
+**Atom-ness survives the name sugar** (requirement 2 below). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The IR shape is one rule: **any attribute whose entire value is one atom is a `static` `Attr` with `atom { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
 
 An atom list (`accept=[:title, :body]` is an expression, not a whole-value atom) arrives in `lowerSource` as an `Expr` whose `node` has array items are `StringLiteral` nodes with `extra.mxAtom`, each with its own span.
 
@@ -73,7 +73,7 @@ The runtime value of an atom is its name as a string literal, on every target: `
 
 ### 4. Contracts
 
-A contract attribute may be declared in these ways (items 3, 5 and 9):
+A contract attribute may be declared in these ways (requirements 3, 5 and 9 below):
 
 - `{ type: "atom" }`: **open.** Any atom is accepted.
 - `{ type: "atom", values: [...] }`: a set of allowed names, like an enum. An optional `pattern` (a regex source string) restricts the name further, with or without `values`.
@@ -86,7 +86,7 @@ An unknown name is a positioned error on the atom with a did-you-mean suggestion
 
 #### Declaring and resolving references
 
-Checking is **two phases** (addendum 1, item 4):
+Checking is **two phases**:
 
 1. **Declare.** Core collects every declaration in the file: the ones contracts state with `declares`, and the ones an `analyze` hook adds with `ctx.declare`.
 2. **Check.** Core then checks every reference against the declarations. Order in the source does not matter, so a reference may come before its declaration and a hook-added name is visible to every reference.
@@ -107,7 +107,7 @@ Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>" | [
 - A reference resolves against every enclosing scope, **innermost first**, and last against the file scope; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
 - `uniqueWith` (optional): a declaration also collides with a same-named declaration of the listed kinds in its scope, not just with its own kind.
 
-This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; the contract ruling says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the file, which every reference sees. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
+This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; the lead's 2026-10-05 atom ruling says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the file, which every reference sees. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
 
 **Derived declarations** (item 6). A name that no tag states, such as the `listId` a `belongs-to` derives, is added from the vocabulary's `analyze` hook with `ctx.declare(kind, name, { span, scope })`, in the declare phase. It is not a name transform in `declares`. `span` is where an error or go-to for that name should point (the tag that caused the derivation); `scope` has the same meaning and default as above.
 
@@ -154,7 +154,7 @@ The `name` attribute the sugar sets keeps its atom-ness (section 2): the IR mark
 
 ### 6. Invariants
 
-Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation and a regression check, not a Marko parity requirement (Marko is the default where MX has no ruling, divergences need a decision and a row); the left column is the form, the right is what it means before and after atoms (identical, except `x=:b`, `x= :b` and `a ? :b :c`, which are changes). The baseline is main **after the name-sugar default-value change** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). The 31 of 31 byte-identical run (parser simulation off and on) was measured on main *without* addendum 4, so the addendum-4 rows below (sugar plus `value=x`, sugar plus `value=function`) are **unmeasured**; they are re-measured in Phase B.
+Everything ADR 146 ships keeps its meaning. This table is the test list for the implementation and a regression check, not a Marko parity requirement (Marko is the default where MX has no ruling, divergences need a ruling and a row); the left column is the form, the right is what it means before and after atoms (identical, except `x=:b`, `x= :b` and `a ? :b :c`, which are changes). The baseline is main **after the name-sugar default-value change** (branch `name-sugar-default-value`; main itself still has the "sugar takes no value" error in `name-sugar.ts:622`). The 31 of 31 byte-identical run (parser simulation off and on) was measured on main *without* the sugar-followed-by-a-value change, so the rows below (sugar plus `value=x`, sugar plus `value=function`) are **unmeasured**; they are re-measured in Phase B.
 
 | form | meaning, before and after |
 |---|---|
@@ -163,8 +163,8 @@ Everything ADR 146 ships keeps its meaning. This table is the test list for the 
 | `<kind :atom>` | tag `kind` with `name="atom"` |
 | `<kind#id:atom.class>` and every order of the three tag-adjacent sugars (`<a.c:b>`, `<a#d:b.c>`, `<:b.c>`) | id, class and name as written |
 | `#id`, `.class`, `:name` in attribute position (first, or after any attribute) | `id`, `class`, `name` |
-| sugar followed by `=value` (`#id=x`, `:name=x`, `.class=x`) | the sugar plus `value=x` (addendum 4; unmeasured) |
-| sugar followed by `(params) { body }` | the sugar plus `value=function` (addendum 4; unmeasured) |
+| sugar followed by `=value` (`#id=x`, `:name=x`, `.class=x`) | the sugar plus `value=x` (ADR 146, sugar followed by a value; unmeasured) |
+| sugar followed by `(params) { body }` | the sugar plus `value=function` (ADR 146, sugar followed by a value; unmeasured) |
 | a bare `:` (no name) | positioned error: `:` needs a name; write `value:` for Marko's attribute |
 | the default-attribute exemption: `<if=a\n .b>`, `<const/x=items\n .filter()/>` | Marko's meaning; sugar right after a default value is not supported, except after a default value that is a single atom (`belongs-to=:Customer :customer`) |
 | `class:x`, `style:x`, `value:fn:=x` | Marko's named modifiers, untouched |
@@ -214,7 +214,7 @@ With atoms:
 
 ### Mesh's worked examples
 
-**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the addendum-4 form `:name=value`). Inside `<set>`, each line is the default tag with the name sugar: `<:status="paid"/>` sets `name="status"` and `value="paid"` on the default tag, not on `set` itself. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `lowerSource` reports it as a `static` `Attr` with `atom`, and `<:statuss="paid"/>` is an error with a suggestion.
+**A `set` line** (shown as text: the tree-sitter grammar does not yet parse the sugar-followed-by-a-value form `:name=value`). Inside `<set>`, each line is the default tag with the name sugar: `<:status="paid"/>` sets `name="status"` and `value="paid"` on the default tag, not on `set` itself. That `name` is a reference to an attribute: the contract types it `{ type: "atom", ref: "attribute" }`, the sugar form satisfies it, `lowerSource` reports it as a `static` `Attr` with `atom`, and `<:statuss="paid"/>` is an error with a suggestion.
 
 ```text
 <entity :invoice>
@@ -241,7 +241,7 @@ load: { type: "atom", ref: ["relationship", "computed"] }
 
 so `load=[:items, :total]` is checked against both kinds, and a name declared as neither is an error. `sort` (attribute or computed) and `require` (attribute or argument) are the same shape.
 
-**Arguments scoped to an action.** `string` declares two things by its parent (addendum 1, item 10):
+**Arguments scoped to an action.** `string` declares two things by its parent (the Mesh requirements below):
 
 ```text
 string: { declares: [
@@ -309,7 +309,7 @@ Today htmljs-parser passes every atom through intact in every position (attribut
 | (b) | the htmljs-parser copy pre-scans and hands Babel a string literal | positions shift by one per preceding atom in the same expression |
 | (c) | core rewrites the source text before Babel | core re-scanning attribute source was rejected; Marko's code frames would show the stand-in; every entry point must rewrite |
 
-**Measured** (on 5.42.5 / 5.15.0, main without addendum 4). 31 of 31 name-sugar forms produce byte-identical output with the simulation on and off. A corpus check over 523 `.mx`/`.marko` files and 864 expression positions found 0 atoms, so no existing parse changes (the 22 intentional error fixtures stop scanning at their first error). Spans are exact (for the source `<div x=[:a, :b]/>`, the atoms are at 8-10 and 12-14), and Babel errors land on the offending column. The `.solid.mx` bridge inherits core and needs nothing.
+**Measured** (on 5.42.5 / 5.15.0, main without the sugar-followed-by-a-value change). 31 of 31 name-sugar forms produce byte-identical output with the simulation on and off. A corpus check over 523 `.mx`/`.marko` files and 864 expression positions found 0 atoms, so no existing parse changes (the 22 intentional error fixtures stop scanning at their first error). Spans are exact (for the source `<div x=[:a, :b]/>`, the atoms are at 8-10 and 12-14), and Babel errors land on the offending column. The `.solid.mx` bridge inherits core and needs nothing.
 
 **The typecheck module.** Core's `expr()` emits the *authored source slice*, not a printed AST, so TypeScript type arguments survive. The virtual code for `x=[:a, :rename-all]` therefore holds `[:a, :rename-all]` verbatim, and atoms leak into TypeScript. Phase B splices `JSON.stringify(name)` at each atom's span through `rewriteReferencesSource` (both the no-bindings fast path and the rewrite path), and adds per-atom sub-mappings (`:a` to `"a"`) in `mappedExpr`, so a TypeScript error on `type=:emial` lands on the atom and offsets do not drift by one per atom.
 
@@ -332,13 +332,13 @@ Settled by the lead on 2026-10-05, on Mesh's review (all nine items accepted):
 - **Atoms in expressions are public API.** `StringLiteral` with `extra.mxAtom = { span }`, nested cases included (section 2).
 - **The name sugar keeps its atom-ness**, in the IR as a `static` `Attr` with `atom` (sections 2 and 5).
 - **Open atom type**, `values` optional, optional `pattern` (section 4).
-- **Two phases and scope.** Declare then check; `declares.scope` names an ancestor tag, default the file (addendum 7); innermost-first resolution; no tag opens a context (section 4). This replaces the earlier open question "how a context is declared" and refines "the enclosing tag's whole subtree".
+- **Two phases and scope.** Declare then check; `declares.scope` names an ancestor tag, default the file; innermost-first resolution; no tag opens a context (section 4). This replaces the earlier open question "how a context is declared" and refines "the enclosing tag's whole subtree".
 - **Union `ref`.** A list of kinds.
 - **Derived declarations** through `ctx.declare` from `analyze`, not a name transform. This replaces the earlier open question 2(a).
 - **Duplicates** are a positioned core error with both spans; `uniqueWith` is optional.
 - **Kinds merge** across modules. This replaces the earlier open question 2(b).
 - **Atom against `string`** is a type error, both ways. This replaces the earlier open question on string contracts.
-- **IR shape** (addendum 1, item 10). An attribute whose entire value is one atom, the sugar-derived `name` included, is a `static` `Attr` with `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
+- **IR shape.** An attribute whose entire value is one atom, the sugar-derived `name` included, is a `static` `Attr` with `atom`; an atom nested in an expression is a `StringLiteral` with `extra.mxAtom`; each carries its own span.
 
 Known limits, settled by the lead (pinned by tests, not fixed; there is no type parser in the lexer). MX reads a spaced `< >` as comparison:
 
