@@ -30,6 +30,7 @@ import {
   type MxWarning,
   metadataForTemplate,
   type Position,
+  readCalleeInput,
   resolveSpecifier,
   rewriteAccessorReads,
   type SourceSpan,
@@ -1114,6 +1115,9 @@ function emitAttrs(
   lets?: Map<Attr, PrimitiveBinding & { variable: string }>,
   onRefine?: () => RefineContext,
   onClassHelper?: () => void,
+  // A tag call whose callee declares a `class` input: the value goes to that
+  // input as written, the way Marko hands it to `input.class`.
+  calleeTakesClass = false,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -1215,7 +1219,18 @@ function emitAttrs(
           out.write('"');
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
-          if (name === "class" && shape === "array") {
+          if (name === "class" && calleeTakesClass) {
+            // Marko passes `class` to the callee's `input.class` untouched (an
+            // array stays an array, a shorthand merged with `class=y` is
+            // `["a", y]`). Angular hands a `[class]` binding to a declared
+            // `class` input, so the value goes as written; the callee joins it
+            // with `__mxClass` wherever it prints it on an element.
+            out.write(" [");
+            out.writeMapped(name, attr.nameSpan);
+            out.write(']="');
+            out.writeMapped(esc(attr.value.code), attr.value.span);
+            out.write('"');
+          } else if (name === "class" && shape === "array") {
             // Never `[ngClass]`: it throws on a non-string entry. See
             // `CLASS_HELPER_MEMBERS`. `[class]`, not `[attr.class]`, so classes
             // from directives, host bindings and a component's `host: {class}`
@@ -2421,6 +2436,7 @@ class AngularEmitter implements Emitter<string> {
       undefined,
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
+      this.calleeTakesClass(target, node.attrs),
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -2432,6 +2448,33 @@ class AngularEmitter implements Emitter<string> {
       for (const child of node.content.children) this.emitNode(child);
     }
     this.out.write(`</${selector}>`);
+  }
+
+  /**
+   * Whether this call's `class` value goes to a `class` input of the callee.
+   * True when the callee's `Input` declares `class`; false when it does not,
+   * cannot be read, or the call has no dynamic `class` to place. Without the
+   * input Angular binds `[class]` on the callee's host element, where only a
+   * joined string is safe.
+   */
+  private calleeTakesClass(
+    target: Extract<ComponentTarget, { kind: "name" }>,
+    attrs: Attr[],
+  ): boolean {
+    if (!attrs.some((a) => a.kind === "dynamic" && a.name === "class")) {
+      return false;
+    }
+    try {
+      const resolvedPath =
+        target.resolvedPath ?? this.tagModules.get(target.name)?.resolvedPath;
+      const { input } = readCalleeInput(
+        resolvedPath ? { ...target, resolvedPath } : target,
+        this.ctx,
+      );
+      return input.kind === "declared" && input.otherProps.has("class");
+    } catch {
+      return false;
+    }
   }
 
   private validateAttributeTagProp(
