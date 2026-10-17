@@ -21,7 +21,7 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
 
 1. **Tree rewrites, before any tag name is read** (`resolveUnnamedTags`, `default-tag.ts`). Top-down over the parsed tree, per tag:
    1. **Shorthand** (`shorthand.ts` `rewriteShorthands`): the tag-adjacent `#id` and `.class` become the `id`/`class` attributes the author would otherwise have written, as in Marko. The rewritten attribute remembers its token as `sugarLabel`, which becomes `Attr.sugar` (section 6). A `:` in a tag head is part of the tag name or the shorthand part; core splits nothing at it.
-   2. **Default tag** (`resolveDefaultTag` host hook, decision 145): an unnamed tag (`<#a>`, `<.b>`) is renamed to what the host answers, given its ancestors. With no hook it is a positioned error ("no default tag is declared…").
+   2. **Default tag** (`resolveDefaultTag` host hook): an unnamed tag (`<#a>`, `<.b>`) is renamed to what the host answers, given its ancestors. With no hook it is a positioned error ("no default tag is declared…").
 
    After this step the tree contains no shorthand and no unnamed tag. A new parser may produce that tree directly; it must not hand an unnamed tag to the walk (step 5).
 2. **Reserved-name check** (`checkReservedTemplate`) and the file's own `Input` (`readOwnInput`, `raiseInvalidOwnInput`).
@@ -33,13 +33,13 @@ The IR is not the parser's output. It is the result of a parse **plus** a sequen
    3. core structural tags: `import`/`static`/`export` (statement nodes), `for`, `const`, `define`, `return`, a stray `else`/`else-if` (error); `if` is grouped with its `else` siblings before this switch;
    4. built-in custom tags (`try`, never shadowable);
    5. a PascalCase name the file binds (an import, a `<define>`, a `<const>`, a tag param — `fileLocalBinding`) skips steps 6 and 7;
-   6. a registered or discovered **custom tag** (`lowerCustomTag`): its contract is validated (attributes, attribute tags, `children`, `parents`; decisions 130, 138, 142) and its `transform` or template replaces the call with ordinary IR (zero or more nodes);
+   6. a registered or discovered **custom tag** (`lowerCustomTag`): its contract is validated (attributes, attribute tags, `children`, `parents`) and its `transform` or template replaces the call with ordinary IR (zero or more nodes);
    7. a host claim (`isDelegatedTag`) → `DelegatedTag`, with the host's `resolveDelegatedTag` answer in `data`;
    8. a component (`fileLocalBinding` or `isComponent`) → `Component`;
    9. an unbound PascalCase name, or a lowercase name `isElement` rejects → positioned error;
    10. otherwise an `Element`.
 
-   During the walk, attributes are lowered, de-duplicated last-wins (decision 135) and offered to the host's `orderAttrs`; attribute tags are planned against the callee's `Input` (section 8); `ctx.hoist` calls collect `Hoisted` statements for the enclosing function.
+   During the walk, attributes are lowered, de-duplicated last-wins and offered to the host's `orderAttrs`; attribute tags are planned against the callee's `Input` (section 8); `ctx.hoist` calls collect `Hoisted` statements for the enclosing function.
 6. **Assembly** (`lowerTemplate`), after the walk: module-level kinds are lifted out of the body into `Ir.imports`, `Ir.hoisted`, `Ir.inputInterface` and `Ir.prelude`; imports synthesized for discovered tags are appended to `Ir.imports`; `needsAttrTagImport` is computed; at the file root, every used tag's `finalize` output is **prepended** to `Ir.body` in tag-name order; `returnValue` is read off the walk; `tagMetadata` is derived from the finished IR (`metadataOfIr`).
 
 There are no passes after `lower()` returns. Everything an emitter reads is set by the time `emitIr` is called.
@@ -124,7 +124,7 @@ A new lowering over its own parser has no reason to reproduce the shift mechanic
 
 ### 3.5 What diagnostics require
 
-- A lowering error is a `TranslateError` with a 1-based `line`, 0-based `column`, and `file` when it is about another file (`cross-file-error.test.ts`). Each `fail(…, node)` reports the node's `loc.start`. An error about several places also carries the optional `spans: SourceSpan[]` (file-absolute UTF-16 offsets, source order; `line`/`column` are the last span's): a duplicate atom-contract declaration holds the first and the second (decision 156).
+- A lowering error is a `TranslateError` with a 1-based `line`, 0-based `column`, and `file` when it is about another file (`cross-file-error.test.ts`). Each `fail(…, node)` reports the node's `loc.start`. An error about several places also carries the optional `spans: SourceSpan[]` (file-absolute UTF-16 offsets, source order; `line`/`column` are the last span's): a duplicate atom-contract declaration holds the first and the second.
 - An attribute diagnostic is positioned at the attribute **name** (`Attr.loc`, which for an authored, spelled attribute is the position of `nameSpan.sourceStart`; a shorthand `#id`/`.class` with no position of its own reports at its tag, a merged sugar `class` at its first sugar token). Hosts rely on this for event-attribute errors (pinned per host by position tests on solid/preact/html/astro).
 - Warnings (`MxWarning`) carry the same structured position; the message text prints columns 1-based.
 - The TypeScript plugin and language server map only through authored positions — spans, and for an expression today `Expr.node.loc` (section 4). A missing position means "no mapping", never a guessed one ([Spans and mappings](/architecture/spans-and-mappings/)).
@@ -155,21 +155,21 @@ interface Atom {
 
 | Field | Contract |
 | --- | --- |
-| `code` | The expression's source text, ready to emit. **Sliced from the authored source**, not printed back from the AST (`core.ts` `expr()`): type arguments and every authored detail survive (`lower.test.ts` › "binding scopes are per JS block" › "type arguments survive the non-empty binding registry path"). Two exceptions: when the host has registered bindings (`ctx.bindings.register`, decision 70), free references to those names are rewritten in the sliced text (`count` → `count()`); when the parser node has no offsets, the node is printed with Marko's own Babel generator (`printExpression`). |
+| `code` | The expression's source text, ready to emit. **Sliced from the authored source**, not printed back from the AST (`core.ts` `expr()`): type arguments and every authored detail survive (`lower.test.ts` › "binding scopes are per JS block" › "type arguments survive the non-empty binding registry path"). Two exceptions: when the host has registered bindings (`ctx.bindings.register`), free references to those names are rewritten in the sliced text (`count` → `count()`); when the parser node has no offsets, the node is printed with Marko's own Babel generator (`printExpression`). |
 | `shape` | The syntactic shape, computed once while the node is in hand (`expressionShape`): `ObjectExpression` → `"object"`, `ArrayExpression` → `"array"`, `StringLiteral`/`TemplateLiteral` → `"string"`, anything else → `"other"`. Pinned by `lower.test.ts` › "Expr records its parsed value shape during resolution". |
-| `node` | The parser's (Babel) expression node, with `loc.start`/`loc.end` as `{ line, column, index? }`. `null` on a synthesized `Expr` (section 2.2). Decision 79 is that emitters read `code` and `shape`, but three consumers still read `node` today, so a new lowering **must** supply it, positioned, for every authored expression: `@mxlang/typescript-plugin` maps an expression only when `source.slice(node.loc) === code` (`mx-language.ts`; `index.test.ts` › "builds exact expression mappings from positioned HTML IR"); `@mxlang/host-angular`'s tag module rewrites `node` and reassigns `code`; the Preact and Solid emitters read a `by=` string key's `node.value`. Emitters also read `node` to inspect an expression but never to print it (E3): Solid reads the literal value of a range bound (`numericValue`, which folds a `<Repeat>` count) and of a template-literal `class` (`staticTemplateValue`), the node type of an attribute method and of a `class`/`style` value, and a `step=` node to reject `step=0` (the first two pinned by `solid/src/ir-contract.test.ts` › "E3: Solid reads Expr.node to inspect"); Angular's tag module rewrites `input.x` reads on it (`tag-module.ts`, on a copy, E21). `Expr.span` carries the same range and is the field a new consumer should use. |
+| `node` | The parser's (Babel) expression node, with `loc.start`/`loc.end` as `{ line, column, index? }`. `null` on a synthesized `Expr` (section 2.2). Emitters read `code` and `shape`, but three consumers still read `node` today, so a new lowering **must** supply it, positioned, for every authored expression: `@mxlang/typescript-plugin` maps an expression only when `source.slice(node.loc) === code` (`mx-language.ts`; `index.test.ts` › "builds exact expression mappings from positioned HTML IR"); `@mxlang/host-angular`'s tag module rewrites `node` and reassigns `code`; the Preact and Solid emitters read a `by=` string key's `node.value`. Emitters also read `node` to inspect an expression but never to print it (E3): Solid reads the literal value of a range bound (`numericValue`, which folds a `<Repeat>` count) and of a template-literal `class` (`staticTemplateValue`), the node type of an attribute method and of a `class`/`style` value, and a `step=` node to reject `step=0` (the first two pinned by `solid/src/ir-contract.test.ts` › "E3: Solid reads Expr.node to inspect"); Angular's tag module rewrites `input.x` reads on it (`tag-module.ts`, on a copy, E21). `Expr.span` carries the same range and is the field a new consumer should use. |
 | `span` | Section 3.3. Absent exactly when the expression has no authored source. Distinct sibling expressions get distinct spans (`lower.test.ts` › "Expr.span" › "sibling-sharing case: four byte-identical exprs get four distinct spans"). |
 | `unrewrittenCode?` | `code` as it was before a rewrite changed it (`rewrite-codes.ts` `rewriteCodes`, e.g. Solid's accessor reads `i` → `i()`): set by that rewrite only when it changed `code`, so it is absent when no read was rewritten. It is the authored text with each atom as its string literal (an atom `~q` is `"q"`, one character longer), not a slice of the source: `mappedExpr` maps it to `span` through `atomMappings`, or one to one when the lengths match, then diffs it against `code` token by token and leaves inserted text unmapped. The diff trims the common prefix and suffix, and past `MAX_DIFF_CELLS` (about 2000 x 2000 tokens) maps the changed middle as one run. Read by every host that maps expressions through `mappedExpr` (today Solid). Pinned by `solid/src/expression-mappings.test.ts` (rewritten reads keep exact columns). |
 | `bodySpan?` | The authored `{ … }` block of an attribute method shorthand (`onClick() { … }`, `async onClick<T>(…) { … }`), whose `code` is the `function` expression the compiler printed for it; absent for every other expression, an authored `function` expression included. Set in `lower.ts` (`methodBodySpan`) from the method node's own body position, which Marko gives as the text between the braces, so it is widened onto them. `bodySource` is its authored text. A host that emits the printed function maps its head as generated text and diffs the printed body against `bodySource` token by token (`mappedRewrite`), so a reformatted body (`{ go() }` printed as `{ go(); }`) or one with rewritten reads still maps. Read by Solid's `mappedValue`, which splits the printed function at its parsed body (`printedBodyStart`). Pinned by `tsc` `expression-values-solid-typecheck.test.ts` (an error in a method body, async, generic or nested, reports at its authored column). |
 | `file` | Reserved. Nothing in `packages/core` sets it today; a tag unit compiles under its own `Ctx`, so its spans are already absolute in its own file. |
 | `atoms` | The atoms a dialect built inside the expression, in source order; absent when there are none. `code` holds each one as its string literal (`[~a]` is `["a"]` under a dialect whose atoms are `~name`): core splices `JSON.stringify(name)` at each atom's span on both `expr()` paths (`atom-marks.test.ts`). In `node`, each atom is the `StringLiteral` the dialect's hook returned, whose `value` is the name and whose `extra.mxAtom` is `{ span }` (`MxAtomMark`). Until the atom removal (mx-g1tw), a consumer translating an expression recognises an atom by `extra.mxAtom`. `mappedExpr` maps each atom to its literal and the text between one to one, so a type error on a nested atom lands on it. |
 
-**The `node` contract (decision 166, addendum 3).** `Expr.node`, `For.paramNodes` and the tag-author API's `attr.value.node` are expression nodes in `@mxlang/babel`'s vocabulary (Babel 7.29 shapes), with file-absolute positions, and they are read-only: an emitter that edits one copies first with `cloneIr` (E21). A `node` is `null` in two cases only: a value core built itself (section 2.2), and, after the MX2 port, an expression that failed to parse. A host treats `null` as "no structure" and never dereferences it unchecked. No host parses source text to recover structure, and core offers no re-parse helper.
+**The `node` contract.** `Expr.node`, `For.paramNodes` and the tag-author API's `attr.value.node` are expression nodes in `@mxlang/babel`'s vocabulary (Babel 7.29 shapes), with file-absolute positions, and they are read-only: an emitter that edits one copies first with `cloneIr` (E21). A `node` is `null` in two cases only: a value core built itself (section 2.2), and, after the MX2 port, an expression that failed to parse. A host treats `null` as "no structure" and never dereferences it unchecked. No host parses source text to recover structure, and core offers no re-parse helper.
 
 What an emitter may assume:
 
 - `code` is a complete JavaScript/TypeScript expression and may be emitted verbatim inside parentheses.
-- The only rewritings core performs on `code` are the binding-registry rewrite above, which is a host's own request, and the splice of a dialect-built atom (its string literal). Core does not rename, hygienize or reformat expressions. Name sugar (decision 146) rewrites the **tree** before lowering and never touches an expression's text.
+- The only rewritings core performs on `code` are the binding-registry rewrite above, which is a host's own request, and the splice of a dialect-built atom (its string literal). Core does not rename, hygienize or reformat expressions. Name sugar rewrites the **tree** before lowering and never touches an expression's text.
 - Hosts may rewrite `code` further when emitting; the lowering does not. Section 10.3 lists who does.
 - Consumers recognize an `Expr` structurally — an object with a string `code` and a `shape` (`rewrite-codes.ts`) or a `node` (`mx-language.ts`, Angular's `tag-module.ts`). The statement kinds also carry `code`; they must never carry `shape` or `node`.
 
@@ -205,7 +205,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 
 ### 5.3 `Text`
 
-`{ kind: "Text", value: string, span? }`. `value` is the text after Marko's whitespace normalization (decision 33: newline-bearing whitespace runs dropped, the rest collapsed); `span` covers the text as authored, so the two differ (`spans.test.ts` › "Text: span slices the authored text, which `value` has normalized"). Same-line spaces are content (decision 141). A lowering must apply the same normalization: emitters print `value` and never re-normalize. `value` may be `""` (the placeholder an inert tag or `<return>` leaves); an emitter must emit nothing for it.
+`{ kind: "Text", value: string, span? }`. `value` is the text after Marko's whitespace normalization (newline-bearing whitespace runs dropped, the rest collapsed); `span` covers the text as authored, so the two differ (`spans.test.ts` › "Text: span slices the authored text, which `value` has normalized"). Same-line spaces are content. A lowering must apply the same normalization: emitters print `value` and never re-normalize. `value` may be `""` (the placeholder an inert tag or `<return>` leaves); an emitter must emit nothing for it.
 
 ### 5.4 `Interpolation`
 
@@ -213,7 +213,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 
 ### 5.5 `Element`
 
-`{ kind: "Element", name, nameSpan?, span?, attrs: Attr[], children: IrNode[], void: boolean }`. A native HTML/SVG/MathML element, after the host's `isElement` accepted it. `void` is true for an element the target's native elements declare void (its `HostDeclarations.nativeTags`, else core's own HTML void elements; decision 197), whose `children` is always `[]`. The custom-tag builder's `element()` defaults `void` from the same table, and a void element it is given `children` for (by default or `{ void: true }`) is a compile error at the tag, so the invariant holds for built IR too (`custom-tags.test.ts` › "ctx.build.element's void default"). Pinned by `lower.test.ts` › "Element marks a void tag and takes no children". An `Element` never has attribute tags (the host's `rejectElementAttributeTags` or the generic field guard refuses them). Only an `Element` lowers `on*` attributes to `kind: "event"` (section 6).
+`{ kind: "Element", name, nameSpan?, span?, attrs: Attr[], children: IrNode[], void: boolean }`. A native HTML/SVG/MathML element, after the host's `isElement` accepted it. `void` is true for an element the target's native elements declare void (its `HostDeclarations.nativeTags`, else core's own HTML void elements), whose `children` is always `[]`. The custom-tag builder's `element()` defaults `void` from the same table, and a void element it is given `children` for (by default or `{ void: true }`) is a compile error at the tag, so the invariant holds for built IR too (`custom-tags.test.ts` › "ctx.build.element's void default"). Pinned by `lower.test.ts` › "Element marks a void tag and takes no children". An `Element` never has attribute tags (the host's `rejectElementAttributeTags` or the generic field guard refuses them). Only an `Element` lowers `on*` attributes to `kind: "event"` (section 6).
 
 ### 5.6 `Component`
 
@@ -231,7 +231,7 @@ A module-level kind in a body is a malformed IR: `drive()` throws ("unexpected m
 | `returnsValue?` | `true` when the target unit declares `<return>`, resolved from the callee's cached metadata; set even without a `/var`, because the JSX hosts must still unwrap the output from `{ value, output }`; html and astro call the default export unchanged and read the value from `render`. Absent otherwise. |
 | `authoredName?` | The tag name as written, set only when it differs from the target's name (a discovered tag routed to `$mx_Name1`). Use it in diagnostics: Preact, Solid, Astro, Angular and the IR entry do, pinned by `preact/src/index.test.ts` › "rejects /var inside <for>, naming the tag as written", the same test in `solid/src/index.test.ts`, `astro-template.test.ts` › "rejects /var on it, naming the tag as written", `angular/test/component.test.ts` › "rejects content with tag params, naming the real tag rather than a literal {Tag} placeholder" and `core/src/ir-entry/parse.test.ts` › "calls a template tag". |
 
-A named custom tag's argument form is exclusive (Marko's `assertAttributesOrSingleArg`): arguments with attributes, attribute tags or a body is an error. A `dynamic` or `define` target follows Marko's lenient rule: arguments with a body or attribute tags are allowed, arguments with a plain attribute are not (decision 109). Pinned by `lower.test.ts` › "allows a define call mixing tag-argument form with an attribute tag…", "…with a body…", "still rejects a define call mixing tag-argument form with a plain attribute".
+A named custom tag's argument form is exclusive (Marko's `assertAttributesOrSingleArg`): arguments with attributes, attribute tags or a body is an error. A `dynamic` or `define` target follows Marko's lenient rule: arguments with a body or attribute tags are allowed, arguments with a plain attribute are not. Pinned by `lower.test.ts` › "allows a define call mixing tag-argument form with an attribute tag…", "…with a body…", "still rejects a define call mixing tag-argument form with a plain attribute".
 
 ### 5.7 `ComponentTarget`
 
@@ -239,9 +239,9 @@ A named custom tag's argument form is exclusive (Marko's `assertAttributesOrSing
 | --- | --- | --- |
 | `name` | `name`, `resolvedPath?`, `binding?` | An import binding or a discovered/registered tag. `binding` is the identifier to call when it differs from `name` (set only when the host answered `resolveDiscoveredTagModule`); absent means call `name`; html calls through it (`html/src/ir-contract.test.ts` › "5.7: a name target with a binding is called through the binding"). `resolvedPath` is set for a template-backed custom tag. |
 | `define` | `name`, `params` | A `<define>` in scope and the params it declared. |
-| `dynamic` | `expr`, `valueImportBinding?` | `<${expr}/>`, resolved at run time. `valueImportBinding` is set only when core synthesized this target (decision 116: a PascalCase tag bound to a value import that is not a `.marko`/`.mx` default import, or to a local value core cannot prove is a function/class); its `expr` is synthesized (`node: null`, no span). |
+| `dynamic` | `expr`, `valueImportBinding?` | `<${expr}/>`, resolved at run time. `valueImportBinding` is set only when core synthesized this target (a PascalCase tag bound to a value import that is not a `.marko`/`.mx` default import, or to a local value core cannot prove is a function/class); its `expr` is synthesized (`node: null`, no span). |
 
-Pinned by `lower.test.ts` › "Component resolves an import binding as its target", "Component records a define target with its declared params", and the "decision 116" and "local-value-as-tag" tests.
+Pinned by `lower.test.ts` › "Component resolves an import binding as its target", "Component records a define target with its declared params", and the "decision 116" and "local-value-as-tag" tests (the first name is the test's own title).
 
 ### 5.8 `IfChain` and `Branch`
 
@@ -260,7 +260,7 @@ Each branch is its own binding scope: a `<const>` inside one does not leak (`low
 | `paramNodes` | The positioned parser nodes for `params`, one per entry. Like `Expr.node`, still read by a consumer (Angular aliases the index param from them), so a lowering must supply them; `[]` on a synthesized loop. |
 | `bindings` | Every identifier the params bind, for scope tracking. |
 | `paramSpans?` | Section 3.3. |
-| `key` | The `by=` expression, or `null`. A one-shot string emitter ignores it (decision 65); a reactive host uses it. |
+| `key` | The `by=` expression, or `null`. A one-shot string emitter ignores it; a reactive host uses it. |
 
 Range rules: `to=` gives `inclusive: true`, `until=` gives `false`; both together is an error. `from` is `null` when omitted — the host supplies the start (0), core does not invent a literal. `step` is `null` when omitted and only legal on a range. More than one of `of=`/`in=`/a range is an error, as is `key=` (Marko spells it `by=`) and a string `by=` on anything but `of=`. Pinned by `lower.test.ts` › "For normalizes `of=`, with params and their bindings", "For normalizes the inclusive and exclusive ranges apart", and the "<for> by=/key= (Marko parity)" block.
 
@@ -303,7 +303,7 @@ Pinned by `lower.test.ts` › "Import and Static are lifted out of the body to m
 | `var` | The `/var` binding as source text, or `null`. |
 | `data` | Whatever the host's `resolveDelegatedTag(name, node, ctx)` returned, or `undefined` with no hook. Opaque to core. |
 
-This is decision 79's narrow escape hatch: every host-owned construct (`<try>`, `<html-comment>`, a future `<signal>`) arrives here fully resolved. The parser node is deliberately **not** carried; a host records what it needs in `data` while the node is in hand, and an emitter must consume only the IR and `data`. A claimed tag's children are lowered exactly once (`lower.test.ts` › "a claimed tag's children are lowered exactly once"). A contract-only custom tag (decision 130) also becomes a `DelegatedTag` on a name the host claims; `<try>` is a built-in custom tag that asks for one through `ctx.build.delegatedTag`.
+This is the narrow escape hatch from the rule that emitters read only the IR: every host-owned construct (`<try>`, `<html-comment>`, a future `<signal>`) arrives here fully resolved. The parser node is deliberately **not** carried; a host records what it needs in `data` while the node is in hand, and an emitter must consume only the IR and `data`. A claimed tag's children are lowered exactly once (`lower.test.ts` › "a claimed tag's children are lowered exactly once"). A contract-only custom tag also becomes a `DelegatedTag` on a name the host claims; `<try>` is a built-in custom tag that asks for one through `ctx.build.delegatedTag`.
 
 ### 5.14 `DocumentType` and `Comment`
 
@@ -311,7 +311,7 @@ This is decision 79's narrow escape hatch: every host-owned construct (`<try>`, 
 
 ## 6. `Attr`
 
-Every attribute has an optional `span`, the whole attribute (section 3.3). (The `static` kind's `atom` field leaves core with the atom removal (mx-g1tw); see the note in section 4.) Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the decision-146 token, `:email`, when the attribute came from sugar).
+Every attribute has an optional `span`, the whole attribute (section 3.3). (The `static` kind's `atom` field leaves core with the atom removal (mx-g1tw); see the note in section 4.) Every non-spread attribute has `name`, `nameSpan` (required), `loc` at the name, and an optional `sugar` (the name-sugar token, `:email`, when the attribute came from sugar).
 
 | Kind | Fields | Produced for |
 | --- | --- | --- |
@@ -328,7 +328,7 @@ Rules a lowering must apply, in this order (`lowerAttrNamed`):
 2. A colon name keeps its complete spelling (`x:foo`) except, on a native element, the reserved `class:`/`style:`/`on:` prefixes, which go to the host's `resolveModifier` (a returned name makes a `dynamic` attr) or are an error (`rejectModifier`, then core's wording).
 3. An attribute method (`onClick() { … }`) is allowed only when the host's `resolveAttributeMethod` returns `true`; its value is an `Expr` over the function expression Marko builds for the method, whose body is synthetic (so its column mapping can drift, [Spans and mappings](/architecture/spans-and-mappings/)). Preact and Solid reprint it in their own function form. Pinned by `lower.test.ts` › "lowers an attribute method on an element to an event with an arrow value".
 4. `bound`, then `static` (string literal), then `boolean` (literal `true`), **then** `event`, then `dynamic`. The event check comes last so `<div onClick>` stays `boolean` and `<button onClick="alert(1)">` stays `static`. Pinned by `lower.test.ts` › "event attributes" (all tests) and "`on*` outside a native element stays a prop".
-5. Duplicates resolve **last-wins** by `name` (case-sensitive), with a warning (code `MX_DUPLICATE_ATTRIBUTE`) for each dropped occurrence, except the parser's empty-named twin of a default method (`run [a=1] (x) { y }`), which is one authored attribute; spreads never count (decision 135). The IR never carries two attributes of the same name. Pinned by `lower.test.ts` › "duplicate attributes resolve last-wins (decision 135)".
+5. Duplicates resolve **last-wins** by `name` (case-sensitive), with a warning (code `MX_DUPLICATE_ATTRIBUTE`) for each dropped occurrence, except the parser's empty-named twin of a default method (`run [a=1] (x) { y }`), which is one authored attribute; spreads never count. The IR never carries two attributes of the same name. Pinned by `lower.test.ts` › "duplicate attributes resolve last-wins".
 6. The host's `orderAttrs(name, attrs, on, ctx)` may reorder the result.
 
 Pinned overall by `lower.test.ts` › "Attr separates static, dynamic, bound and spread".
@@ -346,7 +346,7 @@ Pinned overall by `lower.test.ts` › "Attr separates static, dynamic, bound and
 > `attrTagProps`, `callee-input.ts` (which moves to tooling) and the v2 gate
 > leave the build path. This section is rewritten with that change.
 
-A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry **three synchronized views** of their `<@name>` tags (decisions 106–108):
+A `Component` and a `DelegatedTag` (and, recursively, an `AttributeTag`) carry **three synchronized views** of their `<@name>` tags:
 
 | View | Type | Contract |
 | --- | --- | --- |
@@ -373,9 +373,9 @@ None of these is an IR kind. Each is resolved during lowering into ordinary node
 
 - **Shorthand and default tag**: tree rewrites before the walk (section 1, step 1). Visible in the IR only as `Attr.sugar`.
 - **Custom tags** (programmatic, discovered sidecars and templates): validated against their contract, then replaced by whatever `transform` returns (`IrNode[]`, possibly empty or several nodes), or routed to their template as a `Component` with a generated `name` target, `authoredName`, `returnsValue` and a synthesized `Import`. A `finalize` hook's nodes are prepended to `Ir.body`.
-- **Contracts** (`mx.contracts`, decision 142): validation only; a contract-only tag on a claimed name becomes a `DelegatedTag` (decision 130).
+- **Contracts** (`mx.contracts`): validation only; a contract-only tag on a claimed name becomes a `DelegatedTag`.
 - **`<try>`**: a built-in custom tag that validates and emits a `DelegatedTag` named `try`.
-- **Not yet in the IR**: decision 147 (wildcard `children["*"]`, its alias capture) has no IR representation in the code today. This page gains its nodes when it lands.
+- **Not yet in the IR**: wildcard children (`children["*"]`, its alias capture) have no IR representation in the code today. This page gains its nodes when it lands.
 
 ## 10. The emitter contract
 
@@ -436,7 +436,7 @@ Each of these is assumed by at least one shipped emitter or tool without re-chec
 
 Core: only the binding-registry rewrite a host requests (section 4). In emitters:
 
-- **`@mxlang/host-solid`** rewrites every read of a `<for>` param Solid hands as an accessor into a call (`p.name` → `p().name`, decision 94; `rewriteAccessorReads` in `accessor-reads.ts`, applied in the emitter's `rewriteForBody`, on a private copy of the `For`, E21). Pinned by `solid/src/client-render.test.ts` › "re-renders a same-key row replacement under <for by=\"id\">, …".
+- **`@mxlang/host-solid`** rewrites every read of a `<for>` param Solid hands as an accessor into a call (`p.name` → `p().name`; `rewriteAccessorReads` in `accessor-reads.ts`, applied in the emitter's `rewriteForBody`, on a private copy of the `For`, E21). Pinned by `solid/src/client-render.test.ts` › "re-renders a same-key row replacement under <for by=\"id\">, …".
 - **`@mxlang/host-angular`**'s tag module rewrites `input.x` to the class property `x` (`tag-module.ts` `rewriteExpr`, on a private copy of the IR, E21), and its `by=` lowering slices `key.code` by Babel offsets. Pinned by `angular/test/for-by-scope.test.ts` › "still lowers the forms Angular supports to `track`".
 - **`@mxlang/host-preact`** (and React, Hono) and **`@mxlang/host-solid`** reprint an attribute-method value as a function expression.
 - **`@mxlang/target-html`** and **`@mxlang/host-astro`** print `code` unchanged.
@@ -472,7 +472,7 @@ A host whose output has a returning unit invoked as a plain function also refuse
 
 **Rules for changing the IR:**
 
-- Core's kind set is **closed**: structural core plus "component call". A new construct with compile-time meaning becomes an IR kind (or a field on one) only when every host must emit it differently; host-owned constructs travel as `DelegatedTag` with their decision in `data`. A dialect adds node types only by registering them in core's one node-type registry (keyed `dialect:Type`, core being `mx:`), and their `lower` returns IR of registered kinds. There is no generic payload kind and no opaque node.
+- Core's kind set is **closed**: structural core plus "component call". A new construct with compile-time meaning becomes an IR kind (or a field on one) only when every host must emit it differently; host-owned constructs travel as `DelegatedTag` with their ruling in `data`. A dialect adds node types only by registering them in core's one node-type registry (keyed `dialect:Type`, core being `mx:`), and their `lower` returns IR of registered kinds. There is no generic payload kind and no opaque node.
 - Adding a kind means adding it to `IrNode`, to `Emitter` (a required method) and to `drive`'s switch. Because `drive`'s `default` narrows to `never`, the compiler then fails every emitter until each one **handles or rejects** the kind; no emitter may ignore it. A direct walker (a dialect reading `lowerSource`'s IR) must handle it or throw.
 - Custom tags must produce IR, not host output: input IR in, IR out, positions preserved, run in core before emitters. That is what `transform` already is for custom tags. No opaque "user node" every host must handle is admitted.
 - A new optional field must document its absence (synthesized or not applicable); a new span field follows section 3.
@@ -887,11 +887,11 @@ Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 export default Greeting as ((input: Input) => string) & { render: typeof __mxRender };
 ```
 
-The default export renders into a fresh sink through `render(input, out)`, the module's sink entry (decision 155). Called with `{ name: "<Ada>", items: ["a", "b"] }` it returns `<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>`; with an empty `items` it takes the `<else>` branch. The test asserts both.
+The default export renders into a fresh sink through `render(input, out)`, the module's sink entry. Called with `{ name: "<Ada>", items: ["a", "b"] }` it returns `<h1 class="title">Hello, &lt;Ada&gt;!</h1><ul><li>a</li><li>b</li></ul>`; with an empty `items` it takes the `<else>` branch. The test asserts both.
 
 ## 13. Errors
 
-A lowering reports **every** error of a file it can find, not the first (decision 162). The recovery unit is the **tag**.
+A lowering reports **every** error of a file it can find, not the first. The recovery unit is the **tag**.
 
 - **Skip, don't cascade.** When lowering a tag raises an error, the lowering records it, skips that tag *with its whole subtree*, and continues with the next sibling. A skipped tag's children are never lowered, so they raise nothing: one mistake yields one error, not the errors its children would have reported against a half-built parent. The same holds for text, interpolations and the statement kinds that fail (a scriptlet, a CDATA section, a declaration).
 - **What is not recoverable.** An error raised before the body walk starts (a reserved binding, a malformed own `Input`, an unparseable file) stops lowering at once, as it always did: there is no tree to continue over. An error raised by a check that needs the whole file (the atom contract check, `finalize` hooks) runs only when the walk recorded no error, because its facts would be partial.

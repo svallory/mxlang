@@ -132,7 +132,7 @@ Two other routes reach a returning tag without the compiler seeing its shape:
 - a `.mx` file re-exported through a `.ts` barrel (`export { default as Counter } from "./counter.mx"`);
 - a dynamic tag (`<${x}/>`).
 
-On `@mxlang/target-html` both render the body: the call dispatches at run time, rendering through the callee's `render` entry when it has one (decision 155). The JSX hosts still render `[object Object]` for these (TODO `dynamic-tag-return-unit-object-object`, JSX half); use a direct `.mx` import or a discovered tag there.
+On `@mxlang/target-html` both render the body: the call dispatches at run time, rendering through the callee's `render` entry when it has one. The JSX hosts still render `[object Object]` for these (TODO `dynamic-tag-return-unit-object-object`, JSX half); use a direct `.mx` import or a discovered tag there.
 
 ### Where `/var` can be written, per host
 

@@ -7,7 +7,7 @@ description: "lowerSource and lowerFile hand a program core's IR for a .mx file,
 
 `@mxlang/core` exports `lowerSource` and `lowerFile`: parse a `.mx` source, lower it, check it, and return **core's own IR** with every diagnostic positioned. Nothing is emitted and nothing is evaluated. A program that gives MX tags its own meaning (a **dialect**, such as Mesh's resource definitions, a config loader or a code generator) walks the IR and decides what each tag means.
 
-This replaces the tree target (`@mxlang/data`, `parseData`, the `Data*` tree types), which decision 204 deleted. The IR is the tree: there is no second projection to keep in step with it. The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-core-ir-entry-point); the IR itself is in the [IR specification](/architecture/ir-spec/).
+This replaces the tree target (`@mxlang/data`, `parseData`, the `Data*` tree types), which was deleted. The IR is the tree: there is no second projection to keep in step with it. The normative description is [specification §13.7](/specification/#the-mx-language-13-host-semantics-table-137-the-core-ir-entry-point); the IR itself is in the [IR specification](/architecture/ir-spec/).
 
 Both functions are `@unstable`, like the IR they return.
 
@@ -102,7 +102,7 @@ Only a string literal is `static`; `n=1` and `required=true` are `dynamic`, beca
 
 ## Wildcard children
 
-A parent's `children["*"]` entry claims child names that no explicit entry, registered tag or built-in resolves (decision 147). The IR names the matched tag by its **contract**, and keeps the authored spelling beside it:
+A parent's `children["*"]` entry claims child names that no explicit entry, registered tag or built-in resolves. The IR names the matched tag by its **contract**, and keeps the authored spelling beside it:
 
 | Field | Meaning |
 |---|---|
@@ -124,20 +124,20 @@ lowerSource(source, filename, {
 });
 ```
 
-- **`customTags`** declares the vocabulary: required attributes, attribute types, allowed children and parents (decisions 130 and 138). `lowerSource` does not scan `tags/` or `package.json`; this map is all it knows. Contracts are enforced at every depth, `analyze` included. See [Contract packages](/custom-tags/contract-packages/).
+- **`customTags`** declares the vocabulary: required attributes, attribute types, allowed children and parents. `lowerSource` does not scan `tags/` or `package.json`; this map is all it knows. Contracts are enforced at every depth, `analyze` included. See [Contract packages](/custom-tags/contract-packages/).
 - **`dialect`** is the file's dialect, or a bare syntax table, for a consumer that builds its own (Mesh passes its dialect, hooks included). Omitted, the dialect that claims the file's extension applies. A dialect you pass on every call should be deep-frozen (`Object.freeze` on it and on every nested object and array; RegExps and functions need not be frozen): core validates a deep-frozen one once and any other again on every call, because a mutable object can change between calls. One frozen only at the top is validated again on every call.
-- **`tagRules`** picks the parse rules the source is read under ([below](#core-ir-entry-point-and-dialects-tag-rules-presets)). It is an option of this function only, never a project or host setting (ruling 209).
+- **`tagRules`** picks the parse rules the source is read under ([below](#core-ir-entry-point-and-dialects-tag-rules-presets)). It is an option of this function only, never a project or host setting.
 - **`defaultTag`** is what `<#id>` and `<.class>` stand for in place of `object`.
 - **`structural`**, **`imports`** and **`unknownTags`** each default to the value the file's dialect states on its module (the `dialect` option's, else the one the file routes to), then to the value named below. A call that states one wins. A `.mx` file has no dialect, so it gets the defaults below. See [How strict your files are](/custom-tags/dialects/#writing-a-dialect-how-strict-your-files-are-structural-imports-unknowntags).
-- **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>` and `import`/`export`/`static` in the IR. `"reject"` makes each one a positioned error, so a dialect that reads only tags and attributes cannot silently ignore an `<if>`. Comments are never structural: a `//` line or `<!-- -->` stays in the IR under either value (decision 131 addendum 5).
+- **`structural`**: `"pass"` keeps text, `${}`, `<if>`, `<for>`, `<const>` and `import`/`export`/`static` in the IR. `"reject"` makes each one a positioned error, so a dialect that reads only tags and attributes cannot silently ignore an `<if>`. Comments are never structural: a `//` line or `<!-- -->` stays in the IR under either value.
 - **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural`. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; they arrive in `ir.imports`. A tag-body `import` is body text, not an import, so `imports` does not apply to it.
-- **`unknownTags`**: `"allow"` accepts a tag with no contract (the open set of decision 131). `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/contract-packages/#contract-packages-closing-the-vocabulary) has an example.
+- **`unknownTags`**: `"allow"` accepts a tag with no contract (the open set). `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/contract-packages/#contract-packages-closing-the-vocabulary) has an example.
 - **`stripTypes`**: `true` (the default) erases TypeScript from the nodes before the source lowers: an arrow's parameter and return annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (its `node`, `span` and `code` are the operand's, so `(y as string)` lowers as `y`). `Expr.code` is sliced from the source either way, so annotations inside an expression stay in it. `false` keeps the authored TypeScript in the nodes (`TSTypeAnnotation`, `TSAsExpression`, …), for a dialect whose `nodeType.lower`, contract hooks or `afterLower` read types. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function` and `member` checks. An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. `ctx.lower` in a tag-file hook takes the option but does not inherit the outer call's value.
 - **`warnings`**: a sink for core's warnings, pushed as they are raised, so those raised before a later error stay in the caller's array.
 
 ## Tag rules presets
 
-A preset decides which tag names have a parse rule of their own. With no `tagRules`, a file parses under `html`, the full HTML rules (decision 212 item 8): a dialect that states nothing gets strict rules and turns off what it does not want. `none` is what a dialect whose tags are not HTML passes; Mesh does.
+A preset decides which tag names have a parse rule of their own. With no `tagRules`, a file parses under `html`, the full HTML rules: a dialect that states nothing gets strict rules and turns off what it does not want. `none` is what a dialect whose tags are not HTML passes; Mesh does.
 
 | Preset | Native elements | Language tags |
 |---|---|---|

@@ -5,7 +5,7 @@ description: "What stays fixed under every extension layer: Marko's grammar on t
 
 # The core
 
-**Status:** accepted design (decisions 183 and 184, 2026-10-07), not released. Marko behavior below
+**Status:** accepted design (2026-10-07), not released. Marko behavior below
 was probed on marko 6.4.0, `@marko/compiler` 5.42.10, htmljs-parser 5.18.0.
 
 > **Names in these pages.** A "syntax module" is now a **dialect**, found by
@@ -103,7 +103,7 @@ value a row claims becomes an `MxString`. A claimed default value also ends
 where a space and a `terminatesValue` attribute row follow it:
 `belongs-to=:List :list` is the default `:List` and the attribute `:list`.
 
-`lineTriggers` (decision 182, addendum 1) arm at the start of a tagless
+`lineTriggers` arm at the start of a tagless
 concise line, with or without an `=value` after the matched text, and lower
 through `lowerTrigger` to a `{ call }` node: a child tag of the enclosing
 block. They generalise `inlineScript` (the `$ ` line). Validation refuses a
@@ -252,8 +252,8 @@ may set. An inline object stays a table only. A trigger whose `node` is
     `pattern`, `ref` (attribute) and `declares` (tag).
   - Listing one turns core's registration check and its file-level check
     of that key off.
-  - Core keeps the whole-value shape check (`type: "atom"`, `"member"`,
-    decision 156 addendum 6; decision 183 addendum 2) and `ctx.declare`.
+  - Core keeps the whole-value shape check (`type: "atom"`, `"member"`)
+    and `ctx.declare`.
     Core never reads a claimed key to word that check: the module's
     `describeAttribute` does. A plain string against a declaration with a
     claimed `ref` is left to the module's `afterLower` (which can list the

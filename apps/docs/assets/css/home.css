@@ -507,7 +507,7 @@
    (`highlight/mx-highlight.mjs`) turns a capture name into a class by prefixing `ts-` and
    replacing dots with dashes (`punctuation.bracket` -> `ts-punctuation-bracket`),
    except two MX classes: `ts-atom` (`@string.special.symbol`, an atom value such as
-   `:draft`, decision 156) and `ts-name` (`@label`, the `:name` sugar, decision 146);
+   `:draft`) and `ts-name` (`@label`, the `:name` sugar);
    `@none` ("deliberately unstyled") and the JavaScript query's `@embedded` get
    none. The TypeScript names (`function.method`, `number`, `operator`, ...) come
    from the injected expressions, see `highlight/build-ts-grammar.sh` in that package. The values start from

@@ -55,7 +55,7 @@ Core knows no other atom key. `values`, `pattern`, `ref` and `declares` are not 
 
 ### Declare an attribute tag's own contract
 
-Use the same vocabulary recursively (decision 138 E4):
+Use the same vocabulary recursively:
 
 ```ts
 const card: CustomTag = {
@@ -105,8 +105,8 @@ Dynamic children (`<${input.tag}/>`), unlisted names, disallowed text, repetitio
 Some vocabularies do not choose their children's names. Mesh's `<attributes>` holds
 `<title type="string"/>`, `<summary type="string"/>`, whatever the document needs, and every
 one of them is an `attribute`. A closed `children` record cannot say that, so `children` takes
-the key `"*"`: a claim on the names nothing else resolves (decision 147,
-[ADR 147](/design-notes/adr-wildcard-children/)).
+the key `"*"`: a claim on the names nothing else resolves
+([ADR 147](/design-notes/adr-wildcard-children/)).
 
 ```ts
 // contracts.ts, named by "mx": { "contracts": "./contracts.ts" }, or passed to lowerSource as customTags
@@ -200,7 +200,7 @@ children contracts, so this is an mx-only extension.
 The same claim exists for attribute tags: a vocabulary whose `<@on_click>`s and `<@action_save>`s
 do not choose their names ahead of time. `attributeTags` takes the key `"*"`, and an entry is
 always an inline contract — an attribute tag has no transform of its own, so there is no
-`contract:` form and no delegation case (decision 147, for attribute tags):
+`contract:` form and no delegation case (for attribute tags):
 
 ```ts
 // contracts.ts, named by "mx": { "contracts": "./contracts.ts" }, or passed to lowerSource as customTags
@@ -240,7 +240,7 @@ Marko has no attribute-tag contracts, so this is an mx-only extension.
 ### Name the unnamed tag: `defaultTag`
 
 `defaultTag` sits beside `children` and says what `<#id>` and `<.class>`, written
-with no tag name directly inside this tag, stand for ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag), decision 145). It is the first rung of the ladder: it beats `mx.<target>.defaultTag` in MX's config, the host and the target's built-in. A sidecar declares it like `children`, and `mx.contracts` modules take the same key:
+with no tag name directly inside this tag, stand for ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag)). It is the first rung of the ladder: it beats `mx.<target>.defaultTag` in MX's config, the host and the target's built-in. A sidecar declares it like `children`, and `mx.contracts` modules take the same key:
 
 ```ts
 // tags/my-list.tag.ts

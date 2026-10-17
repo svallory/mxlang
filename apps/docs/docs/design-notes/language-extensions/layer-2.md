@@ -110,7 +110,7 @@ tag whether the file lowered or lowering failed elsewhere.
 
 Mesh's syntax needs no "`:name` after a value" form (`belongs-to=:List :list`):
 the member sigil `&` covers the reference in all three positions, so that
-parser rule has no layer-2 user (decision 182, addendum 1).
+parser rule has no layer-2 user.
 
 The rows Mesh's dialect owns (core ships none of them):
 
@@ -146,8 +146,8 @@ dialect that owns the sugar refuses it at the `:name`, naming the form.
 Without such a dialect, core reads the line as Marko does.
 
 What a Mesh file reads differently from a plain `.mx` file once the move
-lands: `#x=1`, `.x=1` and `#x(p) { b }` are refused (decision 183); a bare
-`:` after a value no longer ends it (decision 182 addendum 1), and
+lands: `#x=1`, `.x=1` and `#x(p) { b }` are refused; a bare
+`:` after a value no longer ends it, and
 `belongs-to=:X :x` splits only because the module's value row `atom-value`
 claims `:X` and a claimed default value ends at the spaced `:x`; `a::b` after a word is TypeScript's error rather
 than the reserved-token one; `::` inside a tag or attribute name is Marko's

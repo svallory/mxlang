@@ -148,7 +148,7 @@ The exported limits are `MAX_EXPANSION_DEPTH = 64` nested calls and `MAX_EXPANSI
 | `items` | With `type: "array"`, checks each literal element as `"string"`, `"number"` or `"boolean"`. |
 | `required` | Requires the attribute or attribute tag. |
 | `enum` | Restricts an attribute to listed string literals. |
-| `default` | Supplies an omitted string, number, or boolean attribute on the custom tag after validation; not applied to attribute-tag attributes (decision 138 E4). |
+| `default` | Supplies an omitted string, number, or boolean attribute on the custom tag after validation; not applied to attribute-tag attributes. |
 | `literalOnly` | Requires a compile-time scalar, array, or object literal. |
 | `repeatable` | Allows an attribute tag name to appear more than once. |
 

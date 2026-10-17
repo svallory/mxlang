@@ -5,13 +5,13 @@ description: "How a parent contract accepts unknown child tag names, validates t
 
 # ADR 147: wildcard children and tag aliases
 
-**Status:** accepted 2026-10-04 (decision 147 in the decisions log; the IR alias and the "no code in contracts" rule were settled in the same discussion). **Depends on:** contract extension E2 (`children`), ADR 145 (`defaultTag`), ADR 146 (`:name`). **Implementation:** one core PR, one data/docs PR.
+**Status:** accepted 2026-10-04 (the IR alias and the "no code in contracts" rule were settled in the same discussion). **Depends on:** contract extension E2 (`children`), ADR 145 (`defaultTag`), ADR 146 (`:name`). **Implementation:** one core PR, one data/docs PR.
 
 ## Context
 
 What happens to a tag name nobody declared:
 
-- An unknown tag that matches no wildcard entry keeps that target's existing behaviour (decision 151 ruling 7): an error on html and astro-html, a native element on the JSX hosts, Solid and Angular, an error on data. Independently, a parent whose `children` record is closed rejects it (E2). On data, `unknownTags: "allow"` (the library default) passes an unknown tag through with no contract and `"reject"` (what `mx-tsc` uses) is a positioned error with a suggestion.
+- An unknown tag that matches no wildcard entry keeps that target's existing behaviour: an error on html and astro-html, a native element on the JSX hosts, Solid and Angular, an error on data. Independently, a parent whose `children` record is closed rejects it (E2). On data, `unknownTags: "allow"` (the library default) passes an unknown tag through with no contract and `"reject"` (what `mx-tsc` uses) is a positioned error with a suggestion.
 
 A vocabulary often wants the middle ground: "any child name is fine here, and every one of them is an *attribute*". Writing
 
@@ -44,7 +44,7 @@ children: {
 - **The child keeps its authored tag name.** `<title>` is the tag `title` in the tree, checked like `attribute`. Only `<:title>` (ADR 146) produces `<attribute name="title">`.
 - In the IR the tag's `name` is the resolved (canonical) contract tag and a new `alias` field carries the authored spelling, its span, and the pattern's named capture groups. Every existing consumer keys on `name`; the data tree exposes both (`tag: "title"`, `contract: "attribute"`).
 - Explicit entries win over `"*"`. With a `"*"` present, matched children are not "unknown" for `unknownTags: "reject"`.
-- "Unknown" is target-neutral (decision 147 addendum 1): no built-in of the target, no registered custom tag, no entry in the parent's contract. Inside a contract parent the contract decides: `children["*"]` matches a lowercase child (`title`, `div`) on the JSX hosts, Solid and Angular exactly as on html and data. The host's native-element fallback applies only outside a contract parent. A target's built-ins are never matched: every entry of core's own taglib (`let`, `const`, `effect`, `script`, `style`, ...) on every target, data included; a name the host declares a disposition for; and a name the target's taglib lookup holds as a non-element. A vocabulary that wants a child named `let` lists it explicitly in `children`.
+- "Unknown" is target-neutral: no built-in of the target, no registered custom tag, no entry in the parent's contract. Inside a contract parent the contract decides: `children["*"]` matches a lowercase child (`title`, `div`) on the JSX hosts, Solid and Angular exactly as on html and data. The host's native-element fallback applies only outside a contract parent. A target's built-ins are never matched: every entry of core's own taglib (`let`, `const`, `effect`, `script`, `style`, ...) on every target, data included; a name the host declares a disposition for; and a name the target's taglib lookup holds as a non-element. A vocabulary that wants a child named `let` lists it explicitly in `children`.
 - Guard: a wildcard child whose name is within did-you-mean distance of an explicit child of the same parent is an error, on every target and in every tool (core raises it; no per-tool promotion). An inline `children["*"]` contract has no transform, so it is validation-only and useful on delegating targets (data); on a target that needs a transform or template a matched child needs `contract:` naming such a tag.
 - Registration errors: invalid regex; `contract` naming an unreachable tag; a reference the resolver cannot terminate.
 

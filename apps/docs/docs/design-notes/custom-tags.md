@@ -29,14 +29,14 @@ history, no rejected options.
 | `description` / `autocomplete` / `deprecated` | No consumer: the LS advertises only `textDocumentSync` | §II.7.1 |
 | Package-dependency tag discovery (`node_modules` walk) | Later; needs a resolution story | §II.5.8 |
 | Per-directory `mx.json` | `package.json#mx.tags` covers the cases; purely additive later | §II.8.8 |
-| Per-host `emit` override | Inverts decision 80's arithmetic; `ctx.build.delegatedTag` covers the real case | §II.7.3 |
+| Per-host `emit` override | Inverts the `H + M` arithmetic (one definition works on every host); `ctx.build.delegatedTag` covers the real case | §II.7.3 |
 | Marko taglib files (`marko.json`, `marko-tag.json`, `tagDiscoveryDirs`) | MX owns everything after parse | §II.5.9 |
 
 **Constraints that bound every decision here:**
 
-- **Decision 79** — hosts stay dumb emitters over the core IR. A custom tag adds
+- **Hosts stay dumb emitters over the core IR. A custom tag adds
   no IR kind and no emitter branch.
-- **Decision 80** — one definition works on every host: `H + M`, never `H × M`.
+- **One definition works on every host: `H + M`, never `H × M`.
   A tag can never see which host it is compiling for.
 - **No new syntax for custom tags.** A custom tag call is syntactically an
   ordinary tag call; nothing in the parser, grammar, Prettier or tree-sitter
@@ -167,7 +167,7 @@ kinds (`Import`, `Static`, `Export`, `InputInterface`) are deliberately absent.
 2. `finalize` hooks run **sorted by tag name**. Output is prepended to the
    program in that order. A `finalize` may not mutate other tags' output — with
    mutation, ordering becomes semantically load-bearing and reintroduces the
-   coupling decision 80 forbids.
+   coupling the one-definition rule forbids.
 3. Expansion is depth-first; nested custom tags expand inside-out.
 4. Limits: `MAX_EXPANSION_DEPTH = 64`, `MAX_EXPANSION_NODES = 100_000`.
 
@@ -197,7 +197,7 @@ kinds (`Import`, `Static`, `Export`, `InputInterface`) are deliberately absent.
 
 `tags/icon.mx` is a complete custom tag. No sidecar, no config.
 
-*Rewritten for the tag-unit model (decision 95, note
+*Rewritten for the tag-unit model (note
 `notes/investigations/tag-unit-design.md`). The previous revision described
 lowering a template by **inlining** it into the caller and substituting
 `input`. That engine is deleted: a template is now a module, and the caller
@@ -246,7 +246,7 @@ emits an import plus a call.*
   This is an observable change from the inlined model, where a `static` block
   ran once per *calling module*.
 - **A tag file may export anything.** Once it is a module, its exports are a
-  public surface (ruling 6).
+  public surface.
 - **A compiled unit's default export is a named declaration**, named after the
   file: `icon.mx` emits `export default function Icon(…)`, `table-of.mx`
   emits `TableOf`. The name is derived, never authored, and is re-minted if it
@@ -285,7 +285,7 @@ emits an import plus a call.*
   `<return>` in a page is legal and means the same thing.
 
   A returning unit's export shape is the host's business: on html, `render(input, out)`
-  writes into the caller's sink and returns the value (decision 155, the Marko render
+  writes into the caller's sink and returns the value (the Marko render
   model); `{ value, output }` on the JSX hosts; on Solid a generated callback prop the unit
   calls during setup, because a Solid component's return value is its view. The
   Solid binding is **one-shot, not reactive** — it holds the value from that one
@@ -429,7 +429,7 @@ reference; the `throw ctx.fail` rule.
   render where a renderer exists, compare parse5-normalized with
   `attributeOrder: "ignore"`. Promote to `packages/core/src/fixtures/` with a
   per-host `expected.<host>.html`.
-- **Count gates** (decision 55): assert the number of fixtures run, so a fixture
+- **Count gates**: assert the number of fixtures run, so a fixture
   silently not running is a failure.
 - **Oracle invariance:** all six oracles at their current numbers in every phase.
   P4 additionally asserts byte-identical `<try>` output before and after.

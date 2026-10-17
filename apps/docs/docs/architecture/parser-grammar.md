@@ -19,19 +19,18 @@ rather than resolved in prose.
 
 ## Status, sources of truth and method
 
-Decision 157 (2026-10-05) makes the MX parser MX-owned, written in TypeScript,
-with no obligation to follow upstream (157.1, 157.2). **Marko's behaviour is the
+The MX parser is MX-owned, written in TypeScript,
+with no obligation to follow upstream. **Marko's behaviour is the
 default answer wherever MX has no ruling of its own**, and Marko byte parity is
-no longer a requirement (157.3). A divergence needs a decision and a
-`divergences.md` row (157.3).
+not a requirement. A divergence needs a ruling and a
+`divergences.md` row.
 
-Decision 158 (2026-10-05) fixes the delivery plan:
+The delivery plan:
 
 - MX2 defines **its own AST with its own node types** in `@mxlang/babel`. The
-  design removes every accommodation made to fit Marko; decision 158.1 names
+  design removes every accommodation made to fit Marko: it has
   "no `markoTag` family inside a patched `@babel/types`" and "**no `value:`
-  modifier split as the name**" (decision 170, amended by decision 163
-  addendum 12: the split at the last `:` is carried as `modifier` + `modifierSpan`
+  modifier split as the name**" (the split at the last `:` is carried as `modifier` + `modifierSpan`
   fields, and `name`/`nameSpan` cover the head before that colon),
   and gives shorthands, attribute tags, `defaultTag` and `<return>` native
   positions. Attribute tags are `@`-prefixed child tags, not a container.
@@ -42,7 +41,7 @@ Decision 158 (2026-10-05) fixes the delivery plan:
   bundles `@marko/compiler`'s parse layer with `htmljs-parser` aliased to the
   in-repo template parser, so a registry install of core already parses with
   MX's rules (OQ 15).
-- Packages (158.3): `@mxlang/parser` is the template parser (`src/template/`,
+- Packages: `@mxlang/parser` is the template parser (`src/template/`,
   derived from htmljs-parser) and the front end from parser events to the MX
   AST; `@mxlang/babel` is the vendored Babel fork with the MX
   node types; `@mxlang/tsx-bridge` is the MX-region bridge. There is no
@@ -52,10 +51,10 @@ Decision 158 (2026-10-05) fixes the delivery plan:
 Two rules that this document mentions are implemented today in
 `@marko/compiler`, not in the template parser, and their fate differs:
 
-| Rule | Today | Under decision 158 |
+| Rule | Today | Under the MX parser |
 | --- | --- | --- |
-| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **split removed from the name, kept as data** (decision 170, amended by decision 163 addendum 12): the parser still splits at the last `:` because htmljs reports the split halves, but `MxAttribute.name` is the head before that colon (`class:x` → `class`, `nameSpan` truncated to the head) and the halves are carried as `modifier` + `modifierSpan` (the modifier's span starts after the colon); the empty-head fill by `value` is gone (A3: the default value is `name: null`) |
-| arguments together with plain attributes are an error (`assertAttributesOrArgs`, decision 109) | `@marko/compiler` | a rule of the layer that builds the call, which is core (158.3); it is not a parser rule either way |
+| the split of an attribute name at its last `:` with an empty head filled by `value` | `@marko/compiler`'s `onAttrName` (as spec §4 "`:modifier`" describes it) | **split removed from the name, kept as data**: the parser still splits at the last `:` because htmljs reports the split halves, but `MxAttribute.name` is the head before that colon (`class:x` → `class`, `nameSpan` truncated to the head) and the halves are carried as `modifier` + `modifierSpan` (the modifier's span starts after the colon); the empty-head fill by `value` is gone (A3: the default value is `name: null`) |
+| arguments together with plain attributes are an error (`assertAttributesOrArgs`) | `@marko/compiler` | a rule of the layer that builds the call, which is core; it is not a parser rule either way |
 
 Sources of truth, in this order:
 
@@ -66,22 +65,18 @@ Sources of truth, in this order:
    is part of a word in the template parser's look-behinds; stock's word test is
    ASCII-only."*), plus `fixtures/divergences.md`.
 
-Older passages cite *decision N*. That refers to the project's archived
-decision log, kept for history only; the rule itself is stated in the spec or
-in this document's tables.
-
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
-Decision 146 addenda 4 to 6 are implemented on `main` and are described here
-as they are, not as planned. Addendum 4 lives in core; addenda 5 and 6 live in
+The name-sugar rules are implemented on `main` and are described here
+as they are, not as planned. The `:name` default-tag form lives in core; the sugar after a default value and the other parser-level forms live in
 the template parser. The template parser has no atom lexer: it reads `:name`
 as stock reads it, and atoms exist only as a dialect feature built on the
 parser's triggers ([Atoms](#the-parser-grammar-atoms)).
 
 ### Method: the tables and the probes are the specification
 
-Decision 165 fixes what in this document is normative:
+What in this document is normative:
 
 - **Normative:** every table whose last column is **Probes**. Each of its rows
   cites the probes that pin it.
@@ -125,7 +120,7 @@ How to read a normative table:
   statement tags.
 
 The subject is **MX's template parser**: the source on `main` at
-`packages/parser/src/template/` (decision 158.3; read for this revision at
+`packages/parser/src/template/` (read for this revision at
 `origin/main` `98f5df47b`). It began as a copy of `htmljs-parser` 5.18.0 and is
 now MX's own code; its `PROVENANCE.md` records its departures from 5.18.0.
 Code is cited **by file and symbol**, not by line number.
@@ -140,8 +135,8 @@ symbols that carry them:
 | the `??` / `?.` skip in a named attribute's value | `states/ATTRIBUTE.ts` (`attrValue`); `states/EXPRESSION.ts`: the `??`/`?.` branch of `EXPRESSION.parse` | ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)); OQ 3 |
 | the dialect triggers: a character that opens an expression of the dialect's own, a value row that claims an attribute's default value | `states/EXPRESSION.ts` (`lexTrigger`, `expectsExpression`, `isOperatorWord`, `closesTypeArguments`, `isSpreadEnd`, `claimDefault`, `isClaimedDefault`, `valueMayEndAt`, the `atomEnd` guard in `lookBehindForKeyword`); the `triggers = true` sites in `states/ATTRIBUTE.ts`, `OPEN_TAG.ts`, `PLACEHOLDER.ts`, `TAG_NAME.ts`, `TEMPLATE_STRING.ts`; `core/Parser.ts` (`standIn`, `read`, `rawOpenTags`); `util/constants.ts` (`onTrigger`); `OPEN_TAG.exit` (`rawOpenTags`) | spec §13.9.5 ([Atoms](#the-parser-grammar-atoms)) |
 | the base position | `core/Parser.ts` (`ParseOptions`, `parse`, `positionAt`, `offsetAt`); `index.ts` | the parser's API ([Base position](#the-parser-grammar-base-position-for-fragment-parses)) |
-| non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`, `isUnicodeSpaceCode`) and its callers in `core/Parser.ts`, `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | decision 156, addenda 9, 10 and 13 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
-| Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the trigger look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | decision 156, addenda 10 to 12 ([Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary)) |
+| non-ASCII word characters where the parser looks behind or ahead | `util/util.ts` (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`, `isUnicodeSpaceCode`) and its callers in `core/Parser.ts`, `states/EXPRESSION.ts`, `ATTRIBUTE.ts` and `INLINE_SCRIPT.ts` | see [Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary) |
+| Unicode whitespace in every look-behind that asks whether a character is whitespace | `util/util.ts` (`isUnicodeWhitespaceCode`) and its callers: `core/Parser.ts` (`getPreviousNonWhitespaceCharCode`); `states/EXPRESSION.ts` (the terminator and `{` look-behinds of `EXPRESSION.parse`, `checkForOperators`, the `++`/`--` row of `lookBehindForOperator`, the trigger look-behind); `states/ATTRIBUTE.ts` (`shouldTerminateHtmlAttrValue`, `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName`); `states/HTML_CONTENT.ts` | see [Vocabulary](#the-parser-grammar-status-sources-of-truth-and-method-vocabulary) |
 | a `//` comment in a text tag's open tag; a close tag with no open tag, or after a tag that never got its name | `states/JS_COMMENT_LINE.ts` (`isInTextBody`); `states/CLOSE_TAG.ts` (`checkForClosingTag`, `ensureExpectedCloseTag`) | the parser does not throw (below) |
 | the bad-indentation message: `Line indentation does not match indentation of previous line` (stock 5.18.0 omits the "not") | `states/CONCISE_HTML_CONTENT.ts` (`CONCISE_HTML_CONTENT.parse`) | stock's wording is a typo; code `MX_PARSE_INVALID_INDENTATION` and the position are unchanged |
 
@@ -150,8 +145,7 @@ npm copy still runs under in this repository, carries only the `??` / `?.` skip,
 whitespace look-behinds and the corrected bad-indentation message (`PROVENANCE.md`); the corpus and
 `corpus-equivalence.test.ts` hold the three builds together.
 
-**The parser does not throw** (the language lead, 2026-10-06, recorded with decision
-165): an internal failure is reported through `onError`.
+**The parser does not throw** (the language lead, 2026-10-06): an internal failure is reported through `onError`.
 
 | Rule | Result | Probes |
 | --- | --- | --- |
@@ -179,10 +173,10 @@ parser returns where an expression stopped yet (OQ 1).
 
 #### The ruling governing that boundary
 
-The language lead, who owns language design, ruled on 2026-10-05. The ruling has no
-decision number yet (OQ 22). Verbatim:
+The language lead, who owns language design, ruled on 2026-10-05. The ruling is not
+yet written into the spec (OQ 22). Verbatim:
 
-> the language rule is the spec's whitespace rule (146 and its addenda); a
+> the language rule is the spec's whitespace rule ([ADR 146](/design-notes/adr-name-sugar/)); a
 > TS-aware boundary may only make an ambiguous case exact, never accept
 > something the spec rejects.
 
@@ -193,7 +187,7 @@ This document applies it as written and no more strongly:
 - Where the spec's rule applies but its outcome turns on a fact only
   TypeScript's grammar supplies, the boundary **may** supply that fact.
 - Where the spec says nothing, the ruling does not decide. The default stands
-  under decision 157.3 until the language lead rules, and the case is listed as not
+  by default until the language lead rules, and the case is listed as not
   settled.
 
 The table in [Where a real TypeScript parser would end the value
@@ -216,7 +210,7 @@ These are definitions of terms; the tables that use them carry the rules.
 - **Whitespace** is a character with code 32 or lower (`isWhitespaceCode`,
   `util/util.ts`). Where a look-behind asks whether a character is
   whitespace, the excepted characters below count as whitespace too
-  (`isUnicodeWhitespaceCode`; decision 156, addenda 10 to 12):
+  (`isUnicodeWhitespaceCode`):
   `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value,
   as with a space ([Recorded defects](#the-parser-grammar-open-questions-for-the-language-lead-recorded-defects-in-the-default)).
   Current-character and look-ahead tests
@@ -224,8 +218,8 @@ These are definitions of terms; the tables that use them carry the rules.
   **word character** is `A`–`Z`, `a`–`z`, `0`–`9`, `$`, `_`, or a code point at
   or above U+0080 that has the Unicode property `ID_Continue`, or is U+200C or
   U+200D (`isUnicodeWordCode`, `wordWidthBefore`, `wordWidthAt`,
-  `util/util.ts`; decision 156, addendum 13, which replaced addendum 9's
-  "anything that is not whitespace"). A surrogate pair is one code point, read
+  `util/util.ts`; this replaced the earlier
+  "anything that is not whitespace" rule). A surrogate pair is one code point, read
   as one looking back (a low surrogate with the high surrogate before it) and
   looking ahead (a high surrogate with the low surrogate after it); a lone
   surrogate is no word character. So `é`, `名`, a combining mark and `𠞷` are
@@ -251,13 +245,12 @@ These are definitions of terms; the tables that use them carry the rules.
   | `<div x=a\u0301 / 2 y=1/>` (a combining mark) | a division | g1696 |
   | `<div x=a >𠞷>c</div>` | `Ambiguous ">"`, as with `a >b>c` | g1698 |
 - **The default** is what the template parser does where no MX departure
-  applies. Decision 157.3 makes it the normative answer wherever MX has no
+  applies. It is the normative answer wherever MX has no
   ruling.
 - **Supplied sets.** Which names are statement tags, text tags and void tags
   is answered by the consumer's `onOpenTagName` handler, which returns a
   `TagType` (`TAG_NAME.exit`). The AST catalogue makes the statement set and
-  the tag shapes inputs supplied per target (decision 163 addenda 1 and 3;
-  [the AST catalogue](/architecture/ast/) §3.10 "Statement keywords per
+  the tag shapes inputs supplied per target ([the AST catalogue](/architecture/ast/) §3.10 "Statement keywords per
   target" and §3.12). This document says "the supplied statement set" and "a
   text tag" for them.
 
@@ -265,8 +258,8 @@ These are definitions of terms; the tables that use them carry the rules.
 
 The parser reports ranges; it builds no nodes. The node types, their fields
 and their spans belong to the AST catalogue
-([`apps/docs/docs/architecture/ast.md`](/architecture/ast/), decision 163), and this document uses
-its names and does not redefine them. Decision 163, ruling Q10: field names
+([`apps/docs/docs/architecture/ast.md`](/architecture/ast/)), and this document uses
+its names and does not redefine them. Field names
 follow the AST, and for every expression container the catalogue's span is the
 parser's **`value`** range (the text between the position's delimiters, inner
 whitespace included, a tag variable's `/` excluded) and its **`outer`** is the
@@ -419,7 +412,7 @@ What the row order means for some inputs:
 
 | Input | Result | Probes |
 | --- | --- | --- |
-| `<a:b=1/>` | the tag `a:b` with a default value: `:` is a name character (decision 146: "tag-adjacent `:` is a tag-name character") | g0701 |
+| `<a:b=1/>` | the tag `a:b` with a default value: `:` is a name character ("tag-adjacent `:` is a tag-name character") | g0701 |
 | `<div:=x/>` | the tag `div` with a bound default value | g0702 |
 | concise `div>a` | one tag name | g0703 |
 | `<1abc/>` | the tag `1abc` (OQ 16) | g0704 |
@@ -435,7 +428,7 @@ The name forms:
 | --- | --- | --- | --- |
 | Static | `div`, `my-widget` | a run of row-5 characters | g0057 g0073 |
 | Interpolated | `<${expr}>`, `<${foo}-bar>`, `<${a}${b}>` | any mix of row-5 characters and `${…}` | g0074 g0075 g0076 |
-| Unnamed | `<.card>`, `<#main>` | the name part is empty and a shorthand follows; the name event has an **empty** range (decision 145) | g0002 g0077 |
+| Unnamed | `<.card>`, `<#main>` | the name part is empty and a shorthand follows; the name event has an **empty** range | g0002 g0077 |
 | Statement tag | `static`, `import`, … | a name in the supplied statement set, for which the consumer returns `TagType.statement` ([E10](#the-parser-grammar-expression-boundaries-e10-statement-tags)) | g0078 g0079 g0080 |
 
 The empty name range is the parser's signal that the tag is unnamed (the
@@ -461,8 +454,7 @@ A shorthand part is read by the tag-name loop above (`TAG_NAME.parse`,
 | `<input#main:email.big/>` | the id part `main:email` and the class part `big`: `:` is a name character, so a `:name` after a shorthand is inside that part | g0638 |
 
 Core splits the static part of a shorthand `class`/`id` value at its first `:`
-(divergence row "A shorthand class or id cannot contain `:`"; decision 146,
-addendum of 23:23).
+(divergence row "A shorthand class or id cannot contain `:`").
 
 ## Attributes
 
@@ -552,7 +544,7 @@ A name is an `EXPRESSION` position with the flag `terminatedByWhitespace`
 | Mode | Hard stops | Source | Probes |
 | --- | --- | --- | --- |
 | HTML | `,` `=` `(` `>` `<`; `:` when the next character is `=`; `/` when the next character is `>` | `shouldTerminateHtmlAttrName` | g0122 g0086 g0010 g0123 |
-| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode (decision 156, addendum 12) | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
+| Concise | `,` `=` `(` `;` `<`; `:` when the next character is `=`; `-` when the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | `shouldTerminateConciseAttrName` | g0124 g0125 g0126 g0127 g1681 |
 | Concise, inside `[ … ]` | `,` `=` `(` `]` `<`; `:` when the next character is `=` | `shouldTerminateConciseGroupedAttrName` | g0128 g0129 g0130 g0131 |
 
 | Input | Result | Probes |
@@ -608,7 +600,7 @@ are E6, E7, E9, E14 to E17 below.
 | attribute-method type parameters ([E16](#the-parser-grammar-expression-boundaries-e16-attribute-method-type-parameters)) | `<div onClick<T>(a) { … }>` | g0017 |
 
 That a tag must not have both arguments and plain attributes is not a parser
-rule (see [Status](#the-parser-grammar-status-sources-of-truth-and-method); decision 109). Spec §8
+rule (see [Status](#the-parser-grammar-status-sources-of-truth-and-method)). Spec §8
 "Tag params" gives the parameters' meaning.
 
 ## Attribute tags
@@ -657,7 +649,7 @@ consumer's `onOpenTagName` returns `TagType.statement` (`TAG_NAME.exit`).
 | `static const a = 1` | empty | the tag `static` with the attributes `const` and `a`, the second with the value `1` | g0759 |
 
 The sets are the AST catalogue's ([ast.md §3.10](/architecture/ast/),
-"Statement keywords per target"; decision 163, addendum 3): the language's
+"Statement keywords per target"): the language's
 `import`, `export`, `static`, `server`, `client` and `class`; on the data
 target `import`, `static`, `export`; and today an empty set on the hosts and
 `parseFragment` callers that MX1 TODO
@@ -680,14 +672,14 @@ target `import`, `static`, `export`; and today an empty set on the hosts and
 | 7 | `<` followed by `>`, `<` or whitespace | text | g0156 |
 | 8 | `<` followed by anything else | an open tag | g0157 |
 | 9 | `$` followed by whitespace, with only whitespace between it and the previous newline | a scriptlet (E11) | g0158 g0159 |
-| 10 | `//` or `/*`, when the character before it is ASCII whitespace (as upstream; a Unicode space does not count here, decision 156, addendum 13, which withdrew addendum 11 at this site) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 g1689 g1690 |
+| 10 | `//` or `/*`, when the character before it is ASCII whitespace (as upstream; a Unicode space does not count here) | a JavaScript comment: `//` to the end of the line, `/* */` to its end | g0160 g0161 g0162 g1682 g1689 g1690 |
 | 11 | `${`, `$!{`, or backslashes before one | a placeholder or escaped placeholder | g0163 |
 | 12 | anything else | text | g0164 |
 
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<p>a // b\n</p>` | the text `a ` and a comment to the end of the line (row 10) | g0760 |
-| `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | text only, `a\u00a0// b\n`: no comment, as upstream and Marko (row 10; decision 156, addendum 13) | g1682 g0760 |
+| `<p>a\u00a0// b\n</p>` (U+00A0 before `//`) | text only, `a\u00a0// b\n`: no comment, as upstream and Marko (row 10) | g1682 g0760 |
 | `<p>Visit\u00a0//cdn.example/x.js</p>` | text; the tag closes (the reading alpha.7 and alpha.8 got wrong: a comment that swallowed `</p>`) | g1689 |
 | `<p>a\u00a0/* b */ c</p>` | text only: no comment | g1690 |
 | `<p>http://x</p>` | text: no whitespace before the `//` | g0761 |
@@ -779,9 +771,8 @@ The whitespace rules of spec §3 "Whitespace" (boundary trimming, dropping a
 whitespace-only run that begins with a newline, collapsing runs to one space,
 ignoring comments, the `preserveWhitespace` bypass) are applied by the consumer
 of the parser's events, not by the parser. Today that is `@marko/compiler`'s
-`onText`. When `@marko/compiler` is dropped (decision 158.2), the design
-intent is that the MX layer taking its place applies them once (decision
-158.3 puts the front end from parser events to the MX AST in
+`onText`. When `@marko/compiler` is dropped, the design
+intent is that the MX layer taking its place applies them once (the front end from parser events to the MX AST is in
 `@mxlang/parser`) and that core and hosts do not re-normalize (spec §3
 "Whitespace"). This is a statement about consumers, not a parser rule.
 
@@ -866,8 +857,7 @@ conditions:
 
 Rejections raised **outside** the template parser, by core: scriptlets, CDATA
 and declarations (spec §3); an attribute name outside Marko's grammar, such as
-a spaced `#id` or `.class` (`Invalid attribute name`); duplicate attributes, a warning with the last occurrence winning
-(decision 135). The catalogue's list of
+a spaced `#id` or `.class` (`Invalid attribute name`); duplicate attributes, a warning with the last occurrence winning. The catalogue's list of
 front-end codes is [ast.md §3.13](/architecture/ast/).
 
 ## Expression boundaries
@@ -1238,7 +1228,7 @@ The value starts as in E1. Hard stops:
 | --- | --- | --- | --- |
 | outside `[ … ]` (`shouldTerminateConciseAttrValue`) | `,` | always | g0435 |
 | | `;` | always | g0436 |
-| | `-` | the next character is `-` **and** the previous character is whitespace, ASCII or Unicode (decision 156, addendum 12) | g0437 g0438 g0439 g1680 |
+| | `-` | the next character is `-` **and** the previous character is whitespace, ASCII or Unicode | g0437 g0438 g0439 g1680 |
 | inside `[ … ]` (`shouldTerminateConciseGroupedAttrValue`) | `,` | always | g0440 |
 | | `]` | always | g0441 |
 
@@ -1247,7 +1237,7 @@ The value starts as in E1. Hard stops:
 | `div x=\n  a` | the value `a`: the whitespace after the `=` includes newlines | g0856 |
 | `div x=a > b`, `div x=a/>` | one value: `>` and `/>` are no stops in concise mode | g0264 g0857 |
 | `div x=a + ,b` | one value: the operator exemption applies as in E1 | g0858 |
-| `div x=1\u00a0-- text`, `div x=1 -- text` | the value `1\u00a0` and a text block; with a space, the value `1` and a text block. The value keeps the Unicode space, which is no soft stop (decision 156, addendum 12) | g1680 g1688 |
+| `div x=1\u00a0-- text`, `div x=1 -- text` | the value `1\u00a0` and a text block; with a space, the value `1` and a text block. The value keeps the Unicode space, which is no soft stop | g1680 g1688 |
 
 Soft stops are as in E1 with the concise-mode steps 3 and 4 of
 [the continuation test](#the-parser-grammar-expression-boundaries-how-a-position-is-scanned-the-continuation-test). A value continues onto the
@@ -1591,7 +1581,7 @@ skipped and then:
 | Input | Result | Probes |
 | --- | --- | --- |
 | `<foo(a) { b }/>`, `<foo(a)\n  { b }/>` | a method with a zero-width name: `{` follows the `)`, after whitespace | g0120 g0942 |
-| `<input:email(a) { return a; }/>` | the tag `input:email` and a default method. Decision 146, addendum 4 gives it its meaning, in core ([dialect rule 5](#the-parser-grammar-dialect-rules)) | g0651 |
+| `<input:email(a) { return a; }/>` | the tag `input:email` and a default method. Core gives it its meaning ([dialect rule 5](#the-parser-grammar-dialect-rules)) | g0651 |
 
 ### Types inside the other positions
 
@@ -1804,19 +1794,19 @@ parser reports for each form is the table after it.
 4. **A spaced `:x` or `.x` after a value** continues the value, as in stock
    ([E1 overrides](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
 5. **Repeated attributes** follow the duplicate rule: the later one wins, with
-   a warning (decision 135).
+   a warning.
 6. **Name sugars belong to a syntax module.** Core has none; a dialect that
    wants `:name` as an attribute or a tag-head name claims it through its
    syntax table and reads the call core hands it.
 7. *(Retired: the former name-sugar rules.)*
 8. *(Retired: the former bare-`:` error.)*
-9. **The unnamed tag and `defaultTag` (decision 145).** The parser reports an
+9. **The unnamed tag and `defaultTag`.** The parser reports an
    empty name range; by design it writes no tag name there. Core resolves the
    name afterwards: parent contract `defaultTag`, then user config
    `mx.<target>.defaultTag`, then the host override, then the
-   target's built-in (decision 145, addendum 2). An invalid `defaultTag` value
-   is an error at its declaration (decision 145 and its addendum 1).
-10. **Wildcard children (decision 147)** add no syntax: a child keeps its
+   target's built-in. An invalid `defaultTag` value
+   is an error at its declaration ([the unnamed tag](/specification/#the-mx-language-4-elements-and-attributes-the-unnamed-tag)).
+10. **Wildcard children** add no syntax: a child keeps its
     authored tag name, and `<:att>` yields a child whose `name` is `att`.
 11. **Atoms belong to a dialect.** The template parser reads `:name` as
     stock does and reserves nothing; a dialect's syntax table arms a trigger
@@ -1943,7 +1933,7 @@ the normative one.
    cases are in [the table below](#the-parser-grammar-open-questions-for-the-language-lead-where-a-real-typescript-parser-would-end-the-value-differently),
    each with its class under the 2026-10-05 ruling. *Recommendation:* rule the
    rows of class (c) one by one; until then the boundary reproduces the default
-   for them, as decision 157.3 requires.
+   for them, as the default rule requires.
 3. **`??`, `?.` and `?:`.** In a named attribute's value MX stops `??` and `?.` from opening a
    ternary, and tests pin it, but no spec paragraph or decision states it, and
    `?:` still counts as a ternary (`x=a ?:b` is one value). *Recommendation:* state `??` and `?.` in the
@@ -1972,8 +1962,8 @@ the normative one.
     is Marko's attribute `value:foo` and `<div :/>` is `value:`, as spec §4
     "`:modifier`" states.
 12. **`$!{…}` in an attribute value.** The template parser accepts it as value
-    text; spec §3 "Interpolation" says "Marko's parser rejects it". Under
-    decision 158 there is no Marko compiler; which MX layer raises it?
+    text; spec §3 "Interpolation" says "Marko's parser rejects it". With
+    the MX parser there is no Marko compiler; which MX layer raises it?
     *Recommendation:* the expression parse at the boundary, with an MX message.
 13. **Text bodies.** The parser recognises placeholders, strings and template
     literals in a `TagType.text` body, and an unbalanced quote there is an
@@ -2020,13 +2010,12 @@ the normative one.
 20. **`::` followed by whitespace.** *Retired*: `::` is no token of the
     template parser, so `x=a :: b` is one value, as in stock
     ([Atoms](#the-parser-grammar-atoms)).
-21. **Agreement with the AST catalogue.** *Settled* by decision 163, ruling
-    Q10: field names follow the AST; a container's span is the parser's `value`
+21. **Agreement with the AST catalogue.** *Settled*: field names follow the AST; a container's span is the parser's `value`
     range and `outer` its event range. This document adopts both
     ([Ranges](#the-parser-grammar-status-sources-of-truth-and-method-ranges-and-the-names-the-ast-catalogue-gives-them)).
-22. **The 2026-10-05 boundary ruling has no decision number**, so nothing
+22. **The 2026-10-05 boundary ruling is stated only here**, so nothing
     outside this document can cite it and `divergences.md` has no row for it.
-    *Recommendation:* number it in the entry that fixes the boundary mechanism
+    *Recommendation:* write it into the spec section that fixes the boundary mechanism
     (OQ 1).
 23. **`x=a !b` and `x=a ++b`.** The default reads each as one value, which is
     not a TypeScript expression; TypeScript reads `a!` and `a++` and stops. No
@@ -2046,7 +2035,7 @@ the normative one.
     to remove; none is covered by spec text.
 25. **`div` in close-tag matching.** `<.a></div>` is accepted because the parser
     compares against the literal `div` for an unnamed tag, whatever `defaultTag`
-    resolves to (decision 145). The htmljs fixture `shorthand-closing-html2` pins it.
+    resolves to. The htmljs fixture `shorthand-closing-html2` pins it.
     *Recommendation:* accept only `</>` for an
     unnamed tag, or compare against the resolved name in core.
 26. **A close tag in a concise region.** Spec §3 "Concise mode" says closing
@@ -2088,7 +2077,7 @@ The inputs the open questions mention:
 | 16 | `<1abc/>` | g0704 |
 | 17 | `<div x=a + ,b/>`, `<div x=a +/>`, `<div x=async/>`, `<div x=async, y=1/>`, concise `div x=async\n  span`, `div x=f<T> ,y=1`. TODO `operator-exemption-consumes-hard-stop` | g0788 g0832 g0664 g0665 g0306 g0666 |
 | 18 | concise `div x=a instanceof\nB`, `div x=a +\nspan`; `<div x=a\n  <span/>` | g0446 g1026 g0633 |
-| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones (decision 161); TODO `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
+| 19 | `div x=(a`, `div(a`, `$ {a`, `div\|a`, `div<A`, `div (a`, `div onClick(a) {b`, `script -- ${b`, `div.a${b`, `${x`, ``span\n  div x=`${a``. The front end reports `MX_INPUT_ENDS_IN_DELIMITER` for the silent ones; TODO `concise-eof-interpolation-drops-event` | g0366 g0368 g0370 g0374 g0375 g0376 g0373 g0377 g0380 g0381 g0382 |
 | 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
 | 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
 | 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | g0686 |
@@ -2100,14 +2089,14 @@ The inputs the open questions mention:
 ### Where a real TypeScript parser would end the value differently
 
 "Default" is main's result. The class is assigned from the spec text and
-decision 146 under the 2026-10-05 ruling:
+the name-sugar rules under the 2026-10-05 ruling:
 
 - **(a)** the spec's rule applies and its outcome turns on a fact only
   TypeScript's grammar supplies; a TypeScript-aware boundary **may** make the
   case exact;
 - **(b)** the spec's rule, in text that exists, decides the input; that result
   stands and the boundary **must not** change it;
-- **(c)** the spec is silent; the default stands under decision 157.3 until
+- **(c)** the spec is silent; the default stands until
   the language lead rules. The last column notes whether TypeScript's reading would
   accept anything the spec rejects.
 
@@ -2147,10 +2136,10 @@ corpus.
 | Defect | Behaviour today | TODO | Probes |
 | --- | --- | --- | --- |
 | a generic call or generic arrow in an HTML-mode value | cut at `>` with no error: `x=f<T>(y)`, `x=<T,>(a) => a` | `html-value-generic-call-cut-at-gt` (OQ 7) | g0353 g0670 |
-| end of input in concise mode in a position whose delimiter the owning state consumed | no error from the template parser; the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (decision 161) | none (was `concise-eof-open-delimiter-silent`, OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
+| end of input in concise mode in a position whose delimiter the owning state consumed | no error from the template parser; the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener | none (was `concise-eof-open-delimiter-silent`, OQ 19) | g0368 g0370 g0374 g0375 g0376 g0373 g0377 |
 | end of input in concise mode inside a tag name's, shorthand's or template literal's `${…}` | no error, and the owning event is not reported: no shorthand, no event, no value (the MX front end reports `MX_INPUT_ENDS_IN_DELIMITER`, so nothing is dropped silently) | `concise-eof-interpolation-drops-event` (OQ 19) | g0380 g0381 g0382 |
 | fixed on main in #377 (TODOs `template-parser-ascii-only-lookbehinds` and `template-parser-comment-in-text-tag-open-crash`), kept here as regression probes | `<div x=é / 2 y/>` and `${é / 2}` divide; `<div x=énew y=1/>` is the value `énew` and `y=1`; `<div.a::${x}/>` is the class `.a::${x}`; `<script // c </script>` no longer closes the tag from inside its open tag | none | g1027 g1028 g1029 g1030 g0047 |
-| fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`; decision 156, addenda 11 and 12), kept here as regression probes | `x=(f(/*c*/ await :b))` and `x=(f( await :b))` are one value each; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
+| fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`), kept here as regression probes | `x=(f(/*c*/ await :b))` and `x=(f( await :b))` are one value each; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |
 
 The behaviours of OQ 13 (no `\` escape in a text-body string), OQ 17, OQ 24,
@@ -2159,7 +2148,7 @@ OQ 25 and OQ 27 look like defects as well and are not filed. An implementer
 
 ## Conformance
 
-The probe corpus (decision 165) pins the rows of this document's normative
+The probe corpus pins the rows of this document's normative
 tables on the three builds ([Method](#the-parser-grammar-status-sources-of-truth-and-method-method-the-tables-and-the-probes-are-the-specification)).
 Beside it: the htmljs fixtures, upstream's fixture directories kept
 byte-identical in `packages/parser/src/template/__tests__/fixtures/` and run

@@ -32,7 +32,7 @@ The html target has no reactive runtime — it compiles a template to a plain `(
 | `<await>` | Error — the host genuinely can't render a pending value to a string |
 | `<try>` with `<@placeholder>` | Error — needs a second render pass the host doesn't have |
 | `<try>` with only `<@catch>` | Lowers to an ordinary `try`/`catch` |
-| `<return>` | Not an error — a tag is its own compiled module under the unit model, so its caller invokes it. The module's `render(input, out)` entry writes the output to the caller's sink and returns the value, which never travels in the output (decision 155). `/var` is supported in any scope, dynamic tags included. See [Returning a value](/custom-tags/templates/#template-tags-returning-a-value) for the full grammar, `/var` scoping per host, and the JSX-hooks restriction. |
+| `<return>` | Not an error — a tag is its own compiled module under the unit model, so its caller invokes it. The module's `render(input, out)` entry writes the output to the caller's sink and returns the value, which never travels in the output. `/var` is supported in any scope, dynamic tags included. See [Returning a value](/custom-tags/templates/#template-tags-returning-a-value) for the full grammar, `/var` scoping per host, and the JSX-hooks restriction. |
 
 "Inert" is a shape, not a license to silently drop content: an inert tag's own attributes and body are validated against what Marko's own tag definition allows, and anything unexpected is a compile error naming the tag — not silently discarded.
 
@@ -52,7 +52,7 @@ Marko also adds a `nonce` from the render's `$global.cspNonce`. MX does not read
 
 ### Opting into `strict`
 
-Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict` (decision 111).
+Pass `{ strict: true }` to reject eight constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>`, `<debug>`) as compile errors instead of treating them as inert, for an author who wants "this template needs a reactive runtime" enforced at compile time rather than silently accepted and ignored. `<log>`/`<debug>` are debug-only tooling rather than reactive constructs, but get the same named-construct-error treatment under `strict`.
 
 The one check that applies regardless of `strict` is the `input`-shadowing guard: a `<let>` or `<const>` binding named `input` is always rejected, since it would silently break the template's own input parameter either way.
 

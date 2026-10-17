@@ -5,7 +5,7 @@ description: "Why `<#id>` and `<.class>` no longer hard-code `div`, how the name
 
 # ADR 145: the unnamed tag and `defaultTag`
 
-**Status:** accepted 2026-10-04 (decision 145 and its two addenda in the decisions log). **Followed by:** ADR 146 (`:name`), ADR 147 (wildcard children).
+**Status:** accepted 2026-10-04. **Followed by:** ADR 146 (`:name`), ADR 147 (wildcard children).
 
 ## Context
 

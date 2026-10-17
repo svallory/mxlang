@@ -34,8 +34,6 @@ where the answer genuinely is not settled.
   means the host's `HostDeclarations` decides, and the host table says what each
   one chose.
 - "MX 1" is the current language. "MX 2" is the next major.
-- "decision N" in older passages refers to the project's archived decision
-  log, kept for history only. The rule stated in this file is what binds.
 
 ### Reserved generated identifiers
 
@@ -54,7 +52,7 @@ exports retain their names; generated imports use private aliases.
 
 This is stricter than Marko 6.4.4, which accepts `__mxX`, `_x`, `__x`, `$x`
 and `$mxX` bindings (tag variables and `static` declarations). It is an
-MX-only safety restriction (reserve-mx-identifiers; decision 72's explicit
+MX-only safety restriction (reserve-mx-identifiers; MX's explicit
 stricter-validation policy), not a `$`- or `_`-prefix reservation.
 
 Type-only names stay legal: a type parameter (`infer __mxU`, `[__mxK in keyof
@@ -63,8 +61,7 @@ binding, so they are not rejected.
 
 **Bindings MX spells itself are `__mx`-reserved.** The reservation protects the
 `__mx` prefix, and the reservation only means anything if generated *bindings*
-live inside it — so every binding a host names itself falls under it (decision
-72's stricter-validation policy, as above). That is not cosmetic: a range
+live inside it — so every binding a host names itself falls under it (the stricter-validation policy, as above). That is not cosmetic: a range
 loop's own mapper parameters are in scope for the authored
 `from`/`to`/`step` expressions written inside the same callback, so a
 generated `_`/`mxIndex`/`$i` there silently shadowed an authored binding of the
@@ -136,7 +133,7 @@ extension selects a compilation model, not a flavour of one language.
 | `.mx` | A whole-file MX template | The host's module (`(input) => string`, a JSX component, an Angular template) | Shipped |
 | `.solid.mx` | A TypeScript module with **MX regions** in expression position | Solid 2 JSX text | Shipped |
 | `.astro.mx` | An Astro component whose template is MX | An `.astro` module | Shipped |
-| `.react.mx`, `.preact.mx`, `.hono.mx` | A TSX module with **MX regions** in expression position (decision 154) | A JSX expression per region, in the host's own JSX dialect | Shipped |
+| `.react.mx`, `.preact.mx`, `.hono.mx` | A TSX module with **MX regions** in expression position | A JSX expression per region, in the host's own JSX dialect | Shipped |
 | `.ng.mx` | An Angular TypeScript module whose `@Component` `template:` is an MX region | `.ts` with an inline `template` | Shipped |
 
 A host file kind's middle segment is the host's name (`.solid.mx`, `.astro.mx`,
@@ -181,30 +178,28 @@ One narrow exception, outside the product path:
   `./x.marko` imports pointed at the twins; a fixture's committed `.mx` twin
   wins). The real `.marko` files are only ever read by Marko's own run.
 
-Core resolves tag names itself (decision 197): a compile runs no Marko tag
+Core resolves tag names itself: a compile runs no Marko tag
 lookup and reads no `marko.json`. Core's own `tags/` discovery can still find a
-`.marko` file for a tag call. That is not an MX input (decision 172): see
+`.marko` file for a tag call. That is not an MX input: see
 "`.marko` files as tags" in §9.2.
 
 ### Why an `.astro.mx` file cannot be a page
 
-Decision 134 spells the Astro template kind `.astro.mx`, like `.solid.mx`
-(`<name>.<host>.mx`); it replaces the single-dot `.amx` of decisions 76c and 78.
+The Astro template kind is spelled `.astro.mx`, like `.solid.mx`
+(`<name>.<host>.mx`); it replaces the single-dot `.amx`.
 It is for components and layouts. Astro's route collection keys on
 `path.extname(basename)` — the **last** extension segment only. Measured
 against astro@7.3.2: a `page.astro.mx` under `src/pages` routes to
 `/page.astro`, with a literal `.astro` in the URL, and `injectRoute` cannot
-repair it. Per the decision 134 addendum, an `.astro.mx` file under the pages
+repair it. An `.astro.mx` file under the pages
 directory is an error from the Astro integration, in `astro dev` and
 `astro build`. The message names every offending file and gives the fix: write
 `about.astro` and import the `.astro.mx` component from it, or write the page
 as `about.mx`. Pages written as `.mx` are unaffected. When Astro matches the
 longest registered page extension, pages follow with no language change.
 
-> **Open question.** `.solid.mx` was left "for now" by decisions 69, 70 and 72;
+> **Open question.** `.solid.mx` was left "for now";
 > no ruling ever finalized it. It is shipped and stable in practice.
-
-**Decisions:** 72, 78, 86, 96, 99; region-file consequences 95, 97.
 
 ---
 
@@ -218,7 +213,7 @@ consequence that costs real debugging time: `start` and `end` are `undefined`
 on these nodes, so the statement text is recovered by slicing on
 `loc` line/column.
 
-**Statement tags on every target (decision 168).** The six statement tags
+**Statement tags on every target.** The six statement tags
 (`import`, `static`, `export`, `client`, `server`, `class`) are declared to the
 parser from core's own taglib on every host, so their text is code, never
 attributes: a typed `static function f(a: number): string {…}` or a `<T,>`
@@ -373,7 +368,7 @@ named, namespace, `import type`, a side-effect `import "…"`) is the whole
 grammar: `import x = M.N`, `import x = require("…")`, several statements in one
 `import` (`import a from "a"; import b from "b"`, or an indented line that
 continues the statement) and Flow's `import typeof` are a positioned error at
-the statement, on every target (decision 193; Marko accepts `import x = M.N` and
+the statement, on every target (Marko accepts `import x = M.N` and
 `import typeof`, recorded in `divergences.md`). The error never reaches the host, so no target
 sees a half-read import.
 
@@ -439,8 +434,8 @@ Import binding names are recovered by **parsing** the hoisted line with Babel �
 default, namespace, named, aliased and combined forms — never by regex.
 
 **Neither explicit imports nor `export interface Input` are required.** Both
-were conventions of the retired `.mx` dialect, killed by decisions 65 and 68 and
-kept dead by 72. Marko allows arbitrary TypeScript in a `static` block
+were conventions of the retired `.mx` dialect, killed and
+kept dead. Marko allows arbitrary TypeScript in a `static` block
 regardless.
 
 ### Region files
@@ -468,7 +463,7 @@ siblings in `<>…</>` is that way out, and what it means depends on the host:
   `</>`.
 
 Marko has no expression-position templates, so this is a host decision, not a
-Marko semantic (decision 120).
+Marko semantic.
 
 ### Errors
 
@@ -482,15 +477,13 @@ Core-owned:
 
 A `server` block is **not** inert on the html target — that target *is* the server
 render, so it runs and hoists like `static`, and its bindings are readable from
-the template (decision 67a; verified: `server const S = 41 + 1` then `${S}`
+the template (verified: `server const S = 41 + 1` then `${S}`
 renders `42`). A `client` block never runs on the server, but html still
 declares the names it declares at its own top level (`client { let q = 1 }`
 leaves `var q;`, with no initializer; an `import` declares its local names, and
 `client export const y = 1` declares `y`), exactly as Marko's server render does, so
 `${typeof q}` renders `undefined` rather than failing; on every other host it is
 an error (see "Statement tags on every target", §2).
-
-**Decisions:** 65, 67a, 68, 70, 71, 72, 95(3), 97(d), 97(j).
 
 ---
 
@@ -505,7 +498,7 @@ an error (see "Statement tags on every target", §2).
 
 `escape(value)` escapes `& < > " '`; `null` and `undefined` render as the empty
 string, not their names. It treats its input as **literal text**, so `&` becomes
-`&amp;` and `&amp;` becomes `&amp;amp;` — pinned by test (decision 45).
+`&amp;` and `&amp;` becomes `&amp;amp;` — pinned by test.
 
 On the html target a `${expr}` or `$!{expr}` in text position prints a truthy
 value as its string, `0` (and `-0`) as `0`, and every other falsy value (`false`,
@@ -540,7 +533,7 @@ would collapse whitespace twice** — this is the same single rule on every host
 Solid included.
 
 Marko's parser owns boundary trimming and collapses remaining whitespace
-runs with `value.replace(/\s+/g, " ")` (decisions 33 and 141). It ignores
+runs with `value.replace(/\s+/g, " ")`. It ignores
 comments when finding adjacent content. At a body's beginning/end it removes
 leading/trailing CR/LF plus indentation; a whitespace-only run beginning with
 CR/LF is dropped by `onText` before a node is created. `preserveWhitespace`
@@ -558,7 +551,7 @@ Consequences, measured against Marko 6.4.4:
 - `${" "}` is the escape hatch for a literal space the newline rule would drop.
 - **Comments are not content** and do not count when trimming.
 
-**Body presence (decision 141).** Core tests the already-normalized text for
+**Body presence.** Core tests the already-normalized text for
 nonemptiness, never `.trim()`s it. `<Wrap> </Wrap>` and `<wrap>\t  </wrap>`
 therefore supply one-space content, through both imports and discovered
 `tags/*.mx`; `<Wrap>\n  </Wrap>` supplies no content. A comment alone supplies
@@ -586,7 +579,7 @@ text before handing values to the host; Solid retains intrinsic-element
 HTML templates but decodes and escapes text in component/flow bodies.
 Decoded control references such as `a&#10;b` retain the newline rather than
 undergoing JSX's whitespace trimming (jsx-text-entities review, 2026-10-04;
-parity correction under decision 72).
+parity correction).
 
 **Known divergence (placeholder boundary).** Preact/React/Hono decode each
 authored text node independently. Marko concatenates HTML before the browser
@@ -674,7 +667,7 @@ construct** (§11/§7). Marko's own fixture
 bare `${tagName}` at column 0 fails at render with "Invalid tag name" — it
 compiled to a dynamic tag, not a placeholder.
 
-Both shapes now lower alike (`lowerTag`, decision — a `DelegatedTag` for a host
+Both shapes now lower alike (`lowerTag`: a `DelegatedTag` for a host
 claiming `DYNAMIC_TAG` with `shape` `"bare"`/`"tagged"`, or, unclaimed, a
 `Component` with a dynamic target):
 
@@ -800,8 +793,6 @@ Only the built-in
 custom tag, and not a `<script>` under the `none` tag-rules preset, where it is an
 ordinary tag.
 
-**Decisions:** 12 (superseded), 33 (both entries), 45, 54, 14, 96, 139.
-
 ---
 
 ## 4. Elements and attributes
@@ -811,7 +802,7 @@ ordinary tag.
 MX decides element-vs-component by **in-scope binding and case**, which is
 Marko's own rule, not JSX's. The full precedence chain is in §11.
 
-**A lowercase tag is never a call to a binding (decision 164).** A local
+**A lowercase tag is never a call to a binding.** A local
 `import` or `<define>` binding is called as a tag only when its name is not
 lowercase (the exact complement of Marko's `/^[A-Z]/` rule, so `_x` and `$x`
 count as lowercase), or through a dynamic tag (`<${row}>`). `import { input }
@@ -837,14 +828,14 @@ the local-variable error:
 | `<x>` is… | Result |
 |---|---|
 | a native element (`<span>` + a define or tag import named `span`) | the native element, with a positioned warning at the tag: "`<span>` is the native element; the `span` defined\|imported at L:C is not called. Rename it `Span` or write `<${span}>`" |
-| a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read, decision 197), or a core taglib name (`<debug>`, `<log>`) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
+| a registered custom tag, a contract child, a tag the target's own taglib registers (a third-party target's; a `marko.json` is not read), or a core taglib name (`<debug>`, `<log>`) | called (or disposed) as before, whatever is imported; no diagnostic, never the local-variable error |
 | none of those (`import row from "./row.mx"` + `<row/>`, a `.ts` value import, a named import, a lowercase `<define>`, `<const>`, `static const`, `export const`, a lowercase `<for>` param) | a positioned **error** on every target, Marko's own message verbatim, at the tag name: "`Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use `<${row}/>` or rename to `Row`." |
 
 Marko's message capitalizes the first character whatever it is, so `_row`'s
 rename offer reads "rename to `_row`" (kept verbatim for parity); the warning
 below, which is MX's own wording, offers only the dynamic tag for such a name
 ("write `<${_row}>`"). "Native" means the target's `nativeTags`, its element table
-(decision 197; `@mxlang/web-elements`' HTML, SVG and MathML elements on every
+(`@mxlang/web-elements`' HTML, SVG and MathML elements on every
 built-in target; core's own HTML elements for a target that declares none),
 in a region and a whole file alike, so the two agree.
 
@@ -912,7 +903,7 @@ takes it. Complex values are clearest in parentheses.
 
 On Preact, React and Hono, tooling checks named, non-event native-element
 props against the host's own JSX types and reports a mismatch at the authored
-attribute name (decision 140 (b)). This includes renamed `class`/`for` props
+attribute name. This includes renamed `class`/`for` props
 and `key`/`ref`; event handlers use their separate type-check projection.
 Spreads have no authored prop name, default attributes have a zero-width name
 span, and custom elements do not acquire native-prop name diagnostics from
@@ -969,12 +960,10 @@ including `.ng.mx` and generated tag classes, remain unchanged pending a
 lead ruling on the compatibility of requiring runtime helpers on authored
 page classes. No new instance member is required by this change.
 
-**Decisions:** 67 (Marko parity), 135 (last-wins spread precedence).
-
 ### Duplicate attributes
 
 Within one tag, the **last** occurrence of an attribute name wins, on every
-host and target (decision 135). `@mxlang/core` resolves it during lowering: the
+host and target. `@mxlang/core` resolves it during lowering: the
 IR carries one attribute per resolved name, the last one with its own spans, so
 no host emitter or delegated-tag consumer ever sees a duplicate. This is
 stock Marko 6.4.4's behavior, probed: `<div class="a" id="x" class="b">`
@@ -1109,7 +1098,7 @@ unknown-key error. See [Custom tags: the contract](/custom-tags/reference/).
 
 ### The unnamed tag
 
-**Decision 145; [ADR 145](/design-notes/adr-default-tag/).** A tag with a
+**[ADR 145](/design-notes/adr-default-tag/).** A tag with a
 shorthand and no name, `<#main>`, `<.card>`, `<#a.b>`, or concise `#main` and
 `.card`, is an **unnamed tag**. `#x` still becomes `id="x"` and `.a.b` still
 becomes `class="a b"`; what changed from Marko is the tag they sit on. Marko
@@ -1285,8 +1274,7 @@ Marko oracle are unchanged. Recorded in `divergences.md`.
 
 ### `class:foo` / `style:foo` modifiers
 
-**Reserved on native elements** — not "something MX cannot express" (decision 67b,
-measured against 5.42.5). Marko's native-element *taglib* rejects every form of them with its
+**Reserved on native elements** — not "something MX cannot express" (measured against 5.42.5). Marko's native-element *taglib* rejects every form of them with its
 own fix-it (the parser itself parses them; the translator's taglib lookup is
 what refuses):
 
@@ -1314,15 +1302,14 @@ name never becomes `value:name`. An empty modifier still contributes its colon: 
 means an attribute named `value:` with an empty value. The same preservation
 applies to any ordinary name: `<div x:/>` means `x:` with an empty value,
 `<div x: = "s"/>` means `x:` with value `"s"`, and `<div x: = expr/>`
-means `x:` with the expression's value (decision 65, Marko parity). The space
+means `x:` with the expression's value (Marko parity). The space
 before `=` matters: `x:=expr` is a binding, not an empty-modifier attribute.
 Every `name:mod` is an ordinary complete name, including `x:foo`, `data:x`
 and names with multiple colons. Only native-element `class:`, `style:` and
-`on:` prefixes are reserved, including empty suffixes and additional colons
-(decision 67b); component props have no such reservation, so both
+`on:` prefixes are reserved, including empty suffixes and additional colons; component props have no such reservation, so both
 `<Card class: = expr/>` and `<Card class:active=expr/>` forward the complete name.
 An expression-valued native event such as `onClick: = fn` keeps its event name
-`click:`, not an ordinary spread key (decision 101). Authored spread expressions
+`click:`, not an ordinary spread key. Authored spread expressions
 and their keys are not rewritten. An explicit head can
 already contain colons: `<div value:foo:bar="y"/>` splits into the head
 `value:foo` and modifier `bar`, then emits the complete name `value:foo:bar`.
@@ -1374,8 +1361,7 @@ support is unchanged. Validation precedes control-flow lowering, including
 controls containing attribute tags, so an invalid binding cannot be discarded.
 Uncontracted attribute tags follow the same binding-reference rule. Calls
 resolved through registered custom-tag contracts, including their recursive
-attribute-tag contracts, retain their own bound-value shape/item checks
-(decision 138, E1/E4), including literal arrays. A local binding shadowing a registered tag is an
+attribute-tag contracts, retain their own bound-value shape/item checks, including literal arrays. A local binding shadowing a registered tag is an
 ordinary component call, not a contract-backed exemption.
 
 | Authored | Meaning | html | preact/react/hono | solid | `.astro.mx` | angular |
@@ -1414,7 +1400,7 @@ name is interpreted (for example Solid's own `prop:` namespace and Astro's
 On `.astro.mx`, authored native `define:`, `is:`, `transition:`, `client:` and
 `server:` names, plus the exact `slot` attribute, use computed string-keyed
 spreads to render escaped **plain attributes**, not Astro directives or implicit
-named-slot projections (decisions 65 and 67b, Marko parity). Their dynamic values
+named-slot projections (Marko parity). Their dynamic values
 are evaluated once; `true` writes an empty attribute and `false` omits it, as in
 Marko. String-typed computed keys avoid Astro's directive-specific JSX types
 without suppressing errors in the authored value expression. Directive-shaped
@@ -1459,8 +1445,7 @@ intrinsic elements), none of which a derivation can reverse (`keydown` →
 `onKeyDown`, never `onKeydown`; `dblclick` → React's and hono's
 `onDoubleClick`, Preact's `onDblClick`; on React also `focusin` → `onFocus`
 and `focusout` → `onBlur`, react-dom's own bindings). Preact and hono bound
-the old `onKeydown` spelling at run time, but their types reject it (decision
-161), so each target looks the spelling up in its own list. The DOM name from
+the old `onKeydown` spelling at run time, but their types reject it, so each target looks the spelling up in its own list. The DOM name from
 `on<Name>`/`on-<exact>` is the input; the host's spelling is a lookup in its
 table. The lists are closed: a DOM name a host's JSX types declare no handler
 prop for is a positioned compile error, never an emitted prop the types reject
@@ -1523,7 +1508,7 @@ Host differences here are **documented, not shimmed**:
 - The handler's parameters are whatever the host runtime passes — the DOM event
   on every current host. (Marko's own runtime would pass `(event, target)`.)
 - **Angular calls the handler as Marko does, `(event, element)`, through a
-  typed invoker on the component** (decision 117), so a 0-arg, 1-arg, 2-arg or
+  typed invoker on the component**, so a 0-arg, 1-arg, 2-arg or
   inline-arrow handler all pass `strictTemplates` and the handler's return
   value reaches Angular (`false` still calls `preventDefault()`). Two recorded
   divergences from Marko (`divergences.md`): `this` is **the component** (Marko:
@@ -1563,9 +1548,9 @@ oracle compares attribute order, so getting it wrong fails the gate.
 ### Spread and trust
 
 Spreading an attacker-controlled object whose key is a legitimate handler name
-(`onload`) renders a live handler. Decision 44 records this as a **residual
+(`onload`) renders a live handler. This is a **residual
 trust boundary, documented not closed**: do not spread untrusted objects.
-Spread attribute *names* are pattern-validated, not merely escaped (decision 42).
+Spread attribute *names* are pattern-validated, not merely escaped.
 
 ### Tag fields rejected by default
 
@@ -1580,14 +1565,14 @@ is the construct label, always backticked (`` `<if>` ``, `` `<for>` ``, …):
 | `type arguments on ${what} are not supported in a standalone template` |
 | `tag params \`\|...\|\` on ${what} are not supported in a standalone template` |
 
-**Decisions:** 9, 10, 11, 13, 30, 42, 44, 65, 67b; events **open**.
+Events are **open**.
 
 ---
 
 ## 5. Structural tags
 
 The structural core renders **the same way on every host**. A host may forbid one
-of these outright; it may never change what one means (decision 71).
+of these outright; it may never change what one means.
 
 ### 5.1 `<if>` / `<else if>` / `<else>`
 
@@ -1609,8 +1594,8 @@ Chain rules: comments and whitespace-only text between branches are skipped;
 conditionless `<else>`. Each branch is its own binding scope.
 
 **Tag params on `<if>` (`<if|u|=cond>`) are not MX 1** — Marko rejects them
-(`Tag does not support parameters.`), so they are deferred to MX 2. Decision 19
-fixed the *word order* of params generally (params come before `=value`); it did
+(`Tag does not support parameters.`), so they are deferred to MX 2. The
+*word order* of params generally (params come before `=value`); it did
 not make `<if|u|>` legal.
 
 | Message | When |
@@ -1633,12 +1618,12 @@ Four iteration shapes, chosen by attribute.
 - `from=`/`to=`/`until=`/`step=` iterate a numeric range: **`to=` is inclusive,
   `until=` is exclusive**. `step=` lowers to a per-row callback binding
   `i = from + k * step`; a **negative step is allowed**, and a literal `step=0`
-  is a parse error (decision 51, superseding decision 7's blanket `step=` error).
+  is a parse error (there is no blanket `step=` error).
   A `step` that evaluates to `0` at runtime clamps to zero rows rather than
   looping forever.
 - `by=` keys rows for reconciliation. It is **reconciler input**: on a
   string-rendering host it is **inert** — accepted, contributing nothing to the
-  output (decision 65, reclassifying S8). Caveat carried from that decision: if
+  output (reclassifying S8). Caveat carried from that rule: if
   hydration markers are ever emitted, `by=` stops being inert.
 - A **string** `by=` is the property-name shorthand and only `of=` has one:
   `in=`/`to=`/`until=` *call* `by` as a function, so Marko refuses the string at
@@ -1653,12 +1638,12 @@ Four iteration shapes, chosen by attribute.
 **Params come before `=value`** — `<for|item, i| of=xs>`, and by the same rule
 `<if|u|=cond>` would be the spelling were it legal. `notes/solidmx-spec.md` §5.1
 writes `<if=user()|u|>`; that prose is wrong, and the real grammar is
-params-first (decision 19).
+params-first.
 
 **Every `<for>` binds its iterable to a temporary before the loop opens.** This
 is not an optimization: `<for|input| of=input.items>` is legal Marko and must
 shadow, and without the temporary the emitted `for (const input of input.items)`
-hits the temporal dead zone and throws at render time (decision 67c).
+hits the temporal dead zone and throws at render time.
 
 | Message | When |
 |---|---|
@@ -1695,7 +1680,7 @@ define's own head, not the enclosing render function's.
 A `<define>` is called as a tag only by its PascalCase name (`<define/Row>`
 then `<Row/>`) or through a dynamic tag; a lowercase `<define/row>` is called
 as an expression (`${row(...)}` where the host allows it) and `<row>` stays a
-native element (§4, decision 164).
+native element (§4).
 
 **A `<define>` is block-scoped.** `<define/Foo>` binds `Foo` inside the body
 that declares it (an `<if>` or `<else>` branch, a `<for>` body, a `<try>`,
@@ -1736,7 +1721,7 @@ stays an error. Astro has no `<define>` at all.
 | `` `<define>` without a name (write `<define/name>`) `` | No `/var`. |
 
 **On html, preact, react, hono and Solid, a `<define>` called with attributes and no
-arguments passes one attribute object to its first parameter (decision 160),**
+arguments passes one attribute object to its first parameter,**
 like a custom tag's `input`:
 `<Row n=1/>` against `<define/Row|p|>` or `<define/Row|{ n }|>` hands `Row`
 `{ n: 1 }` (spreads, attribute tags and `content` included; `{}` when the call
@@ -1746,8 +1731,7 @@ is withdrawn on those hosts. When a define with 2 or more params is called that
 way, lowering gives a warning positioned at the call's tag name (only on the
 hosts that implement the rule, marked by `HostDeclarations.defineCallPassesAttrs`):
 `` `<Card>` has 2 params, but only the first parameter receives the attributes object; destructure it (`|{ a, b }|`) instead of reading one param per attribute ``.
-A call with tag arguments binds its extras Marko's way (decision 109,
-revised by decision 210 item 3): the call appends **one trailing object** —
+A call with tag arguments binds its extras Marko's way: the call appends **one trailing object** —
 the attribute tags by their names plus `content` for the body — as its next
 argument, so it lands in the first unfilled parameter and every parameter
 after it reads `undefined`; nothing is bound by name, so a parameter that
@@ -1760,7 +1744,7 @@ and a define whose only parameter is `...rest` called as `<D(1, 2)>x</D>` reads
 `rest = [1, 2, { content }]`. A call with no body and no attribute tags appends
 nothing. A rest parameter is never padded with `undefined`: when nothing fills
 it, it is the empty array, as in Marko.
-A define with no params still ignores the attributes. Decision 160 is the language rule for every
+A define with no params still ignores the attributes. This is the language rule for every
 target; Angular keeps its own call shape until `define-call-attrs-angular`
 lands.
 
@@ -1771,7 +1755,7 @@ lands.
 | Angular | per-parameter name lookup (`define-call-attrs-angular`) | |
 
 **On Solid, a `<define>` inside a `.solid.mx` region is hoisted to module
-scope (decision 110b).** A region is a JSX expression spliced into someone
+scope.** A region is a JSX expression spliced into someone
 else's module, so it has no statement position for `const Row = (...) =>
 ...;` the way html/preact's in-place `const` does — the same wall
 `hoistedImports` already hits for a discovered tag's synthesized import. The
@@ -1790,9 +1774,9 @@ enclosing render function, and no per-row/per-branch scope for a nested one
 to close over either. On Solid, a `<define>` call is a plain function-call
 expression (`{__mx_DefineRowN(...)}`), not a JSX tag — JSX has no
 positional-call syntax. With tag arguments it appends Marko's one trailing
-object (decision 109, revised by decision 210 item 3, above); without them it
+object (above); without them it
 passes one attribute object
-(decision 160, above). The capture check binds the names a destructured param
+(above). The capture check binds the names a destructured param
 introduces (`|{ n }, i|` binds `n` and `i`).
 
 ### 5.5 `<let>`
@@ -1939,19 +1923,18 @@ construct label verbatim (`` "`<const>`" ``).
 A **tag param** named `input` (`<for|input|>`, `<define/R|input|>`) is
 **accepted**, because it opens a genuinely nested scope where an ordinary
 JavaScript shadow is correct — and Marko renders those. Rejecting them would be
-an implementation limit stated as a language rule, which decision 65 forbids.
+an implementation limit stated as a language rule, which the language rules forbid.
 
 This check is **not** `strict`-only: a silently-broken input is a bug under
 either policy.
 
-**Decisions:** 19, 51, 7 (partly superseded), 65, 67c, 70, 71, 79; `<if|u|>`
-deferred per `divergences.md`.
+`<if|u|>` is deferred per `divergences.md`.
 
 ---
 
 ## 6. `<try>`
 
-`<try>` is a **core-owned custom tag** (decision 91), not per-host code and not a
+`<try>` is a **core-owned custom tag**, not per-host code and not a
 structural tag. Core validates one portable call shape, then asks the active
 host for its `try` primitive via `ctx.build.delegatedTag("try", …)`.
 
@@ -1979,7 +1962,7 @@ validator (§13.3).
 `<try>` is lowered with `isBuiltin`, which exempts it from the `hasContent`
 gate ordinary custom tags get: it is a structural pass-through wrapper and
 must reproduce the caller's body unchanged. `<try>  <@catch>…</@catch></try>` keeps its
-normalized space; decision 141 also retains that space on ordinary component/custom-tag
+normalized space; the same rule also retains that space on ordinary component/custom-tag
 calls, rather than treating it as an absent body.
 
 Errors, all carrying the `` `<try>`:  `` prefix:
@@ -2003,17 +1986,17 @@ Per-host lowering is in §13. Notably `<try>` with `<@placeholder>` is an error 
 the html target (it needs a second render pass), while `<try>` with only `<@catch>`
 lowers to an ordinary `try`/`catch` whose body renders into a buffered sub-sink
 (§13.8): when the body throws, its partial output is dropped and `<@catch>`
-renders in its place, as in Marko 6.4.4 (decision 155). A `<try>` with neither
+renders in its place, as in Marko 6.4.4. A `<try>` with neither
 `<@catch>` nor `<@placeholder>` is a compile error (above), as in Marko 6.4.
 
 On Preact, React and Hono the `<try>` body reaches the host's boundary as a thunk
 (`<__mxErrorBoundary fallback={…}>{() => body}</__mxErrorBoundary>`), so a throw
 written directly in the body is caught with the real error and none of the partial
 body, and a throw in a descendant component is caught during a server render too
-(TODO `jsx-try-ssr-error-boundary`; decision 181). Preact sets `options.errorBoundaries`, a
+(TODO `jsx-try-ssr-error-boundary`). Preact sets `options.errorBoundaries`, a
 process-global flag of the consumer's `preact`. React's server renderer runs no
 error boundaries, so its boundary wraps the body in an internal `Suspense` whose
-fallback is `<@catch>`. Three React-only divergences from Marko 6.4.4 remain (decision 181),
+fallback is `<@catch>`. Three React-only divergences from Marko 6.4.4 remain,
 recorded in `divergences.md`: **R1**, with both `<@catch>` and `<@placeholder>`, a
 descendant's server-side throw renders `<@placeholder>` in the server HTML and
 `<@catch>` only after the client renders; **R2**, with `<@catch>` and no
@@ -2021,15 +2004,13 @@ descendant's server-side throw renders `<@placeholder>` in the server HTML and
 descendant's server-side throw gives `<@catch|e|>` a stand-in `Error`, not the real
 one.
 
-**Decisions:** 8, 28, 51, 65, 85, 91, 93, 155, 181.
-
 ---
 
 ## 7. Components and dynamic tags
 
 ### Resolution precedence
 
-The **normative** order, as shipped (decisions 93, 113). On a target, `<effect>` is refused
+The **normative** order, as shipped. On a target, `<effect>` is refused
 before any of these (§11), unless the `none` tag-rules preset is in force or a
 host's own disposition (step 1) claims the name:
 
@@ -2043,7 +2024,7 @@ host's own disposition (step 1) claims the name:
 6. A registered custom tag
 7. A host claim (`isDelegatedTag`)
 8. `declarations.isComponent` — skipped for a lowercase name bound by an
-   `import` or `<define>` (decision 164, §4: a native element with a warning,
+   `import` or `<define>` (§4: a native element with a warning,
    or Marko's local-variable error when the name is no element, whatever the
    binding is)
 9. PascalCase with nothing matching → error; else an element if
@@ -2056,9 +2037,9 @@ component reference. An earlier fix checked local bindings with no casing gate
 and regressed every lowercase custom tag or host claim (e.g. `<style>`) that
 shared a name with an unrelated lowercase import in the same file.
 
-**Decision 113: a `<const>` binding and a `<for>`/`<define>` tag param also
+**A `<const>` binding and a `<for>`/`<define>` tag param also
 shadow a registered custom tag of the same name, scoped exactly to where the
-binding is in effect** (decision 113, `custom-tags-local-bindings`). Measured
+binding is in effect** (`custom-tags-local-bindings`). Measured
 against Marko 6.4.4's own translator (`normalizeTag`,
 `@marko/runtime-tags/dist/translator/index.js:5852-5860`): Marko rewrites a
 capitalized tag name to a local-variable reference whenever
@@ -2070,8 +2051,7 @@ also consults `ctx.tagVarShadowed`, the scope-tracking set already maintained
 by `shadowBindings`/`scopeBindings` around every `<const>`, `<for|p|>`, and
 `<define|p|>` body, so scoping is correct by construction — a name shadowed
 inside an `<if>` branch or a `<for>` body reverts to the registered custom tag
-immediately outside it. This closes the gap `custom-tags-import-precedence`
-(decision 93) left open.
+immediately outside it. This closes the gap `custom-tags-import-precedence` left open.
 
 The html target resolves a tag by what it matches, not by its case alone: a
 tag matching an import, a `<define>`, or a taglib/`tags/` discovery is a
@@ -2091,7 +2071,7 @@ An unresolved **hyphenated** tag refuses to compile, matching Marko
 5.42.5). `divergences.md` lists letting it through as a literal custom element
 as an MX 2 candidate.
 
-**Decision 114: an unresolved PascalCase tag is Marko's own compile error too,
+**An unresolved PascalCase tag is Marko's own compile error too,
 on every host, including Solid.** Verified against `@marko/compiler` 5.42.5 /
 `marko@6.4.4`, by source (`tag-name-type.ts`'s `analyzeTagNameType`: a
 PascalCase name with no scope binding and no resolvable child file sets
@@ -2161,7 +2141,7 @@ or taglib entry) is a compile error on all four hosts. Each supplies
 
 Type-only fence imports are excluded the same way `sourceBindings`/
 `importBindings` already exclude a type-only value import everywhere else
-(decision 114/115, above): `import type Widget from "./widget.mx"` binds no
+(above): `import type Widget from "./widget.mx"` binds no
 runtime value, so `<Widget/>` on any of these four hosts is Marko's unresolved-
 tag error, not a silent reference.
 
@@ -2173,7 +2153,7 @@ other host, in a page `.mx` and in a `.ng.mx` region alike; it never emits a
 placeholder element with an "add this import yourself" warning for a tag
 nothing resolves. Two consequences:
 
-- Decision 116's routing landed while this host's component dispatch still
+- The import routing landed while this host's component dispatch still
   called `Component.target.kind === "dynamic"` unreachable. A capitalized
   tag bound to a value import that is not a `.mx` default import, or to a
   local whose value core cannot statically prove (a `<for>` tag param), now
@@ -2229,7 +2209,7 @@ For **import bindings**, only a *default* import whose specifier ends in
 other capitalized value *import* (named, namespace, or a default from any
 other extension) routes to `kind: "dynamic"` — the identical lowering an authored
 `<${expr}/>` already produces above, so every host's existing dynamic-tag
-emitter handles it with no host-side routing change (decision 79). Gated
+emitter handles it with no host-side routing change. Gated
 specifically on `ctx.importSpecifiers` (populated only by an authored
 `import` statement or, on Solid, the `importSpecifiers` a real
 `.solid.mx` caller's surrounding module supplies), not on `ctx.imports` —
@@ -2255,7 +2235,7 @@ classifies each local's value:
   expression, arrow function, or class expression — stays a direct
   `kind: "name"` call, unchanged.
 - **Everything else is "unknown"** and routes `kind: "dynamic"` the same way
-  an import routes under decision 116 proper: a string literal
+  an import routes: a string literal
   (`static const Tag = "div"`), a conditional (`const Tag = cond ? A : B`),
   or any other expression core cannot inspect at lowering time — including a
   call result (`const Tag = lazy(...)`/`createComponent(...)`), since core
@@ -2272,14 +2252,14 @@ name set rather than real AST nodes, `@mxlang/tsx-bridge`'s
 classification at the parser boundary (over the surrounding module's own
 `programBindings` pre-parse) and thread it through as
 `unknownModuleBindings`. A routed-dynamic local carries `valueImportBinding`
-exactly as decision 116's import case does, so typed attribute-tag checking
+exactly as the import case does, so typed attribute-tag checking
 and diagnostics are unaffected.
 
 **Astro host-cannot divergence: an "unknown" fence binding cannot render as a
-dynamic tag at all (decision 65's "target cannot" class, unrelated to this
-decision's own classification).** `@mxlang/host-astro`'s `---` fence resolves a
+dynamic tag at all (the "target cannot" class, unrelated to this
+classification).** `@mxlang/host-astro`'s `---` fence resolves a
 capitalized tag through its own top-level value bindings the same way
-`.solid.mx`'s `moduleBindings` does (decision 114's astro extension), and now
+`.solid.mx`'s `moduleBindings` does (the astro extension of the same rule), and now
 classifies them the same way too — but Astro's emitter (`component()`)
 unconditionally rejects every non-`"name"` `Component` target, because Astro
 resolves component names statically and has no dynamic-tag construct at all,
@@ -2308,9 +2288,9 @@ function). Without a branch for such an object, `mxDynamic` (the shared
 Preact/React/Hono JSX emitter's dynamic-tag helper) would hand the bare object
 back as a JSX child, which React rejects ("Objects are not valid as a React
 child"). Reachable both as a local
-(`static const Comp = memo(Foo)`, already "unknown" under this decision's own
+(`static const Comp = memo(Foo)`, already "unknown" under this section's own
 classification — a `CallExpression` is never statically function-like) and,
-since decision 116's own import routing (#155), as a value import
+since the import routing (#155), as a value import
 (`import Card from "./Card.tsx"` where `Card` is `export default memo(Foo)`).
 
 `mxDynamic`'s "is this component-like" check includes an
@@ -2325,7 +2305,7 @@ misclassify an ordinary rendered element as a component (an already-rendered `<@
 `<${head}/>` is exactly such an element). React's `memo`/`forwardRef`/`lazy`
 markers are plain `Symbol()`s, not `Symbol.for(...)`, so identity cannot be
 compared across a second React copy — the description string is the only
-stable cross-copy signal. Checked *before* decision 106's `.content`-guard,
+stable cross-copy signal. Checked *before* the `.content` guard,
 so a recognized object never reaches that guard (a plain data object never
 carries `$$typeof` at all). **The check is React-specific in practice**: measured directly, neither
 Preact's own renderer (`preact-render-to-string`'s dispatcher, `typeof type
@@ -2346,11 +2326,10 @@ still called and its return kept, matching MX's pre-116 behavior for that
 one case rather than Marko's, since an imported `.tsx` component on
 react/preact/hono, or an MX component on html, *is* a plain function —
 matching Marko byte-for-byte here (discarding the function's return value)
-would break ordinary host interop. Decision 106's data-attribute-tag guard
+would break ordinary host interop. The data-attribute-tag guard
 (a plain object with an own `content` property throws, naming the
 `<${x.content}/>` route) is unaffected and still fires for a value import
-reaching it this way — consistent with, not a new divergence from, decision
-106, since Marko itself would silently unwrap `.content` and then find no
+reaching it this way — consistent with, not a new divergence from, the `.content` guard, since Marko itself would silently unwrap `.content` and then find no
 real renderer there either. (The `.content` guard belongs to the outgoing
 attribute-tag model and is being replaced with it: under Marko's record, §8,
 an attribute tag's value has the record's shape on every target.)
@@ -2394,7 +2373,7 @@ ignored, and the trailing props object is not read as input. Content still
 renders, threaded separately, and a string target with arguments that also
 gets attribute tags or content follows Marko exactly (§15 item 11).
 
-**Decisions:** 47/S11 (superseded by 65, swept by 68), 51, 79, 93, 94c, 112.
+Rules are stated in these docs; the history of why is kept outside the repo.
 
 ---
 
@@ -2422,8 +2401,7 @@ On the JSX hosts (preact, react, hono), a call with params that is routed as a
 props object (an imported component, `<${expr}>`, a call of a `<define>`
 written by name, a `<return>` unit) passes the function as the callee's
 `content`, and the callee calls it as `input.content(item, i)`, the shape
-Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06; it has no decision
-number). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
+Marko 6.4.4 emits (lead ruling on PR #371, 2026-10-06; it has no separate rule). A dynamic target that is falsy (`null`, `undefined`, `false`, `0`,
 the empty string) renders the body called with no arguments, as Marko
 does. A literal string target
 (`<${"div"}|item|>`) is the compile error `Tag does not support parameters.`,
@@ -2693,7 +2671,7 @@ Each of these diagnostics carries a stable code, `ScanDiagnostic.code` or
 | `MX_DOTTED_TAG_FILE_NAME` | warning, at the file | A dialect tag file's name has a dot, which a call cannot write as one tag name. The message names the `tagExtensions` entry that would fix it. |
 | `MX_RESERVED_TAG` | error, at the definition | A definition names a reserved tag: core's structural names (`RESERVED_NAMES`), or a name the dialect's `reservedTags` lists. The definition is dropped and a call resolves as if it were absent. Four sources, each positioned at the definition: a discovered tag file (the file's `1:0`), an `mx.tags` entry (that entry in the config file, the tag file named in the message), an `mx.contracts` entry (its key in the module's literal, else the module's `1:0`), and a `customTags` entry passed to `lowerSource` (each call site of the name, else the source's `1:0`). One diagnostic per occurrence: a call that carries it is not also reported `MX_UNKNOWN_TAG`, and a closed parent's `MX_TAG_NOT_ALLOWED` about that call is dropped. Never thrown. |
 
-**Package-level contracts (MX addition, decision 142).**
+**Package-level contracts (MX addition).**
 `mx.contracts` is a module string, an entry `{ module, hosts? }`, or
 an array of either. The module must default-export a plain
 `ContractMap` (`Record<string, CustomTag>`, exported by `@mxlang/core`); each key
@@ -2775,7 +2753,7 @@ remains manifest `1:0`.
 | *(warning)* `` `mx.contracts` names an unknown host in `hosts`: ${host}${hint} `` | Manifest key; full-registry name validation only. |
 | *(warning)* `` `package.json` could not be parsed as JSON: ${message}; no `mx.tags` or `mx.contracts` are loaded until the manifest parses `` | Manifest `1:0`; first revision is broken. With a previous valid revision the suffix is `` the previous valid `mx.tags` and `mx.contracts` stay in force `` instead. |
 
-**`.marko` files as tags (decision 172).** A `.marko` file is not an MX input. Where
+**`.marko` files as tags.** A `.marko` file is not an MX input. Where
 a tag call resolves to one, the result is one positioned error at the tag, with the
 same text on every target:
 
@@ -2793,7 +2771,7 @@ It is never compiled as MX, never a silent native element and never an emitted
   dynamic tag indirectly (through a variable, a ternary or a prop); a named import
   from a `.marko` file is a value, not a tag.
 
-**A `marko.json` is not read** (decision 197), on any target. A tag it maps (a
+**A `marko.json` is not read**, on any target. A tag it maps (a
 `tags-dir`, a `template`, a `renderer`) is an unknown tag like any other: html's
 "Unable to find entry point for custom tag" error, and the native element `<x>` on
 the hosts that render an unknown lowercase tag natively. It is never an import.
@@ -2812,11 +2790,10 @@ discovered tag: a default import, extension kept, relative to the calling file,
 named `_` plus the camelCased tag name (numeric suffix on a collision), once per
 module. It is the optional `HostDeclarations.resolveDiscoveredTagModule` hook plus
 `binding` on the `Component` target. No built-in target implements the hook since
-a `marko.json` stopped being read (decision 197); it stays for a third-party
+a `marko.json` stopped being read; it stays for a third-party
 target.
 
-The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path
-(decision 89a).
+The config key is **`mx`**, not `mxlang` — a hard rename with no legacy path.
 
 **The scan is synchronous, and that is load-bearing.** Bun's `onLoad`, Volar's
 `createVirtualCode`, the language server's diagnose path and `mx-tsc` all call
@@ -2826,7 +2803,7 @@ an editor, a `tsc` run and a build from resolving different tags for one file.
 **A tag's name is its filename, case included**: `tags/Icon.tag.ts` is `<Icon>`.
 Names must match `/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/`; dotfiles are skipped.
 
-**A dotted file name is rejected, not indexed** (decision 137). Under a `tags/`
+**A dotted file name is rejected, not indexed**. Under a `tags/`
 or `mx.tags` directory, a file `<base>.<word>.mx` is never callable as a tag:
 the tag form `<base.word/>` and the concise form `base.word` both parse as tag
 `base` with shorthand class `word`, so no syntax reaches such an entry and
@@ -2883,10 +2860,9 @@ true for full-registry callers. Core's public lookup contract is unchanged.
 
 | Message | When |
 |---|---|
-| *(diagnostic, recorded)* `` `mx.tags` names an unknown host in `hosts`: ${host} `` | An entry's `hosts` array names a host outside the known set (`html`, `astro`, `solid`, `preact`, `react`, `hono`, `angular`). The entry still indexes under that name — nothing is dropped — but no scan will ever match it, so this is worth a warning rather than nothing (decision 110a). |
+| *(diagnostic, recorded)* `` `mx.tags` names an unknown host in `hosts`: ${host} `` | An entry's `hosts` array names a host outside the known set (`html`, `astro`, `solid`, `preact`, `react`, `hono`, `angular`). The entry still indexes under that name — nothing is dropped — but no scan will ever match it, so this is worth a warning rather than nothing. |
 
-**`hosts` restricts a `mx.tags` entry to the host names it lists** (decision
-110a). Every integration passes its own host name into the scan —
+**`hosts` restricts a `mx.tags` entry to the host names it lists**. Every integration passes its own host name into the scan —
 `getCustomTags`/`scanCustomTags`/`scanCached`/`discoverProjectTags` all take
 an optional `host` option (`null` excludes all restricted entries for a target
 with no host filter key; `undefined` intentionally disables filtering) — and a
@@ -2995,7 +2971,7 @@ report is worth anything.
 
 A sidecar may declare `parseOptions`, `attributes`, `attributeTags`, `children`, `parents`, `analyze`,
 `transform` and `finalize`. The hook is named **`transform`, not `resolve`** —
-`resolve` is **reserved for an MX 2 Vite-style hook** (decision 87c), and
+`resolve` is **reserved for an MX 2 Vite-style hook**, and
 `migrate` is **reserved** for a source-printing mode.
 
 A `transform` may return **IR** (a macro the author wrote — the only expansion
@@ -3016,7 +2992,7 @@ Six invariants:
    first walk over a scratch context that records calls and is discarded, so
    `analyze` sees the identical `TagCall` its `transform` will get while the
    walk's hoists and warnings are not emitted twice.
-4. **A unit boundary is a hook boundary** (decision 95). A call written inside a
+4. **A unit boundary is a hook boundary**. A call written inside a
    tag template belongs to *that* template's unit and is not replayed into the
    caller, so a file-level `analyze` sees only the calls its own file wrote. A
    tag that must collect across units does it through its own module state.
@@ -3078,7 +3054,7 @@ walk, because a self-recursive call resolves during that walk.
 ### 9.7 Registration errors
 
 Module declarations are validated as a complete map during discovery, before
-precedence or host filtering drops any entry (decision 142). The following
+precedence or host filtering drops any entry. The following
 module-only errors are thrown at the module file, `1:0`; the existing rows below
 also run per module and keep that position. Programmatic maps and sidecars keep
 their existing registration behavior.
@@ -3094,39 +3070,39 @@ their existing registration behavior.
 | `` `<${name}>` is a core-owned custom tag and cannot be shadowed by a registered custom tag of the same name `` | A registered map contains `try`. |
 | `` `<${name}>`: a custom tag that defines only `finalize` has no call site and nothing to collect; add a `transform`, an `analyze` or a template file `` | `finalize` alone. |
 | `` Unknown key "${key}" in the "${attrName}" attribute declaration of tag "${tagName}"; allowed: type, items, required, enum, default, literalOnly `` | Unknown attribute-declaration key. |
-| `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` requires `type: "array"` `` | `items` on an attribute whose `type` is not `"array"` (decision 138). |
+| `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` requires `type: "array"` `` | `items` on an attribute whose `type` is not `"array"`. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `items` must be one of string, number, boolean `` | An `items` value outside the three literal element types. |
 | `` Invalid "${attrName}" attribute declaration of tag "${tagName}": `enum` cannot be combined with `type: "array"` `` | `enum` with `type: "array"` or `type: "function"` (the message names the type). |
-| `` Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: repeatable, required, attributes, attributeTags, children `` | Unknown attribute-tag-declaration key (decision 138 E4). The same check runs recursively; nested registration owners read `tag "card": "<@group>": "<@row>"`. Attribute and child declaration key lists remain unchanged at every depth. |
-| `` Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: repeatable, required `` | Unknown child-declaration key (decision 138 E2). |
+| `` Unknown key "${key}" in the "${tagAttrName}" attribute tag declaration of tag "${tagName}"; allowed: repeatable, required, attributes, attributeTags, children `` | Unknown attribute-tag-declaration key. The same check runs recursively; nested registration owners read `tag "card": "<@group>": "<@row>"`. Attribute and child declaration key lists remain unchanged at every depth. |
+| `` Unknown key "${key}" in the "${childName}" child declaration of tag "${tagName}"; allowed: repeatable, required `` | Unknown child-declaration key. |
 | `` `<${name}>`: `children` cannot be combined with `parseOptions.text: true` `` | A children contract on a raw-text tag. |
 | `` `<${name}>`: `children` cannot be combined with `parseOptions.openTagOnly: true` `` | A children contract on a tag that cannot have a body. |
-| `` `<${parent}>`: child `<${child}>` declares `parents` without `<${parent}>`; add `<${parent}>` to `<${child}>`'s `parents`, or remove `<${child}>` from `<${parent}>`'s `children` `` | A registered parent's `children` lists a registered child whose declared `parents` omits that parent (decision 138 E3). Names both tags, before parsing, even if unused; `#text` is not a tag. |
+| `` `<${parent}>`: child `<${child}>` declares `parents` without `<${parent}>`; add `<${parent}>` to `<${child}>`'s `parents`, or remove `<${child}>` from `<${parent}>`'s `children` `` | A registered parent's `children` lists a registered child whose declared `parents` omits that parent. Names both tags, before parsing, even if unused; `#text` is not a tag. |
 | `` `<${child}>`: parent `<${parent}>` declares `children` without `<${child}>`; add `<${child}>` to `<${parent}>`'s `children`, or remove `<${parent}>` from `<${child}>`'s `parents` `` | Conversely, a child's `parents` names a registered parent whose closed `children` omits that child. An undeclared `children` contract stays open; `#root` is not a tag. |
 
-Attribute-tag parents use the same two-way cross-check (decision 138 E4): when `C.parents` names `"@row"`, **every** declared `row` on any tag, at any depth, with closed `children` must list `C`. Conversely, a `row.children` listing registered `C` requires `"@row"` in `C.parents` if that list is declared. Another open or compatible `row` does not exempt a conflicting declaration. Omitted contracts and undeclared parent names remain open; `#text` and `#root` are not tags. Messages use the same two-edit fix as above and include the attribute tag's complete owner chain, for example `` `<item>`: parent `<card>`: `<@group>`: `<@row>` declares `children` without `<item>` ``.
+Attribute-tag parents use the same two-way cross-check: when `C.parents` names `"@row"`, **every** declared `row` on any tag, at any depth, with closed `children` must list `C`. Conversely, a `row.children` listing registered `C` requires `"@row"` in `C.parents` if that list is declared. Another open or compatible `row` does not exempt a conflicting declaration. Omitted contracts and undeclared parent names remain open; `#text` and `#root` are not tags. Messages use the same two-edit fix as above and include the attribute tag's complete owner chain, for example `` `<item>`: parent `<card>`: `<@group>`: `<@row>` declares `children` without `<item>` ``.
 
 ### 9.8 Call-site validation
 
-Naming (decision 132): the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
+Naming: the host hook that claims a tag is `HostDeclarations.isDelegatedTag`, its resolver is `resolveDelegatedTag`, and the IR node a claimed tag lowers to is `DelegatedTag` (built with `ctx.build.delegatedTag`). These replace `claimsTag`, `resolveHostTag` and `HostTag`, with no aliases.
 
-**Contract-only tags (MX addition, decision 130).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only whatever else it declares, `{}` included: an empty declaration is a contract for a tag with no attributes and no body rules, and a hooks-only definition is one too. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` Tag does not support arguments. ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. Decision 138 E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a retained whitespace-only body is rejected with a positioned "does not accept content" error. Decision 141 makes retained normalized whitespace content on the `transform` path too: both paths reject same-line spaces, while newline indentation removed by Marko supplies no body. A tag that has a `transform` or a template otherwise keeps its existing contract semantics. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
+**Contract-only tags (MX addition).** A custom tag may declare only a contract and have neither a `transform` nor a template. It counts as contract-only whatever else it declares, `{}` included: an empty declaration is a contract for a tag with no attributes and no body rules, and a hooks-only definition is one too. Where the active host claims the tag's name (`HostDeclarations.isDelegatedTag`), core validates the call as below, applies declared defaults, runs `analyze` over every call like any other custom tag, and lowers the call to a `DelegatedTag` with the call's attributes, attribute tags and body (a whitespace-only body is kept, exactly as for an unregistered claimed tag) and each attribute's position; the node's `span` and `nameSpan` are the ones an unregistered claimed tag gets. It differs from an unregistered claimed tag only in that the contract is enforced and defaults are added, and in what it rejects because it has no template: `` `/var` on `<tag>` is not supported: it has no template, so it has no `<return>` to bind ``; `` Tag does not support arguments. ``; and, for an attribute-tag declaration with none of `attributes`, `attributeTags` or `children`, `` `<tag>`: attribute tag `<@x>` does not support attributes `` / `` does not support nested attribute tags ``. E4 lifts that restriction only for explicitly extended declarations, as below. Where the host does not claim the name, the call fails as before with the "neither a `transform` nor a template" error. With `openTagOnly`, a retained whitespace-only body is rejected with a positioned "does not accept content" error. The same rule makes retained normalized whitespace content on the `transform` path too: both paths reject same-line spaces, while newline indentation removed by Marko supplies no body. A tag that has a `transform` or a template otherwise keeps its existing contract semantics. Marko has no such tag: it reports "Unable to find entry point for custom tag" for a taglib entry with no `template` or `renderer` (`@marko/compiler` `babel-utils/tags.js:362-368`, `runtime-tags` `custom-tag.ts:427`), and treats an `html: true` entry without either as a native element. `ctx.build.delegatedTag` takes an optional fourth argument, the attributes to carry; omitted, the node has none.
 
-**Recursive attribute-tag contracts (MX addition, decision 138 E4).** `CustomTagAttributeTag` accepts `attributes?: Record<string, CustomTagAttribute>`, recursive `attributeTags?: CustomTagAttributeTags` (named entries plus the optional `"*"` wildcard entries, decision 147 for attribute tags), and `children?: Record<string, CustomTagChild>`, alongside `required` and `repeatable`. Each declared map closes its own set; an omitted map on an extended declaration stays open. In particular, omitted `attributeTags` accepts undeclared nested attribute tags with attributes and further nesting, recursively, rather than applying the legacy body-only restriction. The shared attribute check enforces unknown names, required attributes, scalar types, expressions, `literalOnly`, enums, and E1's `array` / `function` / `items` rules at every depth. Spreads are rejected in a closed attribute map. Defaults on attribute-tag attributes are **not applied**, and never satisfy a required attribute.
+**Recursive attribute-tag contracts (MX addition).** `CustomTagAttributeTag` accepts `attributes?: Record<string, CustomTagAttribute>`, recursive `attributeTags?: CustomTagAttributeTags` (named entries plus the optional `"*"` wildcard entries, for attribute tags), and `children?: Record<string, CustomTagChild>`, alongside `required` and `repeatable`. Each declared map closes its own set; an omitted map on an extended declaration stays open. In particular, omitted `attributeTags` accepts undeclared nested attribute tags with attributes and further nesting, recursively, rather than applying the legacy body-only restriction. The shared attribute check enforces unknown names, required attributes, scalar types, expressions, `literalOnly`, enums, and E1's `array` / `function` / `items` rules at every depth. Spreads are rejected in a closed attribute map. Defaults on attribute-tag attributes are **not applied**, and never satisfy a required attribute.
 
 The same E2 children checker runs on each attribute tag's authored body before its plain children lower. It supports the reserved `#text` class, required/repeatable paths through `<if>` / `<for>`, and nested attribute-tag levels; attribute tags themselves do not count as plain children. E3's direct-parent spelling remains `"@row"`. Attribute-tag cardinality uses the preserved control-flow tree: an exhaustive branch can satisfy `required`, a loop cannot, and a loop needs `repeatable: true`. An extended declaration can occur inside `<if>` / `<for>`; one declaring none of the three maps keeps the existing no-template rejection of attributes, nested attribute tags and controlled occurrences. Template-backed tags retain their `Input` checks and host capability gates.
 
-Errors stop at the first in check order, not source order: authored children are checked before attributes, with attribute-tag bodies visited depth first. A child's error (even in a nested attribute tag) can therefore precede an invalid attribute written earlier on an enclosing tag. Errors name the complete owner chain: `` `<card>`: `<@row>`: unknown attribute `bogus` `` or `` `<card>`: `<@group>`: `<@item>`: missing required child `<leaf>` ``. Unknown/typed attributes point at the attribute, array-item errors at the element, unlisted children at the child, repetition at the second occurrence (or sole loop occurrence), and missing requirements at the receiving attribute tag. Registration checks unknown keys and E1 contradictions recursively, even for unused tags. No host-specific core rule is introduced (decision 126).
+Errors stop at the first in check order, not source order: authored children are checked before attributes, with attribute-tag bodies visited depth first. A child's error (even in a nested attribute tag) can therefore precede an invalid attribute written earlier on an enclosing tag. Errors name the complete owner chain: `` `<card>`: `<@row>`: unknown attribute `bogus` `` or `` `<card>`: `<@group>`: `<@item>`: missing required child `<leaf>` ``. Unknown/typed attributes point at the attribute, array-item errors at the element, unlisted children at the child, repetition at the second occurrence (or sole loop occurrence), and missing requirements at the receiving attribute tag. Registration checks unknown keys and E1 contradictions recursively, even for unused tags. No host-specific core rule is introduced.
 
-**Allowed authored children (MX addition, decision 138 E2).** `CustomTag.children` is a record of `{ required?, repeatable? }`, closed once present; omitted, children remain open. The reserved contract-vocabulary key `"#text"` allows non-whitespace text and `${…}` / `$!{…}`. Each non-whitespace text node or interpolation is one occurrence; whitespace-only text never counts. `required` means at least one occurrence on every path; `repeatable: true` permits more than one, including inside a loop. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent: the minimum is the minimum over branches (an absent final `<else>` supplies an empty branch), and a child inside `<for>` has minimum 0 and maximum infinity. Comments, `<const>` and `<define>` declarations are ignored; a `<define>` call counts by its authored name. Ordinary child tags count once by name, without descending into their own bodies (`<script>` and `<style>` count by name as well).
+**Allowed authored children (MX addition).** `CustomTag.children` is a record of `{ required?, repeatable? }`, closed once present; omitted, children remain open. The reserved contract-vocabulary key `"#text"` allows non-whitespace text and `${…}` / `$!{…}`. Each non-whitespace text node or interpolation is one occurrence; whitespace-only text never counts. `required` means at least one occurrence on every path; `repeatable: true` permits more than one, including inside a loop. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent: the minimum is the minimum over branches (an absent final `<else>` supplies an empty branch), and a child inside `<for>` has minimum 0 and maximum infinity. Comments, `<const>` and `<define>` declarations are ignored; a `<define>` call counts by its authored name. Ordinary child tags count once by name, without descending into their own bodies (`<script>` and `<style>` count by name as well).
 
-Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error of a tag; the tag is then skipped with its subtree and the file's other tags are still checked (decision 162, IR spec §13).
+Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error of a tag; the tag is then skipped with its subtree and the file's other tags are still checked (IR spec §13).
 
-**Wildcard children (MX addition, decisions 147 and 147 addendum 1).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The IR `lowerSource` returns (§13.7.2) is the same: a consumer that dispatches on the contract reads `name`, and the authored spelling is in `alias.authored`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
+**Wildcard children (MX addition).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The IR `lowerSource` returns (§13.7.2) is the same: a consumer that dispatches on the contract reads `name`, and the authored spelling is in `alias.authored`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
 
 *Check order.* For each authored child: an explicit `children` entry first; then the `"*"` entries in order, the first whose pattern matches the whole name; then the closed record's own error. A name that matches no entry is the E2 error with the patterns and the explicit names listed. A tag declared in `customTags` that is absent from the parent's explicit `children` is rejected even when it matches a pattern: a wildcard never applies to a declared name. A file-local binding of a PascalCase name (import, `<define>`, `<const>`, parameter) beats a match, unless the file's dialect sets `bindingsCallTags: false`: then the wildcard reads the name as unbound and claims it. Unnamed tags (`<.x>`) and dynamic tags never match.
 
-*"Unknown".* A wildcard claims a name only when nothing else resolves it, and this is target-neutral: no core structural name, no core-owned or registered custom tag, no entry in the parent's explicit `children`, and no built-in of the target. A name is a built-in on every target when it is an entry of core's own taglib (`let`, `const`, `effect`, `id`, `lifecycle`, `log`, `debug`, `await`, `script`, `style`, `html-comment`, `html-script`, `html-style`, `client`, `server`, `class`, ...), when the host declares a disposition for it, when the target's taglib lookup holds it as a non-element, or when the target's declarations list it in `builtinTags` (names the target provides without a taglib entry; the IR entry point's anonymous `object`; the same list the `defaultTag` check reads, so a built-in means one thing in core). The IR entry point is no exception: its non-wildcard handling of `<let>` is unchanged, but a wildcard never claims `let` or `object`; a vocabulary that wants a child named `let` lists it explicitly in `children`. A native element name (`title`, `div`) is not a built-in: inside a contract parent the contract decides, and `children["*"]` matches a lowercase child on the JSX hosts, Solid and Angular exactly as on html and under `lowerSource`, so one `.mx` file validates the same way everywhere. Outside a contract parent every target keeps its behaviour (decision 151 ruling 7): an unknown tag that matches no wildcard entry is an error on html, astro-html and (under `unknownTags: "reject"`) `lowerSource`, and a native element on the JSX hosts, Solid and Angular. `unknownTags: "reject"` counts a wildcard-matched child as known.
+*"Unknown".* A wildcard claims a name only when nothing else resolves it, and this is target-neutral: no core structural name, no core-owned or registered custom tag, no entry in the parent's explicit `children`, and no built-in of the target. A name is a built-in on every target when it is an entry of core's own taglib (`let`, `const`, `effect`, `id`, `lifecycle`, `log`, `debug`, `await`, `script`, `style`, `html-comment`, `html-script`, `html-style`, `client`, `server`, `class`, ...), when the host declares a disposition for it, when the target's taglib lookup holds it as a non-element, or when the target's declarations list it in `builtinTags` (names the target provides without a taglib entry; the IR entry point's anonymous `object`; the same list the `defaultTag` check reads, so a built-in means one thing in core). The IR entry point is no exception: its non-wildcard handling of `<let>` is unchanged, but a wildcard never claims `let` or `object`; a vocabulary that wants a child named `let` lists it explicitly in `children`. A native element name (`title`, `div`) is not a built-in: inside a contract parent the contract decides, and `children["*"]` matches a lowercase child on the JSX hosts, Solid and Angular exactly as on html and under `lowerSource`, so one `.mx` file validates the same way everywhere. Outside a contract parent every target keeps its behaviour: an unknown tag that matches no wildcard entry is an error on html, astro-html and (under `unknownTags: "reject"`) `lowerSource`, and a native element on the JSX hosts, Solid and Angular. `unknownTags: "reject"` counts a wildcard-matched child as known.
 
 *One identity.* `parents`, `children`, duplicate and cardinality rules, did-you-mean and `unknownTags` key on the canonical name; the alias is never a second identity. Messages print both: `` `<title>` (as `attribute`) ``; an inline contract prints `` `<PORT>` (inline contract) ``. A transform sees the canonical name and the alias.
 
@@ -3140,15 +3116,15 @@ Core checks authored children before lowering them, so a child's transform outpu
 
 *Divergence.* Marko has no children contracts, so `children["*"]` is an mx-only extension (`divergences.md`, E2 row).
 
-**Wildcard attribute tags (MX addition, decision 147 for attribute tags).** `attributeTags["*"]` is an entry or an ordered list of entries `{ pattern?, repeatable?, attributes?, attributeTags?, children?, defaultTag? }`. There is no `contract:` form: an attribute tag has no transform of its own, so an entry is always an inline contract, and there is no built-in or registry exclusion because attribute tags have no registry. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. The key works on a tag's `attributeTags` and on an attribute-tag declaration's `attributeTags`.
+**Wildcard attribute tags (MX addition).** `attributeTags["*"]` is an entry or an ordered list of entries `{ pattern?, repeatable?, attributes?, attributeTags?, children?, defaultTag? }`. There is no `contract:` form: an attribute tag has no transform of its own, so an entry is always an inline contract, and there is no built-in or registry exclusion because attribute tags have no registry. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. The key works on a tag's `attributeTags` and on an attribute-tag declaration's `attributeTags`.
 
 *Check order.* For each authored attribute tag: an explicit `attributeTags` entry first; then the `"*"` entries in declaration order, the first whose pattern matches the whole name; then the closed record's own error. A name that matches no entry is the plain unknown-attribute-tag error (`` `<resource>`: unknown attribute tag `<@nope>` ``, with no names or patterns listed). `repeatable` applies per matched name — two `<@row>` under one non-repeatable entry is one error naming `row` — and `required` is rejected at registration: a wildcard has no single name to require.
 
 *Registration errors.* `attributeTags["*"]` is neither an object nor a list of objects; an entry is not an object, has an unknown key (allowed: `pattern`, `repeatable`, `attributes`, `attributeTags`, `children`, `defaultTag`), or declares `required`; `pattern` is not a string, does not compile, or is not a whole regex on its own (`a)|(?:b` would let its anchors bind to one alternative); an entry that contains itself is refused.
 
-**Allowed authored parents (MX addition, decision 138 E3).** `CustomTag.parents?: string[]` names allowed **direct** parents. Omitted, placement remains unrestricted; an empty list permits no placement. `"#root"` is a reserved key of the contract vocabulary: it means the top level of a file or of a template's own compilation unit, never the template's caller. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent. `<define>` is not transparent: a tag in a `<define>` body has parent `define`. A dynamic parent reads `<${…}>` in diagnostics and never matches a `parents` list, even one spelling that diagnostic placeholder. Every other authored tag breaks the chain, whether registered or not: `<attributes><div><attribute/></div></attributes>` gives `attribute` the direct parent `div`. An attribute-tag body has that attribute tag as its direct parent, written `"@row"` in a parents list for `<@row>`. A recursive call inside its own template follows the same rule: top-level recursion has parent `#root`, not its own tag name.
+**Allowed authored parents (MX addition).** `CustomTag.parents?: string[]` names allowed **direct** parents. Omitted, placement remains unrestricted; an empty list permits no placement. `"#root"` is a reserved key of the contract vocabulary: it means the top level of a file or of a template's own compilation unit, never the template's caller. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent. `<define>` is not transparent: a tag in a `<define>` body has parent `define`. A dynamic parent reads `<${…}>` in diagnostics and never matches a `parents` list, even one spelling that diagnostic placeholder. Every other authored tag breaks the chain, whether registered or not: `<attributes><div><attribute/></div></attributes>` gives `attribute` the direct parent `div`. An attribute-tag body has that attribute tag as its direct parent, written `"@row"` in a parents list for `<@row>`. A recursive call inside its own template follows the same rule: top-level recursion has parent `#root`, not its own tag name.
 
-Core tracks authored tag ancestors on the lowering context and checks the parent before lowering the custom call's body or invoking its hooks. Synthesized transform output is not authored syntax and is not checked. The rule covers transform tags, templates with declaration-only sidecars and contract-only delegated tags on every target, with no host-specific branch. Parent diagnostics have no colon prefix and report the first error of a tag (the tag is skipped with its subtree, decision 162):
+Core tracks authored tag ancestors on the lowering context and checks the parent before lowering the custom call's body or invoking its hooks. Synthesized transform output is not authored syntax and is not checked. The rule covers transform tags, templates with declaration-only sidecars and contract-only delegated tags on every target, with no host-specific branch. Parent diagnostics have no colon prefix and report the first error of a tag (the tag is skipped with its subtree):
 
 | Message | When |
 |---|---|
@@ -3165,7 +3141,7 @@ The other call-site diagnostics carry the `` `<tag>`:  `` prefix:
 | `unknown attribute \`${attr.name}\`` | Not declared. |
 | `attribute \`${attr.name}\` must be a literal` | `literalOnly` violated. |
 | `attribute \`${attr.name}\` must be ${type}, got ${literal.type}` | Declared type disagrees. |
-| `attribute \`${attr.name}\` must be ${type}, got ${shape}` | `type: "array"` or `"function"` and the written value has another shape (`string`, `number`, `boolean`, `object`, `array`, `function`). An identifier, call, member or conditional has no knowable shape and is accepted. A function is an arrow function, a function expression or the method shorthand `value({ post }) { … }`; the last two reach the contract only on a host that resolves attribute methods (`resolveAttributeMethod`), any other host rejects them before the contract runs. A template literal counts as a string, and a bound attribute (`value:=…`) is checked like a dynamic one (decision 138). |
+| `attribute \`${attr.name}\` must be ${type}, got ${shape}` | `type: "array"` or `"function"` and the written value has another shape (`string`, `number`, `boolean`, `object`, `array`, `function`). An identifier, call, member or conditional has no knowable shape and is accepted. A function is an arrow function, a function expression or the method shorthand `value({ post }) { … }`; the last two reach the contract only on a host that resolves attribute methods (`resolveAttributeMethod`), any other host rejects them before the contract runs. A template literal counts as a string, and a bound attribute (`value:=…`) is checked like a dynamic one. |
 | `attribute \`${attr.name}\` item ${n} must be ${items}, got ${shape}` | `type: "array"` with `items` and a literal element (1-based) of another shape; positioned at the element. A non-literal element, a spread or a hole passes. |
 | `attribute \`${attr.name}\` must be an expression` | `type: "expression"` but static or boolean. |
 | `attribute \`${attr.name}\` must be a static value from ${…}` | `enum` declared, value not a literal. |
@@ -3187,12 +3163,10 @@ Transform-time:
 
 | Message | When |
 |---|---|
-| `custom tag has neither a \`transform\` nor a template file, so a call has nothing to expand to` | Neither present and the host does not claim the name (§9.8, decision 130). |
+| `custom tag has neither a \`transform\` nor a template file, so a call has nothing to expand to` | Neither present and the host does not claim the name (§9.8). |
 | `` `<${call.name}>`: custom tag threw: ${message} `` | A `transform` threw a non-`TranslateError`. |
 | `custom tag transform must return an array of IR nodes or a TagCall for its template` | Bad return value. |
 | *(warning)* `` `<${call.name}>`: custom tag transform did not read its attributeTags; authored attribute tags were dropped `` | A macro `transform` never touched `call.attributeTags` while the call had some. Detected with a `Proxy`. |
-
-**Decisions:** 80, 85, 87, 89, 90, 91, 93, 94a, 94d, 95, 97, 98, 130, 138, 141.
 
 ---
 
@@ -3236,8 +3210,8 @@ Plus the four generic field rejections (§4) with `` `<return>` `` as the label.
 
 | Host | Shape |
 |---|---|
-| html (and Astro's `.mx` units) | The unit's sink entry `render(input, out)` writes the output to the caller's sink and **returns** the value (decision 155, §13.8). The value never travels in the output, and the default export stays `(input) => string` |
-| Preact, React, Hono | The unit's **render path** `.render(props)` returns `{ value, output }` (decision 155's model, html's `.render` shape adapted to JSX); the default export returns only the output, so any caller without static knowledge of the unit — a dynamic tag, a hand-written TSX import — renders the body, never the pair object. A `/var` call site is still emitted as an ordinary **function call** (`.render(props)`), not a JSX element — a JSX element is a *description* of a call the runtime makes later, so it could never hand the pair back |
+| html (and Astro's `.mx` units) | The unit's sink entry `render(input, out)` writes the output to the caller's sink and **returns** the value (§13.8). The value never travels in the output, and the default export stays `(input) => string` |
+| Preact, React, Hono | The unit's **render path** `.render(props)` returns `{ value, output }` (the Marko render model, html's `.render` shape adapted to JSX); the default export returns only the output, so any caller without static knowledge of the unit — a dynamic tag, a hand-written TSX import — renders the body, never the pair object. A `/var` call site is still emitted as an ordinary **function call** (`.render(props)`), not a JSX element — a JSX element is a *description* of a call the runtime makes later, so it could never hand the pair back |
 | Solid | A generated `$mxReturn` **callback prop** the unit calls during setup, because a Solid component's return value is its view. **One-shot, not reactive** — a tag wanting reactivity returns an accessor |
 | Astro | Renders through its own renderer rather than a call site, so the pair is unwrapped there |
 
@@ -3357,8 +3331,6 @@ per-callback-scope statement position, `tag-var-in-callback-scope`, would
 also let Solid's `/var` bind synchronously instead of through a callback)
 flips the assertion.
 
-**Decisions:** 67d (superseded), 95, 97e, 97f, 97g, 97h, 98.
-
 ---
 
 ## 11. Stateful tags
@@ -3377,7 +3349,7 @@ core's and fire on every target.
 
 ### The capability test
 
-Decision 65, normatively:
+The capability test, normatively:
 
 > Does the construct contribute to the emitted bytes, or does it only configure
 > behaviour after the first render? The second kind is **inert** (accepted, no
@@ -3437,7 +3409,7 @@ its body; `<html-script>` is the tag for those.
 
 ### The `strict` policy
 
-An opt-in stance, not the default (decision 68's policy fold). Under `strict`,
+An opt-in stance, not the default (the policy fold). Under `strict`,
 the same six constructs — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
 blocks, `<id>` — become errors naming the construct, for an author who wants
 "this template needs a reactive runtime" enforced at compile time.
@@ -3495,8 +3467,6 @@ host may also ship framework code an author would otherwise write by hand
 (Preact's `MxErrorBoundary`, for instance), and a template using none of it
 imports none of it.
 
-**Decisions:** 54, 65, 67a, 68, 70, 71, 79, 82, 85.
-
 ---
 
 ## 12. Positions and diagnostics
@@ -3507,8 +3477,7 @@ An error about more than one place (a module's `fail` with `also`) also carries 
 in source order; its `line`/`column` are the last one's.
 
 A `TranslateError` carries **1-based `line`** and **0-based `column`** — what
-Marko's nodes have, not byte offsets. Every IR node carries a position
-(decision 79).
+Marko's nodes have, not byte offsets. Every IR node carries a position.
 
 Three position rules:
 
@@ -3581,7 +3550,7 @@ records it.
   wrong column inside one file's mappings is still worse than none.
 - **Every integration that scans must surface `ScanResult.diagnostics`** (§9.2).
 
-### A diagnostic with no source mapping is never dropped (decision 161)
+### A diagnostic with no source mapping is never dropped
 
 The TypeScript layer type-checks the generated module and maps each diagnostic
 back to the `.mx` source. Not every generated span has a source mapping (a
@@ -3621,7 +3590,7 @@ whichever TypeScript reports first. A source that does not parse reports at
 treated this way: another language's projection in the same program (a plain
 `.astro` page under `mx-tsc --astro`) is that tool's business, and MX never
 labels its diagnostics. The message carries one of three markers, decided **per diagnostic
-range** (decision 161 addendum 1), not per generated line (a Solid template is
+range**, not per generated line (a Solid template is
 one long line):
 
 ```text
@@ -3670,7 +3639,7 @@ generated position to map.
 
 ### A host is not done without its diagnostics
 
-Decision 71, and the reason `@mxlang/language-server` exists: Marko's own
+This is the reason `@mxlang/language-server` exists: Marko's own
 language server compiles with a hardcoded config carrying **no host policy**, so
 a construct a host's `strict` policy rejects is valid Marko and Marko's server
 reports nothing. `tsserver` cannot fill the gap either — it never opens a `.mx`
@@ -3680,15 +3649,13 @@ MX's server is **diagnostics-only** by design: adding completion or hover would
 mean re-implementing Marko's language server, which it runs *alongside*, not in
 place of.
 
-**No file-extension routing for diagnostics** (decision 71): extensions pick a
+**No file-extension routing for diagnostics**: extensions pick a
 grammar, they do not produce diagnostics. Host and `strict` are resolved from the
 nearest `package.json` (§13.5).
 
-**Decisions:** 70, 71, 72, 79, 80, 88, 91, 94c, 95(2), 97f, 99, 161.
-
 ---
 
-### Literal Angular syntax in an Angular template (mx-only lint, decision 126)
+### Literal Angular syntax in an Angular template (mx-only lint)
 
 In a `.mx` page, tag or `.ng.mx` region, text that is Angular template syntax
 is **plain text** to Marko and to MX: `{{ name }}` and `@if (x) {` have no
@@ -3715,7 +3682,7 @@ also names the literal escape, `${"{{"}` or `${"@"}if`. Text in `<pre>`,
 `<code>` and `<textarea>` still warns (Angular interpolates there too), so a
 page that shows Angular syntax uses the escape. The lint covers `.mx` pages and
 tags compiled by the Angular host as well as `.ng.mx` regions. This is a lint
-beyond Marko (decision 72), lives only in `packages/hosts/angular`, and is
+beyond Marko, lives only in `packages/hosts/angular`, and is
 recorded in `divergences.md`.
 
 ## 13. Host semantics table
@@ -3842,7 +3809,7 @@ Not merely in emitted syntax — in observable behavior:
 > those hooks plus tag resolution and file kinds. The registry still lists
 > the four as `*-jsx` targets, and the names below select them.
 
-A **host** is a framework; a **target** is an output format (decisions 129/132).
+A **host** is a framework; a **target** is an output format.
 `@mxlang/core` reads the file's MX config ([Configuration](/configuration/):
 `mx.config.*`, `.mxrc*` or `package.json#mx`, read from the project directory
 only: the directory of the nearest `package.json`, never a subdirectory of it
@@ -3856,7 +3823,7 @@ wherever the config came from.
 
 1. `mx.target` names a registered target directly: `html`, `astro-html`,
    `solid-jsx`, `preact-jsx`, `react-jsx`, `hono-jsx` or `angular-template`.
-   `tree` is an error (decision 204 removed it; below). A host name here is an
+   `tree` is an error (the tree target was removed; below). A host name here is an
    `unknown-target` **error** with its default target in the hint; other unknown
    names get a nearest-target suggestion when within two edits. The literal
    `data` is refused the same way, with a hint instead of a suggestion:
@@ -3883,7 +3850,7 @@ wherever the config came from.
    `@mxlang/host-solid`; it needs no `mx.host`.
 5. If neither resolves, exactly one registered target package in `dependencies`
    or `devDependencies` selects its target; otherwise the default is `html`,
-   non-strict. `@mxlang/core` and `peerDependencies` do not count (decision 124).
+   non-strict. `@mxlang/core` and `peerDependencies` do not count.
    An invalid target still hands on this fallback (or a resolved `mx.host`) so
    later diagnostics are not drowned, but it cannot produce a green build.
 
@@ -3952,7 +3919,7 @@ third-party target cannot join it (for now)` (a loaded target may not name a
 built-in host; TODO `third-party-join-builtin-host`); or the set rule
 `createTargetLookup` enforces (a target registered twice, a name that is a host
 name, a reserved name, a package, `mx.host` value or file-kind segment already
-taken). A loaded descriptor may declare `host.fileKinds` (decision 148), checked
+taken). A loaded descriptor may declare `host.fileKinds`, checked
 by those same rules: a segment another host already owns is refused, and a kind
 without `compileRegion` is a whole-file kind that compiles on the host's target.
 
@@ -4030,7 +3997,7 @@ A loaded host's name is a valid `mx.tags[].hosts` value for files compiled under
 that target, and its `mx.tags` entries filter by it; no unknown-host warning
 fires for it.
 
-**`mx.target: "tree"` is not a target (decision 204).** The tree target and its
+**`mx.target: "tree"` is not a target.** The tree target and its
 package, `@mxlang/data`, are deleted; a program that reads the tree calls
 `lowerSource` (§13.7). An explicit `mx.target: "tree"` is the ordinary
 `unknown-target` error at the key's value, which lists the valid targets:
@@ -4075,19 +4042,18 @@ does something else, silently.
 | # | Host | Bug |
 |---|---|---|
 | 1 | Angular | **FIXED 2026-09-17** (task `angular-spec-gaps`). Was: no stateful-tag policy at all — the emitter declared only `try`. `<effect>`, `<lifecycle>`, `<script>`, `<log>`, `<debug>`, `client`/`server` all emitted **literal elements** (`<effect [value]="…">`); `<let>`/`<id>`/`<await>` failed only incidentally, via the generic field guard, so `<let x=1/>` with no `/var` also emitted a literal element. Now every one of these is its own positioned error (`STATEFUL_ERRORS`, `packages/hosts/angular/src/emitter.ts`), same wording family as `@mxlang/host-preact`'s `statefulErrors`. |
-| 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this under decision 95. Preact returns the pair from the unit's `.render` render path (its default export returns the output alone, `dynamic-tag-return-unit-object-object`); html no longer emits a pair since decision 155: its default export stays `(input) => string` and the value comes from `render(input, out)`. |
+| 2 | html, Preact | **`<return>` is documented as a compile error and is not.** Both READMEs list it under "Errors"; the code reverses this. Preact returns the pair from the unit's `.render` render path (its default export returns the output alone, `dynamic-tag-return-unit-object-object`); html no longer emits a pair: its default export stays `(input) => string` and the value comes from `render(input, out)`. |
 | 3 | Astro `.astro.mx` | **FIXED 2026-09-28.** Every range `<for>` emitted invalid JavaScript: `Math.max(0, (` opened two parens and only one closed: `{Array.from({ length: Math.max(0, (3) - (0) + 1 }, …)}` — *"Unexpected token '}'. Expected ')' to end an argument list."* The test asserted only a substring (`toContain("(3) - (1) + 1")`), which passed regardless; now the tests assert the exact emitted code and that the real Astro compiler (`@astrojs/compiler-rs`) reports zero diagnostics for `from`/`to`, `until`, no-`from`, descending, and expression-bound ranges. |
-| 4 | Solid | **FIXED 2026-09-27**, decision 106. Repeated attribute tags now emit real arrays. |
-| 5 | html-strict | **FIXED 2026-09-28** (decision 111, task `strict-policy-log-debug`). Was: `<log>`/`<debug>` survived `strict` — `STRICT_TAGS` overrode six names but not these two, so they stayed inert under strict, and therefore under the Astro `.mx` host too, whose README claimed all stateful tags were build errors. Both are now `STRICT_TAGS` error rows, same as the other six. |
+| 4 | Solid | **FIXED 2026-09-27**. Repeated attribute tags now emit real arrays. |
+| 5 | html-strict | **FIXED 2026-09-28** (task `strict-policy-log-debug`). Was: `<log>`/`<debug>` survived `strict` — `STRICT_TAGS` overrode six names but not these two, so they stayed inert under strict, and therefore under the Astro `.mx` host too, whose README claimed all stateful tags were build errors. Both are now `STRICT_TAGS` error rows, same as the other six. |
 | 6 | Preact | README claims a non-object `style=` is an error; `<div style="color:red"/>` compiles. |
-| 7 | Angular | **FIXED 2026-09-17**, decision 86; corrected by the colon-attribute parity follow-up. Was: silently lowered `class:active=c` to `[class.active]="c"`. Native `class:`/`style:` forms remain rejected with an object/array `class=`/`style=` replacement (§4). `attr:x`, like other non-reserved colon names, is an ordinary complete attribute name in Marko and is preserved; a dynamic value uses `[attr.attr:x]`, not `[attr.x]`. |
+| 7 | Angular | **FIXED 2026-09-17**; corrected by the colon-attribute parity follow-up. Was: silently lowered `class:active=c` to `[class.active]="c"`. Native `class:`/`style:` forms remain rejected with an object/array `class=`/`style=` replacement (§4). `attr:x`, like other non-reserved colon names, is an ordinary complete attribute name in Marko and is preserved; a dynamic value uses `[attr.attr:x]`, not `[attr.x]`. |
 | 8 | Angular | **FIXED 2026-09-17** (page level; the tag-unit call site already errored). Was: `<return>` accepted and emitted nothing at the page level, silently dropping the value channel rather than erroring as `.astro.mx` does. |
-| 9 | html | **FIXED 2026-09-26**, decision 104. Dynamic tags receive attribute-tag props. |
+| 9 | html | **FIXED 2026-09-26**. Dynamic tags receive attribute-tag props. |
 
 ### 13.7 The core IR entry point
 
-**Decision 204** (replacing the tree target of decisions 131 and 132; ruling
-209). `@mxlang/core` exports `lowerSource` and `lowerFile`, which parse, lower
+**This replaces the tree target.** `@mxlang/core` exports `lowerSource` and `lowerFile`, which parse, lower
 and check one source and return core's IR (the [IR specification](/architecture/ir-spec/))
 with every diagnostic positioned. Nothing is emitted and nothing is evaluated:
 a **dialect** (a program that gives tags its own meaning, such as Mesh) walks
@@ -4128,7 +4094,7 @@ contract are each an error diagnostic, and `ir` is `undefined`: there is never a
 partial IR. Every independent error of the file is reported once, in position
 order: every parse error (the parser recovers), and, once the source lowers,
 every check reject, structural hit and unknown tag. Lowering stops at its first
-error (decision 162 recovers per tag, but a lowering error is the one error of
+error (compiling recovers per tag, but a lowering error is the one error of
 its kind); under `unknownTags: "reject"` the unknown tags are still listed beside
 it. An error with no position (a bug in core) is reported at 1:0 with an
 `internal error: ` prefix, and a user-facing one with none with
@@ -4142,13 +4108,13 @@ read throws, as `readFileSync` does.
 
 | Option | Values | Meaning |
 |---|---|---|
-| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name (decisions 130 and 138): required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Contract packages](/custom-tags/contract-packages/)) |
+| `customTags` | `Record<string, CustomTag>` | contract-only custom tags by call name: required attributes, attribute types, `children`, `parents`, `analyze`. `lowerSource` does **not** scan `tags/` or `package.json`; this map is the whole vocabulary it knows. Contracts are enforced at every depth (see [Contract packages](/custom-tags/contract-packages/)) |
 | `dialect` | `Dialect` or `SyntaxTable` | the dialect of this file, for a consumer that builds its own (Mesh passes its dialect, hooks included); a bare table is a dialect with no hooks. Omitted, the dialect that claims the file's extension applies (§13.9.2). A trigger, block tag or filter nothing lowers is a positioned diagnostic (§13.9). A dialect passed on every call should be deep-frozen: one that is not is validated again on each call (§13.9.2) |
-| `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting (ruling 209) |
-| `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (decision 145; see "The unnamed tag" in §4) |
-| `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``Data files are static, so they do not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value (decision 131 addendum 5). A structural hit and a check error are ordered by position |
+| `tagRules` | `"html"`, `"markup"`, `"none"` (default: the dialect's `tagRules`, else `"html"`) | the tag rules preset the source parses under (§13.7.3). Omitted, the preset the dialect states (the `dialect` option's, else the routed one's; §13.9.2). An option of this function only, never a project or host setting |
+| `defaultTag` | tag name | what `<#id>` and `<.class>` stand for in place of the built-in `object` (see "The unnamed tag" in §4) |
+| `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``Data files are static, so they do not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value. A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the dialect's `imports`, else the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
-| `unknownTags` | `"allow"`, `"reject"` (default: the dialect's `unknownTags`, else `"allow"`) | `"allow"` is the open set of decision 131: a tag with no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) is accepted. `"reject"` (131 addendum 3) makes any authored tag, at any depth, whose name has no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) and is not the built-in `object`, a positioned error at the tag: ``` `<opem>` is not a known tag: no contract for it was given; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). A file of a dialect names the dialect by its id in place of `no contract for it was given`: ``` `<opem>` is not a known tag in the `recipes` dialect; did you mean `<open>`? ```, because its vocabulary is the dialect's `contracts`, its tag directories and whatever the caller passed, and the tag is in none of them. The code and the position are the same. Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped (decision 161). A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
+| `unknownTags` | `"allow"`, `"reject"` (default: the dialect's `unknownTags`, else `"allow"`) | `"allow"` is the open set: a tag with no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) is accepted. `"reject"` makes any authored tag, at any depth, whose name has no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) and is not the built-in `object`, a positioned error at the tag: ``` `<opem>` is not a known tag: no contract for it was given; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). A file of a dialect names the dialect by its id in place of `no contract for it was given`: ``` `<opem>` is not a known tag in the `recipes` dialect; did you mean `<open>`? ```, because its vocabulary is the dialect's `contracts`, its tag directories and whatever the caller passed, and the tag is in none of them. The code and the position are the same. Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped. A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
 | `stripTypes` | `boolean` (default `true`) | `true` erases TypeScript from the nodes before the source lowers: an arrow's annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (`node`, `span` and `code` are the operand's). `Expr.code` is sliced from the source either way. `false` keeps the authored TypeScript in the nodes a dialect's `nodeType.lower`, contract hooks and `afterLower` see. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks (the `atom` and `member` checks leave core with the atom removal (mx-g1tw), §13.9). An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. A tag-file hook's `ctx.lower` takes the option and does not inherit the outer call's value |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
@@ -4181,8 +4147,7 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   span is trimmed of the trailing line terminator a concise tag's measure
   includes (`\n` or `\r\n`); a `<tag/>` span is unchanged.
 - **Every authored tag is a `DelegatedTag`.** Core's entry declarations
-  delegate every name core does not own (decision 132). A wildcard child
-  (decision 147) is named by its canonical tag in `tag.name`, with the authored
+  delegate every name core does not own. A wildcard child is named by its canonical tag in `tag.name`, with the authored
   spelling in `tag.alias` (`{ authored, span, groups }`). A tag a dialect's
   `lowerTrigger` built carries `tag.trigger` (`{ id, span, text }`, §13.9.7).
 - **Attributes** are core's `Attr` kinds: `static` (a string literal or a
@@ -4202,14 +4167,14 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
 
 A preset is the tag table entries the source parses under. An absent
 `tagRules` is the dialect's own preset, and `html` when the dialect states none
-or there is no dialect (decision 212 item 8): a dialect that states no tag rules
+or there is no dialect: a dialect that states no tag rules
 gets the full HTML rules and turns off what it does not want; Mesh passes
 `none`.
 
 | Preset | Native elements | Language tags |
 |---|---|---|
 | `none` | none | the module statements (`import`, `static`, `export`), plus `<const>` and `<return>` open-tag-only |
-| `markup` | the web elements (`WEB_ELEMENTS`, decision 197) with their parse rules | core's statement tags (`import`, `static`, `export`, `client`, `server`, `class`), plus `<const>` and `<return>` open-tag-only |
+| `markup` | the web elements (`WEB_ELEMENTS`) with their parse rules | core's statement tags (`import`, `static`, `export`, `client`, `server`, `class`), plus `<const>` and `<return>` open-tag-only |
 | `html` | the web elements with their parse rules | every entry of core's taglib: the html target's table |
 
 Under `none` the 19 HTML parse rules are off (void `openTagOnly`: `area base br col embed hr img input link meta param source track wbr`;
@@ -4238,18 +4203,17 @@ An unknown preset name is an error diagnostic, not a throw.
 | Capitalized tag bound in the file (`import { Task }`, `<const/Task>`) | ``` `<Task>` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, `import { Task as TaskRef }`) or set `bindingsCallTags: false` in the dialect ``` (the last clause only in a dialect's file) |
 | Call of a tag with a template (`<Foo/>` with `import Foo`, or a `customTags` entry with a template) | ``` `<Foo>` calls a template tag; a data file cannot call a template tag ``` |
 | `<!doctype>` | ``` `<!doctype>` means nothing in a data file; data files describe tags and data, not a page ``` |
-| `<![CDATA[…]]>`, `<?xml …?>` | from core on every target (decision 139) |
+| `<![CDATA[…]]>`, `<?xml …?>` | from core on every target |
 | Attribute modifiers `class:active=c` | from core (standalone template) |
 
 The messages keep `parseData`'s text byte for byte, "data" wording included
-(decision 204: a dialect that matched them keeps working); a wording change
+(a dialect that matched them keeps working); a wording change
 waits for the dialect API.
 
 A tag name is not restricted to an identifier: namespaced (`svg:rect`) and
 non-ASCII names pass through. The only refused names are ones that are not
 names: a leading `$` or `!`, or a `{`, `}` or whitespace (a `$!{x}` line or a
-`$const x = 1` scriptlet that parses as a tag; MX has no scriptlets, decision
-54). A shorthand `class` together with an authored `class` on one tag
+`$const x = 1` scriptlet that parses as a tag; MX has no scriptlets). A shorthand `class` together with an authored `class` on one tag
 (`<x.a class="b"/>`) is one positioned error, because core merges them into a
 class with no source span.
 
@@ -4455,8 +4419,7 @@ host, a target or a dialect.
 
 ### Host selection
 
-See §13.5 for `mx.host`, `mx.target`, their agreement rule and positioned errors
-(decisions 129/132 and decision 131 addendum).
+See §13.5 for `mx.host`, `mx.target`, their agreement rule and positioned errors.
 
 **Edge cases of the walk.** The nearest `package.json` is the one that *exists*:
 a malformed one (or one that is not a JSON object) ends the walk with the
@@ -4479,7 +4442,7 @@ own `strict` value, because that host has no other mode.
 
 ### 13.8 The html target: render entry and sink
 
-**Decision 155**, the Marko render model, for the html family (the html target,
+**The Marko render model**, for the html family (the html target,
 and Astro's `.mx` leaf components and pages, which use its emitter). The JSX
 hosts return elements and keep their own `/var` mechanism.
 
@@ -4549,17 +4512,15 @@ a compile error on this target (§6). The `try-*` fixtures in
 and `dynamic-tag-var` oracle-locks `/var` on a dynamic tag, with and without
 arguments.
 
-**Decisions:** 95, 155.
-
 ### 13.9 Syntax tables and dialects (layer 2)
 
-**Decision 182 and its addenda 1 to 7; decisions 202 and 212.** A project can change what
+A project can change what
 the parser recognises, and what the new forms mean, without touching core: the
 parser reads one plain-data **syntax table** per parse, and a **dialect**
-(decision 202; a "syntax module" before it) carries that table and lowers what
+(a "syntax module" before it) carries that table and lowers what
 its triggers, block tags and filters produce. A dialect is a package that claims
 file extensions; a file reaches its dialect by its extension, and a project may
-use several (decision 212). This is *layer 2* of the
+use several. This is *layer 2* of the
 language-extension design ([design notes](/design-notes/language-extensions/));
 it is not the "L2" of §9.1, which names a custom tag's sidecar. The design pages
 stay as the argument; this section states what is.
@@ -4647,8 +4608,7 @@ code (`MALFORMED_BLOCK_TAG`, `MALFORMED_FILTER`), not the placeholder's.
 **Tag types.** `tagTypes` is keyed by the **full written static name**; a name
 absent from it is `html`; dynamic names and `@name` are never looked up. The
 parser applies `statement` only on a concise line: the HTML-mode spelling of a
-statement word stays `html` and keeps its own diagnostic (decision 182 addenda 2
-and 3). `tagTypes` is taglib-owned: core computes it from the tags and their
+statement word stays `html` and keeps its own diagnostic. `tagTypes` is taglib-owned: core computes it from the tags and their
 `parseOptions`, so a project cannot set it (below).
 
 **Not in the table.** The `<` tag opener, the tag-name grammar, attribute syntax
@@ -4698,7 +4658,7 @@ the field path and, for a trigger, its `id`:
 
 #### 13.9.2 Dialect packages and routing
 
-**Decision 212.** A dialect is a package. It declares itself in its own
+A dialect is a package. It declares itself in its own
 `package.json`, under `mx.dialect`:
 
 ```json
@@ -4874,7 +4834,7 @@ manifest (`` `<key>` is "<module's>", and the dialect's
 `package.json#mx.dialect.<key>` is "<manifest's>": leave it to the manifest, or
 make them agree ``, in the module file at 1:0).
 
-**`mx.syntax` is removed** (decisions 202 and 212, no alias, decision 195). No
+**`mx.syntax` is removed** (no alias). No
 setting selects a file's syntax. In either of its old forms, an inline table or a
 string, it is an error at its key, also on a file a dialect claims: ``` `mx.syntax`
 is removed: a syntax of your own is a dialect, a package that declares itself in
@@ -5033,7 +4993,7 @@ syntax-table API; under the stock parser it is refused in the module file (``
 `htmljs-parser` has none ``).
 
 **`tagRules`** names the core tag-rule preset the dialect's files parse with
-(ruling 211; decision 212 item 8). The dialect states it in its own module; every
+(ruling 211). The dialect states it in its own module; every
 tool honours it for the dialect's files, and project config cannot change it. A
 dialect that states none gets `html`, the full rules. A file no dialect claims
 takes its preset from its target. Every compile entry reads it: `compileSource`
@@ -5163,7 +5123,7 @@ that document before lowering (§13.9.5), in source order, positioned and naming
 the file. A caller that lowers a document itself still meets the same refusals at
 lowering's seams (`payloadOf`, the child and attribute lists), in the same words.
 Core computes `tagTypes` from its tag table (the translator's taglibs over the
-target's `nativeTags`, decision 197) and the tags' `parseOptions`
+target's `nativeTags`) and the tags' `parseOptions`
 (§9.3) before the parse; the written name is the key.
 
 #### 13.9.5 Triggers
@@ -5219,7 +5179,7 @@ built, and the constructor matching `ctx.position`: an expression for
 `"expression"`, an attribute for `"attribute"`, a child for `"line"`. Core gives
 the result its positions from the trigger.
 
-**`async` before a method value** (decision 183 addendum 6). In an attribute list,
+**`async` before a method value**. In an attribute list,
 `async :name(p) { b }` is the trigger with an async method value: `ctx.value` is
 `{ kind: "method", async: true }` and `ctx.valueForm` is `"async-method"`. The
 trigger's `text` and `span` are its own token (`:name`), never `async`; a
@@ -5509,8 +5469,8 @@ lowering yet" error, and never silently dropped.
 | A non-JS parser | — | 74 |
 | An async `<try>`/`<await>` | "a later product" | 65 |
 
-**MX 2 stays TypeScript** (decision 88). `whole-file-mx` is **closed**, not
-deferred (decision 85).
+**MX 2 stays TypeScript**. `whole-file-mx` is **closed**, not
+deferred.
 
 ---
 
@@ -5538,8 +5498,7 @@ deferred (decision 85).
    callee's `Input` types the value and never changes the emitted shape.
    Conditional and looped attribute tags and recursive nested tags are part of
    MX.
-9. **Arguments plus content on dynamic and `<define>` calls — closed by
-   decision 109.** A dynamic `<${expr}>` tag or a `<define>` call now accepts
+9. **Arguments plus content on dynamic and `<define>` calls — closed.** A dynamic `<${expr}>` tag or a `<define>` call now accepts
    the tag-argument form combined with a body or attribute tags, matching
    Marko's own lenient `assertAttributesOrArgs` (which rejects only arguments
    plus a plain attribute); Marko's strict `assertAttributesOrSingleArg`
@@ -5548,11 +5507,11 @@ deferred (decision 85).
    or a `<define>` call's arguments; Solid's dynamic-tag design already kept
    attrs/attribute-tags/content orthogonal from arguments (args only resolve
    the value handed to `<Dynamic component=…>`), so it needed no emitter
-   change for the dynamic case. At the time this decision closed, a
+   change for the dynamic case. At the time this question closed, a
    `<define>` call could not be authored inside a `.solid.mx` region at all
    (`<define>` unconditionally errored there), so a `<define>`-bound call
-   target was unreachable on Solid and out of this decision's scope —
-   **superseded by decision 110b below**, which makes `<define>` itself work
+   target was unreachable on Solid and out of this rule's scope —
+   **superseded below**, which makes `<define>` itself work
    in a region and gives Solid its own call shape (a plain
    function call, not JSX — §5.4). Angular and
    Astro keep a positioned error naming their own constraint
@@ -5568,7 +5527,7 @@ deferred (decision 85).
    value, silently dropping the content (`<div>a</div>`, or
    `<div>[object Object]</div>` with no args at all) — Marko itself gets
    this shape wrong for a construct with no `Input` to destructure against.
-   (Superseded by decision 160 for html and the JSX hosts: a no-args call
+   (Superseded for html and the JSX hosts: a no-args call
    there passes one attribute object to the first param; the paragraph below
    still describes the args path everywhere, and the no-args shape on Angular.)
    MX's `<define>` emitters (html, the shared preact/react/hono emitter)
@@ -5578,7 +5537,7 @@ deferred (decision 85).
    filled from that same named lookup — attributes, attribute-tag exports,
    and a bare body under the reserved `content` key — one value per
    remaining param, rather than one trailing object.
-   **Superseded by decision 210 item 3 (2026-10-09): the args path now emits
+   **Superseded (2026-10-09): the args path now emits
    Marko's own trailing-object shape.** The measured Marko behaviour above
    is the rule on html, preact/react/hono and Solid: one trailing object
    (the attribute tags by name plus `content`) is appended as the next
@@ -5587,8 +5546,7 @@ deferred (decision 85).
    fixed parameter of a define with no rest parameter the extras are dropped
    (a rest parameter collects the object after the args). The named-lookup scheme this item
    closed on is withdrawn (§5.4).
-10. **`<define>` is supported in `.solid.mx` regions — closed by decision
-   110b.** Previously a compile error ("cannot declare a function inside a
+10. **`<define>` is supported in `.solid.mx` regions — closed.** Previously a compile error ("cannot declare a function inside a
    JSX expression"). A top-level `<define>` in a region hoists to a
    gensym'd module-scope function, the same way a discovered tag's import
    already does (see §5.4). After hoisting, item 9's `<define>` call shapes
@@ -5600,7 +5558,7 @@ deferred (decision 85).
    real module scope has no closure over the region's enclosing function or
    a nested callback's own scope.
 11. **A string-target dynamic tag called with arguments uses `args[0]` as
-   its input — closed by decision 112.** Previously html's `renderDynamic`
+   its input — closed.** Previously html's `renderDynamic`
    and the shared preact/react/hono `mxDynamic` helper ignored `args`
    entirely for a string target, rendering the call's own (empty, per
    `rejectArgsWithProps`) attributes or its attribute-tag props instead.
@@ -5613,7 +5571,7 @@ deferred (decision 85).
    `{}`. A non-object truthy `args[0]` (e.g. a string) is spread as-is,
    matching Marko's own `_attrs`'s `for (const name in data)` over a
    non-object value (yields its numeric indices) — not special-cased.
-   **Decision 109's trailing props object does not combine with `args[0]`
+   **The trailing props object does not combine with `args[0]`
    here.** Marko's translator appends that object *after* every positional
    argument (`renderer(...args, { content, <attribute tags> })`), so for a
    string target it lands at `args[N]`, N > 0 — never `args[0]` — and is
@@ -5627,12 +5585,12 @@ deferred (decision 85).
    third `content` argument for the same reason, so the runtime dispatcher
    never has to guess whether a trailing array element is a genuine
    argument or the synthesized props object.
-   **Decisions 109 and 112 are disjoint, not in conflict (lead ruling,
-   2026-09-28): 109 governs a function/component target called with
-   arguments; 112 governs only a string (native-element) target.** Solid's
+   **The trailing-object rule and the string-target rule are disjoint, not in conflict (lead ruling,
+   2026-09-28): the first governs a function/component target called with
+   arguments; the second governs only a string (native-element) target.** Solid's
    `#dynamicComponent` applies both: for a function/component target,
    attrs/attribute-tags/content stay orthogonal from args exactly as
-   decision 109 left them (unchanged, still tested); for a *string* target
+   the trailing-object rule left them (unchanged, still tested); for a *string* target
    called with arguments, `args[0]` becomes the element's attributes
    *instead of* the call's attribute-tag props, matching html/preact/
    react/hono — content still renders regardless, threaded independently.

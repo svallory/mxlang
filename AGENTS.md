@@ -123,9 +123,9 @@ A `.mx`/`.solid.mx`/`.ng.mx`/`.astro.mx` template flows through the system as fo
 
 See `README.md`'s package table for the npm-name-to-dir mapping and each package's own `AGENTS.md` (indexed below) for its internals.
 
-## Decision numbers
+## Rules
 
-Decision numbers (e.g. "decision 72") refer to the hyper space root's `notes/decisions-2026-09-10.md` (outside this repo).
+Rules live in the language spec and the docs, never in a log. Cite the doc section (for example "spec §4, the unnamed tag"), never a decision number. A new ruling is written, in present tense, into the doc it changes.
 
 ## Design docs
 
@@ -135,12 +135,10 @@ Design docs, specs, and research notes live outside this repo, at the project sp
 
 `apps/docs/docs/specification.md` is the normative MX language specification — one
 section per construct, each carrying its syntax, its semantics per host, the
-errors core owns, and the decision numbers that fixed it. It is the answer to
+errors core owns. It is the answer to
 "what does this construct mean", where the docs site (`apps/docs/docs/`)
-answers "how do I use it" and the decision log answers "when did we choose
-this". A PR that changes syntax or semantics updates
-`apps/docs/docs/specification.md` in the same change, citing the decision number; a
-decision entry that changes the language names the spec section it updates.
+answers "how do I use it". A PR that changes syntax or semantics updates
+`apps/docs/docs/specification.md` in the same change, writing the new rule into the section it changes.
 
 ## Oracle harness
 
@@ -148,7 +146,7 @@ decision entry that changes the language names the spec section it updates.
 
 ## Per-package instructions
 
-Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets (decision 132): `@mxlang/target-html`:
+Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md` symlink). `packages/hosts/` holds the hosts; `packages/targets/` holds the hostless targets: `@mxlang/target-html`:
 
 | Path | Covers |
 |---|---|
@@ -165,7 +163,7 @@ Packages and examples with their own `AGENTS.md` (each has a sibling `CLAUDE.md`
 | `packages/hosts/hono/AGENTS.md` | `@mxlang/host-hono` |
 | `packages/hosts/astro/AGENTS.md` | `@mxlang/host-astro`; `.astro.mx` AstroMX templates |
 | `packages/hosts/angular/AGENTS.md` | `@mxlang/host-angular` (in progress) |
-| `packages/target-registry/AGENTS.md` | `@mxlang/targets` (umbrella, decision 201): the built-in target descriptors and lookup, plus the html target (unstable) |
+| `packages/target-registry/AGENTS.md` | `@mxlang/targets` (umbrella): the built-in target descriptors and lookup, plus the html target (unstable) |
 | `packages/tooling/vite-plugin/AGENTS.md` | `@mxlang/vite-plugin` |
 | `packages/tooling/typescript-plugin/AGENTS.md` | `@mxlang/typescript-plugin` and `@mxlang/tsc` |
 | `packages/editors/vscode/AGENTS.md` | VS Code extension; how the VSIX ships `@mxlang/typescript-plugin`, `check-vsix` |

@@ -81,7 +81,7 @@ A named, reusable template fragment, callable like any other tag:
 <Badge label="Sale" color="red"/>
 ```
 
-`<define>` fragments take the same tag params and attribute tags as any other tag call. A call with attributes passes one attribute object to the first parameter (decision 160), so destructure it as `|{ label, color }|`; a second parameter never receives an attribute.
+`<define>` fragments take the same tag params and attribute tags as any other tag call. A call with attributes passes one attribute object to the first parameter, so destructure it as `|{ label, color }|`; a second parameter never receives an attribute.
 
 A `<define>` tag's own attributes are properties of its value, so `${Badge.color}` below reads `"green"`:
 

@@ -145,8 +145,7 @@ The caller reads the callee's type syntax without running a TypeScript program:
 
 For an untyped, unresolved, or dynamic callee, MX infers cardinality and shape
 from the whole call. A property is singular when at most one occurrence can be
-selected on a path, and an array when it repeats or appears in `<for>`. Under
-decision 108 it is a bare renderable when none of its occurrences has
+selected on a path, and an array when it repeats or appears in `<for>`. It is a bare renderable when none of its occurrences has
 attributes or nested tags. If any occurrence has either, every occurrence is
 data-shaped. This keeps library patterns such as
 `<Suspense><@fallback>Loading…</@fallback>…</Suspense>` working. A declared
@@ -356,7 +355,7 @@ import Tabs from "./Tabs.mx"
 | Repeated value | One iterable `attrTag`/`attrTags` record; a single tag is iterable too. | The `Input` property chooses one value or a real array. |
 | Attributes on repeats | Direct property reads expose the first occurrence's attributes; iteration reaches every occurrence. | Every array item owns its own attrs, nested tags, and `content`. |
 | Unused attributes | The compiler can tree-shake attributes the callee never reads. | Every authored attribute is passed. |
-| No declaration | Marko's runtime shape applies. | Decision 108 uses a bare renderable for body-only occurrences, data when any occurrence carries attrs/nested tags, and infers single versus array separately. |
+| No declaration | Marko's runtime shape applies. | A bare renderable is used for body-only occurrences, data when any occurrence carries attrs/nested tags, and infers single versus array separately. |
 
 For Marko authors migrating a component, declare every named block in
 `Input`. Use `AttrTag[]` anywhere Marko code iterated a tag, replace direct
