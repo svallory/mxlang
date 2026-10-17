@@ -58,6 +58,7 @@ import {
 import { CALLEE_INPUT_ERROR } from "./callee-input-error.ts";
 import { claimedFields } from "./contract-fields.ts";
 import {
+  argumentsBlame,
   attachRelatedErrors,
   attrByName,
   bindingIdentifierNodes,
@@ -2479,8 +2480,8 @@ function rejectArgsWithProps(
     if (tagAttributesOf(node).length === 0) return;
     raise(
       UNSUPPORTED_TAG_ARGUMENTS_CODE,
-      `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} present.`,
-      tagNameSpanOf(node) ?? node,
+      `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} or body present.`,
+      argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
   if (
@@ -2493,7 +2494,7 @@ function rejectArgsWithProps(
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
     `Tag does not support arguments when ${voiceOfCtx(ctx).attributes} or body present.`,
-    tagNameSpanOf(node) ?? node,
+    argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
   );
 }
 
@@ -2911,12 +2912,7 @@ function rejectAttributeTagArguments(ctx: Ctx, node: Node, name: string): void {
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,
     `${voice.attrTag(name)} does not take arguments. Remove \`(…)\` and pass the value as ${voice.anAttribute} (\`<@${name} value=1>\`) or as the tag's body.`,
-    {
-      loc: {
-        start: positionAtOffset(ctx, nodeSpan(ctx, first).sourceStart),
-        end: positionAtOffset(ctx, nodeSpan(ctx, last).sourceEnd),
-      },
-    },
+    argumentsBlame(ctx, args, node),
   );
 }
 

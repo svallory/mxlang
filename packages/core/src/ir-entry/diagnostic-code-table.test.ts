@@ -655,7 +655,7 @@ const ROWS: Row[] = [
     "MX_UNSUPPORTED_TAG_ARGUMENTS",
     "<define/Foo|a|>\n</define>\n<Foo(x) a=1/>\n",
     3,
-    1,
+    5,
   ),
   compileRow("MX_INVALID_TAG_NAME", "<foo~bar/>\n", 1, 1),
   compileRow("MX_RESERVED_EFFECT_TAG", "<effect/>\n", 1, 1),

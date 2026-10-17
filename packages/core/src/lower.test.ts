@@ -509,7 +509,7 @@ describe("one fixture per IR kind", () => {
     }
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(
-      "Tag does not support arguments when attributes present.",
+      "Tag does not support arguments when attributes or body present.",
     );
   });
 
@@ -1931,9 +1931,13 @@ describe("a dynamic tag's bare shape", () => {
     }
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toBe(
-      "Tag does not support arguments when attributes present.",
+      "Tag does not support arguments when attributes or body present.",
     );
-    expect(error).toMatchObject({ line: 1, column: 3 });
+    expect(error).toMatchObject({
+      line: 1,
+      column: 13,
+      end: { line: 1, column: 16 },
+    });
   });
 
   it.each([
@@ -4275,6 +4279,101 @@ describe("tag arguments are reported at the argument", () => {
   it("points at a non-identifier argument too", () => {
     fails("<button (§a.b)>x</button>");
     fails("<button (§1)>x</button>");
+  });
+});
+
+/**
+ * A tag that takes no arguments, or none beside attributes, blames the whole
+ * list, from the first argument's start to the last one's end (stock Marko
+ * 6.4.4 `assertNoArgs` / `assertAttributesOrSingleArg`, probed with
+ * `bun run --cwd packages/stock-marko probe`). `§` marks the first argument's
+ * start, `¶` the last one's end.
+ */
+describe("tag arguments are blamed over the whole list", () => {
+  const blames = (
+    marked: string,
+    message: string | RegExp,
+    policy: Policy = fakeDeclarations(),
+  ): void => {
+    const start = marked.indexOf("§");
+    const text = marked.replace("§", "");
+    const end = text.indexOf("¶");
+    const source = text.replace("¶", "");
+    const at = (offset: number) => {
+      const lines = source.slice(0, offset).split("\n");
+      return {
+        line: lines.length,
+        column: lines[lines.length - 1]?.length ?? 0,
+      };
+    };
+    let error: unknown;
+    try {
+      lowerSource(source, policy);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    const e = error as TranslateError;
+    expect(e).toMatchObject({
+      line: at(start).line,
+      column: at(start).column,
+      end: at(end),
+    });
+    if (typeof message === "string") expect(e.message).toBe(message);
+    else expect(e.message).toMatch(message);
+  };
+  const PLAIN = /^Tag does not support arguments\./;
+  const WITH_ATTRIBUTES =
+    "Tag does not support arguments when attributes or body present.";
+
+  it("<let/x(1, 2)/> and <const/x(1,2)/>", () => {
+    blames("<let/x(§1, 2¶)/>\n", PLAIN);
+    blames("<const/x(§1,2¶)/>\n", PLAIN);
+  });
+
+  it("<if(a, b)>, <else-if(a,b)/> and <for(a,b)>", () => {
+    blames("<if(§a, b¶)>x</if>\n", PLAIN);
+    blames("<if=c></if><else-if(§a,b¶)/>\n", PLAIN);
+    blames("<for(§a,b¶)>x</for>\n", PLAIN);
+  });
+
+  it("an html tag, three arguments, and a list over several lines", () => {
+    blames("<button (§a, b, c¶)>x</button>\n", PLAIN);
+    blames("<let/x(\n  §1,\n  2¶\n)/>\n", PLAIN);
+  });
+
+  it("<Foo(a, b) c=1/> on a <define> call blames the arguments in stock's words", () => {
+    blames("<define/Foo|x|>hi</define>\n<Foo(§a, b¶) c=1/>\n", WITH_ATTRIBUTES);
+    blames("<define/Foo|x|>hi</define>\n<Foo(§a¶) c=1/>\n", WITH_ATTRIBUTES);
+  });
+
+  it("a define call with an attribute and a body, and a line break in the list", () => {
+    blames(
+      "<define/Foo|x|>hi</define>\n<Foo(§a, b¶) c=1>body</Foo>\n",
+      WITH_ATTRIBUTES,
+    );
+    blames(
+      "<define/Foo|x|>hi</define>\n<Foo(\n  §a,\n  b¶\n) c=1/>\n",
+      WITH_ATTRIBUTES,
+    );
+  });
+
+  it("a dynamic tag", () => {
+    blames("<${input.fn}(§a, b¶) c=1/>\n", WITH_ATTRIBUTES);
+  });
+
+  it("a named custom tag with a body keeps its message and blames the arguments", () => {
+    blames(
+      'import Panel from "./panel.mx"\n<Panel(§a, b¶)>body</Panel>\n',
+      WITH_ATTRIBUTES,
+      fakeDeclarations({ isComponent: (name) => name === "Panel" }),
+    );
+  });
+
+  it("a define call with arguments and a body only still lowers", () => {
+    expect(() =>
+      lowerSource("<define/Foo|x|>hi</define>\n<Foo(a, b)>body</Foo>\n"),
+    ).not.toThrow();
   });
 });
 

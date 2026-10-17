@@ -918,7 +918,7 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
             "<define/Card|title|><div>${title}</div></define>\n<Card('a') foo=\"bar\"/>",
         }),
       ).rejects.toThrow(
-        "Tag does not support arguments when attributes present.",
+        "Tag does not support arguments when attributes or body present.",
       );
     },
   );

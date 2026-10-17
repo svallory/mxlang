@@ -1969,6 +1969,31 @@ function eventHandlerHint(ctx: Ctx, node: Node): string {
   return ` For an event handler write \`on${event[0].toUpperCase()}${event.slice(1)}=${handler ?? "handler"}\``;
 }
 
+/**
+ * What an error about a tag's argument list blames: from the first argument's
+ * start to the last one's end, as stock Marko's `assertNoArgs` and
+ * `assertAttributesOrSingleArg` report it. `fallback` stands in when the list
+ * is empty. Takes MX nodes (a span) and Marko or Babel nodes (a `loc`).
+ */
+export function argumentsBlame(
+  ctx: Ctx,
+  args: readonly Node[],
+  fallback: Node,
+): Node {
+  const first = args[0];
+  const last = args[args.length - 1];
+  if (first === undefined || last === undefined) return fallback;
+  const startOf = (node: Node): Position => {
+    const span = node?.loc ? undefined : mxSpanOf(node);
+    return span ? positionAtOffset(ctx, span.sourceStart) : node.loc.start;
+  };
+  const endOf = (node: Node): Position => {
+    const span = node?.loc ? undefined : mxSpanOf(node);
+    return span ? positionAtOffset(ctx, span.sourceEnd) : node.loc.end;
+  };
+  return { loc: { start: startOf(first), end: endOf(last) } };
+}
+
 /** The place {@link rejectUnsupportedFields} names; see `Ctx.unsupportedIn`. */
 function unsupportedIn(ctx: Ctx): string {
   return ctx.unsupportedIn ?? "a standalone template";
@@ -2124,7 +2149,7 @@ export function rejectUnsupportedFields(
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
       `${tagArgumentsMessage(ctx, node, ownerText(what))}${eventHandlerHint(ctx, node)}`,
-      tagArgsOf(node)?.[0] ?? node,
+      argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
   if (!allow.var && tagVarOf(node)) {

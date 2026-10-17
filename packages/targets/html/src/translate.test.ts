@@ -475,7 +475,9 @@ describe("bindings may not shadow the input parameter", () => {
         ),
         file,
       ),
-    ).toThrow("Tag does not support arguments when attributes present.");
+    ).toThrow(
+      "Tag does not support arguments when attributes or body present.",
+    );
   });
 
   // Decision 109, revised to Marko's own shape (ruling 2026-10-09; measured
@@ -1889,7 +1891,7 @@ describe("dynamic tags", () => {
 
   it("rejects arguments combined with a plain attribute (Marko's own rule, MX's own wording)", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
-      "Tag does not support arguments when attributes present.",
+      "Tag does not support arguments when attributes or body present.",
     );
   });
 
@@ -1956,7 +1958,7 @@ describe("dynamic tags", () => {
 
   it("still rejects arguments combined with a plain attribute", () => {
     expect(() => compile(src('<${input.fn}("A") foo="bar"/>'), file)).toThrow(
-      "Tag does not support arguments when attributes present.",
+      "Tag does not support arguments when attributes or body present.",
     );
   });
 
