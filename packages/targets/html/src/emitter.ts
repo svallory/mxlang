@@ -1670,7 +1670,6 @@ export function createEmitter(
   return emitter;
 }
 
-/** One slice of a `client` statement's code, mapped to where the author wrote it. */
 /**
  * Does this node declare a name in the block it sits in? A `<const>`, a
  * `<let>`, a `<define>`, a `/var` on a tag call, or a delegated tag that binds
@@ -1693,6 +1692,7 @@ function declaresBinding(node: IrNode): boolean {
   }
 }
 
+/** One slice of a `client` statement's code, mapped to where the author wrote it. */
 function clientPiece(piece: ClientPiece): MappedCode {
   if (piece.parts) {
     return concatMapped(

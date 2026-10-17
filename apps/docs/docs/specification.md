@@ -1915,7 +1915,7 @@ the `none` tag-rules preset nothing fires.
 **A tag variable is scoped to the body that declares it.** A `<const>`, a `<let>`
 or a `/var` binds inside the body that writes it (an `<if>` or `<else>` branch, a
 `<for>`, `<try>`, component or attribute-tag body, a `<define>`, or a native
-element's body) and nowhere after it, exactly as Marko 6.4.4 scopes them. A
+element's body) and nowhere after it. A
 read in that body, below the declaration, is the inner binding; a read after the
 body is the outer one, so `<let/count=1/><div><const/count=2/>${count}</div>${count}`
 renders `<div>2</div>1`. The same name may be declared again in a nested body, in
@@ -1925,7 +1925,7 @@ not make a later write to the outer `<let/x>` an error, and an inner `<let/x>`
 does not make a later write to the outer `<const/x>` legal). On the html target a
 native element whose body declares a name is emitted with a block around its
 children. Declaring one name twice in the *same* body is not scoping, and is not
-covered by this rule.
+covered by this rule. A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render.
 
 ### 5.6 A binding named `input`
 
