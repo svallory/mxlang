@@ -67,8 +67,9 @@
  * second name with `MX_DUPLICATE_DECLARATION`, naming the first, because the
  * module would not load. A type export and an ambient `declare` export are
  * erased and never collide, and neither does a list naming a type-only import
- * or namespace; an enum or namespace that merges into an earlier declaration
- * of its name adds no export (the strip emits none); a `server` export and a `client` export may share a name, as each
+ * or namespace; a namespace that merges into an earlier function, class, enum or
+ * namespace of its name, or an enum into an earlier enum, adds no export (the
+ * strip emits none); a `server` export and a `client` export may share a name, as each
  * output keeps one side.
  */
 
@@ -901,6 +902,8 @@ function bindingErrors(
   // The enums and namespaces that merge into an earlier declaration of their
   // name, by statement and name position: the strip emits no export for them.
   const merged = new Map<Node, Set<number>>();
+  // The enums that merge into an earlier namespace, by the same key.
+  const overNamespace = new Map<Node, Set<number>>();
   const parsed = scope.statements.map((statement) => ({
     statement,
     parsed: parseStatement(ctx, scope, statement),
@@ -937,13 +940,21 @@ function bindingErrors(
           merges(real, next))
       ) {
         earlier.push(next);
+        // The strip emits no export for a namespace that merges into an
+        // earlier function, class, enum or namespace, or for an enum that
+        // merges into an earlier enum. An enum after a namespace emits its own
+        // `export var` unless an earlier exported enum or namespace already did
+        // (the export loop below decides).
         if (
           real.length > 0 &&
-          (next.kind === "enum" || next.kind === "namespace")
+          (next.kind === "namespace" || next.kind === "enum")
         ) {
-          const starts = merged.get(statement) ?? new Set<number>();
+          const over =
+            next.kind === "enum" && real.some((d) => d.kind !== "enum");
+          const into = over ? overNamespace : merged;
+          const starts = into.get(statement) ?? new Set<number>();
           starts.add(next.id.start);
-          merged.set(statement, starts);
+          into.set(statement, starts);
         }
       } else {
         const first = clash ?? (real[0] as Declaration);
@@ -983,6 +994,13 @@ function bindingErrors(
     const keyword = tagNameOf(statement) as string;
     for (const exported of p.declared.exported) {
       if (exported.kind && merged.get(statement)?.has(exported.id.start)) {
+        continue;
+      }
+      if (
+        exported.kind &&
+        overNamespace.get(statement)?.has(exported.id.start) &&
+        (exportedAt.get(exported.name) ?? []).some((site) => site.kind)
+      ) {
         continue;
       }
       if (exported.local !== undefined && erasedList(exported.local)) continue;

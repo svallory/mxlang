@@ -1598,6 +1598,11 @@ describe("a name exported twice is refused at the second export", () => {
       "a type-only import, a var of its name, and its list twice",
       'static import type { T } from "./m"\nstatic var T = 1\nstatic export { ‹T› }\nstatic export { «T» }',
     ],
+    // An enum after a namespace emits its own export (Bun's and esbuild's strips fail on the pair with a list).
+    [
+      "a namespace, its list, then an enum of its name",
+      "static namespace q { export const b = 1 }\nstatic export { ‹q› }\nstatic export enum «q» { A }",
+    ],
     // A namespace that merges into no earlier declaration of its name exports it.
     [
       "a list of a type-only namespace, then a value of its name",
@@ -1819,6 +1824,19 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "a function, its list, then two namespaces of its name",
       "static function q() {}\nstatic export { q }\nstatic export namespace q { export const a = 1 }\nstatic export namespace q { export const b = 1 }",
+    ],
+    // An enum after an exported namespace (or enum) adds no export: the earlier one made it.
+    [
+      "an exported namespace and an exported enum of its name",
+      "static export namespace q { export const a = 1 }\nstatic export enum q { B }",
+    ],
+    [
+      "a namespace and an exported enum of its name",
+      "static namespace q { export const a = 1 }\nstatic export enum q { B }",
+    ],
+    [
+      "an enum, its list, then an enum of its name",
+      "static enum q { A }\nstatic export { q }\nstatic export enum q { B }",
     ],
     // A list naming a type-only import or namespace exports nothing: the strip drops the specifier.
     [

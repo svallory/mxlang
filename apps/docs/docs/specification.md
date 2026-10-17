@@ -356,8 +356,9 @@ form and the module does not load (`Duplicate export of 'q'`). A `server` export
 and a `client` export of one name stay legal, since each output keeps one side;
 a type export, an `export declare` form, `export *`, function overloads, an
 export list that names a type-only import or a type-only namespace, and an enum
-or namespace that merges into an earlier declaration of its name (a function,
-class, enum or namespace, exported or not) export no second value and compile
+or namespace that merges into an earlier declaration of its name (a namespace
+into a function, class, enum or namespace; an enum into an enum, or into a
+namespace that is itself exported) export no second value and compile
 (`divergences.md`). The checks are skipped under the `none` tag
 rules, and a render-only name (above) is reported first.
 
