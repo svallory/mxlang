@@ -67,7 +67,7 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         break;
       default: {
         const tag = this.activeTag!;
-        // MX (decision 182 addenda 2, 3): the syntax table's `tagTypes`,
+        // MX: the syntax table's `tagTypes`,
         // computed before the parse, decides; a handler that still returns
         // a type (`@marko/compiler`'s taglib, bundled into core) wins.
         const tagType =
@@ -135,7 +135,7 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         this.pos += 2; // skip ${
         const expr = this.enterState(STATE.EXPRESSION);
         expr.shouldTerminate = matchesCloseCurlyBrace;
-        // MX: every `${}` is an expression position (decision 182).
+        // MX: every `${}` is an expression position.
         expr.triggers = true;
         return;
       } else if (endsTagName(this, code, data.charCodeAt(this.pos + 1))) {
@@ -285,11 +285,11 @@ export function prepareStatement(
 }
 
 /**
- * MX (decision 182 addenda 2, 3): a tag's type from the table, keyed by the
+ * MX: a tag's type from the table, keyed by the
  * full written static name (`input:email` is its own key). A dynamic name
  * or an attribute tag (`@name`) is never looked up; a name absent is html;
  * `statement` applies only on a concise line, so the HTML-mode spelling of
- * a statement word stays html (decision 163 addendum 7).
+ * a statement word stays html.
  */
 function tableTagType(
   parser: Parser,

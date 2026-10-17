@@ -101,7 +101,7 @@ export function checkInvariants(
         within(`${path}.valueSpan`, node.valueSpan, node);
         break;
       case "MxTrigger": {
-        // Decision 182: the span starts with the matched text; `=value`, if
+        // The span starts with the matched text; `=value`, if
         // any, follows it after `=` and whitespace, and ends the span. A
         // method value follows it after whitespace and ends the span; its
         // `async`, written before the text, starts the span but not the
@@ -183,7 +183,7 @@ export function checkInvariants(
         if (node.name === null && node.nameSpan.start !== node.nameSpan.end) {
           fail(path, "the default value's nameSpan is not zero-width");
         }
-        // Decision 163 addendum 12: the name is the head before the last
+        // The name is the head before the last
         // `:`; the modifier's span sits after that colon, colon excluded.
         if ((node.modifier === null) !== (node.modifierSpan === null)) {
           fail(path, "modifier and modifierSpan are not both null or both set");
@@ -362,7 +362,7 @@ export function checkInvariants(
           if (node.source !== slice)
             fail(path, "source is not the span's text");
           within(`${path}.outer`, node, node.outer);
-          // Decision 182: present only when non-empty; each trigger is an
+          // Present only when non-empty; each trigger is an
           // operand inside the container.
           if ("triggers" in node) {
             if (node.triggers.length === 0)

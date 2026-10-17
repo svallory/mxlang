@@ -1,8 +1,7 @@
 # Provenance: htmljs-parser
 
 `src/template/` is a copy of `htmljs-parser`'s TypeScript source: the tokenizer
-that reads MX templates (decision 158, which supersedes the compiler part of
-decision 157 addendum 2). This directory is MX's own code now. Licence:
+that reads MX templates. This directory is MX's own code now. Licence:
 `LICENSE` (MIT, copied from upstream).
 
 It is **not wired into core**. Core still parses through `@marko/compiler`
@@ -40,7 +39,7 @@ directory yet (nothing imports it).
 
 ## Changes after the copy
 
-The decision 146 rule, applied as ordinary source edits. It is the bun patch
+The `:name` sugar's attribute-value rules, applied as ordinary source edits. They are the bun patch
 `patches/htmljs-parser@5.18.0.patch`, whose hunks edit the built
 `dist/index.js` and `dist/index.mjs`; each hunk (identical in both builds) maps
 to one place in `src/`:
@@ -53,7 +52,7 @@ to one place in `src/`:
 | (the minified build keeps the flag implicit) | `states/EXPRESSION.ts`: `attrValue: boolean` on `ExpressionMeta`, initialised `false` in `enter` |
 | the bad-indentation error text: `does not match` for stock's `does match` (a missing "not") | `states/CONCISE_HTML_CONTENT.ts` (`CONCISE_HTML_CONTENT.parse`); the patch carries the same text in both builds |
 
-Nothing else from the decision 146 rule differs from `v5.18.0`. To check:
+Nothing else from that patch differs from `v5.18.0`. To check:
 extract `git archive v5.18.0 src` of upstream and diff; only
 `states/ATTRIBUTE.ts` and `states/EXPRESSION.ts` differ from upstream for that
 rule, plus the two files the base-position addition below touches.
@@ -148,12 +147,12 @@ below, `CLOSE_TAG.ts` and `JS_COMMENT_LINE.ts` from the crash fix below), and
 the files the syntax table adds or touches (its own section).
 
 Unicode whitespace in every look-behind (template-parser-lookbehinds-
-followup, decision 156 addenda 11 and 12; both dist builds carry the same
+followup; both dist builds carry the same
 JavaScript). Wherever a look-behind asks "is this whitespace", the set of
 `isUnicodeSpaceCode` answers as ASCII whitespace does, through the one
 `isUnicodeWhitespaceCode`. Each input renders as
 its ASCII-space twin (`unicodeWhitespaceTwinMismatches`), except the
-addendum 12 pair below.
+concise-dash pair below.
 
 | Source location | Function | What changed |
 |---|---|---|
@@ -162,8 +161,8 @@ addendum 12 pair below.
 | `states/EXPRESSION.ts` | `checkForOperators` | looks behind past a run of Unicode whitespace (`isUnicodeSpaceCode` only, never ASCII) right before the whitespace or newline that triggered it (`a +\u00a0 b`, `a +\u00a0\n`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `++`/`--` case | `lookBehindWhile(isUnicodeWhitespaceCode, …)` |
 | `states/ATTRIBUTE.ts` | `shouldTerminateHtmlAttrValue` | a Unicode-whitespace-preceded `>=` is a comparison (`<if=count\u00a0>= 10>`) |
-| `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (addendum 12: the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
-| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: addendum 11 is withdrawn here (addendum 13, item 1). Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function is byte-identical to upstream again |
+| `states/ATTRIBUTE.ts` | `shouldTerminateConciseAttrValue`, `shouldTerminateConciseAttrName` | a Unicode-whitespace-preceded `--` starts the text block (the attribute's range keeps the trailing whitespace, `1\u00a0` or `x\u00a0`, because an ASCII space ends the attribute by the current-character test, which is unchanged; pinned in `CONCISE_DASH_ROWS`) |
+| `states/HTML_CONTENT.ts` | `HTML_CONTENT.parse` | none: a Unicode-whitespace rule does not apply here. Only ASCII whitespace before `//` or `/*` in HTML text starts a comment, as upstream; `<p>Visit\u00a0//cdn.example/x.js</p>` is text. The function is byte-identical to upstream again |
 
 Comments around an operator word (same follow-up; source only): `isOperatorWord`'s
 look-back before `of`, `yield` and `await` steps over comments
@@ -192,7 +191,7 @@ JavaScript.
 | `states/JS_COMMENT_LINE.ts` | `JS_COMMENT_LINE.parse`, new `isInTextBody` | the close-tag check runs only for a comment in the text tag's body (`PARSED_TEXT_CONTENT` before any `OPEN_TAG` among its ancestors); a body comment, including one in a body placeholder, closes the tag as before |
 | `states/CLOSE_TAG.ts` | `checkForClosingTag` | returns false when there is no active tag |
 | `states/CLOSE_TAG.ts` | `ensureExpectedCloseTag` | an active tag that never got its name (`,--/</e>`: the `,` opens one, a concise `--` line follows) cannot match a named closing tag: `EXTRA_CLOSING_TAG`, as with no open tag, instead of reading `tagName.end` and throwing; `</>` still closes it (template-parser-lookbehinds-followup) |
-| `util/util.ts` | `htmlEOF` | a tag that never got its name (`<,>a`, `<,>`) and is still open at the end of the input reports `MISSING_END_TAG` named as the default `div` (as `ensureExpectedCloseTag` names it; only when the tag has no name range, an empty name such as `<#i>` keeps `""`) instead of reading the range of a name it never had, which threw a `TypeError` out of `parse()` (decision 156 addendum 13, item 5; both dist builds carry the same JavaScript) |
+| `util/util.ts` | `htmlEOF` | a tag that never got its name (`<,>a`, `<,>`) and is still open at the end of the input reports `MISSING_END_TAG` named as the default `div` (as `ensureExpectedCloseTag` names it; only when the tag has no name range, an empty name such as `<#i>` keeps `""`) instead of reading the range of a name it never had, which threw a `TypeError` out of `parse()` (both dist builds carry the same JavaScript) |
 
 `JS_COMMENT_BLOCK` runs no close-tag check. `checkForClosingTag`'s only
 other caller, `PARSED_TEXT_CONTENT`, is the text body itself. Tests:
@@ -201,7 +200,7 @@ passes) and a line-shaped fuzz (`fuzzLineThrows`, seed 1, 5,000 inputs).
 A 500,000-input sweep (token seeds 1 to 50 and line seeds 1001 to 1050,
 5,000 each) throws 0 times on this copy and both dist builds.
 
-## The syntax table (decision 182)
+## The syntax table
 
 MX's own, not in the patched npm build: `createParser(handlers, { syntax })`
 reads a `SyntaxTable` (`syntax.ts`, plain data, validated and compiled once
@@ -219,11 +218,11 @@ stock reads them. A dialect expresses atoms and the name sugars as rows
 | `core/Parser.ts` | `syntax` (compiled table, a constructor argument), `triggers` and `lastTriggerStart`; `recordTrigger`; `read` goes through `standIn` when a trigger was lexed, which replaces each trigger wholly inside the range by its same-length stand-in (binary search for the first candidate; a read of exactly a raw open tag, `rawOpenTags`, returns the source) |
 | `index.ts` | `createParser`'s second argument; exports `DEFAULT_SYNTAX`, `validateSyntaxTable` and the table types |
 | `util/constants.ts` | `onTrigger` and `Ranges.Trigger` (slice a1: `method`, an attribute trigger's method value) |
-| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that arm triggers (`ExpressionMeta.triggers`), where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the decision 146 guard (`attrValue` or a default value a value row claims whole, no open `?`); the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides; P2, a trigger whose next text would continue its token declines silently, by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`) |
+| `states/EXPRESSION.ts` | `lexTrigger`, before the word fast path in expressions that arm triggers (`ExpressionMeta.triggers`), where `expectsExpression` holds or right after a ternary's `?` (never inside a word, never continuing a punctuator of the same character), and refused with an error when the text after the match would continue the stand-in's token (`continuesToken`); a trigger's end is recorded in `atomEnd` (its text is an operand, never a keyword); `checkForOperators` ends an attribute value at a space then a `terminatesValue` attribute trigger under `valueMayEndAt`, the `:name` sugar guard (`attrValue` or a default value a value row claims whole, no open `?`); the EOF message of a trigger value. Slice a1: P1, the `?` bypass never applies to a trigger armed on `:` (TypeScript's optional marker is `?` then `:`, `a?:T`, `a? :T`), so there `expectsExpression` alone decides; P2, a trigger whose next text would continue its token declines silently, by `continuesToken` or `stopsShortOfToken` (the matcher would take more had the non-ASCII word characters after it been ASCII letters: `:a-é`) |
 | `states/ATTRIBUTE.ts`, `states/attr-stage.ts` | `lexAttrTrigger` at a name's first character, an optional `=value` with whitespace before `=` as after a name (stage `TRIGGER_VALUE`), `endsAttrTriggerAt`; the value-entry code factored into `enterAttrValue`, used by both. A method value after a trigger (`(params) { body }`, `<T>(…) { … }`, `async` before the trigger), lexed by the attribute's own `(` / `<` / `{` branches (no empty name is announced) and announced as the trigger's `method`; `(args)` without a body are the trigger's `args` (review 460 r1, L1: core refuses them through the hook), lexed as a named attribute's arguments, after which `=` / `:=` may give a value and `exit` announces a trigger not yet announced; `:=` after a non-refusing trigger is a value lexed as for `=`, announced with `operator: ":="` (`"="` for `=`, also on line triggers); the generic follow error lists "a method" for a non-refusing row; `isAsyncMethodPrefix` holds `async` before a trigger until the body shows. `value: "refuse"`: `=`, `:=` or `(` after the trigger (after whitespace) is ``The `#main` shorthand takes no value.``, `INVALID_ATTRIBUTE_VALUE`, positioned at that operator; like every parser error it ends the parse (`emitError`), so nothing cascades. `enterAttrValue` sets `claimDefault` for a default `=value` when the table has value rows |
 | `states/CONCISE_HTML_CONTENT.ts`, `states/LINE_TRIGGER.ts` (new), `states/index.ts` | a line trigger at a tagless concise line start, its optional `=value` (a concise attribute value, spaces allowed before `=`), then whitespace or a `//` / block comment (reported through `onComment`, as after a concise tag line) |
 | `states/BLOCK_TAG.ts` (new), `states/HTML_CONTENT.ts`, `states/index.ts` | PR B: a table's block tag (`open`, raw body, first `close`) and filter (`open`, a name, `close`, raw body, next `close`) in HTML content, announced by `onBlockTag` / `onFilter`; the text run stops at their first characters (`contentStops`, empty on the default row); an unclosed one is `MALFORMED_BLOCK_TAG` / `MALFORMED_FILTER` (new codes 31, 32, `util/error-code.ts`) at end of input; an opener at a concise line start is `INVALID_LINE_START` (`states/CONCISE_HTML_CONTENT.ts`) |
-| `states/TAG_NAME.ts` | PR B: `tableTagType`, the table's `tagTypes` keyed by the full written static name (decision 182 addenda 2 and 3): dynamic and `@` names never looked up, absent is html, `statement` only on a concise line; a type an `onOpenTagName` handler still returns wins (the bundled `@marko/compiler` path, whose table is empty); `tagShorthands: false`: `.` continues the tag name, `#` and a leading `.` are `MX_NO_TAG_SHORTHAND`, an empty dotted part is `MX_INVALID_TAG_NAME` (`endsTagName` is the old terminator test, extracted) |
+| `states/TAG_NAME.ts` | PR B: `tableTagType`, the table's `tagTypes` keyed by the full written static name: dynamic and `@` names never looked up, absent is html, `statement` only on a concise line; a type an `onOpenTagName` handler still returns wins (the bundled `@marko/compiler` path, whose table is empty); `tagShorthands: false`: `.` continues the tag name, `#` and a leading `.` are `MX_NO_TAG_SHORTHAND`, an empty dotted part is `MX_INVALID_TAG_NAME` (`endsTagName` is the old terminator test, extracted) |
 | `__tests__/base-offset.test.ts` | `onTrigger`, `onBlockTag`, `onFilter` are table-only handlers: declared, never fired by either default-row source |
 
 ## Tests
@@ -316,7 +315,7 @@ Non-ASCII look-behind (source only):
   also skips, are not in the set: ECMAScript and Babel reject both.
 
 Non-ASCII identifiers outside the trigger look-behind (template-parser-ascii-only-
-lookbehinds, decision 156 addendum 9; both dist builds carry the same
+lookbehinds; both dist builds carry the same
 JavaScript). Code that was byte-identical to `v5.18.0` until then looked
 behind or ahead with the ASCII-only `isWordCode`, so a non-ASCII identifier
 read as punctuation. Every site below now uses `isUnicodeWordCode`, moved to
@@ -328,15 +327,15 @@ twin (`mx-unicode-words.cases.ts`), and ASCII-only input renders as before
 | Source location | Function | What changed |
 |---|---|---|
 | `states/EXPRESSION.ts` | `canFollowDivision` | (receives a code point from `getPreviousNonWhitespaceCharCode`) a `/` after a non-ASCII identifier is division (`x=é / 2`, `${é / 2}`), not a regular expression |
-| `states/EXPRESSION.ts` | `isWordOrPeriodBefore` (`lookBehindForKeyword`; `isWordOrPeriodCode` until addendum 13) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
+| `states/EXPRESSION.ts` | `isWordOrPeriodBefore` (`lookBehindForKeyword`; `isWordOrPeriodCode` before the exact word class) | a name ending in a unary or relational keyword after a non-ASCII letter is no keyword (`x=énew y=1` no longer swallows `y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.EXCLAMATION` | a `!` after a non-ASCII identifier is postfix (`x=é! y=1`) |
 | `states/EXPRESSION.ts` | `lookBehindForOperator`, `case CODE.PERIOD` | a `.` before a non-ASCII identifier continues the member access (`x=a. é`, `x=a.\n  é`) |
 | `states/EXPRESSION.ts` | `lookAheadForOperator`, `case CODE.PERIOD` | the same, looking ahead (`<if=a .é>`, `x=a . é`) |
-| `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndAt` (`isOperandEndCode` until addendum 13) | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
+| `states/ATTRIBUTE.ts` | `detectAmbiguousCloseAngleBracket`, `isOperandEndAt` (`isOperandEndCode` before the exact word class) | a non-ASCII operand counts, so `<div x=a >é>c</div>` reports the ambiguous `>` |
 | `states/ATTRIBUTE.ts` | `isAsyncMethodPrefix` | a non-ASCII method name after `async` (`<div async é() {…}>`) |
 | `states/INLINE_SCRIPT.ts` | `startsTypeName` | a non-ASCII type alias name (`$ type é = …`), and a name starting with a binary keyword (`type iné`) |
 
-The exact word class (decision 156 addendum 13, item 2; both dist builds
+The exact word class (both dist builds
 carry the same JavaScript). `isUnicodeWordCode(code)` takes a code point:
 below U+0080 it is `isWordCode` (the ASCII test stays a comparison); at or
 above, U+200C and U+200D, and otherwise `\p{ID_Continue}` (one module-level

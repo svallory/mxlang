@@ -45,7 +45,7 @@ afterEach(() => TestBed.resetTestingModule());
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe.each([false, true])(
-  "body whitespace, decision 141 (discovered=%s)",
+  "body whitespace (discovered=%s)",
   (discovered) => {
     it.each(cases.map((entry, index) => ({ ...entry, index })))(
       "$label",

@@ -9,7 +9,7 @@ const tags: Record<string, CustomTag> = {
   },
 };
 
-describe("the parent contract's defaultTag on Angular (decision 145 PR 3)", () => {
+describe("the parent contract's defaultTag on Angular", () => {
   it("beats the package config; elsewhere the config answers", () => {
     const run = (source: string) =>
       compile(source, "/tmp/a.mx", { customTags: tags, defaultTag: "section" })

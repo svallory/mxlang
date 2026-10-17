@@ -415,12 +415,11 @@ describe("conditional Astro named slots", () => {
   });
 });
 
-// The local extension of decision 116 (firstmate's ruling under decision 116
-// in `notes/decisions-2026-09-10.md`): a fence-declared `const`/`function`/
+// The local extension of the capitalized-import rule: a fence-declared `const`/`function`/
 // `class` used as a tag classifies by whether its value is statically a
-// function/arrow/class. A fence import already routes through decision 116
-// proper (`isComponent`/`ctx.imports`); this covers the non-import fence
-// binding decision 114's own fix (`unresolved-tag-jsx-astro-angular`)
+// function/arrow/class. A fence import already routes through the
+// import rule (`isComponent`/`ctx.imports`); this covers the non-import fence
+// binding the unresolved-tag fix (`unresolved-tag-jsx-astro-angular`)
 // introduced but never classified.
 describe("local-value-as-tag-parity: non-import fence binding used as a tag", () => {
   // Astro's own emitter rejects every non-"name" Component target
@@ -517,7 +516,7 @@ describe("local-value-as-tag-parity: non-import fence binding used as a tag", ()
     expect(code).toContain("<Comp n={1} />");
   });
 
-  it("a fence import stays a direct component call, unaffected (decision 116 proper, not the local extension)", () => {
+  it("a fence import stays a direct component call, unaffected (the import rule, not the local extension)", () => {
     const { code } = lowerAstroMx(
       '---\nimport Card from "./Card.astro";\n---\n<Card title="t"/>',
       "Test.astro.mx",

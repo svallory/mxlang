@@ -8,7 +8,7 @@
  * root) with their message text and ranges, and the nameless concise tag.
  *
  * What is NOT here, on purpose (ast §3.13): a duplicate default value
- * (lowering's `MX_DUPLICATE_DEFAULT`) and the decision-174 bracket/numeric
+ * (lowering's `MX_DUPLICATE_DEFAULT`) and the bracket/numeric
  * shorthand errors (lowering's).
  */
 
@@ -128,8 +128,7 @@ export function frontEndRules(
   const errs: MxParseError[] = [];
   const name = tag.name as Any;
 
-  // A concise `,` line or `<,/>`: no tag was ever named (decision 163
-  // addendum 13). The nameless node stays in the tree beside the error.
+  // A concise `,` line or `<,/>`: no tag was ever named. The nameless node stays in the tree beside the error.
   if (tag._phantom) {
     errs.push(
       error(

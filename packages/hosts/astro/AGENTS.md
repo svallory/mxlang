@@ -2,7 +2,7 @@
 
 ## `@mxlang/host-astro`: the Astro host
 
-`packages/hosts/astro` (`@mxlang/host-astro`, decisions 70 to 72) renders `.mx`
+`packages/hosts/astro` (`@mxlang/host-astro`) renders `.mx`
 components inside an Astro project as **static markup**: no islands, no
 hydration, no client JS from this renderer. Two files and no third —
 `src/index.ts` is the integration, `src/server.ts` the renderer's server
@@ -43,20 +43,19 @@ Four facts worth knowing before editing it:
   `<lifecycle>`, `<script>`, `client` blocks, `<id>`, `<log>` and `<debug>`
   are compile errors naming the construct (the reactive tags are core
   language, and this host has no reactive target to lower them to;
-  decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the
-  same way). That required the one
+  `<log>`/`<debug>` are debug-only tooling, rejected the same way). That required the one
   change to `@mxlang/vite-plugin` this package needed: a `strict?: boolean`
   option on `MxPluginOptions`, passed straight through to `compile()`. It is a
   passthrough, not a policy of the plugin's own; `.solid.mx` never goes
   through the translator and is unaffected.
 - **A capitalized tag resolves through the `---` fence's own value bindings**
-  (decision 114 parity, `unresolved-tag-jsx-astro-angular`), not by bare
+  (parity with the other hosts, `unresolved-tag-jsx-astro-angular`), not by bare
   casing. `lowerAstroMx` parses the fence's own top-level imports and
   `const`/`function`/`class` declarations with `@mxlang/tsx-bridge`'s
   `sourceBindings` (type-only bindings excluded, same rule as everywhere
-  else decision 114/115 applies) and feeds them into `ctx.imports` before
+  else this rule applies) and feeds them into `ctx.imports` before
   lowering — the same operator-ruling extension `.solid.mx`'s
-  `moduleBindings` already gave decision 114, since Astro's local-component
+  `moduleBindings` already gave it, since Astro's local-component
   form *is* a fence import and a `.astro.mx` template body has no MX-level
   `import`/`<define>`/`<const>` of its own. `isComponent` used to be a bare
   `/^[A-Z]/` test, so `<TotallyUndefined/>` (no fence import) silently
@@ -89,14 +88,14 @@ Four facts worth knowing before editing it:
   the build would succeed and emit an `<astro-island client="load">` whose
   loader falls back to `Promise.resolve({default:()=>()=>{}})` — an island that
   silently does nothing, on a host whose claim is shipping no client JS.
-  Decision 70's intent is that the directive is an error, so
+  The directive is meant to be an error, so
   `renderToStaticMarkup` throws on `metadata.hydrate` (Astro's own fourth
   argument; `AstroComponentMetadata.hydrate` is
   `'load'|'idle'|'visible'|'media'|'only'`, and `displayName` names the
   component). `examples/astro-static/e2e/build-errors.spec.ts` asserts the
   failing build.
 
-### `.astro.mx`: AstroMX templates (decisions 76c, 78)
+### `.astro.mx`: AstroMX templates
 
 An `.astro.mx` file is an **Astro component whose template is MX** — a different
 file kind from `.mx`, not a variant of it. A `.mx` component compiles to a
@@ -111,8 +110,8 @@ list).
 Four facts worth knowing before editing `src/astro-template.ts` or
 `src/vite-templates.ts`:
 
-- **An `.astro.mx` file cannot be a page, because of Astro's router**
-  (decision 134 and its addendum). Astro's route collection keys on `path.extname(basename)`, which returns only the
+- **An `.astro.mx` file cannot be a page, because of Astro's router**.
+  Astro's route collection keys on `path.extname(basename)`, which returns only the
   **last** extension segment (`create-manifest.js`; `parse-route.js` does the
   same through `@astrojs/internal-helpers`' `fileExtension`, which is
   `path.split(".").pop()`). Measured against astro@7.3.2: a `page.astro.mx`
@@ -196,7 +195,7 @@ silently skipped. Command-line checks use `mx-tsc --astro --noEmit`.
 Both paths also type-check `.astro.mx` itself through the composed AstroMX plugin;
 without Astro mode, `.astro.mx` files are ignored.
 
-### Attribute tags (decisions 106–107)
+### Attribute tags
 
 This host declares `attrTags: 2`; `.astro.mx` emits only core's resolved
 `attrTagProps` plan. A singular tag is a `<Fragment slot="name">`, and a

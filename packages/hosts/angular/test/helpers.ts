@@ -57,7 +57,7 @@ export function emitWithTags(source: string, tagNames: string[]): string {
 /**
  * Compiles `source` with every tag in `tagNames` discovered from a trivial
  * stub at `tags/<kebab>.mx`, so a capitalized tag call has a binding to
- * resolve through — decision 114 made an *unresolved* capitalized tag
+ * resolve through — an *unresolved* capitalized tag is
  * Marko's compile error, so a test for the resolved-call path (selector,
  * projection, the step-1 import warning) must give the tag a real home.
  *

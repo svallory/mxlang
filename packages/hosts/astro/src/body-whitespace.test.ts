@@ -69,7 +69,7 @@ let serial = 0;
 // Astro's .mx host is the strict HTML compiler plus the MX server renderer.
 // Execute that real path inside an Astro component, not only the plain function.
 describe.each([false, true])(
-  "body whitespace, decision 141 (discovered=%s)",
+  "body whitespace (discovered=%s)",
   (discovered) => {
     it.each(cases)("$label", async ({ body, html }) => {
       const name = `case${serial++}`;

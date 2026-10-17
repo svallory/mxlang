@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the inputs are MX source with ${…} placeholders
 /**
- * The whitespace layer (ast §3.8, §3.12; decision 166 item 2): `MxText.value`
+ * The whitespace layer (ast §3.8, §3.12): `MxText.value`
  * per body mode, the runs that produce no node, `raw` and `valueSpan`. One
  * row per shape of brief §1.1.4: every body mode crossed with leading,
  * trailing and inner whitespace, newlines and CRLF, text beside

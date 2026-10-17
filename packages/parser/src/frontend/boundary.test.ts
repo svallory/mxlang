@@ -27,7 +27,7 @@ describe("options", () => {
     expect(() => loose("<a/>")).toThrow(TypeError);
   });
 
-  it("tagShape is asked once per distinct name, with the written name; never for an attribute tag (decision 182 addendum 3: the tagTypes pre-scan asks every candidate name)", () => {
+  it("tagShape is asked once per distinct name, with the written name; never for an attribute tag (the tagTypes pre-scan asks every candidate name)", () => {
     const asked: string[] = [];
     const shape = (name: string): MxBodyMode => {
       asked.push(name);
@@ -201,7 +201,7 @@ describe("lineColumnAt", () => {
   });
 });
 
-describe("exposed as the package's second entry point (PR 3, decision 166 addendum 1)", () => {
+describe("exposed as the package's second entry point", () => {
   it("the frontend subpath exports the front end", async () => {
     const frontend = (await import("@mxlang/parser/frontend")) as Record<
       string,

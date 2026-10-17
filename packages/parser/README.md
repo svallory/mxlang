@@ -8,7 +8,7 @@ The htmljs-parser-derived template parser (`src/template/`; provenance in
 `src/frontend/parse.ts` (`FrontEnd`) implements the 30 handlers the template
 parser can call — the 27 of htmljs-parser 5.18.0 plus MX's own `onTrigger`,
 `onBlockTag` and `onFilter`, which fire only for a syntax table that arms
-them (decision 182). The contract, per handler: the event it serves, the payload
+them. The contract, per handler: the event it serves, the payload
 the parser hands it, and what the handler must do. The per-node detail (which
 AST field each event lands in, and the exact splitting rules) is ast.md §7
 (`apps/docs/docs/architecture/ast.md`); this section is the *calling*
@@ -50,11 +50,11 @@ the partial tree.
 the template parser consumes: it returns the `TagTypeValue` that tells the
 parser how to lex the tag's body (`text`, `void`, `statement`, …). The front
 end computes it from the written name and its `tagShape(name)` input. This is
-the seam decision 183 schedules to disappear: the type will come from a
+a seam planned to disappear: the type will come from a
 `tagTypes` table the parser consults directly by tag name, making
 `onOpenTagName` fire-and-forget like every other handler. Until then, any
 new front end must keep the return-value contract for this one handler.
 
 The Babel fork that used to live here is `@mxlang/babel` (`packages/babel`) and
 the MX-in-TypeScript bridge is `@mxlang/tsx-bridge` (`packages/tsx-bridge`);
-see decision 158.
+see `apps/docs/docs/architecture/ast.md`.

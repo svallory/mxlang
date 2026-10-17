@@ -35,7 +35,7 @@ describe("addPageExtension guard", () => {
 
     expect(extensions).toContain(".mx");
     // Astro strips only the last extension, so a page `.astro.mx` would route
-    // to `/page.astro` (decision 134 addendum): it is an error, not a page.
+    // to `/page.astro`: it is an error, not a page.
     expect(extensions).not.toContain(".astro.mx");
   });
 

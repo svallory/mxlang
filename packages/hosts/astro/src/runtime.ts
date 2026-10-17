@@ -1,6 +1,6 @@
 /**
  * The run-time surface an Astro project can import: the sink a fence passes to
- * a unit's `render(input, out)` (decision 155).
+ * a unit's `render(input, out)`.
  *
  * A subpath, not the main entry: the main entry is the integration, build-time
  * code (the Vite plugin and the compiler) that cannot load inside the SSR

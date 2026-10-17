@@ -1,5 +1,5 @@
 /**
- * `lineColumnAt(document, offset)` (ast §5.2, decision 163 addendum 6): a
+ * `lineColumnAt(document, offset)` (ast §5.2): a
  * file offset to a 1-based line and 0-based column, the fragment base
  * applied (ast §5.3). The line-start index is private: the document stays
  * plain data.

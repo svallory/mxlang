@@ -10,8 +10,8 @@
  * Positions are file-absolute at creation: the sub-parse receives the
  * container's offset, line and column, so every payload node's `start`, `end`
  * and `loc` (with `index`) already addresses the original file (ast §4.1,
- * §5.3) — there is no post-hoc shift walk. Expression triggers (decision
- * 182) are parsed from their same-length stand-in, and the payload marks each
+ * §5.3) — there is no post-hoc shift walk. Expression triggers
+ * are parsed from their same-length stand-in, and the payload marks each
  * with `extra.mxTrigger` (`markTriggers`).
  *
  * A failure is data (ast §3.13 item 2): `node` is null and the error's
@@ -62,7 +62,7 @@ export type ContainerPayload<C extends ContainerKind> = C extends "MxExpression"
             ? TSTypeParameterInstantiation
             : TSTypeParameterDeclaration;
 
-/** An expression trigger of the container's source (decision 182), local to the container's text. */
+/** An expression trigger of the container's source, local to the container's text. */
 export interface SubParseTrigger {
   readonly start: number;
   readonly end: number;
@@ -410,7 +410,7 @@ function recoverPastStandIns(
 /**
  * Parses one container. `text` is the authored slice, `at` the position of
  * its first character and `end` the file-absolute end of the slice;
- * `triggers` its expression triggers (decision 182), local spans in source
+ * `triggers` its expression triggers, local spans in source
  * order.
  */
 export function subParse(
@@ -609,7 +609,7 @@ function errorOf(
 }
 
 /**
- * Marks one payload node per trigger (decision 182) with `extra.mxTrigger`:
+ * Marks one payload node per trigger with `extra.mxTrigger`:
  * its id, span and authored text (the node holds the stand-in, `_status`).
  * Several nodes can share the span (`x() { &a }`: the statement and the
  * identifier; `{ &a }`: the property, its key and its value); the mark goes

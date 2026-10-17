@@ -24,7 +24,7 @@ import * as template from "../index.ts";
 
 /** This fixture's text for a reserved `::name` (the atom row's own rule, not the parser's). */
 export const rowReservedMessage = (name: string) =>
-  `\`::${name}\` is reserved (decision 156): \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
+  `\`::${name}\` is reserved: \`::\` will be the Symbol.for sugar; write \`:${name || "name"}\` for an atom`;
 
 type Handlers = Record<string, ((event: never) => unknown) | undefined>;
 

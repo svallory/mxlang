@@ -36,7 +36,7 @@ import { compileSourceWithHint } from "./structural-attr-hint.ts";
  * `@Input()` value in authored TypeScript.
  */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: the public default for an attribute tag with no config
   C extends AttrTagConfig = {},
 > = C extends AttrTagConfig ? never : never;
 
@@ -88,7 +88,7 @@ export {
 export interface CompileOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.angular-template.defaultTag`, already validated. */
   defaultTag?: string;
   /**
    * Collects positioned warnings — constructs that compile while diverging
@@ -104,7 +104,7 @@ export interface CompileOptions {
    */
   tagSelectorPrefix?: string;
   /**
-   * The registered targets this compile runs under (decisions 129 and 132).
+   * The registered targets this compile runs under.
    * Defaults to this package's own descriptor, which is right for a direct
    * entry; a tool compiling several targets passes the built-in registry's
    * lookup, so a callee importing `AttrTag` from another registered target's

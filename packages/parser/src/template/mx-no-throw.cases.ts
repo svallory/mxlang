@@ -393,7 +393,7 @@ export function fuzzLineThrows(
 }
 
 /**
- * template-parser-nameless-tag-throw (decision 156 addendum 13, item 5):
+ * template-parser-nameless-tag-throw:
  * [input, rendered events]. A tag that never got its name and is still open
  * at the end of the input is `MISSING_END_TAG` (22), named as the default
  * `div`, as `ensureExpectedCloseTag` names it; it used to throw
@@ -422,7 +422,7 @@ export const NAMELESS_TAG_ROWS: [string, string][] = [
 ];
 
 /**
- * template-parser-nameless-tag-throw (decision 156 addendum 13, item 5): the
+ * template-parser-nameless-tag-throw: the
  * tags that never get a name. A `,` line, `<,>`, `<,/>`, a `</>` and head
  * parts (an attribute, shorthand, argument or variable) before any name, with
  * a comment before a name, each inside and outside a parent, HTML and

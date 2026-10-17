@@ -1,5 +1,5 @@
 /**
- * The front end's `tagTypes` (decision 182 addenda 2 and 3), built before the
+ * The front end's `tagTypes`, built before the
  * parse from the two per-target inputs, so the template parser decides tag
  * types from the table alone and no handler returns a decision.
  *
@@ -98,10 +98,9 @@ function typeOf(mode: MxBodyMode): TagTypeValue | undefined {
 }
 
 /**
- * The table for `source`, keyed by the full written static name (addendum
- * 3): a statement keyword is `statement` (the parser applies it only on a
+ * The table for `source`, keyed by the full written static name: a statement keyword is `statement` (the parser applies it only on a
  * concise line), any other name its `tagShape` body mode's type. `@name` is
- * never asked (an attribute tag's body is html, decision 163 addendum 8).
+ * never asked (an attribute tag's body is html).
  */
 /** `tagTypes[name]` as an own property: a tag named `toString` is not a function. */
 export function ownTagType(
@@ -138,8 +137,8 @@ const TYPE_NAMES: Record<number, string> = {
 };
 
 /**
- * The statement rule against a caller's table, checked before the parse
- * (decision 182 addenda 2 and 3): `statementKeywords` alone decides what is a
+ * The statement rule against a caller's table, checked before the parse:
+ * `statementKeywords` alone decides what is a
  * statement, on a concise line only. A table may give a keyword `statement`
  * or leave it out (it is filled in, see `withStatementKeywords`), never
  * another type, and may give no other name `statement`. A keyword's

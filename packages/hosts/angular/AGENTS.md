@@ -151,7 +151,7 @@ filename never matches the parser's own `.solid.mx` extension test) and
 `MxRegionContext` fields are load-bearing, `argumentIndex` being the only
 one that separates `@Component({ template })` from `@Component(opts, {
 template })`. The template is emitted as a **backtick literal** with
-`` ` ``, `${` and `\` escaped (decision 99, reversing A4 divergence 3;
+`` ` ``, `${` and `\` escaped (reversing A4 divergence 3;
 spike §Q3 measured that a double-quoted emit puts Angular's diagnostics in
 escaped coordinates and forces an inverse hop at every newline, while
 backticks are 1:1). Unlike a page, this host **owns the module**, so it
@@ -216,7 +216,7 @@ watcher and resolves `onIdle` off the initial build alone (for CI and tests).
 The CLI's non-`--once` path resolves on `SIGINT`/`SIGTERM` (`Ctrl-C`, exit
 0).
 
-### Literal Angular syntax lint (decision 126)
+### Literal Angular syntax lint
 
 `src/literal-syntax-hint.ts` warns on `{{ x }}` and `@if (…) {`-style block
 text in a `Text` node (code `LITERAL_SYNTAX_CODE`). `Emitter.text()` calls it
@@ -235,7 +235,7 @@ word start: `(…) {`, a bare `{`, or `@let name = …;`; each message names the
 Marko compiles the text without a diagnostic, so it is recorded as an mx-only
 lint in `divergences.md`.
 
-### Event handlers (decision 117)
+### Event handlers
 
 An element event handler is emitted as a call through two `protected` invoker
 members on the component, `__mxOn(handler, receiver, $event)` and
@@ -248,7 +248,7 @@ into the decorated class, a tag module writes them into its class, and a
 page's own class gets a once-per-file warning
 (`EVENT_HELPER_ADVICE_CODE`) with the text to paste, or to extend
 `MxHandlers` / `MxHandlersMixin(Base)` from `@mxlang/host-angular/runtime` instead
-(decision 118; `src/runtime.ts`, built to `dist/runtime.js`). `build.ts`
+(`src/runtime.ts`, built to `dist/runtime.js`). `build.ts`
 `compileOne` suppresses that warning (and the header's paste line) when
 `inspectPageClass` (`src/page-class.ts`: sibling `<name>.ts`, Babel parse, same
 three shapes as `.ng.mx`) finds both members on every `@Component` class; a
@@ -264,7 +264,7 @@ name). `this` is the component and `element` is `$event.currentTarget` as
 
 A refined bound attribute (`v:fn:=q`) adds two more members the same way, `__mxGet` and `__mxSet` (`REFINE_HELPER_MEMBERS`; `helperMembersFor(text)` picks which a template needs, so a page with handlers alone gets none): `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`. They read and write a `WritableSignal` (`()` / `.set()`) or a plain property as Angular's own `[(v)]` does. `[(v)]="q"` stays byte-identical without a refinement. A bare target that is a template variable (the `Emitter.scopes` stack: `@for` bindings, `<define>` params, `<const>` `@let`s per block) is written `item.set(fn($event))` instead, never `this.item`; Angular's `[(v)]` accepts a template variable only when it is a signal. A `@for` index and a `<for>` range number are the exception: they are never signals, so `Emitter.inScope`'s `neverSignal` map (innermost declaration wins) makes them a positioned compile error at the attribute, as Angular's own `[(v)]` rejects them.
 
-### Attribute tags (decisions 106–107)
+### Attribute tags
 
 This host declares `attrTags: 2` and emits component projections only from
 core's resolved `attrTagProps` plan. A singular tag is an

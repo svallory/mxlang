@@ -1,5 +1,5 @@
 /**
- * The `angular-template` target descriptor (decisions 129 and 132; unstable).
+ * The `angular-template` target descriptor (unstable).
  *
  * Page `.mx` is not wired for this target yet: no `load`, and `pending` is the
  * text the TypeScript plugin and the Vite plugin print today

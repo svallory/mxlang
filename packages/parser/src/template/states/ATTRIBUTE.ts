@@ -33,7 +33,7 @@ export interface AttrMeta extends Meta {
   /** Range of an `async` keyword already confirmed to modify a method. */
   asyncMethod: undefined | Range;
   /**
-   * MX (decision 182): the attribute trigger this attribute is, its matched
+   * MX: the attribute trigger this attribute is, its matched
    * text, whether it is announced (false on a re-lex), its `(args)` (written
    * with no body), and whether `onTrigger` was called for it already.
    */
@@ -78,7 +78,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
     // Catches the paths that leave the attribute without resolving a pending
     // `async`, notably EOF part way through typing `<div async onCl`.
     flushPendingAsync(this, attr);
-    // MX (decision 182): a trigger with `(args)` and no value ends with the
+    // MX: a trigger with `(args)` and no value ends with the
     // attribute, as a named attribute's arguments do.
     if (attr.trigger && !attr.trigger.announced) {
       announceAttrTrigger(this, attr, undefined, undefined);
@@ -121,7 +121,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         attr.valueStart = this.pos;
         flushPendingAsync(this, attr); // a value means no method follows
 
-        // MX (decision 182): `=` or `:=` after a trigger's `(args)`.
+        // MX: `=` or `:=` after a trigger's `(args)`.
         if (attr.trigger && code !== CODE.PERIOD) {
           enterTriggerValue(this, attr, code === CODE.COLON);
           return;
@@ -154,7 +154,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         this.pos++; // skip (
         const expr = this.enterState(STATE.EXPRESSION);
         expr.shouldTerminate = matchesCloseParen;
-        expr.triggers = true; // MX: decision 182
+        expr.triggers = true; // MX
         return;
       } else if (
         code === CODE.OPEN_ANGLE_BRACKET &&
@@ -176,7 +176,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         const body = this.enterState(STATE.EXPRESSION);
         body.shouldTerminate = matchesCloseCurlyBrace;
         // MX: a method-shorthand body is an attribute value (it lowers to a
-        // function), so it arms expression triggers (decision 182).
+        // function), so it arms expression triggers.
         body.triggers = true;
         return;
       } else if (attr.stage === ATTR_STAGE.UNKNOWN) {
@@ -197,7 +197,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
           );
         }
 
-        // MX (decision 182): an attribute trigger, armed by the name's
+        // MX: an attribute trigger, armed by the name's
         // first character. The default row has no trigger set.
         if (
           this.syntax.attribute !== null &&
@@ -310,7 +310,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         } else {
           flushPendingAsync(this, attr); // args without a body is not a method
           attr.args = true;
-          // MX (decision 182): an attribute trigger's arguments are announced
+          // MX: an attribute trigger's arguments are announced
           // with it (core decides what they mean).
           if (attr.trigger) attr.trigger.args = { start, end, value };
           else {
@@ -354,7 +354,7 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
             },
           },
         };
-        // MX (decision 182): an attribute trigger's method is its value.
+        // MX: an attribute trigger's method is its value.
         if (attr.trigger) announceAttrTrigger(this, attr, undefined, method);
         else this.options.onAttrMethod?.(method);
         this.exitState();
@@ -470,7 +470,7 @@ function enterAttrValue(parser: Parser, attrValue: boolean, bound = false) {
   // The exemption: a default `=value` a value row claims.
   expr.claimDefault =
     !attrValue && !bound && parser.syntax.value !== null;
-  expr.triggers = true; // MX: decision 182
+  expr.triggers = true; // MX
   expr.operators = true;
   expr.terminatedByWhitespace = true;
   expr.shouldTerminate = parser.isConcise
@@ -481,7 +481,7 @@ function enterAttrValue(parser: Parser, attrValue: boolean, bound = false) {
 }
 
 /**
- * MX (decision 182): at an attribute name's first character, lexes an
+ * MX: at an attribute name's first character, lexes an
  * attribute trigger when its matcher matches. The match is the whole name.
  * After it (and optional whitespace, as after a name): `=` or `:=` starts a
  * value lexed exactly as a named attribute's (announced with its
@@ -828,7 +828,7 @@ function isAsyncMethodPrefix(parser: Parser, name: Range) {
     // a default attribute method's type params, but not a close tag
     (code === CODE.OPEN_ANGLE_BRACKET &&
       data.charCodeAt(pos + 1) !== CODE.FORWARD_SLASH) ||
-    // MX (decision 182): an attribute trigger, which may take a method
+    // MX: an attribute trigger, which may take a method
     // value; `lexAttrTrigger` flushes `async` when none follows.
     (parser.syntax.attribute !== null &&
       parser.claimTrigger(parser.syntax.attribute, data, pos, "attribute") !==

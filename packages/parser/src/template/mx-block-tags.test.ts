@@ -1,8 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * The syntax table (decision 182, PR B) at the template parser: block tags
- * and filters in HTML content, and the precomputed `tagTypes` (addenda 2
- * and 3). Events render compactly, as in `mx-triggers.test.ts`.
+ * The syntax table (PR B) at the template parser: block tags
+ * and filters in HTML content, and the precomputed `tagTypes`. Events render compactly, as in `mx-triggers.test.ts`.
  */
 import { describe, expect, it } from "vitest";
 import { PROBES } from "./grammar-spec.cases.ts";
@@ -152,7 +151,7 @@ describe("filters", () => {
   });
 });
 
-describe("tagTypes (decision 182 addenda 2 and 3)", () => {
+describe("tagTypes", () => {
   const TYPES = table({
     tagTypes: {
       textarea: TagType.text,
@@ -174,7 +173,7 @@ describe("tagTypes (decision 182 addenda 2 and 3)", () => {
 
   it("statement applies only on a concise line, at the root", () => {
     expect(render("static x = 1\ndiv", TYPES)).toBe("<static> <div> </>");
-    // HTML mode: html, no RESERVED_TAG_NAME (decision 163 addendum 7).
+    // HTML mode: html, no RESERVED_TAG_NAME.
     expect(render("<static x=1/>", TYPES)).toBe('<static> @"x"');
     // Nested concise: the parser's own ROOT_TAG_ONLY, as today.
     expect(render("div\n  static x", TYPES)).toContain(

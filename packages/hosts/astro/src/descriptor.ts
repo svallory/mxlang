@@ -1,7 +1,7 @@
 /**
- * The `astro-html` target descriptor (decisions 129 and 132; unstable).
+ * The `astro-html` target descriptor (unstable).
  *
- * `host.fileKinds` carries the Astro template, `.astro.mx` (decision 134: it is
+ * `host.fileKinds` carries the Astro template, `.astro.mx` (it is
  * a file kind of the `astro` host, not a target). It has no region compile and
  * no callee reader: `lowerAstroMx` and `convertToTSX` run in the TypeScript
  * plugin's `amx-language.ts`, selected through the registry-private

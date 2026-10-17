@@ -40,7 +40,7 @@ export function createAstroTypeSurface(code: string): string {
       "  : Input;",
       // `render` stays visible: a caller compiled by `@mxlang/target-html` (an MX
       // page, another leaf) calls `Name.render(input, out)` and binds `/var`
-      // to its result (decision 155). Hidden, that call is an error on
+      // to its result. Hidden, that call is an error on
       // generated text no source position maps to, so it is dropped and the
       // binding silently types as the error type.
       `const mxAstroRender = ${name} as unknown as ((input: MxAstroInput) => string) & { render: typeof __mxRender };`,

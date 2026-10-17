@@ -105,7 +105,7 @@ rather than to MX:
 reactive runtime anywhere, so a construct that only means something with a
 runtime is a build error rather than markup that silently renders once and
 never updates (the reactive tags are core language, and a target that cannot
-express them refuses them; decision 111 adds `<log>`/`<debug>` as debug-only tooling rejected the same
+express them refuses them; `<log>`/`<debug>` are debug-only tooling, rejected the same
 way, rather than the default policy's inert disposition).
 
 **`client:*` directives** on an MX component **fail the build**, naming the
@@ -137,7 +137,7 @@ This integration relies on Astro's undocumented and non-semver `addPageExtension
 
 ## Pages
 
-Decision 76b: an `.mx` file directly under `src/pages` is a **page**, not a
+An `.mx` file directly under `src/pages` is a **page**, not a
 component. The integration calls Astro's `addPageExtension(".mx")`, so
 `src/pages/about.mx` routes to `/about` the way `about.astro` would. `.marko`
 is not an extension this integration registers at all, so a `.marko` file
@@ -205,7 +205,7 @@ MX file fails the build for the same reason (nothing to hydrate).
 
 ## AstroMX templates (`.astro.mx`)
 
-Decisions 76c/78. An `.astro.mx` file is an **Astro component whose template is
+An `.astro.mx` file is an **Astro component whose template is
 MX**: a TypeScript frontmatter fence with Astro's own semantics, followed by
 an MX template instead of Astro's JSX-shaped markup. The template is lowered
 to Astro template syntax and the whole file is handed to Astro's compiler, so
@@ -242,8 +242,7 @@ strips only the last extension of a route file, so `src/pages/about.astro.mx`
 would route to `/about.astro`, not `/about`. The integration reports every
 `.astro.mx` file under `src/pages` (or your configured `srcDir`) as an error in
 `astro dev` and `astro build`, with the fix: write `about.astro` and import the
-`.astro.mx` component from it, or write the page as `about.mx` (decision 134,
-addendum).
+`.astro.mx` component from it, or write the page as `about.mx`.
 
 For TypeScript, enable Astro composition in `@mxlang/typescript-plugin` or run
 `mx-tsc --astro`. The `.astro.mx` emitter records source spans while it writes the
@@ -289,7 +288,7 @@ does not support reads "`<let>` is not supported in embedded MX on Astro.", then
 sentence saying why or what to write instead.
 
 - **Stateful tags** — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
-  blocks, `<id>`. Same stance as `.mx` under this host (decision 71): static
+  blocks, `<id>`. Same stance as `.mx` under this host: static
   markup at build time, no reactive runtime, so "this needs a runtime" is a
   build error rather than markup that renders once and never updates.
 - **`<await>`** — needs a suspense-capable renderer.
@@ -304,7 +303,7 @@ sentence saying why or what to write instead.
   calls its default export, which returns the markup alone (`server.ts`).
   To use the value, call the unit's sink entry `render(input, out)` from the
   fence's own TypeScript instead, where it is an ordinary function call that
-  returns the `<return>` value (decision 155):
+  returns the `<return>` value:
   ```astro
   ---
   import Counter from "./tags/counter.mx";

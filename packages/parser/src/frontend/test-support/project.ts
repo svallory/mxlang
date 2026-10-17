@@ -85,7 +85,7 @@ export function projectChild(node: Node, depth: number, out: string[]): void {
   }
 }
 
-/** A syntax-table trigger (decision 182) in a body or an attribute list. */
+/** A syntax-table trigger in a body or an attribute list. */
 function triggerLine(node: Node): string {
   const args = node.args ? ` args ${expr(node.args)}` : "";
   const value = node.value

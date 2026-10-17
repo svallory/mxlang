@@ -1,5 +1,5 @@
 /**
- * Unresolved-tag parity (decision 114): an unresolved capitalized tag is
+ * Unresolved-tag parity: an unresolved capitalized tag is
  * Marko 6.3.51's compile error on Angular too — "Unable to find entry point
  * for custom tag `<Name>`." — routed through the same core check every
  * other Marko-parity host wires into (`rejectUnknownTag`; html #149, Solid
@@ -41,7 +41,7 @@ afterAll(() => {
   }
 });
 
-describe("unresolved capitalized tag (decision 114)", () => {
+describe("unresolved capitalized tag", () => {
   it("is Marko's compile error, self-closing", () => {
     expect(() => compile("<TotallyUndefined/>", "x.mx")).toThrowError(
       MARKO_ERROR,
@@ -76,14 +76,14 @@ describe("unresolved capitalized tag (decision 114)", () => {
   });
 });
 
-describe("resolvable tags still compile (decision 114)", () => {
+describe("resolvable tags still compile", () => {
   it("a <define> call resolves", () => {
     const out = emit("<define/Row|a|>${a}</define><Row(1)/>");
     expect(out).toContain("[ngTemplateOutlet]");
     assertAngularParses(out);
   });
 
-  it("a capitalized local binding routes dynamic, never unresolved (decisions 113/116)", () => {
+  it("a capitalized local binding routes dynamic, never unresolved", () => {
     // A `<for>` tag param binds `Item` in scope; its runtime value cannot be
     // inspected at compile time, so the call lowers to a dynamic component
     // outlet — not to `mx-item`, and not to Marko's unresolved error.
@@ -117,7 +117,7 @@ describe("resolvable tags still compile (decision 114)", () => {
     assertAngularParses(result.code);
   });
 
-  it("a value import used as a tag routes dynamic (decision 116)", () => {
+  it("a value import used as a tag routes dynamic", () => {
     // Not a `.mx` default import, so the callee is a runtime value: the call
     // emits ngComponentOutlet with the attributes as its inputs, and the tag
     // module imports NgComponentOutlet itself.

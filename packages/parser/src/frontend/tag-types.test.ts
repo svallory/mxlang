@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "./parse.ts";
 
-/** Tag types are looked up as own properties (decision 182 addenda 2, 3). */
+/** Tag types are looked up as own properties. */
 describe("a tag named after an Object.prototype member", () => {
   it.each([
     "__proto__",

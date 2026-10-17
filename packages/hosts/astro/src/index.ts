@@ -2,7 +2,7 @@
  * `@mxlang/host-astro` — the Astro host for MX.
  *
  * MX (Markup eXtended) is a template language born from Marko, MX 1.0 being a
- * strict subset of Marko's syntax (decision 72). This package renders `.mx`
+ * strict subset of Marko's syntax. This package renders `.mx`
  * components inside an Astro project as **static markup**: they are compiled
  * by `@mxlang/target-html` to a runtime-free
  * `(input) => string` function, called during Astro's build, and never shipped
@@ -31,7 +31,7 @@ import { mxTemplates } from "./vite-templates.ts";
 
 /** Attribute-tag slot received by an `@mxlang/host-astro` component. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: the public default for an attribute tag with no config
   C extends AttrTagConfig = {},
 > = C["as"] extends "renderable"
   ? (...args: AttrTagParams<C>) => string
@@ -110,18 +110,16 @@ const DEFAULT_EXTENSIONS = [".mx"];
  * client JS.
  *
  * So **this host raises the error itself**, in `renderToStaticMarkup` when
- * Astro's `metadata.hydrate` is set: `client:*` on an MX component is an error
- * (decision 70), not something to discover in a bundle.
+ * Astro's `metadata.hydrate` is set: `client:*` on an MX component is an error, not something to discover in a bundle.
  * `examples/astro-static/e2e/build-errors.spec.ts` asserts the failing build.
  *
  * `strict: true` on the Vite plugin selects `@mxlang/target-html`'s
  * `strictPolicy`: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
  * blocks, `<id>`, `<log>` and `<debug>` become compile errors naming the
  * construct instead of rendering their initial value or compiling away as
- * inert. Decision 71 — stateful tags mean whatever the host says, and this
- * host has no reactive target at all, so "this needs a runtime" is a build
+ * inert. This host has no reactive target at all, so "this needs a runtime" is a build
  * error rather than markup that silently renders once and never updates.
- * `<log>`/`<debug>` join the same set under decision 111, rejected as
+ * `<log>`/`<debug>` join the same set, rejected as
  * debug-only tooling rather than inert.
  */
 export default function mxAstro(
@@ -164,18 +162,18 @@ export default function mxAstro(
           );
         }
 
-        // `.mx` files under `src/pages` are pages (decision 76b). `.marko`
+        // `.mx` files under `src/pages` are pages. `.marko`
         // is not a registered extension for this integration at all (see
         // `MxIntegrationOptions.extensions`'s own doc comment), so a
         // `.marko` file anywhere in an Astro project is simply not MX's.
         addPageExtension(".mx");
 
         // `.astro.mx` files are AstroMX: an Astro component whose template is
-        // MX, lowered to Astro template syntax (decision 76c/78/134). It is
+        // MX, lowered to Astro template syntax. It is
         // deliberately *not* registered as a page extension: Astro strips only
         // the last extension of a route file, so a page `about.astro.mx` would
         // route to `/about.astro`. One under the pages directory is an error
-        // instead (decision 134 addendum), raised here so both `astro dev` and
+        // instead, raised here so both `astro dev` and
         // `astro build` stop on it.
         assertNoAstroMxPages(config.srcDir);
 
@@ -184,7 +182,7 @@ export default function mxAstro(
             plugins: [
               // `.astro.mx` first: it owns that extension outright, lowering
               // the MX template to Astro template syntax and handing the file
-              // to Astro's own compiler (decision 76c). `mx()` declines the
+              // to Astro's own compiler. `mx()` declines the
               // extension itself, so the order is documentation rather than a
               // tie-break.
               mxTemplates(options.customTags),

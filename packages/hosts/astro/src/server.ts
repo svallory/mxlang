@@ -105,7 +105,7 @@ export async function renderToStaticMarkup(
   // loader falls back to a no-op hydrator — an island that silently does
   // nothing, on a host whose whole claim is shipping no client JS.
   //
-  // Decision 70's intent is that the directive is an error, so the failure is
+  // The directive is meant to be an error, so the failure is
   // raised here rather than left to be discovered in a bundle. `metadata` is
   // Astro's own fourth argument and `hydrate` holds the directive's value
   // (`load`, `idle`, `visible`, `media` or `only`).
@@ -137,7 +137,7 @@ export async function renderToStaticMarkup(
     }
   }
 
-  // The default export always returns the markup (decision 155), including
+  // The default export always returns the markup, including
   // for a unit that declares `<return>`: its value is what the sink entry
   // `Component.render(input, out)` returns, and Astro has nowhere to put it —
   // an `.astro.mx` template has no statement position to bind one in, and

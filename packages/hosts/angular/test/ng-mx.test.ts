@@ -79,7 +79,7 @@ describe("compileNgMx", () => {
     expect(parsed.errors).toBe(null);
   });
 
-  describe("template-literal escaping (decision 99)", () => {
+  describe("template-literal escaping", () => {
     it("escapes a backtick in template text", () => {
       const result = compileNgMx(
         componentFile("<p>a ` b</p>"),
@@ -1425,7 +1425,7 @@ describe("compileNgMx: fragment regions (G9)", () => {
   /** [authored region, the template it lowers to]. */
   const lowered: Array<[string, string]> = [
     ["<></>", ""],
-    // Decision 141: retained text uses Angular's non-droppable space marker.
+    // Retained text uses Angular's non-droppable space marker.
     ["<>   </>", "&ngsp;"],
     ["<>hello</>", "hello"],
     ["<>hello ${name}</>", "hello {{ name }}"],

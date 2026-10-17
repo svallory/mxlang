@@ -29,7 +29,7 @@ const frontEnd = (d: Any): string[] =>
         `${e.code} [${e.start},${e.end}) ${JSON.stringify(e.message)} ctx=${JSON.stringify(e.context)}`,
     );
 
-describe("MX_TAG_NAME_MISSING (decision 163 addendum 9)", () => {
+describe("MX_TAG_NAME_MISSING", () => {
   it("a bare `,` line: the nameless node stays beside the error", () => {
     const d = doc(",");
     expect(frontEnd(d)).toEqual([
@@ -58,7 +58,7 @@ describe("MX_TAG_NAME_MISSING (decision 163 addendum 9)", () => {
   });
 });
 
-describe("MX_STATEMENT_IN_HTML_MODE (decision 149)", () => {
+describe("MX_STATEMENT_IN_HTML_MODE", () => {
   it("<static x = 1/>: the statement example rides the message", () => {
     expect(frontEnd(doc("<static x = 1/>"))).toEqual([
       `MX_STATEMENT_IN_HTML_MODE [1,7) "\`static\` is a statement, not an html tag: write it at the root of the template without angle brackets, eg \`static const value = …\`." ctx=null`,
@@ -89,7 +89,7 @@ describe("MX_ATTRIBUTE_TAG_AT_ROOT", () => {
     // `div\n  @slot(a` — the front end finishes the open tags at the end of
     // input with their real ancestor (calibration F5), so the root rule
     // does not fire on the nested `@slot`; the input ending inside `(` is
-    // reported (decision 161).
+    // reported.
     expect(frontEnd(doc("div\n  @slot(a"))).toEqual([
       'MX_INPUT_ENDS_IN_DELIMITER [11,12) "the input ends inside `(`…`)` opened here" ctx=null',
     ]);

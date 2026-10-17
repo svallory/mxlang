@@ -149,7 +149,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
           }
       }
 
-      // MX (decision 182 addendum 1): a line trigger at a tagless line
+      // MX: a line trigger at a tagless line
       // start. The default row has no trigger set. A row whose claim
       // declines lexes as if none matched (a tag name).
       if (this.syntax.line !== null) {
@@ -165,7 +165,7 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
         }
       }
 
-      // MX (decision 182): a block tag or filter opener at a concise line
+      // MX: a block tag or filter opener at a concise line
       // start would otherwise read as a tag name (`{%`); it goes in a text
       // line instead.
       if (

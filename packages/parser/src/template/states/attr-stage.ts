@@ -4,7 +4,7 @@ export const VALUE = 2;
 export const ARGUMENT = 3;
 export const TYPE_PARAMS = 4;
 export const BLOCK = 5;
-/** MX (decision 182): the `=value` of an attribute trigger. */
+/** MX: the `=value` of an attribute trigger. */
 export const TRIGGER_VALUE = 6;
 
 export type AttrStage =

@@ -1,5 +1,5 @@
 /**
- * The parser grammar's probe corpus (decision 165) against this source copy,
+ * The parser grammar's probe corpus against this source copy,
  * and the link between the corpus and the document: every row of a normative
  * table in `parser-grammar.md` cites a probe, every cited probe exists, and
  * every probe is cited. See `grammar-spec.cases.ts` for the corpus format and

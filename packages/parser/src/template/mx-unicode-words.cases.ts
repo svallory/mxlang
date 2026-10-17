@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * template-parser-ascii-only-lookbehinds (decision 156 addendum 9): the
+ * template-parser-ascii-only-lookbehinds: the
  * look-behinds and look-aheads htmljs-parser 5.18.0 wrote with an ASCII-only
  * word class, outside the atom path. A non-ASCII identifier character is a
  * word character there too (any code unit at or above U+0080 that is not
@@ -363,7 +363,7 @@ export function renderWhitespaceEvents(
 }
 
 /**
- * Decision 156 addendum 11: the Unicode whitespace and line terminators
+ * The Unicode whitespace and line terminators
  * (`isUnicodeSpaceCode`) behave as ASCII whitespace in every look-behind.
  * Each form puts `W` where a look-behind asks "is this whitespace"; every
  * code point is one UTF-16 unit, like the space, so offsets never shift.
@@ -405,8 +405,8 @@ const WS_TEMPLATES = [
   // `shouldTerminateHtmlAttrValue`: a whitespace-preceded `>=`.
   "<if=countW>= 10>y</if>",
   "<div x=aW>= b>c</div>",
-  // Not `HTML_CONTENT`'s `//` and `/*` in body text: decision 156 addendum
-  // 13 withdrew addendum 11 there, see `BODY_TEXT_FORMS`.
+  // Not `HTML_CONTENT`'s `//` and `/*` in body text: only ASCII
+  // whitespace before them starts a comment, see `BODY_TEXT_FORMS`.
 ];
 
 /**
@@ -437,7 +437,7 @@ export function unicodeWhitespaceTwinMismatches(
 }
 
 /**
- * Decision 156 addendum 11: [input, events | atoms], each Unicode-whitespace
+ * [input, events | atoms], each Unicode-whitespace
  * input (U+00A0) beside its ASCII-space twin. 22 of these changed from the
  * merge base: division after `)`, a word or a number, the terminator
  * look-behind after an operator, ` >=`, and a comment in HTML text.
@@ -642,8 +642,7 @@ export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
     "<div x=a >= b>c</div>",
     '<div> @x ="a >= b" > text:"c" </div> | <div> @x ="a >= b"',
   ],
-  // Decision 156 addendum 13 (withdrawing addendum 11's confirmed
-  // consequence at this site): in a tag body only ASCII whitespace before
+  // In a tag body only ASCII whitespace before
   // `//` or `/*` starts a comment, as in Marko. After NBSP the text stays
   // text; its ASCII-space twin below is the comment.
   ["<div>a\u00a0// c\n</div>", '<div> > text:"a\u00a0// c\\n" </div> | <div>'],
@@ -653,7 +652,7 @@ export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
 ];
 
 /**
- * Decision 156 addendum 13, item 1: the body-text inputs where a Unicode
+ * The body-text inputs where a Unicode
  * whitespace or line terminator character `W` stands before `//` or `/*`.
  */
 const BODY_TEXT_FORMS = [
@@ -702,7 +701,7 @@ export const BODY_TEXT_ROWS: [string, string][] = [
 ];
 
 /**
- * Decision 156 addendum 13, item 2: a code point at or above U+0080 is a word
+ * A code point at or above U+0080 is a word
  * character only when it is `ID_Continue`, or U+200C or U+200D; a surrogate
  * pair is one code point and a lone surrogate is none. Each row is the
  * reading of stock htmljs-parser 5.18.0 (Marko's), measured on the unpatched
@@ -736,7 +735,7 @@ export const NON_WORD_ROWS: [string, string][] = [
 /**
  * The atom row (`ATOMS_SYNTAX`) arms after a non-identifier symbol, as after
  * ASCII punctuation (`%` here); stock reports an error for both forms. Neither
- * input is valid Marko or JavaScript. Before addendum 13 the symbol was a word
+ * input is valid Marko or JavaScript. The symbol used to be a word
  * character, so `\u00d7:await` read as a key and no atom lexed. Each is pinned
  * beside its ASCII twin; the patched build, which lexes no atom, reads both as
  * the source copy's default row does.
@@ -858,12 +857,12 @@ export function extraWordTwinMismatches(mod: AtomParserModule) {
 }
 
 /**
- * Decision 156 addendum 15: the after-value `:name` rule's identifier start is
+ * The after-value `:name` rule's identifier start is
  * ASCII-only, as on main, and stays so while the operator reconsiders
  * `:name` after a value ("on hold"). A non-ASCII name leaves one value, so a
  * later change shows here: `x=1 :é` is one value (a compile error), and an
  * arrow or function expression return type with a non-ASCII name is one
- * valid value, as stock reads it. The ASCII twins split (decision 146).
+ * valid value, as stock reads it. The ASCII twins split.
  */
 export const AFTER_VALUE_ON_HOLD_ROWS: [string, string][] = [
   ["<div x=1 :e/>", '<div> @x ="1 :e"'],
@@ -912,7 +911,7 @@ export function renderAttrRanges(mod: AtomParserModule, code: string): string {
 }
 
 /**
- * Decision 156 addendum 12: in concise mode, `--` after Unicode whitespace
+ * In concise mode, `--` after Unicode whitespace
  * starts the text block, as after an ASCII space, but the attribute's range
  * keeps the trailing Unicode whitespace (value `1 `, name `x `):
  * an ASCII space ends the attribute by the current-character test, which is

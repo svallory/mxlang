@@ -40,7 +40,7 @@ export {
 /** Options of `createParser`. */
 export interface CreateParserOptions {
   /**
-   * MX (decision 182): the syntax table this parser reads; omitted means
+   * MX: the syntax table this parser reads; omitted means
    * `DEFAULT_SYNTAX`, today's grammar. Throws a `TypeError` when the table
    * does not validate (`validateSyntaxTable`).
    */

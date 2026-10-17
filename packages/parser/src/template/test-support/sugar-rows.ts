@@ -1,6 +1,6 @@
 /**
  * The atoms-and-sugars dialect's rows (`lang-ext-move-sugars-to-mesh`,
- * slice a1): MX's atoms (decision 156) and name sugars (decision 146) as
+ * slice a1): MX's atoms and name sugars as
  * layer-2 syntax-table rows. Core has no name sugars of its own; these
  * rows are test fixtures. `mx-sugar-module.test.ts` runs the atom corpora
  * through the atom row.
@@ -47,7 +47,7 @@ const COLONS = `:{1,2}${PLAIN}`;
 export const ITEM = `(?:${PLAIN}|${SLASH}|${BRACKETS}|${COLONS})`;
 const NAME_START = "[A-Za-z_$\\u200c\\u200d\\p{ID_Start}\\p{Mn}\\p{Mc}\\p{Pc}]";
 
-/** `:name` as a value (decision 156), and the reserved `::name` (the hook reports it). */
+/** `:name` as a value, and the reserved `::name` (the hook reports it). */
 export const ATOM: Trigger = {
   id: "atom",
   chars: ":",
@@ -57,7 +57,7 @@ export const ATOM: Trigger = {
   node: { call: "atom" },
 };
 
-/** `:name` in attribute position: the `name` attribute (decision 146). */
+/** `:name` in attribute position: the `name` attribute. */
 export const NAME: Trigger = {
   id: "name",
   chars: ":",
@@ -67,7 +67,7 @@ export const NAME: Trigger = {
   terminatesValue: true,
 };
 
-/** Spaced `#id` (decision 146): no value (decision 183). */
+/** Spaced `#id`: no value. */
 export const ID: Trigger = {
   id: "id",
   chars: "#",
@@ -78,7 +78,7 @@ export const ID: Trigger = {
   value: "refuse",
 };
 
-/** Spaced `.class` (decision 146): no value (decision 183). */
+/** Spaced `.class`: no value. */
 export const CLASS: Trigger = {
   id: "class",
   chars: ".",

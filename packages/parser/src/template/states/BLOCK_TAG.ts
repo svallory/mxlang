@@ -18,7 +18,7 @@ export interface BlockTagMeta extends Meta {
 const FILTER_NAME = /[A-Za-z_][\w-]*/y;
 
 /**
- * MX (decision 182): a syntax table's block tag (`{% … %}`) or filter
+ * MX: a syntax table's block tag (`{% … %}`) or filter
  * (`::name:: … ::`) in HTML content. The body is raw: it runs to the first
  * `close` after the opener, and is announced by `onBlockTag` or `onFilter`
  * with its spans. What it means is lowering's (`lowerBlockTag`,
@@ -72,7 +72,7 @@ export const BLOCK_TAG: StateDefinition<BlockTagMeta> = {
 };
 
 /**
- * MX (decision 182): in HTML content at `parser.pos`, enters `BLOCK_TAG` for
+ * MX: in HTML content at `parser.pos`, enters `BLOCK_TAG` for
  * the table's block tag opener, or for a filter head (`open`, a name,
  * `close`). A filter opener without a name and `close` right after it is
  * text. Returns whether it entered.

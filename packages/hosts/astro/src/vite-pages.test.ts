@@ -90,7 +90,7 @@ describe("wrapAsPage", () => {
     );
   });
 
-  it("moves the sink entry onto the renamed page function (decision 155)", () => {
+  it("moves the sink entry onto the renamed page function", () => {
     // The compiled module attaches `render(input, out)` to its default export
     // as `NAME.render = __mxRender;`. Left behind by the rename, that line
     // would reference a function that no longer exists and throw on load.

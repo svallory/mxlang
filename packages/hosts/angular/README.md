@@ -2,8 +2,8 @@
 
 > **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
 
-**Preview.** This host is not yet a complete "Angular host" by decision
-70's own bar (a host is not done without its TypeScript plugin; that part
+**Preview.** This host is not yet a complete "Angular host" by the bar that
+a host is not done without its TypeScript plugin (that part
 of step 2 is still open). Two file kinds compile today:
 
 - **step 1** — an MX (`.mx`) page template compiles to a plain Angular
@@ -141,7 +141,7 @@ Five things are worth knowing before editing `src/ng-mx.ts`:
   `<>` and `</>`, or the overwrite would leave them in the module (the G9 leak).
   Two bare roots are the parser's `MultipleRoots` error, not a lowering.
 - **The template is a backtick literal**, with `` ` ``, `${` and `\`
-  escaped (decision 99, reversing the design note's A4 divergence 3). The
+  escaped (reversing the design note's A4 divergence 3). The
   reversal is a mapping decision, not a taste one: the spike measured that
   a double-quoted emit hands back Angular diagnostics in *escaped*
   coordinates, forcing an escape-aware inverse hop at every newline in
@@ -186,7 +186,7 @@ error table closes.
 ## Event handlers and `@mxlang/host-angular/runtime`
 
 A template that binds an element event calls two members on its component,
-`__mxOn` and `__mxOnAt` (decision 117). `.ng.mx` and tag modules get them
+`__mxOn` and `__mxOnAt`. `.ng.mx` and tag modules get them
 written in. A page's own class either pastes the text the build prints, or
 extends the zero-import runtime subpath, which carries the same members
 (public, `@internal`):
@@ -234,8 +234,8 @@ only`) don't warn: an `@` keyword warns only before real block syntax (`(…) {`
 a bare `{`, or `@let name = …;`). Each message names the literal escape
 (`${"{{"}`, `${"@"}if`). Text in `<pre>`/`<code>`/`<textarea>` still warns,
 because Angular interpolates there too. It covers `.mx` pages and tags the
-Angular host compiles as well as `.ng.mx` regions. An mx-only lint (decision
-126), unlike the per-category warnings above it fires once per occurrence.
+Angular host compiles as well as `.ng.mx` regions. An mx-only lint, unlike the
+per-category warnings above it fires once per occurrence.
 
 The "binds an event handler" warning (the `__mxOn`/`__mxOnAt` invoker) is the
 exception to "the build cannot see your class": `build`/`watch` read the page's

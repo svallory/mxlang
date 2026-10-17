@@ -3,7 +3,7 @@ import { compile } from "../src/index.ts";
 
 /**
  * A duplicate attribute (`<div class="a" class="b">`) resolves last-wins in
- * core, like stock Marko 6.4.4 (decision 135): the earlier occurrence is
+ * core, like stock Marko 6.4.4: the earlier occurrence is
  * dropped from the output and gets a positioned warning naming the survivor.
  * Never an error. The structured position is core's 0-based column; the
  * message text is 1-based.
@@ -104,7 +104,7 @@ describe("duplicate attributes (angular)", () => {
   });
 
   it("treats `x`, `[x]`, `(x)` and `#x` as distinct names", () => {
-    // Decision 135: names compare as resolved, so an Angular binding, an
+    // Names compare as resolved, so an Angular binding, an
     // output and a plain attribute of the same stem never collide.
     const { code, warnings } = run('<div [value]="a" value="b" #value>x</div>');
     expect(warnings).toEqual([]);

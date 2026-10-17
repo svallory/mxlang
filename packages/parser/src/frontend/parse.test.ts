@@ -289,7 +289,7 @@ describe("§3.5 MxAttribute", () => {
     });
   });
 
-  it("the name is the head before the colon (addendum 12)", () => {
+  it("the name is the head before the colon", () => {
     expect(first("<a class:x=1/>").attributes[0]).toMatchObject({
       name: "class",
       nameSpan: span(3, 8),
@@ -298,7 +298,7 @@ describe("§3.5 MxAttribute", () => {
     });
   });
 
-  it("the modifier split (decision 163 addendum 12): the name is the head", () => {
+  it("the modifier split: the name is the head", () => {
     // `<a a:b=1/>`: one colon.
     expect(first("<a a:b=1/>").attributes[0]).toMatchObject({
       name: "a",
@@ -343,7 +343,7 @@ describe("§3.5 MxAttribute", () => {
 
   it('a name ending in a colon: modifier "" with a zero-width span', () => {
     // `<a x:/>`: the bare attribute `x:` — the name is the head `x` and the
-    // empty modifier sits after the colon (decision 163 addendum 12).
+    // empty modifier sits after the colon.
     expect(first("<a x:/>").attributes[0]).toMatchObject({
       name: "x",
       nameSpan: span(3, 4),
@@ -648,7 +648,7 @@ describe("§3.10 MxModuleStatement and MxScriptlet", () => {
     });
   });
 
-  it("nested concise statement: the template parser's ROOT_TAG_ONLY (decision 163 addendum 7)", () => {
+  it("nested concise statement: the template parser's ROOT_TAG_ONLY", () => {
     const d = doc("div\n  static x = 1");
     expect(d.errors).toEqual([
       expect.objectContaining({
@@ -661,7 +661,7 @@ describe("§3.10 MxModuleStatement and MxScriptlet", () => {
     expect(d.body[0]).toMatchObject({ type: "MxTag", incomplete: true });
   });
 
-  it("<import x/> records MX_STATEMENT_IN_HTML_MODE (decision 149, PR 2b)", () => {
+  it("<import x/> records MX_STATEMENT_IN_HTML_MODE", () => {
     // A statement tag nested as an html tag: the front end records it, the
     // tag stays in the tree (ast \u00a73.13).
     const d = doc("<import x/>");
@@ -766,7 +766,7 @@ describe("§3.13 errors", () => {
     });
   });
 
-  it("MISSING_END_TAG at EOF keeps the nodes that arrived (decision 163 addendum 8)", () => {
+  it("MISSING_END_TAG at EOF keeps the nodes that arrived", () => {
     const d = doc("<div><p>x");
     expect(d.errors[0]).toMatchObject({
       code: "MISSING_END_TAG",
@@ -827,7 +827,7 @@ describe("§3.13 errors", () => {
 });
 
 describe("PR 2b front-end rules on interim shapes", () => {
-  it("a bare `,` line is an unnamed MxTag beside MX_TAG_NAME_MISSING (decision 163 addendum 9)", () => {
+  it("a bare `,` line is an unnamed MxTag beside MX_TAG_NAME_MISSING", () => {
     // The nameless node stays in the tree beside the recorded error.
     const d = doc(",");
     expect(d.errors).toEqual([
@@ -862,7 +862,7 @@ describe("template parser shapes the catalogue does not name", () => {
   });
 
   it("an HTML-mode tag with no name (<,/>) is unnamed, right after <, beside MX_TAG_NAME_MISSING", () => {
-    // Decision 163 addendum 9: the front end records MX_TAG_NAME_MISSING.
+    // The front end records MX_TAG_NAME_MISSING.
     expect(doc("<,/>").errors).toEqual([
       expect.objectContaining({
         code: "MX_TAG_NAME_MISSING",
@@ -906,7 +906,7 @@ describe("template parser shapes the catalogue does not name", () => {
   });
 });
 
-describe("review fixes (decision 163 addenda 10, 11)", () => {
+describe("review fixes", () => {
   it("B1: arguments are kept on the node", () => {
     const s = first("<div .c(a)/>").attributes[0];
     expect(s).toMatchObject({
@@ -922,7 +922,7 @@ describe("review fixes (decision 163 addenda 10, 11)", () => {
     });
   });
 
-  it("a statement a template error cuts short is kept (addendum 10)", () => {
+  it("a statement a template error cuts short is kept", () => {
     const cases: [string, number, number][] = [
       // input, end (right-trimmed), untrimmedEnd
       ["static const x = (", 6, 6],

@@ -159,7 +159,7 @@ export const HTML_CONTENT: StateDefinition<HTMLContentMeta> = {
         }
       }
 
-      // MX (decision 182): a syntax table's block tag or filter. The
+      // MX: a syntax table's block tag or filter. The
       // default row has no opener, so `stops` is empty.
       if (stops.length && stops.includes(code) && STATE.checkForBlockTag(this)) {
         return; // checkForBlockTag entered BLOCK_TAG

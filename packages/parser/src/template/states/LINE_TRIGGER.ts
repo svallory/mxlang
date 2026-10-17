@@ -23,7 +23,7 @@ export interface LineTriggerMeta extends Meta {
 }
 
 /**
- * MX (decision 182 addendum 1): a line trigger at the start of a tagless
+ * MX: a line trigger at the start of a tagless
  * concise line, entered by `CONCISE_HTML_CONTENT` with `pos` after the
  * matched text. An optional `=value` follows, lexed as a concise attribute's
  * value; then only whitespace may remain on the line. Generalises the `$ `

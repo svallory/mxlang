@@ -237,7 +237,7 @@ const DECLARED_HANDLERS = [
 ] as const;
 
 /**
- * MX (decision 182): handlers only a syntax table with triggers, a block tag
+ * MX: handlers only a syntax table with triggers, a block tag
  * or a filter can produce.
  * The default row has none, so neither source here fires them; "table-only
  * handlers do not fire on the default row" below re-tests that.

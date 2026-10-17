@@ -3,8 +3,8 @@
  *
  * `@mxlang/vite-plugin`'s `mx()` (added by the integration, unchanged) already
  * turns `src/pages/foo.mx` into a plain `<path>.mx.ts` module exporting
- * `default(input) => string` plus any hoisted module-level exports (decision
- * 76b's `export const getStaticPaths = ...` support in `@mxlang/core`'s
+ * `default(input) => string` plus any hoisted module-level exports (the
+ * `export const getStaticPaths = ...` support in `@mxlang/core`'s
  * `emitStatement`). That is a component shape, not a page shape: Astro's
  * router calls a page module's default export as `(result, props, slots) =>
  * ...` through `createComponent`, not as MX's own `(input) => string`.
@@ -59,7 +59,7 @@ function brandedTailRe(name: string): RegExp {
 /**
  * `export const layout = "../layouts/Base.astro";`, MX's frontmatter
  * equivalent of Markdown's `layout` key — matched as a plain string literal,
- * the only shape decision 76b's brief asks for. Captured and stripped from
+ * the only shape supported. Captured and stripped from
  * the hoisted module scope (a `.astro` specifier is metadata for this
  * transform, not a value the compiled module has any use for at runtime) so
  * the wrapper can turn it into a real import instead.
@@ -133,8 +133,8 @@ export function wrapAsPage(code: string): string | null {
   // with no type annotations at all — so injecting `(input: Input)`/`as
   // Input` here would hand rolldown's plain-JS parser syntax it no longer
   // expects anywhere else in the module.
-  // `NAME.render = …` attaches the sink entry to the default export
-  // (decision 155); it follows the function to its new name, or it would
+  // `NAME.render = …` attaches the sink entry to the default export;
+  // it follows the function to its new name, or it would
   // reference a binding the rename removed.
   const rendered = withoutLayout
     .replace(brandedTail, "\nfunction __mxRenderPage(input) {")
@@ -202,8 +202,7 @@ export function wrapAsPage(code: string): string | null {
  * An anchored prefix check, not `path.includes(pagesRoot)`: a substring test
  * matches `pagesRoot` anywhere in `path`, including a sibling project's own
  * `src/pages/` if such a path ever reaches this same Vite instance (a
- * monorepo, a symlinked tree) — not only "under this project's `srcDir`" as
- * decision 76b specifies. A literal `"/"`, not `node:path`'s platform `sep`:
+ * monorepo, a symlinked tree) — not only "under this project's `srcDir`". A literal `"/"`, not `node:path`'s platform `sep`:
  * both inputs here are already guaranteed POSIX-slash-delimited on every
  * OS — a `URL`'s `.pathname` (`srcDir`/`pagesRoot` come from
  * `new URL("pages/", srcDir).pathname`) and Vite/Rolldown module ids are
@@ -237,7 +236,7 @@ export function mxPages(srcDir: URL): Plugin {
 
       const wrapped = wrapAsPage(code);
       if (wrapped === null) {
-        // Decision 61: this file plainly lives under `src/pages/` and passed
+        // This file plainly lives under `src/pages/` and passed
         // the extension test above, so it is unambiguously a page module —
         // `wrapAsPage` returning `null` here means the branded-tail regexes
         // did not match `@mxlang/target-html`'s actual emitted shape (a drift

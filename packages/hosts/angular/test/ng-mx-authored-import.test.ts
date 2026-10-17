@@ -673,7 +673,7 @@ describe("authored .mx import in a .ng.mx region", () => {
     );
   });
 
-  it("lowers a module-scope const used as a tag to ngComponentOutlet (decision 116)", () => {
+  it("lowers a module-scope const used as a tag to ngComponentOutlet", () => {
     const dir = project({});
     const result = run(dir, ngMx(["const Local = 1;"], "<div><Local/></div>"));
     expect(result.code).toContain("ngComponentOutlet");

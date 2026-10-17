@@ -114,7 +114,7 @@ export function isWordCode(code: number) {
 const ID_CONTINUE = /^\p{ID_Continue}$/u;
 
 /**
- * MX (decision 156 addendum 13): a word character wherever the parser looks
+ * MX: a word character wherever the parser looks
  * behind or ahead to decide whether a word starts or ends. `code` is a code
  * point. At or above U+0080 it is a word character when it is `ID_Continue`
  * or U+200C or U+200D (ECMAScript's IdentifierPart), so `é`, `名` and `𝑥`
@@ -170,7 +170,7 @@ export function wordWidthAt(data: string, i: number) {
 }
 
 /**
- * MX (decision 156 addenda 10 and 11): whitespace wherever the parser looks
+ * MX: whitespace wherever the parser looks
  * behind (a dialect trigger's look-behind, division or regex, the keyword and operator
  * look-behinds, ` --` and ` >=`): ASCII whitespace and the Unicode
  * whitespace and line terminators of `isUnicodeSpaceCode`, which behave

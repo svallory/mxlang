@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the inputs are MX source with ${…} placeholders
 /**
- * `MX_INPUT_ENDS_IN_DELIMITER` (decision 161: no silent drop). At end of
+ * `MX_INPUT_ENDS_IN_DELIMITER` (no silent drop). At end of
  * input inside a concise open delimiter the template parser (like stock
  * htmljs-parser 5.18.0) stops with no error and no close events; the front
  * end reports the outermost delimiter left open, spanning its opener, and

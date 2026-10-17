@@ -1,5 +1,5 @@
 /**
- * A lookup for a test that needs one (decisions 129 and 132; unstable).
+ * A lookup for a test that needs one (unstable).
  *
  * The Angular package is a direct entry: `build`, `watch`, `discover` and the
  * CLI resolve their targets from this package's own descriptor unless the

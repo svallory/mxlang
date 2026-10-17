@@ -3,7 +3,7 @@
  * tag file becomes an Angular component", task 1.7).
  *
  * A tag file is an ordinary `.mx` file that compiles, per host, into a module
- * exporting the tag (decision 95, `notes/investigations/tag-unit-design.md`
+ * exporting the tag (`notes/investigations/tag-unit-design.md`
  * §1.1). On every other host that module's default export is a function. An
  * Angular component is a class with a decorator — there is no template-only
  * form — so this host emits a real standalone component module instead, and
@@ -54,7 +54,7 @@ import { compileSourceWithHint } from "./structural-attr-hint.ts";
 export interface CompileTagModuleOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.angular-template.defaultTag`, already validated. */
   defaultTag?: string;
   /** Collects positioned warnings; unset, they print to `console.warn`. */
   warnings?: MxWarning[];
@@ -64,7 +64,7 @@ export interface CompileTagModuleOptions {
    */
   tagSelectorPrefix?: string;
   /**
-   * The registered targets this compile runs under (decisions 129 and 132).
+   * The registered targets this compile runs under.
    * Defaults to this package's own descriptor, which is right for a direct
    * entry; a tool compiling several targets passes the built-in registry's
    * lookup, so a callee importing `AttrTag` from another registered target's

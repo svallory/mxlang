@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the inputs are MX source with ${…} placeholders
 /**
- * The expression layer (ast §4.1, §4.1a, §7.1; decision 166 item 1): every
+ * The expression layer (ast §4.1, §4.1a, §7.1): every
  * container's parsed Babel payload, its positions (file-absolute at
  * creation, fragment base included), the atom payload shape, the failure
  * that is data (`node: null`, `error` in `errors` in start order), and the

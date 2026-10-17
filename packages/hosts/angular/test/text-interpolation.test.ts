@@ -7,7 +7,7 @@ import {
 } from "./helpers.ts";
 
 describe("Text", () => {
-  it("protects Marko-normalized retained whitespace from Angular trimming (decision 141)", () => {
+  it("protects Marko-normalized retained whitespace from Angular trimming", () => {
     const out = emit("<div> \t </div>");
     expect(out).toBe("<div>&ngsp;</div>");
     assertAngularParses(out);

@@ -391,7 +391,7 @@ describe("attributes", () => {
   });
 });
 
-describe("unresolved components (decision 114 parity)", () => {
+describe("unresolved components (parity with the other hosts)", () => {
   it.each([
     ["self-closing", "<TotallyUndefined/>"],
     ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
@@ -847,8 +847,8 @@ describe("the fence's top-level return does not leak into the template", () => {
  * table is consulted while compiling whichever file holds the tag. The call
  * is legal: the unit is a separate module, and Astro's renderer calls its
  * default export, which returns the markup alone (`server.ts`; the value is
- * what `render(input, out)` returns, decision 155). Only `/var` is refused: it is a
- * structural host limit (ruled 2026-09-28, decision-65-style host-cannot),
+ * what `render(input, out)` returns). Only `/var` is refused: it is a
+ * structural host limit (ruled 2026-09-28; a host-cannot),
  * since Astro runs the `---` fence to completion before the template's tags
  * are ever called, leaving no statement position, in either the fence or the
  * template, to bind a value into. The message explains why and points at the
@@ -905,7 +905,7 @@ describe("a tag that returns a value", () => {
 
   it("explains why /var can't bind (fence-before-template ordering) and shows the fence-call workaround", () => {
     // Ruling 2026-09-28 (TODO amx-tag-var): this is a structural host limit
-    // (decision-65-style host-cannot), not a missing feature, so the message
+    // (a host-cannot), not a missing feature, so the message
     // says why rather than reading like a TODO — and points at the one route
     // that already works: calling the unit directly from the `---` fence's
     // own TypeScript, where it is an ordinary function call.
@@ -916,14 +916,14 @@ describe("a tag that returns a value", () => {
         { customTags: { counter } },
       ),
     ).toThrow(
-      // The route it names must be one that works since decision 155: the
+      // The route it names must be one that works: the
       // default export returns markup only, so the value comes from `render`.
       /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/host-astro\/runtime"; const value = Mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("rejects an expression-valued event handler: .astro.mx has no runtime", () => {
     expect(errorFor("<button onClick=handler>x</button>").message).toBe(
       "`onClick` is an event handler and requires a runtime; .astro.mx renders static markup at build time",

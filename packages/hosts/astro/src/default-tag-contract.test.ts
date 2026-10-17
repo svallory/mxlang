@@ -9,7 +9,7 @@ const tags: Record<string, CustomTag> = {
   },
 };
 
-describe("the parent contract's defaultTag on Astro templates (decision 145 PR 3)", () => {
+describe("the parent contract's defaultTag on Astro templates", () => {
   it("beats the package config; elsewhere the config answers", () => {
     const run = (source: string) =>
       lowerAstroMx(source, "/tmp/a.astro.mx", {

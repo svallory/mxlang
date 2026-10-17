@@ -1,5 +1,5 @@
 /**
- * The MX → Astro-template emitter (decisions 76c, 78 and 79).
+ * The MX → Astro-template emitter.
  *
  * An `.astro.mx` file keeps Astro's TypeScript frontmatter byte-for-byte and uses
  * MX for the template that follows it. The core parses that template,
@@ -50,7 +50,7 @@ import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import descriptor from "./descriptor.ts";
 
 /**
- * This package's own target table (decisions 129 and 132): the one descriptor
+ * This package's own target table: the one descriptor
  * it exports, defaulting for a direct entry that names no lookup of its own
  * (`mxTemplates()`; design note §5.1, rule (c)). A tool compiling several
  * targets passes the built-in registry's lookup through `options.targets`.
@@ -61,7 +61,7 @@ const ATTRIBUTE_SPREAD_EXPRESSION = "__mxAttrSpread";
 const ATTRIBUTE_OUT_EXPRESSION = "__mxAttrOut";
 
 /**
- * Marko's primitive attribute values on top of `addAttribute` (decision 149).
+ * Marko's primitive attribute values on top of `addAttribute`.
  * Astro's own rules: null/undefined omit, `false`/`true` print as text, a name
  * on its boolean-attribute list prints by truthiness only, `class`/`style`
  * print any non-nullish primitive. Marko omits `false`, prints `true` bare, omits
@@ -223,7 +223,7 @@ const TAGS: HostDeclarations["tags"] = {
   // refused a `.astro.mx` file that merely *called* a returning `.mx` tag. That
   // call is legal: the unit is a separate module, and `component()` below
   // calls its default export, which returns the markup alone; the value stays
-  // with `render` (decision 155).
+  // with `render`.
   const: {
     kind: "unsupported",
     hint: "Declare it in the `---` fence instead: an Astro template expression cannot declare a binding.",
@@ -262,7 +262,7 @@ function isComponentName(name: string): boolean {
 const ASTRO_BUILTIN_TAG_NAMES = new Set(["Fragment"]);
 
 /**
- * Whether a capitalized tag resolves (decision 114, extended to `.astro.mx`'s
+ * Whether a capitalized tag resolves (extended to `.astro.mx`'s
  * larger scope like `.solid.mx`'s own extension): the `---` fence's own
  * value bindings (`ctx.imports`, fed from `sourceBindings` in
  * `lowerAstroMx`), or one of Astro's own built-ins (above). There is no
@@ -335,7 +335,7 @@ export const astroTemplateDeclarations: HostDeclarations = {
   hostName: "Astro",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
-  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
@@ -493,7 +493,7 @@ function validatePlainAstroAttrs(attrs: Attr[], nativeName?: string): void {
  * Astro renders the attributes of a plain element one after another, and a
  * `{...x}` beside `a={2}` is rendered as its own run, so `<div a=1 {...x}
  * a=2>` printed `a` three times and a browser kept the first (x's). Marko
- * merges them as one object, where the later write wins (decision 135). When
+ * merges them as one object, where the later write wins. When
  * the element has a spread, its attributes are therefore folded into ONE spread
  * object in authored order, `{...{ "a": 1, ...x, "a": 2 }}`: a JS object merge
  * gives Marko's precedence, and Astro renders the merged object's keys, one
@@ -669,7 +669,7 @@ function emitAttrs(
           attr,
         );
         break;
-      // Phase B of `dom-events` (decision 101, design note §8): an
+      // Phase B of `dom-events` (design note §8): an
       // expression-valued event handler needs a runtime, and `.astro.mx` renders
       // static markup at build time — so it is rejected rather than emitted
       // as dead markup. A *string*-valued handler (`onclick="…"`) is an
@@ -1041,7 +1041,7 @@ export function createEmitter(
             node,
           );
         }
-        // `valueImportBinding` is set only by decision 116's own classified
+        // `valueImportBinding` is set only by the classified
         // routing (an import, or the local extension's fence-binding
         // classification) — never by an authored `<${expr}/>`, which has no
         // tag name to name in the error. Give this case its own wording
@@ -1061,8 +1061,7 @@ export function createEmitter(
 
       const name = componentNames.get(node.target.name) ?? node.target.name;
       if (node.var) {
-        // Structural, not a missing feature (decision 65-style host-cannot,
-        // ruled 2026-09-28 on TODO amx-tag-var): Astro runs the `---` fence
+        // Structural, not a missing feature (a host-cannot, TODO amx-tag-var): Astro runs the `---` fence
         // to completion before this template's tags are ever lowered or
         // called, so there is no statement position left, in either the
         // fence or the template, to receive a value into. A plain (no-`/var`)
@@ -1456,14 +1455,13 @@ export function lowerAstroMx(
   options: {
     /** Custom tags already discovered and loaded by the calling integration. */
     customTags?: Record<string, CustomTag>;
-    /** `package.json#mx.astro-html.defaultTag`, already validated (decision 145). */
+    /** `package.json#mx.astro-html.defaultTag`, already validated. */
     defaultTag?: string;
     /** Positioned non-fatal diagnostics collected by editor/build tooling. */
     warnings?: MxWarning[];
     /**
-     * The registered targets this lowering runs under (decisions 129 and
-     * 132). Defaults to this package's own descriptor (right for a direct
-     * entry); a tool compiling several targets passes the built-in registry's
+     * The registered targets this lowering runs under. Defaults to this package's own descriptor (right for a
+     * direct entry); a tool compiling several targets passes the built-in registry's
      * lookup.
      */
     targets?: TargetLookup;
@@ -1503,9 +1501,8 @@ export function lowerAstroMx(
     // The `---` fence is the author's own TypeScript module scope: a
     // capitalized tag routes to a component only when the fence actually
     // binds it as a value (an import, or a top-level const/function/class —
-    // the same operator-ruling extension decision 114 already gave
-    // `.solid.mx`'s surrounding module, since Marko has no `.astro.mx` concept to
-    // measure against). Fed into `ctx.imports` before lowering, the same set
+    // the same extension `.solid.mx` has for its surrounding
+    // module, since Marko has no `.astro.mx` concept to measure against). Fed into `ctx.imports` before lowering, the same set
     // `isComponent` (below) and the file-local-binding check in `lower.ts`
     // already consult for an ordinary MX-level `import`.
     //
@@ -1540,7 +1537,7 @@ export function lowerAstroMx(
     }
     checkReservedSource(match?.[1] ?? "", 2, 0, FENCE_SOURCE);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
-    // Local extension of decision 116 (firstmate's ruling): a fence
+    // Local extension of the capitalized-import rule: a fence
     // binding's own non-import value — a top-level `const`/`function`/
     // `class` the `---` fence declares — is classified the same way
     // `.solid.mx`'s `moduleBindings` is (`unknownModuleBindings`), so

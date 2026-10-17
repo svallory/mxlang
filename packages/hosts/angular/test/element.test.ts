@@ -94,7 +94,7 @@ describe("Element", () => {
   });
 
   it("emits `on-<exact>` as an event binding from core's resolved name", () => {
-    // Phase B of `dom-events` (decision 101): core lowers `on-my-event` to
+    // Phase B of `dom-events`: core lowers `on-my-event` to
     // the `event` kind carrying `event: "my-event"` verbatim, and Angular's
     // `(x)` can bind it — the phase-A `[on-my-event]=` passthrough is gone.
     const out = emit("<div on-my-event=f>x</div>");
@@ -102,10 +102,10 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("maps a lowercase expression `onclick=fn` to (click), per decision 101", () => {
+  it("maps a lowercase expression `onclick=fn` to (click)", () => {
     // A lowercase `onclick` is not event-shaped for the core kind (the
-    // `/^on[A-Z-]/` gate keeps it `dynamic`), but decision 101 maps it on
-    // this host instead of leaving a dead `[onclick]` property binding.
+    // `/^on[A-Z-]/` gate keeps it `dynamic`), but this host maps it
+    // instead of leaving a dead `[onclick]` property binding.
     const out = emit("<button onclick=handler>x</button>");
     expect(out).toBe(
       '<button (click)="__mxOn(handler, this, $event)">x</button>',
@@ -146,7 +146,7 @@ describe("Element", () => {
   });
 
   it("emits onDoubleClick as (doubleclick) with core's warning, never a rewrite", () => {
-    // No aliases (decision 101 (c)): `onDoubleClick` lowercases to
+    // No aliases: `onDoubleClick` lowercases to
     // `doubleclick`, which is not a DOM event; core warns at the attribute
     // name and the binding emits exactly what was written. The old
     // IRREGULAR_EVENTS table that rewrote this to `(dblclick)` is deleted.
@@ -188,7 +188,7 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("preserves ordinary attr: but rejects reserved class:/style: (decision 86 follow-up)", () => {
+  it("preserves ordinary attr: but rejects reserved class:/style:", () => {
     const out = emit("<a attr:aria-label=l>x</a>");
     expect(out).toBe(
       `${attrLet(0, "l")}<a [attr.attr:aria-label]="${attrBinding(0)}">x</a>`,

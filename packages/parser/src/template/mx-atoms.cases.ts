@@ -141,7 +141,7 @@ export const ATOMS: [string, string][] = [
   ["<div x = :b/>", '<div> @x atom(b@9-11) ="0."'],
   ["t x= :b", '<t> @x atom(b@5-7) ="0."'],
   // Row 6: the ternary counter skips an atom's `:`, so this is ONE value
-  // (decision 146's after-value split used to cut it at ` :c`).
+  // (an after-value split would cut it at ` :c`).
   ["<div x=a ? :b :c/>", '<div> @x atom(b@11-13) ="a ? 0. :c"'],
   ["<div x=a ?:b :c/>", '<div> @x atom(b@10-12) ="a ?0. :c"'],
   ["<div x=a ? :b :c :d/>", '<div> @x atom(b@11-13) ="a ? 0. :c :d"'],
@@ -201,9 +201,9 @@ export const ATOMS: [string, string][] = [
   ["<div x=:in :b/>", '<div> @x atom(in@7-10) ="0.0 :b"'],
   ["<div x=:typeof :b/>", '<div> @x atom(typeof@7-14) ="0.00000 :b"'],
   // Review round 4 (PR #342): contextual keywords as identifiers, unary `!`,
-  // and every `${}` (in raw-text bodies and tag names too, addendum 2).
+  // and every `${}` (in raw-text bodies and tag names too).
   ["<div x=f(of, :b)/>", '<div> @x atom(b@13-15) ="f(of, 0.)"'],
-  // template-parser-ascii-only-lookbehinds (decision 156 addendum 8): after
+  // template-parser-ascii-only-lookbehinds: after
   // a spread's `...`, `await`, `typeof` and `new` are operators, not member
   // names, so the atom lexes.
   ["<div x=[...await :b]/>", '<div> @x atom(b@17-19) ="[...await 0.]"'],
@@ -261,7 +261,7 @@ export const ATOMS: [string, string][] = [
     "<belongs-to=:Customer :customer/>",
     '<belongs-to> @ atom(Customer@12-21) ="0.0000000 :customer"',
   ],
-  // Every other default value keeps decision 151 ruling 2.
+  // Every other default value keeps the after-value `:name` rule (no sugar, so no split).
   ["<has-many=a :y/>", '<has-many> @ ="a :y"'],
   [
     "<has-many=:X + :y/>",
@@ -288,7 +288,7 @@ export const ATOMS: [string, string][] = [
     "<div x=(n === 0x1f? :a : :b)/>",
     '<div> @x atom(a@20-22) atom(b@25-27) ="(n === 0x1f? 0. : 0.)"',
   ],
-  // Decision 156 addendum 4, pinned so a lexer change is a conscious one:
+  // Pinned so a lexer change is a conscious one:
   // MX reads a spaced `< >` as comparison, so these lex an atom where
   // TypeScript would read type arguments. No type parser.
   ["<div x=(c ? a < b > :z)/>", '<div> @x atom(z@20-22) ="(c ? a < b > 0.)"'],
@@ -312,8 +312,7 @@ export const ATOMS: [string, string][] = [
     "<div x=(c ? y as Foo</* < */T> :z)/>",
     '<div> @x atom(z@31-33) ="(c ? y as Foo</* < */T> 0.)"',
   ],
-  // A non-ASCII operand (atom-lookbehind-non-ascii, decision 156 addenda 2
-  // and 8): a real atom still lexes where TypeScript cannot own the `:`
+  // A non-ASCII operand (atom-lookbehind-non-ascii): a real atom still lexes where TypeScript cannot own the `:`
   // (after `,`, an operator, an operator keyword, a string, template or
   // comment holding non-ASCII text), exactly as with an ASCII letter.
   ["<div x=[é, :b]/>", '<div> @x atom(b@11-13) ="[é, 0.]"'],
@@ -799,8 +798,7 @@ export const ATOMS: [string, string][] = [
   ["${\u00a0:b}\n", "atom(b@3-5) <${\u00a0:b}>"],
   ["<div x=`${\u00a0:b}`/>", '<div> @x atom(b@11-13) ="`${\u00a00.}`"'],
   ["div x=`${\u00a0:b}`\n", '<div> @x atom(b@10-12) ="`${\u00a00.}`"'],
-  // Decision 156 addendum 8, comments (template-parser-lookbehinds-
-  // followup): a comment before `of`, `yield` or `await`, or between the
+  // Comments (template-parser-lookbehinds-followup): a comment before `of`, `yield` or `await`, or between the
   // word and the `:`, is skipped exactly as whitespace is. Each row is beside
   // its twin with the comment replaced by spaces (`commentTwinMismatches`).
   ["<div x=(a /*c*/ of :b)/>", '<div> @x atom(b@19-21) ="(a /*c*/ of 0.)"'],
@@ -960,7 +958,7 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
   ["<div x=(c ? yield :b : d)/>", '<div> @x ="(c ? yield :b : d)"'],
   ["<div x={ k: yield :b }/>", '<div> @x ="{ k: yield :b }"'],
-  // Decision 156 addendum 4, pinned: `(a<b> :c)` with no open `?` takes
+  // Pinned: `(a<b> :c)` with no open `?` takes
   // TypeScript's reading (type arguments), so no atom; core's hint names the
   // ambiguity.
   ["<div x=(a<b> :c)/>", '<div> @x ="(a<b> :c)"'],
@@ -992,8 +990,8 @@ export const NOT_ATOMS: [string, string][] = [
   ["<p>${c ? a!! :b}</p>", '<p> ${"c ? a!! :b"}'],
   ["<div x=(c ? a! ! :z)/>", '<div> @x ="(c ? a! ! :z)"'],
   ["<div x=[c ? a[0]!! :z]/>", '<div> @x ="[c ? a[0]!! :z]"'],
-  // A non-ASCII letter before the `:` (atom-lookbehind-non-ascii, decision
-  // 156 addenda 2 and 8: a `:` TypeScript could own is TypeScript's): the
+  // A non-ASCII letter before the `:` (atom-lookbehind-non-ascii; a `:` TypeScript
+  // could own is TypeScript's): the
   // look-behind takes every character at or above U+0080 as a word
   // character, as the row's matcher does after a name. Each expected value is the
   // same row with an ASCII letter in its place (`asciiTwinMismatches`). The
@@ -1124,7 +1122,7 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=(c ? f<é>() :z)/>", '<div> @x ="(c ? f<é>() :z)"'],
   ["<div x=(c ? é?.b :z)/>", '<div> @x ="(c ? é?.b :z)"'],
   ["<div x=(c ? é[0]! :z)/>", '<div> @x ="(c ? é[0]! :z)"'],
-  // Decision 156 addendum 10: in the atom look-behind, Unicode whitespace
+  // In the atom look-behind, Unicode whitespace
   // and line terminators behave exactly as ASCII whitespace. These two shapes
   // lexed an atom on main and compiled (a ternary, a comparison); they now
   // read as TypeScript does with an ASCII space (each beside its ASCII-space
@@ -1257,14 +1255,13 @@ export const NOT_ATOMS: [string, string][] = [
     "div x=`${({ \u00e9\u00a0:a })}`\n",
     '<div> @x ="`${({ \u00e9\u00a0:a })}`"',
   ],
-  // Decision 156 addendum 8, comments (template-parser-lookbehinds-
-  // followup): a comment before `of`, `yield` or `await`, or between the
+  // Comments (template-parser-lookbehinds-followup): a comment before `of`, `yield` or `await`, or between the
   // word and the `:`, is skipped exactly as whitespace is. Each row is beside
   // its twin with the comment replaced by spaces (`commentTwinMismatches`).
 ];
 
 /**
- * Decision 146's forms (research §4, the 31 `p8-invariants` sources): every
+ * The name-sugar forms (research §4, the 31 `p8-invariants` sources): every
  * piece of sugar lives in tag and attribute names, never in a value, so none
  * of these lexes an atom or reports `::`.
  */
@@ -1717,8 +1714,7 @@ export const UNICODE_WHITESPACE = [
 ].map((code) => String.fromCharCode(code));
 
 /**
- * Decision 156 addendum 10 (which replaced review F1's "as main did"): in
- * the atom look-behind, every Unicode whitespace character renders exactly as
+ * In the atom look-behind, every Unicode whitespace character renders exactly as
  * an ASCII space. All 19 are in the Basic Multilingual Plane, one UTF-16 unit
  * like the space, so offsets never shift. Returns the inputs whose two
  * renderings differ (none expected) and how many ran.
@@ -1763,8 +1759,8 @@ export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
       for (const form of forms) {
         total++;
         // `x=<WS>:b`: the attribute state, not the look-behind, consumes the
-        // whitespace after `=`, and only ASCII whitespace (addendum 10 is the
-        // look-behind only), so the value starts at the Unicode whitespace.
+        // whitespace after `=`, and only ASCII whitespace (the Unicode rule is
+        // the look-behind only), so the value starts at the Unicode whitespace.
         // The atom is the same; the 294 rows above pin these events.
         if (form.startsWith("W") && pre.endsWith("=")) continue;
         const code = pre + form.replaceAll("W", ws) + post;
@@ -1778,7 +1774,7 @@ export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
 }
 
 /**
- * Decision 156 addendum 10: the other whitespace the atom look-behind skips,
+ * The other whitespace the atom look-behind skips,
  * besides the run right before the `:`: between a run of postfix `!`, before
  * a contextual keyword (`of`, `await`), and around a comment. Each Unicode
  * whitespace character renders as an ASCII space in every atom position.
@@ -1828,7 +1824,7 @@ export function unicodeWhitespaceLoopMismatches(mod: AtomParserModule): {
 }
 
 /**
- * Decision 156 addendum 8, comments (template-parser-lookbehinds-followup):
+ * Comments (template-parser-lookbehinds-followup):
  * a comment between an operator word (`of`, `yield`, `await`) and what comes
  * before it, or between the word and the `:`, is skipped exactly as
  * whitespace is. Each input's atoms equal those of the same input with the

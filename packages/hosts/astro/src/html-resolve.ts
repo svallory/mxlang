@@ -3,7 +3,7 @@
  * dependency.
  *
  * Every html-compiled `.mx` module imports the bare specifier `@mxlang/target-html`
- * (`escape` and, since decision 155, `createOut`). Vite resolves it from the
+ * (`escape` and `createOut`). Vite resolves it from the
  * importing file's directory, i.e. the user's project, where an isolated
  * linker (bun workspaces, pnpm) does not put a package the user never
  * installed. The install line is `bun add -d @mxlang/host-astro` and nothing else,

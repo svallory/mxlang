@@ -200,7 +200,7 @@ describe("virtual Angular tag modules", () => {
   });
 });
 
-describe("the virtual reader reads the package's validated defaultTag (decision 145)", () => {
+describe("the virtual reader reads the package's validated defaultTag", () => {
   const withConfig = (value: unknown) => ({
     mx: { host: "angular", "angular-template": { defaultTag: value } },
   });

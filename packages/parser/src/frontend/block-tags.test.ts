@@ -1,6 +1,6 @@
 /**
- * Decision 182, PR B, in the front end: `MxBlockTag` and `MxFilter` nodes,
- * and the precomputed `tagTypes` (addenda 2 and 3): the explicit option, the
+ * Syntax table PR B, in the front end: `MxBlockTag` and `MxFilter` nodes,
+ * and the precomputed `tagTypes`: the explicit option, the
  * interim pre-scan, and that the parser's types always agree with the body
  * modes the tree records.
  */
@@ -84,7 +84,7 @@ describe("MxBlockTag and MxFilter", () => {
   });
 });
 
-describe("tagTypes (decision 182 addenda 2 and 3)", () => {
+describe("tagTypes", () => {
   it("an explicit table equal to the pre-scan's gives the same tree for every probe", () => {
     const differ = PROBES.filter((probe) => {
       const tagTypes = buildTagTypes(
@@ -209,7 +209,7 @@ describe("tagTypes (decision 182 addenda 2 and 3)", () => {
         OPTIONS.tagShape,
       ),
     ).toEqual({ static: TagType.statement, textarea: TagType.text });
-    // `<static/>` in HTML mode is a tag (decision 163 addendum 7), as before.
+    // `<static/>` in HTML mode is a tag, as before.
     expect(parse("<static x=1/>", OPTIONS).body[0]?.type).toBe("MxTag");
     expect(parse("import:x y", OPTIONS).body[0]?.type).toBe("MxTag");
   });

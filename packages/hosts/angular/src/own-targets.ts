@@ -1,5 +1,5 @@
 /**
- * This package's own target table (decisions 129 and 132): the one descriptor
+ * This package's own target table: the one descriptor
  * `@mxlang/host-angular` exports, bound to a `TargetLookup`.
  *
  * Its own module because the import graph is a cycle otherwise:

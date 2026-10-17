@@ -1,5 +1,5 @@
 /**
- * The probe corpus of the parser grammar (decision 165): the normative
+ * The probe corpus of the parser grammar: the normative
  * content of `apps/docs/docs/architecture/parser-grammar.md` is its tables,
  * and every table row there cites the probes below that pin it.
  *

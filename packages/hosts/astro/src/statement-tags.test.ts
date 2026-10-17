@@ -1,4 +1,4 @@
-// Decision 168: the statement tags are declared to the parser on every
+// The statement tags are declared to the parser on every
 // target, so a statement whose text the attribute grammar cannot read (a typed
 // return, `<T,>`) compiles as the statement it is.
 import { describe, expect, it } from "vitest";

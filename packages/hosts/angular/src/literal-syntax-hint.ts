@@ -1,6 +1,6 @@
 /**
  * A positioned warning for Angular template syntax written as literal text in
- * an MX template (audit item 7, decision 126).
+ * an MX template (audit item 7).
  *
  * Marko reads `{{ name }}` and `@if (x) {` as plain text (neither `{` nor `@`
  * means anything to its parser; only `${…}` and `<…>` do), so the template

@@ -1,5 +1,5 @@
 /**
- * The pages-directory guard (decision 134, addendum).
+ * The pages-directory guard.
  *
  * An `.astro.mx` file is an Astro component or layout, never a page. Astro's
  * route collection strips only the **last** extension of a file under

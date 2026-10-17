@@ -179,7 +179,7 @@ describe("build: page routing", () => {
   });
 });
 
-describe("build: page header lists the event invoker members (decision 117)", () => {
+describe("build: page header lists the event invoker members", () => {
   const project = {
     mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },
   };
@@ -631,7 +631,7 @@ describe("checkOverwriteGuard", () => {
   });
 
   it("allows overwriting an output generated under the pre-rename package name", () => {
-    // Decision 201 renamed the package (`@mxlang/angular` ->
+    // The package was renamed (`@mxlang/angular` ->
     // `@mxlang/host-angular`); outputs already on disk carry the old header
     // and must still count as generated, in both comment styles.
     writeProject({
@@ -1474,7 +1474,7 @@ describe("build: .ng.mx round 2 review", () => {
     // `build()` is a direct entry, so it resolves its targets from this
     // package's own descriptor unless the caller passes a lookup of its own
     // (design note §5.1, rule (c)). `solid` is therefore not a file kind it
-    // knows, and decision 137's second branch reports it: the file cannot be
+    // knows, and the tag lookup reports it: the file cannot be
     // called as a tag. What must not happen either way is the `.ng.mx`
     // wording, which would tell the author the wrong thing about a file this
     // host does not own.
@@ -1683,7 +1683,7 @@ describe("discovery: core's host-module extension rule", () => {
   });
 });
 
-describe("build: the package's defaultTag (decision 145)", () => {
+describe("build: the package's defaultTag", () => {
   const manifest = (value: unknown) =>
     JSON.stringify({
       mx: {
@@ -1730,7 +1730,7 @@ describe("build: the package's defaultTag (decision 145)", () => {
   });
 });
 
-describe("build: a contract's invalid defaultTag (decision 145, review round 2)", () => {
+describe("build: a contract's invalid defaultTag", () => {
   it("is the one declaration error, through the build's warnings, once for many files", () => {
     writeProject({
       "package.json": JSON.stringify({
