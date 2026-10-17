@@ -632,7 +632,9 @@ Five facts worth knowing before editing it:
   (`src/expr-nodes.ts`) maps each forward to its node in a WeakMap, and
   `exprWithNodes` (`core.ts`) lists the nodes in `Expr.nodes` (`ExprNode`:
   `type`, `span`, `node`, `forward`, `code`) with the range of `Expr.code`
-  each forward is printed at; `cloneIr` keeps each forward by reference, so
+  each forward is printed at (an attribute method's `function` is printed
+  from its tree, so its nodes are found by walking it, `nodesInside`, and
+  carry no range); `cloneIr` keeps each forward by reference, so
   the map still finds it on a cloned IR. A claimed default value ends
   at a space followed by a `terminatesValue` row (`isClaimedDefault`,
   parser `EXPRESSION.ts`). `ContractAttr` (`lowered-unit.ts`) is the

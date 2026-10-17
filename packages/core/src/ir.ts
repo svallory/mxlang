@@ -189,7 +189,8 @@ export interface ExprNode {
   /**
    * Where `forward` is printed in `Expr.unrewrittenCode ?? Expr.code`
    * (UTF-16 offsets into that string). Absent only when the expression was
-   * reprinted rather than spliced (an expression with no authored position).
+   * reprinted rather than spliced: an expression with no authored position,
+   * such as an attribute method's `function` (`onClick() { return ~a }`).
    */
   code?: { start: number; end: number };
 }

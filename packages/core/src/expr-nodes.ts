@@ -38,3 +38,45 @@ export function recordForward(
   forwards.set(forward, entry);
   return entry;
 }
+
+/** Keys of a Babel node that hold no child expression. */
+const NOT_CHILDREN = new Set([
+  "loc",
+  "extra",
+  "leadingComments",
+  "trailingComments",
+  "innerComments",
+  "typeAnnotation",
+  "returnType",
+  "typeParameters",
+]);
+
+/**
+ * The dialect nodes whose forwards sit inside `node`, found by identity, in
+ * source order. For an expression `expr()` prints by generating it (a method
+ * value, `onClick() { return ~a }`, has no source range of its own): there
+ * is no splice to carry the node, so the payload is walked instead. The
+ * entries have no printed range.
+ */
+export function nodesInside(node: unknown): Omit<ExprNode, "code">[] {
+  const found: Omit<ExprNode, "code">[] = [];
+  const seen = new WeakSet<object>();
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    const entry = forwards.get(value);
+    if (entry) {
+      found.push(entry);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const each of value) walk(each);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (!NOT_CHILDREN.has(key)) walk(child);
+    }
+  };
+  walk(node);
+  return found.sort((a, b) => a.span.sourceStart - b.span.sourceStart);
+}

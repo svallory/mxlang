@@ -47,6 +47,7 @@ import {
 } from "./diagnostic-codes.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
+import { nodesInside } from "./expr-nodes.ts";
 import { handleNode } from "./host-handle.ts";
 import type { Attr, Expr, ExprNode, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
@@ -1321,12 +1322,15 @@ export function exprWithNodes(
   const end = node.end ?? node.loc?.end.index;
 
   if (typeof start !== "number" || typeof end !== "number") {
-    // If we have no position, we must fall back to generation (e.g. synthetic nodes)
+    // If we have no position, we must fall back to generation (e.g. synthetic
+    // nodes such as a method value's function). No splice carries the
+    // dialect nodes here, so they are found by walking the payload; they
+    // have no printed range.
     return {
       code: ctx.generate(
         ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
       ),
-      nodes: [],
+      nodes: nodesInside(node),
     };
   }
 

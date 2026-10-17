@@ -199,6 +199,34 @@ describe.each(LOADERS)("a dialect's node in the IR, via %s", (_, load) => {
     ]);
   });
 
+  it("a method value, printed from its function, still lists its nodes, with no printed range", () => {
+    const [attr] = attrsOf(
+      "<div onClick(e) { const x = ~a; return [x, ~b] }/>\n",
+    );
+    const value = (attr as { value: Expr }).value;
+    expect(value.code).toContain('"a"');
+    expect(value.code).toContain('"b"');
+    expect(
+      (value.nodes ?? []).map((each) => [
+        (each.node as unknown as { name: string }).name,
+        each.span,
+        "code" in each,
+      ]),
+    ).toEqual([
+      ["a", { sourceStart: 28, sourceEnd: 30 }, false],
+      ["b", { sourceStart: 43, sourceEnd: 45 }, false],
+    ]);
+    // Each forward is still the very node the payload holds.
+    const literals: unknown[] = [];
+    JSON.stringify(value.node, (_key, each) => {
+      if (each?.type === "StringLiteral") literals.push(each);
+      return each;
+    });
+    for (const each of value.nodes ?? []) {
+      expect(literals).toContain(each.forward);
+    }
+  });
+
   it("an expression with no node has no `nodes` field", () => {
     const value = dynamicOf(attrsOf("<div v=[1, x]/>\n")[0]);
     expect("nodes" in value).toBe(false);
