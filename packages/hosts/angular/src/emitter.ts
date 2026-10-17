@@ -2466,9 +2466,9 @@ class AngularEmitter implements Emitter<string> {
     }
     const resolvedPath =
       target.resolvedPath ?? this.tagModules.get(target.name)?.resolvedPath;
-    // No try/catch: `readCalleeInput` reports an unreadable or unparseable
-    // callee as an `invalid`/`unresolved` result, never a throw. The only throw
-    // is a missing lowering Ctx, which is a host bug and must surface.
+    // No try/catch: `readCalleeInput` returns `none`, `unresolved` or `invalid`
+    // for a callee it cannot read (a missing lowering Ctx included) and does
+    // not throw, so a catch here would only hide a bug of our own.
     const { input } = readCalleeInput(
       resolvedPath ? { ...target, resolvedPath } : target,
       this.ctx,
