@@ -60,6 +60,15 @@
  * not) is refused at `q`, because the module it makes cannot load. A re-export
  * (`export { q } from "m"`) and a type export (`export type { T }`) bind
  * nothing local.
+ *
+ * A module exports a name once. A second export of a name across the module
+ * statements (`static export { q }` beside `server export { q }`, an export
+ * list beside `export const q`, a re-export beside a list) is refused at the
+ * second name with `MX_DUPLICATE_DECLARATION`, naming the first, because the
+ * module would not load. A type export and an ambient `declare` export are
+ * erased and never collide; an enum or namespace merges with an earlier one of
+ * its name; a `server` export and a `client` export may share a name, as each
+ * output keeps one side.
  */
 
 import { coreBabel } from "./babel.ts";
@@ -437,6 +446,8 @@ interface StatementDeclarations {
   readonly names: ReadonlySet<string>;
   /** The local names of the statement's export lists (`export { q }`). */
   readonly exports: readonly Node[];
+  /** Every value name the statement exports, in source order. */
+  readonly exported: readonly ExportedName[];
   /** Value names only a `declare` or a bodiless signature introduces, by the first such name node. */
   readonly erased: ReadonlyMap<
     string,
@@ -477,6 +488,106 @@ function typeOnlyStatement(statement: Node): boolean {
   }
 }
 
+/** One name a statement exports, for the duplicate-export check. */
+interface ExportedName {
+  readonly name: string;
+  /** The exported name as written, where an error about it goes. */
+  readonly id: Node;
+  /** The declaration kind of `export const q`, `export enum q`; unset for a list or a re-export. */
+  readonly kind?: DeclarationKind;
+  readonly constEnum: boolean;
+}
+
+/** An identifier with a type (`q: number`) spans only its letters in a diagnostic. */
+function nameOnly(id: Node): Node {
+  return id.typeAnnotation && id.loc
+    ? {
+        ...id,
+        end: id.start + id.name.length,
+        loc: {
+          ...id.loc,
+          end: {
+            ...id.loc.start,
+            column: id.loc.start.column + id.name.length,
+          },
+        },
+      }
+    : id;
+}
+
+/**
+ * The value names a parsed statement exports: lists (`export { q }`, `export {
+ * a as q }`), re-exports (`export { q } from "m"`, `export * as q from "m"`)
+ * and exported declarations. A type export, an ambient `declare` and a
+ * function signature export no value, so the TypeScript strip leaves nothing to
+ * collide; `default` is the template's own and has its own check; `export *`
+ * names nothing.
+ */
+function exportedNames(file: Node): readonly ExportedName[] {
+  const { types } = coreBabel();
+  const out: ExportedName[] = [];
+  const add = (id: Node, kind?: DeclarationKind, constEnum = false): void => {
+    const name = id.type === "StringLiteral" ? id.value : id.name;
+    if (name === "default") return;
+    out.push({ name, id: nameOnly(id), kind, constEnum });
+  };
+  const declaration = (declared: Node): void => {
+    if (declared.declare === true) return;
+    switch (declared.type) {
+      case "VariableDeclaration":
+        for (const declarator of declared.declarations as Node[]) {
+          for (const id of Object.values<Node>(
+            types.getBindingIdentifiers(declarator.id),
+          )) {
+            add(id, declared.kind === "var" ? "var" : "lexical");
+          }
+        }
+        return;
+      case "FunctionDeclaration":
+        add(declared.id, "function");
+        return;
+      case "ClassDeclaration":
+        add(declared.id, "class");
+        return;
+      case "TSEnumDeclaration":
+        add(declared.id, "enum", declared.const === true);
+        return;
+      case "TSModuleDeclaration":
+        if (
+          declared.id?.type === "Identifier" &&
+          !declared.global &&
+          !typeOnlyNamespace(declared)
+        ) {
+          add(declared.id, "namespace");
+        }
+        return;
+    }
+  };
+  for (const statement of file.program.body as Node[]) {
+    if (statement.type === "TSImportEqualsDeclaration") {
+      if (statement.isExport && statement.importKind !== "type") {
+        add(statement.id, "import");
+      }
+      continue;
+    }
+    if (
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.exportKind === "type"
+    ) {
+      continue;
+    }
+    if (statement.declaration) {
+      declaration(statement.declaration);
+      continue;
+    }
+    for (const specifier of statement.specifiers as Node[]) {
+      if (specifier.exportKind === "type") continue;
+      if (specifier.exported) add(specifier.exported);
+    }
+  }
+  return out.sort((a, b) => a.id.start - b.id.start);
+}
+
 /** The declarations and export lists of one parsed statement. */
 function statementDeclarations(file: Node): StatementDeclarations {
   const { types } = coreBabel();
@@ -501,25 +612,10 @@ function statementDeclarations(file: Node): StatementDeclarations {
         signature: extra.ambient !== true,
       });
     }
-    // A name with a type (`d: number`) spans only its letters in a diagnostic.
-    const nameOnly =
-      id.typeAnnotation && id.loc
-        ? {
-            ...id,
-            end: id.start + id.name.length,
-            loc: {
-              ...id.loc,
-              end: {
-                ...id.loc.start,
-                column: id.loc.start.column + id.name.length,
-              },
-            },
-          }
-        : id;
     values.push({
       name: id.name,
       kind,
-      id: nameOnly,
+      id: nameOnly(id),
       ambient: false,
       signature: false,
       constEnum: false,
@@ -637,7 +733,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
     },
   });
   values.sort((a, b) => a.id.start - b.id.start);
-  return { values, names, exports, erased };
+  return { values, names, exports, exported: exportedNames(file), erased };
 }
 
 /**
@@ -742,6 +838,39 @@ function typeImportClash(first: Declaration, second: Declaration): boolean {
   return false;
 }
 
+/** An exported name and the statement keyword it was written under. */
+interface ExportSite extends ExportedName {
+  readonly keyword: string;
+}
+
+/**
+ * Would `next` give the module a second export of a name `first` already
+ * exports? A module can export a name once. Two exports never collide when
+ * one is in a `server` statement and the other in a `client` one: each output
+ * keeps its own side's code, so each module exports the name once. An enum or
+ * namespace merges with an earlier enum, namespace, function or class of its
+ * name (TypeScript's merge, one binding): the strip emits one export for them.
+ */
+function exportsCollide(first: ExportSite, next: ExportSite): boolean {
+  const sides = new Set([first.keyword, next.keyword]);
+  if (sides.has("server") && sides.has("client")) return false;
+  if (next.kind === "enum") {
+    return !(
+      first.kind === "namespace" ||
+      (first.kind === "enum" && first.constEnum === next.constEnum)
+    );
+  }
+  if (next.kind === "namespace") {
+    return !(
+      first.kind === "function" ||
+      first.kind === "class" ||
+      first.kind === "enum" ||
+      first.kind === "namespace"
+    );
+  }
+  return true;
+}
+
 /** 1-based `line:column`, as an editor shows a position. */
 function whereIs(node: Node): string {
   const at = node.loc?.start;
@@ -817,6 +946,27 @@ function bindingErrors(
           at: next.id,
         });
       }
+    }
+  }
+  // A module exports a name once, whichever statements export it. The second
+  // export is refused at its name, and the error names the first.
+  const exportedAt = new Map<string, ExportSite[]>();
+  for (const { statement, parsed: p } of parsed) {
+    if (!p) continue;
+    const keyword = tagNameOf(statement) as string;
+    for (const exported of p.declared.exported) {
+      const next: ExportSite = { ...exported, keyword };
+      const earlier = exportedAt.get(next.name) ?? [];
+      const first = earlier.find((site) => exportsCollide(site, next));
+      if (first) {
+        record(statement, {
+          code: DUPLICATE_DECLARATION_CODE,
+          message: `Duplicate export "${next.name}": the module already exports that name at ${whereIs(first.id)}, and a module cannot export one name twice, so it would not load. Export each name once: rename one (\`export { local as other }\`) or remove it. An enum or namespace merges with an earlier one of its name, and a \`server\` export may share a name with a \`client\` one.`,
+          at: next.id,
+        });
+      }
+      earlier.push(next);
+      exportedAt.set(next.name, earlier);
     }
   }
   // An export list can name any declaration in the file, above or below it. A

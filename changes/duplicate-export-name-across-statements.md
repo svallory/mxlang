@@ -1,0 +1,5 @@
+---
+packages: [core]
+kind: Fixed
+---
+A name exported twice across the module statements is now a compile error on every target. `static const q = 1`, `static export { q }` and `server export { q }` used to compile, and the module they made did not load (`SyntaxError: Duplicate export of 'q'`). The second export is refused at its name with `MX_DUPLICATE_DECLARATION`, and the message says where the first is: two export lists, an export list beside `export const`, `export function`, `export class`, `export enum`, `export namespace` or `export var`, `export { a as q }` beside `export { b as q }` or `export const q`, a re-export (`export { q } from "./m"`, `export * as q from "./m"`) beside any of them, and two names in one list, in a block or without one. A `server` export and a `client` export of one name stay legal, since each output keeps one side. So do type exports, `export declare` forms, `export * from` of two modules, function overloads with their implementation, and an enum or namespace merged with an earlier one of its name. To fix it, export each name once: rename one with `export { local as other }`, or remove it.

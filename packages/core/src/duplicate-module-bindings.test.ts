@@ -27,6 +27,10 @@
  * introduces, or only a bodiless function signature, is erased, so it does not
  * count. A re-export and a type export bind nothing local.
  *
+ * A name is exported once: a second export of it across the module statements
+ * is refused at the second name with `MX_DUPLICATE_DECLARATION`, except a
+ * `server` export beside a `client` one, and what the strip erases or merges.
+ *
  * Every row was probed on the stock parser (Marko 6.4.4) and through node
  * (`probes/duplicate-module-bindings-7cfaa606/`); positions below are
  * 1-based lines and 0-based columns, as `lowerSource` reports them.
@@ -1317,5 +1321,497 @@ describe("an export list names a declared binding", () => {
     );
     expect(found.some((d) => d.code === UNDECLARED)).toBe(false);
     expect(found.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * A module exports a name once. Marko 6.4.4 compiles a second export of a
+ * name across the module statements and the module it makes does not load
+ * (`Duplicate export of 'q'`, probed for the html and the dom output of every
+ * keyword and form: `probes/duplicate-export-name-across-statements-load-6.4.4.txt`).
+ * `‹…›` marks the first export of the name and `«…»` the second, which is
+ * where the error goes; the markers are removed before the source is compiled.
+ */
+describe("a name exported twice is refused at the second export", () => {
+  interface Marked {
+    source: string;
+    name: string;
+    line: number;
+    column: number;
+    first: string;
+  }
+
+  /** Strips the markers; reads the second name's 1-based line, 0-based column and the first's `line:column` (1-based). */
+  function marked(text: string): Marked {
+    const read = (open: string, close: string) => {
+      const start = text.indexOf(open);
+      const end = text.indexOf(close);
+      const before = text.slice(0, start).replaceAll(/[‹›«»]/g, "");
+      const lines = before.split("\n");
+      return {
+        name: text.slice(start + 1, end),
+        line: lines.length,
+        column: (lines.at(-1) as string).length,
+      };
+    };
+    const first = read("‹", "›");
+    const second = read("«", "»");
+    return {
+      source: text.replaceAll(/[‹›«»]/g, ""),
+      name: second.name,
+      line: second.line,
+      column: second.column,
+      first: `${first.line}:${first.column + 1}`,
+    };
+  }
+
+  function refusedAt(text: string) {
+    const m = marked(text);
+    const error = expectRefused(m.source, DUPLICATE, m.name, m.line, m.column);
+    expect(error.message).toContain(
+      `the module already exports that name at ${m.first}`,
+    );
+    return error;
+  }
+
+  // [label, marked source]
+  const rows: [string, string][] = [
+    // The reported source: a name exported by a list in one statement and again in another.
+    [
+      "export lists in static and server statements",
+      "static const q = 1\nstatic export { ‹q› }\nserver export { «q» }",
+    ],
+    [
+      "export lists in two static statements",
+      "static const q = 1\nstatic export { ‹q› }\nstatic export { «q» }",
+    ],
+    [
+      "export lists in two static blocks",
+      "static { const q = 1 }\nstatic { export { ‹q› } }\nstatic { export { «q» } }",
+    ],
+    [
+      "export lists in two server statements",
+      "server const q = 1\nserver export { ‹q› }\nserver export { «q» }",
+    ],
+    [
+      "export lists in two server blocks",
+      "server { const q = 1 }\nserver { export { ‹q› } }\nserver { export { «q» } }",
+    ],
+    [
+      "export lists in two client statements",
+      "client const q = 1\nclient export { ‹q› }\nclient export { «q» }",
+    ],
+    [
+      "export lists in two client blocks",
+      "client { const q = 1 }\nclient { export { ‹q› } }\nclient { export { «q» } }",
+    ],
+    [
+      "a static list and a client list",
+      "static const q = 1\nstatic export { ‹q› }\nclient export { «q» }",
+    ],
+    [
+      "a client list and a static list",
+      "static const q = 1\nclient export { ‹q› }\nstatic export { «q» }",
+    ],
+    [
+      "a server list and a static list",
+      "static const q = 1\nserver export { ‹q› }\nstatic export { «q» }",
+    ],
+    [
+      "a static list and a server list in blocks",
+      "static { const q = 1 }\nstatic { export { ‹q› } }\nserver { export { «q» } }",
+    ],
+    [
+      "top level export lists",
+      "static const q = 1\nexport { ‹q› }\nexport { «q» }",
+    ],
+    [
+      "a top level list and a static list",
+      "static const q = 1\nexport { ‹q› }\nstatic export { «q» }",
+    ],
+    [
+      "one list naming a name twice",
+      "static const q = 1\nstatic export { ‹q›, «q» }",
+    ],
+    [
+      "one top level list naming a name twice",
+      "static const q = 1\nexport { ‹q›, «q» }",
+    ],
+    [
+      "one block with two lists",
+      "static { const q = 1; export { ‹q› }; export { «q» } }",
+    ],
+    [
+      "one block with a list naming a name twice",
+      "static { const q = 1; export { ‹q›, «q» } }",
+    ],
+    [
+      "a name on two lines of a list",
+      "static const q = 1\nstatic export {\n  ‹q›,\n  «q»,\n}",
+    ],
+    // An exported declaration and a list.
+    [
+      "export const, then a list",
+      "static export const ‹q› = 1\nstatic export { «q» }",
+    ],
+    [
+      "export const in a block, then a list in a block",
+      "static { export const ‹q› = 1 }\nstatic { export { «q» } }",
+    ],
+    [
+      "server export const, then a server list",
+      "server export const ‹q› = 1\nserver export { «q» }",
+    ],
+    [
+      "client export const, then a client list",
+      "client export const ‹q› = 1\nclient export { «q» }",
+    ],
+    [
+      "top level export const, then a top level list",
+      "export const ‹q› = 1\nexport { «q» }",
+    ],
+    [
+      "export const, then a list, in one block",
+      "static { export const ‹q› = 1; export { «q» } }",
+    ],
+    [
+      "a typed export const, then a list",
+      "static export const ‹q›: number = 1\nstatic export { «q» }",
+    ],
+    [
+      "a destructured export const, then a list",
+      "static export const { ‹q› } = o\nstatic export { «q» }",
+    ],
+    [
+      "an export var, then a list",
+      "static export var ‹q› = 1\nstatic export { «q» }",
+    ],
+    [
+      "an export function, then a list",
+      "static export function ‹q›() {}\nstatic export { «q» }",
+    ],
+    [
+      "an export class, then a list",
+      "static export class ‹q› {}\nstatic export { «q» }",
+    ],
+    [
+      "an export enum, then a list",
+      "static export enum ‹q› { A }\nstatic export { «q» }",
+    ],
+    [
+      "an export namespace, then a list",
+      "static export namespace ‹q› { export const a = 1 }\nstatic export { «q» }",
+    ],
+    [
+      "an export function with its signature, then a list",
+      "static export function q(): void\nstatic export function ‹q›() {}\nstatic export { «q» }",
+    ],
+    // A renamed local.
+    [
+      "a renamed list, then export const",
+      "static const a = 1\nstatic export { a as ‹q› }\nstatic export const «q» = 2",
+    ],
+    [
+      "a renamed server list, then a static export const",
+      "static const a = 1\nserver export { a as ‹q› }\nstatic export const «q» = 2",
+    ],
+    [
+      "two renamed lists",
+      "static const a = 1, b = 2\nstatic export { a as ‹q› }\nstatic export { b as «q» }",
+    ],
+    [
+      "two renamed names in one list",
+      "static const a = 1, b = 2\nstatic export { a as ‹q›, b as «q» }",
+    ],
+    [
+      "a renamed list, and the name itself",
+      "static const q = 1, a = 2\nstatic export { a as ‹q› }\nstatic export { «q» }",
+    ],
+    [
+      "a string name, then an identifier",
+      'static const a = 1, b = 2\nstatic export { a as ‹"q"› }\nstatic export { b as «q» }',
+    ],
+    [
+      "an identifier, then a string name",
+      'static const a = 1, b = 2\nstatic export { a as ‹q› }\nstatic export { b as «"q"» }',
+    ],
+    // Re-exports.
+    [
+      "a re-export, then a list",
+      'static export { ‹q› } from "./m"\nstatic const q = 1\nstatic export { «q» }',
+    ],
+    [
+      "a list, then a re-export",
+      'static const q = 1\nstatic export { ‹q› }\nstatic export { «q» } from "./m"',
+    ],
+    [
+      "two re-exports",
+      'static export { ‹q› } from "./m"\nstatic export { «q» } from "./n"',
+    ],
+    [
+      "two re-exports in blocks",
+      'static { export { ‹q› } from "./m" }\nstatic { export { «q» } from "./n" }',
+    ],
+    [
+      "two renamed re-exports",
+      'static export { a as ‹q› } from "./m"\nstatic export { b as «q» } from "./n"',
+    ],
+    [
+      "a top level re-export, then a list",
+      'export { ‹q› } from "./m"\nstatic const q = 1\nexport { «q» }',
+    ],
+    [
+      "a re-export, then export const",
+      'static export { ‹q› } from "./m"\nstatic export const «q» = 1',
+    ],
+    [
+      "a namespace re-export, then a list",
+      'static export * as ‹q› from "./m"\nstatic const q = 1\nstatic export { «q» }',
+    ],
+    [
+      "two namespace re-exports",
+      'static export * as ‹q› from "./m"\nstatic export * as «q» from "./n"',
+    ],
+    [
+      "a namespace re-export, then export const",
+      'static export * as ‹q› from "./m"\nstatic export const «q» = 1',
+    ],
+    [
+      "a namespace re-export in a block, then a list in a server block",
+      'static { export * as ‹q› from "./m" }\nserver { const q = 1; export { «q» } }',
+    ],
+    // A var is one binding, but a module exports its name once.
+    ["two export vars", "static export var ‹q› = 1\nstatic export var «q» = 2"],
+    [
+      "two export vars in a block",
+      "static { export var ‹q› = 1; export var «q» = 2 }",
+    ],
+    // A list of a type name is a value export to the strip (stock's module does not load).
+    [
+      "a list naming a type twice",
+      "static type T = 1\nstatic export { ‹T› }\nstatic export { «T» }",
+    ],
+    // An enum or namespace is not merged with a list or a var.
+    [
+      "a namespace after a list",
+      "static const a = 1\nstatic export { a as ‹q› }\nstatic export namespace «q» { export const b = 1 }",
+    ],
+  ];
+  it.each(rows)("%s", (_label, text) => {
+    refusedAt(text);
+  });
+
+  it("names the first export also when it is in a later keyword's statement", () => {
+    refusedAt(
+      "server const q = 1\nserver export { ‹q› }\nstatic export { «q» }",
+    );
+  });
+
+  it("refuses each later export at its own name, against the first", () => {
+    const found = diagnostics(
+      "static const q = 1\nstatic export { q }\nstatic export { q }\nstatic export { q }",
+    ).filter((d) => d.severity === "error");
+    expect(found).toHaveLength(2);
+    expect(found[0]).toMatchObject({
+      code: DUPLICATE,
+      line: 3,
+      column: 16,
+      end: { line: 3, column: 17 },
+    });
+    expect(found[1]).toMatchObject({
+      code: DUPLICATE,
+      line: 4,
+      column: 16,
+      end: { line: 4, column: 17 },
+    });
+    for (const d of found) {
+      expect(d.message).toContain("already exports that name at 2:17");
+    }
+  });
+
+  it("refuses a client export beside a static one and a server one beside it, each at its own name", () => {
+    const found = diagnostics(
+      "static const q = 1\nstatic export { q }\nclient export { q }\nserver export { q }",
+    ).filter((d) => d.severity === "error");
+    expect(found.map((d) => [d.line, d.column])).toEqual([
+      [3, 16],
+      [4, 16],
+    ]);
+  });
+
+  it("says the rule and the fix, with no decision number", () => {
+    const error = refusedAt(
+      "static const q = 1\nstatic export { ‹q› }\nstatic export { «q» }",
+    );
+    expect(error.message).toMatch(
+      /^Duplicate export "q": the module already exports that name at 2:17, and a module cannot export one name twice, so it would not load\. Export each name once: rename one \(`export \{ local as other \}`\) or remove it\./,
+    );
+    expect(error.message).not.toMatch(/decision \d/i);
+  });
+
+  it("names a string name by its value", () => {
+    const error = refusedAt(
+      'static const a = 1, b = 2\nstatic export { a as ‹"q"› }\nstatic export { b as «q» }',
+    );
+    expect(error.message).toContain('Duplicate export "q"');
+  });
+
+  it("keeps the declaration error when the declaration itself is the duplicate", () => {
+    // Two lexical declarations of a name are one `MX_DUPLICATE_DECLARATION`, not two.
+    const found = diagnostics(
+      "static export const q = 1\nstatic export const q = 2",
+    ).filter((d) => d.severity === "error");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain('Duplicate declaration "q"');
+  });
+
+  const compiles: [string, string][] = [
+    // One side each: a server export and a client export keep one side per output.
+    [
+      "a server list and a client list, each with its own local",
+      "server const a = 1\nclient const b = 2\nserver export { a as q }\nclient export { b as q }",
+    ],
+    [
+      "a client list and a server list",
+      "server const a = 1\nclient const b = 2\nclient export { b as q }\nserver export { a as q }",
+    ],
+    [
+      "a server block and a client block",
+      "server { const a = 1; export { a as q } }\nclient { const b = 2; export { b as q } }",
+    ],
+    [
+      "a server export const and a client re-export",
+      'server export const q = 1\nclient export { q } from "./m"',
+    ],
+    // Type exports are erased.
+    [
+      "a type export twice",
+      "static type T = 1\nstatic export type { T }\nstatic export type { T }",
+    ],
+    [
+      "an inline type export twice",
+      "static type T = 1\nstatic export { type T }\nstatic export { type T }",
+    ],
+    [
+      "an interface and a type export",
+      "static export interface T {}\nstatic export type { T }",
+    ],
+    [
+      "an exported type alias and an exported value of its name",
+      "static export type T = 1\nstatic export const T = 2",
+    ],
+    [
+      "an exported interface and an exported value of its name",
+      "static export interface T {}\nstatic export const T = 2",
+    ],
+    [
+      "a type export, then a list of a value of its name",
+      "static type T = 1\nstatic export type { T }\nstatic const T = 2\nstatic export { T }",
+    ],
+    [
+      "a namespace with only types, and an exported value of its name",
+      "static export namespace q { export type X = 1 }\nstatic export const q = 1",
+    ],
+    // Ambient exports are erased.
+    [
+      "an exported declare function and an exported function",
+      "static export declare function q(): void\nstatic export function q() {}",
+    ],
+    [
+      "an exported function and an exported declare function",
+      "static export function q() {}\nstatic export declare function q(): void",
+    ],
+    [
+      "an exported declare class and an exported namespace",
+      "static export declare class q {}\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "an exported declare namespace and an exported const",
+      "static export declare namespace q { const a: number }\nstatic export const q = 1",
+    ],
+    [
+      "an exported declare var and an exported var",
+      "static export declare var q: number\nstatic export var q = 1",
+    ],
+    [
+      "an exported function signature and its implementation",
+      "static export function q(): void\nstatic export function q(x?: number) {}",
+    ],
+    // `export *` exports no name of its own.
+    [
+      "export all from two modules",
+      'static export * from "./m"\nstatic export * from "./n"',
+    ],
+    [
+      "export all and a list",
+      'static export * from "./m"\nstatic const q = 1\nstatic export { q }',
+    ],
+    [
+      "export all and a namespace re-export",
+      'static export * from "./m"\nstatic export * as q from "./m"',
+    ],
+    // TypeScript's merges stay one export.
+    [
+      "an exported function and a namespace of its name",
+      "static export function q() {}\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "an exported class and a namespace of its name",
+      "static export class q {}\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "an exported enum and a namespace of its name",
+      "static export enum q { A }\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "two exported namespaces",
+      "static export namespace q { export const a = 1 }\nstatic export namespace q { export const b = 1 }",
+    ],
+    [
+      "two exported enums in one block",
+      "static { export enum q { A }; export enum q { B } }",
+    ],
+    // Distinct names.
+    [
+      "lists of two names",
+      "static const q = 1, r = 2\nstatic export { q }\nstatic export { r }",
+    ],
+    [
+      "a name and its alias",
+      "static const q = 1\nstatic export { q }\nstatic export { q as r }",
+    ],
+    [
+      "a string name and another name",
+      'static const a = 1, b = 2\nstatic export { a as "q-r" }\nstatic export { b as q }',
+    ],
+    [
+      "the same local under two aliases in one list",
+      "static const q = 1\nstatic export { q as a, q as b }",
+    ],
+    // `default` is the template's, with its own check.
+    [
+      "a default export function and a named list",
+      "export default function f() {}\nstatic export { f }",
+    ],
+  ];
+  it.each(compiles)("%s compiles", (_label, source) => {
+    expectCompiles(source);
+  });
+
+  it("refuses nothing under the `none` tag rules, where a dialect owns its statements", () => {
+    expect(
+      diagnostics(
+        "static const q = 1\nstatic export { q }\nstatic export { q }",
+        "none",
+      ).filter((d) => d.severity === "error"),
+    ).toEqual([]);
+  });
+
+  it("is checked under the other tag rules too", () => {
+    const found = diagnostics(
+      "static const q = 1\nstatic export { q }\nserver export { q }",
+      "markup",
+    ).filter((d) => d.code === DUPLICATE);
+    expect(found).toHaveLength(1);
   });
 });

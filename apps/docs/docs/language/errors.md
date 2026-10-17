@@ -78,6 +78,12 @@ The code is `MX_DUPLICATE_DECLARATION`, positioned at the second declaration's n
 
 An export list that names something no module statement declares (`static export { q }` with no `q`) is `MX_UNDECLARED_EXPORT`, at the name: "Export 'q' is not defined in module: …". A declaration in a later statement, an `import`, a type and an `export { q } from "…"` all count as fine. A value only `declare` introduces (`static declare const d: number` then `static export { d }`) does not count: the TypeScript strip erases it and the module would not load, and the message says where the `declare` is. A function signature without a body counts the same way. A `type` or `interface` name in an export list is erased too and is accepted.
 
+A name exported twice across the module statements is `MX_DUPLICATE_DECLARATION` too, at the second export's name, because the module would not load (`Duplicate export of 'q'`):
+
+> Duplicate export "q": the module already exports that name at 2:17, and a module cannot export one name twice, so it would not load. Export each name once: rename one (`export { local as other }`) or remove it. An enum or namespace merges with an earlier one of its name, and a `server` export may share a name with a `client` one.
+
+`static const q = 1`, `static export { q }` and `server export { q }` is the case: two export lists, a list beside `export const q`, a re-export beside a list, and `export { a as q }` beside `export { b as q }` all collide. A `server` export beside a `client` export of one name compiles, since each output keeps one side; so do type exports, `export declare` forms, `export * from` of two modules and function overloads.
+
 ## A derived `<const>` read after its `<let>` was written
 
 ```html

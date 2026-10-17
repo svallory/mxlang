@@ -43,6 +43,16 @@ describe("html: a module name declared twice", () => {
     expect(code).toContain("var v = 2");
   });
 
+  it("refuses a name exported by two statements, at the second export", () => {
+    const error = failure(
+      "static const q = 1\nstatic export { q }\nserver export { q }\n<div/>\n",
+    );
+    expect(error).toMatchObject({ line: 3, column: 16 });
+    expect(error.message).toContain(
+      'Duplicate export "q": the module already exports that name at 2:17',
+    );
+  });
+
   it("refuses an export list naming nothing the module declares", () => {
     const error = failure("static export { q }\n<div/>\n");
     expect(error).toMatchObject({ line: 1, column: 16 });

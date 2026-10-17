@@ -346,8 +346,18 @@ declaration and the module would not load; a type name (`type`, `interface`,
 `import type`, a namespace holding only types) is erased from the export list
 too, so it is accepted. Re-exports (`export { q } from "…"`) and type
 exports are not checked, and a template-scope name (`<const/q>`) is not a
-module binding. Both checks are skipped under the `none` tag rules, and a
-render-only name (above) is reported first.
+module binding. **A name is exported once.** A second export of a name across
+the module statements (`static export { q }` beside `server export { q }`, an
+export list beside `export const q`, a list beside a re-export, `export { a as
+q }` beside `export { b as q }`, two names in one list) is refused at the second
+name, `MX_DUPLICATE_DECLARATION`, naming the first: "Duplicate export "q": the
+module already exports that name at 2:17, …". Stock Marko compiles every such
+form and the module does not load (`Duplicate export of 'q'`). A `server` export
+and a `client` export of one name stay legal, since each output keeps one side;
+a type export, an `export declare` form, `export *`, function overloads and an
+enum or namespace merged with an earlier one of its name export no second value
+and compile (`divergences.md`). The checks are skipped under the `none` tag
+rules, and a render-only name (above) is reported first.
 
 **An `import` is one ES import declaration.** `import … from "…"` (default,
 named, namespace, `import type`, a side-effect `import "…"`) is the whole
