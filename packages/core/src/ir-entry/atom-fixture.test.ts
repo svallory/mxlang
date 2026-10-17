@@ -20,6 +20,8 @@
  * 6. `mappedExpr` maps each node to its forward (typecheck).
  * 7. A mark a dialect sets on its forward (`extra.mxAtom`) reaches every
  *    later reader unchanged; core no longer reads it.
+ * 8. A node placed by `ctx.attribute` lowers through its type; a node of a
+ *    type the dialect does not register is a positioned error.
  */
 import {
   mkdirSync,
@@ -136,6 +138,21 @@ describe.each(LOADERS)("a dialect's node in the IR, via %s", (_, load) => {
     expect(mode && "atom" in mode).toBe(false);
   });
 
+  it("an attribute-list `~name` is the static `name` attribute carrying the node it placed", () => {
+    const [name] = attrsOf("thing ~title\n");
+    expect(name && "sugar" in name).toBe(false);
+    expect(name).toMatchObject({
+      kind: "static",
+      name: "name",
+      value: "title",
+      node: {
+        type: "atom:Atom",
+        name: "title",
+        span: { sourceStart: 6, sourceEnd: 12 },
+      },
+    });
+  });
+
   it("a node inside an expression is an `Expr.nodes` entry: type, span, node, forward and printed range", () => {
     const value = dynamicOf(attrsOf("<div v=(a + ~b)/>\n")[0]);
     expect(value.code).toBe('a + "b"');
@@ -227,9 +244,9 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
   };
 
   it("a whole value is the node, an expression is the `mx:Expression` it is in, frozen", () => {
-    const source = "<pick mode=~on n=(x + ~y)/>";
+    const source = "<pick mode=~on n=(x + ~y)/>\n<pick ~named/>";
     const unit = unitOf(source, PICK);
-    const [first] = unit.calls;
+    const [first, second] = unit.calls;
     const mode = attrOf(first?.attrs, "mode");
     expect(mode.value).toMatchObject({
       type: "atom:Atom",
@@ -241,6 +258,13 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     // Inside an expression the node is an entry of the expression's `nodes`.
     const n = attrOf(first?.attrs, "n");
     expect(n.value).toMatchObject({ type: "mx:Expression", code: 'x + "y"' });
+    // The attribute-list form is the static `name` attribute, its node the value.
+    expect(attrOf(second?.attrs, "name")).toEqual({
+      name: "name",
+      nameSpan: { sourceStart: 34, sourceEnd: 40 },
+      label: "`name`",
+      value: expect.objectContaining({ type: "atom:Atom", name: "named" }),
+    });
   });
 
   it("a mark the dialect sets on its forward reaches `afterLower` unchanged; core reads none", () => {
@@ -302,6 +326,7 @@ describe("a contract `type` naming a node type key", () => {
     ["a whole-value node", "<pick mode=~on/>"],
     ["a node in parentheses (its forward)", "<pick mode=(~on)/>"],
     ["an identifier (no knowable type)", "<pick mode=x/>"],
+    ["an attribute-list node", "pick ~on\n"],
   ])("accepts %s", (_, source) => {
     const tagsFor = source.startsWith("pick ")
       ? tags({ pick: { attributes: { name: { type: "atom:Atom" } } } })
@@ -431,6 +456,40 @@ describe("where core's `type` check reports, and what it names", () => {
     ],
   ])("%s is refused once, at the value: %s", (source, expected) => {
     expect(at(source, SLOTS)).toEqual([expected]);
+  });
+});
+
+describe("a node a hook places with `ctx.attribute`", () => {
+  const placing = (type: string): Dialect => ({
+    ...atomSyntax,
+    lowerTrigger: (_id, text, span, ctx) =>
+      ctx.attribute("name", {
+        type: type as `${string}:${string}`,
+        name: text.slice(1),
+        span,
+      }),
+  });
+
+  it("lowers through its type's `lower`, like a claimed value", () => {
+    const [name] = attrsWith("thing ~title\n", "/v/a.mx", {
+      dialect: placing("atom:Atom"),
+    });
+    expect(name).toMatchObject({
+      kind: "static",
+      value: "title",
+      node: { type: "atom:Atom", name: "title" },
+    });
+  });
+
+  it("of a type the dialect does not register is a positioned error, never a silent drop", () => {
+    const [problem, ...rest] = lowerSource("thing ~title\n", "/v/a.mx", {
+      dialect: placing("atom:Nope"),
+    }).diagnostics;
+    expect(rest).toEqual([]);
+    expect(problem).toMatchObject({ line: 1, column: 6 });
+    expect(problem?.message).toContain(
+      "the attribute value is a `atom:Nope` node, which is not a node type the dialect registers (it registers `atom:Atom`)",
+    );
   });
 });
 

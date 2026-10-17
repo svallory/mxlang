@@ -617,7 +617,10 @@ Five facts worth knowing before editing it:
   static `MxAttribute`: `mx:String` gives its `value`; any other type's
   `lower` sees `ctx.position` `"value"` and returns a string or
   `ctx.expression`. `valueNodeOf` gives `lower.ts` the node for the static
-  `Attr.node` (never with `member`).
+  `Attr.node` (never with `member`). A `{ call }` hook's
+  `ctx.attribute(name, node)` with a node of a registered type is lowered
+  the same way, through that type's `lower` in the value position; a node of
+  an unregistered type is a positioned error.
   **The expression position**: the template parser's `EXPRESSION` state
   asks the claim at a matching expression row, the row's own `match`
   deciding the end (a `{ call }` row there is claimed as a plain

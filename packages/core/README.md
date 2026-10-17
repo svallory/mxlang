@@ -616,7 +616,11 @@ export default {
 static attribute `to="user.name"` whose IR carries the node (`Attr.node`)
 beside the `value` every target emits. A value node's `lower` returns a string
 or `ctx.expression(node)`; in an attribute list or on a line it builds
-attributes and tags, as `lowerTrigger` does.
+attributes and tags, as `lowerTrigger` does. A `{ call }` row's hook can also
+place a node of a registered type as an attribute's value
+(`ctx.attribute(name, { type: "ref:Ref", ... })`): core lowers it through that
+type's `lower` in the value position, as if a value row had claimed it there;
+a node of a type the dialect does not register is a positioned error.
 
 In an expression (`x=(a + ~user.name)`, `${f(~user.name)}`), Babel parses the
 row's stand-in, and the node's `lower` (`ctx.position` `"expression"`) returns

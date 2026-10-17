@@ -193,9 +193,15 @@ describe("the `LoweredUnit` view", () => {
       ]),
     ) as Record<string, ContractAttr>;
     // Each attribute is its name plus its value node, read by `type`.
-    expect(kinds.name).toMatchObject({
+    expect(kinds.name).toEqual({
       name: "name",
-      value: { type: "mx:String", value: "named" },
+      nameSpan: { sourceStart: 6, sourceEnd: 12 },
+      label: "`name`",
+      value: {
+        type: "atom:Atom",
+        name: "named",
+        span: { sourceStart: 6, sourceEnd: 12 },
+      },
     });
     expect(kinds.s).toEqual({
       name: "s",

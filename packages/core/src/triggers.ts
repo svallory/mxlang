@@ -730,7 +730,7 @@ function callHook(
           trigger,
         );
       }
-      checkAttributeValue(trigger, attrValue);
+      checkAttributeValue(ctx, trigger, attrValue);
       checkAttributeOptions(trigger, options);
       if (options?.at) checkPart(ctx, trigger, options.at, "ctx.attribute");
       const result = Object.freeze({
@@ -889,9 +889,11 @@ function checkAttributeOptions(
 }
 
 function checkAttributeValue(
+  ctx: Ctx,
   trigger: Node,
   value: TriggerAttributeValue,
 ): void {
+  const dialect = ctx.dialect;
   if (value === true || typeof value === "string") return;
   if (value && typeof value === "object") {
     if (
@@ -907,11 +909,55 @@ function checkAttributeValue(
     ) {
       return;
     }
+    const type = (value as { type?: unknown }).type;
+    if (isRegistryKey(type)) {
+      const registered = nodeTypeRegistry(dialect).get(type);
+      if (!registered?.nodeType) {
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: the attribute value is a \`${type}\` node, which is not a node type the dialect registers (${registeredTypes(dialect)})`,
+          trigger,
+        );
+      }
+      const span = (value as { span?: unknown }).span;
+      if (span !== undefined && !isSpanIn(ctx, span)) {
+        raise(
+          DIALECT_HOOK_ERROR_CODE,
+          `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: a node value's \`span\` is a \`{ sourceStart, sourceEnd }\` span inside the document`,
+          trigger,
+        );
+      }
+      return;
+    }
   }
   raise(
     DIALECT_HOOK_ERROR_CODE,
-    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "member", name }\``,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "member", name }\` or a node of a registered type (\`{ type: "dialect:Type", … }\`)`,
     trigger,
+  );
+}
+
+/** The dialect's own node types, for an error that names them, or "none". */
+function registeredTypes(dialect: Dialect | undefined): string {
+  const own = [...nodeTypeRegistry(dialect).values()].filter(
+    (each) => each.nodeType,
+  );
+  return own.length === 0
+    ? "it registers none"
+    : `it registers ${own.map((each) => `\`${each.key}\``).join(", ")}`;
+}
+
+/** Is `span` a `{ sourceStart, sourceEnd }` inside the document? */
+function isSpanIn(ctx: Ctx, span: unknown): span is SourceSpan {
+  const at = span as SourceSpan;
+  return (
+    !!at &&
+    typeof at === "object" &&
+    Number.isInteger(at.sourceStart) &&
+    Number.isInteger(at.sourceEnd) &&
+    at.sourceStart >= 0 &&
+    at.sourceStart <= at.sourceEnd &&
+    at.sourceEnd <= ctx.source.length
   );
 }
 
@@ -1371,6 +1417,8 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
         ? equalsAt(ctx, ownValue.outer.start)
         : { start: text.sourceStart, end: text.sourceEnd };
   let container: Node | null = null;
+  // A registered node placed as the value, kept on the lowered attribute.
+  let placedNode: DialectNode | undefined;
   if (value === true) {
     container = null;
   } else if (typeof value === "string") {
@@ -1404,6 +1452,32 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       text: printed(ctx, node, trigger),
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
+  } else if (isRegistryKey((value as { type?: unknown }).type)) {
+    // A node of a registered type lowers through its type's `lower` in value
+    // position, as a node a value row claimed does, and stays beside what
+    // it lowered to.
+    const given = value as { type: string; span?: SourceSpan };
+    const span = given.span ?? text;
+    const node = Object.freeze({ ...given, span }) as unknown as DialectNode;
+    const lowered = lowerValueNode(ctx, trigger, node);
+    if (typeof lowered === "string") {
+      // The string spans its occurrence in the text (`email` in `:email`),
+      // as a string value does; the node keeps the whole token.
+      const at = given.span ? -1 : spelled.indexOf(lowered);
+      const [start, end] =
+        at > 0
+          ? [text.sourceStart + at, text.sourceStart + at + lowered.length]
+          : [span.sourceStart, span.sourceEnd];
+      container = containerOf(
+        ctx,
+        literal(ctx, lowered, start, end),
+        start,
+        end,
+      );
+    } else {
+      container = lowered;
+    }
+    placedNode = node;
   } else {
     const member = value as { name: string; span?: SourceSpan };
     const span = member.span ?? text;
@@ -1457,6 +1531,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       ? { mxWritten: { start: trigger.start, end: ownValue.end } }
       : {}),
   };
+  if (placedNode) keepValueNode(lowered, placedNode);
   return lowered;
 }
 

@@ -5165,8 +5165,14 @@ UTF-16 range. `ctx` is frozen and offers exactly:
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
-  attribute), a string, a `ctx.expression` result, or a whole-value
-  `{ kind: "member", name, span? }`.
+  attribute), a string, a `ctx.expression` result, a whole-value
+  `{ kind: "member", name, span? }`, or a node of a type the dialect registers
+  (`{ type: "atom:Atom", span, … }`, §13.9.9). Core lowers such a node through
+  its type's `lower` in the value position, as if a value row had claimed it
+  there, and keeps it on the attribute (`Attr.node`, or `Expr.nodes` when its
+  `lower` returns an expression other than a string literal). A node of any
+  other type is ``the `<id>` trigger's `lowerTrigger`: the attribute value is
+  a `<type>` node, which is not a node type the dialect registers (…)``.
 - `ctx.child(tagName, attrs)`: a child tag of the enclosing block, built from
   `ctx.attribute` results. It goes through the normal tag path, so contracts and
   host declarations apply to it.
@@ -5214,7 +5220,7 @@ row's id and `<text>` for the trigger's text:
 | The hook returns an object it did not build | `` the `<id>` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built `` |
 | The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
 | `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
-| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, or `{ kind: "member", name }` `` |
+| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, `{ kind: "member", name }` or a node of a registered type (`{ type: "dialect:Type", … }`)`` |
 | The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |

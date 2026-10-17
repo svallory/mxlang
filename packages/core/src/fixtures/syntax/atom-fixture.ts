@@ -96,8 +96,11 @@ const atomSyntax = {
   },
   lowerTrigger(_id, text, span, ctx) {
     // Only the attribute-list row is a `{ call }` row.
-    void span;
-    return ctx.attribute("name", text.slice(1));
+    return ctx.attribute("name", {
+      type: "atom:Atom",
+      name: text.slice(1),
+      span,
+    });
   },
   contractFields: {
     attribute: ["values", "pattern", "ref"],
