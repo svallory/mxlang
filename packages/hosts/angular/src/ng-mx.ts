@@ -462,6 +462,9 @@ function lowerRegion(
     true,
     templateMappings,
     templateAnchors,
+    // A `.ng.mx` gets `__mxClass` injected, like a tag module: a dynamic
+    // element `class=` of any value form is joined by it.
+    true,
   );
 
   // An authored import called as a tag is referenced by its own local name

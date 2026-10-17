@@ -1122,8 +1122,9 @@ function emitAttrs(
   // A tag call whose callee declares a `class` input: the value goes to that
   // input as written, the way Marko hands it to `input.class`.
   calleeTakesClass = false,
-  // A tag module's element: every dynamic `class=` is joined by `__mxClass`
-  // (a tag module gets the member injected), so a callee that prints the raw
+  // A tag module's or `.ng.mx`'s element or tag call: every dynamic `class=`
+  // but an object literal is joined by `__mxClass` (those files get the member
+  // injected), so a callee that prints the raw
   // `input.class` it was handed gets Marko's class text for any value form.
   joinClass = false,
 ): void {
@@ -1240,8 +1241,7 @@ function emitAttrs(
             out.write('"');
           } else if (
             name === "class" &&
-            (shape === "array" ||
-              (joinClass && isElement && shape !== "object"))
+            (shape === "array" || (joinClass && shape !== "object"))
           ) {
             // Never `[ngClass]`: it throws on a non-string entry. See
             // `CLASS_HELPER_MEMBERS`. `[class]`, not `[attr.class]`, so classes
@@ -1919,7 +1919,7 @@ class AngularEmitter implements Emitter<string> {
   /** `mx-` by default; `mx.angular.tagSelectorPrefix` overrides it. */
   private readonly selectorPrefix: string;
 
-  /** True in a tag module, which has `__mxClass` injected: see `emitAttrs`. */
+  /** True in a tag module or `.ng.mx`, which have `__mxClass` injected: see `emitAttrs`. */
   private readonly joinElementClass: boolean;
 
   constructor(
@@ -2461,6 +2461,7 @@ class AngularEmitter implements Emitter<string> {
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
       this.calleeTakesClass(target, node.attrs),
+      this.joinElementClass,
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -3299,7 +3300,7 @@ export function emitTemplate(
    * generated offsets relative to the returned string.
    */
   anchorsOut?: NodeAnchor[],
-  /** True for a tag module, which gets `__mxClass` injected: see `emitAttrs`. */
+  /** True for a tag module or `.ng.mx`, which get `__mxClass` injected: see `emitAttrs`. */
   joinElementClass = false,
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
