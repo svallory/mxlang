@@ -53,6 +53,16 @@ describe("html: a module name declared twice", () => {
     );
   });
 
+  it("refuses an exported enum and its list in one block, positioned at the list", () => {
+    const error = failure(
+      "static { export enum q { A }; export { q } }\n<div/>\n",
+    );
+    expect(error).toMatchObject({ line: 1, column: 39 });
+    expect(error.message).toContain(
+      'Duplicate export "q": the module already exports that name at 1:22',
+    );
+  });
+
   it("refuses an export list naming nothing the module declares", () => {
     const error = failure("static export { q }\n<div/>\n");
     expect(error).toMatchObject({ line: 1, column: 16 });

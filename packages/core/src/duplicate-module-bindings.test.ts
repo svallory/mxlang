@@ -1603,6 +1603,36 @@ describe("a name exported twice is refused at the second export", () => {
       "a namespace, its list, then an enum of its name",
       "static namespace q { export const b = 1 }\nstatic export { ‹q› }\nstatic export enum «q» { A }",
     ],
+    // The strip of one block runs as a single program: it must not throw a
+    // positionless internal error for these, and the refusal is at the second name.
+    [
+      "an exported enum, then its list, in one block",
+      "static { export enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "a list, then an exported enum of its name, in one block",
+      "static { export { ‹q› }; export enum «q» { A } }",
+    ],
+    [
+      "an exported enum, then its list, in a server block",
+      "server { export enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "an exported enum, then its list, in a client block",
+      "client { export enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "an exported const enum, then its list, in one block",
+      "static { export const enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "an exported enum, its list, then a namespace of its name, in one block",
+      "static { export enum ‹q› { A }; export { «q» }; namespace q {} }",
+    ],
+    [
+      "an exported enum, then its list, over several lines of one block",
+      "static {\n  export enum ‹q› { A }\n  export { «q» }\n}",
+    ],
     // A namespace that merges into no earlier declaration of its name exports it.
     [
       "a list of a type-only namespace, then a value of its name",
@@ -1862,6 +1892,19 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "a namespace with only types named by a list twice, in a block",
       "static { namespace N { export type X = 1 }; export { N }; export { N } }",
+    ],
+    // A list naming a plain (unexported) enum is its only export.
+    [
+      "a plain enum and its list, in one block",
+      "static { enum q { A }; export { q } }",
+    ],
+    [
+      "an exported enum and a list of another name, in one block",
+      "static { export enum q { A }; const r = 1; export { r } }",
+    ],
+    [
+      "two exported enums of a name, in one block",
+      "static { export enum q { A }; export enum q { B } }",
     ],
     // Distinct names.
     [

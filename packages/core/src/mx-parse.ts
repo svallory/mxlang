@@ -922,8 +922,25 @@ function declareExportedNames(path: Node, t: Node): Set<Node> {
       names.add(statement.declaration.name);
     }
   }
+  // The plugin registers an enum's and a namespace's own name as it strips
+  // them, so a placeholder for that name collides with it ("Duplicate
+  // declaration", thrown positionless). The program declares it already.
+  const own = new Set<string>();
+  for (const statement of path.node.body as Node[]) {
+    const declared =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (
+      (declared?.type === "TSEnumDeclaration" ||
+        declared?.type === "TSModuleDeclaration") &&
+      declared.id?.type === "Identifier"
+    ) {
+      own.add(declared.id.name);
+    }
+  }
   for (const name of names) {
-    if (path.scope.hasBinding(name)) continue;
+    if (own.has(name) || path.scope.hasBinding(name)) continue;
     path.scope.push({ id: t.identifier(name), kind: "var" });
     placeholders.add(path.node.body[0]);
   }
