@@ -1983,15 +1983,19 @@ export function argumentsBlame(
   const first = args[0];
   const last = args[args.length - 1];
   if (first === undefined || last === undefined) return fallback;
-  const startOf = (node: Node): Position => {
+  const startOf = (node: Node): Position | undefined => {
     const span = node?.loc ? undefined : mxSpanOf(node);
-    return span ? positionAtOffset(ctx, span.sourceStart) : node.loc.start;
+    return span ? positionAtOffset(ctx, span.sourceStart) : node?.loc?.start;
   };
-  const endOf = (node: Node): Position => {
+  const endOf = (node: Node): Position | undefined => {
     const span = node?.loc ? undefined : mxSpanOf(node);
-    return span ? positionAtOffset(ctx, span.sourceEnd) : node.loc.end;
+    return span ? positionAtOffset(ctx, span.sourceEnd) : node?.loc?.end;
   };
-  return { loc: { start: startOf(first), end: endOf(last) } };
+  const start = startOf(first);
+  const end = endOf(last);
+  // A synthesized argument with no position blames `fallback`, as `fail` does.
+  if (start === undefined || end === undefined) return fallback;
+  return { loc: { start, end } };
 }
 
 /** The place {@link rejectUnsupportedFields} names; see `Ctx.unsupportedIn`. */

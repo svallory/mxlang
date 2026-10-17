@@ -10,6 +10,7 @@ import {
 import { compileSource } from "./compile.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
+  argumentsBlame,
   assertPositioned,
   DYNAMIC_TAG,
   expr,
@@ -4368,6 +4369,15 @@ describe("tag arguments are blamed over the whole list", () => {
       WITH_ATTRIBUTES,
       fakeDeclarations({ isComponent: (name) => name === "Panel" }),
     );
+  });
+
+  it("argumentsBlame falls back to the given node when an argument has no position", () => {
+    const fallback = { type: "MarkoTag" } as Node;
+    const ctx = { source: "x", lines: ["x"] } as unknown as Ctx;
+    expect(
+      argumentsBlame(ctx, [{ type: "Identifier", name: "a" }], fallback),
+    ).toBe(fallback);
+    expect(argumentsBlame(ctx, [], fallback)).toBe(fallback);
   });
 
   it("a define call with arguments and a body only still lowers", () => {
