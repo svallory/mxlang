@@ -5,7 +5,7 @@
     "inputs": [
       {
         "name": "class",
-        "type": 1,
+        "type": 0,
         "securityContext": 0,
         "value": {
           "ast": {

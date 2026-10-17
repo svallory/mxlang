@@ -145,7 +145,7 @@ export class MxHandlers {
 
   /**
    * Joins an array `class=` value (a tag shorthand beside `class=y` is one)
-   * the way Marko does, for `[attr.class]="__mxClass([...])"`.
+   * the way Marko does, for `[class]="__mxClass([...])"`.
    *
    * @internal Called by generated templates; not part of the authoring API.
    */
@@ -196,7 +196,7 @@ export function MxHandlersMixin<
 
     /**
      * Joins an array `class=` value (a tag shorthand beside `class=y` is one)
-     * the way Marko does, for `[attr.class]="__mxClass([...])"`.
+     * the way Marko does, for `[class]="__mxClass([...])"`.
      *
      * @internal Called by generated templates; not part of the authoring API.
      */

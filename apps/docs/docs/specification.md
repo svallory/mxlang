@@ -1058,9 +1058,10 @@ merge is `class={["card", y]}` and the host joins that array itself, so Solid's
 own class-array rules (it keeps `0`, drops `true`, removes repeated words) never
 show; a component receives the array as its `class` prop. On Angular an array
 class (a shorthand merge, or one written as `class=["a", y]`) is joined by a
-`__mxClass` member the same way and bound as `[attr.class]`, because
-`[ngClass]` throws on any array entry that is not a string and `[class]` would
-reorder the words; a plain object `class={…}` stays `[ngClass]`.
+`__mxClass` member the same way and bound as `[class]`, because `[ngClass]`
+throws on any array entry that is not a string; a plain object `class={…}`
+stays `[ngClass]`. Angular may reorder the words of a `[class]` string, so the
+class set matches Marko's and the word order may not.
 
 | Written | Result |
 |---|---|

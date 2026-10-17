@@ -775,7 +775,7 @@ describe("compileTagModule: array class", () => {
 
     expect(result.code).toContain("protected readonly __mxClass = ");
     expect(templateOf(result.code)).toContain(
-      '[attr.class]="__mxClass([&quot;a&quot;, tone])"',
+      '[class]="__mxClass([&quot;a&quot;, tone])"',
     );
     expect(result.code).not.toContain("NgClass");
     expect(warnings.filter((w) => w.message.includes("__mxClass"))).toEqual([]);

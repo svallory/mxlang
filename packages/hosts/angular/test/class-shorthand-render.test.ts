@@ -17,7 +17,8 @@ import { MxHandlers, MxHandlersMixin } from "../src/runtime.ts";
 import { compileMx } from "./helpers.ts";
 
 // A shorthand class merges with an explicit `class=` of any value, shorthand
-// first, one space apart, as stock Marko 6.4.4 does. These rows render the
+// first, as stock Marko 6.4.4 does. Angular binds the class as `[class]`, which
+// may reorder the words, so the rows compare the class set. These rows render the
 // emitted template through TestBed in dev mode, where `NgClass` throws on any
 // non-string entry, and compare the DOM `class` attribute with what stock
 // renders. The expected strings come from `renderStockMarko` (the oracle's
@@ -68,6 +69,17 @@ function render(
   };
 }
 
+/** A class string as a sorted word list: Angular may reorder a `[class]` string, so the class set is what is compared. */
+const asSet = (value: string | null | undefined) =>
+  value == null ? null : value.split(" ").filter(Boolean).sort().join(" ");
+
+function expectClasses(
+  actual: (string | null)[],
+  expected: (string | null)[],
+): void {
+  expect(actual.map(asSet)).toEqual(expected.map(asSet));
+}
+
 const NESTED = ["p", ["q", ["r"]], false, null, 0, "s", { m: true, n: 0 }];
 
 // [name, value, [".a", ".a.${x}", ".${x}"] as stock renders them].
@@ -99,12 +111,12 @@ describe("Angular render: a shorthand class beside class=y", () => {
       "<div.a class=y/><div.a.${x} class=y/><div.${x} class=y/>",
       props,
     );
-    expect(tag.classes).toEqual([a, ax, x]);
+    expectClasses(tag.classes, [a, ax, x]);
     const concise = render(
       "div.a class=y\ndiv.a.${x} class=y\ndiv.${x} class=y",
       props,
     );
-    expect(concise.classes).toEqual([a, ax, x]);
+    expectClasses(concise.classes, [a, ax, x]);
   });
 
   it.each([
@@ -121,17 +133,17 @@ describe("Angular render: a shorthand class beside class=y", () => {
       `<div.a class=${literal}/><div.a.\${x} class=${literal}/><div.\${x} class=${literal}/>`,
       { x: "xx" },
     );
-    expect(tag.classes).toEqual([a, ax, x]);
+    expectClasses(tag.classes, [a, ax, x]);
     const concise = render(
       `div.a class=${literal}\ndiv.a.\${x} class=${literal}\ndiv.\${x} class=${literal}`,
       { x: "xx" },
     );
-    expect(concise.classes).toEqual([a, ax, x]);
+    expectClasses(concise.classes, [a, ax, x]);
   });
 
   it("includes an object's inherited truthy keys, as for...in does", () => {
     const y = Object.assign(Object.create({ inh: true }), { own: true });
-    expect(render("<div.a class=y/>", { y }).classes).toEqual(["a own inh"]);
+    expectClasses(render("<div.a class=y/>", { y }).classes, ["a own inh"]);
   });
 
   it("renders a call, a ternary with a string and a ternary with an object", () => {
@@ -139,29 +151,57 @@ describe("Angular render: a shorthand class beside class=y", () => {
       '<div.a class=y.toUpperCase()/><div.a class=on ? "p" : "q"/><div.a class=on ? {k: true} : null/>',
       { y: "zz", on: true },
     );
-    expect(view.classes).toEqual(["a ZZ", "a p", "a k"]);
+    expectClasses(view.classes, ["a ZZ", "a p", "a k"]);
     view.update({ on: false });
-    expect(view.classes).toEqual(["a ZZ", "a q", "a"]);
+    expectClasses(view.classes, ["a ZZ", "a q", "a"]);
   });
 
-  it("follows later changes, shorthand first, including in-place mutation", () => {
+  it("follows later changes, including in-place mutation", () => {
     const list: unknown[] = ["p"];
     const view = render("<div.a.${x} class=y/>", { x: "xx", y: list });
-    expect(view.classes).toEqual(["a xx p"]);
+    expectClasses(view.classes, ["a xx p"]);
     list.push(["q"], false);
     view.update({});
-    expect(view.classes).toEqual(["a xx p q"]);
+    expectClasses(view.classes, ["a xx p q"]);
     view.update({ y: { k: true } });
-    expect(view.classes).toEqual(["a xx k"]);
+    expectClasses(view.classes, ["a xx k"]);
     view.update({ y: null, x: "yy" });
-    expect(view.classes).toEqual(["a yy"]);
+    expectClasses(view.classes, ["a yy"]);
     view.update({ y: "zz" });
-    expect(view.classes).toEqual(["a yy zz"]);
+    expectClasses(view.classes, ["a yy zz"]);
   });
 
   it("omits the attribute when nothing is left to print", () => {
     const view = render("<div.${x} class=y/>", { x: "", y: [null, false] });
-    expect(view.classes).toEqual([null]);
+    expectClasses(view.classes, [null]);
+  });
+});
+
+describe("Angular render: classes from other sources survive an update", () => {
+  it("keeps a directive's host class and a component's host: {class} across updates", () => {
+    const template = compileMx("<div.a class=y><span/></div>").code;
+    class Probe extends MxHandlers {}
+    Component({
+      selector: "mx-class-keep-probe",
+      template,
+      changeDetection: ChangeDetectionStrategy.Eager,
+      host: { class: "from-host" },
+    })(Probe);
+    const fixture = TestBed.createComponent(Probe);
+    const host = fixture.nativeElement as HTMLElement;
+    const div = () => host.querySelector("div") as HTMLElement;
+    Object.assign(fixture.componentInstance, { y: "p" });
+    fixture.detectChanges();
+    div().classList.add("from-directive");
+    expect(host.classList.contains("from-host")).toBe(true);
+    for (const y of ["q", ["r", "s"], null]) {
+      Object.assign(fixture.componentInstance, { y });
+      fixture.componentRef.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(div().classList.contains("from-directive")).toBe(true);
+      expect(div().classList.contains("a")).toBe(true);
+      expect(host.classList.contains("from-host")).toBe(true);
+    }
   });
 });
 
@@ -173,7 +213,7 @@ describe("Angular render: class= without a shorthand (control)", () => {
     ["true", true, "true"],
   ])("class=y with %s", (_name, y, expected) => {
     const view = render("<div class=y/>", { y });
-    expect(view.classes).toEqual([expected]);
+    expectClasses(view.classes, [expected]);
   });
 
   it("renders an authored array with nested arrays and falsy parts", () => {
@@ -182,14 +222,14 @@ describe("Angular render: class= without a shorthand (control)", () => {
       y: NESTED,
       on: false,
     });
-    expect(view.classes).toEqual(["a p q r s m xx"]);
+    expectClasses(view.classes, ["a p q r s m xx"]);
   });
 
   it("keeps a plain object class on [ngClass]", () => {
     const view = render("<div class={a: on, b: !on}/>", { on: true });
-    expect(view.classes).toEqual(["a"]);
+    expectClasses(view.classes, ["a"]);
     view.update({ on: false });
-    expect(view.classes).toEqual(["b"]);
+    expectClasses(view.classes, ["b"]);
   });
 });
 

@@ -232,12 +232,12 @@ describe("Element", () => {
     assertAngularParses(out);
   });
 
-  it("emits [attr.class] through __mxClass for an array-valued class, never [ngClass]", () => {
+  it("emits [class] through __mxClass for an array-valued class, never [ngClass]", () => {
     const { code, warnings } = compileMx(
       '<div class=["a", cond && "b"]>x</div>',
     );
     expect(code).toBe(
-      '<div [attr.class]="__mxClass([&quot;a&quot;, cond &amp;&amp; &quot;b&quot;])">x</div>',
+      '<div [class]="__mxClass([&quot;a&quot;, cond &amp;&amp; &quot;b&quot;])">x</div>',
     );
     assertAngularParses(code);
     expect(angularAstSnapshot(code)).toMatchObject([
@@ -254,7 +254,7 @@ describe("Element", () => {
       "<div.a class=y>x</div><div.a.${x} class=y>y</div>",
     );
     expect(code).toBe(
-      '<div [attr.class]="__mxClass([&quot;a&quot;, y])">x</div><div [attr.class]="__mxClass([&quot;a&quot;, x, y])">y</div>',
+      '<div [class]="__mxClass([&quot;a&quot;, y])">x</div><div [class]="__mxClass([&quot;a&quot;, x, y])">y</div>',
     );
     expect(
       warnings.filter((w) => w.message.includes("__mxClass")),

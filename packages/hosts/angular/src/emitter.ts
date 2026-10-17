@@ -488,7 +488,7 @@ export const REFINE_HELPER_NAMES = REFINE_HELPER_MEMBERS.map(
 );
 
 /**
- * The member an array-valued `class=` calls: `[attr.class]="__mxClass([...])"`.
+ * The member an array-valued `class=` calls: `[class]="__mxClass([...])"`.
  * Angular's `[ngClass]` throws in dev mode on any array entry that is not a
  * string (`null`, `false`, a number, an object, a nested array), and a tag
  * shorthand merged with `class=y` is always such an array, so the array is
@@ -1217,11 +1217,13 @@ function emitAttrs(
           const shape = attr.value.shape;
           if (name === "class" && shape === "array") {
             // Never `[ngClass]`: it throws on a non-string entry. See
-            // `CLASS_HELPER_MEMBERS`. `[attr.class]`, not `[class]`: a `[class]`
-            // string is split into a map that Angular reorders, so the
-            // words would not come out in the order Marko prints them.
+            // `CLASS_HELPER_MEMBERS`. `[class]`, not `[attr.class]`, so classes
+            // from directives, host bindings and a component's `host: {class}`
+            // survive an update. Angular splits a `[class]` string into a map
+            // and may reorder the words: the class set matches Marko, the
+            // word order may not (a divergences.md row).
             onClassHelper?.();
-            out.write(" [attr.");
+            out.write(" [");
             out.writeMapped(name, attr.nameSpan);
             out.write(`]="${CLASS_HELPER_MARKER}`);
             out.writeMapped(esc(attr.value.code), attr.value.span);

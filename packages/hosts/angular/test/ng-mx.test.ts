@@ -934,7 +934,7 @@ describe("compileNgMx: array class", () => {
     );
     expect(result.code).toContain("protected readonly __mxClass = ");
     expect(emittedTemplate(result.code)).toBe(
-      '<div [attr.class]="__mxClass([&quot;a&quot;, y])">x</div>',
+      '<div [class]="__mxClass([&quot;a&quot;, y])">x</div>',
     );
     expect(result.code).not.toContain("NgClass");
     expect(warnings.filter((w) => w.message.includes("__mxClass"))).toEqual([]);

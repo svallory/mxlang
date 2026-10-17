@@ -15,7 +15,7 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { … }` |
 | `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue: null`, with `@let k` and `@let v`, plus a warning telling you to add `KeyValuePipe` to the component's imports |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
-| `class=["a", y]`, or a shorthand beside `class=`: `<div.a class=y/>` | `[attr.class]="__mxClass(['a', y])"`: shorthand first, one space apart, falsy parts skipped, as Marko prints it |
+| `class=["a", y]`, or a shorthand beside `class=`: `<div.a class=y/>` | `[class]="__mxClass(['a', y])"`: the same class set Marko prints (falsy parts skipped); Angular may order the words differently |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
 | `<${Comp} x=1/>`, or a tag named by a module-scope `const` | `<ng-container [ngComponentOutlet]="Comp" [ngComponentOutletInputs]="…">`; content and tag arguments are errors |
@@ -46,10 +46,11 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 
 ## Shorthands and colons
 
-`#id` and `.class` next to the tag name work as on every host, with two Angular facts:
+`#id` and `.class` next to the tag name work as on every host, with three Angular facts:
 
 - **`<div #ref>` is a template reference.** In attribute position `#x` is Angular's; next to the tag name, `<div#x>`, it is the `id` shorthand.
 - **`<svg:rect>` is one tag name.** A colon in a tag name is part of the name, as in Marko, so it reaches the template as Angular's `svg:`-prefixed element.
+- **A class beside `class=` has the same set of words, maybe in another order.** `<div.a class=y/>` is bound as `[class]`, and Angular may reorder the words of a `[class]` string. Marko prints the shorthand first.
 
 ## Events
 
