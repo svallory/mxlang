@@ -924,6 +924,35 @@ describe("compileNgMx: standalone warnings, round 3", () => {
   });
 });
 
+describe("compileNgMx: array class", () => {
+  it("writes __mxClass into the decorated class, adds no NgClass and drops the advice", () => {
+    const warnings: { message: string }[] = [];
+    const result = compileNgMx(
+      componentFile("<div.a class=y>x</div>", "\n  y: unknown = null;\n"),
+      "/p/x.component.ng.mx",
+      { warnings: warnings as never },
+    );
+    expect(result.code).toContain("protected readonly __mxClass = ");
+    expect(emittedTemplate(result.code)).toBe(
+      '<div [attr.class]="__mxClass([&quot;a&quot;, y])">x</div>',
+    );
+    expect(result.code).not.toContain("NgClass");
+    expect(warnings.filter((w) => w.message.includes("__mxClass"))).toEqual([]);
+    assertModuleTypechecks(result.code, "x.component.ts");
+  });
+
+  it("leaves a class that already declares __mxClass alone", () => {
+    const code = compileNgMx(
+      componentFile(
+        "<div.a class=y>x</div>",
+        "\n  y: unknown = null;\n  __mxClass = (v: unknown): string | null => null;\n",
+      ),
+      "/p/x.component.ng.mx",
+    ).code;
+    expect(code.match(/__mxClass = /g)).toHaveLength(1);
+  });
+});
+
 describe("compileNgMx: event handlers", () => {
   it("writes the event invoker members into the decorated class and drops the advice", () => {
     const warnings: { message: string }[] = [];

@@ -32,12 +32,11 @@ import { directivesFor } from "./directives.ts";
 import {
   angularDeclarations,
   type DynamicComponentData,
-  EVENT_HELPER_ADVICE_CODE,
   emitTemplate,
+  HELPER_ADVICE_CODES,
   helperMembersFor,
   isTagModuleImport,
   kebabCase,
-  REFINE_HELPER_ADVICE_CODE,
   returnRefusal,
   selectorDeclarationOf,
   tagBasename,
@@ -1487,10 +1486,7 @@ export function compileTagModule(
   // advice does not apply to a tag module.
   for (let i = warnings.length - 1; i >= 0; i--) {
     const code = (warnings[i] as { code?: string }).code;
-    if (
-      code === EVENT_HELPER_ADVICE_CODE ||
-      code === REFINE_HELPER_ADVICE_CODE
-    ) {
+    if (code !== undefined && HELPER_ADVICE_CODES.includes(code)) {
       warnings.splice(i, 1);
     }
   }

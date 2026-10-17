@@ -4,24 +4,32 @@
     "attributes": [],
     "inputs": [
       {
-        "name": "ngClass",
-        "type": 0,
+        "name": "class",
+        "type": 1,
         "securityContext": 0,
         "value": {
           "ast": {
-            "expressions": [
+            "receiver": {
+              "receiver": {},
+              "name": "__mxClass"
+            },
+            "args": [
               {
-                "value": "a"
-              },
-              {
-                "operation": "&&",
-                "left": {
-                  "receiver": {},
-                  "name": "cond"
-                },
-                "right": {
-                  "value": "b"
-                }
+                "expressions": [
+                  {
+                    "value": "a"
+                  },
+                  {
+                    "operation": "&&",
+                    "left": {
+                      "receiver": {},
+                      "name": "cond"
+                    },
+                    "right": {
+                      "value": "b"
+                    }
+                  }
+                ]
               }
             ]
           }

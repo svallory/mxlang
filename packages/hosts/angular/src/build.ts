@@ -29,10 +29,9 @@ import { type AngularConfig, readAngularConfig } from "./config.ts";
 import { angularDefaultTag } from "./default-tag.ts";
 import { discoverFiles, isInside } from "./discover.ts";
 import {
-  EVENT_HELPER_ADVICE_CODE,
+  HELPER_ADVICE_CODES,
   helperMembersFor,
   helperNamesFor,
-  REFINE_HELPER_ADVICE_CODE,
 } from "./emitter.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
@@ -61,9 +60,7 @@ export function checkOverwriteGuard(outputPath: string): string | undefined {
 /** Is this warning the paste advice for a helper member the page's class lacks? */
 function isHelperAdvice(warning: MxWarning): boolean {
   const code = (warning as { code?: string }).code;
-  return (
-    code === EVENT_HELPER_ADVICE_CODE || code === REFINE_HELPER_ADVICE_CODE
-  );
+  return code !== undefined && HELPER_ADVICE_CODES.includes(code);
 }
 
 export interface PositionedMessage {

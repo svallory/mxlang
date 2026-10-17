@@ -15,12 +15,15 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `<for\|item\| of=items by=(item => item.id)>` | `@for (item of items; track item.id) { … }` |
 | `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue: null`, with `@let k` and `@let v`, plus a warning telling you to add `KeyValuePipe` to the component's imports |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
+| `class=["a", y]`, or a shorthand beside `class=`: `<div.a class=y/>` | `[attr.class]="__mxClass(['a', y])"`: shorthand first, one space apart, falsy parts skipped, as Marko prints it |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
 | `<${Comp} x=1/>`, or a tag named by a module-scope `const` | `<ng-container [ngComponentOutlet]="Comp" [ngComponentOutletInputs]="…">`; content and tag arguments are errors |
 | `<@name>` on an MX tag | `<ng-container ngProjectAs="[name]">` |
 | `onClick=f` | `(click)="__mxOn(f, this, $event)"` |
 | `attr=expr` on an element | `[attr]`, or `[attr.attr]`: see below |
+
+An array `class` is never bound to `[ngClass]`: Angular throws in dev mode on any entry that is not a string (`null`, `false`, a number, an object, a nested array), and a shorthand beside `class=y` is always an array. `__mxClass` is a member on the component class, like the event invokers: a `.ng.mx` and a tag module get it automatically, a page extends `MxHandlers` / `MxHandlersMixin(Base)` or pastes the member the warning prints.
 
 Give `<for>` a `by`: Angular requires `track`. A loop without one emits `track $index`, and MX warns once per file, since reordering such a list re-renders its rows.
 

@@ -34,12 +34,11 @@ import { directivesFor } from "./directives.ts";
 import {
   ALL_HELPER_NAMES,
   angularDeclarations,
-  EVENT_HELPER_ADVICE_CODE,
   emitTemplate,
+  HELPER_ADVICE_CODES,
   helperMembersFor,
   helperNamesFor,
   IMPORTS_ADVICE_CODE,
-  REFINE_HELPER_ADVICE_CODE,
   RUNTIME_SPECIFIER,
   type UsedTag,
 } from "./emitter.ts";
@@ -1720,8 +1719,9 @@ export function compileNgMx(
     .filter(
       (warning) =>
         (warning as { code?: string }).code !== IMPORTS_ADVICE_CODE &&
-        (warning as { code?: string }).code !== EVENT_HELPER_ADVICE_CODE &&
-        (warning as { code?: string }).code !== REFINE_HELPER_ADVICE_CODE,
+        !HELPER_ADVICE_CODES.includes(
+          (warning as { code?: string }).code ?? "",
+        ),
     );
   warnings.push(...moduleWarnings);
   if (options.warnings) options.warnings.push(...warnings);

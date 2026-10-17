@@ -398,6 +398,14 @@ export const IMPORTS_ADVICE_CODE = "angular.imports-advice";
 export const EVENT_HELPER_ADVICE_CODE = "angular.event-helper-advice";
 /** Warning code for the `__mxSet` advice a page gets when its template holds a refined bound attribute. */
 export const REFINE_HELPER_ADVICE_CODE = "angular.refine-helper-advice";
+/** Warning code for the `__mxClass` advice a page gets when its template holds an array `class=`. */
+export const CLASS_HELPER_ADVICE_CODE = "angular.class-helper-advice";
+/** Every code of a warning that tells a page to add helper members to its class. */
+export const HELPER_ADVICE_CODES: readonly string[] = [
+  EVENT_HELPER_ADVICE_CODE,
+  REFINE_HELPER_ADVICE_CODE,
+  CLASS_HELPER_ADVICE_CODE,
+];
 
 // A1:112-113's exact wording, one per directive — "class" takes "object or
 // array" (both structured shapes route here) while "style" takes only
@@ -479,14 +487,39 @@ export const REFINE_HELPER_NAMES = REFINE_HELPER_MEMBERS.map(
   (member) => /readonly (\w+)/.exec(member)?.[1] as string,
 );
 
-/** Every member name a component may need from `MxHandlers`, event invokers and `__mxSet`. */
-export const ALL_HELPER_NAMES = [...EVENT_HELPER_NAMES, ...REFINE_HELPER_NAMES];
+/**
+ * The member an array-valued `class=` calls: `[attr.class]="__mxClass([...])"`.
+ * Angular's `[ngClass]` throws in dev mode on any array entry that is not a
+ * string (`null`, `false`, a number, an object, a nested array), and a tag
+ * shorthand merged with `class=y` is always such an array, so the array is
+ * joined here the way Marko joins it instead: strings as written, numbers and
+ * `true` as text, other falsy parts skipped, nested arrays in order, an
+ * object's truthy keys. An empty result is `null`, so the attribute is
+ * absent. The binding is re-evaluated on every check, so a value mutated in
+ * place still shows. Separate from the other groups: a template needs it only
+ * when it holds an array `class`.
+ */
+export const CLASS_HELPER_MEMBERS = [
+  '  protected readonly __mxClass = (value: unknown): string | null => { const text = (part: unknown): string => !part ? "" : Array.isArray(part) ? part.map(text).filter(Boolean).join(" ") : typeof part === "object" ? Object.keys(part).filter((key) => (part as Record<string, unknown>)[key]).join(" ") : String(part); return text(value) || null; };',
+];
+const CLASS_HELPER_MARKER = "__mxClass(";
+export const CLASS_HELPER_NAMES = CLASS_HELPER_MEMBERS.map(
+  (member) => /readonly (\w+)/.exec(member)?.[1] as string,
+);
+
+/** Every member name a component may need from `MxHandlers`, event invokers, `__mxSet` and `__mxClass`. */
+export const ALL_HELPER_NAMES = [
+  ...EVENT_HELPER_NAMES,
+  ...REFINE_HELPER_NAMES,
+  ...CLASS_HELPER_NAMES,
+];
 
 /** The helper members `text` (an emitted template) calls, one class-body line each. */
 export function helperMembersFor(text: string): string[] {
   return [
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_MEMBERS : []),
     ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_MEMBERS : []),
+    ...(text.includes(CLASS_HELPER_MARKER) ? CLASS_HELPER_MEMBERS : []),
   ];
 }
 
@@ -495,6 +528,7 @@ export function helperNamesFor(text: string): string[] {
   return [
     ...(text.includes(EVENT_HELPER_MARKER) ? EVENT_HELPER_NAMES : []),
     ...(text.includes(`${REFINE_GET_MARKER}(`) ? REFINE_HELPER_NAMES : []),
+    ...(text.includes(CLASS_HELPER_MARKER) ? CLASS_HELPER_NAMES : []),
   ];
 }
 
@@ -504,6 +538,8 @@ export const EVENT_HELPER_RUNTIME_OPTION = `or extend \`MxHandlers\` (or \`MxHan
 const EVENT_HELPER_ADVICE = `this template binds an event handler; add these members to the component class: ${EVENT_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION} (app code importing it needs \`@mxlang/host-angular\` in \`dependencies\`, not \`devDependencies\`; extend \`MxHandlers\`/\`MxHandlersMixin\` directly: \`.ng.mx\` injects the members into an indirect base, and TypeScript then reports a conflict).`;
 
 const REFINE_HELPER_ADVICE = `this template binds a refined bound attribute (\`v:fn:=q\`); add these members to the component class: ${REFINE_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
+
+const CLASS_HELPER_ADVICE = `this template binds \`class\` to an array value; add this member to the component class: ${CLASS_HELPER_MEMBERS.map((m) => `\`${m.trim()}\``).join(" and ")}, ${EVENT_HELPER_RUNTIME_OPTION}.`;
 
 interface HandlerNode {
   type: string;
@@ -1077,6 +1113,7 @@ function emitAttrs(
   onHandler?: () => string,
   lets?: Map<Attr, PrimitiveBinding & { variable: string }>,
   onRefine?: () => RefineContext,
+  onClassHelper?: () => void,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -1178,7 +1215,18 @@ function emitAttrs(
           out.write('"');
         } else if (name === "class" || name === "style") {
           const shape = attr.value.shape;
-          if (shape === "object" || shape === "array") {
+          if (name === "class" && shape === "array") {
+            // Never `[ngClass]`: it throws on a non-string entry. See
+            // `CLASS_HELPER_MEMBERS`. `[attr.class]`, not `[class]`: a `[class]`
+            // string is split into a map that Angular keeps sorted, so the
+            // words would not come out in the order Marko prints them.
+            onClassHelper?.();
+            out.write(" [attr.");
+            out.writeMapped(name, attr.nameSpan);
+            out.write(`]="${CLASS_HELPER_MARKER}`);
+            out.writeMapped(esc(attr.value.code), attr.value.span);
+            out.write(')"');
+          } else if (shape === "object" || shape === "array") {
             const directive = name === "class" ? "ngClass" : "ngStyle";
             onceWarn(directive);
             out.write(" [");
@@ -1788,6 +1836,15 @@ class AngularEmitter implements Emitter<string> {
     }
   }
 
+  private classHelperContext(loc: Position): void {
+    this.warnOnce(
+      "classHelper",
+      CLASS_HELPER_ADVICE,
+      loc,
+      CLASS_HELPER_ADVICE_CODE,
+    );
+  }
+
   private refineContext(loc: Position): RefineContext {
     this.warnOnce(
       "refineHelper",
@@ -2222,6 +2279,7 @@ class AngularEmitter implements Emitter<string> {
       },
       lets,
       () => this.refineContext(node.loc),
+      () => this.classHelperContext(node.loc),
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -2357,6 +2415,7 @@ class AngularEmitter implements Emitter<string> {
       undefined,
       undefined,
       () => this.refineContext(node.loc),
+      () => this.classHelperContext(node.loc),
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLASS_HELPER_MEMBERS } from "../src/emitter.ts";
 import {
   angularAstSnapshot,
   assertAngularParses,
@@ -225,15 +226,33 @@ describe("Element", () => {
     );
   });
 
-  it("emits [ngClass] for an array-valued class", () => {
-    const out = emit('<div class=["a", cond && "b"]>x</div>');
-    expect(out).toBe(
-      '<div [ngClass]="[&quot;a&quot;, cond &amp;&amp; &quot;b&quot;]">x</div>',
+  it("emits [attr.class] through __mxClass for an array-valued class, never [ngClass]", () => {
+    const { code, warnings } = compileMx(
+      '<div class=["a", cond && "b"]>x</div>',
     );
-    assertAngularParses(out);
-    expect(angularAstSnapshot(out)).toMatchObject([
-      { inputs: [{ name: "ngClass" }] },
+    expect(code).toBe(
+      '<div [attr.class]="__mxClass([&quot;a&quot;, cond &amp;&amp; &quot;b&quot;])">x</div>',
+    );
+    assertAngularParses(code);
+    expect(angularAstSnapshot(code)).toMatchObject([
+      { inputs: [{ name: "class" }] },
     ]);
+    expect(warnings.map((w) => w.message)).toEqual([
+      expect.stringContaining("this template binds `class` to an array value"),
+    ]);
+    expect(warnings[0]?.message).toContain(CLASS_HELPER_MEMBERS[0]?.trim());
+  });
+
+  it("warns once per file for an array class, and a tag shorthand beside class= is one", () => {
+    const { code, warnings } = compileMx(
+      "<div.a class=y>x</div><div.a.${x} class=y>y</div>",
+    );
+    expect(code).toBe(
+      '<div [attr.class]="__mxClass([&quot;a&quot;, y])">x</div><div [attr.class]="__mxClass([&quot;a&quot;, x, y])">y</div>',
+    );
+    expect(
+      warnings.filter((w) => w.message.includes("__mxClass")),
+    ).toHaveLength(1);
   });
 
   it("emits [ngStyle] for an object-valued style, warning once, matching A1:113 verbatim", () => {

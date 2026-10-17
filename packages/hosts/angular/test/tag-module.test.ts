@@ -758,6 +758,31 @@ describe("compileTagModule: event handlers", () => {
   });
 });
 
+describe("compileTagModule: array class", () => {
+  it("writes __mxClass into the generated class, needs no NgClass and drops the advice", () => {
+    const dir = scratchProject();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
+    const source =
+      "export interface Input { tone: string }\n<div.a class=input.tone>x</div>\n";
+    const path = join(dir, "tags", "tone-box.mx");
+    writeFileSync(path, source);
+    const warnings: { message: string }[] = [];
+    const result = compileTagModule(source, path, {
+      customTags: getCustomTags(path, { targets: angularOwnTargets }) as never,
+      warnings: warnings as never,
+    });
+
+    expect(result.code).toContain("protected readonly __mxClass = ");
+    expect(templateOf(result.code)).toContain(
+      '[attr.class]="__mxClass([&quot;a&quot;, tone])"',
+    );
+    expect(result.code).not.toContain("NgClass");
+    expect(warnings.filter((w) => w.message.includes("__mxClass"))).toEqual([]);
+    assertModuleTypechecks(result.code, "tone-box.ts");
+  });
+});
+
 describe("compileTagModule: module-level names the template reads", () => {
   // A template resolves a bare name against the component instance, and a
   // module-level binding is not a member of it: `{{ x }}` rendered blank, or

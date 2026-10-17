@@ -220,7 +220,7 @@ Every diagnostic position `build` and `watch` print (their `file:line:column` pr
 a construct that compiles but diverges from an exact Angular equivalent, or
 needs an import the watcher (not this package) cannot add for the caller.
 One warning per file per category (not per occurrence): `[ngClass]`/
-`[ngStyle]` usage, `<for in=>`'s `keyvalue` pipe, a trackless `<for>`, a
+`[ngStyle]` usage, an array `class` (needs the `__mxClass` member), `<for in=>`'s `keyvalue` pipe, a trackless `<for>`, a
 `$!{…}` raw interpolation, `[ngComponentOutlet]` usage, and the full list of
 MX tags a template calls (with the exact `import`/`imports:` lines to add,
 since step 1 cannot edit the caller's TypeScript file itself).

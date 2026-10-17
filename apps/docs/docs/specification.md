@@ -1056,7 +1056,11 @@ text, other falsy values add nothing, an array joins its entries in order, and
 an object contributes its truthy keys in order. On a native Solid element the
 merge is `class={["card", y]}` and the host joins that array itself, so Solid's
 own class-array rules (it keeps `0`, drops `true`, removes repeated words) never
-show; a component receives the array as its `class` prop.
+show; a component receives the array as its `class` prop. On Angular an array
+class (a shorthand merge, or one written as `class=["a", y]`) is joined by a
+`__mxClass` member the same way and bound as `[attr.class]`, because
+`[ngClass]` throws on any array entry that is not a string and `[class]` would
+sort the words; a plain object `class={…}` stays `[ngClass]`.
 
 | Written | Result |
 |---|---|

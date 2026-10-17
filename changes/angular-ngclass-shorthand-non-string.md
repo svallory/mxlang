@@ -1,0 +1,5 @@
+---
+packages: [angular]
+kind: Fixed
+---
+A tag-shorthand class beside a non-string `class=` value no longer throws on Angular. `<div.a class=y/>`, `<div.a.${x} class=y/>` and concise `div.a class=y` were lowered to `[ngClass]="['a', y]"`, and `NgClass` throws in dev mode ("NgClass can only toggle CSS classes expressed as strings") on a `null`, `undefined`, `false`, `0`, number, `true`, object or array `y`; an authored `class=["a", cond && "b"]` threw the same way. Every array `class` is now bound as `[attr.class]="__mxClass([...])"` and renders what Marko 6.4.4 prints: shorthand first, one space apart, strings as written, numbers and `true` as text, other falsy parts skipped, nested arrays in order, an object's truthy keys, and no `class` attribute when nothing is left. The binding is re-evaluated on every check, so a value changed or mutated later is shown. `__mxClass` is a member on the component class, like the event invokers: a `.ng.mx` and a tag module get it automatically, `MxHandlers` and `MxHandlersMixin(Base)` carry it, and a page that does not extend them gets a warning with the member to paste. A plain object `class={…}` still uses `[ngClass]`.

@@ -77,6 +77,26 @@ const set = <O, K extends keyof O>(
 };
 
 /**
+ * Joins an array `class` the way Marko does: strings as written, numbers and
+ * `true` as text, other falsy parts skipped, nested arrays in order, an
+ * object's truthy keys; `null` when nothing is left, so the attribute is
+ * absent. `[ngClass]` would throw on any of those non-string parts.
+ */
+const classText = (value: unknown): string | null => {
+  const text = (part: unknown): string =>
+    !part
+      ? ""
+      : Array.isArray(part)
+        ? part.map(text).filter(Boolean).join(" ")
+        : typeof part === "object"
+          ? Object.keys(part)
+              .filter((key) => (part as Record<string, unknown>)[key])
+              .join(" ")
+          : String(part);
+  return text(value) || null;
+};
+
+/**
  * Base class carrying the event invoker members.
  *
  * @example
@@ -118,6 +138,14 @@ export class MxHandlers {
    * @internal Called by generated templates; not part of the authoring API.
    */
   readonly __mxGet = get;
+
+  /**
+   * Joins an array `class=` value (a tag shorthand beside `class=y` is one)
+   * the way Marko does, for `[attr.class]="__mxClass([...])"`.
+   *
+   * @internal Called by generated templates; not part of the authoring API.
+   */
+  readonly __mxClass = classText;
 }
 
 /**
@@ -161,5 +189,13 @@ export function MxHandlersMixin<
      * @internal Called by generated templates; not part of the authoring API.
      */
     readonly __mxGet = get;
+
+    /**
+     * Joins an array `class=` value (a tag shorthand beside `class=y` is one)
+     * the way Marko does, for `[attr.class]="__mxClass([...])"`.
+     *
+     * @internal Called by generated templates; not part of the authoring API.
+     */
+    readonly __mxClass = classText;
   };
 }
