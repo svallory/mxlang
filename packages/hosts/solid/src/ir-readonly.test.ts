@@ -48,6 +48,8 @@ const TEMPLATES: Record<string, string> = {
   "stepped range": "<for|i| from=0 to=10 step=2><li>${i}</li></for>",
   "plain rows": "<for|row, i| of=rows><li>${i}${row}</li></for>",
   "define attributes": "<define/D a=1/><p>${D.a}</p>",
+  "define dynamic attributes":
+    "<define/D a=input.x ...rest/><for|n| of=xs><p>${D.a}${n}</p></for>",
 };
 
 describe("the Solid emitter leaves the IR alone (E21)", () => {

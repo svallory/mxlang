@@ -95,6 +95,9 @@ function thrown(region: string, setup = ""): any {
 }
 
 const INPUT = "const input = { x: 7, rest: { a: 1, b: 2 } };";
+// A value that records when it is evaluated, for the once-at-the-define rule.
+const TICK =
+  "const log: string[] = []; const tick = (l: string, v: any) => { log.push(l); return v; };";
 
 // [label, region, setup, expected]. Expected is stock Marko 6.4.4's render.
 const CASES: Array<[string, string, string, string]> = [
@@ -146,6 +149,54 @@ const CASES: Array<[string, string, string, string]> = [
     "<define/A a=1/><define/B b=A.a/><p>${A.a}${B.b}</p>",
     "",
     "<ul><p>11</p></ul>",
+  ],
+  [
+    "a dynamic attribute read twice is evaluated once",
+    '<define/D a=tick("a", 1)/><p>${D.a}${D.a}</p><i>${log.join()}</i>',
+    TICK,
+    "<ul><p>11</p><i>a</i></ul>",
+  ],
+  [
+    "a dynamic attribute nothing reads is still evaluated once",
+    '<define/D a=tick("a", 1)/><p>hi</p><i>${log.join()}</i>',
+    TICK,
+    "<ul><p>hi</p><i>a</i></ul>",
+  ],
+  [
+    "a dynamic attribute is evaluated at the define, before a later placeholder",
+    '<define/D a=tick("a", 1)/><p>${tick("p", 0)}</p><p>${D.a}</p><i>${log.join()}</i>',
+    TICK,
+    "<ul><p>0</p><p>1</p><i>a,p</i></ul>",
+  ],
+  [
+    "an object attribute has one identity across reads",
+    '<define/D o={}/><p>${D.o === D.o ? "same" : "different"}</p>',
+    "",
+    "<ul><p>same</p></ul>",
+  ],
+  [
+    "a later define reads an earlier dynamic one",
+    "<define/A a=input.x/><define/B b=A.a/><p>${A.a}${B.b}</p>",
+    INPUT,
+    "<ul><p>77</p></ul>",
+  ],
+  [
+    "a dynamic define with a hoisted define called after it",
+    "<define/D a=input.x/><define/E|v|><b>${v}</b></define><p>${D.a}</p><E(5)/>",
+    INPUT,
+    "<ul><p>7</p><b>5</b></ul>",
+  ],
+  [
+    "a dynamic define in an element body",
+    "<div><define/D a=input.x/><p>${D.a}</p></div>",
+    INPUT,
+    "<ul><div><p>7</p></div></ul>",
+  ],
+  [
+    "a define with no body can be read as a whole",
+    "<define/D a=1/><p>${typeof D}</p><p>${JSON.stringify(D)}</p>",
+    "",
+    '<ul><p>object</p><p>{"a":1}</p></ul>',
   ],
   ["concise mode", "define/D a=1\np -- ${D.a}", "", "<ul><p>1</p></ul>"],
   [
@@ -225,6 +276,48 @@ describe("solid: a <define>'s attributes are properties of its value", () => {
     expect(JSON.parse(out)).toEqual(["<ul><p>1</p></ul>", "<ul><p>2</p></ul>"]);
   });
 
+  it("evaluates the attributes once per change and keeps the DOM it built", () => {
+    const setup =
+      "const [count, setCount] = createSignal(1); (globalThis as any).setCount = setCount; (globalThis as any).calls = 0; const tick = (v: number) => { (globalThis as any).calls++; return v; };";
+    const out = runInTempDir(
+      {
+        "app.mjs": solidModule(
+          "<define/D a=tick(count())/><p>${D.a}${D.a}</p>",
+          setup,
+          "dom",
+        ),
+        "run.mjs": [
+          'import { JSDOM } from "jsdom";',
+          'const dom = new JSDOM("<!DOCTYPE html><body></body>");',
+          "for (const k of ['window', 'document', 'HTMLElement', 'Node', 'Text', 'Comment', 'DocumentFragment']) {",
+          "  globalThis[k] = k === 'window' ? dom.window : k === 'document' ? dom.window.document : dom.window[k];",
+          "}",
+          'const { render } = await import("@solidjs/web");',
+          'const { App } = await import("./app.mjs");',
+          'const container = document.createElement("div");',
+          "document.body.appendChild(container);",
+          "render(() => App(), container);",
+          "const first = container.querySelector('p');",
+          "const html = () => container.innerHTML.replace(/<!--.*?-->/g, '');",
+          "const snapshots = [html(), globalThis.calls];",
+          "globalThis.setCount(2);",
+          "await new Promise((r) => setTimeout(r, 0));",
+          "snapshots.push(html(), globalThis.calls, container.querySelector('p') === first);",
+          "process.stdout.write(JSON.stringify(snapshots));",
+        ].join("\n"),
+      },
+      "run.mjs",
+      ["--conditions=browser"],
+    );
+    expect(JSON.parse(out)).toEqual([
+      "<ul><p>11</p></ul>",
+      1,
+      "<ul><p>22</p></ul>",
+      2,
+      true,
+    ]);
+  });
+
   it("reads a loop row through a define in the same body", () => {
     // The define itself is hoisted, so one nested in a body is refused below;
     // a read of the region-level define's attributes inside a row is fine.
@@ -250,12 +343,23 @@ describe("solid: what stays refused", () => {
   });
 
   it("a hoisted define that reads a dynamic attribute cannot close over the region", () => {
+    // Stock renders `<i>7</i>`. The attributes are evaluated in the region, a
+    // hoisted define lives at module scope, and the error names the define.
     expect(
       thrown("<define/D a=input.x/><define/E><i>${D.a}</i></define><E/>", INPUT)
         .message,
     ).toBe(
-      "`<define/E>` is hoisted to module scope and cannot close over `input`, a value local to this region; pass it as a param instead",
+      "`<define/E>` is hoisted to module scope and cannot close over `D`, a value local to this region; pass it as a param instead",
     );
+  });
+
+  it("a define that reads its own attribute cannot close over itself", () => {
+    // Stock renders `1`. The body is hoisted, and `D` is not in scope there.
+    const error = thrown("<define/D a=1>${D.a}</define><D/>");
+    expect(error.message).toBe(
+      "`<define/D>` is hoisted to module scope and cannot close over `D`, a value local to this region; pass it as a param instead",
+    );
+    expect([error.line, error.column]).toEqual([1, 0]);
   });
 
   it("assigning the define's name is refused", () => {
@@ -277,14 +381,41 @@ describe("solid: what stays refused", () => {
     expect([error.line, error.column]).toEqual([1, source.indexOf("a:=")]);
   });
 
-  it("D.content of a define that has attributes and a body is refused, at the first attribute", () => {
+  it("D.content of a define that has attributes and a body is refused, at the read", () => {
     const source = "<define/D a=1><i>b</i></define><p>${typeof D.content}</p>";
     const error = thrown(source);
     expect(error.message).toBe(
       "`D.content` is the body of `<define/D>`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as `<D/>`, or move the attributes to a second `<define>`",
     );
-    expect([error.line, error.column]).toEqual([1, source.indexOf("a=1")]);
+    expect([error.line, error.column]).toEqual([1, source.indexOf("${typeof")]);
   });
+
+  // Every way to reach the body of a define that has attributes, other than a
+  // plain `D.content`, was a silent wrong value before (stock: `function`,
+  // `<i>b</i>`, a value carrying `.content`).
+  it.each([
+    ["a parenthesised D.content", "<p>${typeof (D).content}</p>", "content"],
+    ["an optional D?.content", "<p>${typeof D?.content}</p>", "content"],
+    ['a computed D["content"]', '<p>${typeof D["content"]}</p>', "content"],
+    ["a dynamic tag <${D}/>", "<${D}/>", "whole"],
+    ["a bare D in a placeholder", "<p>${typeof D}</p>", "whole"],
+    ["a computed D[key]", "<p>${D[input.key]}</p>", "whole"],
+    ["D as a call argument", "<define/E|v|>x</define><E(D)/>", "whole"],
+    ["D as an attribute value", "<section data=D>x</section>", "whole"],
+  ])(
+    "%s is refused at the read when the define has a body",
+    (_label, read, kind) => {
+      const source = `<define/D a=1><i>b</i></define>${read}`;
+      const error = thrown(source, "const input = { key: 'a' };");
+      expect(error.message).toBe(
+        kind === "content"
+          ? "`D.content` is the body of `<define/D>`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as `<D/>`, or move the attributes to a second `<define>`"
+          : "`D` is read as a whole here, but `<define/D>` has attributes and a body, and on Solid only `D.<attribute>` can be read from it: the define is hoisted to a function. Call it as `<D/>`, or move the attributes to a second `<define>`",
+      );
+      expect(error.line).toBe(1);
+      expect(error.column).toBeGreaterThanOrEqual(source.indexOf(read));
+    },
+  );
 
   it("a define with a body and attributes is fine when nothing reads D.content", () => {
     expect(thrown("<define/D a=1><i>b</i></define><D/><p>${D.a}</p>")).toBe(

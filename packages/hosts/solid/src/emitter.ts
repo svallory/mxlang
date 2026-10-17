@@ -1,4 +1,7 @@
-import { parse as parseBabel } from "@babel/parser";
+import {
+  parse as parseBabel,
+  parseExpression as parseBabelExpression,
+} from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -1696,52 +1699,192 @@ function attributeTagAttrValue(
   }
 }
 
+/** Marks a read of a define's value until it is known how the read is written. */
+const DEFINE_READ = "__mxDefineRead";
+
+type DefineRead = {
+  start: number;
+  end: number;
+  /** `member`: `D.name`; `content`: `D.content`; `other`: any other use of `D`. */
+  kind: "member" | "content" | "other";
+};
+
 /**
- * Whether any expression in `nodes` reads `name.content` (or `name?.content`,
- * `name["content"]`). A define's `content` is its body; with attributes it is
- * not exposed (see `withDefineAttributeReads`), and the read would otherwise
- * be `undefined`. A textual test: it errs toward refusing (a shadowing `name`
- * counts), never toward missing the read.
+ * Every read of `DEFINE_READ` in one expression, classified by how it is
+ * used. Structural, from the parsed expression: `(D).content`, `D?.content`,
+ * `D["content"]`, `typeof D`, a bare `D` and `D[key]` are each told apart by
+ * the node around the read, never by matching the printed text.
  */
-function readsContent(nodes: unknown, name: string): boolean {
-  const escaped = name.replace(/[$]/g, "\\$&");
-  const pattern = new RegExp(
-    `(?<![\\w$.])${escaped}\\s*(?:\\??\\.\\s*content\\b|\\[\\s*["']content["']\\s*\\])`,
-  );
-  const seen = new Set<object>();
-  const visit = (value: unknown): boolean => {
-    if (!value || typeof value !== "object" || seen.has(value)) return false;
-    seen.add(value);
-    if (Array.isArray(value)) return value.some(visit);
-    const record = value as Record<string, unknown>;
-    if (typeof record.code === "string" && "shape" in record) {
-      return pattern.test(record.code);
+function defineReadsIn(code: string): DefineRead[] {
+  let root: unknown;
+  try {
+    root = parseBabelExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return [];
+  }
+  const reads: DefineRead[] = [];
+  const visit = (value: unknown, parent: Record<string, unknown> | null) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, parent);
+      return;
     }
-    return Object.entries(record).some(
-      ([key, child]) => key !== "node" && visit(child),
-    );
+    const node = value as Record<string, unknown> & {
+      type?: string;
+      start?: number;
+      end?: number;
+    };
+    if (typeof node.type !== "string") return;
+    if (node.type === "Identifier" && node.name === DEFINE_READ) {
+      let kind: DefineRead["kind"] = "other";
+      if (
+        parent &&
+        (parent.type === "MemberExpression" ||
+          parent.type === "OptionalMemberExpression") &&
+        parent.object === node
+      ) {
+        const property = parent.property as {
+          type: string;
+          name?: string;
+          value?: unknown;
+        };
+        const key = parent.computed
+          ? property.type === "StringLiteral"
+            ? String(property.value)
+            : null
+          : property.type === "Identifier"
+            ? property.name
+            : null;
+        if (key === "content") kind = "content";
+        else if (key !== null) kind = "member";
+      }
+      reads.push({ start: node.start ?? 0, end: node.end ?? 0, kind });
+      return;
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key === "loc" || key === "extra" || key.endsWith("Comments"))
+        continue;
+      visit(child, node);
+    }
   };
-  return visit(nodes);
+  visit(root, null);
+  return reads;
+}
+
+/** What an `Expr` that reads a define says about the read, and where it is. */
+type DefineReadSite = {
+  expr: Expr;
+  at: { loc: Position } | undefined;
+  reads: DefineRead[];
+};
+
+/** The expressions under `root` that still hold a `DEFINE_READ`. */
+function defineReadSites(root: unknown): DefineReadSite[] {
+  const sites: DefineReadSite[] = [];
+  const seen = new Set<object>();
+  const visit = (value: unknown, at: { loc: Position } | undefined): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, at);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const here =
+      record.loc && typeof record.loc === "object"
+        ? (record as { loc: Position })
+        : at;
+    if (typeof record.code === "string" && "shape" in record) {
+      if (record.code.includes(DEFINE_READ)) {
+        const expr = record as unknown as Expr;
+        sites.push({ expr, at: here, reads: defineReadsIn(expr.code) });
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "loc" && key !== "node") visit(child, here);
+    }
+  };
+  visit(root, undefined);
+  return sites;
+}
+
+/** Writes `replacement` over every `DEFINE_READ` of `site`. */
+function replaceDefineReads(site: DefineReadSite, replacement: string): void {
+  let code = site.expr.code;
+  for (const read of [...site.reads].sort((a, b) => b.start - a.start)) {
+    code = code.slice(0, read.start) + replacement + code.slice(read.end);
+  }
+  site.expr.code = code;
 }
 
 /**
+ * The source text of an attribute whose value is a primitive literal (a
+ * string, number, boolean or null, a template literal with no placeholder, a
+ * negated number), as an object property; `null` for any other attribute.
+ * Evaluating such a value is not observable, so it may be written at each
+ * read.
+ */
+function literalAttrText(attr: Attr): string | null {
+  if (attr.kind === "static") {
+    return `${JSON.stringify(attr.name)}: ${JSON.stringify(attr.value)}`;
+  }
+  if (attr.kind === "boolean") return `${JSON.stringify(attr.name)}: true`;
+  if (attr.kind !== "dynamic") return null;
+  const node = attr.value.node as {
+    type?: string;
+    expressions?: unknown[];
+    operator?: string;
+    argument?: { type?: string };
+  } | null;
+  const primitive =
+    node?.type === "NumericLiteral" ||
+    node?.type === "StringLiteral" ||
+    node?.type === "BooleanLiteral" ||
+    node?.type === "NullLiteral" ||
+    (node?.type === "TemplateLiteral" && node.expressions?.length === 0) ||
+    (node?.type === "UnaryExpression" &&
+      node.operator === "-" &&
+      node.argument?.type === "NumericLiteral");
+  return primitive ? `${JSON.stringify(attr.name)}: ${attr.value.code}` : null;
+}
+
+/** A define's scope: the siblings after it, rendered where `name` is its attributes. */
+type DefineScope = { name: string; attrs: Attr[]; rest: IrNode[] };
+
+/** The nodes `withDefineAttributeReads` stands in for a define's later siblings. */
+const defineScopes = new WeakMap<IrNode, DefineScope>();
+
+/** The author's name of each define scope's generated binding, for diagnostics. */
+const defineScopeAuthorNames = new Map<string, string>();
+
+/**
  * Marko makes a `<define>`'s attributes properties of its value
- * (`<define/D a=input.x/>`, then `${D.a}` reads them). This host hoists a
- * define to a module-level function under a generated name, so `D` is no
- * value a template expression can read, and the attributes (which may read
- * region-local values such as `input`) cannot live at module scope either.
+ * (`<define/D a=input.x/>`, then `${D.a}` reads them), evaluated once, where
+ * the define is written. This host hoists a define to a module-level
+ * function under a generated name, so `D` is no value a template expression
+ * can read, and the attributes (which may read region-local values such as
+ * `input`) cannot live at module scope either.
  *
- * So each read of `D` after the define, in its own body, becomes an object
- * literal of its attributes at the read: `D.a` prints `({ "a": input.x }).a`.
- * Solid evaluates it where the read is tracked, so the value stays reactive
- * and a `<for>` row or an `<if>` the read sits in is in scope for it; the
- * cost is that a value is computed at each read rather than once, and a write
- * to a property (`D.a = 1`) lands on a copy.
+ * Two lowerings, both on a private copy of the IR (an emitter never mutates
+ * it, ir-spec E21), made only when a define has attributes:
  *
- * The rewrite works on a private copy of the IR (an emitter never mutates it,
- * ir-spec E21), and the copy is made only when a define has attributes.
- * Siblings are rewritten in order, so a later define's attributes may read an
- * earlier one's. A bound attribute (`a:=x`) is refused by
+ * - Every attribute a string, number or boolean literal: each read of `D`
+ *   after the define is the object of them at the read (`({ "a": 1 }).a`).
+ *   Nothing is evaluated, so doing it at each read is not observable, and a
+ *   define hoisted to module scope may still read the attributes.
+ * - Any other attribute: the siblings after the define become the body of a
+ *   `<Show when={{ … }}>{(__mxDefineN) => …}</Show>`, and a read of `D` is
+ *   `__mxDefineN()`. `Show` memoizes `when`, so the attributes are evaluated
+ *   once at the define, in source order, whether or not anything reads them,
+ *   read by one object whose identity is stable, and the memo re-runs only
+ *   when a signal an attribute reads changes. A define hoisted to module
+ *   scope cannot read it (it cannot close over a region-local value).
+ *
+ * A define that has attributes and a body is `D.content`'s owner in Marko;
+ * here the body is a hoisted function, so only `D.<attribute>` reads are
+ * lowered. Any other read (a bare `D`, `D.content`, `D[key]`, `(D)`) is a
+ * positioned error at the read. A bound attribute (`a:=x`) is refused by
  * `attributeTagAttrValue`, as on a component call.
  */
 function withDefineAttributeReads(body: IrNode[]): IrNode[] {
@@ -1761,50 +1904,88 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
   if (!hasAttributes(body)) return body;
 
   const copy = cloneIr(body);
-  const walked = new Set<object>();
-  const walk = (value: unknown): void => {
-    if (!value || typeof value !== "object" || walked.has(value)) return;
-    walked.add(value);
+  let serial = 0;
+
+  const lowerDefine = (
+    node: Extract<IrNode, { kind: "Define" }>,
+    later: IrNode[],
+  ): DefineScope | null => {
+    rewriteAccessorReads(
+      later,
+      new Map([
+        [
+          node.name,
+          {
+            read: DEFINE_READ,
+            assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
+          },
+        ],
+      ]),
+    );
+    const sites = defineReadSites(later);
+    const hasBody = meaningful(node.children).length > 0;
+    if (hasBody) {
+      for (const site of sites) {
+        const bad = site.reads.find((read) => read.kind !== "member");
+        if (!bad || !site.at) continue;
+        fail(
+          bad.kind === "content"
+            ? `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``
+            : `\`${node.name}\` is read as a whole here, but \`<define/${node.name}>\` has attributes and a body, and on Solid only \`${node.name}.<attribute>\` can be read from it: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+          site.at,
+        );
+      }
+    }
+    const literals = node.attrs.map(literalAttrText);
+    if (literals.every((part) => part !== null)) {
+      const parts = literals as string[];
+      for (const site of sites) {
+        replaceDefineReads(site, `({ ${parts.join(", ")} })`);
+      }
+      return null;
+    }
+    serial += 1;
+    const name = `__mxDefine${serial}`;
+    defineScopeAuthorNames.set(name, node.name);
+    for (const site of sites) replaceDefineReads(site, `${name}()`);
+    return { name, attrs: node.attrs, rest: later };
+  };
+
+  const lower = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        const node = item as IrNode;
-        if (node?.kind !== "Define" || node.attrs.length === 0) return;
-        const later = value.slice(index + 1) as IrNode[];
-        if (
-          meaningful(node.children).length > 0 &&
-          readsContent(later, node.name)
-        ) {
-          fail(
-            `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
-            node.attrs[0] ?? node,
-          );
-        }
-        const parts = node.attrs.map((attr) =>
-          attr.kind === "spread"
-            ? `...${attr.value.code}`
-            : `${JSON.stringify(attr.name)}: ${attributeTagAttrValue(attr).code}`,
-        );
-        rewriteAccessorReads(
-          later,
-          new Map([
-            [
-              node.name,
-              {
-                read: `({ ${parts.join(", ")} })`,
-                assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
-              },
-            ],
-          ]),
-        );
-      });
-      for (const item of value) walk(item);
+      lowerList(value as IrNode[]);
       return;
     }
     for (const [key, child] of Object.entries(value)) {
-      if (key !== "node") walk(child);
+      if (key !== "node") lower(child);
     }
   };
-  walk(copy);
+  const lowerList = (list: IrNode[]): void => {
+    for (let index = 0; index < list.length; index++) {
+      const item = list[index] as IrNode;
+      if (item?.kind === "Define" && item.attrs.length > 0) {
+        const later = list.slice(index + 1);
+        const scope = lowerDefine(item, later);
+        lower(item.children);
+        if (scope) {
+          lowerList(later);
+          const marker = {
+            ...item,
+            attrs: [],
+            params: [],
+            children: [],
+          } as IrNode;
+          defineScopes.set(marker, scope);
+          list.splice(index + 1, list.length - index - 1, marker);
+          return;
+        }
+        continue;
+      }
+      lower(item);
+    }
+  };
+  lower(copy);
   return copy;
 }
 
@@ -3125,6 +3306,33 @@ export class SolidEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
+    const scope = defineScopes.get(node);
+    if (scope) {
+      // The marker `withDefineAttributeReads` left for the siblings after a
+      // define whose attributes are evaluated once: they render inside the
+      // `<Show>` that holds the attributes.
+      const parts: MappedCode[] = scope.attrs.map((attr, index) =>
+        concatMapped(
+          index > 0 ? ", " : "",
+          attr.kind === "spread"
+            ? concatMapped("...", mappedExpr(attr.value))
+            : concatMapped(
+                `${JSON.stringify(attr.name)}: `,
+                attributeTagAttrValue(attr),
+              ),
+        ),
+      );
+      this.#out.push(
+        concatMapped(
+          "<Show when={{ ",
+          ...parts,
+          ` }}>{(${scope.name}) => `,
+          jsxValue(blockExpressionIn(scope.rest)),
+          "}</Show>",
+        ),
+      );
+      return;
+    }
     if (!hoistedDefines || !defineBindings) {
       // Reached only from `compileSolidUnit` (a whole-file tag, never a
       // region): that path has a real module scope of its own, so hoisting
@@ -3171,7 +3379,7 @@ export class SolidEmitter implements Emitter<string> {
     );
     if (captured.length > 0) {
       fail(
-        `\`<define/${node.name}>\` is hoisted to module scope and cannot close over \`${captured[0]}\`, a value local to this region; pass it as a param instead`,
+        `\`<define/${node.name}>\` is hoisted to module scope and cannot close over \`${defineScopeAuthorNames.get(captured[0] as string) ?? captured[0]}\`, a value local to this region; pass it as a param instead`,
         node,
       );
     }

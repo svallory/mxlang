@@ -630,30 +630,127 @@ function statementBodyConstruct(code: string): string | undefined {
   return undefined;
 }
 
+/** Marks a read of a define's value until it is known how the read is written. */
+const DEFINE_READ = "__mxDefineRead";
+
+type DefineRead = {
+  start: number;
+  end: number;
+  /** `member`: `D.name`; `content`: `D.content`; `other`: any other use of `D`. */
+  kind: "member" | "content" | "other";
+};
+
 /**
- * Whether any expression in `nodes` reads `name.content` (or `name?.content`,
- * `name["content"]`). A textual test: it errs toward refusing (a shadowing
- * `name` counts), never toward missing the read.
+ * Every read of `DEFINE_READ` in one expression, classified by how it is
+ * used. Structural, from the parsed expression: `(D).content`, `D?.content`,
+ * `D["content"]`, `typeof D`, a bare `D` and `D[key]` are each told apart by
+ * the node around the read, never by matching the printed text.
  */
-function readsContent(nodes: unknown, name: string): boolean {
-  const escaped = name.replace(/[$]/g, "\\$&");
-  const pattern = new RegExp(
-    `(?<![\\w$.])${escaped}\\s*(?:\\??\\.\\s*content\\b|\\[\\s*["']content["']\\s*\\])`,
-  );
-  const seen = new Set<object>();
-  const visit = (value: unknown): boolean => {
-    if (!value || typeof value !== "object" || seen.has(value)) return false;
-    seen.add(value);
-    if (Array.isArray(value)) return value.some(visit);
-    const record = value as Record<string, unknown>;
-    if (typeof record.code === "string" && "shape" in record) {
-      return pattern.test(record.code);
+function defineReadsIn(code: string): DefineRead[] {
+  let root: unknown;
+  try {
+    root = (
+      babelParser as unknown as {
+        parseExpression(code: string, options: object): unknown;
+      }
+    ).parseExpression(code, { plugins: ["typescript"] });
+  } catch {
+    return [];
+  }
+  const reads: DefineRead[] = [];
+  const visit = (value: unknown, parent: Record<string, unknown> | null) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, parent);
+      return;
     }
-    return Object.entries(record).some(
-      ([key, child]) => key !== "node" && visit(child),
-    );
+    const node = value as Record<string, unknown> & {
+      type?: string;
+      start?: number;
+      end?: number;
+    };
+    if (typeof node.type !== "string") return;
+    if (node.type === "Identifier" && node.name === DEFINE_READ) {
+      let kind: DefineRead["kind"] = "other";
+      if (
+        parent &&
+        (parent.type === "MemberExpression" ||
+          parent.type === "OptionalMemberExpression") &&
+        parent.object === node
+      ) {
+        const property = parent.property as {
+          type: string;
+          name?: string;
+          value?: unknown;
+        };
+        const key = parent.computed
+          ? property.type === "StringLiteral"
+            ? String(property.value)
+            : null
+          : property.type === "Identifier"
+            ? property.name
+            : null;
+        if (key === "content") kind = "content";
+        else if (key !== null) kind = "member";
+      }
+      reads.push({ start: node.start ?? 0, end: node.end ?? 0, kind });
+      return;
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (key === "loc" || key === "extra" || key.endsWith("Comments"))
+        continue;
+      visit(child, node);
+    }
   };
-  return visit(nodes);
+  visit(root, null);
+  return reads;
+}
+
+/** An `Expr` that reads a define, the node it sits in, and how it reads it. */
+type DefineReadSite = {
+  expr: Expr;
+  at: { loc: Position } | undefined;
+  reads: DefineRead[];
+};
+
+/** The expressions under `root` that still hold a `DEFINE_READ`. */
+function defineReadSites(root: unknown): DefineReadSite[] {
+  const sites: DefineReadSite[] = [];
+  const seen = new Set<object>();
+  const visit = (value: unknown, at: { loc: Position } | undefined): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, at);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    const here =
+      record.loc && typeof record.loc === "object"
+        ? (record as { loc: Position })
+        : at;
+    if (typeof record.code === "string" && "shape" in record) {
+      if (record.code.includes(DEFINE_READ)) {
+        const expr = record as unknown as Expr;
+        sites.push({ expr, at: here, reads: defineReadsIn(expr.code) });
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "loc" && key !== "node") visit(child, here);
+    }
+  };
+  visit(root, undefined);
+  return sites;
+}
+
+/** Writes `replacement` over every `DEFINE_READ` of `site`. */
+function replaceDefineReads(site: DefineReadSite, replacement: string): void {
+  let code = site.expr.code;
+  for (const read of [...site.reads].sort((a, b) => b.start - a.start)) {
+    code = code.slice(0, read.start) + replacement + code.slice(read.end);
+  }
+  site.expr.code = code;
 }
 
 /**
@@ -2779,34 +2876,46 @@ class AngularEmitter implements Emitter<string> {
           const node = item as IrNode;
           if (node?.kind !== "Define" || node.attrs.length === 0) return;
           const later = value.slice(index + 1) as IrNode[];
-          if (
-            node.children.some(
-              (child) =>
-                child.kind !== "Comment" &&
-                !(child.kind === "Text" && child.value.trim() === ""),
-            ) &&
-            readsContent(later, node.name)
-          ) {
-            fail(
-              `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose in an Angular template: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
-              node.attrs[0] ?? node,
-              "MX_UNSUPPORTED_CONSTRUCT",
-            );
-          }
           const row = this.gensym("__mxDefine");
           this.defineRows.set(node, row);
-          rewriteAccessorReads(
-            later,
-            new Map([
-              [
-                node.name,
-                {
-                  read: row,
-                  assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
-                },
-              ],
-            ]),
+          const rewrites = new Map([
+            [
+              node.name,
+              {
+                read: DEFINE_READ,
+                assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
+              },
+            ],
+          ]);
+          // The define's own body reads `D` too (`<define/D a=1>${D.a}</define>`)
+          // unless a param of the define is named `D`.
+          const own = new RegExp(
+            `(?<![\\w$])${node.name.replace(/\$/g, "\\$")}(?![\\w$])`,
+          ).test(node.params.join(","))
+            ? []
+            : node.children;
+          rewriteAccessorReads(later, rewrites);
+          rewriteAccessorReads(own, rewrites);
+          const sites = defineReadSites([own, later]);
+          const hasBody = node.children.some(
+            (child) =>
+              child.kind !== "Comment" &&
+              !(child.kind === "Text" && child.value.trim() === ""),
           );
+          if (hasBody) {
+            for (const site of sites) {
+              const bad = site.reads.find((read) => read.kind !== "member");
+              if (!bad || !site.at) continue;
+              fail(
+                bad.kind === "content"
+                  ? `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose in an Angular template: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``
+                  : `\`${node.name}\` is read as a whole here, but \`<define/${node.name}>\` has attributes and a body, and in an Angular template only \`${node.name}.<attribute>\` can be read from it: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+                site.at,
+                "MX_UNSUPPORTED_CONSTRUCT",
+              );
+            }
+          }
+          for (const site of sites) replaceDefineReads(site, row);
         });
         for (const item of value) walk(item);
         return;

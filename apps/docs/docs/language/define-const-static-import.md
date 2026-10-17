@@ -91,7 +91,7 @@ A `<define>` tag's own attributes are properties of its value, so `${Badge.color
 <p>${Badge.color}</p>
 ```
 
-They are evaluated where the `<define>` is written, outside its params, and a spread (`<define/Badge ...input.theme/>`) keeps its place. `content` is the body, so it is not available as an attribute on a `<define>` that has one. Solid and Angular refuse a `<define>` with attributes, and Astro has no `<define>`; see the [specification](/specification/).
+They are evaluated where the `<define>` is written, outside its params, and a spread (`<define/Badge ...input.theme/>`) keeps its place. `content` is the body, so it is not available as an attribute on a `<define>` that has one. Solid and Angular lower the attributes too: Solid evaluates them once at the define, Angular as a `@let` beside the define's template reference. On those two hosts a `<define>` that has attributes and a body can only be read as `D.<attribute>`; `D.content` and any whole-value use of `D` is a positioned error. Astro has no `<define>`; see the [specification](/specification/).
 
 ## A name that shadows `input`
 

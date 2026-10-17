@@ -1655,10 +1655,19 @@ outside. A `<let>` written in one is refused like in any attribute
 attribute beside a body is dropped, as Marko does, with a warning at the
 attribute (`MX_DEFINE_CONTENT_DROPPED`; never an error, `mx.strict` included);
 with no body it is an ordinary property. On html, preact, react and hono the attributes are own
-properties of the function a call runs. Solid and Angular refuse a `<define>`
-with attributes (`MX_UNSUPPORTED_CONSTRUCT` on Angular): their define is a
-hoisted function or a template reference, which a template expression cannot
-read a property from, and Astro has no `<define>` at all.
+properties of the function a call runs. Solid and Angular lower them: Solid
+evaluates the attributes once, where the `<define>` is written, and reads `D.a`
+from that value (a define whose attributes are all literals inlines them at each
+read); Angular declares them as a `@let` beside the define's template reference
+and points the reads of `D` at it. On both, a `<define>` that has attributes
+**and a body** can only be read as `D.<attribute>`: `D.content`, and any other
+use of `D` as a whole (`D`, `(D).content`, `D[key]`, `<${D}/>`, `D` as an argument),
+is a positioned error at the read (`MX_UNSUPPORTED_CONSTRUCT` on Angular), because
+their define is a hoisted function or a template reference, not the object that
+holds the attributes and the body. `a:=x` is refused at the attribute. On Solid
+a `<define>` is hoisted, so one inside a `<for>`/`<if>` body, or one whose body
+reads a region-local value (including another define's dynamic attribute),
+stays an error. Astro has no `<define>` at all.
 
 | Message | When |
 |---|---|

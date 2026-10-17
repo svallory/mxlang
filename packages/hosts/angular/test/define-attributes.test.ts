@@ -47,6 +47,11 @@ function render(source: string): string {
       show: true,
       label: "L",
     };
+    log: string[] = [];
+    tick = (label: string, value: unknown) => {
+      this.log.push(label);
+      return value;
+    };
   }
   counter += 1;
   Component({
@@ -110,6 +115,46 @@ const CASES: Array<[string, string, string]> = [
     "a later define reads an earlier one",
     "<define/A a=1/><define/B b=A.a/><p>${A.a}${B.b}</p>",
     "<p>11</p>",
+  ],
+  [
+    "the define's own body reads its attributes",
+    "<define/D a=1>${D.a}</define><D/>",
+    "1",
+  ],
+  [
+    "the define's own body reads a dynamic attribute and a param",
+    "<define/D|v| a=input.x><b>${D.a}${v}</b></define><D(2)/>",
+    "<b>72</b>",
+  ],
+  [
+    "a param named like the define shadows it in the define's body",
+    "<define/D|D| a=1>${D}</define><D(5)/>",
+    "5",
+  ],
+  [
+    "a define nested in the define's body reads the outer attributes",
+    "<define/D a=1><define/E b=D.a/>${E.b}</define><D/>",
+    "1",
+  ],
+  [
+    "a dynamic attribute read twice is evaluated once in a pass",
+    '<define/D a=tick("a", 1)/><p>${D.a}${D.a}</p><i>${log.join()}</i>',
+    "<p>11</p><i>a</i>",
+  ],
+  [
+    "a dynamic attribute nothing reads is still evaluated once in a pass",
+    '<define/D a=tick("a", 1)/><p>hi</p><i>${log.join()}</i>',
+    "<p>hi</p><i>a</i>",
+  ],
+  [
+    "a dynamic attribute is evaluated at the define, before a later placeholder",
+    '<define/D a=tick("a", 1)/><p>${tick("p", 0)}</p><p>${D.a}</p><i>${log.join()}</i>',
+    "<p>0</p><p>1</p><i>a,p</i>",
+  ],
+  [
+    "an object attribute has one identity across reads",
+    '<define/D o={}/><p>${D.o === D.o ? "same" : "different"}</p>',
+    "<p>same</p>",
   ],
   ["concise mode", "define/D a=1\np -- ${D.a}", "<p>1</p>"],
   [
@@ -196,14 +241,57 @@ describe("angular: what stays refused", () => {
     expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
   });
 
-  it("D.content of a define that has attributes and a body is refused, at the first attribute", () => {
-    const source = "<define/D a=1><i>b</i></define><p>${D.content}</p>";
+  it("D.content of a define that has attributes and a body is refused, at the read", () => {
+    const source = "<define/D a=1><i>b</i></define><p>${typeof D.content}</p>";
     const error = thrown(source);
     expect(error.message).toBe(
       "`D.content` is the body of `<define/D>`, which a define with attributes cannot expose in an Angular template: `#D` is a template reference. Call it as `<D/>`, or move the attributes to a second `<define>`",
     );
-    expect([error.line, error.column]).toEqual([1, source.indexOf("a=1")]);
+    expect([error.line, error.column]).toEqual([1, source.indexOf("${typeof")]);
     expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+  });
+
+  // Every way to reach the body of a define that has attributes, other than a
+  // plain `D.content`, was a silent wrong value before (stock: `function`,
+  // `<i>b</i>`, a value carrying `.content`).
+  it.each([
+    ["a parenthesised D.content", "<p>${typeof (D).content}</p>", "content"],
+    ["an optional D?.content", "<p>${typeof D?.content}</p>", "content"],
+    ['a computed D["content"]', '<p>${typeof D["content"]}</p>', "content"],
+    ["a dynamic tag <${D}/>", "<${D}/>", "whole"],
+    ["a bare D in a placeholder", "<p>${typeof D}</p>", "whole"],
+    ["a computed D[key]", "<p>${D[input.key]}</p>", "whole"],
+    ["D as a call argument", "<define/E|v|>x</define><E(D)/>", "whole"],
+    [
+      "D read in the define's own body",
+      "<define/F>${D.content}</define>",
+      "content",
+    ],
+  ])(
+    "%s is refused at the read when the define has a body",
+    (_label, read, kind) => {
+      const source = `<define/D a=1><i>b</i></define>${read}`;
+      const error = thrown(source);
+      expect(error.message).toBe(
+        kind === "content"
+          ? "`D.content` is the body of `<define/D>`, which a define with attributes cannot expose in an Angular template: `#D` is a template reference. Call it as `<D/>`, or move the attributes to a second `<define>`"
+          : "`D` is read as a whole here, but `<define/D>` has attributes and a body, and in an Angular template only `D.<attribute>` can be read from it: `#D` is a template reference. Call it as `<D/>`, or move the attributes to a second `<define>`",
+      );
+      expect(error.line).toBe(1);
+      expect(error.column).toBeGreaterThanOrEqual(source.indexOf(read));
+      expect(error.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    },
+  );
+
+  it("the define's own body reading its own body is refused too", () => {
+    const source = "<define/D a=1>${typeof D.content}</define>";
+    expect(thrown(source).message).toContain("`D.content` is the body of");
+  });
+
+  it("a define with no body can be read as a whole", () => {
+    expect(render("<define/D a=1/><p>${typeof D}${D === D}</p>")).toBe(
+      "<p>objecttrue</p>",
+    );
   });
 
   it("a define with a body and attributes is fine when nothing reads D.content", () => {
