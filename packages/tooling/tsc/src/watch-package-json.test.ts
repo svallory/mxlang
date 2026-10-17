@@ -112,8 +112,9 @@ function watchIn(dir: string, args: string[]): Watcher {
         ) {
           try {
             act();
-          } catch {
+          } catch (error) {
             // A delete that already took effect: nothing left to repeat.
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
           }
           nextRetry = Date.now() + 2_500;
         }
@@ -132,6 +133,7 @@ function watchIn(dir: string, args: string[]): Watcher {
             throw new Error(`watch exited before it was armed:\n${output}`);
           }
         },
+        WAIT_MS,
       ),
     stop: async () => {
       clearTimeout(lifetime);
