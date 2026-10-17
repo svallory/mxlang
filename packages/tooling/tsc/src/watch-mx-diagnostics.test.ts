@@ -14,7 +14,13 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stripVTControlCharacters } from "node:util";
 import { expect, it } from "vitest";
-import { fixtures, here, mxTsc, repoRoot } from "./test-support.ts";
+import {
+  armDirectoryWatch,
+  fixtures,
+  here,
+  mxTsc,
+  repoRoot,
+} from "./test-support.ts";
 
 /**
  * `mx-tsc -w` reports MX compile errors (a `.mx` file's parse and lowering
@@ -49,6 +55,8 @@ const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 interface Watcher {
   /** The output of the next rebuild cycle (after `edited` is written). */
   untilSummary: (edited?: string) => Promise<string>;
+  /** Resolves once the watcher is watching `dir`; see armDirectoryWatch. */
+  armed: (dir: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -109,6 +117,17 @@ function watchIn(dir: string, args: string[]): Watcher {
       }
       return output.slice(since);
     },
+    armed: (dir) =>
+      armDirectoryWatch(
+        dir,
+        () => output,
+        () => {
+          if (failure) throw failure;
+          if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`watch exited before it was armed:\n${output}`);
+          }
+        },
+      ),
     stop: async () => {
       clearTimeout(lifetime);
       child.kill("SIGKILL");
@@ -272,6 +291,7 @@ it(
       writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
       watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
       expectEffectOnly(await watcher.untilSummary(), "src/broken.mx");
+      await watcher.armed(join(dir, "src"));
 
       // A new root file makes tsc create its program (and the MX language
       // plugins) again; the older file is not read again, and its error stays.
@@ -307,6 +327,7 @@ it(
       writeFileSync(removed, "export const b = 2;\n");
       watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
       expect(await watcher.untilSummary()).toContain("Found 0 errors.");
+      await watcher.armed(join(dir, "src"));
 
       // The rebuild compiles nothing: only the root set shrinks. tsc may write
       // a TS6053 summary first, then the settled one.

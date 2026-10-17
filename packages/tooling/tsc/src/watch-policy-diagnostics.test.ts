@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { reportWatchPass } from "./index.ts";
-import { mxTsc, repoRoot } from "./test-support.ts";
+import { armDirectoryWatch, mxTsc, repoRoot } from "./test-support.ts";
 
 /**
  * `mx-tsc -w` reports host-policy diagnostics (`TS80003`: a `package.json`
@@ -36,6 +36,8 @@ const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 interface Watcher {
   /** The output of the next rebuild cycle (after `edited` is written). */
   untilSummary: (edited?: string) => Promise<string>;
+  /** Resolves once the watcher is watching `dir`; see armDirectoryWatch. */
+  armed: (dir: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -96,6 +98,17 @@ function watchIn(dir: string, args: string[]): Watcher {
       }
       return output.slice(since);
     },
+    armed: (dir) =>
+      armDirectoryWatch(
+        dir,
+        () => output,
+        () => {
+          if (failure) throw failure;
+          if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`watch exited before it was armed:\n${output}`);
+          }
+        },
+      ),
     stop: async () => {
       clearTimeout(lifetime);
       child.kill("SIGKILL");
@@ -251,6 +264,7 @@ describe("mx-tsc -w host-policy diagnostics: more cases", () => {
         writeFileSync(join(sub, "package.json"), MISMATCH);
         watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
         expect(await watcher.untilSummary()).toContain("Found 0 errors.");
+        await watcher.armed(join(dir, "src"));
 
         const added = join(sub, "x.mx");
         writeFileSync(added, "<p>ok</p>\n");

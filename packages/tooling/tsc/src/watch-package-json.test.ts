@@ -14,7 +14,12 @@ import { stripVTControlCharacters } from "node:util";
 import type ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
-import { mxTsc, repoRoot, SPAWN_TIMEOUT_MS } from "./test-support.ts";
+import {
+  armDirectoryWatch,
+  mxTsc,
+  repoRoot,
+  SPAWN_TIMEOUT_MS,
+} from "./test-support.ts";
 import {
   packageJsonInputs,
   trackPackageJsonInputs,
@@ -45,6 +50,8 @@ const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 interface Watcher {
   /** What the next rebuild cycle prints, after `act` ran (if given). */
   cycle: (act?: () => void) => Promise<string>;
+  /** Resolves once the watcher is watching `dir`; see armDirectoryWatch. */
+  armed: (dir: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -82,6 +89,7 @@ function watchIn(dir: string, args: string[]): Watcher {
       const since = output.length;
       act?.();
       const deadline = Date.now() + WAIT_MS;
+      let nextRetry = Date.now() + 2_500;
       while (!SUMMARY.test(output.slice(since))) {
         if (failure) throw failure;
         if (
@@ -93,11 +101,38 @@ function watchIn(dir: string, args: string[]): Watcher {
             `no rebuild finished within ${WAIT_MS} ms of the change:\n${output.slice(since) || "(nothing printed)"}`,
           );
         }
+        // A watcher registered after the first summary records the file's time
+        // then, so a change that landed before it is never seen: repeat the
+        // change (every act here is a write or a delete of a file that is still
+        // there while no rebuild has started) until a rebuild starts.
+        if (
+          act &&
+          Date.now() >= nextRetry &&
+          !output.slice(since).includes("File change detected")
+        ) {
+          try {
+            act();
+          } catch {
+            // A delete that already took effect: nothing left to repeat.
+          }
+          nextRetry = Date.now() + 2_500;
+        }
         await delay(100);
       }
       // The rebuild's whole text: a summary is its last line.
       return output.slice(since);
     },
+    armed: (dir) =>
+      armDirectoryWatch(
+        dir,
+        () => output,
+        () => {
+          if (failure) throw failure;
+          if (child.exitCode !== null || child.signalCode !== null) {
+            throw new Error(`watch exited before it was armed:\n${output}`);
+          }
+        },
+      ),
     stop: async () => {
       clearTimeout(lifetime);
       child.kill("SIGKILL");
@@ -189,6 +224,7 @@ describe.each(MODES)(
           const manifest = join(dir, "package.json");
           watcher = watchIn(dir, args);
           expect(await watcher.cycle()).toContain("Found 0 errors.");
+          await watcher.armed(join(dir, "src"));
 
           // Broken: no `.mx` file is touched, the manifest alone rebuilds.
           const broken = await watcher.cycle(() =>
@@ -238,6 +274,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         const manifest = join(dir, "package.json");
         watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
+        await watcher.armed(join(dir, "src"));
 
         const broken = await watcher.cycle(() =>
           writeFileSync(manifest, BROKEN_JSON),
@@ -270,6 +307,7 @@ describe("mx-tsc -w: more manifest changes", () => {
         writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
         watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
+        await watcher.armed(join(dir, "src"));
 
         const created = await watcher.cycle(() =>
           writeFileSync(join(sub, "package.json"), MISMATCH),
@@ -299,6 +337,7 @@ describe("mx-tsc -w: more manifest changes", () => {
           const manifest = join(dir, "package.json");
           watcher = watchIn(dir, args);
           const first = await watcher.cycle();
+          await watcher.armed(join(dir, "src"));
           expect(count(first)).toBe(errors);
 
           const again = await watcher.cycle(() => {
@@ -335,6 +374,7 @@ describe("mx-tsc -b -w: the manifest watch across build cycles", () => {
         const manifest = join(dir, "package.json");
         watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
+        await watcher.armed(join(dir, "src"));
 
         // Each new file changes the root names, and the program is made anew.
         for (const name of ["a.ts", "b.ts"]) {
@@ -375,6 +415,7 @@ describe("mx-tsc -b -w: the manifest watch across build cycles", () => {
         writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
         watcher = watchIn(dir, args);
         expect(await watcher.cycle()).toContain("Found 0 errors.");
+        await watcher.armed(join(dir, "src"));
 
         const created = await watcher.cycle(() =>
           writeFileSync(join(sub, "package.json"), MISMATCH),
