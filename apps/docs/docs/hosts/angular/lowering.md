@@ -16,6 +16,7 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `<for\|k, v\| in=obj>` | `@for` over `obj \| keyvalue: null`, with `@let k` and `@let v`, plus a warning telling you to add `KeyValuePipe` to the component's imports |
 | `class={ active: isOn }`, `style={ … }` | `[ngClass]`, `[ngStyle]` |
 | `class=["a", y]`, or a shorthand beside `class=`: `<div.a class=y/>` | `[class]="__mxClass(['a', y])"`: the same class set Marko prints (falsy parts skipped); Angular may order the words differently |
+| the same `class=` on an MX tag call whose `Input` declares `class` | `[class]="['a', y]"`, `[class]="y"`: the callee's `class` input gets the value as written, as Marko hands it to `input.class` |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
 | `<${Comp} x=1/>`, or a tag named by a module-scope `const` | `<ng-container [ngComponentOutlet]="Comp" [ngComponentOutletInputs]="…">`; content and tag arguments are errors |
@@ -24,6 +25,8 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `attr=expr` on an element | `[attr]`, or `[attr.attr]`: see below |
 
 An array `class` is never bound to `[ngClass]`: Angular throws in dev mode on any entry that is not a string (`null`, `false`, a number, an object, a nested array), and a shorthand beside `class=y` is always an array. `__mxClass` is a member on the component class, like the event invokers: a `.ng.mx` and a tag module get it automatically, a page extends `MxHandlers` / `MxHandlersMixin(Base)` or pastes the member the warning prints.
+
+On an MX tag call Marko passes `class` to the callee's `input.class` unchanged: `class=y` is `y`, `<Card.a class=y/>` is `["a", y]`. When the callee's `Input` declares `class`, the call binds `[class]` with the value as written and the callee gets exactly that. That tag module is emitted with `changeDetection: Eager`, because Angular components default to OnPush and a call assigns `class` as a plain property: without it the callee would keep the first class it received. Inside a tag module, a dynamic `class=` on a native element (other than an object literal, which stays `[ngClass]`) is joined by `__mxClass`, so `class=input.class` prints Marko's class text for an array, object, `null`, `0` or a number. A page is unchanged.
 
 Give `<for>` a `by`: Angular requires `track`. A loop without one emits `track $index`, and MX warns once per file, since reordering such a list re-renders its rows.
 
