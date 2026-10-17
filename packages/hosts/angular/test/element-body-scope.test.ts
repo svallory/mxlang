@@ -209,9 +209,9 @@ describe("a tag variable is scoped to the native element body that declares it",
         "@let { a } = {a:1};<div>@let { a, b } = {a:2,b:2};{{ a }}{{ b }}</div>{{ a }}",
       ],
       [
-        "beside a plain const in the same body, which is still renamed",
-        "<div><const/{ a }={a:1}/><const/c=2/>${a}${c}</div>",
-        "<div>@let { a } = {a:1};@let __mxConst_c = 2;{{ a }}{{ __mxConst_c }}</div>",
+        "beside a plain const in the same body, which is renamed when its name is read outside",
+        "<div><const/{ a }={a:1}/><const/c=2/>${a}${c}</div>${c}",
+        "<div>@let { a } = {a:1};@let __mxConst_c = 2;{{ a }}{{ __mxConst_c }}</div>{{ c }}",
       ],
     ];
     for (const [label, source, expected] of ROWS) {
@@ -251,17 +251,24 @@ describe("a tag variable is scoped to the native element body that declares it",
         "`D` is read as a whole here, but `<define/D>` has attributes",
       ],
     ];
-    for (const [label, source, expected] of ROWS) {
-      it(label, () => {
-        let message = "";
-        try {
-          emit(source);
-        } catch (error) {
-          message = (error as Error).message;
-        }
-        expect(message).toContain(expected);
-        expect(message).not.toContain("__mx");
-      });
+    // Alone the define keeps its authored name; beside an outer define of the
+    // same name it is renamed, and the message still names what was written.
+    for (const [prefix, when] of [
+      ["", "alone"],
+      ["<define/D>outer</define>", "beside an outer define of the same name"],
+    ] as const) {
+      for (const [label, source, expected] of ROWS) {
+        it(`${label}, ${when}`, () => {
+          let message = "";
+          try {
+            emit(prefix + source);
+          } catch (error) {
+            message = (error as Error).message;
+          }
+          expect(message).toContain(expected);
+          expect(message).not.toContain("__mx");
+        });
+      }
     }
   });
 

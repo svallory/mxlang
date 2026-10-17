@@ -143,6 +143,37 @@ function eventHandlerHint(
 }
 
 /**
+ * Angular's message with each name MX generated for a `<const>` or `<define>`
+ * (`__mxConst_a`) printed as the name the author wrote (`a`).
+ *
+ * The map is the region's own: a generated name is unique within one region's
+ * template, and two regions may give the same generated name to different
+ * authored ones. A diagnostic outside every region quotes none of them.
+ */
+function authoredNamesIn(
+  compiled: CompileNgMxResult,
+  diagnostic: Diagnostic,
+  message: string,
+): string {
+  const region = compiled.regions.find(
+    (r) =>
+      diagnostic.start >= r.generatedStart && diagnostic.start < r.generatedEnd,
+  );
+  if (!region) return message;
+  let result = message;
+  for (const [generated, authored] of Object.entries(region.authoredNames)) {
+    result = result.replace(
+      new RegExp(
+        `(?<![\\w$])${generated.replace(/\$/g, "\\$")}(?![\\w$])`,
+        "g",
+      ),
+      () => authored,
+    );
+  }
+  return result;
+}
+
+/**
  * Map checker records for a compiled `.ng.mx` to positions in the `.ng.mx`.
  *
  * Only `source: "ngtsc"` records are kept. The `"ts"` records (errors in the
@@ -161,7 +192,7 @@ export function mapNgMxDiagnostics(
     .map((d) => ({
       ...locate(compiled, d.start),
       code: d.code,
-      message: eventHandlerHint(compiled, d),
+      message: authoredNamesIn(compiled, d, eventHandlerHint(compiled, d)),
       category: d.category,
       source: "angular" as const,
     }));

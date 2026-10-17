@@ -156,6 +156,14 @@ export interface NgMxRegion {
   anchors: NodeAnchor[];
   /** Warnings the emitter produced while lowering this region. */
   warnings: MxWarning[];
+  /**
+   * The name the author wrote for each `<const>` and `<define>` this region's
+   * emitter renamed, by its generated name (`__mxConst_a` is `a`). A name that
+   * shares nothing with another declaration or read is not renamed, so this is
+   * often empty. A tool that prints Angular's diagnostic text maps the
+   * generated names back with it.
+   */
+  authoredNames: Record<string, string>;
 }
 
 export interface CompileNgMxOptions {
@@ -440,6 +448,7 @@ function lowerRegion(
 
   const templateMappings: AngularMapping[] = [];
   const templateAnchors: NodeAnchor[] = [];
+  const authoredNames = new Map<string, string>();
   const template = emitTemplate(
     {
       ...ir,
@@ -465,6 +474,7 @@ function lowerRegion(
     // A `.ng.mx` gets `__mxClass` injected, like a tag module: a dynamic
     // element `class=` of any value form is joined by it.
     true,
+    authoredNames,
   );
 
   // An authored import called as a tag is referenced by its own local name
@@ -520,6 +530,7 @@ function lowerRegion(
       escapeForLiteral,
     ),
     warnings,
+    authoredNames: Object.fromEntries(authoredNames),
     hoistedImports,
     authoredTagImports,
   };
@@ -1758,6 +1769,7 @@ export function compileNgMx(
           mappings,
           anchors,
           warnings: regionWarnings,
+          authoredNames,
         },
         i,
       ) => ({
@@ -1769,6 +1781,7 @@ export function compileNgMx(
         mappings,
         anchors,
         warnings: regionWarnings,
+        authoredNames,
       }),
     ),
   };

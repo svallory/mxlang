@@ -1641,6 +1641,118 @@ function renameDefineCalls(value: unknown, from: string, to: string): void {
   }
 }
 
+/** Every identifier-shaped token in a piece of source text. */
+const TOKEN = /[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*/gu;
+
+/**
+ * Names Angular binds in a `@for` block. A `@let` of one of them in that
+ * block's view collides with it.
+ */
+const ANGULAR_IMPLICIT_NAMES = new Set([
+  "$implicit",
+  "$index",
+  "$count",
+  "$first",
+  "$last",
+  "$even",
+  "$odd",
+]);
+
+/** IR keys that hold parser nodes, not template content. */
+const NON_TEMPLATE_KEYS = new Set(["node", "paramNodes", "loc"]);
+
+/** Visits every IR record under `value` once, parser nodes excluded. */
+function visitIrRecords(
+  value: unknown,
+  visit: (record: Record<string, unknown>) => boolean | undefined,
+  seen = new Set<object>(),
+): boolean {
+  if (!value || typeof value !== "object" || seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.some((item) => visitIrRecords(item, visit, seen));
+  }
+  const record = value as Record<string, unknown>;
+  if (visit(record)) return true;
+  return Object.entries(record).some(
+    ([key, child]) =>
+      !NON_TEMPLATE_KEYS.has(key) && visitIrRecords(child, visit, seen),
+  );
+}
+
+/**
+ * How many times each name is declared in `body`: a `<const>`, a `<define>`
+ * and its parameters, a `<for>` parameter, a tag call's `/var`. A destructuring
+ * pattern counts every identifier in it, which can only over-count.
+ */
+function declaredNameCounts(body: IrNode[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  const declare = (text: unknown): void => {
+    if (typeof text !== "string") return;
+    for (const token of text.match(TOKEN) ?? []) {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  };
+  visitIrRecords(body, (record) => {
+    switch (record.kind) {
+      case "Const":
+        declare(record.name);
+        break;
+      case "Define":
+        declare(record.name);
+        for (const param of record.params as string[]) declare(param);
+        break;
+      case "For":
+        for (const binding of record.bindings as string[]) declare(binding);
+        for (const param of record.params as string[]) declare(param);
+        break;
+      case "Component":
+        declare(record.var);
+        for (const binding of (record.varBindings ?? []) as Array<{
+          name: string;
+        }>) {
+          declare(binding.name);
+        }
+        break;
+    }
+    return false;
+  });
+  return counts;
+}
+
+/**
+ * True when `name` is read, or a `<define>` of that name is called, anywhere in
+ * `body` outside `inside`. A scan of the expression text, not a parse: a
+ * string or a shadowing arrow parameter that spells the name counts as a read,
+ * which can only make the caller rename when it did not have to. A name after
+ * a single `.` is a member, not a read (`...a` is a read).
+ */
+function isReadOutside(
+  body: IrNode[],
+  name: string,
+  inside: ReadonlySet<object>,
+): boolean {
+  const read = new RegExp(
+    `(?<![\\w$])(?<![^.]\\.)${name.replace(/\$/g, "\\$")}(?![\\w$])`,
+  );
+  const visited = new Set<object>();
+  for (const node of inside) visited.add(node);
+  return visitIrRecords(
+    body,
+    (record) => {
+      if (typeof record.code === "string" && read.test(record.code)) {
+        return true;
+      }
+      if (record.kind === "Component") {
+        const target = record.target as { kind: string; name: string };
+        return target.kind === "define" && target.name === name;
+      }
+      return false;
+    },
+    visited,
+  );
+}
+
 /** Find control-flow cases through IR wrappers, never through a component. */
 function hasCaseDescendant(nodes: IrNode[]): boolean {
   return nodes.some((node) => {
@@ -1865,14 +1977,19 @@ class AngularEmitter implements Emitter<string> {
   /** The `@let` name holding each attributed `<define>`'s attributes. */
   private defineRows = new Map<IrNode, string>();
   /**
-   * The name the author wrote for each `<define>` that `lowerElementBodyConsts`
-   * renamed, by its generated name. A diagnostic names the define the author
-   * typed, not `__mxDefine_D1`.
+   * The name the author wrote for each `<const>` and `<define>` that
+   * `lowerElementBodyConsts` renamed, by its generated name. A diagnostic names
+   * what the author typed, not `__mxDefine_D1`.
    */
-  private readonly authoredDefineNames = new Map<string, string>();
+  private readonly authoredNames = new Map<string, string>();
 
   private authored(name: string): string {
-    return this.authoredDefineNames.get(name) ?? name;
+    return this.authoredNames.get(name) ?? name;
+  }
+
+  /** The generated name of each renamed declaration, mapped to the authored one. */
+  renamedDeclarations(): ReadonlyMap<string, string> {
+    return this.authoredNames;
   }
   // Collected during the walk, each flushed as one warning per file in
   // `done()` — design note A1's step-1 import problem asks for one warning
@@ -3022,8 +3139,9 @@ class AngularEmitter implements Emitter<string> {
 
   /**
    * The IR the emitter walks, with each `<const>` and `<define>` written
-   * directly in a native element's body renamed to a name of its own, and
-   * every read of it in the rest of that body pointed at the new name.
+   * directly in a native element's body that shares its name with another
+   * declaration or read renamed to a name of its own, and every read of it in
+   * the rest of that body pointed at the new name.
    *
    * Marko scopes a name a body declares to that body, an element's included
    * (`<const/n=1/><div><const/n=2/>${n}</div>${n}` reads 2, then 1). Angular
@@ -3035,9 +3153,17 @@ class AngularEmitter implements Emitter<string> {
    * selector would lose its named slots. A unique `@let` name needs no view:
    * the DOM, the projection and the comment nodes are untouched.
    *
+   * The rename is for a collision only. A declaration keeps the name the
+   * author wrote when no other `<const>`, `<define>`, parameter or `/var` in
+   * the template has that name and nothing outside the declaration's own scope
+   * (the rest of its body) reads it: then no read can resolve to anything but
+   * the declaration, and Angular's own diagnostics (an unused `@let`, a
+   * `@let` in a two-way binding) quote the name the author typed. Any doubt
+   * renames; a template without a collision never shows `__mxConst_a`.
+   *
    * A destructuring `<const/{ a, b }=…/>` names no one binding, so it is left
-   * as written. A `<define>` keeps its authored name for diagnostics
-   * (`authoredDefineNames`).
+   * as written. A renamed declaration keeps its authored name for MX's own
+   * messages and for the checker (`renamedDeclarations`).
    *
    * The rewrite is on a private copy of the IR (an emitter never mutates it),
    * made only when such a `<const>` exists. It follows scope the way
@@ -3068,6 +3194,7 @@ class AngularEmitter implements Emitter<string> {
     if (!found(body)) return body;
 
     const copy = cloneIr(body);
+    const keep = this.declarationsWithoutCollision(copy);
     const walked = new Set<object>();
     const walk = (value: unknown): void => {
       if (!value || typeof value !== "object" || walked.has(value)) return;
@@ -3080,9 +3207,10 @@ class AngularEmitter implements Emitter<string> {
       if (record.kind === "Element") {
         const children = record.children as IrNode[];
         children.forEach((child, index) => {
+          if (keep.has(child)) return;
           if (child.kind === "Define") {
             const renamed = this.gensym(`__mxDefine_${child.name}`);
-            this.authoredDefineNames.set(renamed, child.name);
+            this.authoredNames.set(renamed, child.name);
             const rest = children.slice(index + 1);
             const own = child.params.includes(child.name) ? [] : child.children;
             renameDefineCalls([rest, own], child.name, renamed);
@@ -3105,6 +3233,7 @@ class AngularEmitter implements Emitter<string> {
           // rename: it is left as it was.
           if (child.kind !== "Const" || !IDENTIFIER.test(child.name)) return;
           const renamed = this.gensym(`__mxConst_${child.name}`);
+          this.authoredNames.set(renamed, child.name);
           rewriteAccessorReads(
             children.slice(index + 1),
             new Map([
@@ -3126,6 +3255,39 @@ class AngularEmitter implements Emitter<string> {
     };
     walk(copy);
     return copy;
+  }
+
+  /**
+   * The `<const>`s and `<define>`s written directly in a native element's body
+   * that can keep the name the author wrote: the name is declared nowhere
+   * else in the template and read nowhere outside the declaration's scope.
+   */
+  private declarationsWithoutCollision(body: IrNode[]): Set<IrNode> {
+    const keep = new Set<IrNode>();
+    const declared = declaredNameCounts(body);
+    visitIrRecords(body, (record) => {
+      if (record.kind !== "Element") return false;
+      const children = record.children as IrNode[];
+      children.forEach((child, index) => {
+        if (child.kind !== "Const" && child.kind !== "Define") return;
+        if (child.kind === "Const" && !IDENTIFIER.test(child.name)) return;
+        const name = child.name;
+        if (declared.get(name) !== 1 || ANGULAR_IMPLICIT_NAMES.has(name)) {
+          return;
+        }
+        // The declaration's scope: the rest of its body, and a define's own
+        // body unless a parameter of that name shadows it.
+        const scope: IrNode[] = children.slice(index + 1);
+        if (child.kind === "Define" && !child.params.includes(name)) {
+          scope.push(...child.children);
+        }
+        if (!isReadOutside(body, name, new Set<object>(scope))) {
+          keep.add(child);
+        }
+      });
+      return false;
+    });
+    return keep;
   }
 
   /**
@@ -3463,6 +3625,12 @@ export function emitTemplate(
   anchorsOut?: NodeAnchor[],
   /** True for a tag module or `.ng.mx`, which get `__mxClass` injected: see `emitAttrs`. */
   joinElementClass = false,
+  /**
+   * Filled, when given, with each name the emitter generated for a `<const>` or
+   * `<define>` (`__mxConst_a`) mapped to the name the author wrote (`a`), so a
+   * tool that reads Angular's own diagnostics can print the authored one.
+   */
+  authoredNamesOut?: Map<string, string>,
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
   // the core minted it for a discovered tag the template calls, and there is
@@ -3507,6 +3675,11 @@ export function emitTemplate(
   if (usedTagsOut) usedTagsOut.push(...emitter.usedTagRefs());
   if (mappingsOut) mappingsOut.push(...emitter.mappings());
   if (anchorsOut) anchorsOut.push(...emitter.anchors());
+  if (authoredNamesOut) {
+    for (const [generated, authored] of emitter.renamedDeclarations()) {
+      authoredNamesOut.set(generated, authored);
+    }
+  }
   return code;
 }
 
