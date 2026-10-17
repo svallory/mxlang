@@ -922,18 +922,19 @@ function declareExportedNames(path: Node, t: Node): Set<Node> {
       names.add(statement.declaration.name);
     }
   }
-  // The plugin registers an enum's and a namespace's own name as it strips
-  // them, so a placeholder for that name collides with it ("Duplicate
-  // declaration", thrown positionless). The program declares it already.
+  // The plugin registers an exported enum's name as it strips it, so a
+  // placeholder for that name collides with it ("Duplicate declaration",
+  // thrown positionless). Only an exported, non-ambient enum does: a
+  // namespace, a plain enum and a `declare` enum keep the placeholder.
   const own = new Set<string>();
   for (const statement of path.node.body as Node[]) {
     const declared =
       statement.type === "ExportNamedDeclaration"
         ? statement.declaration
-        : statement;
+        : undefined;
     if (
-      (declared?.type === "TSEnumDeclaration" ||
-        declared?.type === "TSModuleDeclaration") &&
+      declared?.type === "TSEnumDeclaration" &&
+      !declared.declare &&
       declared.id?.type === "Identifier"
     ) {
       own.add(declared.id.name);

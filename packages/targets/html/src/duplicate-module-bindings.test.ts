@@ -57,7 +57,11 @@ describe("html: a module name declared twice", () => {
     const error = failure(
       "static { export enum q { A }; export { q } }\n<div/>\n",
     );
-    expect(error).toMatchObject({ line: 1, column: 39 });
+    expect(error).toMatchObject({
+      line: 1,
+      column: 39,
+      end: { line: 1, column: 40 },
+    });
     expect(error.message).toContain(
       'Duplicate export "q": the module already exports that name at 1:22',
     );

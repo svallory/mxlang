@@ -518,6 +518,22 @@ describe("what compiles", () => {
     expectCompiles(source);
   });
 
+  it("compiles a list beside a namespace of its name without a Babel scope warning", async () => {
+    const { vi } = await import("vitest");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expectCompiles(
+        "static class q {}\nstatic { export { q }; namespace q { export const a = 1 } }",
+      );
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
   it("refuses nothing under the `none` tag rules, where a dialect owns its statements", () => {
     expect(ours("static const q = 1\nstatic const q = 2", "none")).toEqual([]);
     expect(ours("static export { q }", "none")).toEqual([]);
@@ -1901,6 +1917,14 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "an exported enum and a list of another name, in one block",
       "static { export enum q { A }; const r = 1; export { r } }",
+    ],
+    [
+      "an exported enum and a list of it under another name, in one block",
+      "static { export enum q { A }; export { q as r } }",
+    ],
+    [
+      "a class, and a list with a namespace of its name, in one block",
+      "static class q {}\nstatic { export { q }; namespace q { export const a = 1 } }",
     ],
     [
       "two exported enums of a name, in one block",
