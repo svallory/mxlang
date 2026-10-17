@@ -1937,7 +1937,13 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
       }
     }
     const literals = node.attrs.map(literalAttrText);
-    if (literals.every((part) => part !== null)) {
+    // Inlining builds a fresh object at each read, so it is only faithful when
+    // every read is a static `D.<attribute>`; a whole-value read (`D === D`,
+    // `<Child d=D/>`) needs the single evaluation the `<Show>` path gives.
+    const onlyMembers = sites.every((site) =>
+      site.reads.every((read) => read.kind === "member"),
+    );
+    if (onlyMembers && literals.every((part) => part !== null)) {
       const parts = literals as string[];
       for (const site of sites) {
         replaceDefineReads(site, `({ ${parts.join(", ")} })`);

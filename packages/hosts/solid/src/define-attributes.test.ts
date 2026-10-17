@@ -175,6 +175,18 @@ const CASES: Array<[string, string, string, string]> = [
     "<ul><p>same</p></ul>",
   ],
   [
+    "literal attributes read as a whole keep one identity",
+    '<define/D a=1/><p>${D === D ? "same" : "different"}</p><p>${D.a}</p>',
+    "",
+    "<ul><p>same</p><p>1</p></ul>",
+  ],
+  [
+    "literal attributes passed as a value keep one identity",
+    '<define/D a=1/><p>${[D, D].every((d) => d === D) ? "same" : "different"}</p>',
+    "",
+    "<ul><p>same</p></ul>",
+  ],
+  [
     "a later define reads an earlier dynamic one",
     "<define/A a=input.x/><define/B b=A.a/><p>${A.a}${B.b}</p>",
     INPUT,
