@@ -124,11 +124,6 @@ const CASES: Array<[string, string, string]> = [
     "<div>1</div>1<div>2</div>1 1",
   ],
   [
-    "the inner value reads the outer binding it shadows",
-    "<const/a=1/><div><const/a=a+1/>${a}</div>${a}",
-    "<div>2</div>1",
-  ],
-  [
     "a shorthand property and a template literal read the inner binding",
     "<const/a=1/><div><const/a=2/>${[{ a }][0].a}${`t${a}`}</div>${a}",
     "<div>2t2</div>1",
@@ -147,6 +142,11 @@ const CASES: Array<[string, string, string]> = [
     "an inner <define> shadows an outer one of the same name",
     "<define/D>o</define><div><define/D>i</define><D/></div><D/>",
     "<div>i</div>o",
+  ],
+  [
+    "an inner <define> in a nested element shadows one written in an element body",
+    "<div><define/D>x</define><span><define/D>y</define><D/></span><D/></div>",
+    "<div><span>y</span>x</div>",
   ],
   [
     "a <define> with a parameter written in an element body",
@@ -186,6 +186,83 @@ describe("a tag variable is scoped to the native element body that declares it",
         "<div><p>{{ x() }}</p></div>",
       );
     });
+  });
+
+  // A destructuring name declares several bindings, so there is no one name to
+  // rename. It is emitted exactly as it was before the rename existed (these
+  // strings are what main emits).
+  describe("a destructuring <const> in an element body is left as it was", () => {
+    const ROWS: Array<[string, string, string]> = [
+      [
+        "an object pattern",
+        "<div><const/{ a, b }={a:1,b:2}/>${a}${b}</div>",
+        "<div>@let { a, b } = {a:1,b:2};{{ a }}{{ b }}</div>",
+      ],
+      [
+        "an array pattern",
+        "<div><const/[a, b]=[1,2]/>${a}${b}</div>",
+        "<div>@let [a, b] = [1,2];{{ a }}{{ b }}</div>",
+      ],
+      [
+        "beside a const of the same name in the outer body",
+        "<const/{ a }={a:1}/><div><const/{ a, b }={a:2,b:2}/>${a}${b}</div>${a}",
+        "@let { a } = {a:1};<div>@let { a, b } = {a:2,b:2};{{ a }}{{ b }}</div>{{ a }}",
+      ],
+      [
+        "beside a plain const in the same body, which is still renamed",
+        "<div><const/{ a }={a:1}/><const/c=2/>${a}${c}</div>",
+        "<div>@let { a } = {a:1};@let __mxConst_c = 2;{{ a }}{{ __mxConst_c }}</div>",
+      ],
+    ];
+    for (const [label, source, expected] of ROWS) {
+      it(label, () => {
+        expect(emit(source)).toBe(expected);
+      });
+    }
+  });
+
+  // A diagnostic names the define the author wrote, not the generated name the
+  // emitter gave it in an element body.
+  describe("a <define> diagnostic in an element body names the define as written", () => {
+    const ROWS: Array<[string, string, string]> = [
+      [
+        "a call with the wrong number of arguments",
+        "<div><define/D|p|>${p.v}</define><D/></div>",
+        "`<D>` expects 1 argument(s), got 0",
+      ],
+      [
+        "a call with a body",
+        "<div><define/D|p|>${p}</define><D(1)>body</D></div>",
+        "body content on `<D>` isn't supported",
+      ],
+      [
+        "a call with attribute tags",
+        "<div><define/D>x</define><D><@x/></D></div>",
+        "attribute tags on `<D>` aren't supported",
+      ],
+      [
+        "the body of a define that has attributes",
+        "<div><define/D a=1>x</define>${D.content}</div>",
+        "`D.content` is the body of `<define/D>`",
+      ],
+      [
+        "a whole read of a define that has attributes and a body",
+        "<div><define/D a=1>x</define>${D}</div>",
+        "`D` is read as a whole here, but `<define/D>` has attributes",
+      ],
+    ];
+    for (const [label, source, expected] of ROWS) {
+      it(label, () => {
+        let message = "";
+        try {
+          emit(source);
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain(expected);
+        expect(message).not.toContain("__mx");
+      });
+    }
   });
 
   describe("after an update", () => {

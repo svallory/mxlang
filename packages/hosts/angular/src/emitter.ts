@@ -1613,6 +1613,9 @@ function renamedMemberChain(
   return code.slice(bodyStart, start) + row + code.slice(end, bodyEnd);
 }
 
+/** A name that is one JavaScript identifier, as opposed to a destructuring pattern. */
+const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*$/u;
+
 /**
  * Points every call of the `<define>` called `from` at `to`, in `value`: a
  * `Component` whose target is that define. A nested `<define>` of the same
@@ -1861,6 +1864,16 @@ class AngularEmitter implements Emitter<string> {
 
   /** The `@let` name holding each attributed `<define>`'s attributes. */
   private defineRows = new Map<IrNode, string>();
+  /**
+   * The name the author wrote for each `<define>` that `lowerElementBodyConsts`
+   * renamed, by its generated name. A diagnostic names the define the author
+   * typed, not `__mxDefine_D1`.
+   */
+  private readonly authoredDefineNames = new Map<string, string>();
+
+  private authored(name: string): string {
+    return this.authoredDefineNames.get(name) ?? name;
+  }
   // Collected during the walk, each flushed as one warning per file in
   // `done()` — design note A1's step-1 import problem asks for one warning
   // naming every MX tag the template calls, not one warning per tag; and the
@@ -2645,9 +2658,10 @@ class AngularEmitter implements Emitter<string> {
     node: Extract<IrNode, { kind: "Component" }>,
     target: Extract<ComponentTarget, { kind: "define" }>,
   ): void {
+    const name = this.authored(target.name);
     if (node.attrTagProps.length > 0) {
       fail(
-        `attribute tags on \`<${target.name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${target.name}(...)/>\` instead`,
+        `attribute tags on \`<${name}>\` aren't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — call it with \`<${name}(...)/>\` instead`,
         node,
       );
     }
@@ -2658,14 +2672,14 @@ class AngularEmitter implements Emitter<string> {
       // arity error below ("expects 0 argument(s), got 1").
       fail(
         target.params.length === 0
-          ? `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — declare a parameter on the define, \`<define/${target.name}|value|>\`, and pass the value as a tag argument, \`<${target.name}(value)/>\``
-          : `body content on \`<${target.name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the value as a tag argument instead, \`<${target.name}(...)/>\``,
+          ? `body content on \`<${name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — declare a parameter on the define, \`<define/${name}|value|>\`, and pass the value as a tag argument, \`<${name}(value)/>\``
+          : `body content on \`<${name}>\` isn't supported by @mxlang/host-angular: a \`<define>\` call is projected with \`ngTemplateOutletContext\`, a positional argument object, not content projection — pass the value as a tag argument instead, \`<${name}(...)/>\``,
         node,
       );
     }
     if (node.args.length !== target.params.length) {
       fail(
-        `\`<${target.name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,
+        `\`<${name}>\` expects ${target.params.length} argument(s), got ${node.args.length}`,
         node,
       );
     }
@@ -2970,7 +2984,7 @@ class AngularEmitter implements Emitter<string> {
     const name = this.defineRows.get(node);
     if (name === undefined) {
       fail(
-        `attributes on \`<define/${node.name}>\` could not be lowered`,
+        `attributes on \`<define/${this.authored(node.name)}>\` could not be lowered`,
         node.attrs[0] ?? node,
         "MX_UNSUPPORTED_CONSTRUCT",
       );
@@ -3007,9 +3021,9 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
-   * The IR the emitter walks, with each `<const>` and `<define>` written directly in a native
-   * element's body renamed to a name of its own, and every read of it in the
-   * rest of that body pointed at the new name.
+   * The IR the emitter walks, with each `<const>` and `<define>` written
+   * directly in a native element's body renamed to a name of its own, and
+   * every read of it in the rest of that body pointed at the new name.
    *
    * Marko scopes a name a body declares to that body, an element's included
    * (`<const/n=1/><div><const/n=2/>${n}</div>${n}` reads 2, then 1). Angular
@@ -3019,9 +3033,11 @@ class AngularEmitter implements Emitter<string> {
    * projects a control-flow block into a component's `<ng-content select>` by
    * its single root only, so a body called into a hand-written component by
    * selector would lose its named slots. A unique `@let` name needs no view:
-   * the DOM, the projection and the comment nodes are untouched, and the
-   * declaration's own value reads the outer `n`, which a shadowing `@let`
-   * cannot do.
+   * the DOM, the projection and the comment nodes are untouched.
+   *
+   * A destructuring `<const/{ a, b }=…/>` names no one binding, so it is left
+   * as written. A `<define>` keeps its authored name for diagnostics
+   * (`authoredDefineNames`).
    *
    * The rewrite is on a private copy of the IR (an emitter never mutates it),
    * made only when such a `<const>` exists. It follows scope the way
@@ -3032,7 +3048,9 @@ class AngularEmitter implements Emitter<string> {
   lowerElementBodyConsts(body: IrNode[]): IrNode[] {
     const declaresConst = (nodes: unknown): boolean =>
       (nodes as IrNode[]).some(
-        (node) => node.kind === "Const" || node.kind === "Define",
+        (node) =>
+          node.kind === "Define" ||
+          (node.kind === "Const" && IDENTIFIER.test(node.name)),
       );
     const seen = new Set<object>();
     const found = (value: unknown): boolean => {
@@ -3064,6 +3082,7 @@ class AngularEmitter implements Emitter<string> {
         children.forEach((child, index) => {
           if (child.kind === "Define") {
             const renamed = this.gensym(`__mxDefine_${child.name}`);
+            this.authoredDefineNames.set(renamed, child.name);
             const rest = children.slice(index + 1);
             const own = child.params.includes(child.name) ? [] : child.children;
             renameDefineCalls([rest, own], child.name, renamed);
@@ -3082,7 +3101,9 @@ class AngularEmitter implements Emitter<string> {
             child.name = renamed;
             return;
           }
-          if (child.kind !== "Const") return;
+          // A destructuring `<const/{ a, b }=…/>` names no one binding to
+          // rename: it is left as it was.
+          if (child.kind !== "Const" || !IDENTIFIER.test(child.name)) return;
           const renamed = this.gensym(`__mxConst_${child.name}`);
           rewriteAccessorReads(
             children.slice(index + 1),
@@ -3146,6 +3167,7 @@ class AngularEmitter implements Emitter<string> {
           const node = item as IrNode;
           if (node?.kind !== "Define" || node.attrs.length === 0) return;
           const later = value.slice(index + 1) as IrNode[];
+          const written = this.authored(node.name);
           const row = this.gensym("__mxDefine");
           this.defineRows.set(node, row);
           const rewrites = new Map([
@@ -3153,7 +3175,7 @@ class AngularEmitter implements Emitter<string> {
               node.name,
               {
                 read: DEFINE_READ,
-                assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
+                assignError: `\`${written}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${written}.name\``,
               },
             ],
           ]);
@@ -3178,8 +3200,8 @@ class AngularEmitter implements Emitter<string> {
               if (!bad || !site.at) continue;
               fail(
                 bad.kind === "content"
-                  ? `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose in an Angular template: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``
-                  : `\`${node.name}\` is read as a whole here, but \`<define/${node.name}>\` has attributes and a body, and in an Angular template only \`${node.name}.<attribute>\` can be read from it: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+                  ? `\`${written}.content\` is the body of \`<define/${written}>\`, which a define with attributes cannot expose in an Angular template: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the attributes to a second \`<define>\``
+                  : `\`${written}\` is read as a whole here, but \`<define/${written}>\` has attributes and a body, and in an Angular template only \`${written}.<attribute>\` can be read from it: \`#${written}\` is a template reference. Call it as \`<${written}/>\`, or move the attributes to a second \`<define>\``,
                 site.at,
                 "MX_UNSUPPORTED_CONSTRUCT",
               );
