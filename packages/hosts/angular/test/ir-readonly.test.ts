@@ -51,6 +51,8 @@ const TEMPLATES: Record<string, string> = {
     "<if=a><p>a</p></if><else if=b><p>b</p></else><else><p>c</p></else>",
   const: "<const/n=a+1/>\n<p>${n}</p>",
   define: "<define/Row|x|><li>${x}</li></define><Row(1)/>",
+  "define attributes":
+    "<define/D a=input.x ...rest/><for|n| of=xs><p>${D.a}${n}</p></for>",
   "void element": '<input type="text" value=v/><br/>',
   "class and style": "<div class=[a, { b: c }] style={ color: d }>x</div>",
   comments: "<!-- kept --><p>x</p>",
