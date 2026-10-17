@@ -190,6 +190,12 @@ export function trackPackageJsonInputs(
   /** The functions made by `wrap`, so assigning one back does not wrap it again. */
   const wrappers = new WeakSet<object>();
   let revision = 0;
+  /**
+   * Set while a wrapper runs. Volar re-runs `setup` when the root files change,
+   * and each run assigns `getSourceFile` again, so layers stack under `-w -p`;
+   * only the outermost one does the manifest work, the inner ones pass through.
+   */
+  let active = false;
 
   type GetSourceFile = ts.CompilerHost["getSourceFile"];
   const wrap = (inner: GetSourceFile): GetSourceFile => {
@@ -198,7 +204,14 @@ export function trackPackageJsonInputs(
       languageVersionOrOptions,
       ...rest
     ) => {
-      const source = inner(fileName, languageVersionOrOptions, ...rest);
+      if (active) return inner(fileName, languageVersionOrOptions, ...rest);
+      active = true;
+      let source: ts.SourceFile | undefined;
+      try {
+        source = inner(fileName, languageVersionOrOptions, ...rest);
+      } finally {
+        active = false;
+      }
       if (
         !source ||
         made.has(source) ||

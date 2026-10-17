@@ -630,4 +630,36 @@ describe("trackPackageJsonInputs", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("does the manifest work once per call however many pass-through layers are assigned over it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-pkgjson-unit-"));
+    try {
+      writeFileSync(join(dir, "package.json"), VALID);
+      const page = join(dir, "page.mx");
+      const { host, sources } = fakeHost();
+      sources.set(page, { text: "<p>ok</p>\n", version: "v1" });
+      trackPackageJsonInputs(typescript, host as never, [".mx"]);
+
+      // Each root-file change under -w -p assigns a pass-through over the current function.
+      for (let i = 0; i < 4; i++) {
+        const previous = host.getSourceFile;
+        host.getSourceFile = (name, option) => previous(name, option);
+      }
+
+      let writes = 0;
+      let locations: string[] | undefined;
+      const option = {};
+      Object.defineProperty(option, "packageJsonLocations", {
+        get: () => locations,
+        set: (next: string[]) => {
+          writes++;
+          locations = next;
+        },
+      });
+      host.getSourceFile(page, option);
+      expect(writes).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
