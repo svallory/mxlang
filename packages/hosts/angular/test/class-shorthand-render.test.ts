@@ -75,7 +75,7 @@ const asSet = (value: string | null | undefined) =>
 
 function expectClasses(
   actual: (string | null)[],
-  expected: (string | null)[],
+  expected: (string | null | undefined)[],
 ): void {
   expect(actual.map(asSet)).toEqual(expected.map(asSet));
 }
