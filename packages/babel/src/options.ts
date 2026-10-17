@@ -112,7 +112,7 @@ export interface Options {
   mxCustomTags?: Record<string, unknown>;
   /**
    * MX FORK: `package.json#mx.<target>.defaultTag`, handed to the host that
-   * lowers each MX region (decision 145). Opaque here.
+   * lowers each MX region. Opaque here.
    */
   mxDefaultTag?: string;
 
@@ -165,14 +165,14 @@ export interface Options {
 
   /**
    * MX FORK: every value the surrounding module binds at its top level,
-   * pre-collected by `parse` (decision 114). See `MxRegionCompileInput.moduleBindings`.
+   * pre-collected by `parse`. See `MxRegionCompileInput.moduleBindings`.
    */
   mxModuleBindings?: ReadonlySet<string>;
 
   /**
    * MX FORK: the subset of `mxImportSpecifiers`' bindings that are a
-   * default import from a `.marko`/`.mx` source, pre-collected by `parse`
-   * (decision 116). See `MxRegionCompileInput.importDefaultFromMarkoOrMx`.
+   * default import from a `.marko`/`.mx` source, pre-collected by `parse`.
+   * See `MxRegionCompileInput.importDefaultFromMarkoOrMx`.
    */
   mxImportDefaultFromMarkoOrMx?: ReadonlySet<string>;
 
@@ -180,14 +180,14 @@ export interface Options {
    * MX FORK: where each `mxImportSpecifiers` binding's `import` statement
    * starts (1-based line, 0-based column), pre-collected by `parse`. Read
    * only for the positioned diagnostic a lowercase tag raises when it names
-   * an import (decision 164). See `MxRegionCompileInput.importSites`.
+   * an import. See `MxRegionCompileInput.importSites`.
    */
   mxImportSites?: ReadonlyMap<string, { line: number; column: number }>;
 
   /**
    * MX FORK: the subset of `mxModuleBindings`' non-import names whose value
    * is not statically a function/arrow/class, pre-collected by `parse` — the
-   * local extension of decision 116. See
+   * local counterpart of the default-import set. See
    * `MxRegionCompileInput.unknownModuleBindings`.
    */
   mxUnknownModuleBindings?: ReadonlySet<string>;
@@ -310,14 +310,14 @@ function createDefaultOptions(): OptionsWithDefaults {
     // MX FORK: pre-collected surrounding module imports for region compiles.
     mxImportSpecifiers: undefined,
     // MX FORK: same "must default to undefined, not be left out" reasoning
-    // as mxImportSpecifiers above — decision 114's module-scope bindings.
+    // as mxImportSpecifiers above — the module-scope bindings.
     mxModuleBindings: undefined,
     // MX FORK: same "must default to undefined, not be left out" reasoning
-    // as the two above — decision 116's default-import-from-template set.
+    // as the two above — the default-import-from-template set.
     mxImportDefaultFromMarkoOrMx: undefined,
-    // MX FORK: same reasoning — decision 164's import positions.
+    // MX FORK: same reasoning — the import positions.
     mxImportSites: undefined,
-    // MX FORK: same reasoning again — the local extension of decision 116's
+    // MX FORK: same reasoning again — the
     // non-function-like module-scope binding set.
     mxUnknownModuleBindings: undefined,
     startIndex: 0,

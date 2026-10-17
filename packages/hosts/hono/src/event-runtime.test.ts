@@ -1,6 +1,6 @@
 /**
  * hono's emitted handler props use the names its JSX types declare
- * (`onKeyDown`, `onDoubleClick`; decision 161), and `hono/jsx/dom` must still
+ * (`onKeyDown`, `onDoubleClick`), and `hono/jsx/dom` must still
  * bind them to the DOM events. The old `onKeydown`/`onDblclick` spellings bound
  * too (the renderer lowercases the name), so this is a regression guard.
  */

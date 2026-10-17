@@ -170,7 +170,7 @@ describe("a .<word>.mx no region kind registers is not claimed", () => {
   });
 
   it("a file kind without compileRegion is never a region kind (a Mesh-style host)", () => {
-    // Decision 148's shape: host `mesh` on a data-like target. A loaded
+    // The shape: host `mesh` on a data-like target. A loaded
     // third-party descriptor may not declare file kinds today; this one is
     // registered directly, so even a declared `.mesh.mx` kind stays out of the
     // region bridge because it has no region entry.

@@ -12,7 +12,7 @@ import { htmlTargets } from "@mxlang/target-html";
 
 /**
  * Turns a scratch copy of a stock `.marko` fixture into the `.mx` project MX
- * actually compiles (decision 172: a `.marko` file is not an MX input).
+ * actually compiles (a `.marko` file is not an MX input).
  *
  * A fixture's own committed `.mx` twin wins over a generated one. Otherwise each `.marko` file is rewritten, by content, to a `.mx` file of the same
  * name, with its own `from "./X.marko"` imports pointed at the `.mx` twins,

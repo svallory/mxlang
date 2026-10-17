@@ -9,8 +9,7 @@ import { isFunctionLikeValue } from "@mxlang/core";
  * compiler stage (native or Babel) auto-imports every built-in it sees (see
  * `packages/hosts/solid/AGENTS.md`, "Solid 2 target and pin policy"). The
  * type-check projection (`@mxlang/typescript-plugin`'s `appendSolidBuiltinImport`)
- * and the resolvability check `@mxlang/host-solid`'s `isComponent` runs (decision
- * 114) both need this exact list, so it lives here once rather than twice.
+ * and the resolvability check `@mxlang/host-solid`'s `isComponent` runs both need this exact list, so it lives here once rather than twice.
  */
 export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
   name: string;
@@ -60,7 +59,7 @@ export interface SourceBindingsOptions {
  * Shared between `@mxlang/typescript-plugin` (`appendSolidBuiltinImport`,
  * deciding whether to inject a synthetic import for a Solid built-in) and
  * `@mxlang/host-astro` (`lowerAstroMx`, deciding whether a capitalized tag
- * resolves through the `---` fence's own scope — decision 114). Parses with
+ * resolves through the `---` fence's own scope). Parses with
  * the same Babel used elsewhere in this package rather than scanning lines,
  * since a line-based probe cannot tell a bound identifier from a substring
  * (an alias clause, a multi-line import).
@@ -172,10 +171,9 @@ export function programBindings(program: File["program"]): Set<string> {
 /**
  * The subset of `programBindings`' *non-import* names (a top-level
  * `const`/`function`/`class`) whose value is not statically a function/
- * arrow/class — the local extension of decision 116 (firstmate's ruling
- * under decision 116 in `notes/decisions-2026-09-10.md`). An import
- * binding is never included here regardless of what it resolves to: decision
- * 116's own import-scoped classification (`ctx.importDefaultFromMarkoOrMx`)
+ * arrow/class — the local counterpart of the default-import set. An import
+ * binding is never included here regardless of what it resolves to: the
+ * default-import set's own import-scoped classification (`ctx.importDefaultFromMarkoOrMx`)
  * already governs those, on a separate channel this function does not
  * duplicate.
  *

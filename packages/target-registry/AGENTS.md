@@ -2,7 +2,7 @@
 
 ## `@mxlang/targets`: the built-in target table
 
-Private package (decisions 129 and 132; **unstable**, like the contract in
+Private package (**unstable**, like the contract in
 `@mxlang/core`'s "Target contract" section). It statically imports each host
 package's `./descriptor` subpath and exports:
 
@@ -10,7 +10,7 @@ package's `./descriptor` subpath and exports:
   `mx.host` order (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`,
   `hono-jsx`, `angular-template`). There is no hostless descriptor.
 - `builtinLookup()`: `createTargetLookup(builtinTargets, { reservedNames: ["astro-template"] })`, built lazily and cached. `lookupFor(policy)` adds a loaded third-party descriptor to it.
-  `astro-template` is reserved for the Astro template output, `.astro.mx` (design note §8 Q5; decision 134 made it a file kind of the `astro` host); the
+  `astro-template` is reserved for the Astro template output, `.astro.mx` (design note §8 Q5; it is a file kind of the `astro` host); the
   reservation lives here because core names no target.
 - `BuiltinFileKind` and `builtinFileKinds`: core's `HostFileKind` plus
   `pipeline: "region" | "ng-template" | "astro-template"`, the key of the editor pipeline that
@@ -19,7 +19,7 @@ package's `./descriptor` subpath and exports:
   `PIPELINES` maps the template segments (`ng`, `astro`), and a built-in
   file kind with neither throws at import.
 - `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)`,
-  `regionCompileFor(file, options)` (decision 154): the region file kinds of
+  `regionCompileFor(file, options)`: the region file kinds of
   a lookup (the built-in one, or `lookupFor(policy)`), the one a file's exact
   `.<segment>.mx` suffix names, and the parser hook that lowers its regions.
   Every tool routes region files through these, never by a segment name. An
@@ -39,7 +39,7 @@ lists encoded.
 Published tooling declarations must not reference this private package; keep
 registry-typed helpers internal to each tool's build.
 
-## The umbrella (decision 201)
+## The umbrella
 
 The package is `@mxlang/targets`, the umbrella of the `target-*` family: the
 registry plus every target. Its directory stays `packages/target-registry`.
@@ -88,7 +88,7 @@ Beyond the registry it adds:
   for tools that must list extensions before the program exists. Tests use
   `test-fixtures/dialects/probe.ts`.
 
-`@mxlang/data`, the former tree target, was deleted by decision 204; its
+`@mxlang/data`, the former tree target, was deleted; its
 replacement is core's `lowerSource`. The package stays private 0.0.0 with `src` entry points; making it
 publishable is release track C. `src/umbrella.test.ts` pins the export map and
 the identity of every re-export.

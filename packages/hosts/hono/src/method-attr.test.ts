@@ -8,7 +8,7 @@ import { compileHonoMx } from "./index.ts";
 const require = createRequire(import.meta.url);
 
 /**
- * Decision 167: an attribute method shorthand is a `function` / `async
+ * An attribute method shorthand is a `function` / `async
  * function` expression, never an arrow. A regex over the printed function once
  * split it at the last `) {`, so a body holding its own `) {` emitted
  * `() { if (c) => { … } }`, which is not JavaScript. Each handler here is
@@ -97,7 +97,7 @@ async function fire(id: string, thisArg: unknown = {}): Promise<number[]> {
   return hits;
 }
 
-describe("an attribute method shorthand (decision 167)", () => {
+describe("an attribute method shorthand", () => {
   it("emits every handler as a function expression, never an arrow", () => {
     expect(code).not.toMatch(/onClick=\{(async )?\(/);
     expect(code).toContain("onClick={function () { if (input.on)");

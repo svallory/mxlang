@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// decision 64: `verify` must prove every non-exception package's tests
+// `verify` must prove every non-exception package's tests
 // actually ran in *this* invocation, not merely that some test wiring exists
 // for it somewhere. Every "ran" verdict below is read from an evidence file
 // written by the real test command during this same `bun run verify` call

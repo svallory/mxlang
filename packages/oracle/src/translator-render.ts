@@ -73,7 +73,7 @@ export async function renderTranslator(
           (_match, prefix, path, suffix) => `${prefix}${path}.ts${suffix}`,
         )
         // Every runtime import, not only the first: the emitted module imports
-        // `escape`/`createOut` (decision 155's sink) from the package root, and
+        // `escape`/`createOut` (the runtime sink) from the package root, and
         // a type-only `AttrTag` import or a `/runtime` specifier may follow.
         .replace(
           /from "@mxlang\/target-html(\/runtime)?"/g,

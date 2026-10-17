@@ -469,7 +469,7 @@ it('MxAttribute (ast §3.5: `type="email"`, and the default value)', () => {
     value: expr(21, 28, '"email"'),
     args: null,
   } satisfies MxAttribute;
-  // Decision 170: the last-colon split as data (`class:x` → modifier `x`).
+  // The last-colon split as data (`class:x` → modifier `x`).
   const modified = {
     ...named,
     name: "class:x",
@@ -775,8 +775,8 @@ type WritableKeys<T> = {
     ? K
     : never;
 }[keyof T];
-// `node` is a Babel payload, which stays as Babel types it (decision 163
-// addendum 6): its arrays are Babel's, not ours.
+// `node` is a Babel payload, which stays as Babel types it 
+// (it is a Babel payload): its arrays are Babel's, not ours.
 type MutableArrayKeys<T> = {
   [K in keyof T]-?: K extends "node"
     ? never

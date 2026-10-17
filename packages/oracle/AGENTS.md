@@ -32,8 +32,8 @@ Golden snapshots (`fixtures/<name>/__golden__/twin.<backend>.<variant>.js`) pin 
 
 ### `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
-Decision 51: the parity target for Marko-syntax constructs is Marko itself,
-not Solid. Decision 68 retired `.mx`/`@mxlang/html`, so there is one dialect
+The parity target for Marko-syntax constructs is Marko itself,
+not Solid. `.mx`/`@mxlang/html` are retired, so there is one dialect
 and one table: `bun run oracle:marko` (`packages/oracle/src/report-marko.ts`,
 delegating to `report-marko-stock.ts`) renders every fixture under
 `packages/targets/html/fixtures-marko/<name>/{input.marko,input.json,expected.html}`
@@ -48,8 +48,8 @@ recorded, reasoned skip/divergence (`meta.json` in a fixture directory — see
 `fixtures/README.md`'s "oracle:marko" section for the full contract) — that
 classification is the settled state, not unfinished work like `oracle`'s own
 `pending`/`skipped`. The run fails if the fixture glob is empty, a fixture is
-missing one of its three files, or too few fixtures were processed (decision
-55: a gate must assert it did work, not only that nothing failed). See the
+missing one of its three files, or too few fixtures were processed (a gate
+must assert it did work, not only that nothing failed). See the
 script's own footer for the current pass/skip/bug count.
 
 `bun run oracle:preact` and `bun run oracle:react` have the same shape for the

@@ -70,7 +70,7 @@ export async function bundledBuild({
     naming: "[dir]/[name].cjs",
     external: [...externals],
     banner: RELOCATABLE_BANNER,
-    // Core inlined from source takes the bundle branch too (decision 159).
+    // Core inlined from source takes the bundle branch too.
     define: { ...RELOCATABLE_DEFINE, ...CORE_FRONTEND_DEFINE },
   });
   if (!result.success) {
@@ -87,7 +87,7 @@ export async function bundledBuild({
 }
 
 /**
- * `@mxlang/core` loads its bundled Marko parse layer (decision 159) from
+ * `@mxlang/core` loads its bundled Marko parse layer from
  * `./marko-frontend.cjs` beside the module that inlines it: its dist does, and
  * so does its source once `CORE_FRONTEND_DEFINE` is applied (the VSIX builds
  * inline some `@mxlang/*` packages' core imports from source). A bundle that

@@ -1,7 +1,7 @@
 # parse-differential — agent instructions
 
 `@mxlang/parse-differential` is a **private test package** of the MX2 parser
-port (decisions 158, 166; brief `port-pr2-front-end-structure`). It compares
+port (brief `port-pr2-front-end-structure`). It compares
 the MX front end (`packages/parser/src/frontend`) with today's Marko tree and
 is never published. It exists from PR 2 (tree differential) through PR 4 (the
 IR differential goes here too) and is removed with the Marko path in PR 6.

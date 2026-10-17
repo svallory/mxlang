@@ -2,11 +2,11 @@ name: Zed extension upstream check
 
 on:
   # MX's weekly upstream drift check (schedule/workflow_dispatch, opening a PR
-  # on drift) was retired with the MX language (decision 68): MX was the only
+  # on drift) was retired with the MX language: MX was the only
   # language here with a networked upstream to drift against. Solid's
   # `vendor.sh` (packages/editors/zed/scripts/vendor.sh) has no `--check`
   # mode at all — its highlights source is a local sibling package, so
-  # "check for drift" would only ever report success (decision 55: a gate
+  # "check for drift" would only ever report success (a gate
   # that cannot fail is not a gate). Every remaining job here is
   # pull_request-only; `solid-vendor-matches` below still calls
   # packages/editors/tree-sitter-solid's own `vendor.sh --check` — a different

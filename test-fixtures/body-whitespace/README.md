@@ -1,4 +1,4 @@
-# Body whitespace parity — decision 141
+# Body whitespace parity
 
 This shared matrix lives outside root `fixtures/`: that directory is reserved
 for Solid oracle pairs, and the parser's vendored-equivalence suite requires

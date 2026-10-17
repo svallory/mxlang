@@ -17,13 +17,13 @@ Host selection is `"mx": { "host": "hono" }` or a lone
 `@mxlang/host-hono` dependency, through the same resolver used by Vite, the
 language server and the TypeScript plugin.
 
-Attribute tags share Preact's v2 `attrTagProps` emission (decisions 106–108):
+Attribute tags share Preact's v2 `attrTagProps` emission:
 data values carry `{ ...attrs, ...nestedProps, content }`, renderable values
 are passed bare, arrays are real arrays, and control flow stays expression
 shaped. This package exports `AttrTag<C>` specialised to Hono's `Child`, and
 an ambient `AttrTag` reference in `.mx` emits a type-only import from
 `@mxlang/host-hono`.
-Untyped body-only props use decision 108's bare renderable fallback; one
+Untyped body-only props use the bare renderable fallback; one
 attributed or nested occurrence makes the whole fallback property data.
 
 `@mxlang/host-hono/bun` registers a Bun plugin loading `.mx` as

@@ -1,5 +1,5 @@
 /**
- * The Bun loader's read of `mx.hono-jsx.defaultTag` (decision 145): core's
+ * The Bun loader's read of `mx.hono-jsx.defaultTag`: core's
  * shared check over this host's lookup (the JSX hosts share Preact's
  * translator) and the file's scanned tags. A rejected value is dropped, the
  * built-in answers, and one warning names the `package.json` position.

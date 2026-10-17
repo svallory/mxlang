@@ -1,12 +1,12 @@
 /**
- * The built-in target table (decisions 129 and 132; unstable).
+ * The built-in target table (unstable).
  *
  * A closed list of the target descriptors the repo's own hosts export, a
  * lookup built over it, and the wrappers every tool imports instead of
  * threading a lookup through its own call sites: a tool that has the built-in
  * set in hand imports `resolveTargetPolicy`, `hostModuleSegment`, `scanCached`
  * and the lookup's own questions from here, and core's closed lists stay
- * deleted (decision 126).
+ * deleted.
  *
  * Every import below is a light `./descriptor` subpath: loading this module
  * pulls in policy tables and emitters' declaration objects, never
@@ -53,7 +53,7 @@ import html from "@mxlang/target-html/descriptor";
  * is tool glue for the built-ins, so it lives here and never in core
  * (`pipeline: "region"` is TypeScript with MX regions, `"ng-template"` is the
  * Angular template pipeline, `"astro-template"` is the `.astro.mx` pipeline,
- * a file kind of the `astro` host per decision 134).
+ * a file kind of the `astro` host).
  */
 export interface BuiltinFileKind extends HostFileKind {
   readonly pipeline: "region" | "ng-template" | "astro-template";
@@ -75,10 +75,10 @@ function resolved(
 }
 
 /**
- * The html target's descriptor, by name (decision 201: `@mxlang/targets` is
+ * The html target's descriptor, by name (`@mxlang/targets` is
  * the umbrella, the registry plus every target). Light like the rest of this
  * entry; the target's full entry is the `./html` subpath. `@mxlang/data` is
- * not re-exported: decision 204 deletes it.
+ * not re-exported: that package is deleted.
  */
 export { html as htmlTarget };
 
@@ -93,7 +93,7 @@ export const builtinTargets: readonly TargetDescriptor[] = [
   angular,
 ].filter(resolved);
 
-/** Names no descriptor may take: outputs a built-in host may add later (07 Q5), and `data`, reserved for the future evaluated tree target (decision 187). */
+/** Names no descriptor may take: outputs a built-in host may add later (07 Q5), and `data`, reserved for the future evaluated tree target. */
 const RESERVED_NAMES: readonly string[] = ["astro-template", "data"];
 
 let cachedLookup: TargetLookup | undefined;
@@ -394,7 +394,7 @@ export function resolveTargetPolicyDetailed(
 }
 
 /**
- * The ladder's rungs the registry owns (decision 145): the package's
+ * The ladder's rungs the registry owns: the package's
  * `mx.<target>.defaultTag`, then the host's override on its descriptor, then
  * the target's built-in. A tool hands the result to the target's compile as
  * `defaultTag`; the target's own `resolveDefaultTag` ends with the same

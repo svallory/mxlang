@@ -132,8 +132,8 @@ Defined in `packages/oracle/src/normalize.ts`. What it does, exactly:
 
 ## Whitespace in a twin
 
-MX follows Marko's whitespace rule, not JSX's, and the rule is **line-based**
-(decision 33): split a text run into lines, trim each line, drop the lines
+MX follows Marko's whitespace rule, not JSX's, and the rule is **line-based**:
+split a text run into lines, trim each line, drop the lines
 that are then empty, join what remains with a single space, then collapse
 internal whitespace runs to one space. Boundary trimming against sibling tags
 applies on top of that.
@@ -175,8 +175,8 @@ Flags pass through `bun run`, e.g. `bun run oracle -- --strict --update`.
 
 ## `oracle:marko`: Marko parity for the stock `.marko` fixture set
 
-Decision 51: the parity target for Marko syntax is Marko itself, not Solid.
-Decision 68 retired the `.mx` dialect and `@mxlang/html`, so there is one
+The parity target for Marko syntax is Marko itself, not Solid.
+The `.mx` dialect and `@mxlang/html` are retired, so there is one
 dialect (stock Marko) and one table. `bun run oracle:marko`
 (`packages/oracle/src/report-marko.ts`, delegating to
 `report-marko-stock.ts`) renders every fixture under
@@ -211,18 +211,18 @@ state here, not an unfinished one. The run fails (in either mode) if the
 fixture glob expands to nothing, if any fixture directory is missing
 `input.marko`, `input.json` or `expected.html`, or if fewer than the required
 minimum were actually processed — a broken glob must never read as a silent
-pass (decision 55).
+pass.
 
 This asks a narrow, strict question: for a template an ordinary Marko user
 would write, does the expressions-only translator emit what Marko's own
 server render emits? **Every fixture is expected to pass**, and a skip needs a
-decision-65 reason — *this target cannot*, never *my code cannot*. See
-`packages/targets/html/README.md`'s policy table (decision 65) for what "this
+reason — *this target cannot*, never *my code cannot*. See
+`packages/targets/html/README.md`'s policy table for what "this
 target cannot" means in practice, and the script's own footer for the current
 pass/skip/bug count — the authoritative number, not one retyped here.
 
 Same comparison (`htmlEquals`, parse5, decoded content, resume markers
-stripped) and the same decision-55 floor: the run fails if the glob expands
+stripped) and the same minimum-fixtures floor: the run fails if the glob expands
 to nothing, if a fixture is missing one of its three files, or if fewer than
 25 fixtures were processed. `meta.json` classifies a skip or divergence
 exactly as it does for the first table.
@@ -252,7 +252,7 @@ real-Marko rendering does not match `@mxlang/target-html`'s:
   (including a Marko compile/render error) is expected and reported as
   `skipped (reason)` instead of `mx bug`. Used for a real, understood
   difference: a settled MX decision Marko does not share (S3's attribute-tag
-  calling convention; S11/decision 47's lowercase-binding dispatch, which
+  calling convention; S11's lowercase-binding dispatch, which
   covers both an imported component and a `<define>`d tag called by name),
   a documented parser limitation the `<fragment>` wrapper works around
   (`notes/team-standalone-mx.md`'s defect 3), or a genuine Marko-side

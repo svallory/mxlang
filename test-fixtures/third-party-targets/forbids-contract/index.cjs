@@ -1,4 +1,4 @@
-// A host that does not permit per-tag default tags (decision 145): a contract
+// A host that does not permit per-tag default tags: a contract
 // declaring defaultTag is a registration error naming the host, and a compile
 // never resolves the unnamed tag through the contract. Its compile reports the
 // element names it lowered, so a test can see which rung answered.

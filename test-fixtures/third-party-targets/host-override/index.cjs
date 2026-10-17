@@ -1,4 +1,4 @@
-// A target whose host overrides the target's built-in defaultTag (decision 145).
+// A target whose host overrides the target's built-in defaultTag.
 // Its compile echoes the default tag it was handed, so a test can see the ladder.
 module.exports = {
   descriptorVersion: 0,

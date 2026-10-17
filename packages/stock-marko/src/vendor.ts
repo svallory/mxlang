@@ -1,5 +1,5 @@
 /**
- * The vendored, unpatched htmljs-parser 5.18.0 (decision 157.3's stock
+ * The vendored, unpatched htmljs-parser 5.18.0 (the stock
  * reference). `vendor/htmljs-parser-5.18.0.tgz` is the published npm
  * tarball, byte for byte: its sha512 equals the integrity `bun.lock`
  * records for `htmljs-parser@5.18.0`. Bun's `patchedDependencies` patches

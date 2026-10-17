@@ -8,7 +8,7 @@ patch diverges MX's parser from the published build.
 It is a probe tool only. Core never probes for, loads or diagnoses a stock
 `htmljs-parser`: MX's own front end is the only parser in every product path.
 
-## Source identity (decision 157.3)
+## Source identity
 
 - `vendor/htmljs-parser-5.18.0.tgz`: the published npm tarball
   (`sha512-ANKBAi2UyiQ…` — same integrity `bun.lock` records for

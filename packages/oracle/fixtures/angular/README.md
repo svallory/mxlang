@@ -31,7 +31,7 @@ file is present:
   routing.
 
   Its `template:` is a **backtick** literal, not a double-quoted string
-  (decision 99, reversing A4 divergence 3), so `templateOf` carries two
+  (reversing A4 divergence 3), so `templateOf` carries two
   patterns and unescapes ``\` ``, `\${` and `\\` — the inverse of the
   host's own `escapeTemplateLiteral`. `ngmx-escapes` is the fixture that
   pins all three.

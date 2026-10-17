@@ -51,7 +51,7 @@ describe("oracle:angular fixtures", () => {
 describe("isDerivedFrom (the mapping assertion's derivation list)", () => {
   it("checks the DOM event name, not only the source's shape", () => {
     // The derivation is real: `onClick` -> `click`, lowercased exactly as
-    // written — no aliases (decision 101 (c)), so `dblclick` is NOT it.
+    // written — no aliases, so `dblclick` is NOT it.
     expect(isDerivedFrom("click", "onClick", "event")).toBe(true);
     expect(isDerivedFrom("doubleclick", "onDoubleClick", "event")).toBe(true);
     expect(isDerivedFrom("dblclick", "onDoubleClick", "event")).toBe(false);

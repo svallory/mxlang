@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// decision 190 item 4: changelog fragments. Every PR adds `changes/<slug>.md`
+// Changelog fragments. Every PR adds `changes/<slug>.md`
 // (slug = branch name with `/` as `-`) instead of editing a package CHANGELOG,
 // which is what made any two open PRs conflict at the top of every file.
 // `bun run changelog:assemble` folds every fragment into the `## Unreleased`

@@ -29,7 +29,7 @@ const byName = (name: string): TargetDescriptor => {
 };
 
 describe("builtinTargets", () => {
-  it("lists the seven hosts in registration order; the tree target is gone (decision 204)", () => {
+  it("lists the seven hosts in registration order; the tree target is gone", () => {
     expect(builtinTargets.map((t) => t.name)).toEqual(NAMES);
     expect(lookup.hasTarget("tree")).toBe(false);
     expect(lookup.fromPackage("@mxlang/data")).toBeUndefined();
@@ -42,7 +42,7 @@ describe("builtinTargets", () => {
   it("every descriptor is version 0 and names its own package", () => {
     for (const t of builtinTargets) {
       expect(t.descriptorVersion).toBe(0);
-      // Package families (decision 201).
+      // Package families.
       expect(t.packageName).toMatch(/^@mxlang\/(target-[a-z]+|host-[a-z]+)$/);
     }
   });
@@ -55,7 +55,7 @@ describe("builtinTargets", () => {
   });
 });
 
-describe("defaultTag (decision 145)", () => {
+describe("defaultTag", () => {
   it("every built-in declares `div`", () => {
     expect(
       Object.fromEntries(builtinTargets.map((t) => [t.name, t.defaultTag])),
@@ -162,7 +162,7 @@ describe("shape of each descriptor", () => {
     ]);
   });
 
-  it("astro-html: the Astro template is a file kind of the astro host (decision 134), with no region compile or callee reader", () => {
+  it("astro-html: the Astro template is a file kind of the astro host, with no region compile or callee reader", () => {
     expect(byName("astro-html").host?.fileKinds).toEqual([
       {
         segment: "astro",
@@ -336,7 +336,7 @@ describe("the reserved `astro-template` name", () => {
   });
 });
 
-describe("the reserved `data` name (decision 187)", () => {
+describe("the reserved `data` name", () => {
   const impostor: TargetDescriptor = {
     descriptorVersion: 0,
     name: "data",

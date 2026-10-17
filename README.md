@@ -70,7 +70,7 @@ All dependencies below are pinned to an exact version (no `^`/`~`) at the root `
 | `@vitejs/plugin-react` | 6.1.1 |
 | `hono` | 4.6.20 |
 
-`marko`/`@marko/compiler`/`@marko/runtime-tags`/`parse5` are pinned in `packages/oracle/package.json`, not the root — they are only a dev dependency of the `oracle:marko` parity check (decision 51), not of the language itself. `@marko/compiler`'s own version numbering is decoupled from the Marko language version; 5.42.11 is the compiler release that `marko@6.4.4` itself depends on (`^5.42.11`); the Marko 6 translator ships as `marko/translator`. `parse5` is `oracle:marko`'s HTML parser for semantic (decoded-content) comparison rather than raw-string comparison, pinned to the version already resolved transitively through `@solidjs/babel-plugin`'s own dependency on it.
+`marko`/`@marko/compiler`/`@marko/runtime-tags`/`parse5` are pinned in `packages/oracle/package.json`, not the root — they are only a dev dependency of the `oracle:marko` parity check, not of the language itself. `@marko/compiler`'s own version numbering is decoupled from the Marko language version; 5.42.11 is the compiler release that `marko@6.4.4` itself depends on (`^5.42.11`); the Marko 6 translator ships as `marko/translator`. `parse5` is `oracle:marko`'s HTML parser for semantic (decoded-content) comparison rather than raw-string comparison, pinned to the version already resolved transitively through `@solidjs/babel-plugin`'s own dependency on it.
 
 The last four entries are build-only dependencies of `packages/babel`'s
 vendored `@babel/parser` source (`@babel/parser`'s own runtime deps, which
@@ -148,11 +148,11 @@ cd examples/mx-vite && bun run build
 
 `examples/astro-static` is the Astro host's example: an Astro site with `.mx`
 components (props, a default slot, a named slot, one
-component composed from another) and, per decision 76b, `.mx` files directly
+component composed from another) and `.mx` files directly
 under `src/pages` as pages — one through a layout with a `static`-block props
 and `<if>`/`<for>`, one with no layout writing its own full document, and a
 dynamic `posts/[slug].mx` with `getStaticPaths`. It also covers `.astro.mx`
-(decisions 76c/78) — an Astro component whose *template* is MX, lowered to
+— an Astro component whose *template* is MX, lowered to
 Astro's own template syntax: a page, a layout and two components, exercising
 props from the `---` fence, named slots, `class:list`, `<if>`/`<else if>`/
 `<else>` and `<for>` with an index. Every page is prerendered with
@@ -207,8 +207,8 @@ bun run e2e
 ## Editors
 
 `packages/editors/zed` ships four languages for Zed: `MX` (`.mx`), backed by
-`packages/editors/tree-sitter-mx` (`marko-js/tree-sitter` plus the decision
-146 shorthands), `AstroMX` (`.astro.mx`), backed by
+`packages/editors/tree-sitter-mx` (`marko-js/tree-sitter` plus the
+shorthand sugars), `AstroMX` (`.astro.mx`), backed by
 `packages/editors/tree-sitter-amx` with the MX grammar injected into the
 template body, and `Solid` (`.solid.mx`) and `AngularMX` (`.ng.mx`), backed
 by `packages/editors/tree-sitter-solid`.

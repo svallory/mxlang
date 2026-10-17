@@ -1,5 +1,5 @@
 /**
- * Pins the vendored stock parser's bytes (decision 157.3's reference):
+ * Pins the vendored stock parser's bytes (the stock reference):
  *
  * 1. The vendored tarball's sha512 is the integrity `bun.lock` records for
  *    `htmljs-parser@5.18.0` — the published, unpatched artifact.

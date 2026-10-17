@@ -54,7 +54,7 @@ describe("builds that are supposed to fail", () => {
     // with no else branch, so left alone the build succeeds and ships an
     // `<astro-island client="load">` whose loader falls back to a no-op
     // hydrator. An island that silently does nothing is the wrong outcome on a
-    // host whose whole claim is shipping no client JS (decision 70), so
+    // host whose whole claim is shipping no client JS, so
     // `renderToStaticMarkup` throws on `metadata.hydrate` instead.
     staged = stagePage("client-error.astro");
     const { code, output } = await build();
@@ -67,7 +67,7 @@ describe("builds that are supposed to fail", () => {
   });
 
   it("rejects <let> in an MX component under the strict policy", async () => {
-    // Decision 71: stateful tags mean whatever the host says, and this host
+    // Stateful tags mean whatever the host says, and this host
     // has no reactive target at all — so `<let>` is a compile error naming the
     // construct, not markup that silently renders once and never updates.
     staged = stagePage("strict-error.astro");

@@ -31,7 +31,7 @@ function visibleImportSpecifiers(
 }
 
 /**
- * Every value the surrounding module binds at its top level (decision 114).
+ * Every value the surrounding module binds at its top level.
  *
  * Deliberately **not** shadow-filtered the way `visibleImportSpecifiers`
  * filters imports for dependency resolution: Marko's own rule
@@ -54,7 +54,7 @@ function moduleBindings(parser: MxParserHost): ReadonlySet<string> {
 
 /**
  * The subset of `moduleBindings`' non-import names whose value is not
- * statically a function/arrow/class (local extension of decision 116).
+ * statically a function/arrow/class (the local counterpart of the default-import set).
  * Unfiltered by local shadowing for the same reason `moduleBindings` itself
  * is: this set only classifies names `moduleBindings` already resolves, so
  * it inherits that set's own (deliberate) lack of shadow-filtering rather
@@ -71,7 +71,7 @@ function unknownModuleBindings(parser: MxParserHost): ReadonlySet<string> {
 /**
  * Which of `importSpecifiers`' bindings is a *default* import from a
  * `.marko`/`.mx` source — Marko's own statically-resolved component case
- * (decision 116; `@mxlang/core`'s `isMarkoOrMxSpecifier`, shared rather than
+ * (`@mxlang/core`'s `isMarkoOrMxSpecifier`, shared rather than
  * duplicated). Shadow-filtered the same way `visibleImportSpecifiers` is,
  * and for the identical reason: a binding a nearer scope shadows is not the
  * module's own import any more, so it cannot carry the module import's

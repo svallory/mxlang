@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// Decision 59: verify a published artifact from a consumer's side. The unit
+// Verify a published artifact from a consumer's side. The unit
 // tests in `pack-hygiene.test.ts` read the tarball's file list and its `.d.ts`
 // import specifiers; this probe proves the consequence. For every packaged
 // library it packs the real tarball, installs it (plus its declared deps) into
@@ -10,7 +10,7 @@
 // consumer does. A `.d.ts` that imports an undeclared module (G8, PR #174)
 // fails here, not in the workspace, where hoisting hides it.
 //
-// It must be able to fail (decision 61):
+// It must be able to fail:
 //   - NEGATIVE case: `@mxlang/target-html` WITHOUT its optional peer `@types/bun`
 //     must fail on `dist/bun.d.ts` with TS2307. If that ever passes, the probe
 //     has stopped seeing what it exists to see, and the script fails.
@@ -367,7 +367,7 @@ function smokeMxTsc(): string | undefined {
     // an html project depends on it itself (`bun add @mxlang/target-html`, the
     // target's docs). Only pinned through `overrides`, it is a transitive
     // dependency an isolated install does not expose to the project, and the
-    // page's import is TS2307 (decision 161 reports it; Volar dropped it).
+    // page's import is TS2307 (the host reports it; Volar dropped it).
     extraDeps: {
       typescript: "6.0.3",
       "@mxlang/target-html": `file:${tarballOf("@mxlang/target-html", workspaceDirs["@mxlang/target-html"] as string)}`,

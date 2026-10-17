@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// decision 190 item 4: a PR whose diff touches `packages/*/src` or a
+// A PR whose diff touches `packages/*/src` or a
 // `packages/*/package.json` must add at least one changelog fragment under
 // `changes/`, unless its body carries a `no-changelog: <reason>` line. The
 // diff is taken against the merge base with origin/main, not origin/main's

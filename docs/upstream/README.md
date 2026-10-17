@@ -1,6 +1,6 @@
 # Upstream fragment-offset API
 
-Decisions 72 and 83: MX's `packages/core/src/fragment.ts` post-shifts every
+MX's `packages/core/src/fragment.ts` post-shifts every
 node and error position after parsing a Marko fragment with `@marko/compiler`,
 because neither `@marko/compiler` nor `htmljs-parser` accept a base position
 for a substring parse (`notes/research/next-items-facts.md` §A;

@@ -5,10 +5,10 @@
  * An MX region inside a `.solid.mx` file is an *expression*, so an import the
  * compiler minted for a discovered tag has no module scope of its own to land
  * in: the surrounding TypeScript module is the only place it can go (design
- * §3.2, decision 95 ruling 3). The same is true of a `<define>` written
+ * §3.2). The same is true of a `<define>` written
  * inside a region: `@mxlang/host-solid` can't emit `const Row = (...) => ...;`
  * mid-expression, so it hoists the declaration out to module scope, gensym'd
- * like a synthesized import (decision 110b).
+ * like a synthesized import.
  *
  * Two consumers need exactly this, which is why the decision lives here rather
  * than inside either of them: `parse` (the product path, for a whole

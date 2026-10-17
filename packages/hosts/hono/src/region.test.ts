@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * `.hono.mx` region goldens (decision 154): every fixture under
+ * `.hono.mx` region goldens: every fixture under
  * `fixtures/region/<name>/` is printed through the parser with this host's
  * region entry, the printed module is checked against its golden
  * (`__golden__/output.txt`), and the module is rendered for real with Hono's

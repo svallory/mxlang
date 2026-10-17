@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 //
-// Decision 143: prove the alpha tarball of `@mxlang/core` works for a consumer
+// Prove the alpha tarball of `@mxlang/core` works for a consumer
 // who installs only it. Core bundles `@mxlang/web-elements` (a devDependency
 // of the workspace), so it is the only `@mxlang` package published for Mesh.
-// Decision 204 deleted `@mxlang/data`: a consumer that reads the tree calls
+// `@mxlang/data` is deleted: a consumer that reads the tree calls
 // core's `lowerSource`. The probe
 //   1. packs core with `bun pm pack` (the command `bun publish` runs), and
 //      checks that its tarball lists no `@mxlang/*` in `dependencies` (a
@@ -14,11 +14,11 @@
 //   3. runs a `lowerSource` probe (`customTags`, `structural: "reject"`,
 //      `unknownTags: "reject"`) that must return an IR for a valid file and
 //      the unknown-tag diagnostic, with no IR, for a typo;
-//   4. decision 159: proves the install parses with MX's own template parser:
+//   4. proves the install parses with MX's own template parser:
 //      `<field type="email" :email/>` is Marko's "Expected a single
 //      expression" error, `x=a.b .c` is one attribute (member access), and
 //      no npm `htmljs-parser` or `@marko/compiler` is installed or loaded.
-//      Since decision 197 slice S3a a parse no longer builds Marko's taglib
+//      A parse no longer builds Marko's taglib
 //      lookup, so core's bundled `marko-frontend.cjs` must not load either.
 //
 // It must be able to fail: any step that exits non-zero, an unrewritten

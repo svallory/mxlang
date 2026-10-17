@@ -26,7 +26,7 @@ import type { Position } from "./util/location.ts";
  * subtly different contracts for one object.
  */
 /**
- * One `<define>` a region hoisted to module scope (decision 110b).
+ * One `<define>` a region hoisted to module scope.
  *
  * Re-exported for the same reason `MxRegionHoistedImport` is: one contract
  * shared by `hoist-imports.ts`, this module, and `@mxlang/host-solid`.
@@ -55,7 +55,7 @@ export interface HoistedImport {
 }
 
 /**
- * One `<define>` a region hoisted to module scope (decision 110b).
+ * One `<define>` a region hoisted to module scope.
  *
  * Unlike a `HoistedImport`, there is nothing to reuse or dedupe against: the
  * declaration exists nowhere until the region mints it, so the binding is
@@ -230,7 +230,7 @@ export interface MxRegionCompileInput<TTag = unknown> {
    * integration has to the region being lowered.
    */
   customTags?: Record<string, TTag>;
-  /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
+  /** `package.json#mx.<target>.defaultTag` the caller resolved. */
   defaultTag?: string;
   /**
    * Where this region appeared, the same context `mxRegionPositionCheck`
@@ -249,15 +249,15 @@ export interface MxRegionCompileInput<TTag = unknown> {
    * locals plus top-level `const`/`function`/`class` names, type-only
    * bindings excluded (`@mxlang/tsx-bridge`'s `programBindings`). A capitalized
    * tag a region references may resolve through this scope rather than
-   * anything the region itself imports or declares (decision 114).
+   * anything the region itself imports or declares.
    */
   moduleBindings: ReadonlySet<string>;
   /**
    * The subset of `importSpecifiers`' bindings that are a *default* import
    * from a `.marko`/`.mx` source — Marko's own statically-resolved
-   * component case (decision 116; `@mxlang/core`'s `isMarkoOrMxSpecifier`).
+   * component case (`@mxlang/core`'s `isMarkoOrMxSpecifier`).
    * A host lowers a capitalized tag bound to a name in this set as a direct
-   * component call, exactly as before decision 116; any other value import
+   * component call; any other value import
    * (named, namespace, or a default from any other extension) lowers as a
    * dynamic tag instead, matching Marko's own `_dynamic_tag` runtime
    * dispatch. Not itself filtered by anything `importSpecifiers` isn't —
@@ -266,16 +266,15 @@ export interface MxRegionCompileInput<TTag = unknown> {
   importDefaultFromMarkoOrMx: ReadonlySet<string>;
   /**
    * Where each `importSpecifiers` binding's `import` statement starts (1-based
-   * line, 0-based column), so a host can position decision 164's warning at
+   * line, 0-based column), so a host can position the lowercase-tag-names-an-import warning at
    * the import. A name may be absent; the warning then omits the position.
    */
   importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /**
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class`) whose value is not statically a
-   * function/arrow/class — the local extension of decision 116 (firstmate's
-   * ruling under decision 116 in `notes/decisions-2026-09-10.md`;
-   * `@mxlang/tsx-bridge`'s `unknownProgramBindings`). A host lowers a
+   * function/arrow/class — the local counterpart of the default-import set
+   * (`@mxlang/tsx-bridge`'s `unknownProgramBindings`). A host lowers a
    * capitalized tag bound to a name in this set as a dynamic tag instead of
    * the direct call `moduleBindings` alone would give it.
    */
@@ -303,7 +302,7 @@ export interface MxRegionCompileResult {
    */
   hoistedImports?: HoistedImport[];
   /**
-   * `<define>`s the region hoisted to module scope (decision 110b). A region
+   * `<define>`s the region hoisted to module scope. A region
    * is an expression, so it cannot hold a function declaration either — same
    * reason `hoistedImports` exists, for an author's own construct instead of
    * a discovered tag's synthesized import.

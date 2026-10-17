@@ -79,7 +79,7 @@ async function renderPair(
 }
 
 describe.each([false, true])(
-  "body whitespace, decision 141 (discovered=%s)",
+  "body whitespace (discovered=%s)",
   (discovered) => {
     it.each(cases)("$label", async ({ body, html }) => {
       const tag = discovered ? "wrap" : "Wrap";

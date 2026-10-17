@@ -23,25 +23,24 @@ export interface DivergenceRow {
 
 /**
  * Parser-level rows: the stock and MX event streams differ. Ranges below
- * cite `divergences.md` rows and the decisions behind them.
+ * cite `divergences.md` rows and the rules behind them.
  */
 export const EVENT_ROWS: DivergenceRow[] = [
-  // Non-ASCII word characters in look-behinds (decision 156 addendum 13;
-  // unicode-rules-research.md). Stock is ASCII-only.
+  // Non-ASCII word characters in look-behinds (unicode-rules-research.md). Stock is ASCII-only.
   {
     id: "nonascii-division",
     input: "<div x=é / 2/>",
-    note: "addendum 13: stock reads a regex after `é` (swallows `/>`); MX divides",
+    note: "stock reads a regex after `é` (swallows `/>`); MX divides",
   },
   {
     id: "nonascii-keyword-lookbehind",
     input: "<div x=énew y=1/>",
-    note: "addendum 13: stock sees the keyword `new` inside `énew`; MX sees one identifier",
+    note: "stock sees the keyword `new` inside `énew`; MX sees one identifier",
   },
   {
     id: "nonascii-member-dot",
     input: "<div x=a .é/>",
-    note: "addendum 13: stock's word test is ASCII-only, so it ends the value before `.é`; MX reads member access `a .é`",
+    note: "stock's word test is ASCII-only, so it ends the value before `.é`; MX reads member access `a .é`",
   },
   {
     id: "nbsp-division",
@@ -53,22 +52,22 @@ export const EVENT_ROWS: DivergenceRow[] = [
     input: "<if=count\u00a0>= 10></if>",
     note: "addenda 10/11: stock ends the value at NBSP (`= 10>` is body text); MX reads `count >= 10`",
   },
-  // Never-throw (decision 165): stock throws a TypeError, MX reports an
+  // Never-throw: stock throws a TypeError, MX reports an
   // onError and returns.
   {
     id: "comment-in-text-tag-open-tag",
     input: "<script x=1 // </script>\n>a</script>",
-    note: "decision 165: a `//` in a text tag's open tag throws in stock",
+    note: "a `//` in a text tag's open tag throws in stock",
   },
   {
     id: "stray-close-after-nameless",
     input: ",--/</e>",
-    note: "decision 165: a stray closing tag after a nameless concise tag throws in stock",
+    note: "a stray closing tag after a nameless concise tag throws in stock",
   },
   {
     id: "nameless-tag-at-eof",
     input: "<,>a",
-    note: "decision 165: a nameless tag open at EOF throws in stock",
+    note: "a nameless tag open at EOF throws in stock",
   },
 ];
 
@@ -258,22 +257,22 @@ export const CONTROL_ROWS: DivergenceRow[] = [
   {
     id: "control-ternary",
     input: "<a x=1 ? y : z/>",
-    note: "an open `?` owns its `:` in both (decision 146)",
+    note: "an open `?` owns its `:` in both",
   },
   {
     id: "control-parenthesized-dot",
     input: "<a x=(a.b .c)/>",
-    note: "parentheses keep member access in both (decision 146)",
+    note: "parentheses keep member access in both",
   },
   {
     id: "copyright-ambiguous-close",
     input: "<div x=a >©>c</div>",
-    note: "decision 156 addendum 13 (ID_Continue only): `©` is no word character in either, so the ambiguous-`>` check agrees — pre-addendum-13 MX errored here",
+    note: "ID_Continue only: `©` is no word character in either, so the ambiguous-`>` check agrees",
   },
   {
     id: "nbsp-before-comment-in-text",
     input: "<p>Visit\u00a0//cdn.example/x.js</p>",
-    note: "addendum 13 item 1: in HTML body text only ASCII whitespace starts a `//` comment, in both",
+    note: "In HTML body text only ASCII whitespace starts a `//` comment, in both",
   },
   {
     id: "control-nonascii-colon",

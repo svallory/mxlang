@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
-// Decision 140: `typeCheck` reaches the shared JSX emitter, with Hono's own
+// `typeCheck` reaches the shared JSX emitter, with Hono's own
 // JSX types in the preamble. Unset, the runtime output is unchanged.
 const source = "<button onClick=((e) => e.detail)>x</button>";
 

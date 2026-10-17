@@ -1,6 +1,6 @@
 /**
  * `<textarea value=x/>` renders the value as escaped content, as Marko 6.4.4
- * does (decision 149). Real renders of both sides in separate Bun processes
+ * does. Real renders of both sides in separate Bun processes
  * (scripts/attribute-value-probe.ts --textarea), compared as parsed DOM: the
  * html target's text escaping is broader than Marko's (`&gt;`, `&quot;`), and
  * the HTML parser drops a textarea's first newline, so the DOM is the contract.

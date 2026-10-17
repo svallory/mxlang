@@ -1,4 +1,4 @@
-// A well-formed descriptor except for the required `defaultTag` (decision 145).
+// A well-formed descriptor except for the required `defaultTag`.
 module.exports = {
   descriptorVersion: 0,
   name: "fake-no-default-tag",

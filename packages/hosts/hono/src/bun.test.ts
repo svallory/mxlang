@@ -101,7 +101,7 @@ describe("@mxlang/host-hono/bun", () => {
 
     // Through the real plugin's own `getCustomTags(path, { host: "hono" })`
     // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]`
-    // must be invisible from the hono loader, which is decision 110(a). A
+    // must be invisible from the hono loader. A
     // nested package.json under the package root, so the upward walk stops
     // there rather than reaching the package's own.
     const base = join(import.meta.dirname, "..");
@@ -175,7 +175,7 @@ describe("@mxlang/host-hono/bun", () => {
   test("does not claim a .astro.mx path", async () => {
     Bun.plugin(honoPlugin);
 
-    // Astro's template kind (decision 134): an Astro component, lowered by
+    // Astro's template kind: an Astro component, lowered by
     // `@mxlang/host-astro`. It ends in `.mx` but is not an MX page, and this
     // source would fail the string translator. Bun's default loader returns
     // the file's own path as the default export when no onLoad hook claims it.
@@ -256,7 +256,7 @@ describe("@mxlang/host-hono/bun", () => {
     expect(mod.default).toEndWith("Counter.solid.mx");
   });
 
-  test("a dotted tag file name is rejected, not indexed (decision 137)", async () => {
+  test("a dotted tag file name is rejected, not indexed", async () => {
     Bun.plugin(honoPlugin);
 
     // The loader is a direct entry: it resolves its targets from this
@@ -308,7 +308,7 @@ describe("@mxlang/host-hono/bun", () => {
   });
 });
 
-describe("the onLoad filter (decision 154: hosts claim .<segment>.mx)", () => {
+describe("the onLoad filter (hosts claim .<segment>.mx)", () => {
   const fake: TargetDescriptor = {
     descriptorVersion: 0,
     name: "fake-jsx",

@@ -1,6 +1,6 @@
 /**
  * Primitive attribute values on native elements render as Marko 6.4.4's html
- * output does, on preact, react, hono, solid and astro (decision 149). Real renders of every
+ * output does, on preact, react, hono, solid and astro. Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 8 attributes x 4 forms x 7 values.
  *

@@ -48,8 +48,7 @@ independent of the root pins, which still track Solid 1 for the oracle's
 disagree; do not "fix" one to match the other.
 
 Type-checking `.solid.mx` imports from `.tsx` uses
-`@mxlang/typescript-plugin`'s virtual-`.tsx` projection (spec section 7.2,
-decision 81), loaded through `compilerOptions.plugins` in each example's
+`@mxlang/typescript-plugin`'s virtual-`.tsx` projection (spec section 7.2), loaded through `compilerOptions.plugins` in each example's
 `tsconfig.json`. The old ambient `src/mx.d.ts` shims are **deleted** and must
 not come back: a shim asserts types instead of deriving them, so it hides both
 each file's real exports and every error inside the file. Each example's
@@ -82,8 +81,7 @@ not resolve bare specifiers through `tsconfig.json` `paths` the same way.
 `examples/astro-static` is the Astro host's example: an Astro 7.3.2 site
 (`output: "static"`, pinned exact in its own `package.json`) with `.mx`
 components — props and a default slot, a named slot, and one component
-composed from another — and, per decision
-76b, `.mx` **pages** directly under `src/pages`: `mx-page.mx` (a `layout`
+composed from another — and `.mx` **pages** directly under `src/pages`: `mx-page.mx` (a `layout`
 export, props from a `static` block, `<if>`, `<for>`), `no-layout.mx` (no
 `layout`, writes its own full document), and `posts/[slug].mx` (`getStaticPaths`
 returning two entries, `prerender = true`).
@@ -114,7 +112,7 @@ imports, so it cannot compile by design. `tsconfig.json` excludes it:
 `mx-tsc` reports a stored compile error as a diagnostic, and the
 example's typecheck would otherwise fail on the file that exists to fail.
 
-**`.mx` pages** (decision 76b, `packages/hosts/astro/src/index.ts` +
+**`.mx` pages** (`packages/hosts/astro/src/index.ts` +
 `packages/hosts/astro/src/vite-pages.ts`): the integration calls Astro's
 `addPageExtension(".mx")` — `.marko` is not a registered extension for this
 integration at all (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`), so

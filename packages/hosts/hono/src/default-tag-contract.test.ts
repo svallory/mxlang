@@ -13,7 +13,7 @@ const bad: Record<string, CustomTag> = {
 const run = (src: string, customTags = tags) =>
   compileHonoMx(src, "/tmp/a.mx", { customTags, defaultTag: "section" }).code;
 
-describe("the parent contract's defaultTag on hono (decision 145 PR 3)", () => {
+describe("the parent contract's defaultTag on hono", () => {
   it("beats the package config; elsewhere the config answers", () => {
     expect(run("<my-list><.a>x</></my-list>")).toContain("<article");
     expect(run("<.a>x</>")).toContain("<section");

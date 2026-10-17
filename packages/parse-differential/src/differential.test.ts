@@ -32,8 +32,7 @@ const ASYNC_METHOD_START = new Set([
  * End of input inside a concise open delimiter (parser-grammar OQ 19):
  * today's parser is silent and its tags there carry no position. The front
  * end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener and closes the tags
- * at the end (decision 161: no silent drop; supersedes decision 163 addendum
- * 9, Q8). TODO `concise-eof-interpolation-drops-event` (the template parser
+ * at the end (no silent drop). TODO `concise-eof-interpolation-drops-event` (the template parser
  * still reports no event for g0380 g0381 g0382) stays open.
  */
 const SILENT_EOF = new Set([
@@ -179,7 +178,7 @@ describe("front-end rules against today's lowering (PR 2b)", () => {
     const wrong: string[] = [];
     for (const { input, frontEnd, parsedToday } of rows) {
       if (!frontEnd || !parsedToday) continue;
-      // New in MX (decision 161): today's parser was silent here.
+      // New in MX: today's parser was silent here.
       if (frontEnd.code === "MX_INPUT_ENDS_IN_DELIMITER") continue;
       const today = lowerToday(input.source);
       if (today.ok) {
@@ -383,7 +382,7 @@ const REVERSE_MATRIX: readonly {
     id: "nested-silent-eof-attribute-tag",
     source: "div\n  @slot(a",
     // Not the root rule (the tag has its real ancestor); the input ending
-    // inside `(` (decision 161).
+    // inside `(`.
     mx: {
       code: "MX_INPUT_ENDS_IN_DELIMITER",
       start: 11,
@@ -555,8 +554,7 @@ describe("grammar corpus inputs", () => {
   });
 
   it("interim: a bare `,` line is an unnamed MxTag; today's path crashes", () => {
-    // Interim: PR 2b records MX_TAG_NAME_MISSING here (decision 163
-    // addendum 9), never an element nobody wrote.
+    // Interim: PR 2b records MX_TAG_NAME_MISSING here, never an element nobody wrote.
     const outcome = compare(",");
     expect(outcome.note).toMatch(/^today's path threw: /);
     expect(outcome.mx).toEqual(["tag (unnamed)@[1,1) [1,1)"]);

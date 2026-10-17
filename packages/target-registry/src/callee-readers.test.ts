@@ -1,5 +1,5 @@
 /**
- * A loaded host's `readCalleeInput` (decision 148): consulted when a compile
+ * A loaded host's `readCalleeInput`: consulted when a compile
  * under that project's lookup reads a `.<segment>.mx` callee, and scoped to
  * that lookup. Two projects can load different hosts that declare the same
  * segment without one reading with the other's reader.

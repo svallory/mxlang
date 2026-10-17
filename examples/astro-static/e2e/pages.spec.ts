@@ -122,7 +122,7 @@ describe("astro-static", () => {
   });
 
   it("/mx-page is an MX file directly under src/pages, rendered through a layout", async () => {
-    // Decision 76b: `.mx` files under `src/pages` are pages, not components.
+    // `.mx` files under `src/pages` are pages, not components.
     // `mx-page.mx` declares `export const layout`, a `static` block for its
     // props, and uses `<if>`/`<for>` — this asserts the whole page-mode
     // pipeline: layout wrapping, static-block props, and control flow.
@@ -192,8 +192,8 @@ describe("astro-static", () => {
   });
 
   it("/templates renders .astro.mx components: MX template, Astro semantics", async () => {
-    // Decisions 76c/78/134. The route is `templates.astro` (a page cannot be
-    // `.astro.mx`, decision 134 addendum); it imports `Templates.astro.mx`,
+    // The route is `templates.astro` (a page cannot be
+    // `.astro.mx`); it imports `Templates.astro.mx`,
     // and the layout and both components are `.astro.mx` too: an Astro
     // component whose template is MX, lowered to Astro template syntax and
     // compiled by Astro itself. This asserts each construct the lowering

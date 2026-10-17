@@ -34,7 +34,7 @@ describe("Hono dialect", () => {
     expect(code).toContain('<label class="field" for="name">Name</label>');
   });
 
-  it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
+  it("a type-only import does not resolve a capitalized tag", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
     // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
@@ -54,7 +54,7 @@ describe("Hono dialect", () => {
     ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
     ["with an attribute", "<TotallyUndefined a=1/>"],
   ])(
-    "rejects a capitalized tag with no import, binding, or taglib entry, %s (decision 114 parity)",
+    "rejects a capitalized tag with no import, binding, or taglib entry, %s",
     (_label, source) => {
       expect(errorOf(source)).toContain(
         "Unable to find entry point for custom tag `<TotallyUndefined>`.",
@@ -162,7 +162,7 @@ describe("Hono dialect", () => {
     // Marko's own html/dom runtimes never render a string renderer's name
     // as literal text, args or not — see `_dynamic_tag` in
     // `runtime-tags/src/html/dynamic-tag.ts`. args[0] ("x") becomes the
-    // spread attributes source (decision 112): `for...in` over a string
+    // spread attributes source: `for...in` over a string
     // yields its numeric indices, matching Marko's own `_attrs`.
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
@@ -274,7 +274,7 @@ describe("Hono dialect", () => {
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("recomposes the prop from the DOM event name", () => {
     expect(markup("<button onClick=handler>x</button>")).toBe(
       "<button onClick={handler}>x</button>",
@@ -289,7 +289,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
   });
 
   it("emits onChange for the change event and leaves hono's input alias to hono", () => {
-    // Decision 101 (d): hono's runtime binds `onChange` to the `input` event
+    // Hono's runtime binds `onChange` to the `input` event
     // for React compatibility; MX emits the prop unchanged and documents the
     // divergence rather than papering over it.
     expect(markup("<input onChange=handler>")).toBe(
@@ -328,13 +328,13 @@ describe("event name spellings", () => {
 });
 
 /**
- * Decision 116: a capitalized tag bound to a value import that is not a
+ * A capitalized tag bound to a value import that is not a
  * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
  * itself, exercised with an ordinary `import { X } from "./target.ts"` and
  * an ordinary `<X>`/`<X/>` call, compiled and rendered for real through
  * `hono/jsx`.
  */
-describe("decision 116: value import used as a tag (hono)", () => {
+describe("value import used as a tag (hono)", () => {
   async function renderImportedTag(
     entrySource: string,
     targetSource: string,
@@ -408,8 +408,7 @@ describe("decision 116: value import used as a tag (hono)", () => {
 });
 
 /**
- * The local extension of decision 116 (firstmate's ruling under decision 116
- * in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+ * The local counterpart of the default-import rule: a non-import PascalCase local
  * (`static`, a `<const>`, a tag param) whose value core cannot statically
  * prove is a function/arrow/class also lowers as a dynamic tag; a plain
  * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
@@ -507,7 +506,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
   });
 
   /**
-   * Firstmate's follow-up on decision 116: hono/jsx's own `memo`/
+   * A follow-up: hono/jsx's own `memo`/
    * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see
    * `@mxlang/host-react`'s sibling suite), so `mxDynamic`'s pre-existing
    * `typeof target === "function"` branch already handled them, unaffected
@@ -521,7 +520,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
    * `memo` object renders a literal `<[object Object]>` tag whether or not
    * it passes through `mxDynamic` — the identical Preact-vs-React
    * incompatibility documented in `@mxlang/host-preact`'s suite, not a
-   * decision-116 routing gap. `mxIsHostComponentObject`'s widened check in
+   * routing gap. `mxIsHostComponentObject`'s widened check in
    * the shared emitter is still correct: it is what makes React's own suite
    * pass, and is simply inert (never taken) on hono/preact, since neither
    * runtime can act on the result regardless.

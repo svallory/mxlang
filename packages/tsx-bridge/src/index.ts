@@ -160,8 +160,7 @@ function parseWithDiagnosticText(source: string, options: ParserOptions) {
 
 /**
  * Reads the surrounding TypeScript module's scope before lowering any MX
- * region: every import specifier (local binding -> module) and, since
- * decision 114, every value that scope binds at its top level
+ * region: every import specifier (local binding -> module) and every value that scope binds at its top level
  * (`programBindings`) — a capitalized tag a region references may resolve
  * through either. The real parse must lower a region immediately so Babel
  * can keep parsing the expression, but a callee import or a value binding a
@@ -193,12 +192,12 @@ function collectModuleScope(
   } as ParserOptions) as unknown as File;
   checkReservedBindings(file);
   const imports = new Map<string, string>();
-  // decision 116: only a *default* import from a `.marko`/`.mx` source is
+  // Only a *default* import from a `.marko`/`.mx` source is
   // Marko's own statically-resolved component case; every other value
   // import (named, namespace, or a default from any other extension) lowers
   // as a dynamic tag on the host side.
   const importDefaultFromMarkoOrMx = new Set<string>();
-  // Where each binding's `import` statement starts (decision 164's warning).
+  // Where each binding's `import` statement starts, for the lowercase-tag-names-an-import warning.
   const importSites = new Map<string, { line: number; column: number }>();
   // SAFETY: the optional structural fields below cover the Babel statement variants inspected here.
   for (const statement of file.program.body as Array<{
@@ -214,7 +213,7 @@ function collectModuleScope(
   }>) {
     if (statement.type !== "ImportDeclaration") continue;
     // A type-only import binds no runtime value, so it must not resolve a
-    // capitalized tag reference (decision 114) — the same exclusion
+    // capitalized tag reference — the same exclusion
     // `programBindings` already applies for `moduleBindings`. Both the whole
     // declaration's own kind (`import type Widget from "..."`) and a single
     // specifier's (`import { type Widget } from "..."`) count.
@@ -257,8 +256,7 @@ function collectModuleScope(
  *
  * An MX region inside a `.solid.mx` file is an *expression*, so a discovered
  * tag's import has no module scope of its own to land in — the surrounding
- * TypeScript module is the only place it can go (design §3.2; decision 95
- * ruling 3). Three rules, all of them decision 95's:
+ * TypeScript module is the only place it can go (design §3.2). Three rules:
  *
  * - **Once per module per resolved path**, so two regions calling `<icon>`
  *   share one import — and a path, not a specifier, because two spellings can
@@ -278,8 +276,8 @@ function hoistRegionImports(file: File, filename: string): void {
   if (!Array.isArray(program?.body)) return;
 
   const hoisted: HoistedImport[] = [];
-  // A `<define>` inside a region hoists to module scope the same way
-  // (decision 110b): the emitter mints a gensym'd function declaration. That
+  // A `<define>` inside a region hoists to module scope the same way:
+  // the emitter mints a gensym'd function declaration. That
   // gensym is only unique *within its own region* — a host has no
   // visibility of another region's choices — so two regions in one file
   // each declaring `<define/Row>` can independently mint the identical
@@ -418,7 +416,7 @@ function hoistRegionImports(file: File, filename: string): void {
   // `entry.code` as text — the latter ties this pass to the exact string
   // `SolidEmitter.define` happens to generate today (`function <name>(`),
   // which already broke once (`$` is a regex metacharacter that silently
-  // never matched, decision 110b round 2) and would break again for any
+  // never matched) and would break again for any
   // future generator shape (an arrow function, a multi-line signature) that
   // still satisfies `HoistedDefine.code`'s contract without matching that
   // one pattern.

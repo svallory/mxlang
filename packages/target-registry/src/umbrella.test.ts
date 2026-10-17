@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import * as htmlSubpath from "./html.ts";
 import * as registry from "./index.ts";
 
-// Decision 201: `@mxlang/targets` is the umbrella, the registry plus every
+// `@mxlang/targets` is the umbrella, the registry plus every
 // target. The main entry names the html target's descriptor; the `./html`
 // subpath is the target's full entry. `@mxlang/data` is not part of it
-// (decision 204 deletes that package).
+// (that package is deleted).
 
 const manifest = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),

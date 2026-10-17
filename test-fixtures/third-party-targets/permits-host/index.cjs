@@ -1,4 +1,4 @@
-// A host whose declarations permit the contract rung (decision 145): no registration error and the compile honours the contract.
+// A host whose declarations permit the contract rung: no registration error and the compile honours the contract.
 // Its compile reports the element names it lowered, so a test can see which rung answered.
 const declarations = {
   tags: {},

@@ -244,7 +244,7 @@ try {
     await new Promise(() => {});
   }
   if (process.argv[3] === "--parity") {
-    // Primitive attribute values on direct / spread / merged paths (decision 149).
+    // Primitive attribute values on direct / spread / merged paths.
     const parityValues: Record<string, unknown> = {
       null: null,
       undefined: undefined,

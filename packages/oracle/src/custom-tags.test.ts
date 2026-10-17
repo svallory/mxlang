@@ -67,7 +67,7 @@ it("runs every custom tag fixture through all six hosts", {
   );
 
   expect(result.status).toBe(0);
-  // Decision 55: assert the count, so a fixture or a host that silently
+  // Assert the count, so a fixture or a host that silently
   // stopped running is a failure rather than an unnoticed absence.
   expect(result.stdout).toContain(
     `${FIXTURES.length * HOSTS.length - SKIPPED.length}/${FIXTURES.length * HOSTS.length} rows passed, ${SKIPPED.length} skipped(reason)`,
@@ -76,7 +76,7 @@ it("runs every custom tag fixture through all six hosts", {
     for (const host of HOSTS) {
       // A skipped row must still appear, and must still say *why*: a skip
       // that stopped being printed is indistinguishable from a fixture that
-      // stopped running, which is the failure decision 55 exists to catch.
+      // stopped running, which is the failure this assertion exists to catch.
       const status = isSkipped(fixture, host) ? "skipped — .+" : "pass";
       expect(result.stdout).toMatch(
         new RegExp(`^${fixture}\\s+${host}\\s+${status}$`, "m"),

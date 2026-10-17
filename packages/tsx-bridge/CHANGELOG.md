@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- **Changed (parser-split, decision 158):** this package is what `@mxlang/parser` was before the split, minus the vendored Babel fork and the htmljs-parser template parser. The fork moved to `@mxlang/babel` (`packages/babel`) and the template parser stays in `@mxlang/parser`. The public surface (`parse`, `print`, `printAst`, `sourceBindings`, …) and `dist/index.d.ts` are unchanged apart from the module name, `@mxlang/tsx-bridge`; every in-repo importer moved with it. The bridge now injects the MX grammar into the fork through the `mxHooks` option (`bridge.ts`'s `mxHooks`) instead of the fork importing it. Solid-lowering tests moved to `@mxlang/solid` (`src/bridge/`), so the package depends on no host. Earlier entries below were written under the old package name.
+- **Changed (parser-split):** this package is what `@mxlang/parser` was before the split, minus the vendored Babel fork and the htmljs-parser template parser. The fork moved to `@mxlang/babel` (`packages/babel`) and the template parser stays in `@mxlang/parser`. The public surface (`parse`, `print`, `printAst`, `sourceBindings`, …) and `dist/index.d.ts` are unchanged apart from the module name, `@mxlang/tsx-bridge`; every in-repo importer moved with it. The bridge now injects the MX grammar into the fork through the `mxHooks` option (`bridge.ts`'s `mxHooks`) instead of the fork importing it. Solid-lowering tests moved to `@mxlang/solid` (`src/bridge/`), so the package depends on no host. Earlier entries below were written under the old package name.
 
-- **Added (decision 164):** `MxRegionCompileInput.importSites` (and the `mxImportSites` option `parse` pre-collects): where each import binding's `import` statement starts, so a host can position the lowercase-tag diagnostic at the import.
-- **Changed (bridge-host, decision 154):** the parser names no host and no file suffix. `parse`/`print` turn the MX grammar on when `mx: true` is passed or an `mxRegionCompile` hook is supplied; the `.solid.mx` filename default is gone (a hook-less `parse("x.solid.mx")` is now a plain TSX parse, and every tool passes `mx: true`). `MissingRegionCompile` names the region-entry contract (`HostFileKind.compileRegion`) instead of `compileSolidMx`.
+- **Added :** `MxRegionCompileInput.importSites` (and the `mxImportSites` option `parse` pre-collects): where each import binding's `import` statement starts, so a host can position the lowercase-tag diagnostic at the import.
+- **Changed (bridge-host):** the parser names no host and no file suffix. `parse`/`print` turn the MX grammar on when `mx: true` is passed or an `mxRegionCompile` hook is supplied; the `.solid.mx` filename default is gone (a hook-less `parse("x.solid.mx")` is now a plain TSX parse, and every tool passes `mx: true`). `MissingRegionCompile` names the region-entry contract (`HostFileKind.compileRegion`) instead of `compileSolidMx`.
 
 - **Fix:** a host helper hoisted with an identical binding and text by several regions of one file (Solid's attribute guard) is declared once instead of being renamed into a copy per region.
 
@@ -15,7 +15,7 @@
 
 - **Changed (beta-readme-note):** Every published package's README now carries the same beta note right after its title/intro: the package is at 0.x and its API may change in any release until 1.0.0 (npm publishes plain `0.1.0` on the `latest` dist-tag for the beta).
 
-- **Changed (pr6-s2-lexer):** Core's parse-error rewrites (the mismatched-close opener, a failure inside a tag's `|params|`, sugar right after a default value, the atom hints, the shorthand-word probe) replay the source with MX's own template lexer (`@mxlang/parser/lexer`) on every run, never with `htmljs-parser` through `@marko/compiler` (decision 197, PR 6 slice S2). The dist already lexed with MX's parser; running from source now does too. No diagnostic text or position changes. `@mxlang/tsx-bridge` declares the `htmljs-parser` 5.18.0 its region walk bundles, which it used to resolve from the install around it; its output is unchanged. `parseData` output and the `DataTag`/`DataAttr`/`DataExpr`/`DataImport` types are unchanged (`mesh-syntax.test.ts` passes unchanged).
+- **Changed (pr6-s2-lexer):** Core's parse-error rewrites (the mismatched-close opener, a failure inside a tag's `|params|`, sugar right after a default value, the atom hints, the shorthand-word probe) replay the source with MX's own template lexer (`@mxlang/parser/lexer`) on every run, never with `htmljs-parser` through `@marko/compiler` (PR 6 slice S2). The dist already lexed with MX's parser; running from source now does too. No diagnostic text or position changes. `@mxlang/tsx-bridge` declares the `htmljs-parser` 5.18.0 its region walk bundles, which it used to resolve from the install around it; its output is unchanged. `parseData` output and the `DataTag`/`DataAttr`/`DataExpr`/`DataImport` types are unchanged (`mesh-syntax.test.ts` passes unchanged).
 
 - **Fixed (hosts-colon-astro-rethrow):** An undeclared colon tag in an `.astro.mx` file (`<ns:tag/>`, `<Ns:Tag/>`) is now a compile error at the tag, as in the JSX hosts: Astro used to emit it silently as a namespace element. The fix the error names is now true for every name. It suggests an `mx.tags` `prefix` only when some prefix can produce the name (the name ends in a file stem: `<a:-x/>` takes `prefix: "a:-"`), and for a name no tag file can end (`<uuid:/>`, `<a:b$/>`) it says only to write the name without the colon. The error now carries the end of the name, so an editor underlines all of it. A lowering error inside a region of a `.solid.mx`, `.preact.mx`, `.react.mx` or `.hono.mx` file, and in an `.astro.mx` file, now reaches `mx-tsc` and the TypeScript plugin with its `MX_*` code and its whole range, where it showed `TS80001` and one character. The language server shows the same code and underlines the whole range for such an error, where it showed one character.
 
@@ -27,7 +27,7 @@
 
 - **Fix (astro-fence-top-level-return):** `sourceBindings` and `unknownSourceBindings` take an optional `allowReturnOutsideFunction` for source a host compiles *inside a function body*, where a top-level `return` is legal — Astro's `---` frontmatter is the case. Default is off, so every other caller (`.solid.mx`, `.ng.mx`, `appendSolidBuiltinImport`) keeps rejecting a stray `return` in real module scope. New export: `SourceBindingsOptions`. `sourceBindings` still reports a parse failure rather than swallowing it.
 
-- **Added (default-tag-ladder, decision 145):** `print`/`parse` accept `defaultTag` (`mxDefaultTag`), forwarded to the host that lowers each MX region as `MxRegionCompileInput.defaultTag`.
+- **Added (default-tag-ladder):** `print`/`parse` accept `defaultTag` (`mxDefaultTag`), forwarded to the host that lowers each MX region as `MxRegionCompileInput.defaultTag`.
 
 - **Fix (reserve-mx-identifiers):** check authored bindings in MX-enabled TypeScript modules before region emission, even when callers supply binding sets. Generated regions are excluded; plain TypeScript and `mx: false` keep upstream behavior.
 
@@ -46,7 +46,7 @@
 - **A mismatched closing tag in an MX region names the opener's position** (audit item 12). `walkMxRegion` appends ` at line:column` (1-based, UTF-16) of the innermost unclosed tag's `<` to htmljs-parser's `The closing "x" tag does not match the corresponding opening "y" tag`, for `.solid.mx` and `.ng.mx` regions. The error stays at the closer.
 
 - **`mxRegionFragment` parser option, and the `MultipleRoots` error** (TODO
-  `angular-ngmx-multi-root`, decision 120). Default off: `<>` stays a TSX
+  `angular-ngmx-multi-root`). Default off: `<>` stays a TSX
   fragment, so `.solid.mx` is unchanged. On (`@mxlang/angular` sets it for
   `.ng.mx`), `<>…</>` in expression position is a *fragment region*: the host's
   `mxRegionCompile` receives the fragment's children as `source` with the new
@@ -98,8 +98,8 @@
   in-repo caller updated to read `.bindings`/`.error` explicitly.
   `programBindings` (the already-parsed-`Program` variant) is unchanged.
 
-- **New exports: `unknownProgramBindings`/`unknownSourceBindings`** (local
-  extension of decision 116). The subset of `programBindings`'/
+- **New exports: `unknownProgramBindings`/`unknownSourceBindings`** (the local
+  counterpart of the default-import set). The subset of `programBindings`'/
   `sourceBindings`' non-import names whose value is not statically a
   function/arrow/class, computed over the same declaration-only pre-parse.
   `unknownSourceBindings` returns a bare `Set<string>` (unaffected by the
@@ -111,7 +111,7 @@
   already is, so a `.solid.mx` region's surrounding module-scope locals
   classify identically to a whole-file `.mx`'s.
 
-- **New dependency: `@mxlang/core`** (decision 116). `MxRegionCompileInput`
+- **New dependency: `@mxlang/core`**. `MxRegionCompileInput`
   gained `importDefaultFromMarkoOrMx: ReadonlySet<string>` — the subset of
   `importSpecifiers`' bindings that are a *default* import from a
   `.marko`/`.mx` source, computed by `collectModuleScope`'s same
@@ -123,8 +123,8 @@
   the import's provenance either). A host uses it to tell a `.marko`/`.mx`
   default import (Marko's own statically-resolved component case) apart
   from every other value import, which now lowers as a dynamic tag
-  (`@mxlang/core`'s decision-116 routing).
-- **New exports** (decision 114): `sourceBindings(source)` and
+  (`@mxlang/core`'s routing).
+- **New exports**: `sourceBindings(source)` and
   `programBindings(program)` — the names a piece of TypeScript/TSX source
   binds at its top level (import locals plus top-level `const`/`function`/
   `class`, type-only bindings excluded) — and `SOLID_BUILTIN_TAGS`, the Solid
@@ -147,7 +147,7 @@
 - `MxRegionCompileResult` gained an optional `hoistedDefines` field
   (`MxRegionHoistedDefine[]`), the `<define>` counterpart to
   `hoistedImports`: a region hosted by Solid can now hoist a `<define>` to
-  module scope (decision 110b), and the bridge writes those declarations
+  module scope, and the bridge writes those declarations
   into the surrounding module alongside any hoisted imports, after the
   module's own import block. Every other `mxRegionCompile` caller is
   unaffected — the field defaults to empty.

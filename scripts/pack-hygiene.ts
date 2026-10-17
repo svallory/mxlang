@@ -105,7 +105,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/helpers.d.ts",
       "dist/index.d.ts",
       "dist/index.js",
-      // The `./runtime` export (decision 155): the sink compiled modules import.
+      // The `./runtime` export: the sink compiled modules import.
       "dist/runtime.d.ts",
       "dist/runtime.js",
       "dist/translate.d.ts",
@@ -144,7 +144,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/ambient-types.d.ts",
       "dist/amx-language.d.ts",
       "dist/astro-language.d.ts",
-      // Decision 161: unmapped-diagnostics.d.ts declares the exported seam
+      // unmapped-diagnostics.d.ts declares the exported seam
       // (approximateUnmapped, AuthoredSpan, SpannedVirtualCode, the suffix
       // texts); authored-spans.d.ts is emitted because mx-language.ts imports
       // it and references only unmapped-diagnostics.d.ts and the declared

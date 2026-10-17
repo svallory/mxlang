@@ -1,11 +1,11 @@
 import { runStockTable } from "./report-marko-stock";
 
 /**
- * `oracle:marko` (decisions 51, 55, 68): parity check between Marko's own
+ * `oracle:marko`: parity check between Marko's own
  * toolchain and `@mxlang/target-html`'s output for the stock `.marko` fixture
  * set at `packages/targets/html/fixtures-marko/`.
  *
- * Decision 68 retired the `.mx` dialect and `@mxlang/html`, so the table this
+ * The `.mx` dialect and `@mxlang/html` are retired, so the table this
  * script used to print for `packages/mx-html/fixtures-mx/` is gone — there is
  * only one dialect (stock Marko) and one table now, `runStockTable()`'s.
  *
@@ -14,7 +14,7 @@ import { runStockTable } from "./report-marko-stock";
  * fixture's `meta.json`, see `fixtures/README.md`'s "oracle:marko" section)
  * never fails the run, in either mode — that classification is the settled
  * state, not unfinished work. Only an unclassified mismatch, a malformed
- * `meta.json`, or too few fixtures processed fails it (decision 55: a gate
+ * `meta.json`, or too few fixtures processed fails it (a gate
  * must assert it did work, not merely that nothing failed).
  */
 

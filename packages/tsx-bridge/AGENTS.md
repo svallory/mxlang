@@ -21,12 +21,11 @@ A host claims the **lowering** of each region through the `mxRegionCompile` pars
 
 Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering (`packages/hosts/solid/README.md`'s table is the authoritative version; this is the summary):
 
-- **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule (decision 33), the same one every host relies on — see the four Marko facts below.
+- **Whitespace follows Marko, not JSX.** A whitespace-only text run containing a newline is dropped entirely, so indented markup renders nothing between children; a whitespace-only run without a newline collapses to one space. `${" "}` is the escape hatch. Comments are dropped from the output and do not count as content when trimming. This is Marko's own `onText` rule, the same one every host relies on — see the four Marko facts below.
 - **Void elements need no slash.** `<input value=x>` parses. The set (`area base br col embed hr img input link meta param source track wbr`) is declared to htmljs-parser as `TagType.void`; a void tag written with a closing tag is a parse error.
 - **Shorthand `class` merges with a string or an object; anything else is a parse error.** Shorthand plus a *string* `class="x"` merges to `class="card x"` (shorthand first). Shorthand plus an **object literal** merges to Solid 2's array form, `class={["card", {...}]}`, the string entry always-on and the object toggling; a static `class="x"` present as well folds into that string entry (`class={["card x", {...}]}`) rather than being emitted as a second `class` attribute. Shorthand plus any *other* dynamic `class=` expression (an identifier, a call, a ternary) is a parse error. `#id` shorthand combined with an explicit `id=` is a parse error. `style=` only accepts an object-literal value (`style={color: c()}` → `style={{color: c()}}`); any other `style=` expression is a parse error for v1.
-- **Tag params and attribute tags are generic, not control-tag-only**
-  (decision 51), for any tag Marko itself accepts them on — decision 72's
-  subset rule (`divergences.md`) removed the cases real Marko rejects (tag
+- **Tag params and attribute tags are generic, not control-tag-only**,
+  for any tag Marko itself accepts them on — the subset rule (`divergences.md`) removed the cases real Marko rejects (tag
   params on `<if>`, tag params and attribute tags on native HTML elements).
   `<Tag|p1, p2|>body</Tag>` lowers to `<Tag>{(p1, p2) => body}</Tag>`, which is
   what lets Solid's own render-prop components be called from MX
@@ -48,17 +47,17 @@ Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering 
 
 A test of `print`/`printAst` output against an expected program compares ASTs (parse both, positions stripped), never normalized text: `retainLines` keeps generated lines aligned with the source, so the printed text cannot match a hand-formatted twin. The oracle is different: it compares compiled output as text.
 
-## `.mx` is the only template extension (decisions 72, 2026-09-15)
+## `.mx` is the only template extension
 
-Decision 68 retired the old `.mx` *dialect* (required explicit imports,
-`<fragment>`, required `export interface Input`, lowercase-by-scope) —
+The old `.mx` *dialect* (required explicit imports,
+`<fragment>`, required `export interface Input`, lowercase-by-scope) is retired —
 `@mxlang/target-html` and `packages/mx-html` stay deleted, and those conventions do
-not come back. Decision 72 re-establishes `.mx` as MX's own **identity**,
+not come back. `.mx` is MX's own **identity**,
 distinct from that dialect: MX is its own language with Marko as its origin.
 Marko is the default where MX has no rule of its own; MX promises neither a
 subset nor a superset of Marko, and each departure is a `divergences.md` row.
 
-**Decision 2026-09-15 (Saulo) superseded decision 72's `.marko` alias**:
+**There is no `.marko` alias**:
 no product path of MX accepts or advertises `.marko` any more: a `.marko`
 file is not an MX input, and treating one as MX would silently claim support
 MX does not promise. `.mx`
@@ -89,7 +88,7 @@ covered by the `.marko` alias in the first place.
   lowered to Solid 2 JSX by `@mxlang/host-solid` (see below). This is the parser
   package's only mode; there is no `mxMode` option. Solid is a separate
   host from the vanilla one below, and is not affected by `.mx` being the
-  only template extension or by decision 68's dialect retirement.
+  only template extension or by the dialect's retirement.
 - `compile(source, filename)` in `@mxlang/target-html` — a whole-file MX
   template (`.mx`, stock Marko syntax with no dialect layered on top).
   `@marko/compiler` parses, validates and supplies the tag registry; the
@@ -105,7 +104,7 @@ covered by the `.marko` alias in the first place.
 Four Marko facts that are easy to get wrong (all measured against
 `@marko/compiler` 5.42.5, all cost real debugging time):
 
-- **Marko's `onText` already implements decision 33.** `<p>\n  a\n</p>` gives
+- **Marko's `onText` already implements the line-based whitespace rule.** `<p>\n  a\n</p>` gives
   `MarkoText "a"` — a whitespace-only run containing a newline is dropped —
   and `a   b` gives `"a b"`. The string translator therefore does **not**
   re-normalize, and does not call `normalizeText()`. Do not add a second

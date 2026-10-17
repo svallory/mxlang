@@ -14,8 +14,8 @@ import * as translator from "marko/translator";
 
 /**
  * Renders a *stock* `.marko` fixture through the real Marko 6 toolchain, for
- * `oracle:marko`'s one table (decision 68 collapsed the old two-table
- * mx-html-vs-translator comparison to this single stock-Marko one; the `.mx`
+ * `oracle:marko`'s one table (the old two-table
+ * mx-html-vs-translator comparison is now this single stock-Marko one; the `.mx`
  * dialect and its own compile path are retired).
  *
  * These fixtures are already `.marko`, so nothing is renamed and no import is

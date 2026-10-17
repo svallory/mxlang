@@ -130,7 +130,7 @@ describe("workspace dependency graph", () => {
     expect(graph.get("@mxlang/babel")).toEqual([]);
   });
 
-  it("lets core use the parser as a devDependency only (decision 182)", () => {
+  it("lets core use the parser as a devDependency only", () => {
     // Core resolves the file's dialect package and runs the syntax table's
     // pre-pass with MX's template parser: from source through the workspace
     // package, in the dist through the bundled front end, so no published
@@ -152,7 +152,7 @@ describe("workspace dependency graph", () => {
       // Private reference package: it compares stock htmljs-parser events with
       // the parser's front end and is never published.
       if (name === "@mxlang/stock-marko") continue;
-      // Decision 182 (PR C): core may use the parser as a devDependency
+      // Core may use the parser as a devDependency
       // only; "lets core use the parser as a devDependency only" pins it.
       if (name === "@mxlang/core") continue;
       expect(deps, `${name} depends on @mxlang/parser`).not.toContain(

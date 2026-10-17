@@ -66,7 +66,7 @@ declare module "@mxlang/tsx-bridge" {
     resolvedPath: string;
   }
 
-  /** One `<define>` a region hoisted to module scope (decision 110b). */
+  /** One `<define>` a region hoisted to module scope. */
   export interface MxRegionHoistedDefine {
     /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
     code: string;
@@ -94,25 +94,25 @@ declare module "@mxlang/tsx-bridge" {
     baseColumn: number;
     /** Custom tag definitions the caller registered, keyed by tag name. */
     customTags?: Record<string, CustomTag>;
-    /** `package.json#mx.<target>.defaultTag` the caller resolved (decision 145). */
+    /** `package.json#mx.<target>.defaultTag` the caller resolved. */
     defaultTag?: string;
     /** Where this region appeared, the same context `mxRegionPositionCheck`
      *  was given. Undefined when no `mxRegionPositionCheck` is set. */
     context?: MxRegionContext;
     /** Imports declared by the surrounding module, local binding -> specifier. */
     importSpecifiers: ReadonlyMap<string, string>;
-    /** Every value the surrounding module binds at its top level (decision 114). */
+    /** Every value the surrounding module binds at its top level. */
     moduleBindings: ReadonlySet<string>;
     /** The subset of `importSpecifiers`' bindings that are a default import
      *  from a `.marko`/`.mx` source — Marko's own statically-resolved
-     *  component case (decision 116). */
+     *  component case. */
     importDefaultFromMarkoOrMx: ReadonlySet<string>;
     /** Where each `importSpecifiers` binding's `import` statement starts
-     *  (1-based line, 0-based column), for decision 164's warning. */
+     *  (1-based line, 0-based column), for the lowercase-tag-names-an-import warning. */
     importSites?: ReadonlyMap<string, { line: number; column: number }>;
     /** The subset of `moduleBindings`' non-import names whose value is not
-     *  statically a function/arrow/class — the local extension of decision
-     *  116. */
+     *  statically a function/arrow/class — the local counterpart of the default-import
+     *  set. */
     unknownModuleBindings: ReadonlySet<string>;
   }
 
@@ -123,7 +123,7 @@ declare module "@mxlang/tsx-bridge" {
     /** Imports the compiler minted for discovered tags called inside this
      *  region. */
     hoistedImports?: MxRegionHoistedImport[];
-    /** `<define>`s the region hoisted to module scope (decision 110b). */
+    /** `<define>`s the region hoisted to module scope. */
     hoistedDefines?: MxRegionHoistedDefine[];
     /** `/var` names this region's call sites bind, for the caller to declare. */
     returnVars?: string[];
@@ -275,8 +275,7 @@ declare module "@mxlang/tsx-bridge" {
   export function isVoidTag(name: string | null): boolean;
 
   /**
-   * Solid JSX built-ins that resolve with no import of their own (decision
-   * 114): the real Solid build pipeline auto-imports these, a compiler stage
+   * Solid JSX built-ins that resolve with no import of their own: the real Solid build pipeline auto-imports these, a compiler stage
    * the type-check projection and MX's own resolvability check never run
    * through. Shared by `@mxlang/typescript-plugin` and `@mxlang/host-solid`.
    */
@@ -328,7 +327,7 @@ declare module "@mxlang/tsx-bridge" {
 
   /**
    * The subset of `sourceBindings`' non-import names whose value is not
-   * statically a function/arrow/class — the local extension of decision 116.
+   * statically a function/arrow/class — the local counterpart of the default-import set.
    * See `source-bindings.ts`'s `unknownProgramBindings` for the full
    * contract.
    */

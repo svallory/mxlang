@@ -108,7 +108,7 @@ export type MxErrorCode =
   | "MX_INVALID_TAG_NAME";
 
 /**
- * A syntax-table trigger (decision 182; ast §4.4): `&status` in an expression
+ * A syntax-table trigger (ast §4.4): `&status` in an expression
  * (in its container's `triggers`), an attribute (in `attributes`) or a
  * tagless concise line (a child). Not lowered by the front end.
  */
@@ -184,7 +184,7 @@ export interface MxString extends MxValueNode {
 }
 
 /**
- * A syntax table's block tag (decision 182; ast §4.5), `{% for x in xs %}`:
+ * A syntax table's block tag (ast §4.5), `{% for x in xs %}`:
  * a child of the enclosing body. Raw: `value` is the body between the
  * table's `open` and `close`, untrimmed. Core's `lowerBlockTag` builds IR
  * from it and pairs openers with closers; the front end does not.
@@ -196,7 +196,7 @@ export interface MxBlockTag extends MxNodeBase {
 }
 
 /**
- * A syntax table's filter (decision 182; ast §4.5), `::markdown:: … ::`: a
+ * A syntax table's filter (ast §4.5), `::markdown:: … ::`: a
  * child of the enclosing body, its name and its raw body. Core's
  * `lowerFilter` returns IR for it.
  */
@@ -223,7 +223,7 @@ export interface MxExpressionContainer<N> extends Span {
   readonly outer: Span;
   readonly node: N | null;
   readonly error: MxParseError | null;
-  /** Expression triggers inside (decision 182, ast §4.4); present only when there are any. */
+  /** Expression triggers inside (ast §4.4); present only when there are any. */
   readonly triggers?: readonly MxTrigger[];
 }
 
@@ -320,11 +320,11 @@ export interface MxShorthand extends MxNodeBase {
 /** One named attribute, or the tag's default value when `name` is null (ast §3.5). */
 export interface MxAttribute extends MxNodeBase {
   readonly type: "MxAttribute";
-  /** The authored name's head before the LAST `:` (`class:x` → `class`); `null` for the default value (decision 163 addendum 12). */
+  /** The authored name's head before the LAST `:` (`class:x` → `class`); `null` for the default value. */
   readonly name: string | null;
   /** The head's span, ending before the modifier's colon; zero-width at the `=`/`(` for the default value. */
   readonly nameSpan: Span;
-  /** The text after the LAST `:` of the authored name; `null` without one (decision 170). */
+  /** The text after the LAST `:` of the authored name; `null` without one. */
   readonly modifier: string | null;
   /** The modifier's own span, colon excluded; `""` for a trailing colon is zero-width after the colon (`nameSpan.end + 1`); `null` with `modifier`. */
   readonly modifierSpan: Span | null;

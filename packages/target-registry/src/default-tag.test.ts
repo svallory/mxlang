@@ -527,7 +527,7 @@ describe("a scan failure keeps the parse-shape check (round 3)", () => {
   });
 });
 
-describe("a contract's defaultTag is checked at registration, at the declaration (decision 145, PR 3)", () => {
+describe("a contract's defaultTag is checked at registration, at the declaration", () => {
   afterEach(() => cleanupProjects());
 
   const contracts = (body: string) =>
@@ -718,7 +718,7 @@ describe("a dependency's contract (review round 2, the unprobed note)", () => {
   });
 });
 
-describe("a dashed custom-element name, per target, as measured (decision 145, round 2 addition)", () => {
+describe("a dashed custom-element name, per target, as measured", () => {
   // Measured: what an unknown `<sl-card class="a">x</sl-card>` compiles to today.
   //   html, astro-html (page)  : error, Marko's "Unable to find entry point for custom tag"
   //   solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template : a native element

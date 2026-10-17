@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { builtinLookup, builtinTargets } from "./index.ts";
 
 /**
- * `children["*"]` per target family (decision 147): inside a contract parent
+ * `children["*"]` per target family: inside a contract parent
  * the contract decides, so a lowercase child matches on every target exactly
  * as on html and under lowerSource, native-element name or not; outside a contract parent
  * the target's own behaviour is unchanged. A target's built-ins are never

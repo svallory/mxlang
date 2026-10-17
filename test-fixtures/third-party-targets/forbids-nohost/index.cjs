@@ -1,4 +1,4 @@
-// A target with no host whose declarations forbid the contract rung (decision 145): registration must say so, naming the target, and the compile must agree.
+// A target with no host whose declarations forbid the contract rung: registration must say so, naming the target, and the compile must agree.
 // Its compile reports the element names it lowered, so a test can see which rung answered.
 const declarations = {
   tags: {},
