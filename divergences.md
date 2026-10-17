@@ -52,8 +52,9 @@ elements to `{...__mxAttrSpread(expr, "tag")}`; string-valued dynamic tags
 when the target resolves to a string and pass through for a component target.
 Only names with genuine non-attribute semantics on Solid are exempt: `class`,
 `style`, `ref`, `children`, event handlers (Marko's `/^on[A-Z-]/` in a spread,
-plus Solid's `on:`/`oncapture:`) and `prop:`, a real property write. `attr:`,
-`bool:` and `use:` lower to `setAttribute` on Solid 2, so they validate, as do
+plus Solid's `on:`) and `prop:`, a real property write. `oncapture:`, `attr:`,
+`bool:` and `use:` are ordinary attributes that lower to `setAttribute` on Solid 2,
+so they validate, as do
 `classList` and `:foo` (`value:foo`); Marko exempts no name. The keys Solid
 reads as markup are not validated and passed on but rewritten by the view (see
 the raw-HTML row below). String-shaped

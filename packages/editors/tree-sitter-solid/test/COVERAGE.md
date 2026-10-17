@@ -721,7 +721,7 @@ Not enumerated as checklist items, but relevant:
 
 1. `Reveal` sugar: **decided no for v1**
 2. `step=` on `<for>` ranges: **decided parse error for v1**
-3. `use:` ergonomics: **decided parse error for v1** (with fix-it hint)
+3. `use:` ergonomics: **decided: an ordinary attribute** that keeps its full name, as in Marko (see 21-24)
 4. HMR preservation rules: **unverified**
 5. `eslint-plugin-solid` Solid 2.0 status: **unknown**
 6. Reactive tags (`<let>`, `<const>`, `<effect>`, `:=`): **deferred to v2**
