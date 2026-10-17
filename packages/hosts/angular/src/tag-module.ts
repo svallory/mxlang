@@ -1552,6 +1552,11 @@ export function compileTagModule(
   // are props, which is why it is aliased unconditionally rather than only
   // when `authored` happens to contain it.
   if (hasInputs) angularImports.push(importSpec("Input", "NgInput"));
+  // A tag call assigns `class` as a plain property each parent pass. Under the
+  // OnPush default that assignment never marks this view dirty, so the callee
+  // would keep rendering the first class it saw. Eager checks it on every pass.
+  const eagerForClass = inputProps.some((prop) => prop.name === "class");
+  if (eagerForClass) angularImports.push(importSpec("ChangeDetectionStrategy"));
 
   /**
    * The class members that expose the module-level names the template reads.
@@ -1611,6 +1616,9 @@ export function compileTagModule(
     "  standalone: true,",
     `  imports: [${componentImports.join(", ")}],`,
     `  template: ${quoteTemplate(template)},`,
+    ...(eagerForClass
+      ? [`  changeDetection: ${localOf("ChangeDetectionStrategy")}.Eager,`]
+      : []),
     "})",
     `export class ${className} {`,
   );

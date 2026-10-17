@@ -2464,17 +2464,16 @@ class AngularEmitter implements Emitter<string> {
     if (!attrs.some((a) => a.kind === "dynamic" && a.name === "class")) {
       return false;
     }
-    try {
-      const resolvedPath =
-        target.resolvedPath ?? this.tagModules.get(target.name)?.resolvedPath;
-      const { input } = readCalleeInput(
-        resolvedPath ? { ...target, resolvedPath } : target,
-        this.ctx,
-      );
-      return input.kind === "declared" && input.otherProps.has("class");
-    } catch {
-      return false;
-    }
+    const resolvedPath =
+      target.resolvedPath ?? this.tagModules.get(target.name)?.resolvedPath;
+    // No try/catch: `readCalleeInput` reports an unreadable or unparseable
+    // callee as an `invalid`/`unresolved` result, never a throw. The only throw
+    // is a missing lowering Ctx, which is a host bug and must surface.
+    const { input } = readCalleeInput(
+      resolvedPath ? { ...target, resolvedPath } : target,
+      this.ctx,
+    );
+    return input.kind === "declared" && input.otherProps.has("class");
   }
 
   private validateAttributeTagProp(

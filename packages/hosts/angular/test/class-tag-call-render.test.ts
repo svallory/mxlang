@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { ChangeDetectorRef } from "@angular/core";
 import { getTestBed, TestBed } from "@angular/core/testing";
 import {
   BrowserTestingModule,
@@ -92,7 +93,13 @@ let pageId = 0;
 async function render(
   template: string,
   props: Record<string, unknown>,
-): Promise<{ inputs: string[]; hosts: (string | null)[] }> {
+  update?: Record<string, unknown>,
+): Promise<{
+  inputs: string[];
+  hosts: (string | null)[];
+  /** The callee's rendered text after `update` is applied and checked again. */
+  updated: { inputs: string[]; shown: (string | null)[] };
+}> {
   const name = `page${++pageId}`;
   const file = join(dir, `${name}.component.ng.mx`);
   const source = [
@@ -113,16 +120,36 @@ async function render(
   const fixture = TestBed.createComponent(mod.Page as never);
   Object.assign(fixture.componentInstance as object, props);
   fixture.detectChanges();
-  const tags = fixture.debugElement.queryAll(
-    (d) => d.name === "mx-child" || d.name === "mx-plain",
-  );
-  return {
-    inputs: tags.map((tag) =>
+  const tags = () =>
+    fixture.debugElement.queryAll(
+      (d) => d.name === "mx-child" || d.name === "mx-plain",
+    );
+  const inputs = () =>
+    tags().map((tag) =>
       JSON.stringify((tag.componentInstance as { class?: unknown }).class),
-    ),
-    hosts: tags.map((tag) =>
+    );
+  const first = {
+    inputs: inputs(),
+    hosts: tags().map((tag) =>
       (tag.nativeElement as HTMLElement).getAttribute("class"),
     ),
+  };
+  if (update) {
+    Object.assign(fixture.componentInstance as object, update);
+    // The page is OnPush too; dirty it as an event handler or signal would.
+    fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
+    fixture.detectChanges();
+  }
+  return {
+    ...first,
+    updated: {
+      inputs: inputs(),
+      shown: tags().map(
+        (tag) =>
+          (tag.nativeElement as HTMLElement).querySelector("pre")
+            ?.textContent ?? null,
+      ),
+    },
   };
 }
 
@@ -186,6 +213,26 @@ describe("a class on an MX tag call whose callee declares a class input", () => 
       { y: 0, x: "xx" },
     );
     expect(view.inputs).toEqual([text({ k: true }), text("XX")]);
+  });
+});
+
+describe("a class input that changes after the first render", () => {
+  it("re-renders the callee's class when the value changes", async () => {
+    const view = await render(
+      "<child class=y/>",
+      { y: "one" },
+      { y: ["two", "three"] },
+    );
+    expect(view.inputs).toEqual([text("one")]);
+    expect(view.updated.inputs).toEqual([text(["two", "three"])]);
+    // The callee prints `input.class`; an OnPush callee kept showing "one".
+    expect(view.updated.shown).toEqual(["two,three"]);
+  });
+
+  it("re-renders a shorthand merged with a changing class", async () => {
+    const view = await render("<child.a class=y/>", { y: 1 }, { y: 2 });
+    expect(view.updated.inputs).toEqual([text(["a", 2])]);
+    expect(view.updated.shown).toEqual(["a,2"]);
   });
 });
 
