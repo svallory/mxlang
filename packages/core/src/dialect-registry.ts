@@ -13,10 +13,11 @@
  * position, and lowering hands it to its type's `lower`. A row naming a
  * type nothing registers is the one table error.
  *
- * Three positions: line, attribute and value (an attribute's whole
- * `=value`, once the parser knows where it ends). An expression-position
- * row naming a node type is a table error (expression-position rows stay
- * `{ call }`, `"string"` or `"identifier"`).
+ * Four positions: expression (an operand inside an expression), line,
+ * attribute and value (an attribute's whole `=value`, once the parser knows
+ * where it ends). A node claimed in expression or value position lowers to
+ * an expression (or, in value position, a string); `Expr.nodes` and
+ * `Attr.node` keep the node beside what it lowered to.
  */
 import {
   DIALECT_HOOK_ERROR_CODE,
@@ -34,11 +35,11 @@ import type {
 } from "./syntax-table.ts";
 
 /**
- * Where a row's node type is asked to claim text: a tagless line, an
- * attribute (the first character of its name), or an attribute's whole
- * `=value`. @unstable
+ * Where a row's node type is asked to claim text: an operand inside an
+ * expression, a tagless line, an attribute (the first character of its
+ * name), or an attribute's whole `=value`. @unstable
  */
-export type ClaimPosition = "line" | "attribute" | "value";
+export type ClaimPosition = "expression" | "line" | "attribute" | "value";
 
 /**
  * What a node type's `parse` gets besides the text and its span: where the
@@ -48,8 +49,9 @@ export interface ClaimContext {
   readonly position: ClaimPosition;
   /**
    * The static name of the tag whose attribute list holds the text, in
-   * attribute and value position; `null` on a tagless line, and for a tag
-   * whose name is dynamic.
+   * expression, attribute and value position; `null` on a tagless line, for
+   * an expression outside a tag's attribute list, and for a tag whose name
+   * is dynamic.
    */
   readonly tag: string | null;
   /**
@@ -91,10 +93,13 @@ export interface DialectNodes {}
 /**
  * One node type a dialect registers (`Dialect.nodeTypes`, keyed by `Type`).
  * `print(parse(text))` gives the text back. `lower` builds core's shapes with
- * the same `ctx` constructors `lowerTrigger` gets. In value position
+ * the same `ctx` constructors `lowerTrigger` gets. In expression position
+ * (`ctx.position === "expression"`, `ctx.use` saying how the operand is
+ * used) it returns a `ctx.expression` result, the node's forward:
+ * `Expr.nodes` keeps the node beside it. In value position
  * (`ctx.position === "value"`) it returns the string every target emits or
- * a `ctx.expression` result; a string keeps the node on the IR attribute
- * (`Attr.node`). @unstable
+ * a `ctx.expression` result; either way the node stays on the IR (`Attr.node`
+ * for a string or a string literal, else `Expr.nodes`). @unstable
  */
 export interface NodeType<N extends DialectNode = DialectNode> {
   /** The fields that hold child nodes, in order; `[]` for a leaf. */
@@ -103,8 +108,8 @@ export interface NodeType<N extends DialectNode = DialectNode> {
    * The node's own fields, from the text the row matched, or `undefined` to
    * decline the text (it then parses as if no row matched). Core adds
    * `type` and `span`, and in line and attribute position the trigger's
-   * `value`, `operator` and `args`; in value position the node's fields
-   * are all its own but `type` and `span`.
+   * `value`, `operator` and `args`; in expression and value position the
+   * node's fields are all its own but `type` and `span`.
    */
   parse(
     text: string,
@@ -131,7 +136,7 @@ export interface RegisteredNodeType {
    * every other core type, which no row can name.
    */
   readonly parse?: NodeType["parse"];
-  /** The positions a row naming the type may hold; absent means all three. */
+  /** The positions a row naming the type may hold; absent means all four. */
   readonly positions?: readonly ClaimPosition[];
 }
 
@@ -197,7 +202,6 @@ const CORE_TYPES: Readonly<Record<string, readonly string[]>> = {
   Method: ["typeParams", "params", "body"],
   Trigger: ["value", "args"],
   String: [],
-  Atom: [],
   Text: [],
   Placeholder: ["expression"],
   Scriptlet: ["code"],
@@ -209,13 +213,13 @@ const CORE_TYPES: Readonly<Record<string, readonly string[]>> = {
   BlockTag: [],
   Filter: [],
   ParseError: [],
-  Expression: ["node", "error", "atoms", "triggers"],
-  Statements: ["node", "error", "atoms", "triggers"],
-  Pattern: ["node", "error", "atoms", "triggers"],
-  Arguments: ["node", "error", "atoms", "triggers"],
-  ParameterList: ["node", "error", "atoms", "triggers"],
-  TypeArguments: ["node", "error", "atoms", "triggers"],
-  TypeParameters: ["node", "error", "atoms", "triggers"],
+  Expression: ["node", "error", "triggers"],
+  Statements: ["node", "error", "triggers"],
+  Pattern: ["node", "error", "triggers"],
+  Arguments: ["node", "error", "triggers"],
+  ParameterList: ["node", "error", "triggers"],
+  TypeArguments: ["node", "error", "triggers"],
+  TypeParameters: ["node", "error", "triggers"],
 };
 
 function entry(
@@ -305,7 +309,7 @@ const CORE_PARSES: Readonly<Record<string, NodeType["parse"]>> = {
   String: (text) => parseMxString(text),
 };
 
-/** The positions of core's types a row may name; absent is all three. */
+/** The positions of core's types a row may name; absent is all four. */
 const CORE_POSITIONS: Readonly<Record<string, readonly ClaimPosition[]>> = {
   Trigger: ["line", "attribute"],
   String: ["value"],
@@ -415,7 +419,7 @@ const CLAIMED_KEYS = ["value", "args"] as const;
 /** The fields core sets on a claimed node; a `parse` result may not hold them. */
 const CORE_SET = ["type", "span", "start", "end", "value", "operator", "args"];
 
-/** The fields core sets on a node claimed in value position. */
+/** The fields core sets on a node claimed in expression or value position. */
 const CORE_SET_VALUE = ["type", "span", "start", "end"];
 
 /** Can a row naming `registered` hold `position`? */
@@ -486,9 +490,11 @@ export function claimNode(
       `the \`${row.id}\` trigger's ${label} must return the node's fields as an object, or \`undefined\` to decline the text`,
     );
   }
-  const owned = (ctx.position === "value" ? CORE_SET_VALUE : CORE_SET).filter(
-    (field) => field in fields,
-  );
+  const owned = (
+    ctx.position === "value" || ctx.position === "expression"
+      ? CORE_SET_VALUE
+      : CORE_SET
+  ).filter((field) => field in fields);
   if (owned.length > 0) {
     return failWith(
       ctx,
@@ -664,7 +670,7 @@ export function checkDialectNodeTypes(
 
 /** The trigger lists a table holds rows in, with the position each takes. */
 const ROW_LISTS = {
-  expressionTriggers: undefined,
+  expressionTriggers: "expression",
   attributeTriggers: "attribute",
   lineTriggers: "line",
   valueTriggers: "value",

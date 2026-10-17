@@ -13,7 +13,8 @@
  * object, so `rewriteCodes`' "visit each shared object once" holds on the copy
  * too.
  *
- * Parser nodes (`Expr.node`, `For.paramNodes`) are kept by reference unless
+ * Parser nodes (`Expr.node`, `For.paramNodes`, an `Expr.nodes` entry's
+ * `node` and `forward`) are kept by reference unless
  * `nodes` is set, since most rewrites touch only `code`; a caller that edits
  * the parser node itself passes `{ nodes: true }`. Inside a parser node the
  * rule is different: a real `@babel/parser` node is a class instance (`Node`,
@@ -44,7 +45,8 @@ export function cloneIr<T>(value: T, options: { nodes?: boolean } = {}): T {
     copies.set(input, out);
     for (const [key, child] of Object.entries(input)) {
       const isParserNode =
-        mode === "ir" && (key === "node" || key === "paramNodes");
+        mode === "ir" &&
+        (key === "node" || key === "paramNodes" || key === "forward");
       out[key] = copy(
         child,
         isParserNode ? (options.nodes === true ? "node" : "shared") : mode,

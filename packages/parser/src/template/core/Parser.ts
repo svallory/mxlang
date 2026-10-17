@@ -60,15 +60,15 @@ export interface StateDefinition<P extends Meta = Meta> {
 }
 
 /**
- * MX: the `claim` option of `createParser`. Asked when an attribute or line
- * trigger's row matches, or a value row matches a whole attribute value,
+ * MX: the `claim` option of `createParser`. Asked when an expression,
+ * attribute or line trigger's row matches, or a value row matches a whole attribute value,
  * with the row's id, the position and the matched text's range;
  * `undefined` declines (the text lexes as if no row matched), anything else
  * claims it.
  */
 export type TriggerClaim = (
   id: string,
-  position: "attribute" | "line" | "value",
+  position: "expression" | "attribute" | "line" | "value",
   start: number,
   end: number,
 ) => unknown;
@@ -188,6 +188,19 @@ export class Parser {
   ): { trigger: CompiledTrigger; end: number; claim: unknown } | undefined {
     const hit = matchTrigger(set, data, pos);
     if (hit === undefined) return undefined;
+    return this.claimHit(hit, pos, position);
+  }
+
+  /**
+   * MX: asks the `claim` option about a row already matched at `pos` (an
+   * expression trigger asks once its other checks pass). Memoized per
+   * position and start; `undefined` is a declined match.
+   */
+  claimHit(
+    hit: { trigger: CompiledTrigger; end: number },
+    pos: number,
+    position: "expression" | "attribute" | "line",
+  ): { trigger: CompiledTrigger; end: number; claim: unknown } | undefined {
     if (this.claim === undefined) return { ...hit, claim: undefined };
     const key = `${position}:${pos}`;
     let claim: unknown;

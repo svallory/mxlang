@@ -560,12 +560,12 @@ this.
 
 A dialect can register its own node types, keyed `id:Type` in one registry
 with core's own (core is dialect zero, `mx`: `mx:Tag`, `mx:Attribute`, …). A
-trigger row names one with `node: { type, dialect }`, in an attribute list,
-on a tagless line, or in the value position (`valueTriggers`: an attribute's
-whole `=value`). In an attribute list and on a line the row's `match` decides
-where the node ends; in the value position the parser already knows where the
-value ends, so `match` must cover the whole value and only decides whether the
-row is asked. While the file parses, core hands the text, its span and a
+trigger row names one with `node: { type, dialect }`, in an expression, in an
+attribute list, on a tagless line, or in the value position (`valueTriggers`:
+an attribute's whole `=value`). In an expression, an attribute list and on a
+line the row's `match` decides where the node ends; in the value position the
+parser already knows where the value ends, so `match` must cover the whole
+value and only decides whether the row is asked. While the file parses, core hands the text, its span and a
 context (`ClaimContext`: the position, the tag's static name, the attribute's
 name for a value, `fail`) to the type's `parse`. Fields claim the text: core
 stamps them with `type` and `span`, and the node stays in the MX AST at that
@@ -616,10 +616,26 @@ export default {
 static attribute `to="user.name"` whose IR carries the node (`Attr.node`)
 beside the `value` every target emits. A value node's `lower` returns a string
 or `ctx.expression(node)`; in an attribute list or on a line it builds
-attributes and tags, as `lowerTrigger` does. A row names a type of its own
-dialect or one of core's: `mx:Trigger` (the same as `{ call }`; attribute and
-line), `mx:Expression` (declines every text; every position) and `mx:String`
-(claims a value as the string it spells, quoted or bare; value position only).
+attributes and tags, as `lowerTrigger` does.
+
+In an expression (`x=(a + ~user.name)`, `${f(~user.name)}`), Babel parses the
+row's stand-in, and the node's `lower` (`ctx.position` `"expression"`) returns
+`ctx.expression(forward)`. The forward is an expression native to the
+expression language, a Babel node: it takes the node's place in the payload,
+and every target emits it as it emits any other expression. There is no
+neutral vocabulary in between: a forward is made of the expression
+language's own nodes. The IR lists each node in the expression's
+`Expr.nodes`, in source order: an `ExprNode` with the node's `type`, its
+`span` in the source, the `node` as parsed, its `forward` (the same object the
+payload holds) and `code`, the range of `Expr.code` the forward is printed at.
+`Expr.code` holds the forward's printed text, never the authored node, so a
+source map maps the text before and after a node one to one and each node to
+its printed range (`mappedExpr`).
+
+A row names a type of its own dialect or one of core's: `mx:Trigger` (the
+same as `{ call }`; attribute and line), `mx:Expression` (declines every
+text; every position) and `mx:String` (claims a value as the string it
+spells, quoted or bare; value position only).
 Naming another dialect's types is not supported yet. Any other name is the one
 error the claim owns. For this dialect's value row naming `ref:Path`: ``the
 `ref` trigger names `ref:Path`, which is not a registered node type (a row can
@@ -644,11 +660,15 @@ or parameter properties. A tag built from a tagless line carries
 Core has no name sugars: on the `.mx` default row a colon in a tag head, a
 spaced ` :b` and a spaced `#id`/`.class` read as stock Marko reads them, so a
 dialect that wants them adds its own rows. Core has no atoms either: `:name`
-in an expression is plain JavaScript, as in Marko. A dialect builds an atom
-with an expression or value trigger whose hook returns a `StringLiteral`
-marked `extra.mxAtom = { span }`; core records it, splices its string
-into `Expr.code`, and lowers a whole-value atom to a `static` attribute with
-`atom`.
+in an expression is plain JavaScript, as in Marko. A dialect that has atoms
+registers them as a node type of its own (`atom:Atom`, say) and names it from
+an expression row and a value row; its `lower` returns the string literal the
+atom stands for. A whole-value atom is a `static` attribute with the node on
+`Attr.node`; an atom inside an expression is an entry of `Expr.nodes`. A mark
+a dialect sets on a forward (`extra.mxAtom`, `extra.mxMember`) reaches every
+later reader, its own `afterLower` included, unchanged; core reads no
+`extra.mxAtom`. Both marks go in 0.1.0-alpha.34: read `Expr.nodes` and
+`Attr.node` instead.
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 
@@ -662,9 +682,16 @@ own, with their meaning, by claiming them. Three `@unstable` parts of
   as opaque data, in `customTags`, `mx.contracts` and tag sidecars alike, and
   never checks it. A key that no core rule knows and no dialect lists is
   still a registration error. A key core checks itself cannot be listed.
-  Core keeps the whole-value shape check (`type: "atom"` or `"member"`, for
-  the atoms and members a dialect builds) and `ctx.declare` in `analyze`,
-  and reads no claimed key.
+  Core keeps the whole-value shape check and `ctx.declare` in `analyze`,
+  and reads no claimed key. The shape check covers the dialect's own node
+  types: `type: "atom:Atom"` (any `id:Type` the file's dialect registers)
+  accepts one node of that type, written as the whole value or as an
+  expression that is the node's forward, and `items: "atom:Atom"` makes an
+  array of them. A string, number, array, function, member or node of
+  another type in that slot is a positioned error; an identifier or a call
+  has no knowable type and passes. A type the dialect does not register is a
+  registration error. `type: "member"` is the same check for the members a
+  dialect builds.
 - `checkContract(tag, contract, ctx)` runs at registration for every
   contract that uses a listed key, at any depth, called or not. `contract`
   is plain data (`attributes`, `attributeTags`, `children` and the listed
@@ -678,26 +705,30 @@ own, with their meaning, by claiming them. Three `@unstable` parts of
 - `afterLower(unit)` runs once per unit, after core's own checks. `unit` is
   a frozen `LoweredUnit`:
   - `calls`: every custom tag call with its contract (the listed tag keys
-    included), its attributes as written (`string`, `atom`, `member`,
-    `boolean`, `expression`, `spread`), its attribute tags at any depth, and
-    its authored ancestors with an opaque `scope` per tag instance.
+    included), its attributes as written (each value's `type`: `mx:String`,
+    `mx:Expression`, `mx:Member`,
+    the dialect node written as the whole value, `null` for a bare boolean,
+    or `{ spread: true }`), its attribute tags at any depth, and its authored
+    ancestors with an opaque `scope` per tag instance.
   - `declared`: what `analyze` hooks declared.
   - `fail(message, { at?, code?, also? })` and `warn(message, at?)`.
 
 ```ts
-import type { Dialect, LoweredUnit } from "@mxlang/core";
+import type { Dialect, LoweredUnit, SourceSpan } from "@mxlang/core";
 
 const checks: Partial<Dialect> = {
   contractFields: { attribute: ["unique"] },
   afterLower(unit: LoweredUnit) {
     for (const call of unit.calls) {
       for (const attr of call.attrs) {
-        if (attr.kind === "spread") continue;
+        if ("spread" in attr || attr.value?.type !== "atom:Atom") continue;
+        // `type` does not narrow a dialect's node: this dialect's own type.
+        const atom = attr.value as unknown as { name: string; span?: SourceSpan };
         const declared = call.contract.attributes?.[attr.name];
-        if (declared?.unique && attr.kind === "atom") {
+        if (declared?.unique) {
           // A positioned error; `code` reaches `DataDiagnostic.code`.
-          unit.fail(`\`:${attr.value}\` must be unique`, {
-            at: attr.span,
+          unit.fail(`\`~${atom.name}\` must be unique`, {
+            at: atom.span,
             code: "UNIQUE",
           });
         }

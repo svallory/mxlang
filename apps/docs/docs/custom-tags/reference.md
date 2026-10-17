@@ -22,8 +22,9 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "atom"; // leaves core with the atom removal (mx-g1tw)
-  items?: "string" | "number" | "boolean";
+    | "member"
+    | `${string}:${string}`; // a node type the file's dialect registers, `atom:Atom`
+  items?: "string" | "number" | "boolean" | `${string}:${string}`;
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -235,7 +236,7 @@ Messages begin with the relevant tag name unless the problem belongs to a discov
 | An enum receives a non-literal expression. | `` `<name>`: attribute `x` must be a static value from … `` |
 | An enum receives a non-string literal. | `` `<name>`: attribute `x` must be a string from …, got TYPE `` |
 | An enum string is not a member. | `` `<name>`: attribute `x` must be one of …, got VALUE `` |
-| A non-atom meets `type: "atom"`, or an atom meets another type (until the atom removal (mx-g1tw) takes `atom` out of core). | `` `<name>`: attribute `x` must be atom, got string `` (and `must be string, got atom`); a dialect that claims a key words the suffix |
+| A value that is not a node of the declared node type meets `type: "<dialect>:<Type>"` (or `items:` one), or a whole-value node meets another type. | `` `<name>`: attribute `x` must be atom:Atom, got string `` (and `must be string, got atom:Atom`, `item 2 must be atom:Atom, got number`); a dialect that claims a key words the suffix |
 | A required attribute is absent. | `` `<name>`: missing required attribute `x` `` |
 | A declared default is not a string, number, or boolean. | `` `<name>`: attribute `x` declares a `default` that … has no attribute spelling `` |
 

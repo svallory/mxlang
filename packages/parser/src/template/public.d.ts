@@ -136,14 +136,14 @@ export declare function createParser(
 ): Lexer;
 
 /**
- * Asked once per matched attribute or line trigger start, and once per
+ * Asked once per matched expression, attribute or line trigger start, and once per
  * value a value row matches, in one parse: `undefined` declines (the text
  * lexes as if no row matched); anything else claims and is carried on the
  * trigger's or value's event as `claim`.
  */
 export type TriggerClaim = (
   id: string,
-  position: "attribute" | "line" | "value",
+  position: "expression" | "attribute" | "line" | "value",
   start: number,
   end: number,
 ) => unknown;

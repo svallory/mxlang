@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { CustomTag, CustomTagAttribute } from "../custom-tags.ts";
+import atomSyntax from "../fixtures/syntax/atom-fixture.ts";
 import { clearScanCache, scanCached } from "../scan-cache.ts";
 import type { Dialect, Trigger } from "../syntax-table.ts";
 import { clearTagFileCache } from "../tag-file.ts";
@@ -505,10 +506,10 @@ describe("`stripTypes: false` and core's own checks", () => {
       "a=(1 as number)",
       "a=((() => 1) as unknown)",
     ],
-    ["atom", { type: "atom" }, "a=(1 as number)", "a=([] as string[])"],
+    ["node type", { type: "atom:Atom" }, "a=(1 as number)", "a=(x as string)"],
     [
-      "atom, array element",
-      { type: "atom" },
+      "node type, array element",
+      { type: "array", items: "atom:Atom" },
       "a=([1] as number[])",
       "a=([] as string[])",
     ],
@@ -520,16 +521,18 @@ describe("`stripTypes: false` and core's own checks", () => {
       const customTags: Record<string, CustomTag> = {
         x: { attributes: { a: attribute } },
       };
-      const byDefault = diagnosticsOf(`<x ${bad}/>\n`, { customTags });
+      // The atom fixture registers `atom:Atom`, the node-type rows' type.
+      const base = { customTags, dialect: atomSyntax };
+      const byDefault = diagnosticsOf(`<x ${bad}/>\n`, base);
       expect(byDefault.map((d) => d.code)).toEqual([
         "MX_INVALID_ATTRIBUTE_VALUE",
       ]);
       expect(
-        diagnosticsOf(`<x ${bad}/>\n`, { customTags, stripTypes: false }),
+        diagnosticsOf(`<x ${bad}/>\n`, { ...base, stripTypes: false }),
       ).toEqual(byDefault);
       for (const options of [{}, { stripTypes: false }]) {
         expect(
-          diagnosticsOf(`<x ${good}/>\n`, { customTags, ...options }),
+          diagnosticsOf(`<x ${good}/>\n`, { ...base, ...options }),
         ).toEqual([]);
       }
     },

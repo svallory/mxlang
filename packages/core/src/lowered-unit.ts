@@ -129,26 +129,24 @@ export interface ContractExpression {
 }
 
 /**
- * A whole-value atom or member a syntax module built (`ctx.attribute`'s
- * `{ kind: "atom" | "member", name }`). Core has no syntax that builds one: it
+ * A whole-value member a syntax module built (`ctx.attribute`'s
+ * `{ kind: "member", name }`). Core has no syntax that builds one: it
  * carries the module's value as it wrote it. @unstable
  */
 export interface ContractAtomOrMember {
-  readonly type: "mx:Atom" | "mx:Member";
+  readonly type: "mx:Member";
   readonly name: string;
-  /** The atom or member token as written. */
+  /** The member token as written. */
   readonly span?: SourceSpan;
 }
 
 /**
- * An attribute's value in a contract view: a string, an expression, or the
- * node a value row claimed when its type lowered it to a string (frozen, as
- * its `parse` returned it; a claimed `mx:String` also carries `raw`,
- * `start` and `end`). A claimed node lowered to `ctx.expression` is the
- * value that expression makes, as if written there: `mx:Expression`, or
- * `mx:String` for a string literal (`mx:Atom` when it is atom-marked).
- * Read `type`
- * first; `type` does not narrow a dialect's node, so check its key and cast.
+ * An attribute's value in a contract view: a string, an expression, a
+ * member, or the node written as the whole value when its type lowered it to
+ * a string or a string literal (frozen, as its `parse` returned it; a claimed
+ * `mx:String` also carries `raw`, `start` and `end`). A node whose type
+ * lowered it to any other expression is that `mx:Expression`. Read `type` first; `type` does not narrow a dialect's node,
+ * so check its key and cast.
  * @unstable
  */
 export type ContractValue =
@@ -256,15 +254,11 @@ function contractValueOf(
 ): ContractValue | null {
   if (attr.kind === "boolean") return null;
   if (attr.kind === "static") {
-    if (attr.atom || attr.member) {
-      const mark = (attr.atom ?? attr.member) as {
-        name: string;
-        span: SourceSpan;
-      };
+    if (attr.member) {
       return Object.freeze({
-        type: attr.atom ? ("mx:Atom" as const) : ("mx:Member" as const),
-        name: mark.name,
-        span: mark.span,
+        type: "mx:Member" as const,
+        name: attr.member.name,
+        span: attr.member.span,
       });
     }
     // The node a value row claimed, as parsed (frozen).

@@ -959,6 +959,10 @@ function lexTrigger(
   ) {
     return false;
   }
+  // The `claim` option has the last word: a declined match lexes as if no
+  // row matched.
+  const claimed = parser.claimHit(hit, start, "expression");
+  if (!claimed) return false;
   if (parser.recordTrigger(trigger, start, end)) {
     parser.options.onTrigger?.({
       id: trigger.id,
@@ -967,6 +971,7 @@ function lexTrigger(
       start,
       end,
       text: { start, end },
+      ...(claimed.claim !== undefined ? { claim: claimed.claim } : {}),
     });
   }
   expression.atomEnd = end;

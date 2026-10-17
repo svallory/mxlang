@@ -48,7 +48,7 @@ import {
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestHtmlElement, nearestName } from "./did-you-mean.ts";
 import { handleNode } from "./host-handle.ts";
-import type { Atom, Attr, Expr, IrNode, Position } from "./ir.ts";
+import type { Attr, Expr, ExprNode, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
@@ -76,7 +76,7 @@ import {
 import type { TagRulesPreset } from "./tag-presets.ts";
 import type { TagTable } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
-import { childrenWithTriggers } from "./triggers.ts";
+import { childrenWithTriggers, type TriggerSplice } from "./triggers.ts";
 
 /**
  * Raised for a construct that parses as Marko but has no string lowering.
@@ -617,19 +617,13 @@ export interface Ctx {
    */
   unnamedTagsResolved?: boolean;
   /**
-   * Every atom a dialect's trigger marked (`extra.mxAtom`), in source order,
-   * recorded by `recordAtoms`; `expr()` splices each one inside an
-   * expression's span.
-   */
-  atoms?: Atom[];
-  /**
    * Each lowered syntax-table trigger's span and printed replacement
-   * (decision 182 addendum 5), spliced into `code` by `expr()` beside the
-   * atoms. Set by the trigger pass from the document's registered syntax.
+   * (spec §13.9.5), spliced into `code` by `expr()`; a dialect
+   * node's splice carries the node, recorded on the expression
+   * (`Expr.nodes`). Set by the trigger pass from the document's registered
+   * syntax.
    */
-  triggerSplices?: { start: number; end: number; text: string }[];
-  /** Set by `lower` once the whole template's atoms are recorded. */
-  atomsRecorded?: boolean;
+  triggerSplices?: TriggerSplice[];
   /**
    * Every `/var` a tag call has bound so far, and where.
    *
@@ -1311,65 +1305,87 @@ export function quote(text: string): string {
  *   stateful tags pays nothing.
  */
 export function expr(ctx: Ctx, node: Node): string {
+  return exprWithNodes(ctx, node).code;
+}
+
+/**
+ * `expr()`'s `code`, and the dialect nodes inside the expression's span
+ * (`Expr.nodes`), in source order, each with the range its forward is
+ * printed at in `code`.
+ */
+export function exprWithNodes(
+  ctx: Ctx,
+  node: Node,
+): { code: string; nodes: ExprNode[] } {
   const start = node.start ?? node.loc?.start.index;
   const end = node.end ?? node.loc?.end.index;
 
   if (typeof start !== "number" || typeof end !== "number") {
     // If we have no position, we must fall back to generation (e.g. synthetic nodes)
-    return ctx.generate(
-      ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
-    );
+    return {
+      code: ctx.generate(
+        ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
+      ),
+      nodes: [],
+    };
   }
 
-  // Each atom a dialect marked inside the span becomes its string literal.
-  // The slice is the authored text, so the marked node alone would leave the
-  // authored atom (`~a` in a dialect spelling it so) in the output; the
-  // splice is what makes `code` carry `"a"`.
-  const atoms = atomSplices(ctx, start, end);
+  // Each lowered trigger inside the span becomes its printed replacement.
+  // The slice is the authored text, so the replaced node alone would leave
+  // the authored trigger (`&status`, `:a`) in the output; the splice is
+  // what makes `code` carry `self.status` or `"a"`.
+  const splices = triggerSplicesIn(ctx, start, end);
+  const printed = new Map<Splice, { start: number; end: number }>();
+  let code: string;
   if (ctx.bindings.size === 0) {
-    return atoms.length === 0
-      ? ctx.source.slice(start, end)
-      : spliceSource(ctx, start, end, atoms);
+    code =
+      splices.length === 0
+        ? ctx.source.slice(start, end)
+        : spliceSource(ctx, start, end, splices, printed);
+  } else {
+    code = rewriteReferencesSource(ctx, node, start, end, splices, printed);
   }
-
-  return rewriteReferencesSource(ctx, node, start, end, atoms);
+  const nodes: ExprNode[] = [];
+  for (const splice of splices) {
+    if (!splice.node) continue;
+    const at = printed.get(splice);
+    nodes.push({ ...splice.node, ...(at ? { code: at } : {}) });
+  }
+  return { code, nodes };
 }
 
-type Splice = { start: number; end: number; text: string };
+type Splice = { start: number; end: number; text: string } & Partial<
+  Pick<TriggerSplice, "node">
+>;
+
+/** The lowered syntax-table triggers inside `[start, end)`, in source order. */
+function triggerSplicesIn(ctx: Ctx, start: number, end: number): Splice[] {
+  // Decision 182 addendum 5: a lowered trigger prints as its replacement.
+  return (ctx.triggerSplices ?? [])
+    .filter((splice) => splice.start >= start && splice.end <= end)
+    .sort((a, b) => a.start - b.start);
+}
 
 /**
- * The atoms inside `[start, end)` as splices of their string literal, and
- * the lowered syntax-table triggers as splices of their printed replacement.
+ * `ctx.source` over `[start, end)` with every splice applied. `printed`
+ * gets where each splice's text landed in the result.
  */
-function atomSplices(ctx: Ctx, start: number, end: number): Splice[] {
-  const splices: Splice[] = [];
-  for (const atom of ctx.atoms ?? []) {
-    if (atom.span.sourceStart < start || atom.span.sourceEnd > end) continue;
-    splices.push({
-      start: atom.span.sourceStart,
-      end: atom.span.sourceEnd,
-      text: JSON.stringify(atom.name),
-    });
-  }
-  // Decision 182 addendum 5: a lowered trigger prints as its replacement.
-  for (const splice of ctx.triggerSplices ?? []) {
-    if (splice.start >= start && splice.end <= end) splices.push(splice);
-  }
-  return splices;
-}
-
-/** `ctx.source` over `[start, end)` with every splice applied. */
 function spliceSource(
   ctx: Ctx,
   start: number,
   end: number,
   splices: Splice[],
+  printed?: Map<Splice, { start: number; end: number }>,
 ): string {
   const sorted = [...splices].sort((a, b) => a.start - b.start);
   let result = "";
   let lastEnd = start;
   for (const r of sorted) {
     result += ctx.source.slice(lastEnd, r.start);
+    printed?.set(r, {
+      start: result.length,
+      end: result.length + r.text.length,
+    });
     result += r.text;
     lastEnd = r.end;
   }
@@ -1561,7 +1577,8 @@ function rewriteReferencesSource(
   node: Node,
   exprStart: number,
   exprEnd: number,
-  atoms: Splice[] = [],
+  splices: Splice[] = [],
+  printed?: Map<Splice, { start: number; end: number }>,
 ): string {
   // A bare identifier is never "referenced" as a lone expression to traverse
   // (there is no parent to ask), so it is handled before the walk.
@@ -1577,9 +1594,8 @@ function rewriteReferencesSource(
     types.program([types.expressionStatement(node as Node)]),
   );
 
-  // Atoms are spliced together with the binding rewrites: an atom is never
-  // an identifier, so the two never overlap.
-  const rewrites: Splice[] = [...atoms];
+  // Lowered triggers are spliced together with the binding rewrites.
+  const rewrites: Splice[] = [...splices];
   // Set only when a reference that *would* be rewritten has no position to
   // splice at — never cleared, so one such reference anywhere in the tree
   // forces the AST-clone fallback below rather than a silent partial rewrite
@@ -1631,7 +1647,7 @@ function rewriteReferencesSource(
     return ctx.source.slice(exprStart, exprEnd);
   }
 
-  return spliceSource(ctx, exprStart, exprEnd, rewrites);
+  return spliceSource(ctx, exprStart, exprEnd, rewrites, printed);
 }
 
 /**

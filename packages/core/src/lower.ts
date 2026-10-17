@@ -30,7 +30,6 @@ import { dirname, resolve } from "node:path";
 // slice 6 ruling B), since `@mxlang/babel` is private.
 import type { MxChild } from "@mxlang/babel/mx-ast";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
-import { atomOf, atomsIn, recordAtoms } from "./atom-marks.ts";
 import {
   attrArgsOf,
   attrNameOf,
@@ -72,6 +71,7 @@ import {
   DYNAMIC_TAG,
   declName,
   expr,
+  exprWithNodes,
   firstAttributeTag,
   hasContent,
   importBindings,
@@ -183,6 +183,7 @@ import {
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestName } from "./did-you-mean.ts";
 import { exportNameFor } from "./export-name.ts";
+import { nodeOfForward } from "./expr-nodes.ts";
 import { parseFragment } from "./fragment.ts";
 import type {
   Attr,
@@ -609,11 +610,10 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
-  const code = expr(ctx, node);
+  const { code, nodes } = exprWithNodes(ctx, node);
   checkTagVarReads(ctx, code, node);
   checkBindingWrites(ctx, code, node);
   const span = exprSpan(ctx, node);
-  const atoms = span ? atomsIn(ctx, span.sourceStart, span.sourceEnd) : [];
   const bodySpan =
     node?.type === "FunctionExpression" && span
       ? methodBodySpan(ctx, node, span)
@@ -623,7 +623,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
     shape: expressionShape(node),
     node,
     span,
-    ...(atoms.length > 0 ? { atoms } : {}),
+    ...(nodes.length > 0 ? { nodes } : {}),
     ...(bodySpan
       ? {
           bodySpan,
@@ -2086,17 +2086,20 @@ function lowerAttrNamed(
     return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
-    // A whole-value atom a dialect built (its literal marked `extra.mxAtom`)
-    // is still a static string to every target; the IR marks it so a data
-    // consumer or contract can tell it from `"strict"`.
-    const atom = atomOf(value);
     // Decision 182 addendum 5: a whole-value member a dialect built
-    // (`ctx.attribute(name, { kind: "member", name })`), marked the same way.
-    const member = atom ? undefined : memberOf(value);
-    // A whole value a value row claimed (a registered node: `mx:String`,
-    // or a dialect's type whose `lower` gave this string) stays beside the
-    // string every target emits.
-    const node = atom || member ? undefined : valueNodeOf(attr);
+    // (`ctx.attribute(name, { kind: "member", name })`), marked
+    // `extra.mxMember`.
+    const member = memberOf(value);
+    // A whole value that is one registered node (`mx:String`, or a
+    // dialect's type whose `lower` gave this string or string literal,
+    // claimed by a value or expression row or placed by `ctx.attribute`)
+    // stays beside the
+    // string every target emits, so a data consumer or contract can tell
+    // it from `"strict"`.
+    // A parenthesized node (`=(~on)`) is its forward alone: the node too.
+    const node = member
+      ? undefined
+      : (valueNodeOf(attr) ?? nodeOfForward(value));
     return {
       kind: "static",
       name,
@@ -2104,7 +2107,6 @@ function lowerAttrNamed(
       valueSpan: exprSpan(ctx, value),
       nameSpan,
       loc,
-      ...(atom ? { atom } : {}),
       ...(member ? { member } : {}),
       ...(node ? { node } : {}),
     };
@@ -6908,10 +6910,7 @@ function lowerChildrenOf(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // An external call (not from `lower`) has unresolved unnamed tags; the
   // walk starts with no parents, right for a body lowered on its own.
   if (!ctx.unnamedTagsResolved) {
-    // A dialect's atoms (`extra.mxAtom` replacements) are recorded once its
-    // triggers are lowered.
-    if (lowerTriggers(ctx, children) || !ctx.atomsRecorded)
-      recordAtoms(ctx, children);
+    lowerTriggers(ctx, children);
     children = childrenWithTriggers(children);
     resolveUnnamedTags(ctx, children);
     ctx.unnamedTagsResolved = true;
@@ -7328,12 +7327,8 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
   // Decision 182 addendum 5: a syntax table's triggers, before anything
-  // reads an expression, an attribute list or a body. A dialect's atoms
-  // (`extra.mxAtom` replacements) are recorded once they are lowered.
-  if (lowerTriggers(ctx, authored) || !ctx.atomsRecorded) {
-    recordAtoms(ctx, authored);
-    ctx.atomsRecorded = true;
-  }
+  // reads an expression, an attribute list or a body.
+  lowerTriggers(ctx, authored);
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
   const wasResolved = ctx.unnamedTagsResolved;
@@ -7552,9 +7547,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   dialect: "inherit",
   tagShorthands: "inherit",
   defaultTag: "inherit",
-  atoms: "inherit",
   triggerSplices: "inherit",
-  atomsRecorded: "inherit",
   dependencies: "inherit",
   resolveImport: "inherit",
   // The walk's own, discarded with it.
@@ -7631,7 +7624,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   );
   // Every field the walk only reads comes from the real `Ctx`, chosen by
   // {@link SCRATCH_HANDOFF}. The file's words (`voice`, `productName`), its
-  // dialect, its trigger splices and atoms, what the host set (`resolveImport`,
+  // dialect, its trigger splices, what the host set (`resolveImport`,
   // `unsupportedIn`, `defaultTag`) and its dependency set are the file's: this
   // walk's errors are thrown as the file's, and `analyze` is handed the very
   // `TagCall` its `transform` will receive.

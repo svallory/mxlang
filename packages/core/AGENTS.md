@@ -579,9 +579,8 @@ Five facts worth knowing before editing it:
   without the `Mx` prefix, keys only, lowered directly), and a dialect's
   `nodeTypes` (`{ keys, parse, print, lower }` per PascalCase type; the
   dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
-  (attribute, line and value triggers; expression position is a table
-  error) names a type core or the loading dialect registers with a `parse`
-  for that position (`CORE_POSITIONS`, `claimsAt`: core registers one only
+  (expression, attribute, line and value triggers) names a type core or the
+  loading dialect registers with a `parse` for that position (`CORE_POSITIONS`, `claimsAt`: core registers one only
   for `mx:Trigger` in attribute and line, `mx:String` in value, and
   `mx:Expression` everywhere); any other is the one claim error, "not
   registered" (position-aware: `notRegisteredMessage` lists what a row in
@@ -590,8 +589,8 @@ Five facts worth knowing before editing it:
   `claimNode`. Naming another dialect's types is not supported yet (the
   error says so). **The claim** (`claimNode`, the only place it is
   decided): `parseMx` (`mx-parse.ts`, `nodeClaims`) passes the front end a
-  `claim` option whenever the table has an attribute, line or value row
-  (never for the default row); at a matching row the template parser asks it once
+  `claim` option whenever the table has a row naming a node type in an
+  expression, or an attribute, line or value row (never for the default row); at a matching row the template parser asks it once
   per position and offset in one parse attempt (core's `answers` memo
   covers restarts). `claimNode` calls `parse(text, span, ctx: ClaimContext)`:
   fields are stamped `type`/`span` and placed in the tree by identity (the front end's `freezeCopy` keeps them), frozen
@@ -618,12 +617,25 @@ Five facts worth knowing before editing it:
   static `MxAttribute`: `mx:String` gives its `value`; any other type's
   `lower` sees `ctx.position` `"value"` and returns a string or
   `ctx.expression`. `valueNodeOf` gives `lower.ts` the node for the static
-  `Attr.node` (never with `atom`/`member`). A claimed default value ends
+  `Attr.node` (never with `member`).
+  **The expression position**: the template parser's `EXPRESSION` state
+  asks the claim at a matching expression row, the row's own `match`
+  deciding the end (a `{ call }` row there is claimed as a plain
+  `MxTrigger` and still lowers through `lowerTrigger`); Babel parses the row's stand-in, and the claimed node takes the
+  trigger's place in the container's `triggers`. Its type's `lower` sees
+  `ctx.position` `"expression"` and returns `ctx.expression(forward)`: the
+  forward, an expression native to Babel, replaces the stand-in in the
+  payload (no neutral vocabulary sits between them). `recordForward`
+  (`src/expr-nodes.ts`) maps each forward to its node in a WeakMap, and
+  `exprWithNodes` (`core.ts`) lists the nodes in `Expr.nodes` (`ExprNode`:
+  `type`, `span`, `node`, `forward`, `code`) with the range of `Expr.code`
+  each forward is printed at; `cloneIr` keeps each forward by reference, so
+  the map still finds it on a cloned IR. A claimed default value ends
   at a space followed by a `terminatesValue` row (`isClaimedDefault`,
   parser `EXPRESSION.ts`). `ContractAttr` (`lowered-unit.ts`) is the
-  attribute's name plus its value node (`mx:String`, `mx:Expression`, the
-  claimed node, or Mesh's `mx:Atom`/`mx:Member` marks, removal work), or
-  `{ spread: true }`. `lowerTriggers` is the one pass
+  attribute's name plus its value node (`mx:String`, `mx:Expression`,
+  the claimed node, or a dialect's
+  `mx:Member` mark), or `{ spread: true }`. `lowerTriggers` is the one pass
   that lowers line and attribute nodes, once each, in source order (a
   body's line node right after the walk reaches it), into `loweredNodes`,
   a cache keyed by the AST node that `attributesWithTriggers` and
@@ -634,8 +646,8 @@ Five facts worth knowing before editing it:
   Core's own lowering stays
   direct until PR 6 is done with `lower.ts`. Tests:
   `src/dialect-registry.test.ts`.
-  A whole-value member is a static `Attr` with `member` (`memberOf`, mirror
-  of `atomOf`); `type: "member"` is checked in `custom-tags.ts`
+  A whole-value member is a static `Attr` with `member` (`memberOf`);
+  `type: "member"` is checked in `custom-tags.ts`
   (`checkMemberAttr`). Core ships no dialect and no `./syntax/*` export: a dialect owns its
   rows, and Mesh's atoms, name sugars and `&` members live in Mesh (core has
   no name sugars of its own). Core's
@@ -646,12 +658,10 @@ Five facts worth knowing before editing it:
   `src/fixtures/syntax/declares-fixture.ts`, plus small row tables defined in
   the test. Never import a Mesh module or copy a Mesh corpus into core.
   Core lexes no atom: `:name` reads as Marko reads it (`src/stock-colon.test.ts`).
-  A dialect builds an atom through its triggers, returning a `StringLiteral`
-  marked `extra.mxAtom = { span }`; `recordAtoms`
-  (`src/atom-marks.ts`) runs after the trigger pass and records each marked
-  literal on `ctx.atoms`, which `expr()` splices as its string.
-  `src/fixtures/syntax/atom-fixture.ts` (sigil `~`) is the fixture that builds
-  atoms and claims `values`, `pattern`, `ref` and `declares`.
+  A dialect that has atoms registers them as a node type of its own.
+  `src/fixtures/syntax/atom-fixture.ts` (sigil `~`, dialect `atom`, type
+  `atom:Atom`) is the fixture that does so in an expression and as a whole
+  value, and claims `values`, `pattern`, `ref` and `declares`.
   **Contract keys in a dialect: `afterLower(unit)` and `contractFields`.** A module's `afterLower` gets `LoweredUnit`
   (`src/lowered-unit.ts`), never the `Ctx`: `lowerTriggers` appends
   `ctx => module.afterLower(loweredUnitOf(ctx))` to `ctx.afterLower`. The
@@ -692,9 +702,18 @@ Five facts worth knowing before editing it:
   A claimed key is skipped by the unknown-key check (its "allowed:" list
   is core's keys only) and handed to the module as frozen data
   (`frozenCopy`, one memo per unit).
-  `checkAtomAttr`: its suffix comes from `expectationOf`, which reads no
+  **A contract slot typed by a node type** (`type: "atom:Atom"`, or
+  `items: "atom:Atom"` under `type: "array"`; any `id:Type` the file's
+  dialect registers, else a registration error) is checked by
+  `checkNodeAttr` (`custom-tags.ts`): a node of the type, written as the
+  whole value (`Attr.node`) or as an expression that is the node's forward
+  (`nodeOfForward`), passes; a string, number, array, function, member or
+  node of another type is a positioned error; an identifier or call has no
+  knowable type and passes. A claimed whole-value node counts as its node
+  type for every other scalar slot too, so `type: "string"` refuses it.
+  Its suffix comes from `expectationOf`, which reads no
   key itself: a declaration using a claimed key is worded by the module's
-  `describeAttribute`, else it has none. A plain string against an atom
+  `describeAttribute`, else it has none. A plain string against a node-type
   declaration that uses a claimed key is no longer a silent return:
   `validateCustomTagCall`'s `ClaimContext.defer` queues core's shape error on
   `ctx.deferredContractErrors`, raised by `raiseDeferredContractErrors`,
@@ -1461,25 +1480,31 @@ stable version.
 
 - **Core lexes no atom.** `:name` in a `.mx` file is plain JavaScript, as in
   Marko (`src/stock-colon.test.ts` pins Marko's errors and positions). A
-  dialect builds atoms with an expression or value trigger whose hook returns
-  a `StringLiteral` marked `extra.mxAtom = { span }` (`MxAtomMark`).
+  dialect with atoms registers an atom node type (`atom:Atom` in the
+  fixture) and names it from an expression row and a value row; its `lower`
+  returns the string literal the atom stands for.
 - **`expr()` emits the authored source slice, not the printed AST; an
   AST-level rewrite must also splice into the slice through
   `rewriteReferencesSource`.** The slice is what keeps TypeScript type
-  arguments (Marko drops them from the AST). `recordAtoms`
-  (`src/atom-marks.ts`) records every marked literal on `ctx.atoms` after the
-  trigger pass, and `expr()` splices the same `"name"` at each atom's span on
-  both paths (no bindings: `spliceSource`; bindings: added to the binding
-  rewrites). Without the splice the authored sigil would stay in
-  `Expr.code`, and every host and the virtual code would emit it.
-- **A whole-value atom is a `static` attr with `atom`** (`atomOf`), so no
-  emitter changed. Nested atoms are `Expr.atoms` (`atomsIn`); `mappedExpr`
-  maps each one to its literal. Hosts mapping an expression should call
-  `mappedExpr(expr)`, not `mapped(expr.code, expr.span)`.
+  arguments (Marko drops them from the AST). Each node's forward is spliced
+  at the node's span through `ctx.triggerSplices` on both paths (no
+  bindings: `spliceSource`; bindings: added to the binding rewrites).
+  Without the splice the authored sigil would stay in `Expr.code`, and every
+  host and the virtual code would emit it.
+- **A whole-value atom is a `static` attr with the node on `Attr.node`**, so
+  no emitter changed. Atoms inside an expression are `Expr.nodes`
+  (`exprWithNodes`); `mappedExpr` maps each forward to its printed range.
+  Hosts mapping an expression should call `mappedExpr(expr)`, not
+  `mapped(expr.code, expr.span)`.
+- **Marks a dialect sets are its own.** Core reads no `extra.mxAtom`, still
+  reads `extra.mxMember` (the `type: "member"` slot), and strips neither: a
+  mark on a forward reaches the dialect's `afterLower` and every later
+  reader unchanged (`ir-entry/atom-fixture.test.ts`). Both marks go in
+  0.1.0-alpha.34.
 - **Core has no atom contract layer.** `transformCustomTag` records a
   `ContractFact` (`src/contract-facts.ts`: definition, call, authored
   ancestor nodes) per call in `ctx.contractFacts`, and `ctx.declare` from
   `analyze` fills `ctx.contractDerived`. A dialect reads both through
   `LoweredUnit` in its `afterLower`; core checks no `values`, `pattern`,
-  `ref` or `declares`. A call's own atom-vs-string shape check stays in
-  `validateAttributes` (`checkAtomAttr`).
+  `ref` or `declares`. A call's own node-type shape check stays in
+  `validateAttributes` (`checkNodeAttr`).

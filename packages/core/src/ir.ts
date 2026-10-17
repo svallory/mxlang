@@ -55,7 +55,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 5;
+export const IR_VERSION = 6;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -134,11 +134,14 @@ export interface Expr {
    */
   file?: string;
   /**
-   * The atoms a dialect built inside this expression, in source order.
-   * Absent when there are none. `code` already holds each as its string
-   * literal; the node holds each as a `StringLiteral` with `extra.mxAtom`.
+   * Every dialect node inside this expression, in source order: a node an
+   * expression row claimed (`:a` in `[:a, :b]`), or the node a value row
+   * claimed when its type's `lower` built an expression (the entry then
+   * spans the whole value). Absent when there are none. `code` holds each
+   * node's forward printed (`ExprNode.code` says where); `node` holds the
+   * forward itself.
    */
-  atoms?: Atom[];
+  nodes?: ExprNode[];
   /**
    * The text of `code` before a reads rewrite (`rewriteAccessorReads`) changed
    * it, set only when it did change it. `code` then no longer lines up with
@@ -163,41 +166,41 @@ export interface Expr {
 }
 
 /**
- * An atom: a value that represents itself, built by a dialect (core has no
- * atom syntax). Its runtime value is the name as a string literal on every
- * target; the IR keeps it distinct from a string so a data consumer, a
- * contract check or an editor can tell the atom `title` from `"title"`.
- * `span` covers the whole authored atom, its sigil included. A dialect builds
- * one as a whole value (`ctx.attribute(name, { kind: "atom", name })`) or as
- * a marked literal inside an expression (`MxAtomMark`).
+ * A dialect node inside an expression (`Expr.nodes`): the node a registered
+ * type claimed, and its forward, the expression it lowered to. MX has no
+ * vocabulary of its own for what a node means: the forward is made of nodes
+ * native to the expression language (Babel's), so every target, checker and
+ * host reads it as plain code, while a contract or a data consumer reads the
+ * node.
  * @unstable
  */
-export interface Atom {
-  kind: "atom";
-  name: string;
+export interface ExprNode {
+  /** The node's registry key (`dialect:Type`, `atom:Atom`). */
+  type: `${string}:${string}`;
+  /** The authored text the node was claimed from, file-absolute. */
   span: SourceSpan;
-}
-
-/**
- * `extra.mxAtom` on the `StringLiteral` a dialect builds for an atom inside
- * an expression: the atom's own span, its sigil included. The node's `value`
- * is the name, so code that reads strings still works; code that cares
- * checks `node.extra?.mxAtom`. Core records every marked literal and splices
- * and maps it.
- * @unstable
- */
-export interface MxAtomMark {
-  span: SourceSpan;
+  /** The node as its type's `parse` built it, frozen. */
+  node: DialectNode;
+  /**
+   * What the type's `lower` returned (`ctx.expression(forward)`): the very
+   * node `Expr.node` holds in the node's place, marks and all.
+   */
+  forward: Node;
+  /**
+   * Where `forward` is printed in `Expr.unrewrittenCode ?? Expr.code`
+   * (UTF-16 offsets into that string). Absent only when the expression was
+   * reprinted rather than spliced (an expression with no authored position).
+   */
+  code?: { start: number; end: number };
 }
 
 /**
  * A member reference a layer-2 dialect produced (decision 182 addenda 4
- * and 5): a sibling of {@link Atom} for a value slot that names a member of
- * the enclosing declaration (Mesh's `&dueOn` after a kind). Its runtime value
- * is the name as a string literal on every target, like an atom; the IR
- * keeps it distinct so a contract (`type: "member"`) or a data consumer can
- * tell it from an atom or a string. `span` covers the whole authored token,
- * sigil included.
+ * and 5), for a value slot that names a member of the enclosing
+ * declaration (Mesh's `&dueOn` after a kind). Its runtime value is the name
+ * as a string literal on every target; the IR keeps it distinct so a
+ * contract (`type: "member"`) or a data consumer can tell it from a string.
+ * `span` covers the whole authored token, sigil included.
  */
 export interface Member {
   kind: "member";
@@ -212,6 +215,12 @@ export interface Member {
  * hands `ctx.expression` inside an expression (`self.status` for Mesh's
  * `&status`). `name` is the member's name, `span` the authored token, sigil
  * included. Public API, as stable as the IR.
+ *
+ * Marks on a dialect's nodes (`extra.mxMember`, and a dialect's own
+ * `extra.mxAtom`) reach every later reader unchanged: core never strips or
+ * rewrites them. They stay for one alpha (0.1.0-alpha.33, the release
+ * that adds `Expr.nodes`) and go in 0.1.0-alpha.34; a dialect reads its
+ * nodes from `Expr.nodes`/`Attr.node` instead.
  */
 export interface MxMemberMark {
   span: SourceSpan;
@@ -331,21 +340,18 @@ export type Attr =
        */
       nameSpan: SourceSpan;
       /**
-       * Set when the whole value is one atom (`mode=:strict`).
-       * `value` is the atom's name, which is what every target emits.
-       */
-      atom?: Atom;
-      /**
        * Set when the whole value is one member reference a dialect produced
        * (decision 182 addendum 5). `value` is the member's name, which is
-       * what every target emits. Never set together with `atom`.
+       * what every target emits.
        */
       member?: Member;
       /**
-       * Set when the whole value is a node a value row claimed and whose
-       * type lowered it to this string. The node is as parsed, frozen,
-       * keyed `dialect:Type`; `value` is the string every target emits.
-       * Never set together with `atom` or `member`.
+       * Set when the whole value is one registered node (`mode=:strict`,
+       * claimed by a value row, or placed by a trigger's
+       * `ctx.attribute(name, node)`) whose type lowered it to this string,
+       * or to a string literal. The node is as parsed, frozen, keyed
+       * `dialect:Type`; `value` is the string every target emits. Never set
+       * together with `member`.
        */
       node?: DialectNode;
     } & IrBase &

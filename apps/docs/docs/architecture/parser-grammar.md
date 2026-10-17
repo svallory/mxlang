@@ -1605,9 +1605,10 @@ and `read` returns the written text unchanged.
 
 Atoms exist as a **dialect** feature. A syntax table's `expressionTriggers`
 and `valueTriggers` (spec §13.9.5) arm a character or
-pattern in the positions that carry the `triggers` flag; the trigger's hook
-returns the replacement node, which for an atom is a `StringLiteral` marked
-`extra.mxAtom` ([ast.md §4.3](/architecture/ast/)). The parser reports a
+pattern in the positions that carry the `triggers` flag; a row naming a node
+type is claimed by that type, whose `lower` returns the forward that replaces
+the stand-in, for an atom the string literal it stands for
+([ast.md §4.3](/architecture/ast/)). The parser reports a
 trigger's span through `onTrigger`, and `read` hands back the trigger's
 stand-in text (`Parser.standIn`) for a consumer that gives the text to Babel.
 With the default syntax table no trigger is armed and the rows below hold. The rules a trigger asks
@@ -2182,7 +2183,7 @@ exercise a section:
 | Text, comments, doctype | `packages/targets/html/fixtures-marko/{doctype-page,comments-and-html-comment,html-comment-placeholder,elements-text,piped-text}`; htmljs fixture `dtd` |
 | Attribute tags | `packages/targets/html/fixtures-marko/attribute-tags*` |
 | End of input | htmljs fixtures `eof-*`, `attr-eof-*`, `tag-name-placeholder-eof`, including `eof-attr-value-js-comment-comment-concise` and `eof-placeholder-concise` for concise mode |
-| Atoms (a dialect's triggers), `:name` and `::` as source text | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-sugar-module.test.ts` through the reference atom dialect); `packages/parser/src/template/mx-triggers.test.ts`; `packages/core/src/atom-marks.test.ts` |
+| Atoms (a dialect's triggers), `:name` and `::` as source text | `packages/parser/src/template/mx-atoms.cases.ts` (run by `mx-sugar-module.test.ts` through the reference atom dialect); `packages/parser/src/template/mx-triggers.test.ts`; `packages/parser/src/frontend/triggers.test.ts`; `packages/core/src/expr-nodes.test.ts`; `packages/core/src/ir-entry/atom-fixture.test.ts` |
 | Base position | `packages/parser/src/template/__tests__/base-offset.test.ts` |
 | E2 continuation onto a later line | htmljs fixtures `attr-operators-newline-after` (unary keywords and a lone `.` at the end of a line, operand at column 0) and `attr-operators-newline-before` |
 

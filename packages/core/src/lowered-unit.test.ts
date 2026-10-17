@@ -97,27 +97,29 @@ function caught(run: () => unknown): TranslateError {
 const vocab = {
   box: {
     attributes: {
-      any: { type: "atom" },
-      mode: { type: "atom", values: ["strict", "loose"] },
+      any: { type: "atom:Atom" },
+      mode: { type: "atom:Atom", values: ["strict", "loose"] },
     },
     attributeTags: {
       row: {
         attributes: {
-          mode: { type: "atom", values: ["a", "b"] },
-          to: { type: "atom", ref: "node" },
+          mode: { type: "atom:Atom", values: ["a", "b"] },
+          to: { type: "atom:Atom", ref: "node" },
         },
         attributeTags: {
-          cell: { attributes: { k: { type: "atom", values: ["x", "y"] } } },
+          cell: {
+            attributes: { k: { type: "atom:Atom", values: ["x", "y"] } },
+          },
         },
       },
       "*": {
         pattern: "col-.*",
-        attributes: { to: { type: "atom", ref: "node" } },
+        attributes: { to: { type: "atom:Atom", ref: "node" } },
       },
     },
   },
   node: { attributes: { id: {} }, declares: { kind: "node", from: "id" } },
-  link: { attributes: { to: { type: "atom", ref: "node" } } },
+  link: { attributes: { to: { type: "atom:Atom", ref: "node" } } },
 } as unknown as Record<string, CustomTag>;
 
 /** The keys the atom fixture claims, and a tag key a test claims on top. */
@@ -191,15 +193,9 @@ describe("the `LoweredUnit` view", () => {
       ]),
     ) as Record<string, ContractAttr>;
     // Each attribute is its name plus its value node, read by `type`.
-    expect(kinds.name).toEqual({
+    expect(kinds.name).toMatchObject({
       name: "name",
-      nameSpan: { sourceStart: 6, sourceEnd: 12 },
-      label: "`name`",
-      value: {
-        type: "mx:Atom",
-        name: "named",
-        span: { sourceStart: 6, sourceEnd: 12 },
-      },
+      value: { type: "mx:String", value: "named" },
     });
     expect(kinds.s).toEqual({
       name: "s",
@@ -211,14 +207,10 @@ describe("the `LoweredUnit` view", () => {
         span: { sourceStart: 15, sourceEnd: 20 },
       },
     });
-    expect(kinds.a).toMatchObject({ value: { type: "mx:Atom", name: "at" } });
+    expect(kinds.a).toMatchObject({ value: { type: "atom:Atom", name: "at" } });
     expect(kinds.e).toMatchObject({
       value: { type: "mx:Expression", code: 'x + "y"' },
     });
-    const marked = (
-      kinds.e as { value: { node: { right: { extra: unknown } } } }
-    ).value.node.right.extra;
-    expect(marked).toMatchObject({ mxAtom: { span: { sourceStart: 34 } } });
     expect(kinds.b).toEqual({
       name: "b",
       nameSpan: { sourceStart: 38, sourceEnd: 39 },
@@ -286,20 +278,20 @@ describe("the `LoweredUnit` view", () => {
     expect(row?.contract?.attributes).toEqual(declared?.attributes);
     expect(row?.contract?.attributes).not.toBe(declared?.attributes);
     expect(row?.attrs[0]).toMatchObject({
-      value: { type: "mx:Atom", name: "a" },
+      value: { type: "atom:Atom", name: "a" },
     });
     const [cell] = row?.attributeTags ?? [];
     expect(cell?.name).toBe("cell");
     expect(cell?.contract?.attributes).toEqual({
-      k: { type: "atom", values: ["x", "y"] },
+      k: { type: "atom:Atom", values: ["x", "y"] },
     });
     expect(cell?.attrs[0]).toMatchObject({
-      value: { type: "mx:Atom", name: "x" },
+      value: { type: "atom:Atom", name: "x" },
     });
     // A wildcard entry is resolved for the module.
     expect(col?.name).toBe("col-1");
     expect(col?.contract?.attributes).toEqual({
-      to: { type: "atom", ref: "node" },
+      to: { type: "atom:Atom", ref: "node" },
     });
   });
 
@@ -365,7 +357,7 @@ describe("the `LoweredUnit` view", () => {
         },
       }),
     );
-    expect(error.message).toMatch(/must be atom, got number/);
+    expect(error.message).toMatch(/must be atom:Atom, got number/);
     expect(ran).toBe(false);
   });
 });
@@ -537,9 +529,10 @@ describe("`unit.fail` and `unit.warn`", () => {
 
 describe("core keeps its checks beside a module's claims", () => {
   const claimOnly: Dialect = {
-    id: "test",
+    id: "atom",
     name: "MX",
     table: {},
+    nodeTypes: atomFixture.nodeTypes,
     contractFields: ATOM_FIELDS,
   };
 
@@ -552,7 +545,7 @@ describe("core keeps its checks beside a module's claims", () => {
       }).diagnostics;
     const byDefault = diagnostics(true);
     expect(byDefault.map((d) => d.message)).toEqual([
-      "`<link>`: attribute `to` must be atom, got string",
+      "`<link>`: attribute `to` must be atom:Atom, got string",
     ]);
     expect(diagnostics(false)).toEqual(byDefault);
   });
@@ -561,7 +554,7 @@ describe("core keeps its checks beside a module's claims", () => {
     const source = '<link to="red"/>';
     const plain = caught(() => compile(source, vocab, claimOnly));
     expect(plain.message).toBe(
-      "`<link>`: attribute `to` must be atom, got string",
+      "`<link>`: attribute `to` must be atom:Atom, got string",
     );
     expect([plain.line, plain.column]).toEqual([1, 9]);
     // The atom fixture words it from `describeAttribute`.
@@ -569,7 +562,7 @@ describe("core keeps its checks beside a module's claims", () => {
       compile('<box mode="red"/>', vocab, atomFixture),
     );
     expect(worded.message).toBe(
-      "`<box>`: attribute `mode` must be atom, got string (one of ~strict, ~loose)",
+      "`<box>`: attribute `mode` must be atom:Atom, got string (one of ~strict, ~loose)",
     );
   });
 
@@ -591,7 +584,7 @@ describe("core keeps its checks beside a module's claims", () => {
 
   it("L4: the view's contracts are deep-frozen copies; the registered contract is untouched", () => {
     const tags: Record<string, CustomTag> = {
-      box: { attributes: { b: { type: "atom", values: ["x"] } as never } },
+      box: { attributes: { b: { type: "atom:Atom", values: ["x"] } as never } },
     };
     const errors: unknown[] = [];
     for (let run = 0; run < 2; run++) {
@@ -621,9 +614,10 @@ describe("`contractFields`", () => {
     fields: Dialect["contractFields"],
     afterLower?: Dialect["afterLower"],
   ): Dialect => ({
-    id: "test",
+    id: "atom",
     name: "MX",
     table: {},
+    nodeTypes: atomFixture.nodeTypes,
     contractFields: fields,
     ...(afterLower ? { afterLower } : {}),
   });
@@ -657,7 +651,7 @@ describe("`contractFields`", () => {
   it("a key core does not know is refused, unless the module claims it; then it is the module's data", () => {
     const tags: Record<string, CustomTag> = {
       box: {
-        attributes: { a: { type: "atom", facet: "wide" } as never },
+        attributes: { a: { type: "atom:Atom", facet: "wide" } as never },
         attributeTags: {
           row: { attributes: { b: { facet: "narrow" } as never } },
         },
@@ -684,7 +678,9 @@ describe("`contractFields`", () => {
   it("core keeps the whole-value shape check, and the module words it", () => {
     const tags: Record<string, CustomTag> = {
       box: {
-        attributes: { mode: { type: "atom", values: ["b", "a"] } as never },
+        attributes: {
+          mode: { type: "atom:Atom", values: ["b", "a"] } as never,
+        },
       },
     };
     const claimed = claiming({ attribute: ["values", "pattern", "ref"] });
@@ -692,7 +688,7 @@ describe("`contractFields`", () => {
     // it knows.
     expect(
       caught(() => compile("<box mode='s'/>", tags, claimed)).message,
-    ).toBe("`<box>`: attribute `mode` must be atom, got string");
+    ).toBe("`<box>`: attribute `mode` must be atom:Atom, got string");
     // The module words it (`describeAttribute`), from a frozen copy.
     const seen: unknown[] = [];
     const describing: Dialect = {
@@ -705,7 +701,7 @@ describe("`contractFields`", () => {
     expect(
       caught(() => compile("<box mode='s'/>", tags, describing)).message,
     ).toBe(
-      "`<box>`: attribute `mode` must be atom, got string (as the module says)",
+      "`<box>`: attribute `mode` must be atom:Atom, got string (as the module says)",
     );
     expect(seen).toEqual([true, ["b", "a"]]);
   });
@@ -714,7 +710,7 @@ describe("`contractFields`", () => {
     const tags: Record<string, CustomTag> = {
       box: {
         attributes: {
-          mode: { type: "atom", values: ["b", "a"] } as never,
+          mode: { type: "atom:Atom", values: ["b", "a"] } as never,
         },
       },
       watched: { analyze() {} },
@@ -727,14 +723,14 @@ describe("`contractFields`", () => {
       compile("<watched/><box mode=1/>", tags, worded),
     );
     expect(error.message).toBe(
-      "`<box>`: attribute `mode` must be atom, got number (as the module says)",
+      "`<box>`: attribute `mode` must be atom:Atom, got number (as the module says)",
     );
     // A plain string is queued behind the module's hook in this walk too.
     const queued = caught(() =>
       compile("<watched/><box mode='s'/>", tags, worded),
     );
     expect(queued.message).toBe(
-      "`<box>`: attribute `mode` must be atom, got string (as the module says)",
+      "`<box>`: attribute `mode` must be atom:Atom, got string (as the module says)",
     );
   });
 });
@@ -742,7 +738,7 @@ describe("`contractFields`", () => {
 describe("`checkContract`", () => {
   const tags: Record<string, CustomTag> = {
     plain: { attributes: { a: { type: "string" } } },
-    used: { attributes: { a: { type: "atom", facet: 1 } as never } },
+    used: { attributes: { a: { type: "string", facet: 1 } as never } },
     deep: {
       attributeTags: {
         "*": [
@@ -877,7 +873,7 @@ describe("`contractFields` through a manifest", () => {
     dialectProject(root, {
       packageName: "fixture-dialect",
       manifest: {
-        id: "fixture",
+        id: "atom",
         name: "Fixture",
         extensions: [".fixture.mx"],
         ...(dialect === true ? { module: "./index.cjs" } : {}),
@@ -906,7 +902,7 @@ describe("`contractFields` through a manifest", () => {
 
   const CONTRACTS = `export default {
   node: { attributes: { id: {} }, declares: { kind: "node", from: "id" } },
-  link: { attributes: { to: { type: "atom", ref: "node" } } },
+  link: { attributes: { to: { type: "atom:Atom", ref: "node" } } },
 };\n`;
 
   it("`mx.contracts` refuses `declares` without a module that claims it", () => {
@@ -939,7 +935,7 @@ describe("`contractFields` through a manifest", () => {
       {},
       {
         "tags/node.tag.ts": `export default { attributes: { id: {} }, declares: { kind: "node", from: "id" } };\n`,
-        "tags/link.tag.ts": `export default { attributes: { to: { type: "atom", ref: "node" } } };\n`,
+        "tags/link.tag.ts": `export default { attributes: { to: { type: "atom:Atom", ref: "node" } } };\n`,
       },
       dir,
       true,

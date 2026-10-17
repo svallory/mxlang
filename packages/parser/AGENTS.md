@@ -35,21 +35,24 @@ announced through `onTrigger` and stood in by `read()` at the same length;
 the front end builds `MxTrigger` nodes (`@mxlang/babel/mx-ast`, ast §4.4).
 With a `claim` option (`createParser(handlers, { syntax, claim })`, the
 front end's `parse(source, { …, claim })`; core passes it), a matching
-attribute or line row is asked once per position and offset in one parse
+expression, attribute or line row is asked once per position and offset in one parse
 attempt (a restart for a missed tag name asks again; core's `parseMx`
 memoizes across attempts): `undefined`
 declines, and the parse goes on as if no row matched; an object rides on
 the trigger event (`Ranges.Trigger.claim`), and the front end places it in
 the tree by identity (`freezeCopy` keeps it) in the trigger's place, unless
-its type is `MxTrigger`. A throw out of `claim` leaves `parse` unwrapped
+its type is `MxTrigger`. An expression row is asked from `EXPRESSION`'s
+`lexTrigger` (`Parser.claimHit`) once its own checks pass; a claimed node
+takes the trigger's place in the container's `triggers`, and Babel still
+parses the row's stand-in. A throw out of `claim` leaves `parse` unwrapped
 (`ClaimThrow`), not as `MX_FRONT_END_INTERNAL`. The parser has no name
 sugars: a colon in a tag head, a spaced ` :b` after a value and a spaced
 `#id`/`.class` lex as stock htmljs-parser lexes them, and it has no atom
 lexer: `:name` in an expression reads as stock reads it (`<a b=:x/>` is
 Babel's "Unexpected token" at the `:`; `::` in a name is part of the name).
-Atoms are a dialect feature: a dialect arms an expression row on `:` whose
-hook returns a `StringLiteral` marked `extra.mxAtom`, which core records and
-splices.
+Atoms are a dialect feature: a dialect registers an atom node type and names
+it from an expression row on its sigil; core lowers the claimed node to the
+forward its type's `lower` returns.
 `tagShorthands: false` (`@unstable`, default `true`) removes the tag head's
 `#id`/`.class` shorthands and the implicit `div`: `states/TAG_NAME.ts` lets a
 `.` continue the name (`billing.InvoiceVoided` is one name, concise and HTML,

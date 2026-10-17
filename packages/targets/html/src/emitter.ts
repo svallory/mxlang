@@ -764,7 +764,7 @@ export function createEmitter(
         // surviving merged value. An overwritten object must not throw.
         // The stand-in is generated text: it carries no span, so it maps
         // nowhere, while the authored value maps at its evaluation site.
-        const { span: _span, atoms: _atoms, ...standIn } = attr.value;
+        const { span: _span, nodes: _nodes, ...standIn } = attr.value;
         const captured = {
           ...attr,
           value: { ...standIn, code: "__mxCapturedValue" },

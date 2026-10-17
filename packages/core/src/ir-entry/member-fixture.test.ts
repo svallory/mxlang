@@ -368,10 +368,12 @@ describe("what is not a member", () => {
 });
 
 describe('the `"member"` contract type', () => {
-  const contract = (type: "member" | "atom" | "expression"): CustomTag => ({
+  const contract = (
+    type: "member" | "member:Atom" | "expression",
+  ): CustomTag => ({
     attributes: { slot: { type } },
   });
-  const run = (type: "member" | "atom" | "expression", value: string) =>
+  const run = (type: "member" | "member:Atom" | "expression", value: string) =>
     lowerSource(`sort ${value}\n`, "/v/entity.mx", {
       dialect: {
         ...memberSyntax,
@@ -399,14 +401,16 @@ describe('the `"member"` contract type', () => {
     expect(run("expression", "&dueOn")).toEqual([]);
   });
 
-  it("`atom` refuses a member", () => {
-    expect(run("atom", "&dueOn")).toEqual([
-      expect.stringContaining("attribute `slot` must be an atom, got a member"),
+  it("a node type refuses a member", () => {
+    expect(run("member:Atom", "&dueOn")).toEqual([
+      expect.stringContaining(
+        "attribute `slot` must be member:Atom, got a member",
+      ),
     ]);
   });
 
   it.each([
-    ["an atom", "slot=~due-on"],
+    ["member:Atom", "slot=~due-on"],
     ["a string", 'slot="dueOn"'],
     ["an expression", "slot=(a.b)"],
     ["a bare attribute", "slot"],
@@ -487,8 +491,15 @@ describe("one member per slot, and the member type's refusals", () => {
     expect(messages.join("\n")).not.toContain("is not a known tag");
   });
 
-  const slot = (type: "member" | "atom", source: string) =>
+  // `member:Atom` is a node type the dialect registers (the atom fixture's
+  // `Atom`, under this dialect's id), so the slot is a node-type slot.
+  const withAtoms: Dialect = {
+    ...memberSyntax,
+    nodeTypes: atomSyntax.nodeTypes,
+  };
+  const slot = (type: "member" | "member:Atom", source: string) =>
     parse(source, {
+      dialect: withAtoms,
       customTags: { sort: { attributes: { load: { type } } } },
     }).diagnostics.map((d) => d.message);
 
@@ -504,9 +515,11 @@ describe("one member per slot, and the member type's refusals", () => {
     ]);
   });
 
-  it("M5: an `atom` slot refuses the dynamic form too", () => {
-    expect(slot("atom", "sort load=&visible\n")).toEqual([
-      expect.stringContaining("attribute `load` must be an atom, got a member"),
+  it("M5: a node-type slot refuses the dynamic form too", () => {
+    expect(slot("member:Atom", "sort load=&visible\n")).toEqual([
+      expect.stringContaining(
+        "attribute `load` must be member:Atom, got a member",
+      ),
     ]);
   });
 
@@ -514,15 +527,19 @@ describe("one member per slot, and the member type's refusals", () => {
     ["member", "sort load=(&visible as any)\n"],
     ["member", "sort load=(&visible!)\n"],
     ["member", "sort load=((&visible as any) satisfies unknown)\n"],
-    ["atom", "sort load=(&visible as any)\n"],
+    ["member:Atom", "sort load=(&visible as any)\n"],
     ["member", "sort load=(1 as number)\n"],
   ] as const)(
     "a `%s` slot: %s gives the same diagnostics with `stripTypes: false`",
     (type, source) => {
       const customTags = { sort: { attributes: { load: { type } } } };
-      const byDefault = parse(source, { customTags }).diagnostics;
+      const byDefault = parse(source, {
+        customTags,
+        dialect: withAtoms,
+      }).diagnostics;
       expect(
-        parse(source, { customTags, stripTypes: false }).diagnostics,
+        parse(source, { customTags, dialect: withAtoms, stripTypes: false })
+          .diagnostics,
       ).toEqual(byDefault);
       // The three member rows are accepted, the other two refused.
       expect(byDefault.length).toBe(

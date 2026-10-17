@@ -953,16 +953,6 @@ describe("validateSyntaxTable", () => {
       /\{ call \} or \{ type, dialect \}/,
     ],
     [
-      "a node type in expression position",
-      table({
-        expressionTriggers: [
-          trigger({ node: { type: "Atom", dialect: "mesh" } }),
-        ],
-      }),
-      "expressionTriggers[0].node",
-      /not supported in expression position yet; use \{ call \}/,
-    ],
-    [
       "terminatesValue off the attribute list",
       table({ expressionTriggers: [trigger({ terminatesValue: true })] }),
       "expressionTriggers[0].terminatesValue",
@@ -1140,11 +1130,15 @@ describe("validateSyntaxTable", () => {
     expect(validateSyntaxTable(MESH)).toEqual([]);
   });
 
-  it("accepts a node type in an attribute list and on a tagless line", () => {
+  it("accepts a node type in an expression, in an attribute list and on a tagless line", () => {
     const row = { ...MEMBER, node: { type: "Member", dialect: "mesh" } };
     expect(
       validateSyntaxTable(
-        table({ attributeTriggers: [row], lineTriggers: [row] }),
+        table({
+          expressionTriggers: [row],
+          attributeTriggers: [row],
+          lineTriggers: [row],
+        }),
       ),
     ).toEqual([]);
   });

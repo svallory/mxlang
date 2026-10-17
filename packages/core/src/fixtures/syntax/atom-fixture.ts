@@ -1,17 +1,22 @@
 /**
- * A test dialect for core's atom values: it builds atoms (a name the module
- * writes `~name`) in all three places a module can, and claims the contract
- * keys that say which atoms a slot allows. Core has no atom syntax and checks
- * none of these keys: what a claimed key means is this file's choice.
+ * A test dialect whose atoms are a node type: `Atom` (`atom:Atom`), a name
+ * the author writes `~name`. It writes one in all three places a dialect
+ * can, and claims the contract keys that say which atoms a slot allows. Core
+ * has no atom syntax and checks none of these keys: what a claimed key
+ * means is this file's choice. Core knows an atom only as a node of a
+ * registered type (`Expr.nodes`, `Attr.node`) and its forward, the string
+ * literal its type's `lower` returns. The literal carries no mark.
  *
- * Where it builds an atom (the sigil is `~`):
+ * Where an atom is written (the sigil is `~`):
  *
- * - in an expression, `x=(a + ~b)` is a `StringLiteral` marked
- *   `extra.mxAtom = { span, name }` (`ctx.expression`);
- * - as a whole attribute value, `x=~b` is the same literal, from the value
- *   row's node type (`Atom`), so the attribute keeps the atom mark;
- * - in an attribute list, `kind ~b` is a static attribute `name` whose value
- *   is `{ kind: "atom", name }` (`ctx.attribute`).
+ * - in an expression, `x=(a + ~b)`: the expression row claims an `Atom`
+ *   node, which lowers to the literal `"b"`, listed in `Expr.nodes`;
+ * - as a whole attribute value, `x=~b`: the value row claims the same node
+ *   type, so the attribute is static, with the node on `Attr.node`;
+ * - in an attribute list, `kind ~b`: the `{ call }` row's hook builds an
+ *   `atom:Atom` node and places it as the value of a `name` attribute
+ *   (`ctx.attribute`), lowered through the type's `lower` like a claimed
+ *   value.
  *
  * What it claims: `values`, `pattern` and `ref` (attribute keys) and
  * `declares` (a tag key), as opaque data. `checkContract` checks the shape of
@@ -24,11 +29,20 @@
  * load it through Node's strip-only `require` as a dialect package's module
  * (no enums or parameter properties).
  */
-import type { ContractAtomOrMember, Dialect, Trigger } from "../../index.ts";
+import type { Dialect, Trigger } from "../../index.ts";
 
 const NAME = "~[a-z][a-z0-9-]*";
 
-/** The atom row in an expression and an attribute list (`{ call }`). */
+/** An atom in an expression or as a whole `=value`: the node type below lowers it. */
+export const ATOM_NODE: Trigger = Object.freeze({
+  id: "atom-node",
+  chars: "~",
+  match: NAME,
+  standIn: "identifier",
+  node: Object.freeze({ type: "Atom", dialect: "atom" }),
+});
+
+/** The atom row in an attribute list (`{ call }`): the hook places an `Atom` node. */
 export const ATOM: Trigger = Object.freeze({
   id: "atom",
   chars: "~",
@@ -37,28 +51,22 @@ export const ATOM: Trigger = Object.freeze({
   node: Object.freeze({ call: "atom" }),
 });
 
-/** The atom row on a whole `=value`: the node type below lowers it. */
-export const ATOM_VALUE: Trigger = Object.freeze({
-  id: "atom-value",
-  chars: "~",
-  match: NAME,
-  standIn: "identifier",
-  node: Object.freeze({ type: "Atom", dialect: "atom" }),
-});
+/** Kept for the tests that name the value row: the same row as `ATOM_NODE`. */
+export const ATOM_VALUE: Trigger = ATOM_NODE;
 
-/** The literal an atom lowers to in an expression or a value position. */
-function atomLiteral(
-  name: string,
-  span: { sourceStart: number; sourceEnd: number },
-) {
+/** The node an `Atom` is: its name, without the sigil. */
+export interface AtomNode {
+  readonly type: "atom:Atom";
+  readonly name: string;
+  readonly span: { readonly sourceStart: number; readonly sourceEnd: number };
+}
+
+/** The literal an atom lowers to: a plain string literal, no mark. */
+function atomLiteral(name: string) {
   return {
     type: "StringLiteral",
     value: name,
-    extra: {
-      raw: JSON.stringify(name),
-      rawValue: name,
-      mxAtom: { span, name },
-    },
+    extra: { raw: JSON.stringify(name), rawValue: name },
   };
 }
 
@@ -73,25 +81,23 @@ const atomSyntax = {
   id: "atom",
   name: "Fixture",
   table: Object.freeze({
-    expressionTriggers: [ATOM],
+    expressionTriggers: [ATOM_NODE],
     attributeTriggers: [ATOM],
-    valueTriggers: [ATOM_VALUE],
+    valueTriggers: [ATOM_NODE],
   }),
   nodeTypes: {
     Atom: {
       keys: [],
       parse: (text: string) => ({ name: text.slice(1) }),
       print: (node: { name: string }) => `~${node.name}`,
-      lower: (node: { name: string; span: never }, ctx) =>
-        ctx.expression(atomLiteral(node.name, node.span)),
+      lower: (node: { name: string }, ctx) =>
+        ctx.expression(atomLiteral(node.name)),
     },
   },
   lowerTrigger(_id, text, span, ctx) {
-    const name = text.slice(1);
-    if (ctx.position === "attribute") {
-      return ctx.attribute("name", { kind: "atom", name, span });
-    }
-    return ctx.expression(atomLiteral(name, span));
+    // Only the attribute-list row is a `{ call }` row.
+    void span;
+    return ctx.attribute("name", text.slice(1));
   },
   contractFields: {
     attribute: ["values", "pattern", "ref"],
@@ -116,9 +122,9 @@ const atomSyntax = {
   afterLower(unit) {
     for (const call of unit.calls) {
       for (const attr of call.attrs) {
-        if ("spread" in attr || attr.value?.type !== "mx:Atom") continue;
-        // `type` does not narrow a dialect's node: the atom's own view type.
-        const atom = attr.value as ContractAtomOrMember;
+        if ("spread" in attr || attr.value?.type !== "atom:Atom") continue;
+        // `type` does not narrow a dialect's node: this file's own node type.
+        const atom = attr.value as unknown as AtomNode;
         const values = valuesOf(call.contract.attributes?.[attr.name]);
         if (!values || values.includes(atom.name)) continue;
         unit.fail(

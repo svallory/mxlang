@@ -75,9 +75,10 @@ export interface ParseOptions extends MxFrontEndOptions {
    */
   readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
   /**
-   * Asked when an attribute or line trigger's row matches, or a value row
-   * matches an attribute's whole `=value`: the row's id, the position, the
-   * matched text's file offsets, in attribute and value position the static
+   * Asked when an expression, attribute or line trigger's row matches, or a
+   * value row matches an attribute's whole `=value`: the row's id, the
+   * position, the matched text's file offsets, in expression, attribute and
+   * value position the static
    * name of the tag whose attribute list holds it (`null` on a line, or for
    * a dynamic or unnamed tag), and in value position the attribute's name
    * (`null` for a default value and in the other positions). In value
@@ -88,7 +89,9 @@ export interface ParseOptions extends MxFrontEndOptions {
    * An object claims it: an `MxTrigger`-typed one keeps the front end's own
    * `MxTrigger` node; any other is the node the tree holds at that
    * position, and the front end sets its `start`, `end`, `operator`,
-   * `value` and `args` as on an `MxTrigger`. A throw leaves `parse` as
+   * `value` and `args` as on an `MxTrigger` (in expression position only
+   * its `start` and `end`: the node takes the trigger's place in its
+   * container's `triggers`, and the payload still holds the stand-in). A throw leaves `parse` as
    * thrown (the caller's error, not `MX_FRONT_END_INTERNAL`). Omitted, every
    * matched row claims.
    */
@@ -98,7 +101,7 @@ export interface ParseOptions extends MxFrontEndOptions {
 /** The `claim` option of `parse` (see {@link ParseOptions.claim}). */
 export type TriggerClaim = (
   rowId: string,
-  position: "attribute" | "line" | "value",
+  position: "expression" | "attribute" | "line" | "value",
   start: number,
   end: number,
   tag: string | null,
@@ -374,7 +377,11 @@ class FrontEnd {
   templateError: MxParseError | undefined;
   readonly stack: TagBuilder[] = [];
   /** Expression triggers announced but not yet claimed by a container, in source order (local offsets). */
-  triggers: (SubParseTrigger & { position: "expression" })[] = [];
+  triggers: (SubParseTrigger & {
+    position: "expression";
+    /** The node the caller's `claim` returned for the trigger, if any. */
+    claim?: object;
+  })[] = [];
   /** Nodes the caller's `claim` returned: kept by identity in the finished tree. */
   readonly claimedNodes = new Set<object>();
   openStart: number | undefined;
@@ -488,7 +495,7 @@ class FrontEnd {
         ...(claim && {
           claim: (
             id: string,
-            position: "attribute" | "line" | "value",
+            position: "expression" | "attribute" | "line" | "value",
             start: number,
             end: number,
           ) => this.claimAt(claim, id, position, start, end),
@@ -650,17 +657,29 @@ class FrontEnd {
       for (const trigger of this.triggers) {
         if (trigger.start >= value.start && trigger.end <= value.end) {
           claimed.push(trigger);
-          triggers.push({
-            type: "MxTrigger",
-            start: this.at(trigger.start),
-            end: this.at(trigger.end),
-            id: trigger.id,
-            position: "expression",
-            text: trigger.text,
-            operator: null,
-            value: null,
-            args: null,
-          });
+          // A node the caller's `claim` returned takes the trigger's place
+          // in `triggers`; the front end sets only its offsets.
+          if (trigger.claim) {
+            this.claimedNodes.add(trigger.claim);
+            triggers.push(
+              Object.assign(trigger.claim as Builder, {
+                start: this.at(trigger.start),
+                end: this.at(trigger.end),
+              }),
+            );
+          } else {
+            triggers.push({
+              type: "MxTrigger",
+              start: this.at(trigger.start),
+              end: this.at(trigger.end),
+              id: trigger.id,
+              position: "expression",
+              text: trigger.text,
+              operator: null,
+              value: null,
+              args: null,
+            });
+          }
         } else pending.push(trigger);
       }
       this.triggers = pending;
@@ -800,13 +819,13 @@ class FrontEnd {
   }
 
   /**
-   * Asks the caller's `claim` for a matched attribute or line trigger, at
+   * Asks the caller's `claim` for a matched trigger or value, at
    * file offsets. A throw is carried out of the template parser untouched.
    */
   claimAt(
     claim: TriggerClaim,
     id: string,
-    position: "attribute" | "line" | "value",
+    position: "expression" | "attribute" | "line" | "value",
     start: number,
     end: number,
   ): object | undefined {
@@ -847,6 +866,12 @@ class FrontEnd {
   onTrigger(event: Ranges.Trigger): void {
     const text = this.slice(event.text);
     if (event.position === "expression") {
+      const claim =
+        event.claim &&
+        typeof event.claim === "object" &&
+        (event.claim as { type?: unknown }).type !== "MxTrigger"
+          ? event.claim
+          : undefined;
       this.triggers.push({
         start: event.start,
         end: event.end,
@@ -854,6 +879,7 @@ class FrontEnd {
         position: "expression",
         standIn: event.standIn,
         text,
+        ...(claim ? { claim } : {}),
       });
       return;
     }

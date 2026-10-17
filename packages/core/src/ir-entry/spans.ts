@@ -51,7 +51,7 @@ type ImportNode = Extract<IrNode, { kind: "Import" }>;
  * before `lowerSource` returned the IR. A `DelegatedTag` and an
  * `AttributeTag` also carry their `nameSpan`, and a `DelegatedTag` its
  * `args` (`[]` without arguments; `finishIr`). A static attribute carries its
- * `valueSpan` (an atom's and a member's included; `e=""` spans its quotes,
+ * `valueSpan` (a dialect node's and a member's included; `e=""` spans its quotes,
  * and a bare colon name such as `x:foo`, whose value is `""`, has a
  * zero-width one at the name's end; an attribute a contract `default` added to
  * a contract-only tag has an empty `span`, `nameSpan` and value span at the end

@@ -293,7 +293,7 @@ describe("a value node's `lower` may return `ctx.expression`", () => {
     });
   });
 
-  it("an atom-marked string literal is a static atom attribute, as the atom trigger builds it", () => {
+  it("a string literal whose `lower` marks it (`extra.mxAtom`) is still a static attribute with the node beside it; core reads no mark", () => {
     const atoms: Dialect = {
       ...REF_DIALECT,
       nodeTypes: {
@@ -318,9 +318,9 @@ describe("a value node's `lower` may return `ctx.expression`", () => {
     expect(to).toMatchObject({
       kind: "static",
       value: "user",
-      atom: { name: "user" },
+      node: { type: "ref:Ref", path: ["user"] },
     });
-    expect(to).not.toHaveProperty("node");
+    expect(to).not.toHaveProperty("atom");
   });
 });
 
@@ -447,8 +447,10 @@ describe("a value row naming a type the value position cannot claim", () => {
 });
 
 describe("the contract view's attribute is its name and its value node", () => {
+  // A claimed value is a node of its type (`ref:Ref`), never a string, for
+  // the slot's `type` check.
   const sort = {
-    attributes: { to: { type: "string" }, s: { type: "string" } },
+    attributes: { to: { type: "ref:Ref" }, s: { type: "string" } },
   } as unknown as CustomTag;
 
   function attrsOf(source: string): readonly ContractAttr[] {

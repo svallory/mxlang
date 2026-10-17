@@ -104,11 +104,13 @@ export type StandIn = "number" | "identifier" | "keep";
  * trigger to the dialect's `lowerTrigger` (decision 182 addendum 5).
  * `{ type, dialect }` names a registered node type (decision 202 item 3):
  * one of the dialect's `nodeTypes`, or core's `mx:Trigger` (what `{ call }`
- * and `"attribute"` are) or `mx:Expression`. The row's `match` decides
- * where the text ends; the parser asks the type's `parse` to claim it, and
- * a declined text parses as if no row matched. A claimed node stays in the
- * tree at its position and its type's `lower` builds it. Attribute, line
- * and value triggers only (a value row's `match` covers the whole value).
+ * and `"attribute"` are, attribute and line rows only) or `mx:Expression`.
+ * The row's `match` decides where the text ends; the parser asks the type's
+ * `parse` to claim it, and a declined text parses as if no row matched. A
+ * claimed node stays in the tree at its position and its type's `lower`
+ * builds it; in an expression it lowers to an expression, its forward, and
+ * `Expr.nodes` keeps the node beside it. A value row's `match` covers the
+ * whole value.
  */
 export type TriggerNode =
   | "string"
@@ -213,11 +215,10 @@ export interface TriggerMethod {
 
 /**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression or the trigger's own method value.
- * A value's `span` defaults to the trigger's own. A node is an attribute's
- * value only through the value position (`valueTriggers`).
- * `{ kind: "atom" | "member", name }` is a whole-value atom or member the
- * module builds; core has no syntax that builds one.
+ * attribute), a string, an expression, the trigger's own method value, or a
+ * member. `{ kind: "member", name }` is a whole-value member the module
+ * builds; core has no syntax that builds one. A value's `span` defaults to
+ * the trigger's own.
  */
 export type TriggerAttributeValue =
   | true
@@ -225,7 +226,7 @@ export type TriggerAttributeValue =
   | TriggerExpression
   | TriggerMethod
   | {
-      readonly kind: "atom" | "member";
+      readonly kind: "member";
       readonly name: string;
       readonly span?: SourceSpan;
     };
@@ -234,10 +235,10 @@ export type TriggerAttributeValue =
  * How `ctx.attribute` places an attribute (all optional). @unstable
  *
  * - `authored`: the attribute is spelled by the trigger's text. A
- *   diagnostic names the text (`:email` for `name`), and a whole-value atom
- *   so placed also satisfies a `string` or `enum` contract slot as its name
- *   (decision 156 addendum 6). On the default value the trigger's own value
- *   sets, a contract's error says which trigger set it (`set by \`:n=…\``).
+ *   diagnostic names the text (`:email` for `name`), and a whole-value node
+ *   so placed also satisfies a `string` or `enum` contract slot as the
+ *   string it lowered to (spec §13.9.5). On the default value the
+ *   trigger's own value sets, a contract's error says which trigger set it (`set by \`:n=…\``).
  * - `once`: a second attribute of the same name on the tag, written or
  *   built, is a positioned error with this message, at the later one. The
  *   default value is one name however it is written (`<x=1>`, `value=1`,
@@ -335,10 +336,11 @@ export type TriggerValueForm =
  * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
  * sits, its lowered `=value`, and the three constructors, the only way a
  * dialect builds anything. Each position takes the matching result:
- * `"expression"` an expression, `"attribute"` an attribute, `"line"` a
- * child, `"value"` (a node a value row claimed) the string every target
- * emits or an expression. Core gives the result its positions from the
- * trigger, or from the value.
+ * `"expression"` an expression (a `{ call }` row's trigger, or a node an
+ * expression row claimed), `"attribute"` an attribute, `"line"` a child,
+ * `"value"` (a node a value row claimed, or one `ctx.attribute` placed) the
+ * string every target emits or an expression. Core gives the result its
+ * positions from the trigger, or from the value.
  */
 export interface TriggerContext {
   readonly position: TriggerPosition;

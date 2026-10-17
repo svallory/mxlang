@@ -571,9 +571,16 @@ describe("a dialect's node types are validated", () => {
       '`dialect.table.lineTriggers[0].node` (trigger "ref") names `mx:Tag`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`)',
     ],
     [
-      "a row in expression position",
-      { ...REF_DIALECT, table: { expressionTriggers: [REF] } },
-      "a registered node type (`{ type, dialect }`) is not supported in expression position yet; use { call }",
+      "an expression row naming a core type with no parse in expression position",
+      {
+        ...REF_DIALECT,
+        table: {
+          expressionTriggers: [
+            { ...REF, node: { type: "String", dialect: "mx" } },
+          ],
+        },
+      },
+      '`dialect.table.expressionTriggers[0].node` (trigger "ref") names `mx:String`, which is not a registered node type in expression position (a row there can name `mx:Expression`, `ref:Ref`)',
     ],
   ])("refuses %s, at the file start", (_, dialect, message) => {
     const error = caught(() =>

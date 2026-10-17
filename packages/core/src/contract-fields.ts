@@ -29,6 +29,12 @@ export interface ContractFields {
 export interface ClaimedFields {
   readonly attribute: ReadonlySet<string>;
   readonly tag: ReadonlySet<string>;
+  /**
+   * The node type keys (`dialect:Type`) the module registers
+   * (`Dialect.nodeTypes`): what an attribute declaration's `type` or
+   * `items` may name besides core's value types.
+   */
+  readonly nodeTypes: ReadonlySet<string>;
   /** The module's registration check of a contract that uses a claimed key. */
   readonly check?: Dialect["checkContract"];
   /** The module's wording of an attribute declaration that uses a claimed key. */
@@ -79,6 +85,7 @@ const CORE_TAG_FIELDS = [
 const NONE: ClaimedFields = Object.freeze({
   attribute: new Set<string>(),
   tag: new Set<string>(),
+  nodeTypes: new Set<string>(),
 });
 
 const byModule = new WeakMap<object, ClaimedFields>();
@@ -92,15 +99,23 @@ export function forgetClaimedFields(module: object): void {
   byModule.delete(module);
 }
 
-/** The keys `module` claims (none without a module), with its `checkContract`. */
+/**
+ * The keys `module` claims (none without a module), with its `checkContract`,
+ * and the node type keys it registers.
+ */
 export function claimedFields(module: Dialect | undefined): ClaimedFields {
   const fields = module?.contractFields;
-  if (!module || !fields) return NONE;
+  const types =
+    module?.nodeTypes && typeof module.nodeTypes === "object"
+      ? Object.keys(module.nodeTypes)
+      : [];
+  if (!module || (!fields && types.length === 0)) return NONE;
   const known = byModule.get(module);
   if (known) return known;
   const claimed: ClaimedFields = {
-    attribute: new Set(fields.attribute ?? []),
-    tag: new Set(fields.tag ?? []),
+    attribute: new Set(fields?.attribute ?? []),
+    tag: new Set(fields?.tag ?? []),
+    nodeTypes: new Set(types.map((type) => `${module.id}:${type}`)),
     ...(module.checkContract ? { check: module.checkContract } : {}),
     ...(module.describeAttribute ? { describe: module.describeAttribute } : {}),
   };

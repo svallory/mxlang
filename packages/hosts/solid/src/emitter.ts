@@ -1353,7 +1353,7 @@ function textareaContent(node: Extract<IrNode, { kind: "Element" }>): {
           // Generated text wrapped around the author's value: a span over
           // different text would shift the positions inside it.
           span: undefined,
-          atoms: undefined,
+          nodes: undefined,
           unrewrittenCode: undefined,
         },
       },

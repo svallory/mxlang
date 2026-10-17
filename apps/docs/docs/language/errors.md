@@ -263,19 +263,17 @@ is the tag `a::b`.
 
 ### Atoms and the contract
 
-> **Being replaced.** These checks are core's atom support as it ships today;
-> they leave core with the atom removal (mx-g1tw), after which a dialect that builds
-> atoms checks them itself.
-
-Atoms are a dialect feature (see the [specification](/specification/), "`:name` in an expression"). When
-a dialect builds them, core still checks a call's atom-versus-string shape, at
+Atoms are a dialect feature (see the [specification](/specification/), "`:name` in an expression"). A
+dialect that has them registers an atom node type (`atom:Atom` below), and a
+contract slot typed by it is checked by core, at
 the value (an attribute-tag attribute at any depth is prefixed
 `` `<box>`: `<@row>`: ``):
 
 | Message | Cause |
 | --- | --- |
-| `` attribute `label` must be string, got atom `` | `label` is declared `string` and the value is an atom |
-| `` attribute `kind` must be atom, got string `` | `kind` is declared `atom` and written `kind="title"`; in a list, the string item itself is the position. A dialect that claims contract keys may add its own wording after the message |
+| `` attribute `label` must be string, got atom:Atom `` | `label` is declared `string` and the whole value is an atom |
+| `` attribute `kind` must be atom:Atom, got string `` | `kind` is declared `atom:Atom` and written `kind="title"`. A dialect that claims contract keys may add its own wording after the message |
+| `` attribute `list` item 2 must be atom:Atom, got number `` | `list` is declared `type: "array"` with `items: "atom:Atom"`; the item itself is the position |
 
 ## `class:foo` and `style:foo`
 

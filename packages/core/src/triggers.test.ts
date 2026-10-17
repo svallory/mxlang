@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
-import atomSyntax, { ATOM } from "./fixtures/syntax/atom-fixture.ts";
+import atomSyntax, { ATOM_NODE } from "./fixtures/syntax/atom-fixture.ts";
 import memberSyntax, { MEMBER } from "./fixtures/syntax/member-fixture.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
@@ -39,19 +39,20 @@ import { lookup as targets } from "./test-targets.ts";
 
 const FIXTURE = join(import.meta.dirname, "fixtures/syntax/member-fixture.ts");
 
-/** The member fixture with the atom fixture's expression row beside it. */
+/**
+ * The member fixture with the atom fixture's expression row and `Atom` node
+ * type beside it, under this dialect's id (`member:Atom`).
+ */
 const memberAndAtom: Dialect = {
   ...memberSyntax,
   table: {
     ...memberSyntax.table,
-    expressionTriggers: [MEMBER, ATOM],
+    expressionTriggers: [
+      MEMBER,
+      { ...ATOM_NODE, node: { type: "Atom", dialect: "member" } },
+    ],
   },
-  lowerTrigger: (id, text, span, ctx) => {
-    const lowerTrigger = (id === ATOM.id ? atomSyntax : memberSyntax)
-      .lowerTrigger;
-    if (!lowerTrigger) throw new Error("a fixture without `lowerTrigger`");
-    return lowerTrigger(id, text, span, ctx);
-  },
+  nodeTypes: atomSyntax.nodeTypes,
 };
 
 const declarations = {
@@ -127,7 +128,7 @@ function dialectWith(
 }
 
 describe("the member dialect through the `dialect` option", () => {
-  it("an expression trigger is the dialect's node; the authored text and atoms stay", () => {
+  it("an expression trigger is the dialect's node; the authored text and the atom node stay", () => {
     const source = "rule check=(() => &status === ~sent)\n";
     const [rule] = elements(irOf(source, undefined, memberAndAtom).body);
     const check = attr(rule as Element, "check");
@@ -148,11 +149,18 @@ describe("the member dialect through the `dialect` option", () => {
         mxMember: { name: "status", span: { sourceStart: 18, sourceEnd: 25 } },
       },
     });
-    expect(body.right).toMatchObject({
-      type: "StringLiteral",
-      value: "sent",
-      extra: { mxAtom: { span: { sourceStart: 30, sourceEnd: 35 } } },
-    });
+    // The atom is a node of the dialect's type, its forward a plain literal.
+    expect(body.right).toMatchObject({ type: "StringLiteral", value: "sent" });
+    expect((body.right as { extra: object }).extra ?? {}).not.toHaveProperty(
+      "mxAtom",
+    );
+    expect(check.value.nodes).toEqual([
+      expect.objectContaining({
+        type: "member:Atom",
+        span: { sourceStart: 30, sourceEnd: 35 },
+        forward: body.right,
+      }),
+    ]);
   });
 
   it("`[&a, &b]` is an array of marked members", () => {

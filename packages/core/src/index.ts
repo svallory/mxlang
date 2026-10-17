@@ -219,7 +219,6 @@ export {
   type TargetPolicyResolution,
 } from "./host-policy.ts";
 export type {
-  Atom,
   Attr,
   AttributeTag,
   AttributeTagNode,
@@ -229,6 +228,7 @@ export type {
   ComponentTarget,
   DelegatedTag,
   Expr,
+  ExprNode,
   ExprShape,
   ForHead,
   ForSource,
@@ -236,7 +236,6 @@ export type {
   Ir,
   IrNode,
   Member,
-  MxAtomMark,
   MxMemberMark,
   Position,
   TagAlias,

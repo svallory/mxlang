@@ -53,6 +53,7 @@ import {
   UNKNOWN_ATTRIBUTE_TAG_CODE,
   UNSUPPORTED_CONSTRUCT_CODE,
 } from "./diagnostic-codes.ts";
+import { nodeOfForward } from "./expr-nodes.ts";
 import type {
   Attr,
   AttributeTag,
@@ -121,9 +122,17 @@ export interface CustomTagAttribute {
    * module produced, in either form: the static value after a kind
    * (`asc &dueOn` in Mesh) or a dynamic value that is one marked member
    * (`on:load=&visible`); nothing else. An `expression` slot accepts a
-   * member too, an `atom` slot refuses both forms.
-   * Which atoms or members a slot allows is the module's job: it claims the
-   * keys that say so (`Dialect.contractFields`) and checks them itself.
+   * member too, a node-type slot refuses both forms.
+   *
+   * A node type key (`dialect:Type`, one the file's dialect registers in
+   * `Dialect.nodeTypes`) accepts a value written as one node of that type,
+   * as the whole value (`mode=:strict`, claimed by a value row or placed by
+   * a trigger) or as an expression that is the node's forward. A plain
+   * string, a number, an array, a function or a node of another type is
+   * refused; an identifier, call, member or conditional has no knowable
+   * type and passes. Which values of the type a slot allows is the
+   * module's job: it claims the keys that say so (`Dialect.contractFields`)
+   * and checks them itself.
    */
   type?:
     | "string"
@@ -132,10 +141,14 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "atom"
-    | "member";
-  /** The literal element type of an `array` attribute; a non-literal element passes. */
-  items?: "string" | "number" | "boolean";
+    | "member"
+    | `${string}:${string}`;
+  /**
+   * The element type of an `array` attribute: a literal type, or a node
+   * type key (each element written as one node of that type). A
+   * non-literal element passes.
+   */
+  items?: "string" | "number" | "boolean" | `${string}:${string}`;
   required?: boolean;
   enum?: string[];
   default?: unknown;
@@ -1394,9 +1407,41 @@ export function buildersFor(
   };
 }
 
+/** A node type's key in contracts: `dialect:Type` (`Dialect.nodeTypes`). */
+type NodeTypeKey = `${string}:${string}`;
+
 interface LiteralValue {
-  type: "string" | "number" | "boolean" | "atom" | "member";
+  type: "string" | "number" | "boolean" | "member" | NodeTypeKey;
   value: string | number | boolean;
+}
+
+/** Is `type` a node type key (`dialect:Type`), not one of core's value types? */
+function isNodeTypeKey(type: unknown): type is NodeTypeKey {
+  return typeof type === "string" && /^[^:\s]+:[^:\s]+$/.test(type);
+}
+
+/**
+ * The type of a dialect's node (`dialect:Type`), or `undefined` for none and
+ * for core's own types (`mx:String`, `mx:Expression`): a value written as
+ * one of those is a string or an expression, as if no row had claimed it.
+ */
+function dialectTypeOf(
+  node: { readonly type: string } | undefined,
+): NodeTypeKey | undefined {
+  return node && !node.type.startsWith("mx:") && isNodeTypeKey(node.type)
+    ? node.type
+    : undefined;
+}
+
+/**
+ * The node type a static attribute's whole value was written as. A sugar's
+ * node (a trigger's token that made the attribute, `Attr.sugar`) reads as
+ * its string for every contract but its own type's.
+ */
+function staticNodeType(
+  attr: Extract<Attr, { kind: "static" }>,
+): NodeTypeKey | undefined {
+  return attr.sugar ? undefined : dialectTypeOf(attr.node);
 }
 
 function listEnum(values: readonly string[]): string {
@@ -1405,15 +1450,11 @@ function listEnum(values: readonly string[]): string {
 
 function literalValue(attr: Attr): LiteralValue | null {
   if (attr.kind === "static") {
-    // A sugar's atom token (a syntax module's trigger, `Attr.sugar`) is
-    // stringified for every contract but an atom one; an explicit `x=:a`
-    // stays an atom.
+    // A node written as the whole value keeps its type; a sugar's node
+    // (`Attr.sugar`) reads as its string for every contract but its own
+    // type's.
     return {
-      type: attr.member
-        ? "member"
-        : attr.atom && !attr.sugar
-          ? "atom"
-          : "string",
+      type: attr.member ? "member" : (staticNodeType(attr) ?? "string"),
       value: attr.value,
     };
   }
@@ -1425,7 +1466,7 @@ function literalValue(attr: Attr): LiteralValue | null {
   switch (node?.type) {
     case "StringLiteral":
       return {
-        type: node.extra?.mxAtom ? "atom" : "string",
+        type: dialectTypeOf(nodeOfForward(node)) ?? "string",
         value: node.value,
       };
     case "NumericLiteral":
@@ -1482,9 +1523,13 @@ function isLiteralNode(written: Node | null | undefined): boolean {
 /** The written type of an expression node, or `null` when it cannot be known. */
 function nodeShape(written: Node | null | undefined): string | null {
   const node = withoutTsWrappers(written);
+  // A dialect's node, lowered to this expression (its forward), has the
+  // node's type whatever the forward is.
+  const claimed = node ? dialectTypeOf(nodeOfForward(node)) : undefined;
+  if (claimed) return claimed;
   switch (node?.type) {
     case "StringLiteral":
-      return node.extra?.mxAtom ? "atom" : "string";
+      return "string";
     // A template literal, plain or interpolated, always produces a string.
     case "TemplateLiteral":
       return "string";
@@ -1514,7 +1559,7 @@ function nodeShape(written: Node | null | undefined): string | null {
 function attrShape(attr: Attr): string | null {
   if (attr.kind === "static") {
     if (attr.member) return "member";
-    return attr.atom && !attr.sugar ? "atom" : "string";
+    return staticNodeType(attr) ?? "string";
   }
   if (attr.kind === "boolean") return "boolean";
   if (attr.kind !== "dynamic" && attr.kind !== "bound") return null;
@@ -1575,38 +1620,39 @@ function checkCompositeAttr(
 }
 
 /**
- * Checks an `atom` attribute against its written shape: an atom
- * or a literal list of atoms. A string, a number or a function is a type error
- * at the offending value; an identifier, call, member or conditional has no
- * knowable type and passes. Which names are allowed is the claiming module's
- * business.
+ * Checks a node-type attribute (`type: "dialect:Type"`) against its written
+ * shape: one node of that type, as the whole value or as an expression that
+ * is the node's forward. A string, a number, an array, a function, a member
+ * or a node of another type is a type error at the offending value; an
+ * identifier, call, member or conditional has no knowable type and passes.
+ * Which values of the type are allowed is the claiming module's business.
  */
-function checkAtomAttr(
+function checkNodeAttr(
   owner: Owner,
   attr: Exclude<Attr, { kind: "spread" }>,
-  declaration: CustomTagAttribute,
+  declaration: CustomTagAttribute & { type: NodeTypeKey },
   locate?: Locate,
   claims?: ClaimContext,
 ): void {
+  const type = declaration.type;
   const expected = expectationOf(declaration, claims?.claimed);
   const voice = claims?.voice ?? MX_VOICE;
   const at = valueLoc(attr, locate);
-  // An atom, the sugar-derived `name` included, satisfies an atom contract.
-  if (attr.kind === "static" && attr.atom) return;
-  // Decision 182 addendum 4: a member is not an atom, in either form.
+  // A node of the type, a sugar's included, satisfies the slot.
+  if (attr.kind === "static" && dialectTypeOf(attr.node) === type) return;
+  // A member is not a node, in either form (spec §13.9.6).
   if (isMemberValue(attr)) {
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `${voice.attribute} ${attrLabel(attr)} must be an atom, got a member${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be ${type}, got a member${expected}`,
       at,
       undefined,
       attrEndOf(attr),
     );
   }
-  const shape = attrShape(attr);
-  // A plain string against an atom declaration that uses a key the module
-  // claims: the module may word it itself (it can list the names), so
+  // A plain string against a declaration that uses a key the module
+  // claims: the module may word it itself (it can list the values), so
   // the shape check stays core's but its error is queued behind the module's
   // `afterLower`. The module's diagnostics keep their order, and a module that
   // checks nothing still gets the error.
@@ -1618,7 +1664,7 @@ function checkAtomAttr(
     claims.defer(
       codedError(
         INVALID_ATTRIBUTE_VALUE_CODE,
-        `${ownerText(owner)}: ${voice.attribute} ${attrLabel(attr)} must be atom, got string${expected}`,
+        `${ownerText(owner)}: ${voice.attribute} ${attrLabel(attr)} must be ${type}, got string${expected}`,
         at.line,
         at.column,
         at.file,
@@ -1626,34 +1672,13 @@ function checkAtomAttr(
     );
     return;
   }
-  if (shape && shape !== "atom" && shape !== "array") {
+  const shape = attrShape(attr);
+  if (shape && shape !== type) {
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `${voice.attribute} ${attrLabel(attr)} must be atom, got ${shape}${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be ${type}, got ${shape}${expected}`,
       at,
-      undefined,
-      attrEndOf(attr),
-    );
-  }
-  if (
-    (attr.kind !== "dynamic" && attr.kind !== "bound") ||
-    withoutTsWrappers(attr.value.node)?.type !== "ArrayExpression"
-  ) {
-    return;
-  }
-  for (const element of withoutTsWrappers(attr.value.node)
-    .elements as Array<Node | null>) {
-    const got = nodeShape(element);
-    if (!element || !got || got === "atom") continue;
-    const start = element.loc?.start;
-    failForOwner(
-      INVALID_ATTRIBUTE_VALUE_CODE,
-      owner,
-      `${voice.attribute} ${attrLabel(attr)} must be atom, got ${got}${expected}`,
-      start
-        ? { ...attr.loc, line: start.line, column: start.column }
-        : attr.loc,
       undefined,
       attrEndOf(attr),
     );
@@ -1689,9 +1714,7 @@ function checkMemberAttr(
   if (isMemberValue(attr)) return;
   const got =
     attr.kind === "static"
-      ? attr.atom && !attr.sugar
-        ? "an atom"
-        : "a string"
+      ? (staticNodeType(attr) ?? "a string")
       : attr.kind === "boolean"
         ? `a bare ${voice.attribute}`
         : "an expression";
@@ -2080,22 +2103,28 @@ export function validateCustomTagChildren(
 /** Offset to line and column in the file being compiled. */
 type Locate = (offset: number) => { line: number; column: number };
 
-/** Where an attribute's value starts: the string, the expression or the atom; the attribute when it has none. */
+/** Where an attribute's value starts: the string, the node or the expression; the attribute when it has none. */
 function valueLoc(attr: Attr, locate?: Locate): Position {
   if (!locate || attr.kind === "spread") return attr.loc;
   let offset: number | undefined;
   if (attr.kind === "static") {
-    offset = (attr.atom?.span ?? attr.valueSpan)?.sourceStart;
+    offset = (dialectTypeOf(attr.node) ? attr.node?.span : attr.valueSpan)
+      ?.sourceStart;
   } else if (attr.kind === "dynamic" || attr.kind === "bound") {
     offset = attr.value.span?.sourceStart;
   }
   return offset === undefined ? attr.loc : { ...attr.loc, ...locate(offset) };
 }
 
-/** Where a value error points: at a whole-value atom when the offset can be located, else the attribute. */
+/** Where a value error points: at a whole-value node when the offset can be located, else the attribute. */
 function valueAt(attr: Attr, locate?: Locate): Position {
-  if (attr.kind === "static" && attr.atom && locate) {
-    return { ...attr.loc, ...locate(attr.atom.span.sourceStart) };
+  if (
+    attr.kind === "static" &&
+    dialectTypeOf(attr.node) &&
+    attr.node &&
+    locate
+  ) {
+    return { ...attr.loc, ...locate(attr.node.span.sourceStart) };
   }
   return attr.loc;
 }
@@ -2155,8 +2184,14 @@ function validateAttributes(
         attrEndOf(attr),
       );
     }
-    if (declaration.type === "atom") {
-      checkAtomAttr(owner, attr, declaration, locate, claims);
+    if (isNodeTypeKey(declaration.type)) {
+      checkNodeAttr(
+        owner,
+        attr,
+        declaration as CustomTagAttribute & { type: NodeTypeKey },
+        locate,
+        claims,
+      );
     } else if (declaration.type === "member") {
       checkMemberAttr(owner, attr, locate, voice);
     } else if (
@@ -2181,7 +2216,7 @@ function validateAttributes(
     }
     if (
       declaration.type === "expression" &&
-      ((attr.kind === "static" && !attr.atom && !attr.member) ||
+      ((attr.kind === "static" && !dialectTypeOf(attr.node) && !attr.member) ||
         attr.kind === "boolean")
     ) {
       failForOwner(
@@ -2415,18 +2450,20 @@ function usesClaimedKey(
   return Object.keys(declaration).some((key) => claimed.attribute.has(key));
 }
 
-/** The text of an attribute written as a plain string (not an atom, not an expression), else undefined. */
+/** The text of an attribute written as a plain string (not a node, not a member, not an expression), else undefined. */
 function plainStringOf(attr: Attr): string | undefined {
-  if (attr.kind === "static") return attr.atom ? undefined : attr.value;
+  if (attr.kind === "static") {
+    return dialectTypeOf(attr.node) || attr.member ? undefined : attr.value;
+  }
   if (attr.kind !== "dynamic") return undefined;
   const node = withoutTsWrappers(attr.value.node);
-  return node?.type === "StringLiteral" && !node.extra?.mxAtom
+  return node?.type === "StringLiteral" && !nodeOfForward(node)
     ? String(node.value)
     : undefined;
 }
 
 /**
- * What core's shape error says an atom declaration accepts. Core reads no
+ * What core's shape error says a node-type declaration accepts. Core reads no
  * key a module claims: a declaration that uses one is worded by the module's
  * `describeAttribute`, else not at all.
  */
@@ -2580,11 +2617,16 @@ const WILDCARD_ATTRIBUTE_TAG_KEYS = [
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
 
-/** Rejects a declaration whose keys contradict each other, at registration. */
+/**
+ * Rejects a declaration whose keys contradict each other, or that names a
+ * node type the file's dialect does not register (`nodeTypes`, its
+ * `dialect:Type` keys), at registration.
+ */
 function rejectContradictoryAttribute(
   owner: string,
   attrName: string,
   declaration: CustomTagAttribute,
+  nodeTypes: ReadonlySet<string>,
 ): void {
   const reject = (code: MxDiagnosticCode, problem: string): never => {
     throw codedError(
@@ -2598,17 +2640,33 @@ function rejectContradictoryAttribute(
     if (declaration.type !== "array") {
       reject(INVALID_CONTRACT_CODE, '`items` requires `type: "array"`');
     }
-    if (!(ITEM_TYPES as readonly unknown[]).includes(declaration.items)) {
+    if (
+      !(ITEM_TYPES as readonly unknown[]).includes(declaration.items) &&
+      !isNodeTypeKey(declaration.items)
+    ) {
       reject(
         INVALID_CONTRACT_CODE,
-        `\`items\` must be one of ${ITEM_TYPES.join(", ")}`,
+        `\`items\` must be one of ${ITEM_TYPES.join(", ")}, or a node type key (\`dialect:Type\`)`,
       );
     }
   }
-  if (declaration.type === "atom" && declaration.enum !== undefined) {
+  for (const key of ["type", "items"] as const) {
+    const type = declaration[key];
+    if (isNodeTypeKey(type) && !nodeTypes.has(type)) {
+      reject(
+        INVALID_CONTRACT_CODE,
+        `\`${key}: "${type}"\` is not a node type the file's dialect registers (${
+          nodeTypes.size === 0
+            ? "it registers none"
+            : `it registers ${[...nodeTypes].map((each) => `\`${each}\``).join(", ")}`
+        })`,
+      );
+    }
+  }
+  if (isNodeTypeKey(declaration.type) && declaration.enum !== undefined) {
     reject(
       INVALID_CONTRACT_CODE,
-      '`enum` cannot be combined with `type: "atom"`',
+      `\`enum\` cannot be combined with \`type: "${declaration.type}"\``,
     );
   }
   if (
@@ -2786,6 +2844,7 @@ export function rejectUnknownDeclarationKeys(
       undefined,
       undefined,
       claimed.attribute,
+      claimed.nodeTypes,
     );
   }
   for (const [tagName, definition] of Object.entries(customTags)) {
@@ -2885,6 +2944,7 @@ function rejectRecursiveContractKeys(
   root = label,
   path: Set<object> = new Set([definition]),
   claimed: ReadonlySet<string> = new Set(),
+  nodeTypes: ReadonlySet<string> = new Set(),
 ): void {
   const keys = (
     declaration:
@@ -2922,7 +2982,7 @@ function rejectRecursiveContractKeys(
         : [...new Set([...ATTRIBUTE_KEYS, ...claimed])],
       `"${attrName}" attribute declaration`,
     );
-    rejectContradictoryAttribute(owner, attrName, declaration);
+    rejectContradictoryAttribute(owner, attrName, declaration, nodeTypes);
   }
   for (const [childName, declaration] of explicitChildEntries(
     definition.children,
@@ -2998,6 +3058,7 @@ function rejectRecursiveContractKeys(
         root,
         path,
         claimed,
+        nodeTypes,
       );
       path.delete(declared);
     });
@@ -3023,6 +3084,7 @@ function rejectRecursiveContractKeys(
       root,
       path,
       claimed,
+      nodeTypes,
     );
     path.delete(named);
   }
@@ -3078,6 +3140,7 @@ function rejectRecursiveContractKeys(
         root,
         path,
         claimed,
+        nodeTypes,
       );
       path.delete(declared);
     });

@@ -10,10 +10,7 @@ interface Range {
 
 /** An embedded-code container: its Babel payload, `null` when it did not parse. */
 interface MxContainer extends Range {
-  node?:
-    | (Range & { type?: string; extra?: { mxAtom?: unknown } })
-    | Range[]
-    | null;
+  node?: (Range & { type?: string }) | Range[] | null;
 }
 
 /** The fields of the MX AST (`@mxlang/babel`'s `mx-ast`) this walk reads. */
@@ -57,8 +54,9 @@ const NOT_CODE = new Set([
  * statement is a `tag` (Marko parsed it as a statement tag); an attribute tag
  * and its body have none (Marko moved them off the body); an attribute starts
  * at its name (an `async` method's keyword is outside) and a shorthand a
- * syntax trigger placed ends after its default value; an atom value is code,
- * a quoted string is not.
+ * syntax trigger placed ends after its default value; a quoted string is not
+ * code, and a string literal a dialect node lowered to (its forward, whose
+ * text in the source is the node, not a quote) is.
  */
 /**
  * The native elements the spans parse with: the default target's, which every
@@ -141,7 +139,7 @@ export function markoAuthoredSpans(
           valueNode &&
           !Array.isArray(valueNode) &&
           valueNode.type === "StringLiteral" &&
-          !valueNode.extra?.mxAtom;
+          /["'`]/.test(source[valueNode.start] ?? "");
         if (value && !quoted) code(value);
       }
       walk(node.body);

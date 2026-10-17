@@ -63,7 +63,8 @@ import {
   STRING_KEY,
   TRIGGER_KEY,
 } from "./dialect-registry.ts";
-import type { Member, MxMemberMark } from "./ir.ts";
+import { recordForward } from "./expr-nodes.ts";
+import type { ExprNode, Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { voiceOf } from "./message-vocabulary.ts";
@@ -122,14 +123,26 @@ export function triggerRow(
 const syntaxRuns = new WeakMap<readonly unknown[], SyntaxRun>();
 
 /**
- * A registered document's syntax and the text each lowered trigger prints
- * as: `expr()` splices it into an expression's `code` (`&status` becomes
- * `self.status`), as it splices atoms. Per document, not per `Ctx`, so a
- * scratch walk (`analyze`) and the real one share it.
+ * A lowered trigger's text range and printed replacement, which `expr()`
+ * splices into an expression's `code` (`&status` becomes `self.status`).
+ * A dialect node's replacement (its forward) carries the node, so the
+ * expression records it (`Expr.nodes`) where the splice lands.
+ */
+export interface TriggerSplice {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+  readonly node?: Omit<ExprNode, "code">;
+}
+
+/**
+ * A registered document's syntax and the splices of its lowered triggers.
+ * Per document, not per `Ctx`, so a scratch walk (`analyze`) and the real
+ * one share it.
  */
 interface SyntaxRun {
   readonly syntax: ResolvedSyntax;
-  readonly splices: { start: number; end: number; text: string }[];
+  readonly splices: TriggerSplice[];
 }
 
 /**
@@ -181,7 +194,7 @@ function isTriggerNode(node: Node): boolean {
  */
 function claimedRow(
   table: SyntaxTable,
-  position: "attribute" | "line" | "value",
+  position: "expression" | "attribute" | "line" | "value",
   node: Node,
   text: string,
 ): Trigger {
@@ -212,11 +225,14 @@ function triggerOf(
   ctx: Ctx,
   table: SyntaxTable,
   node: Node,
-  position: "attribute" | "line",
+  position: "expression" | "attribute" | "line",
 ): Node {
   if (node?.type === "MxTrigger") return node;
   const span = node.span ?? { sourceStart: node.start, sourceEnd: node.end };
   const text = ctx.source.slice(span.sourceStart, span.sourceEnd);
+  // An expression's node has no `=value`, operator or arguments: a field of
+  // those names is the node type's own.
+  const own = position !== "expression";
   return {
     type: "MxTrigger",
     start: node.start,
@@ -224,9 +240,9 @@ function triggerOf(
     id: claimedRow(table, position, node, text).id,
     position,
     text,
-    operator: node.operator ?? null,
-    value: node.value ?? null,
-    args: node.args ?? null,
+    operator: own ? (node.operator ?? null) : null,
+    value: own ? (node.value ?? null) : null,
+    args: own ? (node.args ?? null) : null,
     claimed: node,
   };
 }
@@ -885,7 +901,7 @@ function checkAttributeValue(
       return;
     }
     if (
-      (value.kind === "atom" || value.kind === "member") &&
+      (value as { kind?: unknown }).kind === "member" &&
       typeof (value as { name?: unknown }).name === "string" &&
       (value as { name: string }).name !== ""
     ) {
@@ -894,7 +910,7 @@ function checkAttributeValue(
   }
   raise(
     DIALECT_HOOK_ERROR_CODE,
-    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "atom" | "member", name }\``,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, or \`{ kind: "member", name }\``,
     trigger,
   );
 }
@@ -1134,11 +1150,6 @@ function useOf(site: Site, owner: Node | null): TriggerUse {
   }
 }
 
-/** A whole string literal marked as an atom (`extra.mxAtom`): `expr()` splices it as an atom. */
-function isAtomLiteral(node: Node): boolean {
-  return node?.type === "StringLiteral" && !!node.extra?.mxAtom;
-}
-
 function lowerExpressionTriggers(
   ctx: Ctx,
   run: SyntaxRun,
@@ -1146,19 +1157,21 @@ function lowerExpressionTriggers(
   owner: Node | null,
 ): void {
   const { table, dialect } = run.syntax;
-  for (const trigger of container.triggers ?? []) {
-    if (lowered.has(trigger)) continue;
+  for (const entry of container.triggers ?? []) {
+    if (lowered.has(entry)) continue;
+    // A node an expression row claimed lowers through its type, read as an
+    // `MxTrigger` view of it; core's own `MxTrigger` as is.
+    const claimed: Node | undefined =
+      entry.type === "MxTrigger" ? undefined : entry;
+    const trigger = claimed
+      ? triggerOf(ctx, table, claimed, "expression")
+      : entry;
     const row = rowFor(table, trigger);
     // Unparsed payloads keep their error for `payloadOf`.
     if (container.node == null) return;
-    if (isNodeTypeRow(row.node)) {
-      // The table check refuses this row; a hand-built document may not.
-      raise(
-        INVALID_DIALECT_MODULE_CODE,
-        `the \`${trigger.id}\` trigger names a node type (\`${row.node.dialect}:${row.node.type}\`), which has no meaning in an expression yet; use \`{ call }\` and the dialect's \`lowerTrigger\``,
-        trigger,
-      );
-    }
+    // A row naming a node type whose trigger nothing claimed (a document
+    // parsed without the claim process) has no lowering.
+    if (isNodeTypeRow(row.node) && !claimed) noLowering(trigger);
     if (isCallRow(row.node) && !dialect?.lowerTrigger) {
       noLowering(trigger);
     }
@@ -1176,7 +1189,9 @@ function lowerExpressionTriggers(
     // there is an invalid key, and a shorthand would keep the stand-in. A
     // dialect may refuse it in its own words first (`ctx.use` is "key").
     const use = useOf(at, owner);
-    if (use === "key" && !isCallRow(row.node)) notWholeOperand(trigger);
+    if (use === "key" && !isCallRow(row.node) && !claimed) {
+      notWholeOperand(trigger);
+    }
     const mark = at.node.extra?.mxTrigger;
     let replacement: Node;
     if (row.node === "string") {
@@ -1200,7 +1215,9 @@ function lowerExpressionTriggers(
     } else {
       const result = callHook(
         ctx,
-        lowerTriggerHook(dialect, trigger),
+        claimed
+          ? nodeTypeHook(dialect, trigger, claimed as RegisteredNode)
+          : lowerTriggerHook(dialect, trigger),
         trigger,
         null,
         use,
@@ -1216,16 +1233,18 @@ function lowerExpressionTriggers(
     }
     replaceAt(container, at, positioned(replacement, at.node));
     // The expression's `code` is spliced from the source: the trigger's
-    // text becomes the replacement's printed code. A replacement marked as
-    // an atom is recorded with the atoms instead (`recordAtoms` after this
-    // pass), which splice and map it from its mark.
-    if (!isAtomLiteral(replacement)) {
-      run.splices.push({
-        ...spanRange(trigger),
-        text: printed(ctx, replacement, trigger),
-      });
-    }
+    // text becomes the replacement's printed code. A node's replacement is
+    // its forward: the splice carries the node, so the expression records
+    // it where the forward is printed.
+    run.splices.push({
+      ...spanRange(trigger),
+      text: printed(ctx, replacement, trigger),
+      ...(claimed
+        ? { node: recordForward(claimed as DialectNode, replacement) }
+        : {}),
+    });
     lowered.add(trigger);
+    lowered.add(entry);
   }
 }
 
@@ -1304,11 +1323,10 @@ function containerOf(ctx: Ctx, node: Node, start: number, end: number): Node {
     outer: { start, end },
     node,
     error: null,
-    atoms: [],
   };
 }
 
-/** The `StringLiteral` a static string, atom or member value lowers through. */
+/** The `StringLiteral` a static string or member value lowers through. */
 function literal(
   ctx: Ctx,
   value: string,
@@ -1387,27 +1405,25 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
   } else {
-    const span = value.span ?? text;
-    const mark =
-      value.kind === "member"
-        ? { mxMember: { span, name: value.name } }
-        : { mxAtom: { span } };
-    // The value spans the name where the text spells it (`email` in
-    // `:email`), as a string value does; the mark keeps the whole token.
-    const at = value.span ? -1 : spelled.indexOf(value.name);
+    const member = value as { name: string; span?: SourceSpan };
+    const span = member.span ?? text;
+    const mark = { mxMember: { span, name: member.name } };
+    // The value spans the name where the text spells it (`dueOn` in
+    // `&dueOn`), as a string value does; the mark keeps the whole token.
+    const at = member.span ? -1 : spelled.indexOf(member.name);
     const [start, end] =
       at > 0
-        ? [text.sourceStart + at, text.sourceStart + at + value.name.length]
+        ? [text.sourceStart + at, text.sourceStart + at + member.name.length]
         : [span.sourceStart, span.sourceEnd];
     container = containerOf(
       ctx,
-      literal(ctx, value.name, start, end, mark),
+      literal(ctx, member.name, start, end, mark),
       start,
       end,
     );
   }
   const authored = attr.options?.authored === true;
-  return {
+  const lowered: Node = {
     type: "MxAttribute",
     // The default value is anchored at its value, Marko's anchor.
     start: attr.name === null && container ? container.start : text.sourceStart,
@@ -1441,6 +1457,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       ? { mxWritten: { start: trigger.start, end: ownValue.end } }
       : {}),
   };
+  return lowered;
 }
 
 /**
@@ -1620,23 +1637,30 @@ function mapAttributes(
 /**
  * The attribute a claimed value lowers to: its node's value as a string
  * every target emits (`mx:String` is its own `value`; a dialect's type
- * returns one from `lower`, and the node stays beside it on `Attr.node`),
- * or the expression a dialect's `lower` built (`ctx.expression`), spliced
- * over the value's text. Positions are the value's own.
+ * returns one from `lower`), or the expression a dialect's `lower` built
+ * (`ctx.expression`), spliced over the value's text. Either way a dialect's
+ * node stays beside it: on `Attr.node` for a string or a string literal,
+ * else as the expression's `Expr.nodes` entry spanning the whole value.
+ * Positions are the value's own.
  */
 function lowerValueAttribute(
   ctx: Ctx,
   table: SyntaxTable,
-  dialect: Dialect | undefined,
+  _dialect: Dialect | undefined,
   attr: Node,
 ): Node {
   const node = attr.value as Node;
   const span: SourceSpan = node.span;
   const { sourceStart: start, sourceEnd: end } = span;
   const text = ctx.source.slice(start, end);
-  let result: TriggerResult;
+  let container: Node;
   if (node.type === STRING_KEY) {
-    result = node.value as string;
+    container = containerOf(
+      ctx,
+      literal(ctx, node.value as string, start, end),
+      start,
+      end,
+    );
   } else {
     const trigger: Node = {
       type: "MxTrigger",
@@ -1650,43 +1674,68 @@ function lowerValueAttribute(
       args: null,
       claimed: node,
     };
-    result = callHook(
-      ctx,
-      nodeTypeHook(dialect, trigger, node as unknown as RegisteredNode),
+    const lowered = lowerValueNode(ctx, trigger, node as DialectNode);
+    container =
+      typeof lowered === "string"
+        ? containerOf(ctx, literal(ctx, lowered, start, end), start, end)
+        : lowered;
+  }
+  const result = { ...attr, value: container };
+  keepValueNode(result, node as DialectNode);
+  return result;
+}
+
+/**
+ * Keeps a value's node beside the lowered attribute, for `Attr.node`: read
+ * when the value lowers to a static string (a string result, or a string
+ * literal forward). A forward that stays an expression is in `Expr.nodes`.
+ */
+function keepValueNode(attr: Node, node: DialectNode): void {
+  valueNodes.set(attr, node);
+}
+
+/**
+ * A node in value position (claimed by a value row, or placed by
+ * `ctx.attribute`) through its type's `lower`: the string it returned, or
+ * the container of the expression it built (its forward), spliced over the
+ * node's text with the node recorded. `trigger` is the view errors are
+ * positioned on.
+ */
+function lowerValueNode(
+  ctx: Ctx,
+  trigger: Node,
+  node: DialectNode,
+): string | Node {
+  const { sourceStart: start, sourceEnd: end } = node.span;
+  const result = callHook(
+    ctx,
+    nodeTypeHook(ctx.dialect, trigger, node as unknown as RegisteredNode),
+    trigger,
+    null,
+  );
+  if (typeof result === "string") return result;
+  if (
+    Array.isArray(result) ||
+    (result as { kind?: unknown }).kind !== "expression"
+  ) {
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return a string or \`ctx.expression(node)\` for an attribute value`,
       trigger,
-      null,
     );
-    if (
-      typeof result !== "string" &&
-      (Array.isArray(result) ||
-        (result as { kind?: unknown }).kind !== "expression")
-    ) {
-      raise(
-        DIALECT_HOOK_ERROR_CODE,
-        `the \`${trigger.id}\` trigger's ${hookLabel(trigger)} must return a string or \`ctx.expression(node)\` for an attribute value`,
-        trigger,
-      );
-    }
   }
-  let container: Node;
-  if (typeof result === "string") {
-    container = containerOf(ctx, literal(ctx, result, start, end), start, end);
-  } else {
-    const expression = positioned((result as TriggerExpression).node as Node, {
-      start,
-      end,
-      loc: locOf(ctx, start, end),
-    });
-    ctx.triggerSplices?.push({
-      start,
-      end,
-      text: ctx.generate(expression),
-    });
-    container = containerOf(ctx, expression, start, end);
-  }
-  const lowered = { ...attr, value: container };
-  if (typeof result === "string") valueNodes.set(lowered, node as DialectNode);
-  return lowered;
+  const expression = positioned((result as TriggerExpression).node as Node, {
+    start,
+    end,
+    loc: locOf(ctx, start, end),
+  });
+  ctx.triggerSplices?.push({
+    start,
+    end,
+    text: printed(ctx, expression, trigger),
+    node: recordForward(node, expression),
+  });
+  return containerOf(ctx, expression, start, end);
 }
 
 /** Does one of `attrs` carry the trigger's own `=value` (`ctx.value`, or its node)? */

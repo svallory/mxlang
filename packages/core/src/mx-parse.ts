@@ -40,6 +40,7 @@ import {
   type ClaimContext,
   type ClaimPosition,
   claimNode,
+  isNodeTypeRow,
   isRegistryKey,
   nodeTypeRegistry,
   rowKey,
@@ -130,9 +131,13 @@ export function parseMx(
   return document;
 }
 
+/** The answer for an expression row that names no node type: core's own `MxTrigger`. */
+const KEEP_TRIGGER: object = Object.freeze({ type: "MxTrigger" });
+
 /**
  * The front end's `claim` option for `table`: `undefined` when the table
- * has no attribute, line or value row (the default row: nothing is asked).
+ * has no attribute, line or value row and no expression row naming a node
+ * type (the default row: nothing is asked).
  * Answers are kept per position and offset (per range in value position),
  * as the front end may parse twice (a tag name its pre-scan missed), so
  * each `parse` runs once.
@@ -155,10 +160,14 @@ function nodeClaims(
   | undefined {
   const table = options.syntax;
   const values = table.valueTriggers ?? [];
+  const expressionNodes = table.expressionTriggers.some((row) =>
+    isNodeTypeRow(row.node),
+  );
   if (
     table.attributeTriggers.length === 0 &&
     table.lineTriggers.length === 0 &&
-    values.length === 0
+    values.length === 0 &&
+    !expressionNodes
   ) {
     return undefined;
   }
@@ -196,13 +205,20 @@ function nodeClaims(
         ? table.lineTriggers
         : position === "value"
           ? values
-          : table.attributeTriggers;
+          : position === "expression"
+            ? table.expressionTriggers
+            : table.attributeTriggers;
     const row = list.find((each) => each.id === id);
     if (!row) {
       // The parser asks only with ids of this table.
       throw new Error(
         `internal: the parser asked to claim with the \`${id}\` ${position} trigger, which the table does not hold`,
       );
+    }
+    // An expression row that names no node type (`{ call }`, `"string"`,
+    // `"identifier"`) keeps core's `MxTrigger`.
+    if (position === "expression" && !isNodeTypeRow(row.node)) {
+      return KEEP_TRIGGER;
     }
     const span = { sourceStart: start, sourceEnd: end };
     const label = `the \`${id}\` trigger's \`parse\` (node type \`${rowKey(row.node)}\`)`;

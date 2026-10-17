@@ -24,9 +24,9 @@ describe("a module's own contract key", () => {
   it("passes through registration and reaches its `afterLower`, whose `fail` is a positioned, coded diagnostic", () => {
     const source = "entity name=~invoice\n  index on=~title\n";
     const tags: Record<string, CustomTag> = {
-      entity: { attributes: { name: { type: "atom" } } },
+      entity: { attributes: { name: { type: "atom:Atom" } } },
       index: {
-        attributes: { on: { type: "atom", unique: true } as never },
+        attributes: { on: { type: "atom:Atom", unique: true } as never },
         relations: "many",
       } as CustomTag,
     };
@@ -60,11 +60,11 @@ describe("a module's own contract key", () => {
           );
           const value = on && !("spread" in on) ? on.value : null;
           if (
-            value?.type === "mx:Atom" &&
+            value?.type === "atom:Atom" &&
             call.contract.attributes?.on?.unique
           ) {
             unit.fail(
-              `\`~${(value as { name: string }).name}\` is not unique`,
+              `\`~${(value as unknown as { name: string }).name}\` is not unique`,
               {
                 at: value.span,
                 code: "FIXTURE_UNIQUE",

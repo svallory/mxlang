@@ -67,7 +67,7 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
  */
 export function mappedExpr(expr: Expr): MappedCode {
   return (
-    atomMappings(expr) ??
+    (expr.unrewrittenCode === undefined ? nodeMappings(expr) : undefined) ??
     rewrittenMappings(expr) ??
     mapped(expr.code, expr.span ?? null)
   );
@@ -85,10 +85,10 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
   const before = expr.unrewrittenCode;
   const span = expr.span;
   if (before === undefined || !span || before === expr.code) return undefined;
-  // `before` against the authored text: atoms (one character longer) or a
-  // whole-span identity.
+  // `before` against the authored text: dialect nodes (each printed as its
+  // forward) or a whole-span identity.
   const base =
-    atomMappings({ ...expr, code: before }) ??
+    nodeMappings(expr, before) ??
     mapped(
       before,
       span.sourceEnd - span.sourceStart === before.length ? span : null,
@@ -358,17 +358,23 @@ function mergeAdjacent(mappings: GeneratedMapping[]): GeneratedMapping[] {
 }
 
 /**
- * Per-atom sub-mappings: `code` holds each atom a dialect marked as its
- * string literal (a two-character `~a` is the three-character `"a"`), so one
- * whole-span mapping would drift by one per preceding atom. Each atom maps to
- * its literal and the text between them maps one to one, so a TypeScript
- * error on an atom lands on the atom. `undefined` (the whole-span mapping) when the text
- * between atoms is not the authored text, as when a binding rewrite
- * (`count` to `count()`) moved it.
+ * Per-node sub-mappings: `code` holds each dialect node inside the
+ * expression printed as its forward (`~a` as `"a"`, `&dueOn` as
+ * `self.dueOn`), so one whole-span mapping would drift by the difference at
+ * every node. Each node maps as a whole to its printed range
+ * (`ExprNode.code`) and the text between nodes maps one to one, so a
+ * TypeScript error on a node lands on the node. `undefined` (the whole-span
+ * mapping) when a node was reprinted rather than spliced, or when the text
+ * between nodes is not the authored text, as when a binding rewrite
+ * (`count` to `count()`) moved it. `code` is the text the ranges index:
+ * `Expr.code`, or `Expr.unrewrittenCode` when a reads rewrite changed it.
  */
-function atomMappings(expr: Expr): MappedCode | undefined {
+function nodeMappings(
+  expr: Expr,
+  code: string = expr.code,
+): MappedCode | undefined {
   const span = expr.span;
-  if (!span || !expr.atoms?.length) return undefined;
+  if (!span || !expr.nodes?.length) return undefined;
   const mappings: GeneratedMapping[] = [];
   const between = (sourceStart: number, sourceEnd: number, at: number) => {
     if (sourceEnd > sourceStart) {
@@ -382,24 +388,29 @@ function atomMappings(expr: Expr): MappedCode | undefined {
   };
   let source = span.sourceStart;
   let generated = 0;
-  for (const atom of expr.atoms) {
-    const text = JSON.stringify(atom.name);
-    const at = generated + atom.span.sourceStart - source;
-    if (expr.code.slice(at, at + text.length) !== text) return undefined;
-    between(source, atom.span.sourceStart, generated);
+  for (const node of expr.nodes) {
+    const at = node.code;
+    if (
+      !at ||
+      node.span.sourceStart < source ||
+      at.start - generated !== node.span.sourceStart - source ||
+      at.end > code.length
+    ) {
+      return undefined;
+    }
+    between(source, node.span.sourceStart, generated);
     mappings.push({
-      ...atom.span,
-      generatedStart: at,
-      generatedEnd: at + text.length,
+      sourceStart: node.span.sourceStart,
+      sourceEnd: node.span.sourceEnd,
+      generatedStart: at.start,
+      generatedEnd: at.end,
     });
-    source = atom.span.sourceEnd;
-    generated = at + text.length;
+    source = node.span.sourceEnd;
+    generated = at.end;
   }
-  if (generated + span.sourceEnd - source !== expr.code.length) {
-    return undefined;
-  }
+  if (code.length - generated !== span.sourceEnd - source) return undefined;
   between(source, span.sourceEnd, generated);
-  return { code: expr.code, mappings };
+  return { code, mappings };
 }
 
 /** Applies one generated-text replacement and keeps non-overlapping mappings aligned. */

@@ -446,12 +446,6 @@ function validateTrigger(
       message:
         '`node` is "string", "identifier", "attribute", { call } or { type, dialect }',
     });
-  } else if (nodeType && list === "expressionTriggers") {
-    out.push({
-      field: `${at}.node`,
-      message:
-        "a registered node type (`{ type, dialect }`) is not supported in expression position yet; use { call }",
-    });
   } else if (!nodeType && list === "valueTriggers") {
     out.push({
       field: `${at}.node`,

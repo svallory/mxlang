@@ -4115,7 +4115,7 @@ read throws, as `readFileSync` does.
 | `structural` | `"pass"`, `"reject"` (default: the dialect's `structural`, else `"pass"`) | `"pass"` keeps the structural constructs (text, `${}`, `<if>`, `<for>`, `<const>`, `import`, `export`, `static`) in the IR. `"reject"` makes each one a positioned error: ``Data files are static, so they do not evaluate `<if>` `` (the construct is named). Comments are **never** structural — a `//` line or `<!-- -->` stays in the IR as its `Comment` node under either value. A structural hit and a check error are ordered by position |
 | `imports` | `"pass"`, `"reject"` (default: the dialect's `imports`, else the effective `structural`) | Decides a top-level `import` on its own. `"pass"` with `structural: "reject"` keeps every other structural construct rejected and returns the imports in `ir.imports`; `"reject"` with `structural: "pass"` rejects only the `import`s. Each `Import` carries `code`, `span`, `from` (the unquoted specifier) and `names` (`{ imported, local, kind: "default" \| "named" \| "namespace", span, localSpan?, typeOnly? }`, in written order, empty for `import "x"`), read from the parsed declaration, never from the text. A tag-body `import` is not an import: it parses as body text, so `structural: "reject"` rejects it as text and `imports` does not apply |
 | `unknownTags` | `"allow"`, `"reject"` (default: the dialect's `unknownTags`, else `"allow"`) | `"allow"` is the open set: a tag with no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) is accepted. `"reject"` makes any authored tag, at any depth, whose name has no contract (no entry in `customTags`, nor in the file's dialect's `contracts`) and is not the built-in `object`, a positioned error at the tag: ``` `<opem>` is not a known tag: no contract for it was given; did you mean `<open>`? ``` (the hint appears when one declared name is clearly nearest). A file of a dialect names the dialect by its id in place of `no contract for it was given`: ``` `<opem>` is not a known tag in the `recipes` dialect; did you mean `<open>`? ```, because its vocabulary is the dialect's `contracts`, its tag directories and whatever the caller passed, and the tag is in none of them. The code and the position are the same. Reserved names never reach the check (core consumes them first) and `<@name>` attribute tags are governed by the parent's `attributeTags`. An unknown parent is reported before its children's `parents`/`children` errors, and the errors inside an unknown tag are labelled, never dropped. A tag gets one error: an unknown tag inside a parent whose `children` is closed reports `MX_UNKNOWN_TAG` only, because the missing contract is the cause and "not allowed here" would be its symptom, so it does not also get `MX_TAG_NOT_ALLOWED`. What the not-allowed message would have said beyond that (the parent's wildcard rule, a `defaultTag` hint) is appended to the `MX_UNKNOWN_TAG` message as `; inside `<parent>`: …`, so the author still sees what the parent accepts. A tag the file's dialect explains (`explainUnknownTag`, §13.9.3) gets the dialect's error instead, in both modes, and is the one error for it. A declared tag that the parent does not allow keeps `MX_TAG_NOT_ALLOWED` in both modes, and under `"allow"` the unknown tag in a closed parent reports `MX_TAG_NOT_ALLOWED` |
-| `stripTypes` | `boolean` (default `true`) | `true` erases TypeScript from the nodes before the source lowers: an arrow's annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (`node`, `span` and `code` are the operand's). `Expr.code` is sliced from the source either way. `false` keeps the authored TypeScript in the nodes a dialect's `nodeType.lower`, contract hooks and `afterLower` see. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function`, `atom` and `member` checks (the `atom` and `member` checks leave core with the atom removal (mx-g1tw), §13.9). An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. A tag-file hook's `ctx.lower` takes the option and does not inherit the outer call's value |
+| `stripTypes` | `boolean` (default `true`) | `true` erases TypeScript from the nodes before the source lowers: an arrow's annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (`node`, `span` and `code` are the operand's). `Expr.code` is sliced from the source either way. `false` keeps the authored TypeScript in the nodes a dialect's `nodeType.lower`, contract hooks and `afterLower` see. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function`, node-type and `member` checks. An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. A tag-file hook's `ctx.lower` takes the option and does not inherit the outer call's value |
 | `warnings` | `MxWarning[]` | a sink for core's warnings, pushed as raised, so those raised before a later error stay in the caller's array |
 
 **Fixes (`fixes`, `@unstable`).** A diagnostic may carry `fixes?: readonly { title: string; edits: readonly { offset: number; end: number; newText: string }[] }[]`: each entry is one way to resolve it, `title` the words a tool shows for it and `edits` the changes it makes. `offset` and `end` are UTF-16 code-unit offsets into the same text the diagnostic's `offset` indexes: the lowered file, or, for a diagnostic that `file` places in another file (where `offset` is `-1`), that file's text. `end` is exclusive (`offset` equal to `end` inserts). The edits of one fix are all against the original text and never overlap, so replacing every `[offset, end)` range by its `newText` gives the fixed source, in whatever order they are applied, and a tool applies a fix whole or not at all. A rule sets `fixes` only when it knows the exact repair; `MX_RESERVED_EFFECT_TAG` does, with one fix, "Rename to `<script>`", whose edits rename the open tag and, when it has a close tag with a name, the close tag (a self-closing tag, a concise tag and a `</>` close have the open name only). A host's "not supported" error for `<effect>`, and the strict policy's, offer none. Wherever a diagnostic is re-raised with its `code` and `end`, its `fixes` travel with them in the same coordinates (`TranslateError.fixes`; a region or `.astro.mx` error keeps the whole file's offsets, as it does for `offset`); the language server offers each fix as a quick fix, the TypeScript plugin answers tsserver's code-fix request with it, and `mx-tsc` prints each on a `fix:` line under the diagnostic. The field and its types (`IrDiagnosticFix`, `IrDiagnosticEdit`) may change in a minor release.
@@ -4156,12 +4156,14 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   literal is `static`; nothing is evaluated.
 - **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
   shape: it goes up by one with every change a reader can observe (a node kind
-  or field added, removed, renamed or given a new meaning). It is `5`: `2` added
+  or field added, removed, renamed or given a new meaning). It is `6`: `2` added
   a static `Attr`'s `node` (a dialect's node, §13.9.9), `3` added a
   `DelegatedTag`'s `tag.definedIn` (§9.2), `4` added a `Define`'s `attrs`
   (§5.4), and `5` added `valueSpan` to a dynamic, bound, event and spread
   `Attr` (the value as written, wrapper included) and made a named
-  attribute's `span` end where its written value ends.
+  attribute's `span` end where its written value ends. `6` replaced an
+  `Expr`'s `atoms` and a static `Attr`'s `atom` with `Expr.nodes`, the dialect
+  nodes written inside an expression (§13.9.9).
 
 #### 13.7.3 Tag rules presets
 
@@ -4526,13 +4528,9 @@ it is not the "L2" of §9.1, which names a custom tag's sidecar. The design page
 stay as the argument; this section states what is.
 
 **Atoms are rows of this table.** Core reads `:name` as Marko does (§4); a
-dialect that wants atoms builds them with an expression row and a value row whose
-hooks return a `StringLiteral` marked `extra.mxAtom` (§13.9.5).
-
-> **Being replaced.** This section's atom text describes core's atom support as it ships
-> today. Atoms are a dialect feature (see "Atoms are a dialect feature",
-> §4): `Atom`, `MxAtomMark`, `extra.mxAtom` and the `atom` contract type leave
-> core with the atom removal (mx-g1tw), and none of them is stable API.
+dialect that wants atoms registers an atom node type (§13.9.9) and names it from
+an expression row and a value row; the type's `lower` returns the string
+literal the atom stands for.
 
 #### 13.9.1 The table
 
@@ -5168,8 +5166,7 @@ UTF-16 range. `ctx` is frozen and offers exactly:
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
   attribute), a string, a `ctx.expression` result, or a whole-value
-  `{ kind: "atom" | "member", name, span? }`. (The `"atom"` form leaves core
-  with the atom removal (mx-g1tw); see the note at the top of §13.9.)
+  `{ kind: "member", name, span? }`.
 - `ctx.child(tagName, attrs)`: a child tag of the enclosing block, built from
   `ctx.attribute` results. It goes through the normal tag path, so contracts and
   host declarations apply to it.
@@ -5201,8 +5198,8 @@ before the trigger that owns it. The parsed tree stays as parsed. The lowered
 results live beside it and are what attribute, child and expression readers see,
 so `Expr.code` and the source text at `Expr.span` differ: an expression
 trigger's replacement is **printed and spliced into `code`** at the trigger's
-span (`&status` becomes `self.status`), and an atom-marked literal's string is
-spliced the same way, so emitting hosts emit valid code, while the source text
+span (`&status` becomes `self.status`), and a dialect node's forward
+(§13.9.9) is spliced the same way, so emitting hosts emit valid code, while the source text
 at `Expr.span` and every offset stay the authored text. The stand-in
 node the parser hands the expression parser carries `extra.mxTrigger = { id, span }`,
 and core's built-in string and identifier replacements keep it.
@@ -5217,7 +5214,7 @@ row's id and `<text>` for the trigger's text:
 | The hook returns an object it did not build | `` the `<id>` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built `` |
 | The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
 | `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
-| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, or `{ kind: "atom" \| "member", name }` `` |
+| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, or `{ kind: "member", name }` `` |
 | The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
@@ -5227,11 +5224,6 @@ A `=value` is also lowered as an expression with its own triggers, and a member
 in a method body or in call arguments lowers like any other expression position.
 
 #### 13.9.6 The `"member"` contract type
-
-> **Being replaced.** The atom half of this section (the `"atom"` contract type, its column in the table below, and `values`, `pattern` and `ref` as atom keys) describes core's atom support as it ships
-> today. Atoms are a dialect feature (see "Atoms are a dialect feature",
-> §4): `Atom`, `MxAtomMark`, `extra.mxAtom` and the `atom` contract type leave
-> core with the atom removal (mx-g1tw), and none of them is stable API.
 
 A member is the whole-value reference a dialect produces for a sigil like
 Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
@@ -5245,18 +5237,18 @@ Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
   (`Member`); or a **dynamic** attribute whose value is exactly one marked member
   (`on:load=&visible`).
 
-`CustomTagAttribute.type` gains `"member"`, a sibling of `"atom"`. It accepts
-**both** forms and nothing else; against a member value:
+`CustomTagAttribute.type` takes `"member"`, a sibling of a node-type slot
+(`type: "atom:Atom"`, §13.9.9). It accepts **both** forms and nothing else:
 
-| Declared `type` | A member | An atom |
+| Declared `type` | A member | A dialect node (`atom:Atom`) |
 |---|---|---|
-| `"member"` | accepted | refused: ``attribute `x` must be a member, got an atom`` (a string, a bare attribute or any other expression is named the same way) |
-| `"atom"` | refused: ``attribute `x` must be an atom, got a member`` | accepted |
+| `"member"` | accepted | refused: ``attribute `x` must be a member, got atom:Atom`` (a string, a bare attribute or any other expression is named the same way) |
+| `"atom:Atom"` | refused: ``attribute `x` must be atom:Atom, got a member`` | accepted |
 | `"expression"` | accepted | accepted |
 
-`values`, `pattern` and `ref` stay atom-only; whether a member names something that
-exists is the dialect's `afterLower` check, not the contract's. There is no union
-type: a kind with an atom slot and a member slot declares two slots.
+Whether a member names something that exists is the dialect's `afterLower`
+check, not the contract's. There is no union type: a kind with a node slot and a
+member slot declares two slots.
 
 **One member per name slot.** A second member in the same name slot (`sort asc &c
 &d`) is a positioned error, not a duplicate-attribute warning: ``one member per
@@ -5314,28 +5306,29 @@ interface NodeType<N extends DialectNode> {
 }
 
 interface ClaimContext {
-  position: "line" | "attribute" | "value";
-  tag: string | null;        // the static name of the tag the attribute or value is on; null on a line
+  position: "expression" | "line" | "attribute" | "value";
+  tag: string | null;        // the static name of the tag the expression, attribute or value is on; null on a line
   attribute: string | null;  // the attribute a value belongs to (null for a tag's default value); null elsewhere
   fail(message: string, options?: { at?: SourceSpan; code?: string }): never;
 }
 ```
 
-A table row names one with `node: { type, dialect }`, in an attribute, line or
-value list.
+A table row names one with `node: { type, dialect }`, in an expression,
+attribute, line or value list.
 
-**The claim.** Every row in these three positions goes through one process. At
+**The claim.** Every row naming a node type goes through one process. At
 a trigger position the parser finds the row whose `match` matches and asks the
 row's node type to claim the text: core calls its `parse` with the matched
-text, its span and the context. In an attribute list and on a line the match
-decides where the node ends. In the value position the parser already knows
+text, its span and the context. In an expression, an attribute list and on a
+line the match decides where the node ends. In the value position the parser already knows
 where the value ends, so the row's `match` must cover the whole value, and only
 decides whether the row is asked. `parse` returns the node's own fields, or
 `undefined`:
 
 - **Fields** claim the text. Core sets `type` (the key) and `span` on them, and
-  the node takes the text's place in the MX AST: in its tag's attribute list, as
-  a child of the enclosing body, or as the `MxAttribute`'s `value`. In an
+  the node takes the text's place in the MX AST: in its container's `triggers`
+  (an expression), in its tag's attribute list, as a child of the enclosing
+  body, or as the `MxAttribute`'s `value`. In an
   attribute list and on a line, core also sets the trigger fields every node
   there has (`start`, `end`, `operator`, `value`, `args`); as a value it sets
   only `start` and `end`, so a value node may own a `value` field. Core freezes
@@ -5343,12 +5336,44 @@ decides whether the row is asked. `parse` returns the node's own fields, or
   in the registry and calls that type's `lower`, which builds with the `ctx`
   constructors `lowerTrigger` gets (§13.9.5).
 - **`undefined` declines** the text. Parsing continues as if no row had matched
-  at that position: the text is an attribute name, a tag on its line, or the
-  expression a value is with no row, as the file's other rows and the default
-  grammar read it.
+  at that position: the text is an operand, an attribute name, a tag on its
+  line, or the expression a value is with no row, as the file's other rows and
+  the default grammar read it.
 
-`parse` is called once per trigger. With no row in any of the three positions
-(the default `.mx` row), nothing is asked.
+`parse` is called once per trigger. With no row naming a node type (the
+default `.mx` row), nothing is asked.
+
+**The expression position.** In an expression the parser hands Babel the
+row's stand-in, so the expression parses whatever the node is. The type's
+`lower(node, ctx)`, with `ctx.position` `"expression"`, returns
+`ctx.expression(forward)`: the **forward**, an expression native to the
+expression language (a Babel node), which takes the stand-in's place in the
+expression's `node`. There is no neutral vocabulary in between: a forward is
+made of the expression language's own nodes, and every target emits it as it
+emits any other expression. `Expr.code` holds the forward's printed text at the
+node's place, while the source text at `Expr.span` keeps the authored spelling.
+The IR lists each node in the expression's `Expr.nodes`, in source order: an
+`ExprNode` with the node's `type` and `span`, the `node` as parsed, its
+`forward` (the very object `Expr.node` holds, so a consumer translating an
+expression finds a dialect node by identity) and `code`, the range of
+`Expr.code` the forward is printed at. A source map maps the text around a node
+one to one and each node to its printed range. A mark a dialect sets on its
+forward (`extra.mxAtom`, `extra.mxMember`) reaches every later reader, its own
+`afterLower` included, unchanged: core reads no `extra.mxAtom`, still reads
+`extra.mxMember` for the `"member"` slot (§13.9.6), and strips neither. Both
+marks go in 0.1.0-alpha.34; `Expr.nodes` and `Attr.node` replace them.
+
+**A node-type slot.** A contract attribute typed by a registered node type
+(`type: "atom:Atom"`, or `items: "atom:Atom"` under `type: "array"`) accepts a
+node of that type, written as the whole value or as an expression that is the
+node's forward. A string, number, array, function, member or node of another
+type is a positioned error (``attribute `mode` must be atom:Atom, got
+string``, ``attribute `list` item 2 must be atom:Atom, got number``); an
+identifier or a call has no knowable type and passes. A whole value a row
+claimed counts as its node type for every other slot too (``attribute `s` must
+be string, got atom:Atom``). A slot naming a type the file's dialect does not
+register is a registration error. Which values of the type are allowed
+(`values`, `pattern`, `ref`) is the dialect's own check.
 
 **What `lower` returns.** A node type's `lower` returns IR nodes of the kinds
 core's IR already has, built with the `ctx` constructors. Core has no generic
@@ -5363,7 +5388,7 @@ row may name them:
 | Type | Positions | `parse` |
 |---|---|---|
 | `mx:Trigger` | attribute, line | claims every text; the node is an `MxTrigger`, lowered by the dialect's `lowerTrigger`. A `{ call }` row and the built-in `"attribute"` spelling are this type. |
-| `mx:Expression` | attribute, line, value | declines every text: an expression is what the text is with no row, in every position. |
+| `mx:Expression` | expression, attribute, line, value | declines every text: an expression is what the text is with no row, in every position. |
 | `mx:String` | value | claims a value as the string it spells (`MxString`, below). |
 
 **`mx:String`.** A quoted value (`"a\"b"`, `'it\'s'`) is its contents with the
@@ -5396,11 +5421,10 @@ statement's words are never claimed. A claimed node is the `MxAttribute`'s
 returns a string or `ctx.expression(node)`; `mx:String` lowers to its
 `value` with no hook. A string is a static `Attr` whose `value` is what every
 target emits, and which carries the claimed node as `node` (`DialectNode`),
-never set together with `atom` or `member`. An expression is the `Attr` that
+never set together with `member`. An expression is the `Attr` that
 expression makes, as an expression written there would: a dynamic `Attr`
-with no `node`, or a static one for a literal (an atom-marked string literal
-gives a static `Attr` with `atom`, until the atom removal (mx-g1tw); see the note at the
-top of §13.9). Any other result is ``the `<id>` trigger's `lower`
+whose `Expr.nodes` holds the claimed node, spanning the whole value, or a
+static one for a string literal, which carries the node as `node` too. Any other result is ``the `<id>` trigger's `lower`
 (node type `<key>`) must return a string or `ctx.expression(node)` for an
 attribute value``.
 

@@ -9,7 +9,6 @@ description: "Catalogue of MX's own syntax tree: where it departs from Marko's A
 > describes Marko's AST, the starting point; sections 2 to 9 specify the MX
 > node types, their positions and errors, and how the front end and lowering
 > use them. Where a section describes interim code that the AST replaces (the
-> IR's atoms in §4.3, which leave core with the atom removal (mx-g1tw), and the
 > shorthand merge in §6.1a), it says so. Every statement about Marko,
 > htmljs-parser or the current code cites the file and symbol it was read
 > from (Marko's installed bundle by line), or a probe that was run.
@@ -1034,7 +1033,7 @@ interface MxExpressionContainer<N> extends Span {
   readonly outer: Span;      // the span with the position's delimiters (§3.4); equal to the span when none
   readonly node: N | null;   // the Babel payload; null when the parse failed
   readonly error: MxParseError | null;
-  readonly triggers?: readonly MxTrigger[];   // §4.4, present only when there are any
+  readonly triggers?: readonly (MxTrigger | MxRegisteredNode)[];   // §4.4, §4.4a; present only when there are any
 }
 type MxExpression    = MxExpressionContainer<Expression>   & { readonly type: "MxExpression" };
 type MxStatements    = MxExpressionContainer<Statement[]>  & { readonly type: "MxStatements";
@@ -1127,7 +1126,7 @@ What each consumer reads, and why it is unaffected:
 
 ### 4.2 Compared with the IR's `Expr`
 
-`Expr` is `{ code, shape, node, span?, file?, atoms? }` (`packages/core/src/ir.ts`;
+`Expr` is `{ code, shape, node, span?, file?, nodes? }` (`packages/core/src/ir.ts`;
 normative contract in [the IR spec §4](/architecture/ir-spec/),
 `apps/docs/docs/architecture/ir-spec.md`).
 
@@ -1137,31 +1136,29 @@ normative contract in [the IR spec §4](/architecture/ir-spec/),
 | `shape` | derived from `node.type` | `expressionShape` (`lower.ts`) stays in lowering. |
 | `node` | `node` | `Expr.node` is the container's payload (§4.1a); `null` on a synthesized `Expr` (IR spec §2.2). The type is ruled `Node \| null` (Q14); `ir.ts` on main still declares `node: Node`. While `Node` is `any` (`core.ts`) the change has no effect on any type check, so it documents intent only |
 | `span?` | the payload node's range, **not** the container's `start`/`end` | lowering writes `{ sourceStart: node.start, sourceEnd: node.end }`, the range today's `exprSpan` reads from `node.loc`; the container span includes inner whitespace and would move every `Expr.span` over `${ x }`, `( a )` or `\| a \|` (P1). For a string literal the span includes the quotes (IR spec §3.3) |
-| `atoms?` | (none: §4.3) | one IR `Atom { kind: "atom", name, span }` per atom-marked `StringLiteral` in the payload, absent when there are none (`ir.ts`, `Expr.atoms`) |
+| `nodes?` | the claimed nodes in `triggers` (§4.4a) | one `ExprNode { type, span, node, forward, code? }` per node of a registered type claimed inside the expression, in source order, absent when there are none (`ir.ts`, `Expr.nodes`; IR spec §4, `nodes` row) |
 | `file?` | (document level) | a container never names another file |
 
 ### 4.3 Atoms
 
-Atoms are not a parser node. The template parser lexes no atom, so `:name` in
-a `.mx` expression reads exactly as stock htmljs-parser and Marko read it
-(`<a b=:x/>` is Babel's "Unexpected token" at the `:`; `::` in a name is part
-of the name, `<a::b/>` is the tag `a::b`), and an expression container has no
-`atoms` list. A dialect builds an atom as a marked `StringLiteral`: the
-`expressionTriggers` or `valueTriggers` row hook of its syntax table (§4.4)
-returns a literal whose `value` is the name and whose `extra.mxAtom` is
-`{ span }`, the atom's own span, sigil included (`MxAtomMark`, `ir.ts`,
-public API of `@mxlang/core`). Every Babel-based consumer sees a string.
+Atoms are not a core parser node. The template parser lexes no atom, so
+`:name` in a `.mx` expression reads exactly as stock htmljs-parser and Marko
+read it (`<a b=:x/>` is Babel's "Unexpected token" at the `:`; `::` in a name
+is part of the name, `<a::b/>` is the tag `a::b`). A dialect that has atoms
+registers an atom node type (`atom:Atom`) and names it from the
+`expressionTriggers` and `valueTriggers` rows of its syntax table: the atom is
+then an `MxRegisteredNode` in its container's `triggers` (§4.4a) or an
+`MxValueNode` (§4.4b), and its type's `lower` returns the string literal it
+stands for. What the IR makes of it follows from that:
 
-Core records each marked literal (`atomOf`, `recordAtoms`, `core/src/atom-marks.ts`)
-and what the IR makes of atoms follows from that:
-
-- `Expr.atoms?: Atom[]`, one per marked literal inside the expression, and
-  `Expr.code` holds each as its string literal (core splices
-  `JSON.stringify(name)` at each atom's span; IR spec §4, `atoms` row).
-- A whole value that is one dialect-built atom (`mode=~strict` under a dialect
-  whose atoms are `~name`) is a `static` `Attr` with
-  `atom?: Atom`, `value` the name and `valueSpan` the atom's span (`ir.ts`,
-  `Attr`; IR spec §6, `static` row).
+- Inside an expression, the literal is the atom's **forward**: it replaces the
+  stand-in in `Expr.node`, `Expr.code` holds its printed text at the atom's
+  place, and `Expr.nodes` lists the atom with its forward and printed range
+  (IR spec §4, `nodes` row).
+- A whole value that is one atom (`mode=~strict` under a dialect whose atoms
+  are `~name`) is a `static` `Attr` with the node on `node`, `value` the
+  string and `valueSpan` the atom's span (`ir.ts`, `Attr`; IR spec §6,
+  `static` row).
 
 What an atom means, and which uses of one are errors, is the dialect's.
 
@@ -1182,7 +1179,8 @@ interface MxTrigger extends MxNodeBase {
 }
 ```
 
-Where it sits follows its position: an expression trigger is in the
+Where it sits follows its position: an expression trigger (or the node a
+registered type claimed there, §4.4a) is in the
 `triggers` of the innermost container whose source holds it (the key is
 present only when non-empty); an attribute trigger is in
 the tag's `attributes`, in source order; a line trigger (a tagless concise
@@ -1204,12 +1202,13 @@ with `value` `[32, 43)`.
 
 #### 4.4a `MxRegisteredNode`
 
-A node a registered node type claimed, in place of an attribute or line
-`MxTrigger` (design note `language-extensions/core.md`, "Node types"). When
-an attribute or line row matches, the parser asks the node type the row
-names to claim the matched text: its `parse` returns the node's fields, or
-`undefined` to decline. A declined text parses as if no row matched (on a
-tagless line, a tag name; in an attribute list, an attribute name). A
+A node a registered node type claimed, in place of an expression, attribute
+or line `MxTrigger` (design note `language-extensions/core.md`, "Node types").
+When an expression, attribute or line row naming a node type matches, the
+parser asks that node type to claim the matched text: its `parse` returns the
+node's fields, or `undefined` to decline. A declined text parses as if no row
+matched (in an expression, the operand it is; on a tagless line, a tag name;
+in an attribute list, an attribute name). A
 claimed node sits where the `MxTrigger` would, typed by its registry key.
 Core's own `mx:Trigger` (a `{ call }` row, the `"attribute"` spelling)
 claims an `MxTrigger`, so a table without node types never produces this
@@ -1227,8 +1226,13 @@ interface MxRegisteredNode extends Span {
 ```
 
 Core sets `type`, `span`, the offsets, `operator`, `value` and `args`; the
-`=value` after the text is lexed by core, never by the node type. The node is
-frozen once the parse ends. Lowering hands it to its type's `lower`.
+`=value` after the text is lexed by core, never by the node type. In an
+expression, core sets only `type`, `span` and the offsets (an operand has no
+`=value`, operator or arguments), the node is in its container's `triggers`,
+and Babel parses the row's same-length stand-in in its place. The node is
+frozen once the parse ends. Lowering hands it to its type's `lower`; in an
+expression that returns the forward, a Babel expression that replaces the
+stand-in in the payload (IR spec §4, `nodes` row).
 
 #### 4.4b `MxValueNode` and `MxString`
 
@@ -1533,7 +1537,7 @@ never appear in it.
 | `MxDoctype` | DocumentType |
 | `MxScriptlet`, `MxCDATA`, `MxDeclaration` | none: errors (`lower.ts` `lowerChildList`) |
 | `MxParseError` | none: a diagnostic |
-| none (a dialect's atom is a `StringLiteral` marked `extra.mxAtom`) | `Expr.atoms`, `Attr.atom` (§4.3) |
+| `MxRegisteredNode` in an expression's `triggers`, `MxValueNode` | `Expr.nodes`, `Attr.node` (§4.3, §4.4a, §4.4b) |
 
 ### 6.3 Gaps
 
@@ -1910,7 +1914,7 @@ rulings, with where the text now lives:
 |---|---|---|
 | Q1 | follow the name-sugar default-value rule as merged; `MxShorthand.operator`, `default` only in attribute position | §3.6 |
 | Q2 | no raw text mode | §3.12 (unchanged) |
-| Q3, Q16 | describe atoms as shipped (`Expr.atoms`, `Attr.atom`, `extra.mxAtom = { span }`); a container has no `atoms` list | §4.3, §6.2 |
+| Q3, Q16 | describe atoms as shipped (a dialect node type: `Expr.nodes`, `Attr.node`); a container has no `atoms` list | §4.3, §6.2 |
 | Q4 | `InputInterface` split in lowering, by payload type; `export type Input` stays an `Export` | §3.10, §6.1 |
 | Q5 | AST represents `server`/`client`; they route like tags; html's `server` stays a `DelegatedTag` | §6.1, §6.2, §6.4 |
 | Q6 | `MxText` span = whole `onText` range, `valueSpan` = trimmed range | §3.8 |

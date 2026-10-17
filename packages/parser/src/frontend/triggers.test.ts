@@ -661,6 +661,53 @@ describe("the `claim` option (a node type's claim at a trigger)", () => {
     expect(div.body[0]).toMatchObject({ type: "ref:Ref", start: 13, end: 15 });
   });
 
+  describe("in expression position", () => {
+    const EXPRESSION_ROWS: SyntaxTable = {
+      ...DEFAULT_SYNTAX,
+      expressionTriggers: [MEMBER],
+    };
+
+    it("a claimed node takes the trigger's place in the container's triggers; the payload keeps the stand-in", () => {
+      const asked: unknown[] = [];
+      const node = { type: "ref:Ref" };
+      const document = parse("div a=(x + &y)", {
+        ...OPTIONS,
+        syntax: EXPRESSION_ROWS,
+        claim: (id, position, start, end, tag) => {
+          asked.push([id, position, start, end, tag]);
+          return node;
+        },
+      });
+      expect(document.errors).toEqual([]);
+      expect(asked).toEqual([["member", "expression", 11, 13, "div"]]);
+      const value = (document.body[0] as Node).attributes[0].value;
+      expect(value.triggers).toHaveLength(1);
+      expect(value.triggers[0]).toBe(node);
+      expect(value.triggers[0]).toEqual({
+        type: "ref:Ref",
+        start: 11,
+        end: 13,
+      });
+      expect(value.node.right).toMatchObject({
+        type: "Identifier",
+        name: "_y",
+        start: 11,
+        end: 13,
+      });
+    });
+
+    it("a decline parses as if no row matched", () => {
+      const source = "div a=(x &y)";
+      const declined = parse(source, {
+        ...OPTIONS,
+        syntax: EXPRESSION_ROWS,
+        claim: () => undefined,
+      });
+      expect(declined.errors).toEqual([]);
+      expect(shape(declined)).toEqual(shape(parse(source, OPTIONS)));
+    });
+  });
+
   it("a claim of type `MxTrigger` builds the trigger node the row would", () => {
     const source = "div a &x b\n  &z";
     const trigger = parse(source, {
