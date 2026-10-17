@@ -14,7 +14,7 @@
 // packages that build leaves external and ships (`@astrojs/compiler`) are
 // copied in with their dependency closure from the workspace install: no
 // registry access and exactly the versions `bun.lock` pins. The Marko parse
-// layer is `@mxlang/core`'s `marko-frontend.cjs` (decision 159), which the
+// layer is `@mxlang/core`'s `marko-frontend.cjs`, which the
 // bundled build already copied into each `bundle/`. The project-resolved ones (`typescript`, `@angular/compiler-cli`,
 // `@astrojs/language-server`) are never shipped.
 //

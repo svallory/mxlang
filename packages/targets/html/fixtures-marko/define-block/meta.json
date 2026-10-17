@@ -1,4 +1,4 @@
 {
   "marko": "skip",
-  "reason": "marko-bug: Mismatched group. A <define> immediately followed by a bare top-level placeholder ($!{...}) with no wrapping tag throws \"Mismatched group. A closing \\\"}\\\" character was found but it is not matched with a corresponding opening character.\" in @marko/compiler 5.42.5 / marko@6.3.51's own parser -- reproduced without any MX-specific syntax (no <fragment>, plain stock Marko). This is a genuine upstream Marko parser limitation (decision 65's \"target cannot\" class), not a translator bug."
+  "reason": "marko-bug: Mismatched group. A <define> immediately followed by a bare top-level placeholder ($!{...}) with no wrapping tag throws \"Mismatched group. A closing \\\"}\\\" character was found but it is not matched with a corresponding opening character.\" in @marko/compiler 5.42.5 / marko@6.3.51's own parser -- reproduced without any MX-specific syntax (no <fragment>, plain stock Marko). This is a genuine upstream Marko parser limitation (a \"target cannot\" case in the policy table), not a translator bug."
 }

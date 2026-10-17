@@ -4,7 +4,7 @@ Date: Mon, 5 Oct 2026 01:12:52 -0300
 Subject: [PATCH] feat(grammar): parse #id, .class and :name shorthands
  anywhere in a tag
 
-Implements MX decision 146 (the `:name` sugar):
+Implements the MX `:name` sugar:
 
 - Tag-adjacent `:b` is a new `shorthand_name` node, a sibling of
   `shorthand_id` and `shorthand_class`. The three compose in any order
@@ -68,7 +68,7 @@ index 6c7ebf3..cd99cae 100644
  | `element`                                                                                  | a tag in either mode, including its body and close           |
  | `tag_name`, `tag_name_fragment`                                                            | tag names; interpolated names contain `placeholder` children |
 -| `shorthand_id`, `shorthand_class`                                                          | `#id` / `.class` shorthands                                  |
-+| `shorthand_id`, `shorthand_class`, `shorthand_name`                                        | `#id` / `.class` / `:name` shorthands (MX decision 146)      |
++| `shorthand_id`, `shorthand_class`, `shorthand_name`                                        | `#id` / `.class` / `:name` shorthands (MX)      |
  | `attr_name`, `attr_value`, `attr_bound_value`, `attr_spread`                               | attributes (`x=…`, `x:=…`, `...spread`)                      |
  | `args`, `method_body`                                                                      | `(…)` arguments and `{ … }` shorthand-method bodies          |
  | `tag_var` → `var_pattern`, `var_type`                                                      | tag variables: `/pattern` with an optional `: type`          |
@@ -92,7 +92,7 @@ index 0000000..7c75e39
 --- /dev/null
 +++ b/__tests__/mx-shorthand.test.mts
 @@ -0,0 +1,321 @@
-+// MX decision 146: `#id`, `.class` and `:name` shorthands anywhere in a
++// MX name sugar: `#id`, `.class` and `:name` shorthands anywhere in a
 +// tag: tag-adjacent in any order, and in attribute position (first, or after
 +// any attribute) in html and concise mode. htmljs-parser has no `:name`
 +// sugar and reads the attribute-position forms differently (see the ADR), so

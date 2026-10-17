@@ -204,7 +204,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("a `marko.json` tag is not registered (decision 197): the import is row 3's error", () => {
+  it("a `marko.json` tag is not registered: the import is row 3's error", () => {
     const scratch = mkdtempSync(join(tmpdir(), "mx-html-row4-"));
     try {
       writeFileSync(join(scratch, "package.json"), '{"type":"module"}');

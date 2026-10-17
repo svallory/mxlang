@@ -11,10 +11,10 @@
 (close_tag_name) @tag
 (shorthand_id) @constant
 (shorthand_class) @property
-; Every name-sugar form, tag-adjacent and in attribute position (decision 146).
+; Every name-sugar form, tag-adjacent and in attribute position.
 (shorthand_name) @label
 
-; MX (decision 156): an atom value, wherever an expression holds one. The
+; MX: an atom value, wherever an expression holds one. The
 ; injections leave atoms out of the TypeScript ranges (they are children of the
 ; expression node), so this capture is the only one on them. `::name` is
 ; reserved and has no capture.

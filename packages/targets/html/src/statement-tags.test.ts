@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
-// Decision 168: `class { … }` is one positioned "not supported" error on every
+// `class { … }` is one positioned "not supported" error on every
 // target, html included (it replaces "Unable to find entry point").
 import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";

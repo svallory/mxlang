@@ -31,7 +31,7 @@ index cd99cae1..220c302a 100644
 -groups, statement tags, raw-text tags, `--` content blocks, and `$`
 -scriptlets, all with the exact source ranges the Marko compiler sees, so the
 -tree is reliable for highlighting, folding, structural editing, and tooling.
-+MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
++MX is Marko's syntax plus the name sugar (`#id`, `.class` and
 +`:name` anywhere in a tag). The grammar is a vendored snapshot of
 +[`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
 +patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
@@ -269,7 +269,7 @@ index cd99cae1..220c302a 100644
 -| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
 -| `element`                                                                                  | a tag in either mode, including its body and close           |
 -| `tag_name`, `tag_name_fragment`                                                            | tag names; interpolated names contain `placeholder` children |
--| `shorthand_id`, `shorthand_class`, `shorthand_name`                                        | `#id` / `.class` / `:name` shorthands (MX decision 146)      |
+-| `shorthand_id`, `shorthand_class`, `shorthand_name`                                        | `#id` / `.class` / `:name` shorthands (MX)      |
 -| `attr_name`, `attr_value`, `attr_bound_value`, `attr_spread`                               | attributes (`x=…`, `x:=…`, `...spread`)                      |
 -| `args`, `method_body`                                                                      | `(…)` arguments and `{ … }` shorthand-method bodies          |
 -| `tag_var` → `var_pattern`, `var_type`                                                      | tag variables: `/pattern` with an optional `: type`          |

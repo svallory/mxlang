@@ -1,7 +1,6 @@
 // External scanner for the solid grammar.
 //
-// Two scanners meet here, and they are kept in separate files on purpose
-// (plan decision 5, Z2):
+// Two scanners meet here, and they are kept in separate files on purpose:
 //
 //   * `tree_sitter_typescript_scanner.h` is upstream tree-sitter-typescript's
 //     `common/scanner.h`, copied verbatim (byte-identical — see UPSTREAM.md

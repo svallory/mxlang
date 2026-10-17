@@ -1,5 +1,5 @@
 /**
- * The `html` target descriptor (decisions 129 and 132; unstable).
+ * The `html` target descriptor (unstable).
  *
  * Importing this module must stay cheap: it loads `./translate.ts` (the policy
  * tables, which import only `@mxlang/core`) and nothing that compiles. The

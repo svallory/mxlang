@@ -139,7 +139,7 @@ import { type CompileOptions, compile, htmlTargets } from "./index.ts";
 
 /**
  * `@babel/parser`, the parser `@mxlang/core` itself parses whole modules with
- * (decision 197: no Marko Babel). Round 2, finding 3: the original rewrite pass scanned the
+ * (no Marko Babel). Round 2, finding 3: the original rewrite pass scanned the
  * compiled module line by line with `importedNames` (a single-*line* parse),
  * which silently skipped an author-written multi-line import and never even
  * attempted an `export … from` re-export (`importedNames` only recognizes
@@ -702,7 +702,7 @@ export function loadMx<I = Record<string, unknown>>(
   // — including a caller-supplied `customTags` in the key would only ever
   // create spurious cache misses for options that were never honored.
   const targets = options.targets ?? htmlTargets;
-  // The package's `defaultTag` (decision 145) shapes the compile, so it is in
+  // The package's `defaultTag` shapes the compile, so it is in
   // the key: an edited config recompiles. An explicit option wins over it.
   const configured =
     options.defaultTag === undefined && existsSync(abs)

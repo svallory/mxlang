@@ -48,7 +48,7 @@ export type { CompileHtmlResult, CompileOptions, CompileResult, RawSourceMap };
 
 /** Attribute-tag value received by an `@mxlang/target-html` component. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default
   C extends AttrTagConfig = {},
 > = C["as"] extends "renderable"
   ? (...args: AttrTagParams<C>) => string
@@ -57,7 +57,7 @@ export type AttrTag<
     };
 
 /**
- * This package's own target lookup (decisions 129 and 132): the one
+ * This package's own target lookup: the one
  * descriptor it exports, bound by `createTargetLookup`. What a direct entry
  * compiles under when the caller names no lookup of its own (design note
  * §5.1, rule (c)) — the loader, `loadMx`, `example.ts`. A tool that compiles

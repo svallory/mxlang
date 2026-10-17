@@ -12,8 +12,8 @@ import { brandRender } from "./translate.ts";
  * Per-rule tests for the stock-Marko translator.
  *
  * Two things are pinned here that the fixtures cannot pin. The fixtures assert
- * rendered HTML for constructs that *work*; these assert the policy table of
- * decision 65 — which constructs are accepted with no output (inert), which
+ * rendered HTML for constructs that *work*; these assert the policy table
+ * — which constructs are accepted with no output (inert), which
  * are errors because the target genuinely cannot express them, and the
  * conventions that differ from `@mxlang/target-html`'s dialect.
  *
@@ -419,7 +419,7 @@ describe("bindings may not shadow the input parameter", () => {
   // template's own input stays reachable outside the loop. Marko draws the
   // same line: it renders `<for|input|>` and rejects `<let/input>`. Rejecting
   // the param form would be an implementation limit stated as a rule, which
-  // decision 65 forbids.
+  // the policy table forbids.
   it.each([
     ["for", "<for|input| of=input.items><p>${input}</p></for>"],
     ["for with index", "<for|input, i| of=input.items><p>${input}</p></for>"],
@@ -449,10 +449,10 @@ describe("bindings may not shadow the input parameter", () => {
   });
 
   it("carries an attribute tag through a `<define>` call instead of dropping it", async () => {
-    // `<define>` has no declared `Input`, so decision 108's untyped-callee
+    // `<define>` has no declared `Input`, so the untyped-callee
     // fallback applies: `<@head>` carries no attributes, so `head` arrives
     // renderable (the body itself), read directly with `<${head}/>`. The call
-    // passes one attribute object (decision 160), so the define destructures it.
+    // passes one attribute object, so the define destructures it.
     const html = await renderModules(
       {
         "entry.mx":
@@ -463,7 +463,7 @@ describe("bindings may not shadow the input parameter", () => {
     expect(html).toBe("<div>aH</div>");
   });
 
-  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)", async () => {
+  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (Marko parity)", async () => {
     // `<Card('a')>` passes `title` positionally; `<@head>` rides along as
     // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
     // rejects only a plain attribute alongside args, not a body/attribute
@@ -481,7 +481,7 @@ describe("bindings may not shadow the input parameter", () => {
     expect(html).toBe("<div>aH</div>");
   });
 
-  it("accepts a `<define>` call mixing tag-argument form with a body (decision 109, Marko parity)", async () => {
+  it("accepts a `<define>` call mixing tag-argument form with a body (Marko parity)", async () => {
     // Same trailing-object rule: the body arrives under `content` in the
     // object bound to the first unfilled param, not bound to a param
     // *named* `content`.
@@ -508,7 +508,7 @@ describe("bindings may not shadow the input parameter", () => {
     );
   });
 
-  // Decision 109, revised to Marko's own shape (ruling 2026-10-09; measured
+  // Marko's own shape (measured
   // on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
   // trailing object `{ ...attributeTags, content }` as the next argument, so
   // it lands in the first unfilled param and every param after it reads
@@ -721,7 +721,7 @@ describe("<html-comment> lowers placeholders", () => {
   });
 });
 
-describe("inert constructs (decision 65): accepted, no output", () => {
+describe("inert constructs: accepted, no output", () => {
   // Each was verified against Marko's own server render: the emitted HTML is
   // byte-identical with and without the construct. Rejecting them would be an
   // implementation limit dressed as a rule.
@@ -773,19 +773,19 @@ describe("statement blocks", () => {
   // This host used to reject `<return>` outright, on the grounds that "a
   // module compiled to `(input) => string` has no parent to return to". That
   // was true only while a tag template was expanded into its caller. Under
-  // the unit model (decision 95) every `.mx` file is a module and a caller
+  // the unit model every `.mx` file is a module and a caller
   // invokes it, so the tag has somewhere to return to — and a *page* is not
   // a special case: it is a module that returns a value nobody reads yet.
   it("accepts <return> in a page, with the same meaning as in a tag", () => {
     const { code } = compile(src("<p>x</p>\n<return=42/>"), file);
 
-    // Decision 155: the value is `render`'s return value; the output went
+    // The value is `render`'s return value; the output went
     // to the sink.
     expect(code).toContain("  return 42;\n}\nexport { __mxRender as render };");
   });
 });
 
-describe("evaluate-initial-value constructs (decision 65)", () => {
+describe("evaluate-initial-value constructs", () => {
   it("<let> binds its initial value", () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
     const { code } = compile(src("<let/count=5/>\n<p>${count}</p>"), file);
@@ -820,7 +820,7 @@ describe("error constructs: the target genuinely cannot express them", () => {
   });
 });
 
-describe("a type-only import does not resolve a tag (decision 114 parity)", () => {
+describe("a type-only import does not resolve a tag", () => {
   // `import type Widget from "./widget.mx"` binds no runtime value, so
   // `<Widget/>` must be Marko's own unresolved-tag error — matching
   // `@mxlang/tsx-bridge`'s `programBindings`, which already excludes type-only
@@ -858,12 +858,12 @@ describe("a type-only import does not resolve a tag (decision 114 parity)", () =
 });
 
 /**
- * Decision 155, the Marko render model: a unit writes into its caller's sink
+ * The Marko render model: a unit writes into its caller's sink
  * through `render(input, out)` and `<return>` is `render`'s return value, so a
  * caller that only holds the default export (a dynamic tag, a `.ts` barrel
  * re-export) still renders the body and can bind the value.
  */
-describe("the render sink (decision 155)", () => {
+describe("the render sink", () => {
   const counter = [
     "export interface Input { start: number }",
     // biome-ignore lint/suspicious/noTemplateCurlyInString: Marko placeholder syntax in template source
@@ -927,7 +927,7 @@ describe("the render sink (decision 155)", () => {
     expect(html).toBe("<div><span>4</span></div>");
   });
 
-  // Binds since decision 155's sink; the TODO `dynamic-tag-var-silent-drop`
+  // Binds through the sink; the TODO `dynamic-tag-var-silent-drop`
   // on html is closed here (the oracle fixture is
   // `fixtures-marko/dynamic-tag-var`).
   it("binds /var on a dynamic tag to the callee's render value", async () => {
@@ -1028,8 +1028,8 @@ describe("the render sink (decision 155)", () => {
 
   // Measured with Marko 6.4.4: the body throws after writing `<b>before</b>`
   // and Marko renders `<div>caught</div>`. The body renders into a buffered
-  // sub-sink that is dropped on a throw; before decision 155 this host kept
-  // the partial body (`<div><b>before</b>caught</div>`).
+  // sub-sink that is dropped on a throw, so the partial body
+  // (`<div><b>before</b>caught</div>`) is not kept.
   it("drops a <try> body's partial output when it throws", async () => {
     const html = await renderModules(
       {
@@ -1087,7 +1087,7 @@ describe("an imported .mx tag that declares <return>", () => {
 
   // Marko 6.4.4 renders the body and drops the value when the call binds no
   // `/var`. The call once concatenated the callee's former `{ value, output }`
-  // pair as "[object Object]"; since decision 155 it renders into the sink.
+  // pair as "[object Object]"; it renders into the sink.
   it("renders its body and drops the value without /var", async () => {
     const html = await renderModules(
       {
@@ -1848,7 +1848,7 @@ describe("attribute-tag v2 values (executed)", () => {
     expect(code).not.toContain("children:");
   });
 
-  // Decision 109 relaxed only the dynamic-tag/`<define>` rule; a named
+  // Marko parity relaxes only the dynamic-tag/`<define>` rule; a named
   // custom tag (an imported component reference) stays on Marko's strict
   // rule and must still reject args combined with a body or attribute tag.
   it.each([
@@ -2059,7 +2059,7 @@ describe("dynamic tags", () => {
     expect(code).not.toContain("__mxRenderDynamic(__mxOut, input.comp, {  });");
   });
 
-  it("accepts arguments combined with a body on a dynamic tag (decision 109, Marko parity)", async () => {
+  it("accepts arguments combined with a body on a dynamic tag (Marko parity)", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2075,7 +2075,7 @@ describe("dynamic tags", () => {
     expect(html).toBe("[x-2-body]");
   });
 
-  it("accepts arguments combined with an attribute tag on a dynamic tag (decision 109, Marko parity)", async () => {
+  it("accepts arguments combined with an attribute tag on a dynamic tag (Marko parity)", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2097,13 +2097,13 @@ describe("dynamic tags", () => {
     );
   });
 
-  // decision 112: a string-target dynamic tag called with arguments uses
+  // A string-target dynamic tag called with arguments uses
   // `args[0]` as its input (attributes), matching Marko's own
   // `runtime-tags/src/html/dynamic-tag.ts` `_dynamic_tag` (`typeof renderer
   // === "string"` branch: `const input = (inputIsArgs ? args[0] : ...) ||
   // {}`). Previously `renderDynamic` ignored `args` entirely for a string
   // target and rendered the call-site attributes/attribute tags instead.
-  it("uses args[0] as attributes for a string-target dynamic tag called with arguments (decision 112)", async () => {
+  it("uses args[0] as attributes for a string-target dynamic tag called with arguments", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2117,7 +2117,7 @@ describe("dynamic tags", () => {
     expect(html).toBe('<div id="x" class="y"></div>');
   });
 
-  it("ignores extra arguments beyond args[0] for a string-target dynamic tag (decision 112, Marko parity)", async () => {
+  it("ignores extra arguments beyond args[0] for a string-target dynamic tag (Marko parity)", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2131,7 +2131,7 @@ describe("dynamic tags", () => {
     expect(html).toBe('<div id="x"></div>');
   });
 
-  it("treats a null/undefined args[0] as no attributes for a string-target dynamic tag (decision 112, Marko parity)", async () => {
+  it("treats a null/undefined args[0] as no attributes for a string-target dynamic tag (Marko parity)", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2152,7 +2152,7 @@ describe("dynamic tags", () => {
   // object's attribute-tag values are therefore dropped from the rendered
   // attributes; content still renders through the separate `content` param
   // `_dynamic_tag` always threads independently of `input`.
-  it("does not fold decision 109's trailing attribute-tag props object into args[0] for a string target, but content still renders (Marko parity)", async () => {
+  it("does not fold the trailing attribute-tag props object into args[0] for a string target, but content still renders (Marko parity)", async () => {
     const html = await renderModules(
       {
         "entry.mx":
@@ -2167,7 +2167,7 @@ describe("dynamic tags", () => {
   });
 });
 
-// Decision 116: a capitalized tag bound to a value import that is not a
+// A capitalized tag bound to a value import that is not a
 // `.marko`/`.mx` default import lowers as a dynamic tag, matching Marko's
 // own `_dynamic_tag` runtime dispatch for the six measured value kinds
 // (`scratch/reports/value-import-as-tag-parity.md`). Each case here uses an
@@ -2310,7 +2310,7 @@ describe("a component body with tag params (`<List|item, i|>`) binds them (execu
   }, 15_000);
 });
 
-describe("decision 116: value import used as a tag", () => {
+describe("value import used as a tag", () => {
   it("a string value import renders as a real element", async () => {
     const html = await renderModules(
       {
@@ -2334,7 +2334,7 @@ describe("decision 116: value import used as a tag", () => {
     expect(html).toBe("<my-el></my-el>");
   });
 
-  it("a plain function value import is called as a host component (decision 116, intentional Marko divergence)", async () => {
+  it("a plain function value import is called as a host component (intentional Marko divergence)", async () => {
     // Marko's own `_dynamic_tag` discards a plain function's return value
     // (only a real Marko-template-shaped renderer is invoked as a
     // component); MX calls it and keeps the output — an imported `.tsx`
@@ -2356,9 +2356,9 @@ describe("decision 116: value import used as a tag", () => {
     expect(html).toBe("<span>comp:1</span>");
   });
 
-  it("an object with a content property throws decision 106's data-attribute-tag guard", async () => {
+  it("an object with a content property throws the data-attribute-tag guard", async () => {
     // Not a new divergence: `renderDynamic`'s object branch is the same
-    // guard a `<${x}>` data attribute tag already hits (decision 106).
+    // guard a `<${x}>` data attribute tag already hits.
     // Marko itself would unwrap `.content` and find no real renderer there
     // either, silently rendering nothing — but MX's guard is deliberately
     // loud for this shape everywhere it's reachable, dynamic-tag or not.
@@ -2426,8 +2426,7 @@ describe("decision 116: value import used as a tag", () => {
   });
 });
 
-// The local extension of decision 116 (firstmate's ruling under decision 116
-// in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+// The local extension of value-import routing: a non-import PascalCase local
 // (`static`, module-scope declarations, `<const>`, a tag param) whose value
 // core cannot statically prove is a function/arrow/class also lowers as a
 // dynamic tag; a plain `function Foo(){}`/`class Foo{}`/arrow-valued
@@ -2565,7 +2564,7 @@ describe("module shape", () => {
     );
   });
 
-  // Decision 155: two entries. The default export keeps `(input) => string`;
+  // Two entries. The default export keeps `(input) => string`;
   // `render(input, out)` writes to a sink and is reachable from the default
   // export, so a caller holding only the default export can use it.
   it("emits the sink entry and reaches it from the default export", () => {
@@ -2611,7 +2610,7 @@ describe("module shape", () => {
     // a change to it would otherwise make `brandRender` a no-op: the module
     // compiles, nothing reports a problem, and every `check()` in the Astro
     // host answers false — a whole host quietly failing to claim its own
-    // components. Decision 61: fail loud at the seam that broke.
+    // components. Fail loud at the seam that broke.
     //
     // Drifted in the parameter type, which the shape pins; the *name* is
     // deliberately not pinned, since it is derived from the filename now.
@@ -2655,7 +2654,7 @@ describe("module shape", () => {
   });
 });
 
-describe("the strict policy (decision 68's fold): reactive tags error by name", () => {
+describe("the strict policy: reactive tags error by name", () => {
   it.each([
     ["<let>", "<let/count=5/>\n<p>x</p>", /`<let>` is reactive state/],
     [
@@ -2776,7 +2775,7 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
-// Ref custom-tags-local-bindings (decision 113): a file-local *scope*
+// Ref custom-tags-local-bindings: a file-local *scope*
 // binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
 // `<define/Box|Panel|>` param — shadows a registered custom tag of the same
 // name too, scoped to where the binding is in effect. IR-level coverage
@@ -2905,7 +2904,7 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
   });
 });
 
-// The emitter trusts the IR's `void` (decision 197), so a custom tag's
+// The emitter trusts the IR's `void`, so a custom tag's
 // `ctx.build.element("br")` is void because the builder defaults `void` from
 // the target's native elements, not because the emitter re-reads a table
 // (review 475 r3). An explicit `void` still wins.
@@ -2953,7 +2952,7 @@ describe("a custom tag's built void elements (executed)", () => {
 });
 
 /**
- * A tag template is a compilation unit (decision 95), so these compile the
+ * A tag template is a compilation unit, so these compile the
  * *unit itself* through this host rather than only its caller — the half a
  * caller-side test cannot reach, since the template's body never enters the
  * caller's module.
@@ -3173,7 +3172,7 @@ describe("a unit that returns a value", () => {
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("rejects an expression-valued event handler: a string render has no runtime", () => {
     const body = "<button onClick=handler>x</button>";
     expect(() => compile(src(body), file)).toThrow(

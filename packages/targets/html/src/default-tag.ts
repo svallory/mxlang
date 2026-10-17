@@ -1,7 +1,7 @@
 /**
  * What the paths that discover tags for themselves (`loadMx`, `mx` with a
  * `filename`, nested tags, the Bun loader, `example.ts`) do with the
- * package's `mx.html.defaultTag` (decision 145): core's shared check over
+ * package's `mx.html.defaultTag`: core's shared check over
  * this target's own lookup and the file's scanned tags, the value returned or
  * dropped with one warning at its `package.json` position. The registry runs
  * the same check for the tools that reach it; this package cannot (the

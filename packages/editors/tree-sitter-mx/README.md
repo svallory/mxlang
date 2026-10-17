@@ -7,8 +7,8 @@ time.
 
 > **Beta.** This package is at 0.x. Its API may change in any release until 1.0.0.
 
-MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
-`:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
+MX is Marko's syntax plus the name sugar (`#id`, `.class` and
+`:name` anywhere in a tag) and atoms (`:name` as a value:
 `default=:draft`, `accept=[:title, :body]`, `self.status === :sent`).
 Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute
 arguments and method bodies. One known limit: an atom inside a `${}` of a

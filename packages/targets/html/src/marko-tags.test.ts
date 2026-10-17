@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "vitest";
 import { compile } from "./index.ts";
 
 /**
- * A `.marko` file is not an MX input (decision 172): a tag that
+ * A `.marko` file is not an MX input: a tag that
  * resolves to one is a single positioned error naming the file and saying to
  * convert it to `.mx`, whatever the shape, and never an emitted import.
  */
@@ -116,7 +116,7 @@ describe("tags/<name>/index.mx", () => {
 });
 
 /**
- * A `marko.json` is not read (decision 197): a tag it maps to an `.mx`
+ * A `marko.json` is not read: a tag it maps to an `.mx`
  * template or to a renderer is an unknown tag, never an import.
  */
 describe("a marko.json registers nothing", () => {

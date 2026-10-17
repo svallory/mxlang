@@ -29,7 +29,7 @@ function render(page: string, input: Record<string, unknown> = {}): string {
 }
 
 describe.each([false, true])(
-  "body whitespace, decision 141 (discovered=%s)",
+  "body whitespace (discovered=%s)",
   (discovered) => {
     it.each(cases)("$label", ({ body, html }) => {
       const tag = discovered ? "wrap" : "Wrap";
@@ -73,7 +73,7 @@ describe("a body forwarded through <${input.content}/> (html, Marko parity)", ()
   });
 });
 
-// Body-text whitespace follows stock Marko (decision 141), asserted on a plain
+// Body-text whitespace follows stock Marko, asserted on a plain
 // element's own content rather than on a forwarded body. Expected HTML is what
 // stock Marko 6.4.4 (`bun run --cwd packages/stock-marko probe`, @marko/compiler
 // 5.42.11 on the stock htmljs-parser) emits for the same source.

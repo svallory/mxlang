@@ -65,7 +65,7 @@ Object.defineProperty(Greeting, Symbol.for("mx.component"), { value: true });
 export default Greeting;
 ```
 
-(Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/target-html/runtime` (decision 155).
+(Helpers such as `__mxClassValue` are omitted.) The default export is `(input) => string`. `render(input, out)` is the sink entry: it writes into `out` and returns the template's `<return>` value. The sink comes from `@mxlang/target-html/runtime`.
 
 Marko's syntax is the default: MX parses `.mx` with its own front end, and
 where MX has no ruling of its own the answer is Marko's. Its element knowledge
@@ -161,16 +161,16 @@ that edits templates over and over grows this internal cache without bound.
 An unchanged file is a cache hit and mints nothing new, so this only grows
 at the rate templates are actually edited.
 
-## `.mx` is official, not a retired dialect (decision 72)
+## `.mx` is official, not a retired dialect
 
-Decision 68 retired the old `.mx` dialect (required explicit imports,
-`<fragment>`, required `export interface Input`, lowercase-by-scope) — that
-dialect stays dead. Decision 72 re-establishes `.mx` as MX's own *identity*,
-not a revival of the dialect. Under decision 172 Marko's syntax is the default
+The old `.mx` dialect (required explicit imports,
+`<fragment>`, required `export interface Input`, lowercase-by-scope) is
+retired and stays dead. `.mx` is MX's own *identity*,
+not a revival of the dialect. Marko's syntax is the default
 where MX has no ruling of its own, and MX makes no subset or superset promise:
 the differences are listed in `divergences.md`, and some `.mx` files are not
 valid `.marko`. This package accepts only `.mx`: a `.marko` file is not an
-MX input (decision 172), and treating one as MX would silently claim support
+MX input, and treating one as MX would silently claim support
 it does not have. `packages/mx-html` no longer exists. Its lowering core and its
 `escape` runtime passed through this package and now live in
 [`@mxlang/core`](../core/README.md), which every MX host shares; this package
@@ -231,7 +231,7 @@ loaders' example apps do this).
 
 ## Editor and formatter support for `.mx`
 
-No packages ship for these. Marko's syntax is MX's default (decision 172), so
+No packages ship for these. Marko's syntax is MX's default, so
 Marko's own tooling works on most `.mx` files by aliasing the extension; a
 construct that only MX has (see `divergences.md`) is not understood by it:
 
@@ -284,7 +284,7 @@ construct that only MX has (see `divergences.md`) is not understood by it:
 
 ## The `strict` policy
 
-Decision 68's policy fold: `.mx`'s reactive-constructs-are-errors stance is
+`.mx`'s reactive-constructs-are-errors stance is
 folded in as an opt-in `strict` policy, rather than the default. The default
 `policy` renders what Marko's own server render would emit (`<let>`'s initial
 value, `<lifecycle>`/`<script>`/`<id>` as inert, a `client` block as only the `var` declarations of its names) — see the
@@ -304,7 +304,7 @@ Kept from `.mx`'s dialect: the reactive-tags-as-errors stance above, and the
 `input`-shadowing check (`checkBinding`) — already the default in both
 policies, not `strict`-only, since a `<let>`/`<const>` binding named `input`
 silently breaking the template's own input is a bug in either policy, not a
-stricter preference. Dropped, per decision 65 (these were conventions of the
+stricter preference. Dropped (these were conventions of the
 old `.mx` walk, not capabilities the target lacks, so they do not survive as
 a policy — stock Marko's own conventions replace them unconditionally, not
 just outside `strict`): the explicit-import requirement (Marko's taglib +
@@ -355,7 +355,7 @@ compared for semantic HTML equality.
 > implementation is ~700 lines and the runtime is one function. We would like
 > to contribute it upstream as an output mode.
 
-## Policy table (decision 65)
+## Policy table
 
 The target renders **what Marko's server render would emit, minus resume
 markers**. Every construct is classified by one test: does it contribute to the
@@ -387,7 +387,7 @@ byte-identical with and without the construct.
 | `attr:=expr` | The initial value renders; there is no write-back path. |
 | `<define>`, `static`, `import`, `export interface Input` | Bound / hoisted to module scope. |
 | a `server` block | **Runs.** This *is* the server render, so its statements execute and its bindings are readable from the template — verified against Marko, where `server const S = 41 + 1` then `${S}` renders `42`. Hoisted exactly as `static` is. Its counterpart, a `client` block, never runs, but the names it declares at its own top level (including a non-block `client import` or `client export` declaration's) are declared as `var name;` (no initializer), so a template that reads one renders `undefined` instead of failing, as Marko's server render does. |
-| `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's `render(input, out)` writes into the caller's sink and returns the value (decision 155). `/var` is supported in any scope, dynamic tags included. |
+| `<return>` | **Not** an error. Under the unit model a tag compiles to its own module and its caller invokes it, so a returning unit's `render(input, out)` writes into the caller's sink and returns the value. `/var` is supported in any scope, dynamic tags included. |
 
 ### Lowered — everything with output bytes
 
@@ -418,7 +418,7 @@ matching Marko.
 
 | Choice | Reason |
 |---|---|
-| Attribute values are always double-quoted | Marko elides quotes when a value needs none (`<div id=x>` → `id=x`, unquoted). This translator always emits `id="x"`. Chasing Marko's quote-minimizer byte-for-byte would trade readability and defense-in-depth (an unquoted attribute is one stray space away from becoming a second attribute) for a spelling difference `oracle:marko` cannot even see: `htmlEquals` compares parsed, decoded attribute values, not source bytes, so both spellings already parse identically. Decision 67. |
+| Attribute values are always double-quoted | Marko elides quotes when a value needs none (`<div id=x>` → `id=x`, unquoted). This translator always emits `id="x"`. Chasing Marko's quote-minimizer byte-for-byte would trade readability and defense-in-depth (an unquoted attribute is one stray space away from becoming a second attribute) for a spelling difference `oracle:marko` cannot even see: `htmlEquals` compares parsed, decoded attribute values, not source bytes, so both spellings already parse identically. |
 
 ### Not Marko syntax
 
@@ -441,7 +441,7 @@ table above is not mistaken for silent tolerance:
   not valid in attribute position; `compile()` throws a positioned
   `TranslateError` (``Expected a single expression, but found `{` after it.``).
 - A `.marko` file where a tag is looked up (`tags/`, an import used as a tag) —
-  a positioned error telling you to convert it to `.mx` (decision 172).
+  a positioned error telling you to convert it to `.mx`.
 
 `key=` on an element is not among them: it is an ordinary attribute and is
 emitted as written. Only `key=` on `<for>` is refused (see the inert table).
@@ -454,17 +454,17 @@ of renderables, matching Marko's own server render (verified against Marko
 5.42.5, not assumed). Ordinary children become `input.content`. Component
 resolution goes through core's tag table and its own `tags/` discovery: an
 `import`, a `<define>`, or a `tags/`-discovered `.mx` template. A
-`marko.json` / `marko-tag.json` is not read (decision 197): a tag only it maps
+`marko.json` / `marko-tag.json` is not read: a tag only it maps
 is an unknown tag. An unknown lowercase tag resolves through MX's own element
 table (`@mxlang/web-elements`: HTML, SVG, MathML), and a plain `<!-- -->`
 comment is stripped, because Marko strips it.
 
-The retired `.mx` dialect (decision 68) made different choices here —
+The retired `.mx` dialect made different choices here —
 callable function props instead of renderables, `input.children` instead of
 `input.content`, explicit imports only, no `tags/` discovery, an error for an
 unhyphenated unknown tag, and preserved `<!-- -->` comments. Those were
 recorded conventions of MX's own walk, not capabilities Marko's target
-lacks (decision 65), so they did not survive the fold into this package.
+lacks, so they did not survive the fold into this package.
 
 ## Why third-party translators are hard to write correctly
 
@@ -532,7 +532,7 @@ that nothing failed.
 
 ## Pins
 
-No Marko tag lookup runs in a compile (decision 197). Core's tag table reads
+No Marko tag lookup runs in a compile. Core's tag table reads
 the core taglib (`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`),
 which declares the core tags' parse options (statement tags, control flow,
 `openTagOnly`, raw-text bodies), and the HTML, SVG and MathML elements of

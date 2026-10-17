@@ -2,7 +2,7 @@
  * The paths that discover tags for themselves (`loadMx`, `mx` with a
  * `filename`, nested tags, the Bun loader) read the package's
  * `mx.html.defaultTag`, validate it with core's shared check, and put it in
- * their cache keys (decision 145, review rounds 2 and 3).
+ * their cache keys.
  */
 import {
   mkdirSync,

@@ -8,7 +8,7 @@
  * `.solid.mx`), not something this ambient declaration can derive on its own.
  *
  * The default export renders to a string; its `render` property is the sink
- * entry (decision 155), `render(input, out)`, which writes to `out` and
+ * entry, `render(input, out)`, which writes to `out` and
  * returns the template's `<return>` value. The same entry is the module's
  * named `render` export.
  *

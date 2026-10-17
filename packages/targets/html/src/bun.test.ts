@@ -17,7 +17,7 @@ import { htmlTargets } from "./index.ts";
  * Makes `@mxlang/target-html` resolvable from a fixture that declares its own
  * `package.json`, which otherwise ends the self-reference lookup that lets a
  * file inside this package import the package by name. Every compiled module
- * imports the runtime (`createOut`, decision 155), so a real consumer has the
+ * imports the runtime (`createOut`), so a real consumer has the
  * package installed; this stands in for that install.
  */
 function linkRuntime(pkgDir: string): void {
@@ -84,7 +84,7 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
-  // Decision 155: the default export keeps `(input) => string`, and the sink
+  // The default export keeps `(input) => string`, and the sink
   // entry is reachable both as `X.render` and as the named `render` export.
   test("a loaded .mx module exposes render(input, out) beside its default export", async () => {
     Bun.plugin(markoPlugin);
@@ -115,7 +115,7 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
-  // Decision 162: core reports every error of a file. Bun prints one thrown
+  // Core reports every error of a file. Bun prints one thrown
   // error, so the others ride in its message.
   test("a failing .mx module's error names every error of the file", async () => {
     Bun.plugin(markoPlugin);
@@ -149,7 +149,7 @@ describe("@mxlang/target-html/bun", () => {
   test("does not claim a .astro.mx path", async () => {
     Bun.plugin(markoPlugin);
 
-    // Astro's template kind (decision 134): an Astro component, lowered by
+    // Astro's template kind: an Astro component, lowered by
     // `@mxlang/host-astro`. It ends in `.mx` but is not an MX page, and this
     // source would fail the string translator. Bun's default loader returns
     // the file's own path as the default export when no onLoad hook claims it.
@@ -305,7 +305,7 @@ describe("@mxlang/target-html/bun", () => {
 
     // Through the real plugin's own `getCustomTags(path, { host: "html" })`
     // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]`
-    // must be invisible from the html loader, which is decision 110(a).
+    // must be invisible from the html loader.
     const base = join(import.meta.dirname, "..", "fixtures-marko");
     const pkgDir = join(base, "hosts-fixture");
     const tagsDir = join(pkgDir, "widgets");
@@ -412,7 +412,7 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
-  test("a dotted tag file name is rejected, not indexed (decision 137)", async () => {
+  test("a dotted tag file name is rejected, not indexed", async () => {
     Bun.plugin(markoPlugin);
 
     // The loader is a direct entry: it resolves its targets from this
@@ -535,7 +535,7 @@ describe("@mxlang/target-html/bun asks the file's dialect for its emit", () => {
   });
 });
 
-describe("the onLoad filter (decision 154: hosts claim .<segment>.mx)", () => {
+describe("the onLoad filter (hosts claim .<segment>.mx)", () => {
   const fake: TargetDescriptor = {
     descriptorVersion: 0,
     name: "fake-jsx",

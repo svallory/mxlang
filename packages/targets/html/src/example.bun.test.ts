@@ -38,7 +38,7 @@ async function runExample(name: string) {
 /**
  * Every fixture must run silent, except where it deliberately trips a warning.
  * `spread-between-props` writes `name` before and after a spread: core resolves
- * a repeated name last-wins (decision 135), so the earlier `name` is dropped
+ * a repeated name last-wins, so the earlier `name` is dropped
  * and warned about, naming the surviving later one at 3:39 (1-based).
  * `src/example.ts` compiles each fixture twice (once to print the module,
  * line 19, and once in the Bun loader's onLoad, line 44), so the one warning
@@ -57,7 +57,7 @@ const EXPECTED_STDERR: Record<string, string> = {
   "spread-between-props": twice(
     warning("spread-between-props", "name", "3:39"),
   ),
-  // The `duplicate-attrs*` fixtures exist to lock decision 135 against Marko
+  // The `duplicate-attrs*` fixtures exist to lock last-wins duplicate attributes against Marko
   // in the oracles, so each prints its dropped-attribute warnings.
   "duplicate-attrs": twice(
     warning("duplicate-attrs", "class", "1:23"),

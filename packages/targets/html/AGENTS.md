@@ -25,7 +25,7 @@ It contains:
   lowering, carrying `line`/`column` rather than byte offsets, because that is
   what Marko's nodes have.
 
-Emitted module shape (decision 155, the Marko render model): one runtime
+Emitted module shape (the Marko render model): one runtime
 import (`escape`, `createOut`, `createBufferedOut` only when a `<try>` uses it,
 and the `Out` type, all from `"@mxlang/target-html"`, kept in **one** import because
 the oracle and the test harnesses rewrite that specifier once), the author's
@@ -47,7 +47,7 @@ with their own sink. Every compiled module imports `createOut` at run time, so
 a test fixture that nests its own `package.json` must make `@mxlang/target-html`
 resolvable (see `linkRuntime` in `bun.test.ts`).
 
-Whitespace on **every** host, Solid included, is decision 33's rule
+Whitespace on **every** host, Solid included, is the line-based whitespace rule
 applied once, by Marko's own `onText` before `@mxlang/core`'s resolver ever
 sees a `MarkoText` node (see the four Marko facts in `packages/tsx-bridge/AGENTS.md`) — there is no
 separate Solid-specific whitespace pass to keep in sync; a second
@@ -60,7 +60,7 @@ Goldens live at `packages/targets/html/fixtures-marko/<name>/` with
 
 ## `@mxlang/target-html`: the vanilla html target on `@mxlang/core`
 
-`packages/targets/html` (`@mxlang/target-html`, decisions 66, 68) compiles an
+`packages/targets/html` (`@mxlang/target-html`) compiles an
 **ordinary Marko template** to a runtime-free `(input) => string` module. Not
 a dialect: tag discovery through taglibs and `tags/` directories, Marko's own
 HTML/SVG/MathML element registry, Marko's attribute-tag and component
@@ -80,7 +80,7 @@ compiled template's `import { escape } from "@mxlang/target-html"` is
 unchanged. The `./core` export is **gone** (breaking): importers take
 `@mxlang/core` directly.
 
-Policy table (decision 65): the target renders what Marko's server render
+Policy table: the target renders what Marko's server render
 emits, minus resume markers. **Inert** (accepted, no output, each verified
 byte-identical against Marko): `<lifecycle>`, `<script>`, `<id>`,
 `<log>`, `<debug>`, and `by=` on `<for>`.
@@ -131,8 +131,8 @@ hoists like `static`, and its bindings are readable from the template
 (verified: `server const S = 41 + 1` then `${S}` renders `42`). `<return>` is
 **not** an error any more: under the unit model a tag is its own module and
 its caller invokes it, so a returning unit's `render(input, out)` writes its
-output to the caller's sink and returns the value, which `/var` binds (decision
-155; see the `<return>` bullet in `packages/core/AGENTS.md`). **Evaluate initial
+output to the caller's sink and returns the value, which `/var` binds (see
+the `<return>` bullet in `packages/core/AGENTS.md`). **Evaluate initial
 value**: `<let>`, `<const>`, `:=`. **Error** — only what the target genuinely
 cannot: `<await>` (Marko itself refuses to render one to a string) and
 `<try>` with a `<@placeholder>` (needs a second pass). A plain `<try>` with
@@ -170,7 +170,7 @@ and make the template's own input unreachable, and Marko refuses it as a
 duplicate declaration. A **tag param** (`<for|input|>`, `<define/R|input|>`) is
 *accepted*, because it opens a nested scope where an ordinary JS shadow is
 correct — Marko renders those. Rejecting them would be an implementation limit
-stated as a rule, which decision 65 forbids. Note the codegen consequence: a
+stated as a rule, which the policy table forbids. Note the codegen consequence: a
 `<for>`'s iterable is bound to a temporary before the loop opens, or a param
 shadowing the name used in the iterable (`<for|input| of=input.items>`) hits
 the temporal dead zone and throws at render time.
@@ -186,8 +186,7 @@ than assumed:
   spreads); `htmlEquals` compares attribute order, so getting this wrong fails
   the oracle. With a spread on the tag, Marko's own shape is followed instead:
   attributes after the last spread are written first, the rest is one merged
-  object in authored order, and `<input>` keeps authored order (decision 135
-  addendum).
+  object in authored order, and `<input>` keeps authored order.
 - **`class`/`style` take structured values**: `class={a: true, b: false}` →
   `class="a"`, `class=["x", {y: true}]` → `class="x y"`,
   `style={color: "red", top: 0}` → `style="color:red;top:0"`. These lower to
@@ -202,17 +201,17 @@ than assumed:
 
 ### The `strict` policy
 
-Decision 68's policy fold: the retired `.mx` dialect rejected reactive
+The retired `.mx` dialect rejected reactive
 constructs (`<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client` blocks,
 `<id>`) by name, since standalone MX had no reactive target at all. The
 default `policy` above instead renders what Marko's own server render would
-emit for those (inert, or `<let>`'s initial value) — decision 65's table.
+emit for those (inert, or `<let>`'s initial value) — the policy table above.
 `strictPolicy` (`translate.ts`) keeps `.mx`'s stance as an *opt-in*: the same
 six constructs become errors naming the construct, for an author who wants
 "this needs a reactive runtime" to be a compile error. `compile`/`compileFile`/
 `build` take `{ strict: true }` to select it.
 
-Decision 111 extends `strictPolicy` to also reject `<log>` and `<debug>` by
+`strictPolicy` also rejects `<log>` and `<debug>` by
 name, as errors rather than the default policy's inert rows: both are
 debug-only tooling, not reactive constructs, but a strict author wants the
 same "name the construct, don't silently compile it away" treatment for them.
@@ -220,7 +219,7 @@ The `input`-shadowing check
 (`checkBinding`) is **not** `strict`-only — it was already the default in
 both the old `.mx` policy and this one, since a `<let>`/`<const>` binding
 named `input` silently breaking the template's own input is a bug either way,
-not a stricter preference. Dropped rather than folded in (decision 65: these
+not a stricter preference. Dropped rather than folded in (these
 were conventions of the old `.mx` walk, not target capabilities, so they do
 not survive as a policy toggle): the explicit-import requirement, the
 `export interface Input` requirement (Marko allows arbitrary TS regardless),
@@ -232,11 +231,11 @@ through raw, matching Marko's own `_escape_comment`. Filtering placeholders
 out (an earlier bug) turned `<html-comment>build ${input.sha}</html-comment>`
 into `<!--build -->`.
 
-## Attribute-tag values (decisions 106–107)
+## Attribute-tag values
 
 This host declares `attrTags: 2` and emits only core's resolved
 `attrTagProps` plan. It never regroups the legacy flat `attributeTags` list.
-Decision 108 makes an untyped body-only property renderable; attributes or
+An untyped body-only property is renderable; attributes or
 nested tags on any occurrence keep the fallback data-shaped. Declared shapes
 remain unchanged.
 Cardinality comes from the callee's `Input`: singular values are one value or
@@ -264,8 +263,8 @@ author binding (the same rule applies to ordinary content loops).
 ## Bun loader
 
 `packages/targets/html/src/bun.ts` (`@mxlang/target-html/bun`) is the Bun-side
-`.mx` integration, decision 58 roadmap item 2, half A (moved here from the
-retired `@mxlang/html/bun` by decision 68). It exports a `BunPlugin` that
+`.mx` integration (moved here from the
+retired `@mxlang/html/bun`). It exports a `BunPlugin` that
 registers `build.onLoad({ filter: MX_FILTER }, ...)` — `MX_FILTER` is
 `/(?<!\.solid)\.mx$/`, `.mx` only; `.marko` is deliberately not registered
 (see "`.mx` is the only template extension" in `packages/tsx-bridge/AGENTS.md`). On each matched `.mx`
@@ -289,7 +288,7 @@ still works without double-registering.
 `examples/mx-site` uses this loader: `bunfig.toml` preloads it, `.mx` pages
 import each other directly (`import Layout from "./layout.mx"`), and
 `src/server.ts`/`src/build.ts` import pages directly with no prebuild step.
-The compiled-output equality check decision 58 calls for ("cannot paper over
+The compiled-output equality check ("cannot paper over
 an emit bug") lives in the e2e suite's own content assertions
 (`e2e/routes.spec.ts`), run against both the dev server and the static
 build — there is no separate golden-file diff, since the rendered HTML

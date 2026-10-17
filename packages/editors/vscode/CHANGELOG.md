@@ -6,23 +6,23 @@
 
 `ngmx` joins the language server client's document selector (file scheme only — untitled ng buffers are not diagnosed, because the server routes by the `.ng.mx` suffix an untitled URI does not have). The server compiles a `.ng.mx` whole-file through `@mxlang/angular`'s `compileNgMx`, routed by suffix, so compile/translate errors and warnings inside MX regions are published at their authored position. `astromx` stays out (the server does not handle `.astro.mx`), and `manifest.test.ts`'s old "keep ngmx out of the selector" gate is inverted to pin this.
 
-### Added: `.preact.mx` (PreactMX, decision 154)
+### Added: `.preact.mx` (PreactMX)
 
 A new `preactmx` language (alias `PreactMX`) for `.preact.mx`, TSX with MX regions on Preact, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.preactmx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `PreactMX` language (`languages/preactmx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/preactmx` and `overlay/preactmx`) and lists it in `[language_servers.mxlang]`.
 
-### Added: `.hono.mx` (HonoMX, decision 154)
+### Added: `.hono.mx` (HonoMX)
 
 A new `honomx` language (alias `HonoMX`) for `.hono.mx`, TSX with MX regions on Hono, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.honomx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `HonoMX` language (`languages/honomx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/honomx` and `overlay/honomx`) and lists it in `[language_servers.mxlang]`.
 
-### Added: `.react.mx` (ReactMX, decision 154)
+### Added: `.react.mx` (ReactMX)
 
 A new `reactmx` language (alias `ReactMX`) for `.react.mx`, TSX with MX regions on React, contributed before `mx` so the suffix is not read as a whole-file `.mx`. Its grammar is a `source.reactmx` stub over `source.tsx`; it activates the extension, is in `typescriptServerPlugins.languages` and in the language server client's document selector. The Zed extension gains the `ReactMX` language (`languages/reactmx`, on the shared `solid` grammar, built by `scripts/vendor.sh` from `base/reactmx` and `overlay/reactmx`) and lists it in `[language_servers.mxlang]`.
 
-### Changed: "SolidMX" is now "Solid" (solid-rename, decision 154)
+### Changed: "SolidMX" is now "Solid" (solid-rename)
 
 The product name SolidMX is retired; the host is "Solid". The VS Code language alias shown in the language picker is now `Solid` (the language id `solidmx`, the scope `source.solidmx` and the `.solid.mx` suffix are unchanged). The Zed extension's language is renamed the same way: its name is `Solid`, its grammar is `solid` and the grammar package is `packages/editors/tree-sitter-solid`. Zed settings keyed by `"SolidMX"` (`languages`, `file_types`) must now use `"Solid"`, and a vtsls or typescript-language-server `languages` entry that named Zed's lowercased language id `solidmx` must now be `solid`.
 
-### Changed: `.amx` is now `.astro.mx` (amx-to-astro-mx, decision 134)
+### Changed: `.amx` is now `.astro.mx` (amx-to-astro-mx)
 
 The `astromx` language is associated with `.astro.mx` (it was `.amx`), with no alias. Its TextMate scope is `source.astromx` (it was `source.amx`), following `source.solidmx` and `source.ngmx`.
 

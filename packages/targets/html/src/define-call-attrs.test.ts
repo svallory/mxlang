@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * Decision 160 on html: a `<define>` called with attributes and no tag
+ * On html, a `<define>` called with attributes and no tag
  * arguments passes ONE attribute object to the first param (Marko 6.4.4).
  * The rendered shapes are locked by the oracle fixture
  * `fixtures-marko/define-call-attrs`; this file locks the emitted call and

@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 //
-// Decision 59: when the artifact is consumed from a clone/tarball, verify
-// from a clone/tarball. `bun run typecheck`/`test` exercise this package's
+// Verifies the artifact as a consumer gets it, from a clone/tarball. `bun run typecheck`/`test` exercise this package's
 // *source*, against its own tsconfig; neither proves that a real npm
 // installer, resolving only `package.json` `exports`/`types`, can actually
 // reach a working `dist/`. This script does: it packs the real tarball,
@@ -27,7 +26,7 @@ const distDir = join(pkgDir, "dist");
 const simulateMissingDist = process.argv.includes("--simulate-missing-dist");
 
 /**
- * Every external step runs under a hard wall-clock timeout (decision 61: a
+ * Every external step runs under a hard wall-clock timeout (a
  * script must be able to fail, and a hang is a silent, unbounded pass).
  * `bun pm pack` hangs: first observed inside `packages/parser` (before
  * `core-extract` removed the translator's dependency on it), then again
@@ -146,7 +145,7 @@ try {
   );
 
   // No `@marko/compiler`: core's dist carries its own Marko front end
-  // (decision 159), so the tarballs alone must be enough.
+  // so the tarballs alone must be enough.
   console.log("[consumer-check] installing packed tarballs (no workspace)...");
   run(["bun", "add", tarballPath], scratchDir);
 

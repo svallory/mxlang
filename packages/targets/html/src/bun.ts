@@ -69,7 +69,7 @@ export function mxFilter(targets: TargetLookup): RegExp {
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
- * compiles under (decisions 129 and 132). It defaults to this package's own
+ * compiles under. It defaults to this package's own
  * descriptor, which is what a plain `import "@mxlang/target-html/bun"` wants; a
  * caller that compiles for several targets (the oracle, a tool with the
  * built-in registry in hand) passes that lookup instead, so the loader
@@ -125,7 +125,7 @@ export function createHtmlBunPlugin(
           });
           return { contents: code, loader: "ts" };
         } catch (error) {
-          // Bun prints one thrown error: the file's others (decision 162)
+          // Bun prints one thrown error: the file's others
           // ride in its message so one run shows them all.
           const rest = isTranslateError(error) ? otherErrorsText(error) : "";
           if (!isTranslateError(error) || rest === "") throw error;

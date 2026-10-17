@@ -1,5 +1,5 @@
 /**
- * The parent-contract rung of the ladder (decision 145, PR 3), through a real
+ * The parent-contract rung of the ladder, through a real
  * compile: a parent's contract `defaultTag` beats the package config, the
  * config beats the built-in; structural parents are skipped; an unnamed tag
  * under an attribute tag reads its declaration.

@@ -5,7 +5,7 @@ import markoPlugin from "./bun.ts";
 
 /**
  * A `.mx` page calling a tag from `tags/`, compiled and run for real through
- * the Bun loader. A `.marko` file is no MX input (decision 172): it is never
+ * the Bun loader. A `.marko` file is no MX input: it is never
  * loaded here, and a call that finds one is a compile error.
  */
 
@@ -139,7 +139,7 @@ describe("a .mx page calling a tags/*.mx tag", () => {
     );
     expect(await render(page)).toBe(`<b>explicit</b>`);
   });
-  test("a lowercase registered tag beats a same-named import or define (decision 164 addendum 1)", async () => {
+  test("a lowercase registered tag beats a same-named import or define", async () => {
     // A lowercase tag never calls a binding, so the registered `tags/row.mx`
     // is called, not the authored `./row.mx` import or `<define/row>`.
     const dir = "lowercase-binding";

@@ -1,7 +1,7 @@
 /**
  * `@mxlang/target-html`'s dialect policy: stock `.marko`, expressions-only.
  *
- * Decision 66. The lowering core is shared with `@mxlang/target-html`
+ * The lowering core is shared with `@mxlang/target-html`
  * (`@mxlang/target-html`'s `core.ts`); this file supplies only what differs, and
  * every difference is a property of *stock Marko's conventions* rather than a
  * preference:
@@ -20,7 +20,7 @@
  *   reaches this translator on a pin bump rather than through a hand-edited
  *   set — ADR 0001's entire point.
  *
- * The disposition table (decision 65) below is the interesting part. The test
+ * The disposition table below is the interesting part. The test
  * for each construct is not "can this code lower it" but "does this target
  * emit bytes for it": a construct that only configures behaviour after the
  * first render is *inert* — accepted, with no output — and only a construct a
@@ -55,7 +55,7 @@ import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 export { TranslateError } from "@mxlang/core";
 
 /**
- * The policy table of decision 65, as implemented.
+ * The policy table, as implemented.
  *
  * Inert entries were each verified against Marko's own server render: with
  * and without the construct, the emitted HTML is byte-identical. Error
@@ -130,9 +130,9 @@ const TAGS: Record<string, Disposition> = {
   // `<return>` is **not** listed here. It was, and the reason it gave — "a
   // module compiled to `(input) => string` has no parent to return to" — was
   // true only while a tag template was expanded into its caller. Under the
-  // unit model (decision 95) a tag is its own module and its caller invokes
+  // unit model a tag is its own module and its caller invokes
   // it, so there is a caller to return to: the unit's `render(input, out)`
-  // writes into the caller's sink and returns the value (decision 155). The
+  // writes into the caller's sink and returns the value. The
   // core owns the grammar, in the tag's own compilation.
 };
 
@@ -757,8 +757,8 @@ export function escapeComment(text: string): string {
  * `@marko/compiler` 5.42.5 / `marko@6.3.51`; see fixture `unknown-element`),
  * it does not render it as literal HTML. Treating every hyphenated name as
  * automatically legal (the previous behaviour here) was strictly more
- * permissive than Marko, which is exactly the class of divergence decision
- * 67 closes. The table has no hyphenated name, so such a tag is neither an
+ * permissive than Marko, which is exactly the class of divergence a Marko-parity target
+ * must not introduce. The table has no hyphenated name, so such a tag is neither an
  * element nor (unless discovered) a component.
  */
 function isElement(name: string, _ctx: Ctx): boolean {
@@ -811,7 +811,7 @@ function isComponent(name: string, ctx: Ctx): boolean {
  * `class:big`, `style:color` (static and dynamic) and `class="base"
  * class:active=…`. Matching Marko therefore means *rejecting* them, and
  * inventing a lowering would be inventing markup the target does not have —
- * exactly what decision 65's table forbids. Recorded as a divergence from the
+ * exactly what the policy table forbids. Recorded as a divergence from the
  * brief's expectation, not from Marko.
  *
  * A fixture is impossible for the same reason: no `.marko` file using this
@@ -884,7 +884,7 @@ export const DYNAMIC = DYNAMIC_TAG;
 /**
  * What `resolveDelegatedTag` decides about a tag this host claims, for its emitter.
  *
- * Recorded while the Marko node is still in hand (decision 79's `data` slot),
+ * Recorded while the Marko node is still in hand (the `data` slot),
  * so the emitter never re-inspects one to recover a decision the resolver
  * already made.
  */
@@ -1069,7 +1069,7 @@ export const policy: Policy = {
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
-  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
@@ -1111,13 +1111,13 @@ export const escapeFrom = "@mxlang/target-html";
  * Reactive and debug-only constructs, rejected by name instead of rendering
  * their initial value or being treated as inert.
  *
- * Kept from `.mx`'s dialect (decision 68's policy fold) as an opt-in stance,
+ * Kept from `.mx`'s dialect as an opt-in stance,
  * not the default: `policy.tags` renders `<let>`'s initial value and treats
  * `<lifecycle>`/`<script>`/`<client>`/`<id>` as inert, matching
- * what Marko's own server render emits (decision 65). A `strict` author may
+ * what Marko's own server render emits. A `strict` author may
  * instead want a construct that only makes sense with a reactive runtime to
  * be a compile error, naming the construct, rather than silently accepted.
- * `<log>`/`<debug>` join this set for the same reason (decision 111): both
+ * `<log>`/`<debug>` join this set for the same reason: both
  * are debug-only tooling with no place in output a strict author expects to
  * be exhaustively accounted for, so they are rejected by name rather than
  * compiled away as inert.
@@ -1288,7 +1288,7 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
   return __mxEscaped ? __mxText.replace(/>/g, "&gt;") : __mxText;
 }`;
 
-// Decision 155: writes into the caller's sink and returns what the callee's
+// Writes into the caller's sink and returns what the callee's
 // \`render\` returns, which is what a \`/var\` on the dynamic tag binds. A
 // compiled template is told apart by its \`.render\` entry, never by the shape
 // of what it returns; any other function returns a string that is written.
@@ -1299,13 +1299,13 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (!__mxTarget) {
-    // Decision 116 + Marko parity: a falsy renderer (null, undefined, false,
+    // Marko parity: a falsy renderer (null, undefined, false,
     // 0, "") renders no tag of its own; content renders independently.
     if (__mxProps.content) __mxSink.write(__mxProps.content());
     return;
   }
   if (typeof __mxTarget === "string") {
-    // decision 112: args[0] provides native attributes; content stays separate.
+    // args[0] provides native attributes; content stays separate.
     const __mxAttrs = __mxArgs ? __mxArgs[0] || {} : __mxProps;
     let __mxOut = "<" + __mxTarget;
     for (const [__mxKey, __mxValue] of Object.entries(__mxAttrs)) {
@@ -1341,13 +1341,13 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
 }`;
 
 // What a dynamic call's props are checked against: a callee with `render` or a
-// plain function (a `.ts` module tag, decision 116's value-import routing) takes
+// plain function (a `.ts` module tag, routed as a value import) takes
 // its input's type, so a wrong or missing prop is a TypeScript error at the
 // call; a string, block, `any`, a zero-parameter function or an overloaded
 // one (its last three signatures' inputs differ) stays loose.
 const DYNAMIC_PROPS = `type __MxDynamicProps<T> = 0 extends 1 & T ? Record<string, any> : [NonNullable<T>] extends [{ render: (input: infer I, out: never) => unknown }] ? I : [NonNullable<T>] extends [{ (input: infer A, ...__mxA: any): unknown; (input: infer B, ...__mxA: any): unknown; (input: infer C, ...__mxA: any): unknown }] ? [unknown] extends [B] ? C : [B] extends [C] ? [C] extends [B] ? [unknown] extends [A] ? C : [A] extends [C] ? [C] extends [A] ? C : Record<string, any> : Record<string, any> : Record<string, any> : Record<string, any> : Record<string, any>;`;
 
-// Decision 155: a statically named tag that is not known to be a compiled
+// A statically named tag that is not known to be a compiled
 // template (a hand-written function, or a \`.ts\` barrel re-export of one).
 // Typed the way the call is made: through \`render\` when the callee has one
 // (a compiled template, whose default export a host may present differently:
@@ -1378,7 +1378,7 @@ const INPUT_OF = `type __MxInputOf<F> = [F] extends [{ render: (input: infer I, 
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
  * line, so it is written once rather than twice.
  */
-// Always `: string` since decision 155: a unit that declares `<return>`
+// Always `: string`: a unit that declares `<return>`
 // returns its value from `render`, not from the default export.
 const DEFAULT_EXPORT =
   /\nexport default function ([A-Za-z_$][\w$]*)\(input: (Input(?: & \{ content\?: \(\) => string \})?)\): string \{/;
@@ -1471,7 +1471,7 @@ export const MX_COMPONENT = Symbol.for("mx.component");
  * emitter ever changes that line, a silent `return code` would hand back an
  * unbranded module, and every `check()` in the Astro host would answer false
  * with nothing anywhere reporting why — a whole host quietly failing to claim
- * its own components. Decision 61: fail loud at the seam that broke.
+ * its own components. Fail loud at the seam that broke.
  *
  * A plain `Error`, not a `TranslateError`: this runs over emitted text, not
  * over a Marko node, so there is no source line or column to carry and
