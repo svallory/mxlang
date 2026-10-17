@@ -1912,6 +1912,21 @@ one body and a read in another, and any other flow through a called function. Ho
 `strict` policy refuse `<let>` itself, so they never reach this check, and under
 the `none` tag-rules preset nothing fires.
 
+**A tag variable is scoped to the body that declares it.** A `<const>`, a `<let>`
+or a `/var` binds inside the body that writes it (an `<if>` or `<else>` branch, a
+`<for>`, `<try>`, component or attribute-tag body, a `<define>`, or a native
+element's body) and nowhere after it, exactly as Marko 6.4.4 scopes them. A
+read in that body, below the declaration, is the inner binding; a read after the
+body is the outer one, so `<let/count=1/><div><const/count=2/>${count}</div>${count}`
+renders `<div>2</div>1`. The same name may be declared again in a nested body, in
+a sibling body, and as a different kind (`<let>` inside, `<const>` outside); the
+write rules of §5.5 follow the scope (a `<const/x>` written inside an element does
+not make a later write to the outer `<let/x>` an error, and an inner `<let/x>`
+does not make a later write to the outer `<const/x>` legal). On the html target a
+native element whose body declares a name is emitted with a block around its
+children. Declaring one name twice in the *same* body is not scoping, and is not
+covered by this rule.
+
 ### 5.6 A binding named `input`
 
 A **render-scope** binding named `input` (`<let/input=…>`, `<const/input=…>`) is

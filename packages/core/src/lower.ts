@@ -100,7 +100,6 @@ import {
   rejectUnsupportedFields,
   relatedErrorsOf,
   scopeBindings,
-  scopeDefines,
   scriptSpreadsRefused,
   shadowBindings,
   sliceLoc,
@@ -6784,12 +6783,15 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     (child: Node) => !isMxAttributeTag(child),
   );
   const attrs = lowerAttrs(ctx, node, name, "element", true);
-  // An element's body is its own scope for a `<define>` (Marko 6.4.4: the
-  // define is `const`-declared inside the body), so a `<Foo/>` after the
-  // element never reaches a `<define/Foo>` written in it.
-  const unscopeDefines = scopeDefines(ctx);
+  // An element's body is its own scope for every binding it declares (Marko
+  // 6.4.4 scopes a `<define>`, a `<const>` and a `<let>` to the body that
+  // writes them, as it does for `<if>`, `<for>` and `<try>`): a `<Foo/>` after
+  // the element never reaches a `<define/Foo>` written in it, a read after it
+  // is the outer binding, and the guards on a `<const>` or `<let>` written
+  // inside do not follow the name out.
+  const unscope = scopeBindings(ctx);
   const children = isVoid ? [] : lowerChildren(ctx, contentChildren);
-  unscopeDefines();
+  unscope();
   return {
     kind: "Element",
     name,

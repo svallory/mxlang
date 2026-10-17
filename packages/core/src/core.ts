@@ -1464,9 +1464,9 @@ export function scopeBindings(
  * import of the same name, or nothing. `ctx.defines` is one flat map for the
  * whole file, so the scope is a snapshot restored on the way out: a name the
  * block added is forgotten, a name it re-declared is the outer declaration
- * again. A native element's body is such a block too (Marko gives every tag
- * body its own scope), but it does not go through `scopeBindings`, which also
- * undoes `<const>` shadows; it calls this alone.
+ * again. Every block goes through `scopeBindings`, which calls this beside
+ * the `<const>`/`<let>` snapshots; a native element's body too (Marko gives
+ * every tag body its own scope).
  */
 export function scopeDefines(ctx: Ctx): () => void {
   const saved = new Map(ctx.defines);

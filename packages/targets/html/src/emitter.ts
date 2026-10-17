@@ -1034,7 +1034,20 @@ export function createEmitter(
       elementAttributes(node.name, node.attrs);
       literal(">");
       if (node.void) return;
+      // An element's body is its own scope for what it declares (Marko 6.4.4
+      // scopes a `<const>`, `<let>`, `<define>` or `/var` to the body that
+      // writes it), and the children are otherwise written flat into the
+      // render function, so a body that declares gets a block of its own.
+      const scoped = node.children.some(declaresBinding);
+      if (scoped) {
+        push("{");
+        state.indent++;
+      }
       drive(emitter, node.children);
+      if (scoped) {
+        state.indent--;
+        push("}");
+      }
       literal(`</${node.name}>`);
     },
 
@@ -1658,6 +1671,28 @@ export function createEmitter(
 }
 
 /** One slice of a `client` statement's code, mapped to where the author wrote it. */
+/**
+ * Does this node declare a name in the block it sits in? A `<const>`, a
+ * `<let>`, a `<define>`, a `/var` on a tag call, or a delegated tag that binds
+ * its `/var`: each is written as a `const` where the node stands.
+ */
+function declaresBinding(node: IrNode): boolean {
+  switch (node.kind) {
+    case "Const":
+    case "Define":
+      return true;
+    case "Component":
+      return Boolean(node.var);
+    case "DelegatedTag":
+      return (
+        Boolean(node.tag.var) ||
+        (node.tag.data as DelegatedTagData | undefined)?.kind === "binding"
+      );
+    default:
+      return false;
+  }
+}
+
 function clientPiece(piece: ClientPiece): MappedCode {
   if (piece.parts) {
     return concatMapped(
