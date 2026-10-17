@@ -1060,7 +1060,7 @@ show; a component receives the array as its `class` prop. On Angular an array
 class (a shorthand merge, or one written as `class=["a", y]`) is joined by a
 `__mxClass` member the same way and bound as `[class]`, because `[ngClass]`
 throws on any array entry that is not a string; a plain object `class={…}`
-stays `[ngClass]`. Angular may reorder the words of a `[class]` string, so the
+stays `[ngClass]`. In a `.ng.mx` or a tag module, which own their class and get `__mxClass` injected, every dynamic non-object `class=` is joined that way, so a number or a runtime array renders; a plain `.mx` page keeps the plain `[class]` binding for a non-array value (see divergences.md). Angular may reorder the words of a `[class]` string, so the
 class set matches Marko's and the word order may not. A repeated word collapses to one, and a class that becomes empty after an update leaves `class=""` rather than no attribute.
 
 | Written | Result |

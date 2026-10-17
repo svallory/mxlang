@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { ChangeDetectorRef } from "@angular/core";
+import { ChangeDetectorRef, Component } from "@angular/core";
 import { getTestBed, TestBed } from "@angular/core/testing";
 import {
   BrowserTestingModule,
@@ -20,7 +20,9 @@ import ts from "typescript";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { compileNgMx } from "../src/ng-mx.ts";
 import { angularOwnTargets } from "../src/own-targets.ts";
+import { MxHandlers } from "../src/runtime.ts";
 import { compileTagModule } from "../src/tag-module.ts";
+import { compileMx } from "./helpers.ts";
 
 // A dynamic `class=` in a `.ng.mx` file. A `.ng.mx` owns its component class,
 // so `__mxClass` is injected and any value Marko accepts renders: a number
@@ -161,4 +163,40 @@ describe("a dynamic class= in a .ng.mx", () => {
       expect(view.first.map(set)).toEqual([plain].map(set));
     },
   );
+});
+
+// A plain `.mx` page owns nothing: its component class is the author's, so MX
+// cannot inject `__mxClass` and a non-literal `class=` keeps Angular's plain
+// `[class]` binding (divergences.md, "Angular: class on a plain page").
+describe("a dynamic class= in a plain .mx page", () => {
+  let counter = 0;
+  function renderPage(markup: string, y: unknown): string | null {
+    const template = compileMx(markup).code;
+    class Probe extends MxHandlers {}
+    Component({ selector: `mx-page-class-${counter++}`, template })(Probe);
+    const fixture = TestBed.createComponent(Probe);
+    Object.assign(fixture.componentInstance, { y });
+    fixture.detectChanges();
+    return (
+      (fixture.nativeElement as HTMLElement)
+        .querySelector("div")
+        ?.getAttribute("class") ?? null
+    );
+  }
+
+  it("binds a plain [class], so a number throws", () => {
+    expect(compileMx("<div class=y/>").code).toContain('[class]="__mxAttr');
+    expect(() => renderPage("<div class=y/>", 5)).toThrow(
+      /Unsupported styling type: number/,
+    );
+  });
+
+  it("prints a nested runtime array unjoined", () => {
+    expect(renderPage("<div class=y/>", NESTED)).toBe("0 false null p q,r s");
+  });
+
+  it("joins an array literal through a member the page provides", () => {
+    // MxHandlers carries `__mxClass`; the author writes `class=[y]`.
+    expect(set(renderPage("<div class=[y]/>", NESTED))).toBe("m p q r s");
+  });
 });
