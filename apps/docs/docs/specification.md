@@ -1575,6 +1575,7 @@ is the construct label, always backticked (`` `<if>` ``, `` `<for>` ``, …):
 | Message |
 |---|
 | `Tag does not support arguments.` (Marko 6.4.4's own message; for `if`/`else-if`/`else`/`await` Marko appends its own hint, e.g. `` `Tag does not support arguments. Write the condition as a value attribute instead: `<if=condition>`. `` `` |
+| An empty `()` is not an argument and is accepted on every tag, as in Marko 6.4.4 (`<button ()>`, `<const/x()=1/>`). |
 | `tag variable \`/${…}\` on ${what} is not supported in a standalone template` |
 | `type arguments on ${what} are not supported in a standalone template` |
 | `tag params \`\|...\|\` on ${what} are not supported in a standalone template` |
@@ -4326,7 +4327,7 @@ host, a target or a dialect.
 | `MX_INVALID_ATTRIBUTE` | error | an attribute name, form, value or argument list the language rejects |
 | `MX_INVALID_BOUND_ATTRIBUTE` | error | `:=` on something that is not an identifier or member expression |
 | `MX_DUPLICATE_VALUE_ATTRIBUTE` | error | a second value attribute |
-| `MX_UNSUPPORTED_TAG_ARGUMENTS` | error | tag arguments beside attributes or a body |
+| `MX_UNSUPPORTED_TAG_ARGUMENTS` | error | tag arguments the tag does not take: beside attributes or a body, several or a spread on a named custom tag, any on an attribute tag |
 | `MX_INVALID_EXPRESSION` | error | an expression lowering cannot read |
 | `MX_INVALID_IF` | error | the shape rules of `<if>`, `<else-if>` and `<else>` |
 | `MX_INVALID_FOR` | error | the shape rules of `<for>` |

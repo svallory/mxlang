@@ -2484,13 +2484,11 @@ function rejectArgsWithProps(
       argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
-  if (
-    tagAttributesOf(node).length === 0 &&
-    !containsAttributeTags(node) &&
-    !hasContent(bodyChildren(node))
-  ) {
+  if (tagAttributesOf(node).length === 0 && !hasContent(bodyChildren(node))) {
+    // Stock does not count attribute tags as "attributes or body", so several
+    // or spread arguments beside them reach the multiple/spread rules first.
     rejectMultipleOrSpreadArguments(ctx, node);
-    return;
+    if (!containsAttributeTags(node)) return;
   }
   raise(
     UNSUPPORTED_TAG_ARGUMENTS_CODE,

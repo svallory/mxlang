@@ -4397,6 +4397,11 @@ describe("tag arguments are blamed over the whole list", () => {
       blames(`${IMPORT}Panel(§...xs¶)\n`, SPREAD, panel);
     });
 
+    it("reaches the multiple and spread rules beside attribute tags, which stock does not count as a body", () => {
+      blames(`${IMPORT}<Panel(a, §b¶)><@x/></Panel>\n`, MULTIPLE, panel);
+      blames(`${IMPORT}<Panel(§...xs¶)><@x/></Panel>\n`, SPREAD, panel);
+    });
+
     it("says arguments beside attributes or a body first, over the whole list", () => {
       blames(
         `${IMPORT}<Panel(§a, b¶) c=1/>\n`,
@@ -4471,9 +4476,20 @@ describe("tag arguments are blamed over the whole list", () => {
       blames(marked, "Tag does not support arguments.", inert);
     });
 
-    it("accepts an empty argument list on any tag, as stock does", () => {
-      expect(() => lowerSource("<button ()>x</button>\n")).not.toThrow();
-    });
+    it.each([
+      ["<button ()>x</button>"],
+      ["<div()>x</div>"],
+      ["div()\n  -- x"],
+      ["<const/x()=1/>"],
+      ["<style()>a{}</style>"],
+      ["<textarea()></textarea>"],
+      ["<if=true></if><else()>x</else>"],
+    ])(
+      "accepts an empty argument list on any tag, as stock does: %s",
+      (source) => {
+        expect(() => lowerSource(`${source}\n`)).not.toThrow();
+      },
+    );
 
     it("still takes an empty argument list and none", () => {
       for (const source of ["<id/y/>", "<id()/y/>", "<log=1/>", "<debug/>"]) {
