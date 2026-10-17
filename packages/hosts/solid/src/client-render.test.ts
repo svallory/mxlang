@@ -251,6 +251,10 @@ describe("Solid client render: live signal updates through the real DOM", () => 
         "undefined",
         "false",
         '"zz"',
+        "0",
+        "5",
+        "true",
+        '["k", {k: false}]',
       ],
     );
     const classes = snapshots.map((html) =>
@@ -266,6 +270,10 @@ describe("Solid client render: live signal updates through the real DOM", () => 
       ["a", "a xx", "xx"],
       ["a", "a xx", "xx"],
       ["a zz", "a xx zz", "xx zz"],
+      ["a", "a xx", "xx"],
+      ["a 5", "a xx 5", "xx 5"],
+      ["a true", "a xx true", "xx true"],
+      ["a k", "a xx k", "xx k"],
     ]);
   });
 

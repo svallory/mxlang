@@ -1266,8 +1266,7 @@ function renderAttr(
         attr.name === "class" &&
         native !== undefined &&
         !isPrimitiveValue(attr.value) &&
-        attr.value.shape !== "object" &&
-        attr.value.shape !== "array"
+        attr.value.shape !== "object"
       ) {
         if (attrGuardUse) attrGuardUse.klass = true;
         return concatMapped(
@@ -1430,6 +1429,15 @@ function renderAttrs(
         return renderAttr(attr, mapNames, native, hasSpread);
       }
       if (merged === "") return renderAttr(attr, mapNames, native, hasSpread);
+      if (attr.value.shape === "array" && native !== undefined) {
+        if (attrGuardUse) attrGuardUse.klass = true;
+        return concatMapped(
+          " {...",
+          `${MX_CLASS_BINDING}([${JSON.stringify(merged)}, ...`,
+          mappedExpr(attr.value),
+          `], ${nativeTagOf(native)})}`,
+        );
+      }
       if (attr.value.shape === "array") {
         return concatMapped(
           " ",

@@ -1062,7 +1062,7 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
   // (and the html, preact, react and hono hosts) for the same templates.
   const shapes = [".a", ".a.${x}", ".${x}"];
   const classesOf = (html: string) =>
-    [...html.matchAll(/<div(?: class="([^"]*)")?>/g)].map(
+    [...html.matchAll(/<div(?: class="([^"]*)")?\s*>/g)].map(
       (match) => match[1] ?? "(none)",
     );
   const dynamicRows: [string, string, string, string[]][] = [
@@ -1102,6 +1102,32 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
       ["a", "a xx", "xx"],
     ],
     ["false in a binding", "v", "const v = false;", ["a", "a xx", "xx"]],
+    ["zero in a binding", "v", "const v = 0;", ["a", "a xx", "xx"]],
+    ["a number in a binding", "v", "const v = 5;", ["a 5", "a xx 5", "xx 5"]],
+    [
+      "numeric strings in a binding",
+      "v",
+      'const v = ["10", "q"];',
+      ["a 10 q", "a xx 10 q", "xx 10 q"],
+    ],
+    [
+      "true in a binding",
+      "v",
+      "const v = true;",
+      ["a true", "a xx true", "xx true"],
+    ],
+    [
+      "a repeated class in a binding",
+      "v",
+      'const v = "a";',
+      ["a a", "a xx a", "xx a"],
+    ],
+    [
+      "an object that turns a class off, in a binding",
+      "v",
+      'const v = ["k", {k: false}];',
+      ["a k", "a xx k", "xx k"],
+    ],
     ["a function call", '"p".toUpperCase()', "", ["a P", "a xx P", "xx P"]],
     [
       "a ternary yielding a string",
@@ -1135,6 +1161,32 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
         .map((shape) => `div${shape} class=${value}`)
         .join("\n");
       expect(classesOf(renderApp(markup, setup))).toEqual(expected);
+    },
+  );
+
+  // An authored class array goes through the same join, so Solid's own
+  // flattening (it keeps `0`, drops `true`, removes duplicates, sorts
+  // integer-like words first) never shows.
+  it.each([
+    ["zero", "0", ["a", "a", "(none)"]],
+    ["false", "false", ["a", "a", "(none)"]],
+    ["a number", "5", ["a 5", "5 a", "5"]],
+    ["true", "true", ["a true", "true a", "true"]],
+    ["a repeated word", '"a"', ["a a", "a a", "a"]],
+    ["numeric strings", '["10", "q"]', ["a 10 q", "10 q a", "10 q"]],
+    [
+      "an object that turns a class off",
+      '["k", {k: false}]',
+      ["a k", "k a", "k"],
+    ],
+  ])(
+    "joins an authored class array as Marko does: %s",
+    (_name, value, expected) => {
+      const html = renderApp(
+        '<div class=["a", v]/><div class=[v, "a"]/><div class=[v]/>',
+        `const v = ${value};`,
+      );
+      expect(classesOf(html)).toEqual(expected);
     },
   );
 

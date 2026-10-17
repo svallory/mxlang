@@ -17,13 +17,28 @@ export const MX_CLASS_BINDING = "__mxClassProp";
 /**
  * Marko drops a falsy primitive `class`/`style` (null, undefined, false, 0, "",
  * NaN), prints `true` as "true" and leaves structured values to its own
- * serializer. Solid's SSR prints `class=""` for any undefined/null/false/""
+ * serializer. An array is joined here the way Marko joins it (strings as they
+ * are, numbers and `true` as text, other falsy parts skipped, nested arrays in
+ * order, an object's truthy keys), because Solid would flatten it into an
+ * object: it keeps `0`, drops `true`, removes duplicates and lets a later
+ * `{k: false}` delete an earlier `"k"`. Solid's SSR prints `class=""` for any undefined/null/false/""
  * class value, so the attribute has to be absent from the props rather than
  * set to something falsy: a one-key prop object for `class=expr`, and an
  * `ownKeys` filter inside the spread proxy.
  */
 export const CLASS_PROP_HELPER = `function ${MX_CLASS_BINDING}<T,>(value: T, tag: string | null = ""): { class?: unknown } {
-  if (tag === null || (typeof value === "object" && value !== null)) return { class: value };
+  if (tag === null) return { class: value };
+  if (Array.isArray(value)) {
+    const text = (part: unknown): string => {
+      if (!part) return "";
+      if (Array.isArray(part)) return part.map(text).filter(Boolean).join(" ");
+      if (typeof part === "object") return Object.keys(part).filter((key) => (part as Record<string, unknown>)[key]).join(" ");
+      return String(part);
+    };
+    const joined = text(value);
+    return joined ? { class: joined } : {};
+  }
+  if (typeof value === "object" && value !== null) return { class: value };
   return value ? { class: value === true ? "true" : value } : {};
 }`;
 

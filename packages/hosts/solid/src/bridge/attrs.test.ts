@@ -28,13 +28,32 @@ const attrsOf = (source: string) => {
   return element.openingElement.attributes;
 };
 
-/** The printed `class={...}` expression of the first element. */
-const classCodeOf = (source: string): string => {
-  const attr = attrsOf(source).find(
+/**
+ * The class value of the first element, as Marko builds it. On a native element
+ * an array class reaches Solid through `__mxClassProp([...], "div")`, a spread
+ * of the helper that joins it the way Marko does; any other class is the
+ * attribute's own expression.
+ */
+const classNodeOf = (
+  source: string,
+): { type: string; elements?: unknown[] } => {
+  const attrs = attrsOf(source);
+  const spread = attrs.find((a) => a.type === "JSXSpreadAttribute") as
+    | { argument: { callee: { name: string }; arguments: object[] } }
+    | undefined;
+  if (spread) {
+    expect(spread.argument.callee.name).toBe("__mxClassProp");
+    return spread.argument.arguments[0] as { type: string };
+  }
+  const attr = attrs.find(
     (a) => (a.name as { name?: string } | undefined)?.name === "class",
-  ) as { value: { expression: object } };
-  return generate(attr.value.expression as Parameters<typeof generate>[0]).code;
+  ) as { value: { expression: { type: string } } };
+  return attr.value.expression;
 };
+
+/** The printed class value of the first element. */
+const classCodeOf = (source: string): string =>
+  generate(classNodeOf(source) as Parameters<typeof generate>[0]).code;
 
 function expectSyntaxError(fn: () => void, expected: string) {
   let error: unknown;
@@ -126,19 +145,9 @@ describe("class shorthand", () => {
   ])(
     "lowers a shorthand class array with a placeholder: %s",
     (_name, markup) => {
-      const attrs = attrsOf(`const el = ${markup};`);
-      expect(attrs).toHaveLength(1);
-      const attr = attrs[0] as {
-        name: { name: string };
-        value: {
-          type: string;
-          expression: { type: string; elements: unknown[] };
-        };
-      };
-      expect(attr.name.name).toBe("class");
-      expect(attr.value.type).toBe("JSXExpressionContainer");
-      expect(attr.value.expression.type).toBe("ArrayExpression");
-      expect(attr.value.expression.elements).toHaveLength(2);
+      const node = classNodeOf(`const el = ${markup};`);
+      expect(node.type).toBe("ArrayExpression");
+      expect(node.elements).toHaveLength(2);
     },
   );
 
@@ -184,24 +193,18 @@ describe("class shorthand", () => {
     // Solid 2's `class` accepts a recursive array, so shorthand plus an
     // object is a merge rather than the conflict it was against 1.x's
     // separate `classList` prop.
-    const attrs = attrsOf(`const el = <div.card.big class={a: on()}>y</div>;`);
-    expect(attrs).toHaveLength(1);
-    const attr = attrs[0] as {
-      name: { name: string };
-      value: {
-        expression: {
-          type: string;
-          elements: [{ type: string; value: string }, { type: string }];
-        };
-      };
+    const node = classNodeOf(
+      "const el = <div.card.big class={a: on()}>y</div>;",
+    ) as {
+      type: string;
+      elements: [{ type: string; value: string }, { type: string }];
     };
-    expect(attr.name.name).toBe("class");
-    expect(attr.value.expression.type).toBe("ArrayExpression");
+    expect(node.type).toBe("ArrayExpression");
     // Shorthand first: later array entries win, so the object must be able to
     // toggle a class the shorthand set.
-    expect(attr.value.expression.elements[0].type).toBe("StringLiteral");
-    expect(attr.value.expression.elements[0].value).toBe("card big");
-    expect(attr.value.expression.elements[1].type).toBe("ObjectExpression");
+    expect(node.elements[0].type).toBe("StringLiteral");
+    expect(node.elements[0].value).toBe("card big");
+    expect(node.elements[1].type).toBe("ObjectExpression");
   });
 });
 

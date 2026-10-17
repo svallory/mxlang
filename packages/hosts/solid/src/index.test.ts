@@ -143,7 +143,15 @@ describe("Solid IR lowering", () => {
     [
       "object class merge",
       `<div.card class={active: on()}>x</div>`,
-      [`class={["card", { active: on() }]}`],
+      [`{...__mxClassProp(["card", { active: on() }], "div")}`],
+    ],
+    [
+      // A component receives `class` as the array Marko hands it as
+      // `input.class`; only a native element's class is joined into a string.
+      "class shorthand on a component keeps the array",
+      `<Card.big class=extra/>`,
+      [`class={["big", extra]}`],
+      ["Card"],
     ],
     // Sliced verbatim from source (no space after `{`): `expr()` keeps the
     // author's own spacing once it can slice, the same seam that keeps

@@ -993,22 +993,24 @@ Both take **structured values**, lowered by the host:
 - `style={color: "red", top: 0}` → `style="color:red;top:0"`
 
 Shorthand merging. A tag-shorthand class merges with an explicit `class=` of any
-value, on every host, as Marko does: the shorthand parts come first, then the
-explicit value, joined by a single space. A falsy explicit value adds nothing.
-Solid 2 takes a recursive class array, so `.card` + `class=y` is
-`class={["card", y]}`.
+value, as Marko does: the shorthand parts come first, then the explicit value,
+joined by a single space. Strings print as written, numbers and `true` print as
+text, other falsy values add nothing, an array joins its entries in order, and
+an object contributes its truthy keys in order. On a native Solid element the
+merge is `class={["card", y]}` and the host joins that array itself, so Solid's
+own class-array rules (it keeps `0`, drops `true`, removes repeated words) never
+show; a component receives the array as its `class` prop.
 
 | Written | Result |
 |---|---|
 | shorthand `.card` + `class="x"` | `class="card x"` (shorthand first) |
-| shorthand `.card` + `class={…}` object | Solid 2's array form, `class={["card", {…}]}` |
-| shorthand `.card` + any other `class=` (identifier, call, ternary, array, `null`, `false`) | `class={["card", value]}`; `null`, `undefined` and `false` add nothing, an array or object adds its truthy entries |
+| shorthand `.card` + `class={…}` object | the array form, `class={["card", {…}]}` |
+| shorthand `.card` + any other `class=` (identifier, call, ternary, array, number, `true`, `null`, `false`) | `class={["card", value]}`, joined as above |
 | shorthand with a placeholder, `.a.${x}` + `class=y` | `class={["a", x, y]}` |
 | `#id` shorthand + explicit `id=` | **parse error** |
 
 The merge is emitted **at the explicit attribute's position**, not pushed to the
-front — otherwise the attribute is emitted twice and the second wins
-(decision 30).
+front — otherwise the attribute is emitted twice and the second wins.
 
 `style=` accepts an **object literal only**: `style={color: c()}` →
 `style={{color: c()}}`. Any other `style=` expression is a parse error in MX 1.
