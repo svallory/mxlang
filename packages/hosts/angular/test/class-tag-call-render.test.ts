@@ -38,6 +38,12 @@ const TAKES_CLASS = [
   "<pre>{{ class }}</pre>",
   "",
 ].join("\n");
+// A callee that prints the class it was handed on an element of its own.
+const DIV_CLASS = [
+  "export interface Input { class?: unknown }",
+  "<div class=input.class/>",
+  "",
+].join("\n");
 const NO_CLASS = [
   "export interface Input { label?: string }",
   "<pre>x</pre>",
@@ -70,11 +76,12 @@ beforeAll(() => {
   for (const [name, source] of [
     ["child", TAKES_CLASS],
     ["plain", NO_CLASS],
+    ["divchild", DIV_CLASS],
   ] as const) {
     const file = join(dir, "tags", `${name}.mx`);
     writeFileSync(file, source.replace("{{ class }}", "${input.class}"));
   }
-  for (const name of ["child", "plain"]) {
+  for (const name of ["child", "plain", "divchild"]) {
     const file = join(dir, "tags", `${name}.mx`);
     writeModule(
       join(dir, "tags", `${name}.mjs`),
@@ -98,7 +105,12 @@ async function render(
   inputs: string[];
   hosts: (string | null)[];
   /** The callee's rendered text after `update` is applied and checked again. */
-  updated: { inputs: string[]; shown: (string | null)[] };
+  updated: {
+    inputs: string[];
+    shown: (string | null)[];
+    /** The class attribute of the callee's own `<div>`, if it has one. */
+    divs: (string | null)[];
+  };
 }> {
   const name = `page${++pageId}`;
   const file = join(dir, `${name}.component.ng.mx`);
@@ -122,7 +134,10 @@ async function render(
   fixture.detectChanges();
   const tags = () =>
     fixture.debugElement.queryAll(
-      (d) => d.name === "mx-child" || d.name === "mx-plain",
+      (d) =>
+        d.name === "mx-child" ||
+        d.name === "mx-plain" ||
+        d.name === "mx-divchild",
     );
   const inputs = () =>
     tags().map((tag) =>
@@ -144,6 +159,12 @@ async function render(
     ...first,
     updated: {
       inputs: inputs(),
+      divs: tags().map(
+        (tag) =>
+          (tag.nativeElement as HTMLElement)
+            .querySelector("div")
+            ?.getAttribute("class") ?? null,
+      ),
       shown: tags().map(
         (tag) =>
           (tag.nativeElement as HTMLElement).querySelector("pre")
@@ -233,6 +254,43 @@ describe("a class input that changes after the first render", () => {
     const view = await render("<child.a class=y/>", { y: 1 }, { y: 2 });
     expect(view.updated.inputs).toEqual([text(["a", 2])]);
     expect(view.updated.shown).toEqual(["a,2"]);
+  });
+});
+
+// What Marko prints for `<div class=input.class/>` with each `input.class`:
+// the class set, falsy parts skipped, nested arrays flattened, an object's
+// truthy keys (Angular may reorder the words, so sets are compared).
+const DIV_ROWS: [string, unknown, string | null, unknown, string | null][] = [
+  ["a nested array", NESTED, "m p q r s", "later", "later"],
+  ["an object", { k: 1, z: 0 }, "k", { n: true }, "n"],
+  ["null", null, null, ["x"], "x"],
+  ["0", 0, null, 3, "3"],
+  ["5", 5, "5", 0, null],
+];
+
+describe("a callee that prints its class input on an element", () => {
+  it.each(DIV_ROWS)(
+    "%s, then an update",
+    async (_name, first, firstSet, next, nextSet) => {
+      const view = await render(
+        "<divchild class=y/>",
+        { y: first },
+        { y: next },
+      );
+      // An emptied class leaves `class=""` after an update (Angular removes
+      // the words, not the attribute); an empty set is the same as none.
+      const divSet = (value: string | null | undefined) =>
+        set(value ?? null) || null;
+      // The first render, then the same callee after `y` changed.
+      const initial = await render("<divchild class=y/>", { y: first });
+      expect(divSet(initial.updated.divs[0])).toEqual(firstSet);
+      expect(divSet(view.updated.divs[0])).toEqual(nextSet);
+    },
+  );
+
+  it("joins a shorthand merged with class=y for the callee's element", async () => {
+    const view = await render("<divchild.a class=y/>", { y: NESTED });
+    expect(set(view.updated.divs[0] ?? null)).toEqual("a m p q r s");
   });
 });
 

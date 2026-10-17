@@ -1043,6 +1043,7 @@ function primitiveBinding(
   attr: Attr,
   tagName: string | undefined,
   filename: string,
+  joinClass = false,
 ): PrimitiveBinding | null {
   if (attr.kind !== "dynamic") return null;
   const name = attr.name;
@@ -1053,6 +1054,9 @@ function primitiveBinding(
   if (LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) return null;
   if (name === "class" || name === "style") {
     const shape = attr.value.shape;
+    // A tag module joins a dynamic element class through `__mxClass`. An
+    // object literal keeps `NgClass`, which handles it correctly.
+    if (name === "class" && joinClass && shape !== "object") return null;
     return shape === "object" || shape === "array"
       ? null
       : { form: "list", attribute: false };
@@ -1118,6 +1122,10 @@ function emitAttrs(
   // A tag call whose callee declares a `class` input: the value goes to that
   // input as written, the way Marko hands it to `input.class`.
   calleeTakesClass = false,
+  // A tag module's element: every dynamic `class=` is joined by `__mxClass`
+  // (a tag module gets the member injected), so a callee that prints the raw
+  // `input.class` it was handed gets Marko's class text for any value form.
+  joinClass = false,
 ): void {
   for (const attr of attrs) {
     // Marko accepts `value:`, but Angular's literal-attribute tokenizer does
@@ -1230,7 +1238,11 @@ function emitAttrs(
             out.write(']="');
             out.writeMapped(esc(attr.value.code), attr.value.span);
             out.write('"');
-          } else if (name === "class" && shape === "array") {
+          } else if (
+            name === "class" &&
+            (shape === "array" ||
+              (joinClass && isElement && shape !== "object"))
+          ) {
             // Never `[ngClass]`: it throws on a non-string entry. See
             // `CLASS_HELPER_MEMBERS`. `[class]`, not `[attr.class]`, so classes
             // from directives, host bindings and a component's `host: {class}`
@@ -1907,12 +1919,17 @@ class AngularEmitter implements Emitter<string> {
   /** `mx-` by default; `mx.angular.tagSelectorPrefix` overrides it. */
   private readonly selectorPrefix: string;
 
+  /** True in a tag module, which has `__mxClass` injected: see `emitAttrs`. */
+  private readonly joinElementClass: boolean;
+
   constructor(
     ctx: Ctx,
     filename: string,
     imports: Ir["imports"] = [],
     selectorPrefix: string = TAG_SELECTOR_PREFIX,
+    joinElementClass = false,
   ) {
+    this.joinElementClass = joinElementClass;
     this.ctx = ctx;
     this.filename = filename;
     this.selectorPrefix = selectorPrefix;
@@ -2244,7 +2261,12 @@ class AngularEmitter implements Emitter<string> {
     // Each primitive-normalized attribute binds its authored expression once.
     const bindings = new Map<Attr, PrimitiveBinding>();
     for (const attr of node.attrs) {
-      const binding = primitiveBinding(attr, node.name, this.filename);
+      const binding = primitiveBinding(
+        attr,
+        node.name,
+        this.filename,
+        this.joinElementClass,
+      );
       if (binding) bindings.set(attr, binding);
     }
     const normalized = [...bindings.keys()];
@@ -2300,6 +2322,8 @@ class AngularEmitter implements Emitter<string> {
       lets,
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
+      false,
+      this.joinElementClass,
     );
     this.out.write(">");
     this.out.anchor(tagStart, this.out.length, node.nameSpan);
@@ -3275,6 +3299,8 @@ export function emitTemplate(
    * generated offsets relative to the returned string.
    */
   anchorsOut?: NodeAnchor[],
+  /** True for a tag module, which gets `__mxClass` injected: see `emitAttrs`. */
+  joinElementClass = false,
 ): string {
   // A *synthesized* import is not a module-level statement the author wrote:
   // the core minted it for a discovered tag the template calls, and there is
@@ -3300,7 +3326,13 @@ export function emitTemplate(
     fail(`a \`<${node.kind}>\` ${MODULE_LEVEL_MESSAGE}`, node);
   }
 
-  const emitter = new AngularEmitter(ctx, filename, ir.imports, selectorPrefix);
+  const emitter = new AngularEmitter(
+    ctx,
+    filename,
+    ir.imports,
+    selectorPrefix,
+    joinElementClass,
+  );
   for (const node of emitter.lowerDefineAttributes(ir.body)) {
     emitter.emitNode(node);
   }

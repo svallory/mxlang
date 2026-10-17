@@ -1477,6 +1477,8 @@ export function compileTagModule(
         prefix,
         true,
         templateMappings,
+        undefined,
+        true,
       );
       return template;
     },
