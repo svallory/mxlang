@@ -4,7 +4,7 @@ import { printExpression } from "./index.ts";
 
 /**
  * `printExpression` prints with core's own Babel generator
- * (`coreBabel().generator`, decision 197); these fixtures parse with
+ * (`coreBabel().generator`); these fixtures parse with
  * `coreBabel().parseExpression`, the parser lowering uses beside the front
  * end's.
  *

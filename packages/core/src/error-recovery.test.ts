@@ -47,7 +47,7 @@ function thrown(source: string): TranslateError {
 const SCRIPTLET = "$ const a = 1";
 const NO_CONDITION = "<if></if>";
 
-describe("per-tag error recovery in lower (decision 162)", () => {
+describe("per-tag error recovery in lower", () => {
   it("reports three independent errors, ordered by position", () => {
     const source = [
       "<div>ok</div>",

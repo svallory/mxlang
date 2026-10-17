@@ -14,8 +14,7 @@ import { attributesWithTriggers } from "./triggers.ts";
 
 /**
  * Default tags resolved for unnamed MX tags (`default-tag.ts`), kept beside
- * the tree: an MX pass never writes to the MX AST (decision 158, slice-4
- * addendum), where the Marko path rewrites its name node in place.
+ * the tree: an MX pass never writes to the MX AST, where the Marko path rewrites its name node in place.
  */
 const resolvedNames = new WeakMap<object, string>();
 
@@ -180,9 +179,8 @@ export function hasTypeArguments(node: Node): boolean {
  */
 export function tagAttributesOf(node: Node): Node[] {
   if (!isMxTagShape(node)) return node?.attributes ?? [];
-  // Attribute triggers as the trigger pass lowered them (decision 182
-  // addendum 5); the shorthand record, when there is one, is built from
-  // the same list.
+  // Attribute triggers as the trigger pass lowered them; the shorthand record,
+  // when there is one, is built from the same list.
   const attributes: Node[] = attributesWithTriggers(node);
   return (
     shorthandAttributes.get(node) ??

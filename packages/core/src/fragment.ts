@@ -1,5 +1,5 @@
 /**
- * The fragment front door (decision 70): parse a *substring* of a larger file
+ * The fragment front door: parse a *substring* of a larger file
  * as Marko, with positions reported against the enclosing file.
  *
  * The consumer is a host whose MX lives inside another language — the Solid host's
@@ -83,7 +83,7 @@ import { registerSyntax } from "./triggers.ts";
  *
  * `@marko/compiler` requires *a* translator and resolves `marko/translator`
  * when none is given. This one registers no taglibs beyond Marko's own
- * built-ins and core's (decision 168: the statement tags are the language's,
+ * built-ins and core's (the statement tags are the language's,
  * so every parse knows them) and no `translate` visitors, so `compileSync`
  * parses and stops.
  */
@@ -200,7 +200,7 @@ export interface FragmentBase {
   /** The name reported for the *enclosing* file, in diagnostics. */
   filename?: string;
   /**
-   * The dialect, or a bare syntax table (decisions 182 addendum 5, 202);
+   * The dialect, or a bare syntax table;
    * omitted, the dialect `filename`'s extension routes to, as for
    * `compileSource`. The returned body lowers with it
    * (`lower`/`lowerChildren`).
@@ -234,8 +234,8 @@ export interface FragmentBase {
    */
   nativeTags?: NativeTags;
   /**
-   * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183); see `TranslatorOptions.productName`. Unset, the
+   * The product name diagnostics use where core's own wording says "MX";
+   * see `TranslatorOptions.productName`. Unset, the
    * dialect's `name`, and `MX` for MX's own default row.
    */
   productName?: string;

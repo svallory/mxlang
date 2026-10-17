@@ -82,7 +82,7 @@ describe("resolveDiscoveredTagModule", () => {
     ]);
   });
 
-  it("refuses a `.marko` module, positioned at the tag (decision 172)", () => {
+  it("refuses a `.marko` module, positioned at the tag", () => {
     let error: unknown;
     try {
       lower(
@@ -102,8 +102,8 @@ describe("resolveDiscoveredTagModule", () => {
 /**
  * A tag a translator's own taglib registers (a third-party target's; no
  * built-in target registers a lowercase tag since a `marko.json` stopped being
- * read, decision 197) is the host's tag, not a binding of the same name
- * (decision 164 addendum 1), and needs the hook to have something to call.
+ * read) is the host's tag, not a binding of the same name,
+ * and needs the hook to have something to call.
  */
 describe("a tag a translator taglib registers", () => {
   function lowerWithTaglib(source: string, declarations: Policy): Ir {
@@ -159,7 +159,7 @@ describe("a tag a translator taglib registers", () => {
     );
   });
 
-  describe("with an import or `<define>` of the same name in scope (addendum 1)", () => {
+  describe("with an import or `<define>` of the same name in scope", () => {
     const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-taglib-tag-")));
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
     writeFileSync(join(dir, "package.json"), "{}");

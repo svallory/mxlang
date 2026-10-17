@@ -17,7 +17,7 @@ const customTags: Record<string, CustomTag> = {
   },
 };
 
-describe("allowed parents under delegate-everything declarations (decision 138 E3)", () => {
+describe("allowed parents under delegate-everything declarations", () => {
   it("validates the mash-style structure with children and attribute types", () => {
     const valid = lowerSource(
       '<resource><attributes><attribute="status" values=["draft", "published"]/></attributes></resource>',

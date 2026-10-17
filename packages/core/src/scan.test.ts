@@ -46,7 +46,7 @@ const fixtures = join(here, "fixtures", "scan");
 /**
  * The registered set every scan here runs under. The file kinds it knows are
  * the ones the "host module file" cases name, and nothing else, so a dotted
- * name whose segment no target declares is the case-2 branch (decision 137).
+ * name whose segment no target declares is the case-2 branch.
  */
 const lookup = testTargetLookup();
 
@@ -141,7 +141,7 @@ describe("scanCustomTags", () => {
     expect(globals.mxScanLoadCount).toBe(1);
   });
 
-  it("loads and enforces children from a discovered declaration-only sidecar (decision 138 E2)", () => {
+  it("loads and enforces children from a discovered declaration-only sidecar", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"));
     writeFileSync(join(dir, "package.json"), '{"name":"child-contract"}');
@@ -513,7 +513,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"footag"}');
     writeFileSync(join(dir, "tags", "widget.foo.mx"), "");
 
-    // Decision 137. `foo` is no file-kind segment the lookup knows, so this
+    // `foo` is no file-kind segment the lookup knows, so this
     // is not the host-module case: it is excluded because it cannot be
     // called. `<widget.foo>` and concise `widget.foo` both parse as tag
     // `widget` with shorthand class `foo` (measured on Marko 6.3.51), so no
@@ -545,7 +545,7 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"dottedtag"}');
     writeFileSync(join(dir, "tags", "my.icon.mx"), "");
 
-    // Decision 137, case 2 as a loader that knows only its own target sees it:
+    // Case 2, as a loader that knows only its own target sees it:
     // `icon` is a file kind of some *other* host, which this lookup does not
     // hold, so the file cannot be a host module file here — and it still
     // cannot be called. The message says both, and the tag is not indexed.

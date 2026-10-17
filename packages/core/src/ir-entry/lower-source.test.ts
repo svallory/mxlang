@@ -14,7 +14,7 @@ import {
 } from "./index.ts";
 
 /**
- * `lowerSource`, the IR entry point (decision 204). The diagnostics it reports
+ * `lowerSource`, the IR entry point. The diagnostics it reports
  * replaced `@mxlang/data`'s `parseData` text for text and position for
  * position; the pinned cases below are the ones a first cut got wrong.
  */
@@ -36,7 +36,7 @@ function errors(source: string, options?: LowerSourceOptions) {
 
 /**
  * `<const>` and `<return>` are open-tag-only under every preset (lead ruling
- * on review of decision 204's `none`), as `@mxlang/data`'s taglib made them.
+ * on review of the `none` preset), as `@mxlang/data`'s taglib made them.
  * Without the flag a `<const/y=1>` not self-closed swallows what follows, and
  * a child written inside one is silently dropped.
  */
@@ -159,7 +159,7 @@ const NATIVE_RULE_NAMES = [
 ];
 
 /**
- * An absent `tagRules` is the strict `html` preset (decision 212 item 8: a
+ * An absent `tagRules` is the strict `html` preset (a
  * dialect that chooses no tag rules gets the full HTML rules). Mesh passes
  * `none` itself.
  */
@@ -212,7 +212,7 @@ describe("absent `tagRules`: the strict `html` preset", () => {
 });
 
 /**
- * An absent `tagRules` is the dialect's own (decision 212 item 8): the
+ * An absent `tagRules` is the dialect's own: the
  * `dialect` option's, else the one the file routes to; `html` when it
  * states none. The call's `tagRules` wins.
  */

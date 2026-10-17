@@ -43,7 +43,7 @@ function fixtureTarget(
  * `mx.host` values (one deprecated), six hosted ones, two with a file kind —
  * and named so that nothing in this file can be mistaken for a real host.
  *
- * Core names no target and no host (decision 126), so a test that pinned the
+ * Core names no target and no host, so a test that pinned the
  * resolver against the repo's own seven would either reintroduce that list
  * here or assert nothing. A fixture set of invented names says the stronger
  * thing: the resolver answers for *whatever* is registered. The built-in set
@@ -200,13 +200,13 @@ describe("resolveTargetPolicy", () => {
     expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
-  it("ignores a host listed only in peerDependencies (decision 124)", () => {
+  it("ignores a host listed only in peerDependencies", () => {
     const filePath = join(FIXTURES, "peer-only/App.mx");
 
     expect(resolveTargetPolicy(filePath, lookup)).toEqual({ target: "page" });
   });
 
-  it("takes the host from dependencies when another host is only a peer (decision 124)", () => {
+  it("takes the host from dependencies when another host is only a peer", () => {
     // A counted peer would make two hosts and collapse to html.
     const filePath = join(FIXTURES, "peer-and-dependency/App.mx");
 
@@ -757,7 +757,7 @@ describe("TargetPolicyDiagnostic code", () => {
   });
 });
 
-describe("mx.<target>.defaultTag (decision 145)", () => {
+describe("mx.<target>.defaultTag", () => {
   const roots: string[] = [];
   afterEach(() => {
     for (const root of roots.splice(0)) {

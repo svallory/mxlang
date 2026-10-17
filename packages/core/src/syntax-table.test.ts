@@ -1,5 +1,5 @@
 /**
- * A dialect's table (decision 182, PR C; decisions 202 and 212): a file
+ * A dialect's table (PR C): a file
  * routed to a dialect package by its extension parses with that dialect's
  * table, resolved from the nearest manifest; the table's own problems are
  * positioned in the dialect's module, tables are interned by hash, the
@@ -59,7 +59,7 @@ const MESH = {
 
 /**
  * MESH with a built-in node kind, which a table-only dialect may use: a
- * `{ call }` node needs the dialect's `lowerTrigger` (decision 182 addendum 5).
+ * `{ call }` node needs the dialect's `lowerTrigger`.
  */
 const INLINE_ROW: Trigger = { ...MEMBER, node: "identifier" };
 const INLINE = {
@@ -238,8 +238,8 @@ describe("the removed `package.json#mx.syntax`", () => {
   });
 });
 
-describe("a dialect's tag rules (ruling 211)", () => {
-  it("are `html` when the dialect declares none (decision 212 item 8)", () => {
+describe("a dialect's tag rules", () => {
+  it("are `html` when the dialect declares none", () => {
     expect(dialectTagRules({ id: "test", name: "Test", table: {} })).toBe(
       "html",
     );

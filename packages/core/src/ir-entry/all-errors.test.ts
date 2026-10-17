@@ -89,8 +89,7 @@ describe("every error is reported", () => {
     const { diagnostics } = lowerSource(source, "/t.mx", {
       structural: "reject",
     });
-    // Line 4 is the comment: never structural, never reported (decision 131
-    // addendum 5).
+    // Line 4 is the comment: never structural, never reported.
     expect(diagnostics.map((d) => [d.line, d.column])).toEqual([
       [1, 0],
       [2, 3],
@@ -272,7 +271,7 @@ describe("no input makes lowerSource throw", () => {
   it("reports input ending inside a concise open delimiter at the opener", () => {
     // Marko's parser was silent here and its tree left `<x>` with no
     // position, which only this target's span invariant caught; the front end
-    // reports it (decision 161: no silent drop).
+    // reports it (no silent drop).
     const { ir, diagnostics } = lowerSource(`x<a x=\`\${<a>`, "/t.mx");
     expect(ir).toBeUndefined();
     expect(diagnostics).toEqual([
@@ -396,7 +395,7 @@ const VAR =
 const UNKNOWN = (name: string) =>
   `\`<${name}>\` is not a known tag: no contract for it was given`;
 
-describe("an error inside an unknown tag is labelled, never dropped (decision 161)", () => {
+describe("an error inside an unknown tag is labelled, never dropped", () => {
   const open: Record<string, CustomTag> = { open: {} };
   const list = (source: string, options: LowerSourceOptions = {}) =>
     lowerSource(source, "/t.mx", {

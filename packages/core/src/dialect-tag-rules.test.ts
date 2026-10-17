@@ -1,10 +1,9 @@
 /**
- * A dialect's tag rules on every compile entry (decision 212 item 8 and its
- * addendum item 1): `compileSource` and `parseFragment` parse a dialect's
- * files under the preset the dialect states, never the target's, as
- * `lowerSource` does; MX's own files keep the host's. The caller's host
- * file kinds reach routing from the target lookup `compileSource` and
- * `parseFragment` are given.
+ * A dialect's tag rules on every compile entry: `compileSource` and
+ * `parseFragment` parse a dialect's files under the preset the dialect states,
+ * never the target's, as `lowerSource` does; MX's own files keep the host's.
+ * The caller's host file kinds reach routing from the target lookup
+ * `compileSource` and `parseFragment` are given.
  */
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

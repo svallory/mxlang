@@ -1,7 +1,7 @@
 /**
  * Loads a third-party target descriptor from the project, synchronously.
  *
- * **Unstable** (decision 129), like the contract it loads.
+ * **Unstable**, like the contract it loads.
  *
  * This is `loadSidecar`'s mechanism (`scan.ts`) with two changes. It resolves
  * from the *project* (`fromDir`), not from core, so a user's installed target

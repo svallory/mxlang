@@ -17,12 +17,12 @@ import { testTargetLookup } from "../test-targets.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * `mx.contracts` through `lowerSource` (decision 142): a dialect package whose
+ * `mx.contracts` through `lowerSource`: a dialect package whose
  * entire vocabulary is one contracts module — no sidecars, no `tags/`
  * directory — reaches `lowerSource` through the one-liner a consumer writes:
  * `getCustomTags(file, { targets, host: null })` handed to `lowerSource` as
  * `customTags`. The 25 tag names are copied from the Ash resource fixture
- * (`fixtures/ash-resource/post.mx`, the mash-shaped dialect decision 131 made
+ * (`fixtures/ash-resource/post.mx`, the mash-shaped dialect that was
  * the first fixture of the tree target); that file is the positive proof, and
  * small mutations of it pin each rule family: nesting, parents, cardinality,
  * `array`/`function` attribute types, and one `analyze` rule.

@@ -133,7 +133,7 @@ describe("a scan failure: only the custom tags become unknown (round 3)", () => 
   });
 });
 
-describe("checkConfiguredDefaultTag: a `marko.json` is not read (decision 197)", () => {
+describe("checkConfiguredDefaultTag: a `marko.json` is not read", () => {
   it("rejects a `defaultTag` only a `marko.json` defines, as the compile does", () => {
     const file = project(manifest("badge"));
     const dir = dirname(file);

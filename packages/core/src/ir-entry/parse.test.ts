@@ -121,7 +121,7 @@ const RESERVED = (name: string) =>
 const STATIC = (construct: string) =>
   `Data files are static, so they do not evaluate ${construct}`;
 
-describe("normalized body text (decision 141)", () => {
+describe("normalized body text", () => {
   it.each(
     cases.filter(({ label }) => label !== "element" && label !== "mixed"),
   )("$label passes through unchanged", ({ body, html }) => {
@@ -569,7 +569,7 @@ describe('structural: "reject"', () => {
     );
   });
 
-  it("a `//` line comment stays a `Comment` node under reject (decision 131 addendum 5)", () => {
+  it("a `//` line comment stays a `Comment` node under reject", () => {
     const source = "// src/domain/billing/invoice.mesh.mx\nentity :Invoice\n";
     const ir = ok(source, {
       structural: "reject",
@@ -663,7 +663,7 @@ describe('structural: "reject"', () => {
   });
 });
 
-describe("contract-only custom tags (decision 130)", () => {
+describe("contract-only custom tags", () => {
   const contract: Record<string, CustomTag> = {
     attribute: {
       attributes: {
@@ -708,10 +708,10 @@ describe("contract-only custom tags (decision 130)", () => {
 });
 
 describe("duplicate attributes", () => {
-  // Decision 135 (last-wins in core) merged, so this is the flip the test
+  // Last-wins in core merged, so this is the flip the test
   // has been carrying since round 1: core drops the earlier occurrence and
-  // warns on **it**, naming the survivor. Before 135 both attributes reached
-  // the IR; after it exactly one does.
+  // warns on **it**, naming the survivor. Before it, both attributes reached
+  // the IR; now exactly one does.
   it("warns on the dropped occurrence and keeps only the survivor", () => {
     const result = lowerSource(`<x b=1 b=2/>\n`, "/t.mx");
     expect(result.ir).toBeDefined();
@@ -959,7 +959,7 @@ describe("a default method after other attributes (one `value`, no warning)", ()
   });
 });
 
-describe('the raw-text trade of `tagRules: "none"` (the addendum\'s item 3)', () => {
+describe('the raw-text trade of `tagRules: "none"`', () => {
   const none = { tagRules: "none" } as const;
 
   it("a `<style>` body with tag-like content parses as tags, not text", () => {
@@ -1108,7 +1108,7 @@ describe("round 2 (rev-236)", () => {
   });
 
   describe("finding 3: nothing vanishes silently", () => {
-    // Decision 139 moved this to core, where it belongs: a CDATA section and
+    // This moved to core, where it belongs: a CDATA section and
     // an XML declaration are rejected by lowering, at the `<` of the
     // construct, on every target. The messages below are **core's**, spelled
     // out as literals rather than imported, so this test pins that the entry
@@ -1769,7 +1769,7 @@ describe("round 4 (rev-236-r2)", () => {
 });
 // biome-ignore-end lint/suspicious/noTemplateCurlyInString: the reject messages quote core's MX placeholder syntax, not JS templates
 
-describe("fail-fast parse (the addendum's item 8)", () => {
+describe("fail-fast parse", () => {
   it("a syntax error returns `ir: undefined` and one positioned error", () => {
     const result = lowerSource(`<x\n`, "/t.mx");
     expect(result.ir).toBeUndefined();
@@ -1973,7 +1973,7 @@ describe("a warning with no source position is file-level too", () => {
 describe("valueless default-attribute modifier (Mesh span bug)", () => {
   const options = { structural: "reject" } as const;
 
-  // Decision 146 made the bare `:Todo` `name="Todo"` sugar; the Mesh bug was
+  // The bare `:Todo` is `name="Todo"` sugar; the Mesh bug was
   // an invariant failure on every valueless modifier attribute, so the
   // regression rows use the spellings that are still modifiers.
   it.each([
@@ -2011,7 +2011,7 @@ describe("valueless default-attribute modifier (Mesh span bug)", () => {
   });
 });
 
-// Decision 146: `:name`, `#id` and `.class` sugar reaches the IR as the
+// `:name`, `#id` and `.class` sugar reaches the IR as the
 // attributes the author would have written.
 // A colon reads as stock Marko reads it (`@marko/compiler` 5.42.11 on
 // `htmljs-parser` 5.18.0, probed): part of a tag's name or of a shorthand

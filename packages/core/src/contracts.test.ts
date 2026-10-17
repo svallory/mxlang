@@ -84,7 +84,7 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-describe("mx.contracts (decision 142)", () => {
+describe("mx.contracts", () => {
   it.each([
     "./contracts.ts",
     { module: "./contracts.ts" },

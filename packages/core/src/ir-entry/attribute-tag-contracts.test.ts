@@ -25,7 +25,7 @@ const customTags: Record<string, CustomTag> = {
   item: { parents: ["@row"] },
 };
 
-describe("recursive attribute-tag contracts through lowerSource (decision 138 E4)", () => {
+describe("recursive attribute-tag contracts through lowerSource", () => {
   it("keeps nested authored attributes, children and control flow, without applying defaults", () => {
     const valid = lowerSource(
       '<card><@group><@row n=1 values=["a"] run=(x) => x><if=enabled><item/></if><else><item/></else><for|x| of=xs><item/></for></@row></@group></card>',
@@ -91,7 +91,7 @@ describe("recursive attribute-tag contracts through lowerSource (decision 138 E4
   );
 });
 
-describe('attributeTags["*"] through lowerSource (decision 147, for attribute tags)', () => {
+describe('attributeTags["*"] through lowerSource (for attribute tags)', () => {
   const wildcardTags: Record<string, CustomTag> = {
     resource: {
       attributeTags: {

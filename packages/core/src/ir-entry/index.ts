@@ -1,5 +1,5 @@
 /**
- * The IR entry point (decision 204): parse, lower, check and return core's
+ * The IR entry point: parse, lower, check and return core's
  * IR, for a consumer that interprets the tree itself (a dialect such as
  * Mesh) rather than emitting a host's code. Replaces `@mxlang/data`'s
  * `parseData`: with `tagRules: "none"`, every diagnostic it reported is
@@ -99,7 +99,7 @@ export type { Spanned, SpannedIr } from "./spans.ts";
 /** @unstable */
 export interface LowerSourceOptions {
   /**
-   * Contract-only custom tags (decision 130), by call name. A name core
+   * Contract-only custom tags, by call name. A name core
    * reserves (`if`, `for`, `try`, …) cannot be defined: the definition is
    * dropped, the call lowers as core's construct, and each call site is an
    * `MX_RESERVED_TAG` error (the name's 1:0 when it is never called). A name
@@ -109,22 +109,21 @@ export interface LowerSourceOptions {
    */
   customTags?: Record<string, CustomTag>;
   /**
-   * The dialect, or a bare syntax table (decision 182 addendum 5), for a
+   * The dialect, or a bare syntax table, for a
    * consumer that builds its own (Mesh passes its dialect, hooks included);
-   * omitted, the dialect the file's extension routes to (decision 212). A
+   * omitted, the dialect the file's extension routes to. A
    * trigger, block tag or filter nothing lowers (a `{ call }` trigger with
    * no `lowerTrigger`) is a positioned diagnostic ("`<id>` trigger has no
    * lowering yet").
    */
   dialect?: SyntaxTable | Dialect;
   /**
-   * The tag rules preset the source parses under (decision 204; ruling 209:
-   * an option of this function only, never a project or host setting).
-   * Omitted, the dialect's own `tagRules` (the `dialect` option's, else the
-   * one the file routes to), else `"html"` (decision 212 item 8: a dialect
-   * that states no tag rules gets the full HTML rules): the web elements'
-   * parse rules (void, raw text, preserved whitespace) and core's whole
-   * taglib. `"markup"`: the same
+   * The tag rules preset the source parses under (an option of this function
+   * only, never a project or host setting). Omitted, the dialect's own
+   * `tagRules` (the `dialect` option's, else the one the file routes to), else
+   * `"html"` (a dialect that states no tag rules gets the full HTML rules):
+   * the web elements' parse rules (void, raw text, preserved whitespace) and
+   * core's whole taglib. `"markup"`: the same
    * parse rules with core's statement tags only. `"none"` (Mesh's): no native
    * element rules, so `script`, `input` or `title` is an ordinary tag whose
    * body parses as markup.
@@ -132,7 +131,7 @@ export interface LowerSourceOptions {
   tagRules?: TagRulesPreset;
   /**
    * What the unnamed tag (`<#id>`, `<.class>`) stands for in place of the
-   * built-in `object` (decision 145), already validated.
+   * built-in `object`, already validated.
    */
   defaultTag?: string;
   /**
@@ -142,8 +141,8 @@ export interface LowerSourceOptions {
    * `"pass"` keeps the structural constructs — text, `${}`,
    * `<if>`/`<for>`/`<const>`, `import`/`export`/`static` — in the IR for the
    * consumer to interpret. Comments are never structural: under either value
-   * a `//` line or `<!-- -->` stays in the IR as its `Comment` node
-   * (decision 131 addendum 5). `"reject"` makes each structural construct a
+   * a `//` line or `<!-- -->` stays in the IR as its `Comment` node.
+   * `"reject"` makes each structural construct a
    * positioned error ("Data files are static, so they do not evaluate
    * `<if>`"), for a consumer that wants tags and attributes
    * only and must not silently ignore an `<if>` it never reads. A
@@ -163,13 +162,13 @@ export interface LowerSourceOptions {
    * Omitted, the dialect's own `unknownTags` (the `dialect` option's, else
    * the one the file routes to), else `"allow"`.
    *
-   * `"allow"` keeps the open set of decision 131: a tag with no
+   * `"allow"` keeps the open set: a tag with no
    * entry in `customTags` is accepted. `"reject"` closes it: any tag, at any
    * depth, whose name has no entry in `customTags` (and is not the built-in
    * `object`) is a positioned error naming the tag, with a
    * nearest-declared-name hint when one is close. An unknown parent is
    * reported before its children's `parents`/`children` errors, and the
-   * errors inside an unknown tag are labelled, never dropped (decision 161).
+   * errors inside an unknown tag are labelled, never dropped.
    */
   unknownTags?: "allow" | "reject";
   /**
@@ -256,7 +255,7 @@ function declaredTagNames(
 
 /**
  * The preset `filename` parses under: the call's `tagRules`, else its
- * dialect's (decision 212 item 8). A dialect that fails to resolve throws
+ * dialect's. A dialect that fails to resolve throws
  * the error the compile would raise.
  */
 function presetOf(

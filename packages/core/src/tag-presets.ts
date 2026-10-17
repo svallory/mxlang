@@ -1,12 +1,11 @@
 /**
- * Tag rules presets (decision 204): the tag-table entries a dialect or a
+ * Tag rules presets: the tag-table entries a dialect or a
  * target picks by name instead of assembling taglibs.
  *
  * - `html`: the html target's full table. The target's native elements with
  *   their HTML parse rules, plus every entry of core's taglib (`if`, `for`,
  *   `script`, `let`, the statement tags, ...). The IR entry point
- *   (`lowerSource`) defaults to it when `tagRules` is absent (decision 212
- *   item 8).
+ *   (`lowerSource`) defaults to it when `tagRules` is absent.
  * - `markup`: the native elements plus core's statement tags (`import`,
  *   `static`, `export`, `client`, `server`, `class`), what the JSX, Solid,
  *   Astro and Angular hosts register, plus `<const>` and `<return>` as

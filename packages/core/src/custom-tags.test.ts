@@ -137,7 +137,7 @@ describe("custom tag transforms", () => {
   });
 
   it("keeps `on*` on a custom tag call a dynamic prop, not an event", () => {
-    // The `isElement` gate (decision 101): a custom tag is a call, so its
+    // The `isElement` gate: a custom tag is a call, so its
     // `onClick` is the tag author's own prop contract, not a DOM event. Only a
     // native element lowers `on<Name>` to `kind: "event"`.
     let seen: TagCall | null = null;
@@ -567,12 +567,12 @@ describe("custom tag declarations", () => {
   });
 
   it("rejects the retired `staticOnly`/`repeated` declaration keys at registration", () => {
-    // `staticOnly`/`repeated` were renamed to `literalOnly`/`repeatable`
-    // (decision 2026-09-16). There is no legacy alias: a sidecar still
-    // written against the old names fails registration like any other
-    // unknown key, rather than registering with the option silently ignored.
-    // Cast through `unknown` to write the retired key past `CustomTag`'s
-    // current type, the same way a type-stripped `.tag.ts` sidecar would.
+    // `staticOnly`/`repeated` were renamed to `literalOnly`/`repeatable`.
+    // There is no legacy alias: a sidecar still written against the old names
+    // fails registration like any other unknown key, rather than registering
+    // with the option silently ignored. Cast through `unknown` to write the
+    // retired key past `CustomTag`'s current type, the same way a
+    // type-stripped `.tag.ts` sidecar would.
     const staleAttribute = {
       attributes: { name: { type: "string", staticOnly: true } },
       transform: () => [],
@@ -1478,7 +1478,7 @@ describe("core-owned custom tags", () => {
   });
 
   // `<try>` is a structural pass-through: its body always reaches the host.
-  // Decision 141 also keeps retained normalized spaces on ordinary tags;
+  // Body normalization also keeps retained normalized spaces on ordinary tags;
   // built-ins still bypass the presence gate entirely.
   it("preserves a whitespace-only `<try>` body rather than dropping it", () => {
     const ir = lowerWithTags(
@@ -1599,7 +1599,7 @@ describe("import precedence over registered custom tags (IR-level)", () => {
   });
 });
 
-// Ref custom-tags-local-bindings (decision 113): a *file-local scope*
+// Ref custom-tags-local-bindings: a *file-local scope*
 // binding — `<const/Panel=…/>`, a `<for|Panel|>` param, or a
 // `<define/Box|Panel|>` param — wins over a registered custom tag of the
 // same name too, exactly like an `import`/`<define>` name (spec §4,
@@ -1640,7 +1640,7 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
     );
     const forNode = find(ir.body, "For");
     // A tag param's runtime value can never be inspected at lowering time,
-    // so it is always "unknown" (local extension of decision 116) and
+    // so it is always "unknown" and
     // routes dynamic — it still wins over the registered custom tag
     // (proving the shadowing itself), just not as a direct `"name"` call.
     expect(find(forNode.children, "Component").target).toMatchObject({
@@ -1740,7 +1740,7 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
 });
 
 /**
- * Decision 130: a custom tag that declares only a contract (no `transform`, no
+ * A custom tag that declares only a contract (no `transform`, no
  * template) is valid on a name the active host claims. Core validates the call,
  * then lowers it to the same `DelegatedTag` an unregistered claimed tag would be.
  */
@@ -2050,7 +2050,7 @@ describe("contract-only custom tags", () => {
     ).toThrowError("does not accept content");
   });
 
-  it("rejects retained whitespace under `openTagOnly` for contract and transform tags (decision 141)", () => {
+  it("rejects retained whitespace under `openTagOnly` for contract and transform tags", () => {
     const parseOptions = { openTagOnly: true };
     expect(() =>
       lowerWithTags(
@@ -2068,7 +2068,7 @@ describe("contract-only custom tags", () => {
     ).toThrowError("does not accept content");
   });
 
-  it("accepts dropped newline indentation under `openTagOnly` (decision 141)", () => {
+  it("accepts dropped newline indentation under `openTagOnly`", () => {
     const parseOptions = { openTagOnly: true };
     for (const definition of [
       { parseOptions, attributes: { a: { type: "string" } } },
@@ -2282,7 +2282,7 @@ describe("ctx.build.element's void default", () => {
   });
 });
 
-describe("array and function attribute types (decision 138, E1)", () => {
+describe("array and function attribute types", () => {
   const listed: CustomTag = {
     attributes: { values: { type: "array" } },
     transform: () => [],

@@ -35,7 +35,7 @@ import {
 import { lookup } from "./test-targets.ts";
 
 /**
- * The lowerer (decision 79): one fixture per IR kind, plus the error cases.
+ * The lowerer: one fixture per IR kind, plus the error cases.
  *
  * These are the tests that keep the IR honest. `compileSource`'s own emitted
  * output is asserted elsewhere (`@mxlang/target-html`'s suite and both
@@ -293,7 +293,7 @@ describe("one fixture per IR kind", () => {
     const ir = lowerSource("<p>hello</p>\n");
     const text = find(ir.body, "Text");
     expect(text.value).toBe("hello");
-    // Decision 33 is Marko's own `onText`, applied before the lowerer sees
+    // Marko's own `onText` is applied before the lowerer sees
     // the node; a second normalization here would collapse twice.
     expect(text.loc.line).toBe(1);
   });
@@ -596,7 +596,7 @@ describe("one fixture per IR kind", () => {
     expect(component.content).not.toBeNull();
   });
 
-  it("decision 116: a .ts default import routes to a dynamic Component target, not a name call", () => {
+  it("a .ts default import routes to a dynamic Component target, not a name call", () => {
     // Only a `.marko`/`.mx` default import is Marko's own statically
     // resolved component case; a `.ts`/`.js` value import lowers as a
     // dynamic tag (matching Marko's `_dynamic_tag` runtime dispatch), with
@@ -619,7 +619,7 @@ describe("one fixture per IR kind", () => {
     expect(component.content).not.toBeNull();
   });
 
-  it("decision 116: a .mx default import still routes to a name Component target", () => {
+  it("a .mx default import still routes to a name Component target", () => {
     const ir = lowerSource(
       'import Panel from "./panel.mx"\n<Panel/>\n',
       fakeDeclarations({ isComponent: (name) => name === "Panel" }),
@@ -628,7 +628,7 @@ describe("one fixture per IR kind", () => {
     expect(component.target).toMatchObject({ kind: "name", name: "Panel" });
   });
 
-  it("decision 116: a .mx default import still routes to a name Component target", () => {
+  it("a .mx default import still routes to a name Component target", () => {
     const ir = lowerSource(
       'import Panel from "./panel.mx"\n<Panel/>\n',
       fakeDeclarations({ isComponent: (name) => name === "Panel" }),
@@ -637,7 +637,7 @@ describe("one fixture per IR kind", () => {
     expect(component.target).toMatchObject({ kind: "name", name: "Panel" });
   });
 
-  it("decision 116: a named (non-default) .marko import still routes as a dynamic tag", () => {
+  it("a named (non-default) .marko import still routes as a dynamic tag", () => {
     // `Panel` here is a *named* import, not `.marko`'s statically-resolved
     // default-import case — Marko itself only special-cases the default
     // export of a `.marko` file, so a named import of the same file is
@@ -748,7 +748,7 @@ describe("one fixture per IR kind", () => {
     expect(component.attributeTags[1]?.block.params).toEqual(["year"]);
   });
 
-  // Decision 109 relaxed the dynamic-tag/`<define>` rule; a named custom
+  // The dynamic-tag/`<define>` rule is relaxed; a named custom
   // tag (`target.kind === "name"`) stays on Marko's strict
   // `assertAttributesOrSingleArg`-equivalent rule, unaffected. Regression
   // coverage for that boundary: before this test, every existing assertion
@@ -1886,7 +1886,7 @@ describe("one fixture per IR kind", () => {
       }),
     );
     // The declaration outlives the block it was written in, which is the whole
-    // point of decision 70's hoist hook.
+    // point of the hoist hook.
     expect(ir.prelude).toMatchObject([
       {
         kind: "Hoisted",
@@ -2225,7 +2225,7 @@ describe("errors keep their message and position", () => {
   });
 });
 
-describe("CDATA sections and XML declarations (decision 139)", () => {
+describe("CDATA sections and XML declarations", () => {
   /**
    * Marko's parser makes two node kinds out of `<![CDATA[…]]>` and `<?…?>`:
    * `MarkoCDATA` and `MarkoDeclaration`. Core's IR has no node for either, so
@@ -3105,7 +3105,7 @@ describe("Define/For param and name spans", () => {
 });
 
 /**
- * Event attributes (decision 101).
+ * Event attributes.
  *
  * The rule under test is a *contract*, not an emission: core resolves one DOM
  * event name from two source spellings and hands it to every host, so the
@@ -3362,7 +3362,7 @@ describe("`on*` outside a native element stays a prop", () => {
 });
 
 /**
- * Native `on:*` is reserved (decision 101b); lowercase `oncapture:*` is an
+ * Native `on:*` is reserved; lowercase `oncapture:*` is an
  * ordinary colon name in Marko, not an event or a capture-mode alias.
  */
 describe("reserved `on:` and ordinary `oncapture:`", () => {
@@ -3480,15 +3480,15 @@ describe("<for by=> loop-param scope", () => {
 });
 
 /**
- * Decision 135: a repeated attribute name on one tag resolves to its LAST
+ * A repeated attribute name on one tag resolves to its LAST
  * occurrence, in core, so the IR carries one attribute per resolved name and no
  * host or delegated-tag consumer ever sees a duplicate. The earlier ones get a
- * decision-133 warning each. Marko 6.4.4 is the reference: `class="a" id="x"
+ * duplicate-attribute warning each. Marko 6.4.4 is the reference: `class="a" id="x"
  * class="b"` compiles to `<div id=x class=b>` (the survivor keeps its own
  * position), the dropped value is never evaluated, and `class`/`style` do not
  * merge.
  */
-describe("duplicate attributes resolve last-wins (decision 135)", () => {
+describe("duplicate attributes resolve last-wins", () => {
   const panel = fakeDeclarations({
     name: "TestHost",
     attrTags: 2,
@@ -4553,7 +4553,7 @@ describe("tag arguments are blamed over the whole list", () => {
 });
 
 /**
- * Decision 183: the tag-argument rejection is Marko 6.4.3's own message,
+ * The tag-argument rejection is Marko 6.4.3's own message,
  * verbatim (probed against stock marko 6.4.3), so the two languages never
  * diverge on the same construct. The event-handler hint stays, as a second
  * sentence after Marko's exact text.
@@ -4629,7 +4629,7 @@ describe("a /var a host cannot bind is reported at the /var", () => {
 
 describe("a host that binds a dynamic tag's /var opts in", () => {
   // `HostDeclarations.bindsDynamicTagVar`: the host's dynamic dispatch reaches
-  // a returning unit's render path (decision 155), so core lets the binding
+  // a returning unit's render path, so core lets the binding
   // through to the IR instead of refusing it. Without the flag the refusal
   // above stands.
   const policy = (): Policy => ({
@@ -5296,8 +5296,8 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
       },
     });
     // The hook only records; core's own field guard then rejects the tag.
-    // Hooks see the Marko-shaped view of the MX node (decision 163 addendum,
-    // `markoViewOf`), so the first attribute tag reads as Marko's.
+    // Hooks see the Marko-shaped view of the MX node
+    // (`markoViewOf`), so the first attribute tag reads as Marko's.
     expect(() => mx(source, policy)).toThrowError(/attribute tag `@a`/);
     expect(seen.map((node) => [node.type, node.name.value])).toEqual([
       ["MarkoTag", "@a"],
@@ -5404,7 +5404,7 @@ describe("hybrid node kinds and spans, MX-shaped (PR 4 slice 2)", () => {
     expect(e.span?.sourceStart).toBe(at);
   });
 
-  it("positions an MX-node error in the recovering walk (decision 162)", () => {
+  it("positions an MX-node error in the recovering walk", () => {
     const source = "<div>\n  <![CDATA[ x ]]>\n</div>\n<?xml?>";
     let errors: TranslateError[] = [];
     const { e } = thrown(() =>
@@ -5666,7 +5666,7 @@ describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slic
     });
   });
 
-  it("records an unparsed placeholder and lowers its siblings (decision 162)", () => {
+  it("records an unparsed placeholder and lowers its siblings", () => {
     const source = "${a +}b";
     const ctx = ctxFor(source);
     ctx.errors = [];
@@ -5692,7 +5692,7 @@ describe("hybrid text, placeholders, comments and payloads, MX-shaped (PR 4 slic
     ]);
   });
 
-  it("refuses a placeholder's expression trigger (decision 182 seam)", () => {
+  it("refuses a placeholder's expression trigger", () => {
     const source = "<p>${&status}</p>";
     const trigger = {
       type: "MxTrigger",
@@ -6299,7 +6299,7 @@ describe("hybrid attributes, MX-shaped (PR 4 slice 4)", () => {
     });
   });
 
-  it("refuses a trigger in an attribute value (decision 182 seam)", () => {
+  it("refuses a trigger in an attribute value", () => {
     const source = "<div a=x/>";
     const result = mx(source, components(), (body) => {
       body[0].attributes[0].value.triggers = [
@@ -6499,7 +6499,7 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
     ).toMatchObject({ line: 2, column: 13 });
   });
 
-  it("names a syntax-table node at child level and positions it (decision 182)", () => {
+  it("names a syntax-table node at child level and positions it", () => {
     const source = "<p/>\n&status=x\n{% if a %}\n::md:: b ::";
     const cases: [Node, string, number, number][] = [
       [

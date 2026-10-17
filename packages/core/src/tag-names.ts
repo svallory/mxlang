@@ -25,7 +25,7 @@
  */
 export const TAG_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
-/** The names no tag may use under the entry point (decision 131 addendum, item 2). */
+/** The names no tag may use under the entry point. */
 export const RESERVED_NAMES = [
   "if",
   "else",

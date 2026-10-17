@@ -1,9 +1,8 @@
 /**
- * The view a host hook receives (ast §6.4; decisions 163 addendum 1 and
- * 197): plain data built by lowering from the MX AST, plus an opaque
- * `MxNodeHandle` that only core's helpers resolve. It replaces the
- * Marko-shaped view (`marko-view.ts`), so no `Mx*` node and no Marko shape
- * becomes public API of `@mxlang/core` through a host.
+ * The view a host hook receives (ast §6.4): plain data built by lowering from
+ * the MX AST, plus an opaque `MxNodeHandle` that only core's helpers resolve.
+ * It replaces the Marko-shaped view (`marko-view.ts`), so no `Mx*` node and no
+ * Marko shape becomes public API of `@mxlang/core` through a host.
  *
  * Groundwork of PR 6 slice S4: built and pinned here; the hooks switch to it
  * in the slice itself.

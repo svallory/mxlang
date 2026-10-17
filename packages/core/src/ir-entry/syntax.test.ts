@@ -1,5 +1,5 @@
 /**
- * `lowerSource`'s `dialect` option (decision 182, PR C): a consumer's own table
+ * `lowerSource`'s `dialect` option (PR C): a consumer's own table
  * (Mesh builds a frozen one) reaches core; until core lowers triggers, a
  * trigger in the file is a positioned diagnostic, and a file without one
  * gives the default row's IR.

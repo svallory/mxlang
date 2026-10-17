@@ -100,7 +100,7 @@ const vocabulary = (
   ...extra,
 });
 
-describe('children["*"] by contract reference (decision 147)', () => {
+describe('children["*"] by contract reference', () => {
   it("a matched child takes the canonical name and keeps its authored spelling as `alias`", () => {
     const source = '<attributes>\n  <title type="string"/>\n</attributes>\n';
     const ir = compile(
@@ -498,7 +498,7 @@ describe('children["*"] recursion by reference', () => {
   });
 });
 
-describe("the did-you-mean guard (decision 147)", () => {
+describe("the did-you-mean guard", () => {
   const near: Record<string, CustomTag> = {
     attributes: {
       children: { title: {}, "*": { contract: "attribute" } },

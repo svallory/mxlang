@@ -19,7 +19,7 @@ import {
   TranslateError,
 } from "./index.ts";
 
-// Invented built-ins: core names no target and no host (decision 126).
+// Invented built-ins: core names no target and no host.
 const lookup = createTargetLookup([
   {
     descriptorVersion: 0,

@@ -87,8 +87,8 @@ export interface TemplateMetadata {
    * interface Input …`, or the `<static>` block's `type Input`/`interface
    * Input` — when it has one.
    *
-   * Carried for the callee-`Input` reader (decision 106,
-   * `callee-input.ts`): a caller with attribute tags reads the callee's
+   * Carried for the callee-`Input` reader
+   * (`callee-input.ts`): a caller with attribute tags reads the callee's
    * `Input` syntactically, and a `.mx` callee's Input is reached through
    * this metadata rather than by re-parsing the template.
    */
@@ -781,7 +781,7 @@ export function metadataOfIr(
     metadata.returnsValue = true;
     metadata.returnValueCode = ir.returnValue.code;
   }
-  // The callee-Input reader's sources (decision 106). The exported interface
+  // The callee-Input reader's sources. The exported interface
   // is the primary source; the static blocks and authored imports are the
   // alias/import-type channel a `type Input` in `<static>` or an attribute-
   // tag config alias may live in. Synthesized imports are skipped: their

@@ -179,7 +179,7 @@ function hintFor(
 }
 
 /**
- * Decision 174: a shorthand part with a bracket Marko's own group reader trips
+ * A shorthand part with a bracket Marko's own group reader trips
  * over (`.data-[state=open]:flex` — "Mismatched group", `.[&>*]:p-4` —
  * "Missing ending tag") dies in Marko's vocabulary before MX lowers anything.
  * When the failing tag head carries shorthand and a bracket, say what the
@@ -215,7 +215,7 @@ function rewriteShorthandGroup(error: Located, source: string): string | null {
 }
 
 /**
- * Decision 174: a `/` right after a class or id shorthand followed by a
+ * A `/` right after a class or id shorthand followed by a
  * non-identifier (`<div.w-1/2/>`) is Marko's tag-variable read (`2` is not a
  * valid tag variable, with a link out of the template). Say what the author
  * wrote instead: the class shorthand cannot hold it; use `class="…"`.

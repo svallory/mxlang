@@ -1,5 +1,5 @@
 /**
- * The callee-`Input` reader (decision 106), driven against real fixture
+ * The callee-`Input` reader, driven against real fixture
  * files on disk. Every test asserts the full returned object — shape,
  * cardinality, nested declarations and callee spans — not a fragment, so a
  * field 1b codes against cannot drift silently.
@@ -479,7 +479,7 @@ describe("readCalleeInput", () => {
     } satisfies CalleeInput);
   });
 
-  it("rejects renderable with attrs, with the decision-106 wording", () => {
+  it("rejects renderable with attrs", () => {
     const source = fixtureSource("invalid-renderable-attrs.ts");
     const { input } = readCalleeInput(
       namedTarget("Card"),
@@ -1712,9 +1712,9 @@ describe("readCalleeInput", () => {
     );
   });
 
-  it("decision 116: a value import routed to a dynamic tag still resolves its declared Input", () => {
+  it("a value import routed to a dynamic tag still resolves its declared Input", () => {
     // "./compile-callee" is a bare, extensionless specifier — not a
-    // `.marko`/`.mx` default import — so `lower.ts`'s decision-116 routing
+    // `.marko`/`.mx` default import — so `lower.ts`'s value-import routing
     // lowers `<Card>` as a dynamic tag (`ComponentTarget.kind: "dynamic"`),
     // not a direct `kind: "name"` call. `valueImportBinding` on that target
     // is what still lets `readCalleeInput` resolve `Card`'s real `Input`
@@ -1730,7 +1730,7 @@ describe("readCalleeInput", () => {
     ).not.toThrow();
   });
 
-  it("decision 116: a value import routed to a dynamic tag still reports a wrong-attribute diagnostic, naming the real tag", () => {
+  it("a value import routed to a dynamic tag still reports a wrong-attribute diagnostic, naming the real tag", () => {
     // Same routing as above; `<@header>` given twice violates the callee's
     // declared singular cardinality. The diagnostic must still name `Card`
     // (via `targetName`'s `valueImportBinding` fallback), not "dynamic tag" —
@@ -1745,9 +1745,9 @@ describe("readCalleeInput", () => {
     ).toThrowError("`<@header>` may appear at most once");
   });
 
-  it("decision 116: an authored dynamic tag stays untyped (no valueImportBinding to resolve)", () => {
+  it("an authored dynamic tag stays untyped (no valueImportBinding to resolve)", () => {
     // An author's own `<${Card}/>` is `kind: "dynamic"` with no
-    // `valueImportBinding` — decision 116 only sets that provenance flag for
+    // `valueImportBinding` — lowering sets that provenance flag only for
     // its own synthesized routing, never for hand-written dynamic-tag
     // syntax. `readCalleeInput` must fall back to `{ kind: "none" }`
     // (untyped) exactly as before, so an over-repeated declared singular

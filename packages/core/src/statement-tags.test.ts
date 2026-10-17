@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
-// Decision 168 / #395 r2: every translator declares the statement tags, a
+// #395 r2: every translator declares the statement tags, a
 // translator that does not is refused rather than papered over, and a statement
 // is checked the way Marko checks it.
 import { describe, expect, it } from "vitest";

@@ -4,14 +4,14 @@ import type { Attr, DelegatedTag, IrNode } from "../ir.ts";
 import { lowerFile, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * The Ash resource fixture (decision 131: "the mash resource example is the
- * host's first fixture"), copied from the mash plan's resource dialect
+ * The Ash resource fixture (the mash resource example is the
+ * host's first fixture), copied from the mash plan's resource dialect
  * section. It exercises the whole attribute vocabulary: concise indentation,
  * default attributes, string attributes, bare booleans, array expressions,
  * arrow functions, and one method shorthand. It has no text, `${}`, `<if>`,
  * `<for>`, `<const>`, statements or attribute tags.
  *
- * It is a `.mx` file, which no dialect claims (decision 212), so it parses
+ * It is a `.mx` file, which no dialect claims, so it parses
  * with MX's default row.
  */
 

@@ -54,7 +54,7 @@ function tree(source: string): Tag[] {
  * (present only on a claimed child) holds the authored spelling and the
  * pattern's named groups.
  */
-describe("wildcard-matched tags in the IR (decision 147)", () => {
+describe("wildcard-matched tags in the IR", () => {
   it("by reference: name is the canonical tag, alias.authored the authored one", () => {
     const src = '<attributes>\n  <title type="string"/>\n</attributes>\n';
     const [attributes] = tree(src);
@@ -108,7 +108,7 @@ describe("wildcard-matched tags in the IR (decision 147)", () => {
 });
 
 /**
- * One meaning of "built-in" (decision 147 addendum 2, decision 148): the
+ * One meaning of "built-in": the
  * names the entry point's declarations list in `builtinTags` (`object`) are
  * built-ins for a `children["*"]` wildcard exactly as they are for the
  * `defaultTag` check.

@@ -1,10 +1,10 @@
-// Decision 159: bundles `@marko/compiler`'s parse layer into
+// Bundles `@marko/compiler`'s parse layer into
 // `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to
 // MX's own template parser (`packages/parser/src/template/`), so a registry
 // install of `@mxlang/core` parses `.mx` with MX's rules and installs no npm
 // `htmljs-parser`. `src/marko-frontend.ts` loads the file; the main build
 // defines `MX_MARKO_FRONTEND` as its path. Deleted when the MX AST replaces
-// `@marko/compiler` (decision 158).
+// `@marko/compiler`.
 //
 // One CommonJS bundle, one entry exporting the compiler, its Babel and the
 // parser, so every `@marko/compiler/*` self-require inside the compiler lands
@@ -162,7 +162,7 @@ function notices(source: string): string {
   const sections = [
     "# Third-party code in marko-frontend.cjs",
     "",
-    "`marko-frontend.cjs` bundles the packages below (decision 159). `@marko/compiler`'s",
+    "`marko-frontend.cjs` bundles the packages below. `@marko/compiler`'s",
     "own `dist/babel.js` embeds Babel 7 and its helpers (`@babel/*`, `@jridgewell/*`,",
     "`convert-source-map`, `debug`, `gensync`, `json5`, `semver` and others), each",
     "under its own licence (MIT, ISC or BSD-2-Clause), as `@marko/compiler`",

@@ -157,7 +157,7 @@ function fails(
   }
 }
 
-describe("closed authored children contracts (decision 138 E2)", () => {
+describe("closed authored children contracts", () => {
   it("keeps children open when omitted and closes an empty declaration", () => {
     expect(() =>
       compile("<box><item/>text</box>", { box: passthrough }),

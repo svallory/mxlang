@@ -216,7 +216,7 @@ export function checkReservedTemplate(ctx: Ctx, body: readonly Node[]): void {
  * render (or its redirect handler), so `return Astro.redirect("/")` is
  * ordinary Astro. Marko statement tags and every other caller's source are a
  * plain module, where the default (off) keeps `return` the syntax error it
- * should be. Host-agnostic on purpose (decision 126): the host states the
+ * should be. Host-agnostic on purpose: the host states the
  * fact about its own grammar; core does not know what Astro is.
  */
 export interface CheckReservedSourceOptions {

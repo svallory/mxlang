@@ -1,5 +1,5 @@
 /**
- * The emitter interface and its driver (decision 79).
+ * The emitter interface and its driver.
  *
  * A host implements `Emitter<Out>` — one method per IR kind — and `drive()`
  * walks the IR calling them. Nothing here knows what `Out` is: the vanilla
@@ -14,7 +14,7 @@
  * body's bindings (so a host must not re-shadow), and `Hoisted` nodes must
  * precede the construct that produced them. Driving the walk once here means a
  * second host inherits those rules instead of re-deriving them — which is the
- * concrete payoff decision 79 predicted when it said Solid becomes "emitter
+ * concrete payoff of Solid becoming "emitter
  * number three".
  *
  * A host that needs to render a child list itself — a component's `content`

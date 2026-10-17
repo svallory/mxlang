@@ -115,8 +115,8 @@ describe("reserved generated-code bindings", () => {
   });
 
   it("reports malformed statement text as a syntax error, not a reserved binding", () => {
-    // A statement's text is code the parser no longer reads as attributes
-    // (decision 168), so a malformed one is no longer a Marko syntax error here:
+    // A statement's text is code the parser no longer reads as attributes,
+    // so a malformed one is no longer a Marko syntax error here:
     // it passes through to TypeScript, as on html. This check must not turn it
     // into a reserved-binding rejection.
     // Now it is Marko's own positioned syntax error (#395 r2), not a reserved-

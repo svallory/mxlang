@@ -1,7 +1,7 @@
 /**
  * Core's tag table: what a tag name means to the parser and to lowering, built
  * from a translator's taglibs and a target's native elements, with no
- * `@marko/compiler` lookup (decision 197, PR 6 slice S3a).
+ * `@marko/compiler` lookup (PR 6 slice S3a).
  *
  * It reproduces the merge `@marko/compiler`'s `taglib.buildLookup` performed
  * for the taglibs MX registers, which `tag-table.test.ts` pins against the

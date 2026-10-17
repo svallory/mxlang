@@ -1,5 +1,5 @@
 /**
- * `coreBabel()` (decision 197, PR 6 slice S1) replaced `@marko/compiler`'s
+ * `coreBabel()` (PR 6 slice S1) replaced `@marko/compiler`'s
  * bundled Babel. The generator is part of the byte contract (`printExpression`
  * reaches emitted code through `ctx.generate`), so this file proves the stock
  * generator prints every payload of the repo's `.mx` corpus exactly as

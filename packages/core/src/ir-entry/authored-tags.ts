@@ -192,8 +192,8 @@ export function scanAuthoredTags(
             : undefined;
       const unnamed = kind === "unnamed";
       const name = unnamed ? unnamedName(scope) : written;
-      // A tag the enclosing contract's `children["*"]` claims is known
-      // (decision 147); the walk carries the contract in force, as core's does.
+      // A tag the enclosing contract's `children["*"]` claims is known;
+      // the walk carries the contract in force, as core's does.
       // No `lookup`: this pass has no target taglib, and the structural names
       // it would hold are RESERVED already.
       const claimed =

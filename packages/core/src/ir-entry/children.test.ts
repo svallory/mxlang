@@ -6,7 +6,7 @@ const customTags: Record<string, CustomTag> = {
   resource: { children: { item: { required: true, repeatable: true } } },
 };
 
-describe("authored children under delegate-everything declarations (decision 138 E2)", () => {
+describe("authored children under delegate-everything declarations", () => {
   it("enforces a children-only contract through lowerSource, with no partial IR", () => {
     const valid = lowerSource(
       "<resource><item/><item/></resource>",

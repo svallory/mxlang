@@ -1,4 +1,4 @@
-// The tag rules presets (decision 204) against the tables the targets build
+// The tag rules presets against the tables the targets build
 // today: `html` is the html target's table, `markup` the JSX/Solid/Astro/
 // Angular hosts' plus open-tag-only `<const>`/`<return>`, and `none` knows
 // only the module statements and those two.
@@ -79,7 +79,7 @@ describe("tag rules presets", () => {
 
   it("`markup`'s statement entries are the hosts' statement taglib", () => {
     // `STATEMENT_TAGLIB` is what `compileSource` registers for a host with
-    // no taglib of its own (decision 168): the JSX hosts' statement set.
+    // no taglib of its own: the JSX hosts' statement set.
     const hosts = Object.keys(STATEMENT_TAGLIB as object)
       .map((key) => key.slice(1, -1))
       .sort();

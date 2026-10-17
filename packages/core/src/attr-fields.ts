@@ -57,7 +57,7 @@ export function isMethodAttr(attr: Node): boolean {
  * The attribute's value as Marko held it, a Babel node:
  *
  * - a valueless attribute is Marko's synthesized `true` (no position);
- * - an `MxExpression` is its payload (`payloadOf`: the decision-182 trigger
+ * - an `MxExpression` is its payload (`payloadOf`: the trigger
  *   seam, the parse-error guard);
  * - an `MxMethod` is the `FunctionExpression` Marko built for it
  *   (`methodFunctionOf`).
@@ -75,8 +75,8 @@ export function attrValueOf(ctx: Ctx, attr: Node): Node {
 /**
  * The `FunctionExpression` Marko's parser builds for a method attribute
  * (`@marko/compiler`'s `parseParams`/`parseExpression` over the method's
- * parts), rebuilt from the `MxMethod` so `Expr.node` stays the Babel payload
- * (decision 166 addendum 3). Measured against Marko 5.42.10:
+ * parts), rebuilt from the `MxMethod` so `Expr.node` stays the Babel payload.
+ * Measured against Marko 5.42.10:
  *
  * - its `loc` runs from the method's start (`async` when written, else the
  *   `(`) to after the closing `}`, line and column only;

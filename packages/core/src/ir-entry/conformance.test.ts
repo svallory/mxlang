@@ -69,7 +69,7 @@ const INTENDED: Record<
   string,
   { pattern: RegExp; cases: string[]; strictOnly?: boolean }
 > = {
-  // decision 54: MX has no scriptlets (`$ stmt` is refused)
+  // MX has no scriptlets (`$ stmt` is refused)
   scriptlets: {
     pattern: /scriptlets \(/,
     cases: [
@@ -114,13 +114,13 @@ const INTENDED: Record<
       "script-with-strings",
     ],
   },
-  // decision 139: non-tag prologue syntax (CDATA) is refused at the construct
+  // Non-tag prologue syntax (CDATA) is refused at the construct
   cdata: {
     pattern: /CDATA/,
     cases: ["cdata", "cdata-2", "cdata-pos", "mixed-cdata"],
   },
   // a doctype means nothing in a data file (checks.ts); same group of non-tag
-  // prologue syntax as CDATA: decision 139 addendum 2026-10-09
+  // prologue syntax as CDATA
   doctype: {
     pattern: /doctype/,
     cases: [
@@ -131,12 +131,12 @@ const INTENDED: Record<
       "var",
     ],
   },
-  // decision 139: an XML declaration or processing instruction is refused
+  // An XML declaration or processing instruction is refused
   xmlDeclaration: {
     pattern: /XML declaration/,
     cases: ["declaration", "xml-declaration", "xml-declaration-ill-formed"],
   },
-  // decision 131 addendum, ruling 3: a dynamic tag has no name in a static tree
+  // a dynamic tag has no name in a static tree
   dynamicTag: {
     pattern: /dynamic tag/,
     cases: [
@@ -152,7 +152,7 @@ const INTENDED: Record<
       "tag-name-expression-simple-empty-close",
     ],
   },
-  // decision 131 addendum, ruling 3: a tag variable binds without evaluating.
+  // a tag variable binds without evaluating.
   // tag-var-declaration also carries Marko's own `foo + 1 is not a valid tag
   // variable` (Marko refuses `<let/foo + 1/>` too); both match this pattern.
   tagVariable: {
@@ -186,7 +186,7 @@ const INTENDED: Record<
     pattern: /^Unexpected token(, expected ",")?$/,
     cases: ["atom in expression", "mesh-invoice", "whole-value atom"],
   },
-  // decision 172 (Marko behaviour is the default): a tag with no argument
+  // Marko behaviour is the default: a tag with no argument
   // contract takes none, as in stock Marko
   tagArguments: {
     pattern: /Tag does not support arguments/,
@@ -197,7 +197,7 @@ const INTENDED: Record<
       "argument-tag-nested-parens",
     ],
   },
-  // decision 172 (Marko behaviour is the default): not an attribute name;
+  // Marko behaviour is the default: not an attribute name;
   // stock Marko refuses each
   invalidAttributeName: {
     pattern: /Invalid attribute name/,
@@ -212,7 +212,7 @@ const INTENDED: Record<
       "unary-as-member-expression",
     ],
   },
-  // decision 172 (Marko behaviour is the default), the JS string rule: a
+  // Marko behaviour is the default, the JS string rule: a
   // newline inside a quoted string is a syntax error; stock Marko refuses it
   newlineInString: {
     pattern: /Unterminated string constant/,
@@ -250,7 +250,7 @@ const INTENDED: Record<
 const KNOWN_GAPS: Record<string, string[]> = {
   // Operators beside an attribute value across spaces or newlines, and
   // non-literal or undelimited values: "Expected a single expression".
-  // htmljs-parser keeps one expression; decision 146 covers only `x .y`.
+  // htmljs-parser keeps one expression; the sugar rule covers only `x .y`.
   "attribute-operator-spacing": [
     "attr-non-literal",
     "attr-operators-newline-after",
@@ -267,8 +267,8 @@ const KNOWN_GAPS: Record<string, string[]> = {
  * void tags (`<img>`), raw-text `<script>`/`<style>`, an html-comment tag and
  * a regexp attribute ("Missing ending", "closing X does not match"). Not a
  * bug: `none` switches the HTML parse rules (openTagOnly, text) off on
- * purpose (decision 131 addendum, ruling 1), so these bodies parse as tags.
- * The default, strict rules (decision 212 item 8) parse them all.
+ * purpose, so these bodies parse as tags.
+ * The default, strict rules parse them all.
  */
 const NONE_GAPS: Record<string, string[]> = {
   "open-tag-only-and-raw-text": [

@@ -56,7 +56,7 @@ function lookupRule(
   throw new Error("expected createTargetLookup to throw");
 }
 
-describe("defaultTag (decision 145)", () => {
+describe("defaultTag", () => {
   it("is required on a target", () => {
     const { defaultTag: _omitted, ...rest } = target() as unknown as Record<
       string,
@@ -665,7 +665,7 @@ describe("createTargetLookup", () => {
     });
   });
 
-  describe("distinctness (decision 132)", () => {
+  describe("distinctness", () => {
     it("rejects two targets with the same name", () => {
       expect(lookupRule([target(), target({ packageName: "@t/other" })])).toBe(
         "duplicate-target",

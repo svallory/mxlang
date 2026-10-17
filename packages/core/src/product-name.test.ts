@@ -5,7 +5,7 @@ import type { HostDeclarations } from "./declarations.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 /**
- * The `productName` compile option (decision 183): a language packaged on top
+ * The `productName` compile option: a language packaged on top
  * of MX passes its name, and every diagnostic where core's own wording says
  * "MX" says that name instead. Unset, the default, every message is
  * byte-identical to before the option existed.
@@ -34,7 +34,7 @@ function fails(source: string, productName?: string): TranslateError {
   throw new Error("expected a TranslateError");
 }
 
-describe("productName (decision 183)", () => {
+describe("productName", () => {
   it("defaults to MX, byte-identical to before the option", () => {
     expect(fails("<div *foo/>").message).toContain("no meaning in MX");
   });

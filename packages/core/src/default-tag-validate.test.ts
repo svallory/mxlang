@@ -156,7 +156,7 @@ describe("validateDefaultTag when the custom tags are unknown (round 3)", () => 
   });
 });
 
-describe("validateDefaultTag: a native custom element (decision 145, round 2 addition)", () => {
+describe("validateDefaultTag: a native custom element", () => {
   const native = (name: string) => !/^[A-Z]/.test(name);
   const scope = { lookup, isElement: () => false, isNativeElement: native };
 

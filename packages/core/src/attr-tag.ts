@@ -1,7 +1,7 @@
 import type { AttributeTag, AttributeTagNode, AttrTagProp } from "./ir.ts";
 
 /**
- * Decision 108's shape for a property on an untyped or unresolved callee.
+ * The shape of a property on an untyped or unresolved callee.
  * One attributed occurrence makes every occurrence data-shaped so the prop
  * has one stable value shape across branches and loops.
  */
@@ -179,6 +179,6 @@ export type AttrTagOf<C extends AttrTagConfig, R> = C["as"] extends "renderable"
     };
 
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: matches the public AttrTag default
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, unknown>;

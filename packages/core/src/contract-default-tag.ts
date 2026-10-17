@@ -128,7 +128,7 @@ function lookupDeclared(
   return undefined;
 }
 
-/** A parent's own contract: a wildcard child's matched one (decision 147), else its registration. */
+/** A parent's own contract: a wildcard child's matched one, else its registration. */
 function contractOf(
   parent: DefaultTagParent,
   customTags: Readonly<Record<string, CustomTag>> | undefined,

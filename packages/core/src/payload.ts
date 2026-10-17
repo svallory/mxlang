@@ -22,7 +22,7 @@ import { isTriggerLowered } from "./triggers.ts";
 /**
  * A container's Babel payload, checked in this order:
  *
- * 1. An expression trigger inside (decision 182; ast §4.4) that the trigger
+ * 1. An expression trigger inside (ast §4.4) that the trigger
  *    pass did not lower (`lowerTriggers`: no registered syntax, or a
  *    `{ call }` with no `lowerTrigger`) is refused at the first one, in the
  *    table check's wording.
@@ -39,7 +39,7 @@ export function payloadOf(container: Node): Node {
     (each: Node) => !isTriggerLowered(each),
   );
   if (trigger) {
-    // Decision 182 seam: the trigger pass lowers what it can reach.
+    // The trigger pass lowers what it can reach.
     raise(
       NO_LOWERING_CODE,
       `\`${trigger.id}\` trigger has no lowering yet`,

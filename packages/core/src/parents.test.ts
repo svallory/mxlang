@@ -95,7 +95,7 @@ const cases = [
   ["recursion in own template", "<attribute/>", "#root", "attribute.mx"],
 ] as const;
 
-describe("authored parents step 0 measurement (decision 138 E3)", () => {
+describe("authored parents step 0 measurement", () => {
   it.each(cases)(
     "measures %s before enforcing parents",
     (label, source, parent, basename) => {
@@ -189,7 +189,7 @@ const restricted: Record<string, CustomTag> = {
   attribute: { ...passthrough, parents: ["attributes"] },
 };
 
-describe("allowed authored parents (decision 138 E3)", () => {
+describe("allowed authored parents", () => {
   it("keeps omitted parents open and rejects an empty list", () => {
     expect(() =>
       compile("<div><attribute/></div><attribute/>", {

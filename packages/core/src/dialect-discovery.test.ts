@@ -1,5 +1,5 @@
 /**
- * Dialect discovery and routing (decision 212 items 1 to 3 and 5): a
+ * Dialect discovery and routing: a
  * dialect package's `package.json#mx.dialect`, discovery among the project's
  * direct dependencies only, routing by the longest claimed extension, the
  * clash between two dialects and `mx.extensions`, which settles it. Loading

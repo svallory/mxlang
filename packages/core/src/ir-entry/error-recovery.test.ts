@@ -10,7 +10,7 @@ const SOURCE = [
   "",
 ].join("\n");
 
-describe("lowerSource consumes core's error list (decision 162)", () => {
+describe("lowerSource consumes core's error list", () => {
   it("reports each of three independent errors once, in position order", () => {
     const { ir, diagnostics } = lowerSource(SOURCE, "/data/page.mx");
     expect(ir).toBeUndefined();

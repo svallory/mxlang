@@ -51,7 +51,7 @@ it("exports helpers for a host to specialize AttrTag", () => {
 });
 
 it("keeps core AttrTag to one public type parameter", () => {
-  // @ts-expect-error decision 106 removed the temporary Renderable parameter
+  // @ts-expect-error the temporary Renderable parameter is gone
   type TwoParameterAttrTag = AttrTag<EmptyConfig, string>;
   expectTypeOf<TwoParameterAttrTag>().toMatchTypeOf<unknown>();
 });

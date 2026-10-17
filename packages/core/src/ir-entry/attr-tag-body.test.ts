@@ -115,7 +115,7 @@ describe("body content beside attribute tags", () => {
     ]);
   });
 
-  it("structural: reject reports text beside an attribute tag; a comment stays a child comment (decision 131 addendum 5)", () => {
+  it("structural: reject reports text beside an attribute tag; a comment stays a child comment", () => {
     const text = lowerSource(HTML.text, "/body.mx", { structural: "reject" });
     expect(text.ir).toBeUndefined();
     expect(text.diagnostics[0]).toMatchObject({ line: 2, column: 2 });

@@ -1,5 +1,5 @@
 /**
- * Test support: a project that uses a dialect the way decision 212 has it.
+ * Test support: a project that uses a dialect the way dialect discovery has it.
  * The project's `package.json` lists a dialect package as a direct
  * dependency, and that package's own `package.json#mx.dialect` declares the
  * dialect. Not exported from the package.

@@ -95,7 +95,7 @@ const cases = [
   ["if in for", "<for|x| of=input.xs><if=x><item/></if></for>", 0, Infinity],
 ] as const;
 
-describe("attribute-tag contracts step 0 (decision 138 E4)", () => {
+describe("attribute-tag contracts step 0", () => {
   it.each(cases)(
     "measures authored children in @row: %s",
     (label, body, min, max) => {
@@ -153,7 +153,7 @@ const row: CustomTagAttributeTag = {
 
 const owner = "`<card>`: `<@row>`: ";
 
-describe("recursive attribute-tag contracts (decision 138 E4)", () => {
+describe("recursive attribute-tag contracts", () => {
   it("accepts authored attributes without rewriting them", () => {
     const call = compile(
       '<card><@row n=1 mode="small" enabled expr=input.x literal=[1]/></card>',
@@ -503,7 +503,7 @@ describe("E1 vocabulary on attribute-tag attributes", () => {
   });
 });
 
-describe("children on attribute tags (decision 138 E4, 16:50 ruling)", () => {
+describe("children on attribute tags", () => {
   it("rejects an unlisted child before its transform can run; first error only", () => {
     const bad = vi.fn(() => []);
     expect(() =>

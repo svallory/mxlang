@@ -2,7 +2,7 @@
  * Policy resolution (brief §2, `host-diagnostics.md` §3): which target a file
  * compiles through, plus that target's strictness.
  *
- * **Unstable contract (decisions 129 and 132).** `mx.target` selects a
+ * **Unstable contract.** `mx.target` selects a
  * registered target directly; `mx.host` selects its host's default target.
  * If both resolve, they must agree. A mismatch is an error, with the
  * explicit target handed on so later diagnostics are not drowned.
@@ -54,7 +54,7 @@
  * one set of branch tests. Unlike the rest of this package it touches
  * `node:fs`, which is why it is its own module rather than part of `core.ts`.
  *
- * **No target and no host is named here** (decision 126). The lookup is a
+ * **No target and no host is named here**. The lookup is a
  * required parameter on every entry point: a caller that forgot it gets a
  * type error, not a silently closed-over list.
  */
@@ -104,7 +104,7 @@ export interface TargetPolicy {
    */
   descriptor?: TargetDescriptor;
   /**
-   * The `mx.<target>.defaultTag` the package configures (decision 145), when
+   * The `mx.<target>.defaultTag` the package configures, when
    * it is a usable string. A registry that knows the target's base target
    * (`TargetDescriptor.builtOn`) falls back to the base's own key
    * (`mx.<base>.defaultTag`) when the target's is absent or rejected, and
@@ -281,8 +281,7 @@ function nearestHostValue(
  * `valid hosts: …` for the unknown-`mx.host` warning: every current value
  * the lookup accepts, plus one clause per deprecated value naming the target
  * it spells. For the built-in lookup this reproduces the closed list the
- * resolver used to hold, in the same order, so the message text is unchanged
- * (decision 07 Q9).
+ * resolver used to hold, in the same order, so the message text is unchanged.
  */
 function validHostsClause(lookup: TargetLookup): string {
   const { current, deprecated } = hostValuesByDeprecation(lookup);
@@ -544,7 +543,7 @@ const verdicts = new WeakMap<TargetDescriptor, Map<string, string | null>>();
  * Why `descriptor` cannot join `lookup`, or `undefined` if it can. A built-in
  * host is refused for now (TODO `third-party-join-builtin-host`): it is not
  * wired for a loaded target, and silently accepting it would be a silent
- * no-op. A file-kind segment must be the host's own name (decisions 136, 148),
+ * no-op. A file-kind segment must be the host's own name,
  * so a loaded host cannot take another host's `.<name>.mx`. The rest is the set
  * rules of `createTargetLookup`, a file-kind segment another host owns included. The verdict is cached per descriptor and per shape
  * of lookup, as resolution runs per file and per keystroke.

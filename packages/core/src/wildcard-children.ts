@@ -1,5 +1,5 @@
 /**
- * Wildcard children (decision 147, ADR 147): a contract's `children["*"]`.
+ * Wildcard children: a contract's `children["*"]`.
  *
  * The pure half: reading a `children` record into its explicit names and its
  * ordered `"*"` entries, compiling an entry's pattern, and matching a name.
@@ -153,7 +153,7 @@ export function matchAttributeTagWildcard(
 /**
  * The declaration an authored attribute tag validates against: its explicit
  * `attributeTags` entry, else the first `"*"` entry whose pattern matches
- * (decision 147 for attribute tags). Undefined, the name is unknown.
+ * (for attribute tags). Undefined, the name is unknown.
  */
 export function attributeTagDeclarationFor(
   attributeTags: CustomTagAttributeTags | undefined,

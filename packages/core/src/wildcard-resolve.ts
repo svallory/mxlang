@@ -1,5 +1,5 @@
 /**
- * Which authored tags a parent's `children["*"]` claims (decision 147).
+ * Which authored tags a parent's `children["*"]` claims.
  *
  * Runs inside `resolveUnnamedTags`'s top-down walk over the Marko tree, so a
  * child's match is known before anything under it is read: an unnamed tag
@@ -60,7 +60,7 @@ export interface WildcardMatch {
 
 /**
  * The names core itself consumes, which no wildcard entry may claim. "Unknown"
- * is target-neutral (decision 147): no core structural name, no core-owned
+ * is target-neutral: no core structural name, no core-owned
  * custom tag, no `customTags` entry. A host's own claims and native elements
  * are not consulted, which is why a wildcard can only fire inside a contract
  * parent.
@@ -104,7 +104,7 @@ function isBuiltin(name: string, ctx: WildcardContext): boolean {
 }
 
 /**
- * Why a parent's `"*"` may not claim `name` (decision 147, target-neutral), or
+ * Why a parent's `"*"` may not claim `name` (target-neutral), or
  * `undefined` when no rung of the target resolves it: not a core structural
  * name, not a core-owned or registered custom tag, not a built-in of the
  * target. A native element is eligible: inside a contract parent the contract

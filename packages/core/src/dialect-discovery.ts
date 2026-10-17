@@ -1,5 +1,5 @@
 /**
- * Dialect discovery and routing (decision 212). A dialect declares itself in
+ * Dialect discovery and routing. A dialect declares itself in
  * its own `package.json` (`mx.dialect`: `id`, `name`, `extensions`,
  * `module`); a project uses the dialects among its direct dependencies, and
  * a file goes to the dialect that claims its extension. Nothing here runs a
@@ -640,7 +640,7 @@ function configKeyAt(
 
 /**
  * The project's `mx.extensions`, from MX's config: which dialect handles which extension, the
- * one dialect fact a user may override (decision 212 item 5). Each key is an
+ * one dialect fact a user may override. Each key is an
  * extension, each value a discovered dialect's `id`. A reserved extension
  * (see {@link reservedExtensionReason}) cannot be routed.
  */
@@ -730,11 +730,11 @@ function rejectHostClaims(
 const DIALECT_OWNED = ["tagRules", "name"] as const;
 
 /**
- * MX's config setting what belongs to a dialect (decision 212 item 5 and its
- * addendum item 1): `mx.tagRules` at the top level, or `tagRules` or `name`
- * under a dialect's id, is an error at its key. Users override only which
- * dialect handles which extension (`mx.extensions`); everything else under
- * a dialect's id is the dialect's own settings, passed on untouched.
+ * MX's config setting what belongs to a dialect: `mx.tagRules` at the top
+ * level, or `tagRules` or `name` under a dialect's id, is an error at its key.
+ * Users override only which dialect handles which extension (`mx.extensions`);
+ * everything else under a dialect's id is the dialect's own settings, passed
+ * on untouched.
  */
 function rejectDialectOwnedConfig(
   source: MxConfigSource | undefined,

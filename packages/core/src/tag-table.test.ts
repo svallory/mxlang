@@ -1,4 +1,4 @@
-// Core's tag table (decision 197, PR 6 slice S3a). S3a pinned it against the
+// Core's tag table (PR 6 slice S3a). S3a pinned it against the
 // `@marko/compiler` lookup it replaced, live, for every translator shape MX
 // builds. S3b deleted that lookup (`buildMarkoLookup`), so the comparison is
 // frozen in `tag-table.expected.json`: for each shape, every name whose entry

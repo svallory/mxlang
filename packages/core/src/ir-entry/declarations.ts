@@ -1,6 +1,6 @@
 /**
- * The `HostDeclarations` the IR entry point (`lowerSource`) lowers under
- * (decision 204): delegate everything, so every non-structural tag arrives in
+ * The `HostDeclarations` the IR entry point (`lowerSource`) lowers under:
+ * delegate everything, so every non-structural tag arrives in
  * the IR as a `DelegatedTag` and the checks (`checks.ts`) read it.
  *
  * What the declarations intercept *before* delegation:
@@ -46,14 +46,14 @@ import {
 import { reservedNameMessage } from "../tag-names.ts";
 import type { NativeTags } from "../tag-table.ts";
 
-/** The names no tag may use under the entry point (decision 131 addendum, item 2). */
+/** The names no tag may use under the entry point. */
 export { RESERVED_NAMES, reservedNameMessage } from "../tag-names.ts";
 
 /**
- * The entry point's built-in tag: the anonymous node (decision 145,
- * addendum 2). The unnamed tag (`<#id>`, `<.class>`) is this tag unless a
- * `defaultTag` says otherwise. It is always known, has no contract of its own
- * and carries the shorthand's `id`/`class` as ordinary attributes.
+ * The entry point's built-in tag: the anonymous node. The unnamed tag
+ * (`<#id>`, `<.class>`) is this tag unless a `defaultTag` says otherwise. It
+ * is always known, has no contract of its own and carries the shorthand's
+ * `id`/`class` as ordinary attributes.
  */
 export const DEFAULT_TAG = "object";
 
@@ -105,7 +105,7 @@ export function entryDeclarations(
       nativeTags,
       attrTags: 2,
       builtinTags: BUILTIN_TAGS,
-      // The ladder (decision 145): the parent's contract `defaultTag`, then
+      // The ladder: the parent's contract `defaultTag`, then
       // the caller's `defaultTag`, then the built-in `object`.
       resolveDefaultTag: (_node, parents, context) =>
         contractDefaultTag(parents, context, BUILTIN_TAGS) ??

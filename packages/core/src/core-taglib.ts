@@ -14,7 +14,7 @@ export const CORE_TAGLIB_ID = "mx-translator-core";
 
 /**
  * Only the statement entries of the core taglib (`import`, `static`, `export`,
- * `client`, `server`, `class`): what every parse registers (decision 168), so
+ * `client`, `server`, `class`): what every parse registers, so
  * their text is code on every target. The rest of the core taglib (`if`,
  * `for`, `script`, ...) carries semantics a host opts into, so a host adds
  * the whole `CORE_TAGLIB` itself (html does).
@@ -62,7 +62,7 @@ interface TaglibCarrier {
 }
 
 /**
- * `translator` with core's statement tags declared (decision 168): the one
+ * `translator` with core's statement tags declared: the one
  * generic point every translator passes before Marko builds a lookup from it,
  * so a translator not built with `createTranslator` (a third-party target's)
  * still parses `static`, `import`, `export`, `client`, `server` and `class` as

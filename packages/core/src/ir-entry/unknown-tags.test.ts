@@ -277,7 +277,7 @@ describe('unknownTags: "reject"', () => {
           { message: "`<x>` is not a known tag", line: 4 },
         ],
       ],
-      // Core recovers per tag (decision 162): the `<define>` after the
+      // Core recovers per tag: the `<define>` after the
       // `<attributes>` error is reached and reports its own.
       ["<define/>\n", [attributes, { message: "<define>", line: 3 }]],
     ];
@@ -639,7 +639,7 @@ describe("a colon in a tag name, in the parse-only scan", () => {
   });
 });
 
-describe("wildcard children (decision 147) under unknownTags: reject", () => {
+describe("wildcard children under unknownTags: reject", () => {
   const tags: Record<string, CustomTag> = {
     attribute: { attributes: { value: { type: "string" } } },
     resource: {

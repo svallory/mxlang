@@ -13,9 +13,9 @@
  * error kit use core's own Babel (`babel.ts`, slice S1), and `markoBabel()`
  * is left only for the differential in `babel.test.ts`. Nothing calls
  * `compileSync` (`parseFragmentNative` delegates to `parseFragment`). The
- * whole file goes with the Marko readers in PR 6 (decision 197, slice S5).
+ * whole file goes with the Marko readers in PR 6 (slice S5).
  *
- * Decision 159. Until then core's build bundles that layer into
+ * Until then core's build bundles that layer into
  * `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to
  * MX's own template parser (`packages/parser/src/template/`). The build
  * defines `MX_MARKO_FRONTEND` as that file's path relative to
@@ -122,7 +122,7 @@ export function markoBabel(): MarkoBabel {
 }
 
 /**
- * MX's own template parser with its syntax-table API (decision 182):
+ * MX's own template parser with its syntax-table API:
  * `createParser(handlers, { syntax })`, `validateSyntaxTable`,
  * `DEFAULT_SYNTAX`. Always `@mxlang/parser`, imported through its `./lexer`
  * export (a static ESM import; the export's curated `public.d.ts` types are
@@ -144,7 +144,7 @@ export function mxTemplateParser(): MxTemplateParser {
   return templateParser as unknown as MxTemplateParser;
 }
 
-/** The slice of the MX template parser's entry that core uses (decision 182). */
+/** The slice of the MX template parser's entry that core uses. */
 export interface MxTemplateParser {
   createParser(
     handlers: Record<string, unknown>,

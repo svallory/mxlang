@@ -1,7 +1,7 @@
 /**
- * A registered set for tests that need one (decisions 129 and 132; unstable).
+ * A registered set for tests that need one (unstable).
  *
- * Core names no target and no host (decision 126), so a test that needs a
+ * Core names no target and no host, so a test that needs a
  * `TargetLookup` must bring its own. This is that own: invented names, a
  * shape borrowed from the built-in set (a hostless target carrying a
  * deprecated legacy `mx.host` value, hosted targets, one of them with a file

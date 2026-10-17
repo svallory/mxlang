@@ -67,7 +67,7 @@ describe("declaredBinding", () => {
   });
 });
 
-describe("decision 174: shorthand parse errors", () => {
+describe("shorthand parse errors", () => {
   const TAG_VARIABLE =
     "`2` is not a valid [tag variable](https://markojs.com/docs/reference/language#tag-variables); use a JavaScript identifier or destructuring pattern.";
 

@@ -1,5 +1,5 @@
 /**
- * What a host *declares*, as opposed to what it *emits* (decision 79).
+ * What a host *declares*, as opposed to what it *emits*.
  *
  * Before the IR existed, one `Policy` object carried both: `isComponent` and
  * the `tags` table (queries the walk asks) sat beside `emitComponent` and
@@ -85,7 +85,7 @@ export interface DefaultTagContext {
 export interface HostDeclarations {
   /**
    * Whether a parent contract's `defaultTag` may decide the unnamed tag on
-   * this host (decision 145). Absent means yes; `false` makes the rung
+   * this host. Absent means yes; `false` makes the rung
    * unavailable and a contract declaring one a registration error.
    */
   allowContractDefaultTag?: boolean;
@@ -130,12 +130,12 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
-   * Whether this host implements decision 160: a `<define>` called with
+   * Whether this host implements the `<define>` call rule: a `<define>` called with
    * attributes, spreads, attribute tags or a body passes ONE object of them to
    * the define's first param (Marko 6.4.4's shape), so `|p|` and `|{ n }|`
-   * both read it. Decision 160 is a language rule for every target; this flag
+   * both read it. That rule holds for every target; this flag
    * only marks the hosts that already implement it, and is removed when every
-   * host implements decision 160 (tracked by TODOs `define-call-attrs-solid`
+   * host implements it (tracked by TODOs `define-call-attrs-solid`
    * and `define-call-attrs-angular`). Core uses it to warn about a multi-param
    * define called that way (only the first param receives anything) on those
    * hosts alone; a host behind on the rule keeps its older per-param lookup
@@ -178,7 +178,7 @@ export interface HostDeclarations {
   isDelegatedTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
    * Whether this host's dynamic-tag dispatch reaches a returning unit's
-   * render path (decision 155's model: the compiled unit exposes `.render`,
+   * render path (the compiled unit exposes `.render`,
    * which hands back the `{ value, output }` pair), so a `/var` on a dynamic
    * tag binds at run time instead of being refused. Absent or false, core
    * refuses the binding at the `/var` — never a silent drop.
@@ -193,7 +193,7 @@ export interface HostDeclarations {
    * decision; the original Marko node is deliberately absent from `DelegatedTag`,
    * so emission cannot fall back to walking parser nodes.
    *
-   * Also the seam decision 80's user-tag macros need: a user-defined tag with
+   * Also the seam a user-tag macro needs: a user-defined tag with
    * compile-time meaning hands its resolved form to every host through this
    * channel, since the core cannot know what the macro decided.
    */
@@ -294,19 +294,18 @@ export interface HostDeclarations {
    * mechanism). Return the absolute path of the tag's template and the core
    * mints a binding, adds `import <binding> from "<path relative to the
    * file>"` to the module and sets `binding` on the `Component` target so the
-   * emitter calls it. A `.marko` path is refused (decision 172).
+   * emitter calls it. A `.marko` path is refused.
    *
    * A lowercase tag one of the translator's taglibs registers is asked too
-   * when an `import` or `<define>` of the same name is in scope (decision 164
-   * addendum 1): the tag still calls the module named here, never the
-   * binding, and its `Input`, attribute tags and `/var` are read from that
-   * module.
+   * when an `import` or `<define>` of the same name is in scope: the tag still
+   * calls the module named here, never the binding, and its `Input`, attribute
+   * tags and `/var` are read from that module.
    *
    * `undefined` (and leaving the hook out) means "nothing to import": the
    * call keeps its bare `name`, which is what a host that resolves the name
    * some other way needs. For a tag a taglib registers it is an error
    * instead (the tag has no template MX can call). No built-in target
-   * implements it since a `marko.json` stopped being read (decision 197).
+   * implements it since a `marko.json` stopped being read.
    */
   resolveDiscoveredTagModule?(name: string, ctx: Ctx): string | undefined;
   /**

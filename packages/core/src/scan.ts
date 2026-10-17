@@ -7,7 +7,7 @@
  * explicitly named directories carrying directory-level defaults. The result
  * is the `customTags` map every host, loader, plugin and the language server
  * already accept (P1) — discovery is the only thing this module adds.
- * `mx.contracts` adds package-level declaration maps (decision 142), evaluated
+ * `mx.contracts` adds package-level declaration maps, evaluated
  * eagerly on a cache miss to learn their names and parser options. Sidecars
  * retain the static/lazy loading behavior described below.
  *
@@ -293,8 +293,8 @@ function routeOf(
  * A file-kind segment is known to a lookup when a registered target declares
  * a host module file kind with that segment: `.solid.mx` (the Solid host),
  * `.ng.mx` (the Angular host's per-region file kind) and `.astro.mx` (the
- * Astro host's template file kind, decision 134) for the built-in lookup.
- * The closed list core used to hold is gone (decision 126): the lookup
+ * Astro host's template file kind) for the built-in lookup.
+ * The closed list core used to hold is gone: the lookup
  * answers, and core holds no segment of any host's name.
  */
 
@@ -337,7 +337,7 @@ export function hostModuleSegment(
  * `scanCustomTags` and `discoverProjectTags` cannot drift on the rule.
  *
  * A `<base>.<word>.mx` file name under `tags/` is never a callable tag
- * (decision 137, design note §5.1 rule (d)): the concise syntax `x.ng` and
+ * (design note §5.1 rule (d)): the concise syntax `x.ng` and
  * the tag form `<x.ng/>` both parse as tag `x` with shorthand class `ng`, so
  * no syntax can reach such an entry and indexing it would create a dead tag.
  * Two messages, both positional at the file:
@@ -359,7 +359,7 @@ interface DottedTagFile {
   column: number;
 }
 
-/** Derive decision 137 wording from neutral filename evidence, per caller. */
+/** Derive the dotted-tag-file wording from neutral filename evidence, per caller. */
 export function dottedTagFileDiagnostics(
   files: readonly DottedTagFile[],
   targets: TargetLookup,
@@ -498,7 +498,7 @@ export interface ScanResult {
    * author their `hosts` entry was fine all along.
    */
   hostRestrictions: HostRestriction[];
-  /** Lookup-neutral evidence for decision 137 diagnostics (never cache wording). */
+  /** Lookup-neutral evidence for dotted-tag-file diagnostics (never cache wording). */
   dottedTagFiles?: DottedTagFile[];
 }
 
@@ -596,7 +596,7 @@ function isPackageSpecifier(value: string): boolean {
 
 /**
  * The diagnostics a set of recorded `hosts` restrictions deserves under
- * `lookup` (decisions 129/132; design note §5). A value that is neither a
+ * `lookup` (design note §5). A value that is neither a
  * host value the lookup accepts nor shaped like a package specifier is a
  * bare unknown word and gets today's warning, byte-identical; a package
  * specifier is silent, since a project may name a host package it does not
@@ -705,7 +705,7 @@ export function normalizeMxTags(
   });
 }
 
-/** One normalized package-level contracts entry (decision 142). */
+/** One normalized package-level contracts entry. */
 export interface MxContractsEntry {
   module: string;
   hosts?: string[];
@@ -1845,7 +1845,7 @@ function indexDirectory(
 
 export interface ScanOptions {
   /**
-   * The registered targets this scan runs under (decisions 129 and 132).
+   * The registered targets this scan runs under.
    * Required, never defaulted: which file-kind segments exist is an open-set
    * question — the scan needs it to tell a host module file from a tag
    * template, and core holds no list to fall back on, so a scan without one

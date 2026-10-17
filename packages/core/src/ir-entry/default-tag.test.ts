@@ -4,7 +4,7 @@ import type { DelegatedTag } from "../ir.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * The default tag as `lowerSource` sees it (decision 145): the built-in
+ * The default tag as `lowerSource` sees it: the built-in
  * `object`, the `defaultTag` option, and a parent contract's `defaultTag`.
  * Core's own `default-tag*.test.ts` and `contract-default-tag.test.ts` pin the
  * resolver and the ladder against test policies; these pin that the entry
@@ -240,7 +240,7 @@ describe("a configured defaultTag (mx.data.defaultTag)", () => {
   });
 });
 
-describe("a parent contract's defaultTag (the Mesh case, decision 145 PR 3)", () => {
+describe("a parent contract's defaultTag (the Mesh case)", () => {
   const mesh: Record<string, CustomTag> = {
     attributes: {
       defaultTag: "attribute",

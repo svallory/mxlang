@@ -155,8 +155,7 @@ function ownScope(input: OwnDefaultTagInput): DefaultTagScope {
  * The scope a target's own compile gives a `defaultTag`: its package's custom
  * tags, the tag table its compile reads (its translator's taglibs over its
  * `nativeTags`: parse shape, and its elements through the host's own
- * `isElement`), and the names it lists as built-in. No `marko.json` is read
- * (decision 197).
+ * `isElement`), and the names it lists as built-in. No `marko.json` is read.
  */
 export function defaultTagScopeFor(
   input: DefaultTagScopeInput,
@@ -167,7 +166,7 @@ export function defaultTagScopeFor(
 /** What `defaultTagScopeFor` needs. */
 export interface DefaultTagScopeInput {
   /**
-   * A directory of the package. Not read since decision 197: the tag table
+   * A directory of the package. Not read: the tag table
    * reads no directory (no `marko.json`, no `tags-dir`).
    */
   dir?: string;

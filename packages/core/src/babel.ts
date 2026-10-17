@@ -1,11 +1,10 @@
 /**
- * The Babel core lowers, prints and strips TypeScript with (decision 197,
- * PR 6 slice S1): stock `@babel/*` packages, exact-pinned runtime
- * dependencies of `@mxlang/core` and external to its bundle. It replaces
- * `@marko/compiler`'s bundled Babel (`markoBabel()`), which was the same
- * packages at 7.29.7 plus Marko's patches; the patches only teach the
- * generator, traverse and types about `Marko*` nodes, which MX payloads never
- * are.
+ * The Babel core lowers, prints and strips TypeScript with: stock `@babel/*`
+ * packages, exact-pinned runtime dependencies of `@mxlang/core` and external
+ * to its bundle. It replaces `@marko/compiler`'s bundled Babel
+ * (`markoBabel()`), which was the same packages at 7.29.7 plus Marko's
+ * patches; the patches only teach the generator, traverse and types about
+ * `Marko*` nodes, which MX payloads never are.
  *
  * `traverse` and `types` come from `@babel/core`'s own exports, so the
  * `File` that `stripMxTypes` builds, its paths and scopes, and the traversal

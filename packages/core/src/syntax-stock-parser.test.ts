@@ -1,5 +1,5 @@
 /**
- * Decision 182, PR C: with a stock `htmljs-parser` in place of MX's
+ * PR C: with a stock `htmljs-parser` in place of MX's
  * template parser (simulated below), the default row still
  * compiles, and a table other than the default row is refused with "needs
  * MX's template parser" at each place a table enters: a dialect package

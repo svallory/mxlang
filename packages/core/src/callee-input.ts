@@ -1,11 +1,11 @@
 /**
- * The syntactic reader of a callee component's `Input` (decisions 106/107).
+ * The syntactic reader of a callee component's `Input`.
  *
  * A caller with attribute tags needs to know, per declared name, the
  * cardinality (`x?:` / `x:` / `x: …[]`), the shape (`as: "data"` renders
  * `{ ...attrs, content }`; `as: "renderable"` renders the body itself), and
  * whether the tag takes `attrs`/`params` — plus, one level down, the same
- * facts for `AttrTag` members of an `attrs` config (decision 107). Marko
+ * facts for `AttrTag` members of an `attrs` config. Marko
  * reads this through a TS program; MX reads it *syntactically*, Vue
  * `defineProps<T>()` style: only type literals and aliases resolvable without
  * a program count, and anything that needs evaluation is a positioned error
@@ -52,7 +52,7 @@ export interface AttrTagDecl {
   as: "data" | "renderable";
   hasAttrs: boolean;
   hasParams: boolean;
-  /** `AttrTag` members of the `attrs` config, scanned recursively (107). */
+  /** `AttrTag` members of the `attrs` config, scanned recursively. */
   nested: Map<string, AttrTagDecl>;
   /** The `attrs` config is not a closed literal: unknown nested names allowed. */
   nestedOpen: boolean;
@@ -74,7 +74,7 @@ export interface FileSpan extends SourceSpan {
  * - `none`: no `Input` to read (a JS callee, a `Props` export, a dynamic or
  *   local `<define>` target). The caller uses the syntactic fallback.
  * - `unresolved`: an explicit import whose specifier cannot be resolved.
- *   The caller uses the fallback and warns (decision 107) so an alias can't
+ *   The caller uses the fallback and warns so an alias can't
  *   cause a silent shape flip.
  * - `invalid`: the `Input` declares an attribute tag whose config the reader
  *   cannot read literally. `errors` is keyed by property path — top-level
@@ -110,7 +110,7 @@ export interface ResolveContext {
   /** The file making the call, for relative resolution and `require.resolve`. */
   importer: string;
   /**
-   * The registered targets in hand (decisions 129 and 132). Required: the
+   * The registered targets in hand. Required: the
    * reader asks it which packages export the `AttrTag` type and which
    * file-kind segments exist, and core holds no list to fall back on — a
    * caller that forgot it would accept a foreign `AttrTag` import and read a
@@ -149,7 +149,7 @@ export type CalleeInputReader = (request: {
 /**
  * The packages `AttrTag` may be imported from as the ambient type: this
  * package plus every registered target's own package, asked of the caller's
- * lookup rather than kept here (decisions 126 and 129): core names no
+ * lookup rather than kept here: core names no
  * package. A third-party target that re-exports `AttrTag` from
  * `@mxlang/core` needs no descriptor entry; one that ships its own declares
  * it as its `packageName`, which `attrTagSources` reports. Targets of one
@@ -616,7 +616,7 @@ function resolveTarget(
 ): ResolvedTarget {
   // A `kind: "name"` target resolves by its own name. A dynamic target
   // resolves the same way only when `valueImportBinding` names the value
-  // import decision 116 routed through this target — never for an author's
+  // import lowering routed through this target — never for an author's
   // own `<${expr}/>`, which has no single known binding to resolve. A local
   // `<define>` has no file to read either way.
   const name =
@@ -718,7 +718,7 @@ function probeFile(
 /**
  * Resolves one import specifier to an absolute file, synchronously.
  *
- * A tool's `resolveImport` is tried first (decision 107), then a relative or
+ * A tool's `resolveImport` is tried first, then a relative or
  * absolute specifier is probed against the importing file's directory with
  * the MX extension list, then a bare specifier goes through
  * `require.resolve` from that directory, the way `scan.ts` resolves sidecar
@@ -901,7 +901,7 @@ function readInputAt(
  * Reads one `Input` from source text. `allowStaticInput` is true for `.mx`
  * callees, where a `<static>`-block `type Input`/`interface Input` counts
  * alongside an `export interface Input`; a `.ts`/`.tsx`/`.js(x)` callee only
- * exports count (decision 107 — a `Props` export is "no Input").
+ * exports count (a `Props` export is "no Input").
  *
  * `auxCode` is the `.mx` metadata's static-block and authored-import text:
  * the same-file alias and `import type` sources for the resolver.
@@ -1873,7 +1873,7 @@ class InputAnalyzer {
   }
 
   /**
-   * Scans an `attrs` config recursively (decision 107): `AttrTag` members
+   * Scans an `attrs` config recursively: `AttrTag` members
    * become `nested` declarations, non-`AttrTag` members are plain attrs and
    * are not interpreted, and a non-closed `attrs` type sets `nestedOpen`.
    */

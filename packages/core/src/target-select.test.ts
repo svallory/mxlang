@@ -6,7 +6,7 @@ import { resolveTargetPolicyDetailed } from "./host-policy.ts";
 import { hostRestrictionDiagnostics } from "./scan.ts";
 import { createTargetLookup } from "./target-descriptor.ts";
 
-// Invented names prove core remains open-set (decision 126).
+// Invented names prove core remains open-set.
 const lookup = createTargetLookup([
   {
     descriptorVersion: 0,

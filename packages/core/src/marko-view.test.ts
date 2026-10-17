@@ -1,6 +1,6 @@
 /**
  * `markoViewOf`: the Marko-shaped view core hands every host hook while the
- * compile parses with the MX front end (decision 163 addendum, option A).
+ * compile parses with the MX front end (option A).
  *
  * Two halves. The first pins the view's fields on a real MX parse
  * (`parseMx`): names, `var`, attributes, modifiers, Marko `loc` values,

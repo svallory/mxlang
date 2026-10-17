@@ -1,5 +1,5 @@
 /**
- * The whole-file front door (decision 70): a Marko template in, an emitted
+ * The whole-file front door: a Marko template in, an emitted
  * module out, with the host's policy deciding everything host-specific.
  *
  * Named `compileSource`, not `compileFile`: it takes source text, and a host
@@ -93,8 +93,8 @@ export interface CompileResult {
   code: string;
   map: RawSourceMap;
   /**
-   * Every file the callee-`Input` resolver read while compiling this file
-   * (decision 106), including followed `import type` targets. An integration
+   * Every file the callee-`Input` resolver read while compiling this file,
+   * including followed `import type` targets. An integration
    * invalidates this file's module when one of these changes — the Vite
    * plugin does from phase 1a — so a callee's `Input` edit cannot leave a
    * caller serving a stale attribute-tag shape. Empty until lowering
@@ -111,7 +111,7 @@ export interface TranslatorOptions {
   taglibs?: Array<[string, unknown]>;
   /**
    * `false` when the host declares its own statement tags in `taglibs` (the
-   * former tree target's three) and core's six (decision 168) must not be registered
+   * former tree target's three) and core's six must not be registered
    * beside them. Unset, every parse registers core's statement tags.
    */
   statementTags?: false;
@@ -123,7 +123,7 @@ export interface TranslatorOptions {
    * @deprecated Unread: core no longer walks directories (tags beside a file
    * reach a compile as `customTags`), and `Translator` stopped carrying the
    * field when Marko's lookup went away. Goes with `taglibs` in PR 6 slice
-   * S3b-2 (decision 197).
+   * S3b-2.
    */
   tagDiscoveryDirs?: string[];
   /** Custom tags already loaded by the calling integration, by call name. */
@@ -135,15 +135,14 @@ export interface TranslatorOptions {
    */
   warnings?: MxWarning[];
   /**
-   * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183). Unset, the file's dialect's `name` (decision 212 item
-   * 10), and `MX` for a file no dialect claims. A language packaged on top of MX (design note §L3)
-   * passes its own name so its errors never mention a product its authors
-   * did not choose.
+   * The product name diagnostics use where core's own wording says "MX".
+   * Unset, the file's dialect's `name`, and `MX` for a file no dialect claims.
+   * A language packaged on top of MX (design note §L3) passes its own name so
+   * its errors never mention a product its authors did not choose.
    */
   productName?: string;
   /**
-   * A synchronous import resolver (decision 107), tried before the built-in
+   * A synchronous import resolver, tried before the built-in
    * relative/`require.resolve` resolution whenever lowering reads a callee
    * file. Lets a tool supply aliases — tsconfig `paths`, Vite
    * `resolve.alias` — so an aliased import resolves to the same file the
@@ -151,7 +150,7 @@ export interface TranslatorOptions {
    */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /**
-   * The registered targets this compile runs under (decisions 129 and 132).
+   * The registered targets this compile runs under.
    * Required: lowering asks it which packages export the `AttrTag` type and
    * which file-kind segments exist, and core holds no list to fall back on —
    * a compile without one would silently accept a foreign `AttrTag` import
@@ -163,9 +162,9 @@ export interface TranslatorOptions {
 
 export interface HostOptions extends TranslatorOptions {
   /**
-   * The file's dialect (decisions 182 addendum 5, 202), or a bare syntax
+   * The file's dialect, or a bare syntax
    * table for a dialect with no hooks. Omitted, the dialect that claims the
-   * file's extension among its project's dependencies (decision 212), else
+   * file's extension among its project's dependencies, else
    * MX's default row (`resolveSyntax`). A trigger,
    * block tag or filter nothing lowers fails the file at the first one
    * (`tableParseError`).
@@ -183,7 +182,7 @@ export interface HostOptions extends TranslatorOptions {
    * keep them. Leave unset for a build.
    */
   stripTypes?: boolean;
-  /** Emits the module from the lowered IR (decision 79). */
+  /** Emits the module from the lowered IR. */
   emitIr: (ir: Ir, ctx: Ctx) => string;
   /** `package.json#mx.<target>.defaultTag`, handed to the host's `resolveDefaultTag`. */
   defaultTag?: string;
@@ -277,7 +276,7 @@ function translatorClaiming(
   // on its first call (`deferredContractError`).
   rejectRegistration(host.customTags, claimed);
   const customTags = customTagTaglib(host.customTags);
-  // Decision 168: core's own taglib is always registered, so `static`,
+  // Core's own taglib is always registered, so `static`,
   // `import`, `export`, `client`, `server` and `class` are statement tags to
   // the parser on every target. A host that already lists it (html) keeps its
   // own entry, and no host names the set.
@@ -319,7 +318,7 @@ function translatorClaiming(
           // default export, so the file has a declaration to name and a tag
           // may call itself without importing itself.
           ctx.emitsModule = true;
-          // Decision 162: report every error of the file, not the first.
+          // Report every error of the file, not the first.
           ctx.errors = [];
           let code: string;
           try {
@@ -372,7 +371,7 @@ function asBabelTransformError(error: unknown, filename: string): unknown {
  * `filename`, a symlinked directory, a different alias of the same dir), and
  * any spelling of the same file repeats it. A prefix naming a *different*
  * file is the only place that file is named and stays. Generic path logic
- * only (decision 126).
+ * only.
  *
  * @internal Exported for the path-identity regression tests only.
  */
@@ -521,7 +520,7 @@ export function compileSource(
         });
   const syntax = resolvedSyntax.table;
   // A dialect's files parse under the dialect's tag rules, never the
-  // target's (decision 212 addendum item 1); MX's own files keep the host's.
+  // target's; MX's own files keep the host's.
   const preset = tagRulesDecided.has(host)
     ? undefined
     : fileTagRules(resolvedSyntax);
@@ -617,15 +616,15 @@ export function compileSource(
       error.dependencies = state.dependencies;
       dropCompiledFilePrefix(error, filename);
       // The rest of the file's errors travel with the first and carry what it
-      // does (decision 162); Babel only prefixed the one it rethrew.
+      // does; Babel only prefixed the one it rethrew.
       for (const other of error.errors ?? []) {
         if (other === error) continue;
         other.dependencies = state.dependencies;
       }
     }
     // The parse-error rewrites below treat an `errors` list as Marko's own
-    // aggregate of parse errors; this one holds the thrown error itself
-    // (decision 162), so it is set aside for them and put back after.
+    // aggregate of parse errors; this one holds the thrown error itself,
+    // so it is set aside for them and put back after.
     const recorded = isTranslateError(error) ? error.errors : undefined;
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);

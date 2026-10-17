@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX messages and sources use `${...}` placeholders.
 
-// A target that declares no `nativeTags` (a third-party target written before
-// decision 197) still parses and lowers HTML's void, raw-text and
+// A target that declares no `nativeTags` (a third-party target that predates
+// `nativeTags`) still parses and lowers HTML's void, raw-text and
 // preserved-whitespace elements: core's tag table falls back to core's own
 // HTML elements, the same void names lowering already uses, so the parse and
 // the IR agree.
@@ -136,7 +136,7 @@ describe("a target with its own nativeTags", () => {
 /**
  * A `.<host>.mx` region is lowered with no tag table (`ctx.tagTable` absent), so
  * whether a lowercase name an in-scope `<define>` binds is the native element
- * (decision 164's warning) or not a tag (row 3's error) comes from the
+ * (a warning) or not a tag (row 3's error) comes from the
  * target's `nativeTags`, else core's own HTML elements: the same elements a
  * whole file's table holds.
  */
