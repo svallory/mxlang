@@ -354,9 +354,11 @@ name, `MX_DUPLICATE_DECLARATION`, naming the first: "Duplicate export "q": the
 module already exports that name at 2:17, …". Stock Marko compiles every such
 form and the module does not load (`Duplicate export of 'q'`). A `server` export
 and a `client` export of one name stay legal, since each output keeps one side;
-a type export, an `export declare` form, `export *`, function overloads and an
-enum or namespace merged with an earlier one of its name export no second value
-and compile (`divergences.md`). The checks are skipped under the `none` tag
+a type export, an `export declare` form, `export *`, function overloads, an
+export list that names a type-only import or a type-only namespace, and an enum
+or namespace that merges into an earlier declaration of its name (a function,
+class, enum or namespace, exported or not) export no second value and compile
+(`divergences.md`). The checks are skipped under the `none` tag
 rules, and a render-only name (above) is reported first.
 
 **An `import` is one ES import declaration.** `import … from "…"` (default,

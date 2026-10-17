@@ -32,7 +32,9 @@
  * `server` export beside a `client` one, and what the strip erases or merges.
  *
  * Every row was probed on the stock parser (Marko 6.4.4) and through node
- * (`probes/duplicate-module-bindings-7cfaa606/`); positions below are
+ * (`probes/duplicate-module-bindings-7cfaa606/`; the rows about a name exported
+ * twice: `probes/duplicate-export-name-across-statements-load-6.4.4.txt`);
+ * positions below are
  * 1-based lines and 0-based columns, as `lowerSource` reports them.
  */
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
@@ -1591,6 +1593,28 @@ describe("a name exported twice is refused at the second export", () => {
       "a list naming a type twice",
       "static type T = 1\nstatic export { ‹T› }\nstatic export { «T» }",
     ],
+    // A type-only import with a value of its name (a TypeScript duplicate identifier) is not erased: the strip keeps both lists.
+    [
+      "a type-only import, a var of its name, and its list twice",
+      'static import type { T } from "./m"\nstatic var T = 1\nstatic export { ‹T› }\nstatic export { «T» }',
+    ],
+    // A namespace that merges into no earlier declaration of its name exports it.
+    [
+      "a list of a type-only namespace, then a value of its name",
+      "static namespace N { export type X = 1 }\nstatic export { ‹N› }\nstatic export const «N» = 1",
+    ],
+    [
+      "a list after an exported function and its namespace",
+      "static export function ‹q›() {}\nstatic export namespace q { export const a = 1 }\nstatic export { «q» }",
+    ],
+    [
+      "a list of a type alias twice, in a block",
+      "static { type T = 1; export { ‹T› }; export { «T» } }",
+    ],
+    [
+      "a list of an interface twice",
+      "static interface I {}\nstatic export { ‹I› }\nstatic export { «I» }",
+    ],
     // An enum or namespace is not merged with a list or a var.
     [
       "a namespace after a list",
@@ -1770,6 +1794,56 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "two exported enums in one block",
       "static { export enum q { A }; export enum q { B } }",
+    ],
+    // A namespace or enum that merges into an earlier declaration emits no export (stock loads all of these).
+    [
+      "a function, its list, then a namespace of its name",
+      "static function q() {}\nstatic export { q }\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "a class, its list, then a namespace of its name",
+      "static class q {}\nstatic export { q }\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "a namespace, its list, then a namespace of its name",
+      "static namespace q { export const b = 1 }\nstatic export { q }\nstatic export namespace q { export const a = 1 }",
+    ],
+    [
+      "a function, its list, then a namespace of its name, in one block",
+      "static { function q() {}; export { q }; export namespace q { export const a = 1 } }",
+    ],
+    [
+      "a function, a namespace of its name, then the function's list",
+      "static function q() {}\nstatic export namespace q { export const a = 1 }\nstatic export { q }",
+    ],
+    [
+      "a function, its list, then two namespaces of its name",
+      "static function q() {}\nstatic export { q }\nstatic export namespace q { export const a = 1 }\nstatic export namespace q { export const b = 1 }",
+    ],
+    // A list naming a type-only import or namespace exports nothing: the strip drops the specifier.
+    [
+      "a type-only import named by a list twice",
+      'static import type { T } from "./m"\nstatic export { T }\nstatic export { T }',
+    ],
+    [
+      "an inline type-only import named by a list twice",
+      'static import { type T } from "./m"\nstatic export { T }\nstatic export { T }',
+    ],
+    [
+      "a type-only namespace import named by a list twice",
+      'static import type * as T from "./m"\nstatic export { T }\nstatic export { T }',
+    ],
+    [
+      "a type-only import named by two lists under one alias",
+      'static import type { T } from "./m"\nstatic export { T as A }\nstatic export { T as A }',
+    ],
+    [
+      "a namespace with only types named by a list twice",
+      "static namespace N { export type X = 1 }\nstatic export { N }\nstatic export { N }",
+    ],
+    [
+      "a namespace with only types named by a list twice, in a block",
+      "static { namespace N { export type X = 1 }; export { N }; export { N } }",
     ],
     // Distinct names.
     [

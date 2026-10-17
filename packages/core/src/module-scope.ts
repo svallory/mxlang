@@ -66,8 +66,9 @@
  * list beside `export const q`, a re-export beside a list) is refused at the
  * second name with `MX_DUPLICATE_DECLARATION`, naming the first, because the
  * module would not load. A type export and an ambient `declare` export are
- * erased and never collide; an enum or namespace merges with an earlier one of
- * its name; a `server` export and a `client` export may share a name, as each
+ * erased and never collide, and neither does a list naming a type-only import
+ * or namespace; an enum or namespace that merges into an earlier declaration
+ * of its name adds no export (the strip emits none); a `server` export and a `client` export may share a name, as each
  * output keeps one side.
  */
 
@@ -448,6 +449,8 @@ interface StatementDeclarations {
   readonly exports: readonly Node[];
   /** Every value name the statement exports, in source order. */
   readonly exported: readonly ExportedName[];
+  /** The names of namespaces that hold only types: they bind nothing at run time. */
+  readonly typeNamespaces: ReadonlySet<string>;
   /** Value names only a `declare` or a bodiless signature introduces, by the first such name node. */
   readonly erased: ReadonlyMap<
     string,
@@ -493,9 +496,10 @@ interface ExportedName {
   readonly name: string;
   /** The exported name as written, where an error about it goes. */
   readonly id: Node;
-  /** The declaration kind of `export const q`, `export enum q`; unset for a list or a re-export. */
-  readonly kind?: DeclarationKind;
-  readonly constEnum: boolean;
+  /** `enum` or `namespace` for `export enum q`, `export namespace q`: the two that can merge into an earlier declaration. */
+  readonly kind?: "enum" | "namespace";
+  /** The local an export list names without a source (`export { q as r }` names `q`). */
+  readonly local?: string;
 }
 
 /** An identifier with a type (`q: number`) spans only its letters in a diagnostic. */
@@ -526,10 +530,10 @@ function nameOnly(id: Node): Node {
 function exportedNames(file: Node): readonly ExportedName[] {
   const { types } = coreBabel();
   const out: ExportedName[] = [];
-  const add = (id: Node, kind?: DeclarationKind, constEnum = false): void => {
+  const add = (id: Node, kind?: ExportedName["kind"], local?: string): void => {
     const name = id.type === "StringLiteral" ? id.value : id.name;
     if (name === "default") return;
-    out.push({ name, id: nameOnly(id), kind, constEnum });
+    out.push({ name, id: nameOnly(id), kind, local });
   };
   const declaration = (declared: Node): void => {
     if (declared.declare === true) return;
@@ -539,18 +543,18 @@ function exportedNames(file: Node): readonly ExportedName[] {
           for (const id of Object.values<Node>(
             types.getBindingIdentifiers(declarator.id),
           )) {
-            add(id, declared.kind === "var" ? "var" : "lexical");
+            add(id);
           }
         }
         return;
       case "FunctionDeclaration":
-        add(declared.id, "function");
+        add(declared.id);
         return;
       case "ClassDeclaration":
-        add(declared.id, "class");
+        add(declared.id);
         return;
       case "TSEnumDeclaration":
-        add(declared.id, "enum", declared.const === true);
+        add(declared.id, "enum");
         return;
       case "TSModuleDeclaration":
         if (
@@ -566,7 +570,7 @@ function exportedNames(file: Node): readonly ExportedName[] {
   for (const statement of file.program.body as Node[]) {
     if (statement.type === "TSImportEqualsDeclaration") {
       if (statement.isExport && statement.importKind !== "type") {
-        add(statement.id, "import");
+        add(statement.id);
       }
       continue;
     }
@@ -582,7 +586,12 @@ function exportedNames(file: Node): readonly ExportedName[] {
     }
     for (const specifier of statement.specifiers as Node[]) {
       if (specifier.exportKind === "type") continue;
-      if (specifier.exported) add(specifier.exported);
+      if (!specifier.exported) continue;
+      const local =
+        !statement.source && specifier.local?.type === "Identifier"
+          ? (specifier.local.name as string)
+          : undefined;
+      add(specifier.exported, undefined, local);
     }
   }
   return out.sort((a, b) => a.id.start - b.id.start);
@@ -593,6 +602,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
   const { types } = coreBabel();
   const values: Declaration[] = [];
   const names = new Set<string>();
+  const typeNamespaces = new Set<string>();
   const exports: Node[] = [];
   const erased = new Map<string, { id: Node; signature: boolean }>();
   const add = (
@@ -681,8 +691,10 @@ function statementDeclarations(file: Node): StatementDeclarations {
         // `declare module "m"` and `declare global` name no binding.
         const id = statement.id;
         if (id?.type !== "Identifier" || statement.global) return;
-        if (typeOnlyNamespace(statement)) names.add(id.name);
-        else add("namespace", id, { ambient: statement.declare === true });
+        if (typeOnlyNamespace(statement)) {
+          names.add(id.name);
+          typeNamespaces.add(id.name);
+        } else add("namespace", id, { ambient: statement.declare === true });
         return;
       }
       case "TSTypeAliasDeclaration":
@@ -733,7 +745,14 @@ function statementDeclarations(file: Node): StatementDeclarations {
     },
   });
   values.sort((a, b) => a.id.start - b.id.start);
-  return { values, names, exports, exported: exportedNames(file), erased };
+  return {
+    values,
+    names,
+    exports,
+    exported: exportedNames(file),
+    typeNamespaces,
+    erased,
+  };
 }
 
 /**
@@ -847,28 +866,11 @@ interface ExportSite extends ExportedName {
  * Would `next` give the module a second export of a name `first` already
  * exports? A module can export a name once. Two exports never collide when
  * one is in a `server` statement and the other in a `client` one: each output
- * keeps its own side's code, so each module exports the name once. An enum or
- * namespace merges with an earlier enum, namespace, function or class of its
- * name (TypeScript's merge, one binding): the strip emits one export for them.
+ * keeps its own side's code, so each module exports the name once.
  */
 function exportsCollide(first: ExportSite, next: ExportSite): boolean {
   const sides = new Set([first.keyword, next.keyword]);
-  if (sides.has("server") && sides.has("client")) return false;
-  if (next.kind === "enum") {
-    return !(
-      first.kind === "namespace" ||
-      (first.kind === "enum" && first.constEnum === next.constEnum)
-    );
-  }
-  if (next.kind === "namespace") {
-    return !(
-      first.kind === "function" ||
-      first.kind === "class" ||
-      first.kind === "enum" ||
-      first.kind === "namespace"
-    );
-  }
-  return true;
+  return !(sides.has("server") && sides.has("client"));
 }
 
 /** 1-based `line:column`, as an editor shows a position. */
@@ -896,6 +898,9 @@ function bindingErrors(
     }
   };
   const declared = new Map<string, Declaration[]>();
+  // The enums and namespaces that merge into an earlier declaration of their
+  // name, by statement and name position: the strip emits no export for them.
+  const merged = new Map<Node, Set<number>>();
   const parsed = scope.statements.map((statement) => ({
     statement,
     parsed: parseStatement(ctx, scope, statement),
@@ -932,6 +937,14 @@ function bindingErrors(
           merges(real, next))
       ) {
         earlier.push(next);
+        if (
+          real.length > 0 &&
+          (next.kind === "enum" || next.kind === "namespace")
+        ) {
+          const starts = merged.get(statement) ?? new Set<number>();
+          starts.add(next.id.start);
+          merged.set(statement, starts);
+        }
       } else {
         const first = clash ?? (real[0] as Declaration);
         // A namespace with values before a function or class is order-sensitive.
@@ -951,17 +964,35 @@ function bindingErrors(
   // A module exports a name once, whichever statements export it. The second
   // export is refused at its name, and the error names the first.
   const exportedAt = new Map<string, ExportSite[]>();
+  // A list naming a type-only import or a type-only namespace exports nothing:
+  // the strip drops the specifier.
+  const typeNamespaces = new Set<string>();
+  for (const { parsed: p } of parsed) {
+    for (const name of p?.declared.typeNamespaces ?? []) {
+      typeNamespaces.add(name);
+    }
+  }
+  const erasedList = (local: string): boolean => {
+    const bindings = declared.get(local);
+    return bindings
+      ? bindings.every((d) => d.kind === "typeImport")
+      : typeNamespaces.has(local);
+  };
   for (const { statement, parsed: p } of parsed) {
     if (!p) continue;
     const keyword = tagNameOf(statement) as string;
     for (const exported of p.declared.exported) {
+      if (exported.kind && merged.get(statement)?.has(exported.id.start)) {
+        continue;
+      }
+      if (exported.local !== undefined && erasedList(exported.local)) continue;
       const next: ExportSite = { ...exported, keyword };
       const earlier = exportedAt.get(next.name) ?? [];
       const first = earlier.find((site) => exportsCollide(site, next));
       if (first) {
         record(statement, {
           code: DUPLICATE_DECLARATION_CODE,
-          message: `Duplicate export "${next.name}": the module already exports that name at ${whereIs(first.id)}, and a module cannot export one name twice, so it would not load. Export each name once: rename one (\`export { local as other }\`) or remove it. An enum or namespace merges with an earlier one of its name, and a \`server\` export may share a name with a \`client\` one.`,
+          message: `Duplicate export "${next.name}": the module already exports that name at ${whereIs(first.id)}, and a module cannot export one name twice, so it would not load. Export each name once: rename one (\`export { local as other }\`) or remove it. A namespace or enum may merge with an earlier declaration of its name, and a \`server\` export may share a name with a \`client\` one.`,
           at: next.id,
         });
       }
