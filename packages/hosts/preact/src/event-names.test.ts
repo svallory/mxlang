@@ -1,7 +1,7 @@
 /**
  * Preact's and hono's handler props are the camelCase names their JSX types
  * declare (`onKeyDown`, never the recomposed `onKeydown`): the type-check
- * rejects any other spelling (decision 161). Three things are pinned:
+ * rejects any other spelling. Three things are pinned:
  *
  * - drift: every handler prop the installed `preact` and `hono/jsx` types
  *   declare is what the dialect tables produce from its lowercased name;

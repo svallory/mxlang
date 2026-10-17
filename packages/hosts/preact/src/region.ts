@@ -63,13 +63,13 @@ export interface CompileJsxRegionOptions {
   baseColumn?: number;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.<target>.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.<target>.defaultTag`, already validated. */
   defaultTag?: string;
   /** Surrounding module imports, local binding -> specifier. */
   importSpecifiers?: ReadonlyMap<string, string>;
-  /** Every value the surrounding module binds at its top level (decision 114). */
+  /** Every value the surrounding module binds at its top level. */
   moduleBindings?: ReadonlySet<string>;
-  /** Bindings that are a default import from a `.marko`/`.mx` source (decision 116). */
+  /** Bindings that are a default import from a `.marko`/`.mx` source. */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
   /** Where each `importSpecifiers` binding's `import` starts (1-based line, 0-based column). */
   importSites?: ReadonlyMap<string, { line: number; column: number }>;
@@ -228,7 +228,7 @@ export function compileJsxRegion(
     }
   }
   // The surrounding module's own top-level values resolve a capitalized tag
-  // too (decision 114), as in `compileSolidMx`.
+  // too, as in `compileSolidMx`.
   if (options.moduleBindings) {
     for (const name of options.moduleBindings) ctx.imports.add(name);
   }
@@ -290,7 +290,7 @@ export function compileJsxRegion(
   // alias (`componentAlias`). A name the module binds gets a local alias
   // beside the region's other statements. A region has no Marko lookup, so a
   // name with no binding never reaches here: core reports it at the tag
-  // (decision 172) rather than importing a file named after it.
+  // rather than importing a file named after it.
   for (const name of emitter.aliases) {
     if (ctx.imports.has(name)) {
       statements.unshift(

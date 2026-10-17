@@ -189,7 +189,7 @@ const Wrap = "<section><${input.content}/></section>";
 const Outer = 'import Wrap from "./Wrap.mx"\n<Wrap><${input.content}/></Wrap>';
 
 describe.each([false, true])(
-  "body whitespace, decision 141 (discovered=%s)",
+  "body whitespace (discovered=%s)",
   (discovered) => {
     it.each(cases)("$label", ({ body, html }) => {
       const tag = discovered ? "wrap" : "Wrap";

@@ -395,9 +395,9 @@ describe("whole-file reactive-tag errors are unchanged", () => {
 
 /**
  * A region has no tag table, so whether a lowercase name the module imports
- * is the native element (decision 164's warning) or not a tag (row 3's error)
+ * is the native element (the lowercase-tag warning) or not a tag (row 3's error)
  * is read from this host's `nativeTags` (`@mxlang/web-elements`), the same
- * elements a whole file's table holds (decision 197).
+ * elements a whole file's table holds.
  */
 describe("native elements in a region", () => {
   const module = (name: string, parent: string) =>

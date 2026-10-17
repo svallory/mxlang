@@ -7,11 +7,11 @@ import type { MxWarning } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
-// Decision 164 + addendum 1: a lowercase tag is the native element, or a
+// A lowercase tag is the native element, or a
 // registered tag, or (when it names an import or `<define>` binding and is neither)
 // an error.
-// Only a host's own taglib registers a tag: a `marko.json` is not read
-// (decision 197), so the `marko.json` tag below is no longer row 4.
+// Only a host's own taglib registers a tag: a `marko.json` is not read,
+// so the `marko.json` tag below is no longer row 4.
 const LOCAL_VARIABLE = (name: string) =>
   `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
 
@@ -211,7 +211,7 @@ describe("lowercase tag with a same-named binding in scope", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("row 4: a `marko.json` registers nothing (decision 197), so a tag import is row 3's error", () => {
+  it("row 4: a `marko.json` registers nothing, so a tag import is row 3's error", () => {
     expect(() =>
       withTaglibRow(`import row from "./row.mx"\n<row label="x"/>\n`),
     ).toThrow(LOCAL_VARIABLE("row"));

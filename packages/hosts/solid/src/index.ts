@@ -36,7 +36,7 @@ export { appendSolidBuiltinImport } from "./typecheck-module.ts";
 
 /** Attribute-tag value specialised to Solid's reusable accessor renderable. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: public default (no attribute-tag config)
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, () => SolidElement>;
 

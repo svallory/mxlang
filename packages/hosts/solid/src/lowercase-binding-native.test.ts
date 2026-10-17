@@ -8,7 +8,7 @@ import { parse } from "@mxlang/tsx-bridge";
 import { describe, expect, it } from "vitest";
 import { compileSolidMx } from "./index.ts";
 
-// Decision 164 + addendum 1 on a Solid region (no `<define>` here: it cannot be
+// A lowercase tag on a Solid region (no `<define>` here: it cannot be
 // declared inside a JSX expression).
 const region = (source: string, specifier: string, warnings?: MxWarning[]) =>
   compileSolidMx(source, {

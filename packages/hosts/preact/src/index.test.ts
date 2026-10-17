@@ -82,7 +82,7 @@ describe("module shape", () => {
     expect(code.indexOf("const G = 1;")).toBeLessThan(componentAt);
   });
 
-  it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
+  it("a type-only import does not resolve a capitalized tag (Marko parity, #151)", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
     // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
@@ -96,7 +96,7 @@ describe("module shape", () => {
     ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
     ["with an attribute", "<TotallyUndefined a=1/>"],
   ])(
-    "rejects a capitalized tag with no import, binding, or taglib entry, %s (decision 114 parity)",
+    "rejects a capitalized tag with no import, binding, or taglib entry, %s (Marko parity)",
     (_label, source) => {
       expect(errorOf(source)).toContain(
         "Unable to find entry point for custom tag `<TotallyUndefined>`.",
@@ -556,7 +556,7 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     // to emit whatever arguments it was called with — it never renders the
     // tag name as literal text. `mxDynamic` must not fall through to
     // returning the bare string here. args[0] ("x", a non-object) becomes
-    // the spread attributes source (decision 112): `for...in` over a string
+    // the spread attributes source: `for...in` over a string
     // yields its numeric indices, matching Marko's own `_attrs`'s `for
     // (const name in data)` over the same non-object value.
     const html = await renderCompiled('<${input.tag}("x", 2)/>', {
@@ -565,7 +565,7 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     expect(html).toBe('<span 0="x"></span>');
   });
 
-  it("uses args[0] as the string target's attributes (decision 112, Marko parity)", async () => {
+  it("uses args[0] as the string target's attributes (Marko parity)", async () => {
     const html = await renderCompiled(
       '<${input.tag}({ id: "x", class: "y" })/>',
       { tag: "span" },
@@ -573,7 +573,7 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     expect(html).toBe('<span id="x" class="y"></span>');
   });
 
-  it("appends a trailing props object when arguments combine with a body (decision 109, Marko parity)", async () => {
+  it("appends a trailing props object when arguments combine with a body (Marko parity)", async () => {
     const html = await renderCompiled('<${input.render}("x", 2)>body</>', {
       render: (a: string, b: number, extra?: { content?: () => unknown }) =>
         h("b", null, `${a}-${b}-`, extra?.content?.() as never),
@@ -581,7 +581,7 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     expect(html).toBe("<b>x-2-body</b>");
   });
 
-  it("appends a trailing props object when arguments combine with an attribute tag (decision 109, Marko parity)", async () => {
+  it("appends a trailing props object when arguments combine with an attribute tag (Marko parity)", async () => {
     const html = await renderCompiled(
       '<${input.render}("x", 2)><@head>H</@head></>',
       {
@@ -594,12 +594,12 @@ describe("mxDynamic's three value kinds (rendered)", () => {
 });
 
 /**
- * Decision 116: a capitalized tag bound to a value import that is not a
+ * A capitalized tag bound to a value import that is not a
  * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
  * itself, exercised with an ordinary `import { X } from "./target.ts"` and
  * an ordinary `<X>`/`<X/>` call, not `<${expr}>` syntax.
  */
-describe("decision 116: value import used as a tag (preact)", () => {
+describe("value import used as a tag (preact)", () => {
   async function renderImportedTag(
     entrySource: string,
     targetSource: string,
@@ -650,7 +650,7 @@ describe("decision 116: value import used as a tag (preact)", () => {
     expect(html).toBe('<div name="1">body</div><div></div>');
   });
 
-  it("a plain function value import is called as a host component (decision 116, intentional Marko divergence)", async () => {
+  it("a plain function value import is called as a host component (intentional Marko divergence)", async () => {
     const html = await renderImportedTag(
       'import { Comp } from "./target.ts"\n<Comp n=1/>',
       "export function Comp(props: { n: number }) {\n  return `<em>${props.n}</em>`;\n}",
@@ -676,8 +676,7 @@ describe("decision 116: value import used as a tag (preact)", () => {
 });
 
 /**
- * The local extension of decision 116 (firstmate's ruling under decision 116
- * in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+ * The local extension of the value-import rule: a non-import PascalCase local
  * (`static`, a `<const>`, a tag param) whose value core cannot statically
  * prove is a function/arrow/class also lowers as a dynamic tag; a plain
  * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
@@ -737,7 +736,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 
   it("a conditional string-or-component local is unknown and lowers as a dynamic tag", async () => {
     // The chosen function is called and its return value used, matching the
-    // plain-function divergence measured for decision 116's own import case
+    // plain-function divergence measured for the import case
     // above — but a JSX host renders a returned *string* as escaped text
     // (there is no raw-HTML-from-string channel without
     // `dangerouslySetInnerHTML`), so the markup comes back escaped rather
@@ -780,7 +779,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 });
 
 /**
- * Firstmate's follow-up on decision 116: preact/compat's own `memo`/
+ * preact/compat's own `memo`/
  * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see the
  * sibling describe block in `@mxlang/host-react`'s suite), so `mxDynamic`'s
  * pre-existing `typeof target === "function"` branch already handled them.
@@ -854,7 +853,7 @@ describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic 
 
   // Measured, not assumed: React's raw `memo(Foo)`/`forwardRef(...)` object
   // cannot render on Preact at all, through `mxDynamic` or otherwise — this
-  // is not a decision-116 routing gap, it is a real Preact-vs-React
+  // is not a routing gap, it is a real Preact-vs-React
   // incompatibility that exists in hand-written Preact code with no MX
   // involved. `preact-render-to-string`'s own dispatcher
   // (`typeof type == "function"`, `src/index.js:327`) has no object-based
@@ -874,7 +873,7 @@ describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic 
 });
 
 /**
- * Attribute-tag rendered shape (decisions 106–107), executed through Preact
+ * Attribute-tag rendered shape, executed through Preact
  * rather than asserted only as emitted source text.
  */
 describe("attribute tag values (executed)", () => {
@@ -997,9 +996,9 @@ describe("attribute tag values (executed)", () => {
 });
 
 describe("component aliases", () => {
-  // Decision 164: a lowercase tag is a native element or a registered tag,
-  // never a call to an imported binding. A `marko.json` registers nothing
-  // (decision 197), so the tag it maps stays the element it spells.
+  // A lowercase tag is a native element or a registered tag,
+  // never a call to an imported binding. A `marko.json` registers nothing,
+  // so the tag it maps stays the element it spells.
   it("leaves a lowercase marko.json tag a native element", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
       "node:fs"
@@ -1061,7 +1060,7 @@ describe("<define> and <const>", () => {
     expect(code).toContain("{Row('a')}");
   });
 
-  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)", async () => {
+  it("accepts a `<define>` call mixing tag-argument form with an attribute tag (Marko parity)", async () => {
     // Marko appends ONE trailing object `{ head }` after the args, landing in
     // the first unfilled param; the define destructures `head` out of it.
     const { render } = (await import("preact-render-to-string")) as {
@@ -1259,7 +1258,7 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
-// Ref custom-tags-local-bindings (decision 113): a file-local *scope*
+// Ref custom-tags-local-bindings: a file-local *scope*
 // binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
 // `<define/Box|Panel|>` param — shadows a registered custom tag of the same
 // name too, scoped to where the binding is in effect. IR-level coverage
@@ -1360,7 +1359,7 @@ describe("local scope bindings shadow a registered custom tag (executed)", () =>
   // with no statement position, so a `<const>` (or `<define>`) *nested*
   // inside `<if>`/`<for>` markup is a compile error on this host regardless
   // of the fix (`PreactEmitter`'s `constant`/`define`: "must appear at the
-  // top level of the template" — pre-existing, unrelated to this decision).
+  // top level of the template" — pre-existing, unrelated to this fix).
   // A `<for|Panel|>` tag param nested the same way is legitimate here, but
   // does not exercise the fixed code path: `<for>`'s own `shadowBindings`
   // restore already reverts `tagVarShadowed` on its own, independent of the
@@ -1401,7 +1400,7 @@ describe("a unit that returns a value", () => {
       "/fixtures/tags/counter.mx",
     ).code;
 
-    // Decision 155's model on this host: the body function returns the pair
+    // The unit render-path model on this host: the body function returns the pair
     // and binds it as `.render`; the default export returns only the output,
     // so any caller without static knowledge of the unit (a dynamic tag, a
     // hand-written TSX import) renders the body, never the pair object.
@@ -1604,7 +1603,7 @@ describe("a unit that returns a value", () => {
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("recomposes the prop from the DOM event name, not the authored spelling", () => {
     expect(markup("<button onClick=handler>x</button>")).toBe(
       "<button onClick={handler}>x</button>",
@@ -1658,7 +1657,7 @@ describe("event name positions and spellings", () => {
   it("looks multi-word DOM names up in Preact's camelCase names (onKeyDown)", () => {
     // Preact lowercases the prop at bind time, so the old `onKeydown` still
     // bound `keydown`; but the JSX types declare `onKeyDown` only, so the
-    // spelling is the declared one (decision 161).
+    // spelling is the declared one.
     expect(markup("<input onKeyDown=handler>")).toBe(
       "<input onKeyDown={handler} />",
     );

@@ -8,13 +8,13 @@ import { parseSolid } from "./test-helpers.ts";
 
 /**
  * These lowering fixtures use bare capitalized tags with no import — they
- * exercise how a construct lowers, not tag resolution. Since decision 114
- * makes an unresolved capitalized tag a compile error, every capitalized
+ * exercise how a construct lowers, not tag resolution. Since an
+ * unresolved capitalized tag is a compile error, every capitalized
  * identifier the fixture source uses is declared bound, matching Marko's own
  * rule that any in-scope binding — real or not — is what decides
  * resolvability, not whether one is actually wired up.
  *
- * Also declared as if each were a `.mx` default import (decision 116): this
+ * Also declared as if each were a `.mx` default import: this
  * file tests control-flow lowering shapes (`<if>`/`<else>` becoming
  * `<Show>`, a fragment, etc.), not the value-import-as-tag routing decision,
  * so every fixture keeps its pre-116 direct-call shape (`<Login />`) rather

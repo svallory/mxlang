@@ -21,7 +21,7 @@ function collect(node: unknown, type: string, out: unknown[] = []): unknown[] {
 const parseMx = (source: string) => parseSolid(source);
 
 describe("MX element parsing", () => {
-  it("lowers an attr method to a block-body function expression (decision 167)", () => {
+  it("lowers an attr method to a block-body function expression", () => {
     const file = parseMx(
       `const el = <button onClick() { setCount(count() + 1) }>\${count()}</button>;`,
     );
@@ -369,7 +369,7 @@ describe("whitespace follows Marko, not JSX (review #5)", () => {
     );
   });
 
-  describe("line-based rule (decision 33)", () => {
+  describe("line-based rule", () => {
     // Lines are trimmed, empties dropped, the rest joined with one space.
     it("joins multi-line prose with a single space", () => {
       expect(childKinds(`const e = <p>a\n  b</p>;`)).toEqual(["text:a b"]);
@@ -505,7 +505,7 @@ describe("collectMxRegions", () => {
 });
 
 /**
- * Decision 114's end-to-end wiring: the real `parse()` entry point runs its
+ * End-to-end wiring of module-scope resolution: the real `parse()` entry point runs its
  * own declaration-only pre-parse (`collectModuleScope`, `index.ts`) over the
  * *whole* source before lowering any region, and feeds the result to
  * `compileSolidMx` as `moduleBindings` — this is what a real `.solid.mx`
@@ -513,7 +513,7 @@ describe("collectMxRegions", () => {
  * a hand-built `moduleBindings` set directly. These tests exercise that full
  * path, not just `programBindings`/`compileSolidMx` in isolation.
  */
-describe("decision 114: module-scope resolution through the real parse() pipeline", () => {
+describe("module-scope resolution through the real parse() pipeline", () => {
   it("resolves a capitalized tag against a top-level component declared in the same file", () => {
     const source = [
       "function Widget() { return null; }",
@@ -541,7 +541,7 @@ describe("decision 114: module-scope resolution through the real parse() pipelin
     expect(() => parseMx(source)).not.toThrow();
   });
 
-  it("decision 116: resolves a .tsx value import against a real caller's module scope, routed dynamic", () => {
+  it("resolves a .tsx value import against a real caller's module scope, routed dynamic", () => {
     // The real `parse()` pipeline (`collectModuleScope`), not a unit test's
     // hand-built options — proving `importDefaultFromMarkoOrMx` reaches the
     // host correctly through the module-scope scan and the bridge, not just

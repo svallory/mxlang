@@ -1,6 +1,6 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * Decision 160 on Solid: `<Row n=1/>` against a `<define>` hands the define's
+ * On Solid, `<Row n=1/>` against a `<define>` hands the define's
  * first param ONE attribute object, as Marko 6.4.4 does. It used to emit
  * `__mx_DefineRow1(undefined)`, and `|{ n }|` failed compile ("cannot close
  * over `n`"). Every case here EXECUTES the output (Solid SSR in a Bun
@@ -125,8 +125,7 @@ const CASES: Array<[string, string, string, string]> = [
     "",
     "<ul><li>12</li></ul>",
   ],
-  // Decision 109, revised to Marko's own shape (ruling 2026-10-09; measured
-  // on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
+  // Matching Marko's own shape (measured on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
   // trailing object `{ ...attributeTags, content }` as the next argument, so
   // it lands in the first unfilled param and every param after it reads
   // `undefined` — nothing is bound by name. These four pin each shape.
@@ -305,7 +304,7 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     ).toThrow(/cannot close over `missing`/);
   });
 
-  // Pre-existing limit, unchanged by decision 160: the capture check does not
+  // Pre-existing limit, unchanged by passing one attribute object: the capture check does not
   // consult the module's own bindings (the spec says imports are fine; only a
   // define's params, sibling defines and globals pass today). Pinned so a
   // change to it is deliberate; reported to the lead as a separate item.

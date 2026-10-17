@@ -47,7 +47,7 @@ function renderSolidMx(
     // declares (e.g. a local `function Row(input) {...}`) must be supplied
     // here the same way a real caller's surrounding module would be.
     moduleBindings: sourceBindings(setup).bindings,
-    // Local extension of decision 116: classified the same way a real
+    // Classified the same way a real
     // `.solid.mx` compile classifies its surrounding module, through
     // `@mxlang/tsx-bridge`'s `unknownSourceBindings`.
     unknownModuleBindings: unknownSourceBindings(setup),
@@ -104,12 +104,12 @@ function renderApp(
 
 /**
  * Same real-Solid-pipeline rendering as `renderApp`, but for a *real import*
- * rather than a module-scope declaration — decision 116's routing is scoped
+ * rather than a module-scope declaration — dynamic routing of value imports is scoped
  * to import bindings, so `renderApp`'s `setup`-string approach (always a
  * local `const`/`function`, never an import) cannot exercise it at all.
  * Writes `targetSource` to a real sibling `.tsx` file (may contain JSX) and
  * imports it — a non-`.marko`/`.mx` extension either way, which is all
- * decision 116's routing checks.
+ * the value-import routing checks.
  */
 function renderAppWithImport(
   mxFragment: string,
@@ -706,13 +706,13 @@ describe("Solid SSR render: dynamic tag", () => {
     expect(html).toContain("<div><em>already rendered</em></div>");
   });
 
-  // Decision 109, Marko parity: args now combine with a body/attribute tag
+  // Marko parity: args combine with a body/attribute tag
   // (`assertAttributesOrArgs`; `rejectArgsWithProps`, core). Solid's own
   // design already keeps args and attrs/tags/content orthogonal — args only
   // resolve the value handed to `<Dynamic component=…>`, while attrs/tags/
   // content render on that element regardless of args — so this needs no
   // emitter change, only core's relaxed guard.
-  it("accepts arguments combined with a body (decision 109, Marko parity)", () => {
+  it("accepts arguments combined with a body (Marko parity)", () => {
     // Solid's `<Dynamic component={…}>body</Dynamic>` forwards a JSX body as
     // the resolved component's ordinary `children` prop, not a `content`
     // callback — unlike html/preact's `content: () => …` convention.
@@ -723,7 +723,7 @@ describe("Solid SSR render: dynamic tag", () => {
     expect(html).toContain("x-2-body");
   });
 
-  it("accepts arguments combined with an attribute tag (decision 109, Marko parity)", () => {
+  it("accepts arguments combined with an attribute tag (Marko parity)", () => {
     const html = renderApp(
       `<\${input.render}("x", 2)><@head>H</@head></>`,
       `const input = { render: (a: string, b: number) => (extra?: { head?: unknown }) => <em>{a}-{b}-{extra?.head as never}</em> };`,
@@ -740,12 +740,12 @@ describe("Solid SSR render: dynamic tag", () => {
     ).toThrow();
   });
 
-  // Decision 112 (lead ruling 2026-09-28): disjoint from decision 109, which
+  // Disjoint from the args-with-body rule above, which
   // governs only a function/component target. A *string* target called with
   // arguments uses args[0] as its element attributes, matching Marko's own
   // `_dynamic_tag` (`runtime-tags/src/html/dynamic-tag.ts`) and the fix
   // already applied to html's `renderDynamic` and the shared JSX `mxDynamic`.
-  describe("string target with arguments (decision 112, Marko parity)", () => {
+  describe("string target with arguments (Marko parity)", () => {
     it("uses args[0] as the element's attributes", () => {
       const html = renderApp(
         `<\${input.tag}({ id: "x", class: "y" })/>`,
@@ -774,7 +774,7 @@ describe("Solid SSR render: dynamic tag", () => {
       expect(html).not.toContain('id="');
     });
 
-    it("does not fold decision 109's attribute-tag props into args[0], but content still renders", () => {
+    it("does not fold the attribute-tag props into args[0], but content still renders", () => {
       // Attribute tags are dropped as attributes (Marko never reads them as
       // args[0] here — see spec §15 item 11), but content renders regardless,
       // since Marko threads it independently of the input.
@@ -796,7 +796,7 @@ describe("Solid SSR render: dynamic tag", () => {
     });
   });
 
-  // Decision 116: a capitalized tag bound to a value import that is not a
+  // A capitalized tag bound to a value import that is not a
   // `.marko`/`.mx` default import lowers as a dynamic tag — the same
   // `<Dynamic>` dispatch the authored `<${expr}>` tests above exercise,
   // reached instead through an ordinary `import { X } from "./x.ts"` and
@@ -804,8 +804,8 @@ describe("Solid SSR render: dynamic tag", () => {
   // SSR pipeline (`renderApp` -> `@solidjs/babel-plugin` -> `@solidjs/web`
   // `renderToString`), proving the routing dispatches the way `<Dynamic>`
   // actually resolves a value at runtime.
-  describe("value import used as a tag (decision 116)", () => {
-    // Decision 116 is scoped to *import* bindings — a module-scope
+  describe("value import used as a tag", () => {
+    // This routing is scoped to *import* bindings — a module-scope
     // declaration (`const Tag = "div"`, a local `function`) is never an
     // import, so every case here uses `renderAppWithImport`, a real
     // sibling `.ts` file and a real `import`, not `renderApp`'s
@@ -853,12 +853,11 @@ describe("Solid SSR render: dynamic tag", () => {
     });
   });
 
-  // Firstmate's extension of decision 116 (`notes/decisions-2026-09-10.md`):
-  // a non-import local (a module-scope `const`/`function`/`class`, or a tag
+  // A non-import local (a module-scope `const`/`function`/`class`, or a tag
   // param) whose value core cannot statically prove is a function/arrow/
   // class also lowers through `<Dynamic>`. `renderApp`'s `setup` string is
   // always module-scope, never an import, so it is the right vehicle for
-  // this — unlike decision 116's own import-scoped tests above, which need
+  // this — unlike the import-scoped tests above, which need
   // `renderAppWithImport`.
   describe("local-value-as-tag-parity: non-import local used as a tag", () => {
     it("a module-scope const string is unknown and renders as a real element", () => {
@@ -892,7 +891,7 @@ describe("Solid SSR render: dynamic tag", () => {
     it("a module-scope const bound to a call result (unknown) routes through Dynamic", () => {
       // A Solid *region* rejects `<const>` unconditionally — it is a JSX
       // expression with no statement position, so `<const>` can never be
-      // emitted there regardless of decision 116 (a pre-existing,
+      // emitted there regardless of dynamic routing (a pre-existing,
       // Solid-only limitation; see `SolidEmitter.constant`). The
       // module-scope form exercises the identical classification: `Tag`'s
       // value is a call result, "unknown" whichever binding site declares
@@ -904,7 +903,7 @@ describe("Solid SSR render: dynamic tag", () => {
       expect(html).toMatch(/<div[^>]* name="1"[^>]*>body<\/div>/);
     });
 
-    // Firstmate's follow-up on decision 116: Solid's own `lazy(...)` returns
+    // Solid's own `lazy(...)` returns
     // a real FUNCTION (measured, `typeof lazy(...) === "function"`), unlike
     // React's `memo`/`forwardRef` (see `@mxlang/host-react`'s sibling suite,
     // which needed a fix for those). A `lazy(...)` call is a

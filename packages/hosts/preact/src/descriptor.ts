@@ -1,5 +1,5 @@
 /**
- * The `preact-jsx` target descriptor (decisions 129 and 132; unstable).
+ * The `preact-jsx` target descriptor (unstable).
  *
  * Importing this module loads `./emitter.ts` (the declarations) only; the
  * compile entries are required by relative paths inside the closures, from

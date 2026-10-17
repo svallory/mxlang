@@ -179,7 +179,7 @@ const SOLID_EVENT_PROP_NAME_BY_DOM_NAME = buildSolidEventPropNames();
 
 /**
  * Recomposes Solid's own JSX prop name for a resolved DOM event name
- * (decision 101's Phase B, corrected): the vendored `jsx.d.ts` spelling when
+ * (phase B of `dom-events`): the vendored `jsx.d.ts` spelling when
  * `@solidjs/web` declares one, else `on` + capitalize-first, for a DOM event
  * Solid's types don't enumerate. Solid's runtime lowercases either spelling
  * identically, so this changes only what TypeScript sees, never what binds.

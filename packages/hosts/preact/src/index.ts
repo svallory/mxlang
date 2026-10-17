@@ -1,6 +1,6 @@
 /**
  * `@mxlang/host-preact` — MX's Preact host, the fourth emitter on `@mxlang/core`'s
- * IR (decisions 71, 79, 81, 82).
+ * IR.
  *
  * A `.mx` template becomes a Preact component module: a JSX file
  * carrying its own `@jsxImportSource` pragma, the author's imports and `static`
@@ -124,12 +124,12 @@ export { emitModule, emitModuleWithMappings };
 
 /** Attribute-tag value specialised to Preact's renderable child type. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: public default (no attribute-tag config)
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, ComponentChildren>;
 
 /**
- * This package's own target table (decisions 129 and 132): the one descriptor
+ * This package's own target table: the one descriptor
  * it exports. The default for a direct entry that names no lookup of its own
  * (`@mxlang/host-preact/bun` and its siblings, which route through here — see
  * design note §5.1, rule (c)). A tool compiling several targets passes the

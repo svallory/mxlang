@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
 /**
- * Decision 139 is a *language* rule, so it has to fire on a JSX-shaped host
+ * CDATA rejection is a *language* rule, so it has to fire on a JSX-shaped host
  * too — a preact template is the same Marko source and the same core lowering,
  * and a CDATA section is not markup a JSX tree can hold. This is the test
  * that would fail if the rejection had been put in a host instead of core.
@@ -36,7 +36,7 @@ function failure(source: string): {
   throw new Error("expected a compile error, but the template compiled");
 }
 
-describe("CDATA sections and XML declarations (preact, decision 139)", () => {
+describe("CDATA sections and XML declarations (preact)", () => {
   it("rejects a CDATA section at the `<`", () => {
     expect(failure("<a><![CDATA[ x ]]></a>\n")).toEqual({
       message: CDATA_MESSAGE,

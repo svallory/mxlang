@@ -14,7 +14,7 @@ Event props emitted by this host (`onClick=`, `on-dblclick=`, …) are looked up
 
 ## `@mxlang/host-solid`: the Solid host on `@mxlang/core`
 
-`packages/hosts/solid` (`@mxlang/host-solid`, decisions 69, 71, 72, 79, 81) is the
+`packages/hosts/solid` (`@mxlang/host-solid`) is the
 third emitter over the core IR — Solid's `.solid.mx` becomes Solid JSX
 text instead of a string or Astro template. `packages/hosts/solid/README.md`
 carries the full lowering table (IR kind to Solid JSX), the error list, and
@@ -22,8 +22,7 @@ the `.solid.mx` bridge paragraph; the summary here is the package-map entry.
 
 Three facts worth knowing before touching it:
 
-- **An unresolved capitalized tag is Marko's own compile error (decision
-  114), and `isComponent` is where that's decided.** `solidDeclarations`
+- **An unresolved capitalized tag is Marko's own compile error, and `isComponent` is where that's decided.** `solidDeclarations`
   (`emitter.ts`) declares `isComponent(name, ctx) => (ctx.imports?.has(name)
   ?? false) || SOLID_BUILTIN_TAG_NAMES.has(name)` — genuine resolvability,
   not the bare `/^[A-Z]/` test it used to be. Everything else capitalized
@@ -49,13 +48,13 @@ Three facts worth knowing before touching it:
   spliced-into-someone-else's-module construct); both came from an operator
   ruling (2026-09-28) rather than a Marko fact.
   **Whole-file `.mx` resolved to Solid goes through `compileSolidUnit`, not
-  `compileSolidMx` (decision 115).** `compileSolidMx` (the *region* compiler)
+  `compileSolidMx`.** `compileSolidMx` (the *region* compiler)
   still rejects every module-level statement unconditionally — a `.solid.mx`
   region is an expression spliced into someone else's module and has nowhere
   to put one — but a whole file has its own module scope, so `compileSolidUnit`
   places an authored `import` there like every other host does, and it
   resolves a capitalized tag the same way an import resolves one on
-  `@mxlang/target-html`/`@mxlang/host-preact`. Before decision 115, every production entry
+  `@mxlang/target-html`/`@mxlang/host-preact`. Before whole-file routing, every production entry
   point (the TypeScript plugin, the language server, `mx-tsc`, and the
   vite-plugin, which had no `host === "solid"` branch at all and silently fell
   through to `@mxlang/target-html`'s string emitter) routed a whole-file `.mx`
@@ -81,7 +80,7 @@ Three facts worth knowing before touching it:
   them (`examples/counter-app/e2e/whole-file.spec.ts` builds and renders one).
   An earlier version dropped `Input` on the belief that Solid's compiler has no
   TypeScript frontend; that was wrong. AttrTag props are additionally checked
-  through a `satisfies` assertion at the call site (decisions 106-108).
+  through a `satisfies` assertion at the call site.
 - **Every expression value is recorded as a mapping (`mappedExpr`), and a
   whole-file unit maps its module statements too** (TODO `solid-mx-tsc-silent`).
   `descriptor.mappings` is `"merge-recorded"`: the TypeScript plugin does not
@@ -91,7 +90,7 @@ Three facts worth knowing before touching it:
   name, a prop type error or a `${}` error. Component and native attribute
   values, spreads, class merges, `${}`/`$!{}` text, `<if>`/`<for of>`/`<for in>`
   heads and attribute-tag spreads/conditions go through `mappedExpr` (per-atom
-  for an atom, decision 156); `compileSolidUnit` maps imports, `static` blocks
+  for an atom); `compileSolidUnit` maps imports, `static` blocks
   and `Input` with `mappedStatement`. A value Solid rewrites maps what
   survives: a `<for>` accessor read (`i` to `i()`, `row` to `row()`, a for-in
   key to `mxEntry()[0]`) maps its unchanged runs one to one and the replaced
@@ -176,22 +175,23 @@ Three facts worth knowing before touching it:
   `attrs.ts` (the pre-core-IR lowering) are deleted; that lowering now lives
   entirely in this package. See `packages/tsx-bridge/README.md`.
 
-- **Decisions 109 and 112 are disjoint, not in conflict (lead ruling,
-  2026-09-28): 109 governs a function/component target with arguments; 112
-  governs only a string (native-element) target.** For a string target
+- **Arguments with a body or attribute tag, and a string target with
+  arguments, are disjoint, not in conflict: the first governs a
+  function/component target; the second governs only a string
+  (native-element) target.** For a string target
   called with arguments, `args[0]` (Marko's own `args[0] || {}`,
   `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`) becomes the
   element's attributes *instead of* this call's attribute-tag props,
   matching html's `renderDynamic` and the shared JSX `mxDynamic` — content
   still renders regardless, since Marko threads it independently of the
   input. A function/component target is unaffected: the next bullet's
-  orthogonality (decision 109's own implementation note, measured against
+  orthogonality (measured against
   Solid 2.0.0-rc.7) still holds there, and `tags` (`attributeTagProps`)
   still applies unconditionally for that branch. Which rule applies is a
   run-time fact (the resolved target's type), so `#dynamicComponent` emits
   two `<Dynamic>` branches behind its existing `typeof` guard rather than
   one conditional attribute list. See spec §15 item 11 for the full detail.
-- **Attribute-tag values are accessors on Solid (decisions 106–107).** This
+- **Attribute-tag values are accessors on Solid.** This
   host declares `attrTags: 2` and emits only core's resolved `attrTagProps`.
   Solid 2.0.0-rc.7 client measurements rule out an eager JSX value (one DOM
   node moves when rendered twice) and a getter (fresh nodes, but the value
@@ -227,7 +227,7 @@ Three facts worth knowing before touching it:
   `.solid.mx` callee reader replaces regions with `null`; declaration reading
   needs no output, and compiling them there would recurse for mutual imports.
 - **A top-level `<define>` inside a region hoists to module scope, gensym'd
-  like a synthesized import (decision 110b).** A region is a JSX expression
+  like a synthesized import.** A region is a JSX expression
   spliced into someone else's module, so `const Row = (...) => ...;` has no
   statement position to live in — the identical wall `hoistedImports`
   already hits for a discovered tag's import. `SolidEmitter.define`
@@ -275,8 +275,7 @@ Three facts worth knowing before touching it:
   JSX tag.** Every other `Component` target prints an ordinary `<Tag
   .../>` element; JSX has no positional-call syntax, so
   `SolidEmitter.#defineComponent` instead emits `{__mx_DefineRowN(...)}` —
-  the same call shape `@mxlang/target-html`'s `<define>` already uses (decision
-  109). **Decision 160: with no tag arguments the call passes ONE object to
+  the same call shape `@mxlang/target-html`'s `<define>` already uses. **With no tag arguments the call passes ONE object to
   the define's first param** (`{__mx_DefineRowN({ "n": 1 })}`: attributes in
   source order, spreads, attribute tags by name, the body as `content`; `{}`
   when the call carries none; a define with no params ignores them), as
@@ -285,7 +284,7 @@ Three facts worth knowing before touching it:
   declared params positionally and, when the call has attribute tags or a
   body and a param is left unfilled, ONE trailing object
   `{ ...attributeTags, content }` goes to the first unfilled param, as Marko
-  6.4.4 does (decision 109 as revised; the params after it read `undefined`,
+  6.4.4 does (the params after it read `undefined`,
   and a rest param is never padded). Nothing is bound by name: `|a, { head }|`
   reads the attribute tag out of the object, and a param that merely shares
   an attribute tag's name gets the whole object. When the args already fill
@@ -314,7 +313,7 @@ Three facts worth knowing before touching it:
     fires. A tag *unit* is a whole file, not a region — nothing there
     reads `hoistedDefines`, so without this gate a `<define>` compiled
     clean but silently emitted a call to a function nothing declares (a
-    runtime `ReferenceError`, decision 110b's "positioned error, not
+    runtime `ReferenceError`; the hoisting's own "positioned error, not
     wrong code" violated silently). Sharing the module-scope collector
     variables between both callers, with no per-caller gate, was the bug.
   - **A gensym is unique only *within its own region*.** Two regions in
@@ -342,8 +341,7 @@ Three facts worth knowing before touching it:
     a region-local value; the check reads `new
     Set(defineBindings.values())` instead.
   - **A self-recursive `<define>`, or a define referencing a sibling not
-    yet declared, was a separate, pre-existing gap — now fixed by decision
-    114, not by this fix.** Core's `lowerDefine` (`ctx.defines.set(name,
+    yet declared, was a separate, pre-existing gap — now fixed by the unresolved-tag check, not by this fix.** Core's `lowerDefine` (`ctx.defines.set(name,
     params)`) registers a define's name only *after* lowering its own body,
     so `<A>` referencing itself or a later `<B>` never resolves as a
     `"define"`-kind `Component` target in the first place. On
@@ -353,14 +351,14 @@ Three facts worth knowing before touching it:
     JSX tag referencing a binding nothing declares (args dropped), because
     `solidDeclarations.isComponent` was a bare `/^[A-Z]/` test with no
     resolvability check — the identical silent pass-through reproduced for
-    *any* unresolvable capitalized tag, define or not. Decision 114
+    *any* unresolvable capitalized tag, define or not. The unresolved-tag check
     tightened `isComponent` to genuine resolvability (an in-scope module
     value, a Solid JSX built-in, or nothing) as its own, separate fix; this
     self-recursive case now reaches Marko's own error
     (`` Unable to find entry point for custom tag `<A>`. ``) as a side
     effect, not something `<define>` hoisting itself changed.
 
-Decision 72's subset rule removed four Solid constructs real Marko itself
+Following Marko exactly removed four Solid constructs real Marko itself
 rejects (tag params on `<if>`, tag params and attribute tags on native
 elements, `<fragment>`) — see `divergences.md`'s "Deferred to MX 2" table for
 each construct, Marko's exact error, and the test that used to cover it.

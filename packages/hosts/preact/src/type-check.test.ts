@@ -4,7 +4,7 @@ import descriptor from "./descriptor.ts";
 import { compilePreactMx } from "./index.ts";
 
 /**
- * Decision 140: `typeCheck` is a tooling-only mode. Unset, the output is the
+ * `typeCheck` is a tooling-only mode. Unset, the output is the
  * runtime output, byte for byte; set, every native element's event handler is
  * checked with the type-only `(fn) satisfies __MxH<"tag", "event">` (erased on
  * emit, so it can never reach a running module).
@@ -122,7 +122,7 @@ describe("typeCheck set", () => {
   });
 });
 
-describe("typeCheck helper names never collide with the template (decision 140)", () => {
+describe("typeCheck helper names never collide with the template", () => {
   const handler = "<button onClick=((e) => e.type)>x</button>";
   const helpers = ["__MxJSX", "__MxM", "__MxH"];
 

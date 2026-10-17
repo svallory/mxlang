@@ -1,6 +1,6 @@
 /**
  * Primitive attribute values on native elements, normalized to what Marko
- * 6.4.4's html output renders (decision 149). One source shared by the three
+ * 6.4.4's html output renders. One source shared by the three
  * JSX hosts; hoisted into the emitted module like core's validation helpers,
  * never a runtime dependency. Component props do not pass through it.
  *

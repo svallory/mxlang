@@ -152,7 +152,7 @@ export interface JsxDialect {
  *
  * The shared emitter recomposes a handler prop from the DOM event name core
  * resolved. Without this lookup `keydown` became `onKeydown`, which neither
- * type set declares (TS2322 on valid code under `mx-tsc`, decision 161).
+ * type set declares (TS2322 on valid code under `mx-tsc`).
  * Preact (it lowercases `onKeydown` to find the DOM property) and hono's DOM
  * renderer both still bound the old spelling at run time, so the bug was in
  * the type-check only; the names are still data to look up, not a rule to

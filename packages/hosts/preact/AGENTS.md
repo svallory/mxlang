@@ -2,7 +2,7 @@
 
 ## `@mxlang/host-preact`: the Preact host on `@mxlang/core`
 
-`packages/hosts/preact` (`@mxlang/host-preact`, decisions 71, 79, 81, 82) is the
+`packages/hosts/preact` (`@mxlang/host-preact`) is the
 fourth emitter over the core IR, and the first whose target has **no
 control-flow components at all**: every structural kind lowers to a plain JSX
 *expression*. `packages/hosts/preact/README.md` carries the full lowering
@@ -28,15 +28,15 @@ Six facts worth knowing before editing it:
   `<badge>` element with the props as attributes. The declarations use the
   taglib lookup and in-scope bindings (the same rule as `@mxlang/target-html`), and
   `componentAlias` renames such a component in the emitted JSX, binding
-  `MxBadge` beside it. Since decision 164 a lowercase `import`/`<define>` is
+  `MxBadge` beside it. A lowercase `import`/`<define>` is
   never called as a tag (core skips `isComponent` for it), so only a
   taglib-discovered lowercase tag reaches the alias; `index.test.ts` and
   `attr-tag-round2.test.ts` pin it through a `tags/badge.marko` file. That
   fixture predates the rule that `.marko` is not an MX input (a `.marko` file
   where a tag is looked up is a positioned error); it moves to a `.mx` tag
   file with that change.
-  **A capitalized tag resolves only when it genuinely resolves** (decision
-  114 parity, `unresolved-tag-jsx-astro-angular`): `isComponent`
+  **A capitalized tag resolves only when it genuinely resolves** (Marko parity,
+  `unresolved-tag-jsx-astro-angular`): `isComponent`
   (`emitter.ts`) used to fall back to a bare `isComponentName` (`/^[A-Z]/`)
   test whenever the taglib lookup found nothing, so `<TotallyUndefined/>` —
   no import, binding, or taglib entry — silently emitted a JSX reference to
@@ -45,13 +45,13 @@ Six facts worth knowing before editing it:
   ("Unable to find entry point for custom tag `<Name>`.") through the same
   `lower.ts` hook `@mxlang/target-html`/`@mxlang/host-solid` already use. `@mxlang/host-react`
   and `@mxlang/host-hono` share this fix through `createJsxDeclarations`.
-- **Attribute tags emit from core's `attrTagProps` plan** (decisions 106–108),
+- **Attribute tags emit from core's `attrTagProps` plan**,
   never by regrouping the flat occurrence list. `data` values are
   `{ ...attrs, ...nestedProps, content }`; `renderable` values are the body;
   repeated values are real arrays; conditionals are ternaries and loops use
   `.flatMap`. On Preact, `content` is `ComponentChildren` and is a render
   function when params are declared.
-  Untyped body-only props therefore arrive bare under decision 108; one
+  Untyped body-only props therefore arrive bare; one
   attributed or nested occurrence makes the whole fallback property data.
 - **A declared attribute-tag value carries its type at the call site.** Each
   concrete singular occurrence is emitted as `((value) satisfies
@@ -88,10 +88,10 @@ Six facts worth knowing before editing it:
   process-global flag of the consumer's `preact`**: once an MX `<try>` with
   `<@catch>` renders, every class component's error boundary works on the
   server too. The shared emitter (`delegatedTag`) serves React and Hono the
-  same way. This does not contradict decision 82: it is Preact code an author
+  same way. This does not contradict the rule that MX ships no runtime: it is Preact code an author
   would otherwise write by hand, not an MX runtime, and a template that uses
   none of it imports none of it.
-- **`typeCheck` is a tooling-only mode (decision 140).** `compilePreactMx`
+- **`typeCheck` is a tooling-only mode.** `compilePreactMx`
   (and the react/hono entries) take `typeCheck: true` only from
   `@mxlang/typescript-plugin`'s virtual code. It wraps every native element's
   event handler as `on…={(fn) satisfies Handler<"tag", "event">}` (`emitter.ts`, the
@@ -125,7 +125,7 @@ no exports ("File '…/Counter.mx' is not a module"). TSX is a superset for the
 other hosts' JSX-free output, whose one narrowing (`<T>x` as a type assertion)
 none of them emits.
 
-**The shared JSX region engine (`src/region.ts`, decision 154).**
+**The shared JSX region engine (`src/region.ts`).**
 `compileJsxRegion` compiles one region of a `.<segment>.mx` TSX module for a
 dialect; `@mxlang/host-react` wraps it (`compileReactRegion`) and this package wraps
 it for `.preact.mx` (`src/region-compile.ts`: `compilePreactRegion`, Preact's

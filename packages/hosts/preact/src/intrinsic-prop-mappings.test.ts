@@ -18,7 +18,7 @@ function nameMappings(source: string, typeCheck?: boolean) {
     .filter(({ authored }) => /^[A-Za-z_$][\w:-]*$/.test(authored));
 }
 
-describe("native non-event name mappings (decision 140 (b))", () => {
+describe("native non-event name mappings", () => {
   it.each([undefined, true])(
     "maps every named prop kind (typeCheck=%s)",
     (typeCheck) => {

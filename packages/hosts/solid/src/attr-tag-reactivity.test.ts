@@ -81,7 +81,7 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
         importSpecifiers: new Map([["Row", "./Row.tsx"]]),
       },
     );
-    // decision 116: `Row` is a `.tsx` default import, so it lowers as a
+    // `Row` is a `.tsx` default import, so it lowers as a
     // dynamic tag, emitted as a JSX child-expression container (`{...}`) —
     // correct only *inside* JSX, not directly as `render(() => code)`,
     // which is a plain arrow-body position. Wrapped in a fragment either

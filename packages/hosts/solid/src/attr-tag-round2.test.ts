@@ -89,8 +89,8 @@ function runFixture(fixture: Fixture, mode: "dom" | "ssr"): unknown {
   const dir = mkdtempSync(join(packageRoot, ".attr-round2-"));
   try {
     const importSpecifiers = new Map<string, string>();
-    // `Row` is a genuine `.mx` default import (decision 116), so it lowers
-    // as a direct component call exactly as before that decision — this
+    // `Row` is a genuine `.mx` default import, so it lowers
+    // as a direct component call exactly as before value imports became dynamic tags — this
     // set is what tells `compileSolidMx` that, since `importSpecifiers`
     // alone no longer implies it.
     const importDefaultFromMarkoOrMx = new Set<string>();

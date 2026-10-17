@@ -79,23 +79,23 @@ export interface CompileSolidMxOptions {
   baseColumn?: number;
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.<target>.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.<target>.defaultTag`, already validated. */
   defaultTag?: string;
   /** Surrounding `.solid.mx` module imports, local binding -> specifier. */
   importSpecifiers?: ReadonlyMap<string, string>;
   /**
    * Every value the surrounding `.solid.mx` module binds at its top level —
    * import locals plus top-level `const`/`function`/`class` names, type-only
-   * bindings excluded (decision 114). A capitalized tag a region references
+   * bindings excluded. A capitalized tag a region references
    * may resolve through this scope as well as `importSpecifiers`.
    */
   moduleBindings?: ReadonlySet<string>;
   /**
    * The subset of `importSpecifiers`' bindings that are a *default* import
    * from a `.marko`/`.mx` source — Marko's own statically-resolved
-   * component case (decision 116). A capitalized tag bound to a name in
-   * this set lowers as a direct component call, exactly as before decision
-   * 116; any other value import (named, namespace, or a default from any
+   * component case. A capitalized tag bound to a name in
+   * this set lowers as a direct component call, exactly as before value
+   * imports became dynamic tags; any other value import (named, namespace, or a default from any
    * other extension) lowers as a dynamic tag instead.
    */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
@@ -105,8 +105,8 @@ export interface CompileSolidMxOptions {
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class` the surrounding module declares) whose value
    * `@mxlang/tsx-bridge`'s `programBindings` could not statically prove is a
-   * function/arrow/class — the local extension of decision 116 (firstmate's
-   * ruling under decision 116 in `notes/decisions-2026-09-10.md`). A
+   * function/arrow/class — the local extension of the value-import
+   * rule. A
    * capitalized tag bound to a name in this set lowers as a dynamic tag
    * instead of the direct call `moduleBindings` alone would give it; a plain
    * `function Foo(){}`/`class Foo{}`/`const Foo = () => {}` is absent from
@@ -116,7 +116,7 @@ export interface CompileSolidMxOptions {
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
   /**
-   * The registered targets this compile runs under (decisions 129 and 132).
+   * The registered targets this compile runs under.
    * Defaults to this package's own descriptor, which is right for a direct
    * entry; a tool compiling several targets passes the built-in registry's
    * lookup, so a callee importing `AttrTag` from another registered target's
@@ -150,7 +150,7 @@ export interface CompileSolidMxResult {
    */
   hoistedImports: HoistedImport[];
   /**
-   * `<define>`s this region hoisted to module scope (decision 110b), as
+   * `<define>`s this region hoisted to module scope, as
    * module-level statement text.
    *
    * A region is an expression, so it cannot hold a function declaration
@@ -186,13 +186,12 @@ export interface HoistedImport {
    * The template's resolved absolute path.
    *
    * Dedupe and authored-import reuse key on this rather than on `specifier`,
-   * so two spellings of one file collapse to a single import (decision 95
-   * ruling 3).
+   * so two spellings of one file collapse to a single import.
    */
   resolvedPath: string;
 }
 
-/** One `<define>` a region hoisted to module scope (decision 110b). */
+/** One `<define>` a region hoisted to module scope. */
 export interface HoistedDefine {
   /** The `function __mx_DefineN(params) { return <>...</>; }` text. */
   code: string;
@@ -376,7 +375,7 @@ export function compileSolidMx(
     }
   }
   // A capitalized tag also resolves through the surrounding TypeScript
-  // module's own top-level value bindings (decision 114) — not just its
+  // module's own top-level value bindings — not just its
   // imports, since a region has no module scope of its own for a
   // function/class/const the author wrote right there in the same file to
   // live in. Folded into `ctx.imports` rather than a new `Ctx` field: core's
@@ -390,7 +389,7 @@ export function compileSolidMx(
       ctx.unknownLocalValue.add(name);
     }
   }
-  // decision 116: only a *default* import from a `.marko`/`.mx` source is
+  // Only a *default* import from a `.marko`/`.mx` source is
   // Marko's own statically-resolved component case; every other value
   // import lowers as a dynamic tag. `moduleBindings` folds every top-level
   // value binding into `ctx.imports` with no source tracking (correct: a
@@ -573,7 +572,7 @@ function mappedStatement(
 /**
  * Compiles a whole `.mx` file to a Solid component module.
  *
- * This is the tag-unit entry point (decision 95): a `tags/icon.mx` is an
+ * This is the tag-unit entry point: a `tags/icon.mx` is an
  * ordinary `.mx` file that compiles, per host, into a module exporting the
  * tag, and the caller emits an import plus a call. It differs from
  * `compileSolidMx` in exactly one way, and it is the reason both exist: a

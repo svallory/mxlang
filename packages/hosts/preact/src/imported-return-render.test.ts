@@ -169,7 +169,7 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
 
 describe("a dynamic tag whose callee declares <return>, rendered on Preact", () => {
   // The verifier's fixture (dynamic-tag-return-unit-object-object): before
-  // decision 155's render path reached this host, `__mxDynamic` passed the
+  // the unit's render path reached this host, `__mxDynamic` passed the
   // returning unit's `{ value, output }` pair straight through and Preact
   // rendered empty. The unit's `.render` is now the value channel; the
   // default export renders the body.

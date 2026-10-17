@@ -10,7 +10,7 @@ const tags: Record<string, CustomTag> = {
   },
 };
 
-describe("the parent contract's defaultTag on Solid (decision 145 PR 3)", () => {
+describe("the parent contract's defaultTag on Solid", () => {
   it("beats the package config; elsewhere the config answers", () => {
     const run = (source: string) =>
       compileSolidUnit(source, {

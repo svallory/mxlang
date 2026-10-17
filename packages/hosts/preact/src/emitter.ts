@@ -1,5 +1,5 @@
 /**
- * The MX → Preact emitter, over `@mxlang/core`'s IR (decisions 79, 81, 82).
+ * The MX → Preact emitter, over `@mxlang/core`'s IR.
  *
  * The fourth emitter on the shared IR, and the one whose target has no
  * control-flow components at all: where Solid has `<Show>`/`<For>` and Astro
@@ -54,8 +54,8 @@ import { type JsxDialect, preactDialect } from "./dialect.ts";
  * instead.
  *
  * Same shape as `@mxlang/host-solid`'s table, and for the same reason: these are
- * Marko's *own* reactivity, and this target has its own. Decision 65's rule
- * holds: core words the refusal ("`<let>` is not supported in embedded MX on
+ * Marko's *own* reactivity, and this target has its own. The capability
+ * test holds: core words the refusal ("`<let>` is not supported in embedded MX on
  * Preact."), and a hint, where there is one, says where the equivalent lives,
  * never "not implemented". `<effect>` has no hint: it is not an MX tag on any
  * target, so no host points it anywhere.
@@ -108,7 +108,7 @@ function statefulErrors(
     },
     // `<return>` is **not** an error here. It was, on the grounds that "a
     // component returns its own markup" — true while a tag template was
-    // expanded into its caller, but under the unit model (decision 95) the
+    // expanded into its caller, but under the unit model the
     // tag is its own module and the caller invokes it, so it has a caller to
     // return to. A returning unit's component returns `{ value, output }`
     // and the call site unwraps it; the core owns the grammar.
@@ -239,12 +239,12 @@ export function createJsxDeclarations(
     nativeTags: WEB_ELEMENTS,
     attrTags: 2,
     defineCallPassesAttrs: true,
-    // Decision 155's model on this host: the compiled unit exposes `.render`,
+    // The render-path model on this host: the compiled unit exposes `.render`,
     // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on
     // a dynamic tag binds instead of being refused.
     bindsDynamicTagVar: true,
     tags: statefulErrors(dialectName, region),
-    // The ladder (decision 145): the parent's contract `defaultTag`, then
+    // The ladder: the parent's contract `defaultTag`, then
     // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
     // the host override into `configured`). This host permits the contract rung:
     // it sets no `allowContractDefaultTag: false`.
@@ -274,8 +274,7 @@ export function createJsxDeclarations(
       // Unresolved, it takes `rejectUnknownTag` below.
       return !isComponentName(name) && !name.includes(":");
     },
-    // Resolves a capitalized tag only when it genuinely resolves (decision
-    // 114): a scope binding (checked here for a direct caller of this
+    // Resolves a capitalized tag only when it genuinely resolves: a scope binding (checked here for a direct caller of this
     // function; `lower.ts`'s own `fileLocalBinding` already covers the
     // whole-file `.mx` precedence path before `isComponent` is ever asked)
     // or a taglib entry. A name matching neither used to fall through to a
@@ -497,7 +496,7 @@ function rawChild(
  *
  * Raw HTML is set through a *prop* on both targets, which replaces the whole
  * subtree — so a raw placeholder with siblings would silently drop them.
- * Refusing is decision 65's rule: the target genuinely cannot express it.
+ * Refusing follows the capability test: the target genuinely cannot express it.
  */
 function rejectMixedRaw(nodes: IrNode[]): void {
   const content = meaningful(nodes);
@@ -668,7 +667,7 @@ export class PreactEmitter implements Emitter<string> {
   readonly #bare: boolean;
 
   /**
-   * Tooling-only (decision 140): the name of the preamble's handler-type
+   * Tooling-only: the name of the preamble's handler-type
    * alias. When set, every native element's event handler becomes
    * `(fn) satisfies Alias<"tag", "event">`, so TypeScript checks it against
    * the host's own handler type; `satisfies` is erased on emit, so the
@@ -865,7 +864,7 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
-      // Phase B of `dom-events` (decision 101): recompose the prop from the
+      // Phase B of `dom-events`: recompose the prop from the
       // DOM event name core resolved — `on` + capitalized (`click` →
       // `onClick`), with each dialect's own spellings (`keydown` →
       // `onKeyDown`, React's `onDoubleClick`, `onFocus`, `onBlur`) through
@@ -945,7 +944,7 @@ export class PreactEmitter implements Emitter<string> {
     tag?: string,
   ): MappedCode {
     if (!isComponent && attr.kind !== "spread") {
-      // Decision 140 (b): native non-event prop errors land on the name.
+      // Native non-event prop errors land on the name.
       // Event-shaped names stay unmapped even for static/boolean values;
       // recomposed handlers use their separate type-check projection. A
       // default attribute has no authored name (zero-width span at `=`).
@@ -1038,14 +1037,14 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
-      // Phase B of `dom-events` (decision 101): the prop is recomposed from
+      // Phase B of `dom-events`: the prop is recomposed from
       // the DOM event name core resolved (`#eventPropName`) — never the
       // authored spelling, so `onDblClick` and `on-dblclick` both emit
       // the dialect's one spelling. The recomposed name is deliberately not span-mapped:
       // it is generated text, not source text, and a mapping whose texts
       // differ is worse than none.
       //
-      // Under `typeCheck` (tooling only, decision 140) a native element's
+      // Under `typeCheck` (tooling only) a native element's
       // handler is wrapped as `(fn) satisfies Handler<"tag", "event">`:
       // TypeScript then checks the value against the host's own handler type
       // (and contextually types its parameters), and the diagnostic lands on
@@ -1056,8 +1055,8 @@ export class PreactEmitter implements Emitter<string> {
       // The `as any` after it ends the check there: `satisfies` keeps the
       // value's own type, so without it the JSX prop re-checks the same value
       // against the same handler type and reports a second error (TS2322)
-      // beside the mapped TS1360, on the unmapped prop (decision 161 surfaced
-      // the duplicate; the unmapped prop used to be dropped).
+      // beside the mapped TS1360, on the unmapped prop, which used
+      // to be dropped.
       case "event": {
         const name = this.#eventPropName(attr);
         if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
@@ -1158,7 +1157,7 @@ export class PreactEmitter implements Emitter<string> {
    * this target calls the DOM property. Renaming on a component call silently
    * dropped the value — the callee read `input.class` and got `undefined` —
    * which only became reachable once a template tag became a real component
-   * call (decision 95) rather than being expanded inline.
+   * call rather than being expanded inline.
    */
   #attrName(name: string, isComponent: boolean): string {
     // `isComponent` is required, not defaulted: a new call site that forgot it
@@ -1172,7 +1171,7 @@ export class PreactEmitter implements Emitter<string> {
 
   /**
    * The JSX prop name for an `event` attribute, recomposed from the DOM
-   * event name core resolved (decision 101, design note §7): `on` plus the
+   * event name core resolved (design note §7): `on` plus the
    * capitalized DOM name — `click` → `onClick` — unless the dialect
    * names it. Every dialect passes the spellings its JSX types declare through
    * `JsxDialect.eventPropNames` (`dblclick` → `onDoubleClick`, `focusin` →
@@ -1186,7 +1185,7 @@ export class PreactEmitter implements Emitter<string> {
    *
    * A name JSX cannot spell as one identifier — a custom DOM event such as
    * `my-event` from `on-my-event` — is a uniform error on all three shared
-   * targets (decision 101 (d)): even where a runtime could bind it, the same
+   * targets: even where a runtime could bind it, the same
    * MX source must not silently do nothing on another. The `ref` route the
    * error names works identically on Preact, React and hono.
    */
@@ -1346,7 +1345,7 @@ export class PreactEmitter implements Emitter<string> {
   /** An attribute tag's body in this host's renderable shape. */
   #attributeTagRenderable(tag: AttributeTag, key?: string): MappedCode {
     // `hasBody` distinguishes `<@x/>` from a body whose rendered expression
-    // happens to be empty. Decision 106 makes the former `undefined`, not a
+    // happens to be empty. The former is `undefined`, not a
     // null JSX child or an empty fragment.
     if (!tag.hasBody) return concatMapped("undefined");
     const children = meaningful(tag.block.children);
@@ -1778,7 +1777,7 @@ export class PreactEmitter implements Emitter<string> {
    */
   #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
     const parts: string[] = [];
-    // A decision-116-routed dynamic target (`valueImportBinding` set) still
+    // A dynamic target routed from a value import (`valueImportBinding` set) still
     // names a real, in-scope import — the emitted call is
     // `mxDynamic(Row, ...)`, with `Row` imported verbatim — so `owner` can
     // still reference it for `Parameters<typeof Row>[0][...]` typing,
@@ -1993,7 +1992,7 @@ export class PreactEmitter implements Emitter<string> {
       // small `mxDynamic` helper into the module (mirroring `@mxlang/target-html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("__mxDynamic");
-      // Decision 109, Marko parity: args now combine with a body/attribute
+      // Marko parity: args combine with a body/attribute
       // tag (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only
       // a plain attribute alongside args is still rejected
       // (`rejectArgsWithProps`, core), so `node.attrs` here holds no named
@@ -2016,7 +2015,7 @@ export class PreactEmitter implements Emitter<string> {
               "]",
             )
           : this.#propsObject(node);
-      // decision 112, Marko parity: for a string target with arguments,
+      // Marko parity: for a string target with arguments,
       // args[0] (not the trailing props object) becomes the input, matching
       // `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`. Content
       // still renders, since Marko threads it independently of `input` — the
@@ -2046,7 +2045,7 @@ export class PreactEmitter implements Emitter<string> {
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`
         : "";
       // A `/var` on a dynamic tag binds the callee's render path's value
-      // (decision 155): `__mxDynamicPair` returns the `{ value, output }`
+      // `__mxDynamicPair` returns the `{ value, output }`
       // pair a returning unit's `.render` hands back, with `undefined` for
       // any callee without one. Same statement-position rule as the static
       // path above: the call hoists to the component body, so a callback
@@ -2102,8 +2101,7 @@ export class PreactEmitter implements Emitter<string> {
       // A `<define>` is a local block; this host lowers one to a local
       // function (see `define` below), so calling it is an ordinary call.
       //
-      // Decision 109, revised to Marko's own shape (ruling 2026-10-09),
-      // measured on stock Marko 6.4.4: with tag arguments the call appends
+      // Matching Marko's own shape, measured on stock Marko 6.4.4: with tag arguments the call appends
       // ONE trailing object — the attribute tags by their names plus
       // `content` — as the next argument, so it fills the first unfilled
       // parameter and every parameter after it reads `undefined`; nothing
@@ -2161,7 +2159,7 @@ export class PreactEmitter implements Emitter<string> {
     // it is bound to, so a component Marko resolved under such a name is
     // emitted under a capitalized alias the module binds instead. A target
     // core already bound (a registered taglib tag whose name an authored
-    // import or define also takes, decision 164 addendum 1) is called by
+    // import or define also takes) is called by
     // that binding: aliasing the authored name would call the import.
     const name = node.target.binding ?? componentAlias(node.target.name);
     if (!node.target.binding && name !== node.target.name) {
@@ -2208,7 +2206,7 @@ export class PreactEmitter implements Emitter<string> {
           }
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
-        // The unit's render path (decision 155): `.render` is the compiled
+        // The unit's render path: `.render` is the compiled
         // unit's own function returning the `{ value, output }` pair; the
         // default export returns only the output.
         this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);

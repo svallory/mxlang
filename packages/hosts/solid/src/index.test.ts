@@ -348,7 +348,7 @@ describe("Solid IR lowering", () => {
     ],
     // attribute-tag-silent-drops B1: a repeated `<@item>` used to emit the
     // `item=` prop twice (JSX last-wins), losing every occurrence but the
-    // last. It becomes an array; decision 108 gives each body-only occurrence
+    // last. It becomes an array; each body-only occurrence gets
     // the renderable accessor shape for this untyped callee.
     [
       "repeated attribute tag becomes an array",
@@ -708,17 +708,17 @@ describe("Solid host errors", () => {
       "cannot appear in a Solid component",
     ],
     [
-      "unresolved capitalized tag (decision 114)",
+      "unresolved capitalized tag",
       `<TotallyUndefined/>`,
       "Unable to find entry point for custom tag `<TotallyUndefined>`",
     ],
     [
-      "unresolved capitalized tag with body (decision 114)",
+      "unresolved capitalized tag with body",
       `<TotallyUndefined>body</TotallyUndefined>`,
       "Unable to find entry point for custom tag `<TotallyUndefined>`",
     ],
     [
-      "unresolved capitalized tag with attribute (decision 114)",
+      "unresolved capitalized tag with attribute",
       `<TotallyUndefined attr=1/>`,
       "Unable to find entry point for custom tag `<TotallyUndefined>`",
     ],
@@ -758,7 +758,7 @@ describe("Solid host errors", () => {
     expect(error).toMatchObject({ line: 8, column: 20 });
   });
 
-  it("does not reject a <for>-param capitalized local as unresolved (decision 113)", () => {
+  it("does not reject a <for>-param capitalized local as unresolved", () => {
     // A local binding resolves before core ever asks the host's
     // `isComponent`, so tightening it to reject unresolved tags must not
     // regress this case. (`<const>` cannot be used for the same check here:
@@ -769,14 +769,14 @@ describe("Solid host errors", () => {
     ).not.toThrow();
   });
 
-  it("resolves a Solid JSX built-in with no import (decision 114)", () => {
+  it("resolves a Solid JSX built-in with no import", () => {
     // `<Show>` is a real MX tag reference here, not a claimed host tag
     // (`isDelegatedTag` only claims `try`) — `isComponent` must recognize it by
     // name.
     expect(() => compile(`<Show when=cond>x</Show>`)).not.toThrow();
   });
 
-  it("resolves a capitalized tag bound by the surrounding module (decision 114)", () => {
+  it("resolves a capitalized tag bound by the surrounding module", () => {
     // A `.solid.mx` region has no module scope of its own; a real caller's
     // surrounding TypeScript module supplies this through
     // `moduleBindings`, computed by `@mxlang/tsx-bridge`'s `programBindings`
@@ -789,7 +789,7 @@ describe("Solid host errors", () => {
     ).not.toThrow();
   });
 
-  it("still rejects a capitalized tag bound only by a type-only import (decision 114)", () => {
+  it("still rejects a capitalized tag bound only by a type-only import", () => {
     // `import type Widget from "./widget.mx"` binds no runtime value, so it
     // must not resolve `<Widget/>` — matching `@mxlang/tsx-bridge`'s
     // `programBindings`, which excludes type-only bindings by design (see
@@ -813,7 +813,7 @@ describe("Solid host errors", () => {
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("recomposes the prop from the DOM event name", () => {
     expect(compile(`<button onClick=handler>x</button>`).code).toContain(
       "onClick={handler}",
@@ -895,7 +895,7 @@ describe("discovered tag imports inside a region", () => {
     let error: unknown;
     try {
       // Written without angle brackets: `<import …/>` is Marko's own
-      // "a statement, not an html tag" error since decision 168.
+      // "a statement, not an html tag" error.
       compileRegion(`import x from "./x.ts"\n<div/>`);
     } catch (caught) {
       error = caught;
@@ -950,10 +950,10 @@ describe("discovered tag imports inside a region", () => {
   });
 });
 
-describe("<define> hoisted to module scope (decision 110b)", () => {
+describe("<define> hoisted to module scope", () => {
   it("used to be a compile error inside a region", () => {
     // The bug this whole feature fixes, pinned so a regression is obvious:
-    // before decision 110b, any `<define>` inside a `.solid.mx` region
+    // before `<define>` hoisting, any `<define>` inside a `.solid.mx` region
     // failed with this message, unconditionally.
     expect(() => compile(`<define/Row>x</define><Row/>`)).not.toThrow();
   });
@@ -967,7 +967,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     );
     // JSX has no positional-call syntax, so a <define> call is a plain
     // function-call expression, not a JSX tag — the same call shape
-    // `@mxlang/target-html` already uses (decision 109's named-param binding).
+    // `@mxlang/target-html` already uses (its named-param binding).
     expect(result.code).toContain(`{${hoisted?.binding}()}`);
     expect(result.code).not.toContain("<Row");
   });
@@ -987,12 +987,12 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     );
     expect(result.hoistedDefines).toHaveLength(1);
     // No tag args: the attribute tag travels in ONE object bound to the
-    // first param (decision 160).
+    // first param.
     expect(result.code).toContain('{ "head": ');
     expect(result.code).toContain("H");
   });
 
-  it("supports args, content and attribute tags together (decision 109)", () => {
+  it("supports args, content and attribute tags together", () => {
     // `item` is consumed positionally by the arg. Marko appends ONE
     // trailing object — the attribute tags by their names plus `content` —
     // as the next argument, so it lands in the second param; the define
@@ -1065,7 +1065,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     expect(a?.code).toContain(`{${b?.binding}()}`);
   });
 
-  it("a self-recursive <define> now errors with Marko's own wording (decision 114, was a silent gap)", () => {
+  it("a self-recursive <define> now errors with Marko's own wording (was a silent gap)", () => {
     // `ctx.defines.set(name, params)` (core, `lowerDefine`) runs only
     // *after* lowering a define's own body, so `A` isn't registered as a
     // define while `A`'s own body is being lowered — on `@mxlang/target-html` this
@@ -1075,7 +1075,7 @@ describe("<define> hoisted to module scope (decision 110b)", () => {
     // resolvability check, so the inner self-reference lowered as a
     // `Component` with a plain `"name"` target and printed a JSX tag
     // referencing a binding nothing declares (`<A />`, args dropped) — the
-    // identical bug decision 114's `TotallyUndefined` case fixes elsewhere
+    // identical bug the `TotallyUndefined` case fixes elsewhere
     // in this file. Tightening `isComponent` closes this gap too, as a
     // side effect rather than a separate fix.
     expect(() =>
@@ -1214,7 +1214,7 @@ describe("compileSolidUnit", () => {
 
   it("returns the same full result shape as compileSolidMx (map/mappings/dependencies)", () => {
     // Prerequisite for wiring this into the TS plugin, the language server
-    // and the vite-plugin (decision 115): those all consume `map`/`mappings`
+    // and the vite-plugin: those all consume `map`/`mappings`
     // for diagnostic positions and `dependencies` for HMR invalidation,
     // exactly as they already do for `compileSolidMx`. One Solid mapping
     // story, not two. Attribute-tag names are one of the few constructs
@@ -1289,7 +1289,7 @@ describe("compileSolidUnit", () => {
     expect(code).toContain("export interface Input { item: AttrTag }");
   });
 
-  it("errors on a whole `import type` used as a tag (decision 114 parity)", () => {
+  it("errors on a whole `import type` used as a tag (Marko parity)", () => {
     // Mirrors `@mxlang/target-html`'s equivalent coverage: a whole `import type`
     // binds no runtime value, so `<Widget/>` must still be Marko's own
     // unresolved-tag error on Solid's whole-file entry too, not a silently
@@ -1309,7 +1309,7 @@ describe("compileSolidUnit", () => {
     );
   });
 
-  it("errors on an inline `{ type X }` specifier used as a tag (decision 114 parity)", () => {
+  it("errors on an inline `{ type X }` specifier used as a tag (Marko parity)", () => {
     let error: unknown;
     try {
       compileSolidUnit(`import { type Widget } from "./widget.mx"\n<Widget/>`, {
@@ -1339,8 +1339,8 @@ describe("compileSolidUnit", () => {
     // gated on the shared `hoistedDefines`/`defineBindings` module state
     // alone, which `collectReturnVars` set for every caller including this
     // one — so a `<define>` here compiled clean but emitted a call to a
-    // function nothing declares (a runtime ReferenceError, decision 110b's
-    // own "positioned error, not wrong code" violated silently).
+    // function nothing declares (a runtime ReferenceError; the
+    // hoisting's own "positioned error, not wrong code" violated silently).
     let error: unknown;
     try {
       compileSolidUnit(`<define/Row>x</define><Row/>`, {
@@ -1382,7 +1382,7 @@ describe("compileSolidUnit", () => {
       const regionImports = compiled.hoistedImports
         .map((entry) => entry.code)
         .join("\n");
-      // decision 116: `Row` is a `.tsx` default import, so `compiled.code`
+      // `Row` is a `.tsx` default import, so `compiled.code`
       // is now a dynamic-tag call, emitted as a JSX child-expression
       // container (`{...}`) — correct only *inside* JSX, not in a plain
       // `const view = ...` assignment position, where a leading `{...}`
@@ -1546,15 +1546,15 @@ describe("event error positions", () => {
 });
 
 /**
- * Decision 116: a capitalized tag bound to a value import that is not a
+ * A capitalized tag bound to a value import that is not a
  * `.marko`/`.mx` default import lowers as a dynamic tag on Solid too — the
  * same `<Dynamic component=…>` shape an authored `<${expr}>` already
  * produces, with `moduleBindings` supplying the import the way a real
- * caller's surrounding TypeScript module does (decision 114).
+ * caller's surrounding TypeScript module does.
  */
-describe("decision 116: value import used as a tag (solid)", () => {
+describe("value import used as a tag (solid)", () => {
   it("a .ts value import compiles to Dynamic, not a direct JSX call", () => {
-    // Decision 116 is scoped to *import* bindings — `moduleBindings` alone
+    // This routing is scoped to *import* bindings — `moduleBindings` alone
     // (a locally declared `const`/`function`/`class`, never an import) must
     // NOT route dynamic; see the "still a direct call" tests below. This
     // case needs a real `importSpecifiers` entry for a non-`.marko`/`.mx`
@@ -1580,10 +1580,10 @@ describe("decision 116: value import used as a tag (solid)", () => {
   });
 
   it("a module-scope local function (not an import) still compiles to a direct JSX call, not Dynamic", () => {
-    // Lead's correction: decision 116 covers value *imports* only. A
+    // Dynamic routing covers value *imports* only. A
     // locally declared `function`/`const`/`class` used as a tag — the most
     // common Solid module-scope-component pattern — keeps today's direct
-    // lowering on every host, unaffected by this decision.
+    // lowering on every host.
     const code = compileSolidMx("<Layout/>", {
       filename: "fixture.solid.mx",
       moduleBindings: new Set(["Layout"]),
@@ -1594,12 +1594,11 @@ describe("decision 116: value import used as a tag (solid)", () => {
 });
 
 describe("local-value-as-tag-parity: non-import local used as a tag (solid)", () => {
-  // Firstmate's extension of decision 116 (`notes/decisions-2026-09-10.md`):
-  // a non-import module-scope binding whose value is not statically a
+  // A non-import module-scope binding whose value is not statically a
   // function/arrow/class is "unknown" and routes through `<Dynamic>` too.
   // `unknownModuleBindings` is the classified subset `@mxlang/tsx-bridge`'s
   // `unknownProgramBindings`/`unknownSourceBindings` compute; these tests
-  // exercise the host-side wiring directly, the same way the decision-116
+  // exercise the host-side wiring directly, the same way the value-import
   // tests above exercise `importDefaultFromMarkoOrMx`.
   it("a module-scope binding classified unknown routes through Dynamic", () => {
     const code = compileSolidMx("<Tag/>", {

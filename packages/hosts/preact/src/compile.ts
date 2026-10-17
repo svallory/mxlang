@@ -55,7 +55,7 @@ import {
 export interface CompilePreactOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.<target>.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.<target>.defaultTag`, already validated. */
   defaultTag?: string;
   /**
    * The registered targets this compile runs under. Defaults to this
@@ -76,7 +76,7 @@ export interface CompilePreactOptions {
   /** Positioned non-fatal diagnostics collected by editor/build tooling. */
   warnings?: MxWarning[];
   /**
-   * Internal, for tooling only (decision 140). Emits the module for type
+   * Internal, for tooling only. Emits the module for type
    * checking, not for running: every native element's event handler is
    * checked with `(fn) satisfies Handler<"tag", "event">`, a type-only
    * expression that resolves the host's own handler type, and Marko keeps the
@@ -234,8 +234,8 @@ export function attributeHelpers(
  *
  * `payload` is either the call's props object (no arguments), or — for
  * Marko's tag-argument form (`<\${x}(a, b)/>`) — an array, told apart with
- * `Array.isArray`. Decision 109 (Marko parity, \`assertAttributesOrArgs\`,
- * \`@marko/compiler/babel-utils\`): args now combine with a body or attribute
+ * `Array.isArray`. Marko parity (\`assertAttributesOrArgs\`,
+ * \`@marko/compiler/babel-utils\`): args combine with a body or attribute
  * tag, so the array is not always bare arguments — when there is content or
  * an attribute tag to carry, the emitter (\`component()\` in \`emitter.ts\`)
  * appends a trailing props object as the array's last element, matching
@@ -249,7 +249,7 @@ export function attributeHelpers(
  * an element description, matching
  * \`@mxlang/target-html\`'s \`renderDynamic\` and \`@mxlang/host-solid\`'s inline dispatch.
  *
- * decision 112, Marko parity: a *string* target called with arguments uses
+ * Marko parity: a *string* target called with arguments uses
  * \`payload[0]\` (Marko's \`args[0]\`) as its element attributes, not the
  * trailing props object's attribute tags — Marko's translator appends that
  * object *after* the positional args (\`renderer(...args, { content, ... })\`),
@@ -345,7 +345,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
 }
 /**
  * __mxDynamic for a call that binds /var: a target with a render path (a
- * compiled unit that declares <return>, decision 155) is called through
+ * compiled unit that declares <return>) is called through
  * .render, which hands back the { value, output } pair — the value binds the
  * /var, the output renders, and the pair object itself never reaches JSX.
  * Any other callee has no value channel, so value is undefined and the
@@ -438,7 +438,7 @@ function handlerTypeNames(source: string): HandlerTypeNames {
 }
 
 /**
- * The type-check-only preamble the handler wrapper needs (decision 140).
+ * The type-check-only preamble the handler wrapper needs.
  *
  * Types only — an `import type` and two aliases — so nothing in it survives
  * emit and it declares no value. `Handler<tag, event>` is the host's own
@@ -595,8 +595,8 @@ export function emitModuleWithMappings(
     ...statements.flatMap((statement) => ["  ", statement, "\n"]),
   );
   // A unit that declares `<return>` hands back `{ value, output }` through
-  // its **render path**, not through the default export (decision 155's
-  // model, html's `.render` shape adapted to JSX): the emitted module keeps
+  // its **render path**, not through the default export (the html
+  // target's `.render` shape adapted to JSX): the emitted module keeps
   // one body function returning the pair, binds it as `Name.render`, and the
   // default export returns only the output. Before this shape the default
   // export returned the pair itself, so any caller without static knowledge

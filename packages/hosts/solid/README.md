@@ -1,7 +1,6 @@
 # @mxlang/host-solid
 
-The Solid host: Solid's emitter over `@mxlang/core`'s shared IR (decisions
-69, 71, 72, 79, 81). Same package shape as `@mxlang/host-astro` — `src/`,
+The Solid host: Solid's emitter over `@mxlang/core`'s shared IR. Same package shape as `@mxlang/host-astro` — `src/`,
 `moon.yml`, a vitest project, this README — and the third emitter over the
 core IR after `@mxlang/target-html` (vanilla strings) and `@mxlang/host-astro` (`.astro.mx`).
 
@@ -55,8 +54,8 @@ own authored default import of the same file where there is one. An
 same error, because they have a real module to put it in.
 
 `compileSolidUnit` is the whole-file entry point beside it — a page's own
-`.mx`, not only a tag unit, since decision 115 routes every whole-file `.mx`
-resolved to Solid through this function in the TypeScript plugin, the
+`.mx`, not only a tag unit, since every whole-file `.mx`
+resolved to Solid goes through this function in the TypeScript plugin, the
 language server, `mx-tsc` and the vite-plugin. A tag file **is** a module, so
 its module-level statements are placed rather than rejected (an authored
 `import` resolves a capitalized tag exactly as it does on `@mxlang/target-html`),
@@ -170,7 +169,7 @@ on `<@placeholder>`) and `#id`/`.class` shorthand-merge errors.
 
 ## What is not in this package
 
-Per decision 79, nothing Solid-specific lives in `@mxlang/core` beyond the
+Per the resolve-then-emit split, nothing Solid-specific lives in `@mxlang/core` beyond the
 IR fields every Marko-syntax host needs to carry regardless of target
 (`ForSource.range.step`, `For.key`) — `Show`/`Switch`/`Repeat`, the JSX
 shape, and every lowering row above are this package's own. `rg -n

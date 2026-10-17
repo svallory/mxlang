@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
-/** Native elements normalize primitive attribute values; component props stay raw (decision 149). */
+/** Native elements normalize primitive attribute values; component props stay raw. */
 describe("preact primitive attribute normalization", () => {
   const compile = (source: string) =>
     compilePreactMx(source, "/virtual/page.mx").code;

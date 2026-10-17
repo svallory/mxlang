@@ -12,13 +12,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 /**
  * These shape/lowering fixtures use bare capitalized tags with no import —
  * they exercise how a component call lowers, not tag resolution. Since
- * decision 114 makes an unresolved capitalized tag a compile error, every
+ * an unresolved capitalized tag is a compile error, every
  * capitalized identifier the fixture source uses is declared bound (as
  * `mxModuleBindings` would be for a real caller's surrounding module),
  * matching Marko's own rule (`tag.scope.hasBinding(tagName)`) that any
  * in-scope binding — real or not — is what actually decides resolvability.
  *
- * Also declared as if each were a `.mx` default import (decision 116): these
+ * Also declared as if each were a `.mx` default import: these
  * fixtures test render-prop/attribute-tag lowering shapes, not the
  * value-import-as-tag routing decision, so every bare name keeps its
  * pre-116 direct-call shape (`<For .../>`) rather than incidentally
@@ -68,7 +68,7 @@ function expectSyntaxError(
 }
 
 /**
- * Decision 51: tag params on components make the children a function. This
+ * Tag params on components make the children a function. This
  * is what lets MX call Solid's own render-prop components natively.
  */
 describe("tag params make the children a function", () => {
@@ -120,12 +120,12 @@ describe("tag params make the children a function", () => {
 });
 
 /**
- * Decision 51, rule 2: `<@name>` inside a tag body becomes the prop `name` on
+ * `<@name>` inside a tag body becomes the prop `name` on
  * that tag.
  */
 describe("attribute tags become props", () => {
   it("uses an imported callee's Input from the surrounding module", () => {
-    // decision 116: `AttrCallee` is a `.tsx` default import (a plain
+    // `AttrCallee` is a `.tsx` default import (a plain
     // function, the "host component" case), not `.marko`/`.mx`, so it
     // lowers as a dynamic tag rather than a direct `<AttrCallee .../>`
     // call — `valueImportBinding` still lets the typed attribute-tag check
@@ -162,7 +162,7 @@ describe("attribute tags become props", () => {
     // whose name and type arguments land on different lines was printed as
     // `NonNullable(\n<Parameters<...>>)`, which is not TypeScript.
     //
-    // decision 116: `AttrCallee` is a `.tsx` default import, so it lowers
+    // `AttrCallee` is a `.tsx` default import, so it lowers
     // as a dynamic tag (see the test above) — the assertion here is on the
     // generated `satisfies` type staying intact, unaffected by that change.
     const filename = join(HERE, "fixtures", "caller.solid.mx");

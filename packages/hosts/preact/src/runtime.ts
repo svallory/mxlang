@@ -1,8 +1,8 @@
 /**
  * The one runtime this host ships: `<try>`'s error boundary and placeholder.
  *
- * Decision 82 says MX itself ships no runtime, and this does not contradict
- * it: nothing here is an MX runtime, it is *Preact* code an MX author would
+ * MX itself ships no runtime, and this does not contradict that:
+ * nothing here is an MX runtime, it is *Preact* code an MX author would
  * otherwise have to write by hand, shipped so the `<try>` lowering has a
  * component to name. A template that never writes `<try>` imports none of it,
  * because the emitter only emits the import when it emits the lowering.

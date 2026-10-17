@@ -1,5 +1,5 @@
 /**
- * The `solid-jsx` target descriptor (decisions 129 and 132; unstable).
+ * The `solid-jsx` target descriptor (unstable).
  *
  * Importing this module loads `./emitter.ts` (the declarations) only. The
  * whole-file compile, the region compile and the callee reader reach their

@@ -5,7 +5,7 @@ component module** — JSX text carrying its own `@jsxImportSource` pragma, with
 the author's imports and `static` blocks at module scope and their
 `export interface Input` as the component's props type.
 
-The fourth emitter on `@mxlang/core`'s IR (decisions 71, 79, 81, 82), and the
+The fourth emitter on `@mxlang/core`'s IR, and the
 first whose target has no control-flow components at all. Where
 `@mxlang/host-solid` has `<Show>`/`<For>` and `@mxlang/host-astro` has its own template
 syntax, Preact has plain JSX plus JavaScript — so every structural kind lowers
@@ -196,7 +196,7 @@ not detect a template that renders `[object Object]`.
 ## Errors
 
 Every construct this target cannot express is a compile error naming the
-construct and where its equivalent lives — decision 65's rule, "this target
+construct and where its equivalent lives — the spec's capability test, "this target
 cannot", never "not implemented".
 
 | construct | message names |

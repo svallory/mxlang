@@ -186,7 +186,7 @@ describe("generated names do not shadow authored bindings", () => {
         }),
       ).toBe("<p>ok</p>");
     });
-    // A `marko.json` registers nothing (decision 197): its lowercase tag is the
+    // A `marko.json` registers nothing: its lowercase tag is the
     // native element, so no alias is named and an authored `MxBadge` stands.
     it(`${host}: a lowercase marko.json tag is native beside an authored MxBadge`, async () => {
       const compile = await compilerFor(host);
@@ -213,7 +213,7 @@ describe("generated names do not shadow authored bindings", () => {
         rmSync(scratch, { recursive: true, force: true });
       }
     });
-    // Decision 164 addendum 1: `import badge from "./row.mx"` + `<badge/>` is
+    // `import badge from "./row.mx"` + `<badge/>` is
     // not a tag, on every target.
     it(`${host}: a lowercase tag naming a tag import that is no element is an error`, async () => {
       await expect(
@@ -718,7 +718,7 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   it.each(hosts)(
     "%s: a `<define>` call carries its attribute tag through instead of dropping it",
     async (host) => {
-      // `<define>` has no declared `Input`, so decision 108's untyped-callee
+      // `<define>` has no declared `Input`, so the untyped-callee
       // fallback applies: `<@head>` carries no attributes, so `head` arrives
       // renderable (the body itself), read directly with `<${head}/>`. As in
       // Marko the call's one attributes object is the define's first param,
@@ -732,12 +732,12 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   );
 
   it.each(hosts)(
-    "%s: accepts a `<define>` call mixing tag-argument form with an attribute tag (decision 109, Marko parity)",
+    "%s: accepts a `<define>` call mixing tag-argument form with an attribute tag (Marko parity)",
     async (host) => {
       // `<Card('a')>` passes `title` positionally; `<@head>` rides along as
       // Marko's own "dynamic tag fallback content" — `assertAttributesOrArgs`
       // rejects only a plain attribute alongside args, not a body/attribute
-      // tag (round-2 review finding, then decision 109 closed the gap).
+      // tag (round-2 review finding, since closed).
       // Marko appends ONE trailing object `{ head }` as the next argument,
       // landing in the first unfilled param; the define destructures `head`
       // out of it to render the tag.
@@ -749,8 +749,7 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
     },
   );
 
-  // Decision 109, revised to Marko's own shape (ruling 2026-10-09;
-  // measured on stock Marko 6.4.4): a `<define>` call WITH tag arguments
+  // Matching Marko's own shape (measured on stock Marko 6.4.4): a `<define>` call WITH tag arguments
   // appends ONE trailing object `{ ...attributeTags, content }` as the next
   // argument, so it lands in the first unfilled param and every param after
   // it reads `undefined` — nothing is bound by name.
