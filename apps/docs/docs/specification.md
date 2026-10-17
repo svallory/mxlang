@@ -1061,7 +1061,7 @@ class (a shorthand merge, or one written as `class=["a", y]`) is joined by a
 `__mxClass` member the same way and bound as `[class]`, because `[ngClass]`
 throws on any array entry that is not a string; a plain object `class={…}`
 stays `[ngClass]`. Angular may reorder the words of a `[class]` string, so the
-class set matches Marko's and the word order may not.
+class set matches Marko's and the word order may not. A repeated word collapses to one, and a class that becomes empty after an update leaves `class=""` rather than no attribute.
 
 | Written | Result |
 |---|---|

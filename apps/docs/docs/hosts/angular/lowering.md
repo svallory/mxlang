@@ -50,7 +50,7 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 
 - **`<div #ref>` is a template reference.** In attribute position `#x` is Angular's; next to the tag name, `<div#x>`, it is the `id` shorthand.
 - **`<svg:rect>` is one tag name.** A colon in a tag name is part of the name, as in Marko, so it reaches the template as Angular's `svg:`-prefixed element.
-- **A class beside `class=` has the same set of words, maybe in another order.** `<div.a class=y/>` is bound as `[class]`, and Angular may reorder the words of a `[class]` string. Marko prints the shorthand first.
+- **A class beside `class=` has the same set of words, maybe in another order.** `<div.a class=y/>` is bound as `[class]`, and Angular may reorder the words of a `[class]` string. Marko prints the shorthand first. A repeated word collapses to one, and a class that becomes empty after an update leaves `class=""`.
 
 ## Events
 
