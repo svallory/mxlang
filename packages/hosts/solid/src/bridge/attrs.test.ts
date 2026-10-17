@@ -33,7 +33,7 @@ const classCodeOf = (source: string): string => {
   const attr = attrsOf(source).find(
     (a) => (a.name as { name?: string } | undefined)?.name === "class",
   ) as { value: { expression: object } };
-  return generate(attr.value.expression).code;
+  return generate(attr.value.expression as Parameters<typeof generate>[0]).code;
 };
 
 function expectSyntaxError(fn: () => void, expected: string) {

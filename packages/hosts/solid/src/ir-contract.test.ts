@@ -74,8 +74,8 @@ function dropParserNodes(value: unknown, seen = new Set<object>()): void {
 
 describe("Solid emitter: what it assumes about the IR (ir-spec 10.2)", () => {
   it("E3: prints Expr.code, not text rebuilt from Expr.node", () => {
-    // Solid does read `node` to *inspect* an expression (the `.class`
-    // shorthand fold, a function-valued attribute, a string `by=` key), so
+    // Solid does read `node` to *inspect* an expression (a function-valued
+    // attribute, a string `by=` key, a literal range bound), so
     // nulling every node is not a valid probe here; what it must never do is
     // print from it.
     const changed = emitted("<p>${a}</p><i title=b>x</i>", (ir) => {
@@ -168,10 +168,6 @@ describe("Solid emitter: what it assumes about the IR (ir-spec 10.2)", () => {
     [
       "a static template-literal class folds (staticTemplateValue)",
       "<div class=`a b`>x</div>",
-    ],
-    [
-      "an authored class array is told from the shorthand fold",
-      '<div class=["a", b]>x</div>',
     ],
   ])("E3: Solid reads Expr.node to inspect — %s", (_name, source) => {
     const authored = emitted(source);
