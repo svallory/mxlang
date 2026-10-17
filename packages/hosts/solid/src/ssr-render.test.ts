@@ -1055,59 +1055,94 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
     },
   );
 
-  // The spec table rules a shorthand beside any other dynamic `class=` a parse
-  // error, and the Solid host refuses it with that message. These two rows pin
-  // what compiles today, not a settled rule: `.${y} class=z` is the open
-  // question (decision 9 versus stock Marko, which merges every form), and
-  // Solid compiles it because its first array entry is a placeholder. Its
-  // output is correct (stock renders `yy zz` too), so it is pinned here; if the
-  // ruling changes, this row and the refusals below move with it.
-  it("renders a placeholder-first shorthand beside a dynamic class as stock does", () => {
-    expect(classOf(renderApp("<div.${y} class=z/>", setup))).toBe("yy zz");
-    expect(classOf(renderApp("div.${y} class=z", setup))).toBe("yy zz");
-  });
-
-  it.each([
-    ["a static word, a placeholder, an identifier", "<div.a.${y} class=z/>"],
+  // A shorthand merges with any `class=` value, as Marko does: the shorthand
+  // parts first, then the explicit value, one space apart, and a falsy explicit
+  // value adds nothing. Each row renders the three shorthand shapes at once, in
+  // tag and in concise mode. The expected strings are what Marko 6.4.4 renders
+  // (and the html, preact, react and hono hosts) for the same templates.
+  const shapes = [".a", ".a.${x}", ".${x}"];
+  const classesOf = (html: string) =>
+    [...html.matchAll(/<div(?: class="([^"]*)")?>/g)].map(
+      (match) => match[1] ?? "(none)",
+    );
+  const dynamicRows: [string, string, string, string[]][] = [
+    ["a string", '"zz"', "", ["a zz", "a xx zz", "xx zz"]],
     [
-      "a static word, a placeholder, a ternary",
-      '<div.a.${y} class=(z ? "on" : "off")/>',
+      "a string in a binding",
+      "v",
+      'const v = "zz";',
+      ["a zz", "a xx zz", "xx zz"],
+    ],
+    ["an object", "{k: true, m: false}", "", ["a k", "a xx k", "xx k"]],
+    [
+      "an object in a binding",
+      "v",
+      "const v = {k: true, m: false};",
+      ["a k", "a xx k", "xx k"],
+    ],
+    ["an array", '["p", "q"]', "", ["a p q", "a xx p q", "xx p q"]],
+    [
+      "an array in a binding",
+      "v",
+      'const v = ["p", "q"];',
+      ["a p q", "a xx p q", "xx p q"],
     ],
     [
-      "a static word, a placeholder, a template literal",
-      "<div.a.${y} class=`c ${z}`/>",
+      "a nested array in a binding",
+      "v",
+      'const v = ["p", ["q", ["r"]]];',
+      ["a p q r", "a xx p q r", "xx p q r"],
+    ],
+    ["null", "null", "", ["a", "a xx", "xx"]],
+    ["null in a binding", "v", "const v = null;", ["a", "a xx", "xx"]],
+    [
+      "undefined in a binding",
+      "v",
+      "const v = undefined;",
+      ["a", "a xx", "xx"],
+    ],
+    ["false in a binding", "v", "const v = false;", ["a", "a xx", "xx"]],
+    ["a function call", '"p".toUpperCase()', "", ["a P", "a xx P", "xx P"]],
+    [
+      "a ternary yielding a string",
+      '(t ? "on" : "off")',
+      "const t = true;",
+      ["a on", "a xx on", "xx on"],
     ],
     [
-      "concise: a static word, a placeholder, an identifier",
-      "div.a.${y} class=z",
+      "a ternary yielding an object",
+      '(t ? {k: true} : "off")',
+      "const t = true;",
+      ["a k", "a xx k", "xx k"],
     ],
-    ["a static word, a one-string array", '<div.a class=["x"]/>'],
-    ["two static words, a one-string array", '<div.a.b class=["x"]/>'],
-    [
-      "a static word, a placeholder, a one-string array",
-      '<div.a.${y} class=["x"]/>',
-    ],
-    [
-      "a static word, a placeholder, an array with an identifier",
-      '<div.a.${y} class=[z, "w"]/>',
-    ],
-    [
-      "a static word, an array with an identifier first",
-      '<div.a class=[z, "w"]/>',
-    ],
-    [
-      "a static word, an array with an identifier last",
-      '<div.a class=["w", z]/>',
-    ],
-    ["a static word, an array of one identifier", "<div.a class=[z]/>"],
-    ["a static word, an empty array", "<div.a class=[]/>"],
-    ["concise: a static word, a one-string array", 'div.a class=["x"]'],
-  ])(
-    "still refuses a static-first shorthand beside another dynamic class: %s",
-    (_name, markup) => {
-      expect(() => renderApp(markup, setup)).toThrow(
-        "combine shorthand with a string class or use class={...}",
-      );
+  ];
+  it.each(dynamicRows)(
+    "merges the shorthand with a dynamic class, shorthand first: %s",
+    (_name, value, extraSetup, expected) => {
+      const setup = `const x = "xx"; ${extraSetup}`;
+      const markup = shapes
+        .map((shape) => `<div${shape} class=${value}/>`)
+        .join("");
+      expect(classesOf(renderApp(markup, setup))).toEqual(expected);
     },
   );
+
+  it.each(dynamicRows)(
+    "merges the shorthand with a dynamic class, shorthand first, in concise mode: %s",
+    (_name, value, extraSetup, expected) => {
+      const setup = `const x = "xx"; ${extraSetup}`;
+      const markup = shapes
+        .map((shape) => `div${shape} class=${value}`)
+        .join("\n");
+      expect(classesOf(renderApp(markup, setup))).toEqual(expected);
+    },
+  );
+
+  it("keeps the explicit class last when the shorthand holds several words and placeholders", () => {
+    const html = renderApp(
+      "<div.a.${x}.b class=v/><div.a${x}.b class=v/>",
+      'const x = "xx"; const v = ["p", {k: true}];',
+    );
+    expect(classesOf(html)).toEqual(["a xx b p k", "axx b p k"]);
+  });
 });

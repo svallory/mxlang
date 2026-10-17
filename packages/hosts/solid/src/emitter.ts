@@ -1399,44 +1399,6 @@ function renderAttrs(
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
     .filter(({ attr }) => attr.kind !== "spread" && attr.name === "class");
-  const invalidShorthandMerge = classEntries.find(({ attr }) => {
-    if (attr.kind !== "dynamic" || attr.value.shape !== "array") return false;
-    const array = attr.value.node;
-    // Marko folds `.card class=value` into a synthetic array whose own `loc`
-    // is absent: the shorthand parts first (they sit in the tag name, before
-    // the attribute) and the explicit value after them. An authored array
-    // `class=[a, b]` is spliced into the fold element by element, so the fold
-    // alone cannot say what was written. Judge the authored value: it merges
-    // only when it is exactly one static string or object literal, written
-    // right after `class=` (an array puts its `[` there, so its first element
-    // starts one character later) and not inside `[...]`. Anything else (an
-    // identifier, a call, an array, `[]`, a spaced `class = "c"`) is the error
-    // Solid has always given.
-    const elements: ({ type: string; start?: number | null } | null)[] =
-      array.elements ?? [];
-    const explicit = elements.filter(
-      (element) =>
-        element?.start != null &&
-        attr.nameSpan !== undefined &&
-        element.start >= attr.nameSpan.sourceEnd,
-    );
-    const only = explicit[0];
-    // Kept from before: a second element that is an object literal merged
-    // already (`.a class={k: true}`, and an array whose first entry is one).
-    const merges =
-      elements[1]?.type === "ObjectExpression" ||
-      (explicit.length === 1 &&
-        (only?.type === "StringLiteral" || only?.type === "ObjectExpression") &&
-        attr.nameSpan !== undefined &&
-        only.start === attr.nameSpan.sourceEnd + 1);
-    return !array.loc && elements[0]?.type === "StringLiteral" && !merges;
-  });
-  if (invalidShorthandMerge) {
-    fail(
-      "`.class` shorthand combined with a non-string `class={...}` value (combine shorthand with a string class or use class={...})",
-      invalidShorthandMerge.attr,
-    );
-  }
   const structured = classEntries.find(
     ({ attr }) =>
       attr.kind === "dynamic" &&

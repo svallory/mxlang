@@ -239,6 +239,36 @@ describe("Solid client render: live signal updates through the real DOM", () => 
       ["<p></p>", "<p></p>"],
     ]);
   });
+  it("merges a shorthand class with a dynamic class= through live writes, shorthand first", () => {
+    const { snapshots } = renderDomApp(
+      "<p.a class=v()/><p.a.${x()} class=v()/><p.${x()} class=v()/>",
+      'const [v, setV] = createSignal<unknown>("zz"); (globalThis as any).setV = setV; const [x] = createSignal("xx");',
+      "setV",
+      [
+        "{k: true, m: false}",
+        '["p", ["q"]]',
+        "null",
+        "undefined",
+        "false",
+        '"zz"',
+      ],
+    );
+    const classes = snapshots.map((html) =>
+      [...html.matchAll(/<p(?: class="([^"]*)")?><\/p>/g)].map(
+        (match) => match[1] ?? "(none)",
+      ),
+    );
+    expect(classes).toEqual([
+      ["a zz", "a xx zz", "xx zz"],
+      ["a k", "a xx k", "xx k"],
+      ["a p q", "a xx p q", "xx p q"],
+      ["a", "a xx", "xx"],
+      ["a", "a xx", "xx"],
+      ["a", "a xx", "xx"],
+      ["a zz", "a xx zz", "xx zz"],
+    ]);
+  });
+
   it("preserves empty and multi-colon attribute names through JSX prop spreads", () => {
     const { snapshots } = renderDomApp(
       '<div value:/><div value:foo:bar="y"/><div value:foo:baz=input.v/><div x:/><div x: = "s"/><div x: = input.v/>',

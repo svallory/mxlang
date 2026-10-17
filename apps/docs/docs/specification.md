@@ -992,14 +992,18 @@ Both take **structured values**, lowered by the host:
 - `class=["x", {y: true}]` → `class="x y"`
 - `style={color: "red", top: 0}` → `style="color:red;top:0"`
 
-Shorthand merging (decision 9, positional fix in decision 30):
+Shorthand merging. A tag-shorthand class merges with an explicit `class=` of any
+value, on every host, as Marko does: the shorthand parts come first, then the
+explicit value, joined by a single space. A falsy explicit value adds nothing.
+Solid 2 takes a recursive class array, so `.card` + `class=y` is
+`class={["card", y]}`.
 
 | Written | Result |
 |---|---|
 | shorthand `.card` + `class="x"` | `class="card x"` (shorthand first) |
 | shorthand `.card` + `class={…}` object | Solid 2's array form, `class={["card", {…}]}` |
-| shorthand + static `class="x"` + object | folds into the string entry: `class={["card x", {…}]}` |
-| shorthand + any **other** dynamic `class=` (identifier, call, ternary) | **parse error** |
+| shorthand `.card` + any other `class=` (identifier, call, ternary, array, `null`, `false`) | `class={["card", value]}`; `null`, `undefined` and `false` add nothing, an array or object adds its truthy entries |
+| shorthand with a placeholder, `.a.${x}` + `class=y` | `class={["a", x, y]}` |
 | `#id` shorthand + explicit `id=` | **parse error** |
 
 The merge is emitted **at the explicit attribute's position**, not pushed to the

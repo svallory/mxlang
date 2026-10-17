@@ -133,7 +133,7 @@ other target can express.
 | `Interpolation` (raw, `$!{...}`) | Must be the element or component's sole child; lowers to an `innerHTML={expr}` attribute, not to output text |
 | `Element` (HTML/SVG/MathML) | A JSX element; `void` elements self-close |
 | `Component` | A JSX element. Attribute tags follow the callee's `AttrTag` declaration: data values are `{ ...attrs, ...nested, content }`, arrays are real reactive arrays, and renderables/content are reusable accessors (`() => JSX`; with params, `(...p) => () => JSX`). Tag params remain the child callback (`{(input) => ...}`) |
-| `.cls` / `#id` shorthand | Folds into a plain `class="…"` / `id="…"` attribute; an object-valued `class={...}` alongside `.cls` merges to `class={["cls", {...}]}` |
+| `.cls` / `#id` shorthand | Folds into a plain `class="…"` / `id="…"` attribute; a `class=` value of any kind alongside `.cls` merges to `class={["cls", value]}`, shorthand first (a string value folds into the plain attribute) |
 | `prop:` namespace | Kept as `prop:name={value}` |
 | `on:` / `oncapture:` / `attr:` / `bool:` / `use:` namespaces | Rejected, each with Solid 2's own replacement in the message (`on:x=fn` → `onX=fn`; `oncapture:` → a `ref` callback with `{ capture: true }`; `attr:`/`bool:` → the plain attribute; `use:foo=opts` → `ref=foo(opts)`) |
 | `IfChain`, 1–2 conditioned branches | `<Show when={cond} fallback={...}>` |

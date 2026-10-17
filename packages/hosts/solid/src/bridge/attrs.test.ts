@@ -1,3 +1,4 @@
+import generate from "@babel/generator";
 import { describe, expect, it } from "vitest";
 import { parseSolid } from "./test-helpers.ts";
 
@@ -25,6 +26,14 @@ const attrsOf = (source: string) => {
     openingElement: { attributes: Record<string, unknown>[] };
   };
   return element.openingElement.attributes;
+};
+
+/** The printed `class={...}` expression of the first element. */
+const classCodeOf = (source: string): string => {
+  const attr = attrsOf(source).find(
+    (a) => (a.name as { name?: string } | undefined)?.name === "class",
+  ) as { value: { expression: object } };
+  return generate(attr.value.expression).code;
 };
 
 function expectSyntaxError(fn: () => void, expected: string) {
@@ -88,12 +97,24 @@ describe("class shorthand", () => {
     expect(attr.value.value).toBe("card x");
   });
 
-  it("is a parse error combined with a non-string class expression", () => {
-    expectSyntaxError(
-      () => parseMx(`const el = <div.card class=someObj>y</div>;`),
-      "combine shorthand with a string class or use class={...}",
-    );
-  });
+  // The shorthand merges with any `class=` value, as in Marko: shorthand first,
+  // then the explicit value, as one recursive class array.
+  it.each([
+    ["an identifier", "<div.card class=someObj>y</div>", '["card", someObj]'],
+    ["null", "<div.card class=null>y</div>", '["card", null]'],
+    ["a call", "<div.card class=f(1)>y</div>", '["card", f(1)]'],
+    [
+      "a ternary",
+      '<div.card class=(on ? "a" : "b")>y</div>',
+      '["card", on ? "a" : "b"]',
+    ],
+    ["an array", '<div.card class=["x", y]>y</div>', '["card", "x", y]'],
+  ])(
+    "merges shorthand with a non-string class expression: %s",
+    (_name, markup, expected) => {
+      expect(classCodeOf(`const el = ${markup};`)).toBe(expected);
+    },
+  );
 
   // A shorthand with a placeholder and no authored `class` is an array core
   // builds over the shorthand's own source (it has a span), not the
@@ -121,11 +142,11 @@ describe("class shorthand", () => {
     },
   );
 
-  it("still refuses a shorthand class beside a non-string class", () => {
-    expectSyntaxError(
-      () => parseMx("const el = <div.a class=y>y</div>;"),
-      "combine shorthand with a string class or use class={...}",
+  it("merges a shorthand class with a placeholder beside a class expression, shorthand first", () => {
+    expect(classCodeOf("const el = <div.a.${x} class=y>y</div>;")).toBe(
+      '["a", x, y]',
     );
+    expect(classCodeOf("const el = <div.${x} class=y>y</div>;")).toBe("[x, y]");
   });
 
   it("resolves a repeated `class` last-wins, emitting class once", () => {
