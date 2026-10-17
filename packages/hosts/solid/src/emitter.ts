@@ -9,7 +9,6 @@ import {
   cloneIr,
   concatMapped,
   contractDefaultTag,
-  defineAttrRead,
   destructuredNames,
   drive,
   type Emitter,
@@ -1698,6 +1697,118 @@ function attributeTagAttrValue(
 }
 
 /**
+ * Whether any expression in `nodes` reads `name.content` (or `name?.content`,
+ * `name["content"]`). A define's `content` is its body; with attributes it is
+ * not exposed (see `withDefineAttributeReads`), and the read would otherwise
+ * be `undefined`. A textual test: it errs toward refusing (a shadowing `name`
+ * counts), never toward missing the read.
+ */
+function readsContent(nodes: unknown, name: string): boolean {
+  const escaped = name.replace(/[$]/g, "\\$&");
+  const pattern = new RegExp(
+    `(?<![\\w$.])${escaped}\\s*(?:\\??\\.\\s*content\\b|\\[\\s*["']content["']\\s*\\])`,
+  );
+  const seen = new Set<object>();
+  const visit = (value: unknown): boolean => {
+    if (!value || typeof value !== "object" || seen.has(value)) return false;
+    seen.add(value);
+    if (Array.isArray(value)) return value.some(visit);
+    const record = value as Record<string, unknown>;
+    if (typeof record.code === "string" && "shape" in record) {
+      return pattern.test(record.code);
+    }
+    return Object.entries(record).some(
+      ([key, child]) => key !== "node" && visit(child),
+    );
+  };
+  return visit(nodes);
+}
+
+/**
+ * Marko makes a `<define>`'s attributes properties of its value
+ * (`<define/D a=input.x/>`, then `${D.a}` reads them). This host hoists a
+ * define to a module-level function under a generated name, so `D` is no
+ * value a template expression can read, and the attributes (which may read
+ * region-local values such as `input`) cannot live at module scope either.
+ *
+ * So each read of `D` after the define, in its own body, becomes an object
+ * literal of its attributes at the read: `D.a` prints `({ "a": input.x }).a`.
+ * Solid evaluates it where the read is tracked, so the value stays reactive
+ * and a `<for>` row or an `<if>` the read sits in is in scope for it; the
+ * cost is that a value is computed at each read rather than once, and a write
+ * to a property (`D.a = 1`) lands on a copy.
+ *
+ * The rewrite works on a private copy of the IR (an emitter never mutates it,
+ * ir-spec E21), and the copy is made only when a define has attributes.
+ * Siblings are rewritten in order, so a later define's attributes may read an
+ * earlier one's. A bound attribute (`a:=x`) is refused by
+ * `attributeTagAttrValue`, as on a component call.
+ */
+function withDefineAttributeReads(body: IrNode[]): IrNode[] {
+  const seen = new Set<object>();
+  const hasAttributes = (value: unknown): boolean => {
+    if (!value || typeof value !== "object" || seen.has(value)) return false;
+    seen.add(value);
+    if (Array.isArray(value)) return value.some(hasAttributes);
+    const record = value as Record<string, unknown>;
+    if (record.kind === "Define" && (record.attrs as Attr[]).length > 0) {
+      return true;
+    }
+    return Object.entries(record).some(
+      ([key, child]) => key !== "node" && hasAttributes(child),
+    );
+  };
+  if (!hasAttributes(body)) return body;
+
+  const copy = cloneIr(body);
+  const walked = new Set<object>();
+  const walk = (value: unknown): void => {
+    if (!value || typeof value !== "object" || walked.has(value)) return;
+    walked.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        const node = item as IrNode;
+        if (node?.kind !== "Define" || node.attrs.length === 0) return;
+        const later = value.slice(index + 1) as IrNode[];
+        if (
+          meaningful(node.children).length > 0 &&
+          readsContent(later, node.name)
+        ) {
+          fail(
+            `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose on Solid: the define is hoisted to a function. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+            node.attrs[0] ?? node,
+          );
+        }
+        const parts = node.attrs.map((attr) =>
+          attr.kind === "spread"
+            ? `...${attr.value.code}`
+            : `${JSON.stringify(attr.name)}: ${attributeTagAttrValue(attr).code}`,
+        );
+        rewriteAccessorReads(
+          later,
+          new Map([
+            [
+              node.name,
+              {
+                read: `({ ${parts.join(", ")} })`,
+                assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
+              },
+            ],
+          ]),
+        );
+      });
+      for (const item of value) walk(item);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (key !== "node") walk(child);
+    }
+  };
+  walk(copy);
+  return copy;
+}
+
+/**
  * One attribute-tag body in Solid's reusable renderable shape.
  *
  * Measured on Solid 2.0.0-rc.7: an eager JSX value is a DOM node and moves
@@ -3024,16 +3135,6 @@ export class SolidEmitter implements Emitter<string> {
         node,
       );
     }
-    // Marko makes a `<define>`'s attributes properties of its value (`${D.a}`),
-    // but this host hoists the define to a module-level function under a
-    // generated name, and a template expression's `D` is not rewritten to it.
-    // Dropping them would compile and read `undefined`.
-    if (node.attrs.length > 0) {
-      fail(
-        `attributes on \`<define/${node.name}>\` are not supported in embedded MX on Solid: the define is hoisted to a function, so ${defineAttrRead(node.name, node.attrs)} cannot be read. Pass the value as a param (\`<define/${node.name}|value|>\`) or declare it in the surrounding TypeScript module`,
-        node.attrs[0] ?? node,
-      );
-    }
     if (lazyScope) {
       fail(
         `\`<define>\` inside \`<for>\`/\`<if>\`/another construct's body is not hoisted to module scope; write \`<define/${node.name}>\` at the top level of the region`,
@@ -3212,12 +3313,12 @@ export function createEmitter(): SolidEmitter {
 
 export function emitSolid(ir: Ir): string {
   const emitter = createEmitter();
-  drive(emitter, ir.body);
+  drive(emitter, withDefineAttributeReads(ir.body));
   return emitter.done();
 }
 
 export function emitSolidWithMappings(ir: Ir): MappedCode {
   const emitter = createEmitter();
-  drive(emitter, ir.body);
+  drive(emitter, withDefineAttributeReads(ir.body));
   return emitter.result();
 }

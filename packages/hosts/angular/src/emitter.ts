@@ -14,9 +14,9 @@ import {
   type AttrTagProp,
   type ComponentTarget,
   type Ctx,
+  cloneIr,
   contractDefaultTag,
   DYNAMIC_TAG,
-  defineAttrRead,
   type Emitter,
   type Expr,
   exportNameFor,
@@ -31,6 +31,7 @@ import {
   metadataForTemplate,
   type Position,
   resolveSpecifier,
+  rewriteAccessorReads,
   type SourceSpan,
   type TemplateMetadata,
   TranslateError,
@@ -627,6 +628,32 @@ function statementBodyConstruct(code: string): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Whether any expression in `nodes` reads `name.content` (or `name?.content`,
+ * `name["content"]`). A textual test: it errs toward refusing (a shadowing
+ * `name` counts), never toward missing the read.
+ */
+function readsContent(nodes: unknown, name: string): boolean {
+  const escaped = name.replace(/[$]/g, "\\$&");
+  const pattern = new RegExp(
+    `(?<![\\w$.])${escaped}\\s*(?:\\??\\.\\s*content\\b|\\[\\s*["']content["']\\s*\\])`,
+  );
+  const seen = new Set<object>();
+  const visit = (value: unknown): boolean => {
+    if (!value || typeof value !== "object" || seen.has(value)) return false;
+    seen.add(value);
+    if (Array.isArray(value)) return value.some(visit);
+    const record = value as Record<string, unknown>;
+    if (typeof record.code === "string" && "shape" in record) {
+      return pattern.test(record.code);
+    }
+    return Object.entries(record).some(
+      ([key, child]) => key !== "node" && visit(child),
+    );
+  };
+  return visit(nodes);
 }
 
 /**
@@ -1625,6 +1652,9 @@ class AngularEmitter implements Emitter<string> {
   private readonly filename: string;
   private readonly warnedOnce = new Set<string>();
   private sourceIdentifiers: Set<string> | undefined;
+
+  /** The `@let` name holding each attributed `<define>`'s attributes. */
+  private defineRows = new Map<IrNode, string>();
   // Collected during the walk, each flushed as one warning per file in
   // `done()` — design note A1's step-1 import problem asks for one warning
   // naming every MX tag the template calls, not one warning per tag; and the
@@ -2633,17 +2663,11 @@ class AngularEmitter implements Emitter<string> {
   }
 
   define(node: Extract<IrNode, { kind: "Define" }>): void {
-    // Marko makes a `<define>`'s attributes properties of its value (`${D.a}`),
-    // but this host's define is a template reference (`#D`), which is not an
-    // object a template expression can read a property from. Dropping them
-    // would compile and read `undefined`.
-    if (node.attrs.length > 0) {
-      fail(
-        `attributes on \`<define/${node.name}>\` are not supported in an Angular template: \`#${node.name}\` is a template reference, so ${defineAttrRead(node.name, node.attrs)} cannot be read. Pass the value as a param (\`<define/${node.name}|value|>\`) or declare it in the component class`,
-        node.attrs[0] ?? node,
-        "MX_UNSUPPORTED_CONSTRUCT",
-      );
-    }
+    // Marko makes a `<define>`'s attributes properties of its value
+    // (`${D.a}`). `#D` is a template reference, not an object, so the
+    // attributes ride a `@let` of their own that every later read of `D` was
+    // pointed at (`lowerDefineAttributes`).
+    if (node.attrs.length > 0) this.defineAttributeLet(node);
     // A bare `let-x` binds `$implicit`, so emitting one per param gives every
     // param the *first* outlet argument — `${v}` reads the key, silently, with
     // `ng build` green because a `let-` variable is implicitly `any`. The
@@ -2668,6 +2692,131 @@ class AngularEmitter implements Emitter<string> {
       for (const child of node.children) this.emitNode(child);
     });
     this.out.write(" </ng-template>");
+  }
+
+  /**
+   * `@let __mxRow = { "a": 1, ...rest };`: the attributes of a `<define>`,
+   * declared where the define is so a `<for>` row or an `@if` it sits in is in
+   * scope for them. The name is the one `lowerDefineAttributes` rewrote the
+   * later reads of the define to.
+   */
+  private defineAttributeLet(node: Extract<IrNode, { kind: "Define" }>): void {
+    const name = this.defineRows.get(node);
+    if (name === undefined) {
+      fail(
+        `attributes on \`<define/${node.name}>\` could not be lowered`,
+        node.attrs[0] ?? node,
+        "MX_UNSUPPORTED_CONSTRUCT",
+      );
+    }
+    this.scopes.at(-1)?.set(name, undefined);
+    this.out.write(`@let ${name} = { `);
+    node.attrs.forEach((attr, i) => {
+      if (i > 0) this.out.write(", ");
+      if (attr.kind === "spread") {
+        this.out.write("...");
+        this.out.writeMapped(attr.value.code, attr.value.span);
+        return;
+      }
+      this.out.write(`${JSON.stringify(attr.name)}: `);
+      switch (attr.kind) {
+        case "boolean":
+          this.out.write("true");
+          return;
+        case "static":
+          this.out.write(JSON.stringify(attr.value));
+          return;
+        case "bound":
+          fail(
+            "bound attribute (`:=`) is Marko reactive state; use a signal and an explicit event handler",
+            attr,
+            "MX_UNSUPPORTED_CONSTRUCT",
+          );
+          return;
+        default:
+          this.out.writeMapped(attr.value.code, attr.value.span);
+      }
+    });
+    this.out.write(" }; ");
+  }
+
+  /**
+   * The IR the emitter walks: the body with every read of an attributed
+   * `<define>`'s name, after the define, pointed at the `@let` that holds its
+   * attributes (`D.a` prints `__mxRow.a`).
+   *
+   * `@let D` itself cannot be the name: it would collide with the `#D`
+   * template reference the define declares and a call reads. The rewrite is on
+   * a private copy of the IR (an emitter never mutates it) made only when a
+   * define has attributes, and is applied to the siblings after the define,
+   * since a name is in scope from its declaration on. `D.content` of a define
+   * that has attributes and a body is refused: the template reference has no
+   * `content`, so the read would be `undefined`.
+   */
+  lowerDefineAttributes(body: IrNode[]): IrNode[] {
+    const seen = new Set<object>();
+    const hasAttributes = (value: unknown): boolean => {
+      if (!value || typeof value !== "object" || seen.has(value)) return false;
+      seen.add(value);
+      if (Array.isArray(value)) return value.some(hasAttributes);
+      const record = value as Record<string, unknown>;
+      if (record.kind === "Define" && (record.attrs as Attr[]).length > 0) {
+        return true;
+      }
+      return Object.entries(record).some(
+        ([key, child]) => key !== "node" && hasAttributes(child),
+      );
+    };
+    if (!hasAttributes(body)) return body;
+
+    const copy = cloneIr(body);
+    const walked = new Set<object>();
+    const walk = (value: unknown): void => {
+      if (!value || typeof value !== "object" || walked.has(value)) return;
+      walked.add(value);
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          const node = item as IrNode;
+          if (node?.kind !== "Define" || node.attrs.length === 0) return;
+          const later = value.slice(index + 1) as IrNode[];
+          if (
+            node.children.some(
+              (child) =>
+                child.kind !== "Comment" &&
+                !(child.kind === "Text" && child.value.trim() === ""),
+            ) &&
+            readsContent(later, node.name)
+          ) {
+            fail(
+              `\`${node.name}.content\` is the body of \`<define/${node.name}>\`, which a define with attributes cannot expose in an Angular template: \`#${node.name}\` is a template reference. Call it as \`<${node.name}/>\`, or move the attributes to a second \`<define>\``,
+              node.attrs[0] ?? node,
+              "MX_UNSUPPORTED_CONSTRUCT",
+            );
+          }
+          const row = this.gensym("__mxDefine");
+          this.defineRows.set(node, row);
+          rewriteAccessorReads(
+            later,
+            new Map([
+              [
+                node.name,
+                {
+                  read: row,
+                  assignError: `\`${node.name}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${node.name}.name\``,
+                },
+              ],
+            ]),
+          );
+        });
+        for (const item of value) walk(item);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key !== "node") walk(child);
+      }
+    };
+    walk(copy);
+    return copy;
   }
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
@@ -2937,7 +3086,9 @@ export function emitTemplate(
   }
 
   const emitter = new AngularEmitter(ctx, filename, ir.imports, selectorPrefix);
-  for (const node of ir.body) emitter.emitNode(node);
+  for (const node of emitter.lowerDefineAttributes(ir.body)) {
+    emitter.emitNode(node);
+  }
   // After emission, so a construct with its own more specific error (a
   // block-bodied `by=` arrow) reports that one first.
   assertTemplateExpressible(ir.body);

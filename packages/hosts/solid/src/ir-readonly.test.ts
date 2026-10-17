@@ -7,7 +7,8 @@ import { compileSolidMx } from "./index.ts";
  * ir-spec 10.2 E21: an emitter never mutates the IR it is handed.
  *
  * The Solid emitter rewrites every read of a `<for>` param into an accessor
- * call and registers the names it generates in `For.bindings`. It used to do
+ * call (and every read of a `<define>` with attributes into its attribute
+ * object) and registers the names it generates in `For.bindings`. It used to do
  * both on the lowered nodes themselves. Here `lower` hands the emitter an IR
  * frozen all the way down (parser nodes included), so a write anywhere in the
  * emitter throws a `TypeError` instead of passing silently.
@@ -46,6 +47,7 @@ const TEMPLATES: Record<string, string> = {
   "destructured for in": "<for|{ a }, v| in=obj><li>${a}${v}</li></for>",
   "stepped range": "<for|i| from=0 to=10 step=2><li>${i}</li></for>",
   "plain rows": "<for|row, i| of=rows><li>${i}${row}</li></for>",
+  "define attributes": "<define/D a=1/><p>${D.a}</p>",
 };
 
 describe("the Solid emitter leaves the IR alone (E21)", () => {
