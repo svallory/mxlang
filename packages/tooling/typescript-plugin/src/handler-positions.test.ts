@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";
 
 /**
- * Decision 140, round 3. The handler wrapper must not move any position inside
+ * The handler wrapper must not move any position inside
  * a handler: a diagnostic or a hover on `e` or on a body reference maps to the
  * authored offset, exactly as it does without the wrapper. The mapping is
  * resolved with Volar's own `SourceMap`, the lookup hover and diagnostics use.
@@ -29,7 +29,7 @@ function virtual(host: (typeof HOSTS)[number], source: string) {
   return { generated, toSource };
 }
 
-describe.each(HOSTS)("handler positions on %s (decision 140)", (host) => {
+describe.each(HOSTS)("handler positions on %s", (host) => {
   const arrow = "<button onClick=((e) => e.nope())>x</button>";
   const shorthand = "<button onClick(e) { e.nope(); }>x</button>";
 
@@ -65,7 +65,7 @@ describe.each(HOSTS)("handler positions on %s (decision 140)", (host) => {
     expect(keyword).toBeLessThanOrEqual(
       shorthand.indexOf("onClick") + "onClick".length,
     );
-    // Decision 167: the body maps token by token, not onto the attribute name.
+    // The body maps token by token, not onto the attribute name.
     for (const within of [0, 2, 7]) {
       expect(toSource(generated.indexOf("e.nope()") + within)).toBe(
         shorthand.indexOf("e.nope()") + within,

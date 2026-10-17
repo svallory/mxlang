@@ -101,7 +101,7 @@ describe("Solid language plugin", {
   it("does not inject an import for an mx.tags entry whose hosts excludes solid", () => {
     // Same shape as the test above, but through an `mx.tags` entry
     // restricted to a different host: `createSolidMxLanguagePlugin`'s scan
-    // must honor `hosts` (decision 110(a)), so no import is minted and the
+    // must honor `hosts`, so no import is minted and the
     // region's `<gizmo>` reference stays unresolved.
     const dir = mkdtempSync(join(tmpdir(), "mx-solid-hosts-"));
     try {
@@ -140,7 +140,7 @@ describe("Solid language plugin", {
     }
   });
 
-  it("warns about an unknown host name in mx.tags[].hosts (decision 110a; round 2 finding 2)", () => {
+  it("warns about an unknown host name in mx.tags[].hosts", () => {
     // The scan diagnostic core records for a typo'd host name was computed
     // but dropped here: `createVirtualCode` used `getCustomTags`, which
     // returns only `.customTags`. It now uses `scanCached` and reports
@@ -677,7 +677,7 @@ describe("MX language plugin", {
     // an unresolved binding on a page a build compiles fine.
     expect(generated).toMatch(/import \$mx_Icon\d+ from "\.\/tags\/icon\.mx"/);
     const binding = generated.match(/import (\$mx_Icon\d+)/)?.[1];
-    // Called through the html target's sink (decision 155).
+    // Called through the html target's sink.
     expect(generated).toMatch(
       new RegExp(
         `(?:\\${binding}\\.render\\(|__mxRenderTag\\(__mxOut, \\${binding}\\)\\()`,
@@ -731,7 +731,7 @@ describe("MX language plugin", {
     expect(plugin.getLanguageId("/src/card.mx")).toBe("mx");
     expect(plugin.getLanguageId("/src/card.marko")).toBeUndefined();
     expect(plugin.getLanguageId("/src/card.solid.mx")).toBeUndefined();
-    // Decision 134: `.astro.mx` ends in `.mx` but goes to the Astro template
+    // `.astro.mx` ends in `.mx` but goes to the Astro template
     // plugin, never to this one.
     expect(plugin.getLanguageId("/src/card.astro.mx")).toBeUndefined();
     expect(
@@ -979,7 +979,7 @@ describe("MX language plugin", {
       // `createMxLanguagePlugin` resolves its host through
       // `resolveTargetPolicy`, which reads this fixture's `package.json` as
       // `"html"` — an entry restricted to `hosts: ["solid"]` must stay
-      // invisible here, decision 110(a).
+      // invisible here.
       const dir = mkdtempSync(join(tmpdir(), "mx-tsplugin-hosts-"));
       scratches.push(dir);
       mkdirSync(join(dir, "widgets"), { recursive: true });
@@ -1050,8 +1050,8 @@ describe("MX language plugin", {
     it("does not resolve an mx.tags entry whose hosts excludes astro (.astro.mx)", () => {
       // Same fixture shape as the "resolves a discovered tag in an .astro.mx
       // page too" test above, but the entry restricts `hosts` to a
-      // different host: `createAmxLanguagePlugin`'s scan must honor it
-      // (decision 110(a)), rather than resolving `<stamp>` as it does with
+      // different host: `createAmxLanguagePlugin`'s scan must honor it,
+      // rather than resolving `<stamp>` as it does with
       // no restriction.
       const dir = mkdtempSync(join(tmpdir(), "mx-amx-hosts-"));
       scratches.push(dir);
@@ -1087,7 +1087,7 @@ describe("MX language plugin", {
       ).not.toContain("stamped");
     });
 
-    it("warns about an unknown host name in mx.tags[].hosts (.astro.mx; decision 110a; round 2 finding 2)", () => {
+    it("warns about an unknown host name in mx.tags[].hosts (.astro.mx)", () => {
       // The scan diagnostic core records for a typo'd host name was
       // computed but dropped here: `createVirtualCode` used
       // `getCustomTags`, which returns only `.customTags`. It now uses
@@ -1199,7 +1199,7 @@ describe("MX language plugin", {
     },
   );
 
-  it("compiles a resolved capitalized tag with no throw for the solid host (decision 114)", () => {
+  it("compiles a resolved capitalized tag with no throw for the solid host", () => {
     // Distinct from the html/preact row above rather than folded into its
     // `it.each`, and a smoke test rather than a mapping test: Solid's
     // whole-file `.mx` compile (`compileSolidMx`) rejects an authored
@@ -1212,7 +1212,7 @@ describe("MX language plugin", {
     // anything in the original call — not the tag name, not its attrs, not
     // its attribute tags — so none of the mapping assertions the html/preact
     // row makes can be reproduced for it. This asserts only what actually
-    // holds: decision 114's tightened `isComponent` does not regress a
+    // holds: the tightened `isComponent` does not regress a
     // custom-tag-resolved capitalized tag into an unresolved-tag error.
     const fileName = `${here}/fixtures/solid-policy/component.mx`;
     const source = "<Card title=1><@footer>ok</@footer></Card>";
@@ -1236,7 +1236,7 @@ describe("MX language plugin", {
     expect(generated).toContain("1");
   });
 
-  it("resolves and imports another whole-file Solid .mx component (decision 115)", () => {
+  it("resolves and imports another whole-file Solid .mx component", () => {
     // Whole-file `.mx` resolved to Solid must go through `compileSolidUnit`
     // in the editor too, not the region compiler — the production-path
     // proof that motivated wiring `createMxLanguagePlugin`'s
@@ -1314,7 +1314,7 @@ describe("MX language plugin", {
     expect(codes("Good")).toEqual([]);
   });
 
-  it("reports a diagnostic in generated code no mapping covers on the element that encloses it (decision 161)", () => {
+  it("reports a diagnostic in generated code no mapping covers on the element that encloses it", () => {
     // A whole-file Solid unit maps its values but no tag: with no JSX types,
     // each element's TS7026 sits in generated text no mapping covers. Volar
     // used to drop them, so the service reported only the mapped errors. Each
@@ -1363,10 +1363,10 @@ describe("MX language plugin", {
     expect(diagnostics.map(text).join("\n")).not.toContain("not yours");
   });
 
-  it("never calls the author's own errors MX's, in a whole-file unit or a region file (decision 161)", () => {
+  it("never calls the author's own errors MX's, in a whole-file unit or a region file", () => {
     // A name typo, a missing required prop, and elements with no JSX types:
     // mapped or not, none of them is code MX wrote. A region file exposes its
-    // spans too (decision 161), so what it cannot map lands on its tag.
+    // spans too, so what it cannot map lands on its tag.
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/Typos.mx`;
     const region = `${directory}/Typos.solid.mx`;
@@ -1416,7 +1416,7 @@ describe("MX language plugin", {
     }
   });
 
-  it("reports a wrongly typed attribute with a mapped value on the attribute, as the author's (decision 161)", () => {
+  it("reports a wrongly typed attribute with a mapped value on the attribute, as the author's", () => {
     // Whole-file Solid maps the value `1` but not the name `class`, where
     // TypeScript reports the mismatch.
     const directory = `${here}/fixtures/solid-policy`;
@@ -1447,7 +1447,7 @@ describe("MX language plugin", {
     );
   });
 
-  it("places 600 unmapped diagnostics in well under the time a keystroke allows (decision 161)", () => {
+  it("places 600 unmapped diagnostics in well under the time a keystroke allows", () => {
     // 300 elements with no JSX types: 602 TS7026, each unmapped. Placing them
     // one Volar memo rebuild and one source parse at a time took 26 s.
     const directory = `${here}/fixtures/solid-policy`;
@@ -1475,7 +1475,7 @@ describe("MX language plugin", {
     ["html", `${here}/fixtures/html-tags`],
     ["astro", `${here}/fixtures/astro-policy`],
   ])(
-    "reports a missing prop on a call with a body exactly on the tag name, on %s (decision 161, #388)",
+    "reports a missing prop on a call with a body exactly on the tag name, on %s",
     (_, directory) => {
       // TypeScript anchors the missing prop (TS2345) on the call's props
       // object; #388 maps its braces onto the tag name, so it is mapped and
@@ -1508,7 +1508,7 @@ describe("MX language plugin", {
     },
   );
 
-  it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in (decision 161)", () => {
+  it("says a diagnostic is MX's bug when the host's emitter wrote the code it is in", () => {
     // A test-only emitter: the html target's module with one defective
     // scaffolding statement appended. It has no spelling in the source, so no
     // construct encloses it: the file start, marked as MX's.
@@ -1556,7 +1556,7 @@ describe("MX language plugin", {
     }
   });
 
-  it("leaves an exactly mapped diagnostic's message and position untouched (decision 161)", () => {
+  it("leaves an exactly mapped diagnostic's message and position untouched", () => {
     const directory = `${here}/fixtures/solid-policy`;
     const source = 'import Card from "./Card.mx"\n<Card title=1/>';
     const service = createPluginService(
@@ -2154,7 +2154,7 @@ describe("MX language plugin", {
       expect(callerErrors(project)).toEqual([]);
     });
 
-    // Decision 107, option A: the documented limitation. A type change
+    // The documented limitation. A type change
     // reaches the caller through TypeScript's own module graph, but what the
     // caller *compiled to* (here the shape inferred while the callee did not
     // exist, and the warning that came with it) is only replaced when the
@@ -3324,7 +3324,7 @@ describe("MX language plugin", {
     expect(valueType).toBe("BinaryExpression");
   });
 
-  it("keeps the type arguments inside an attribute method's body in the type-check virtual code (decision 140)", () => {
+  it("keeps the type arguments inside an attribute method's body in the type-check virtual code", () => {
     // Marko builds the attribute-method shorthand's `FunctionExpression` node
     // itself (there is no literal `function (…) { … }` in the source), so it
     // carries no `start`/`end`/`loc`, and `expr()` in packages/core/src/core.ts
@@ -4497,7 +4497,7 @@ describe("expression values are mapped for a Solid whole-file page", () => {
     const directory = `${here}/fixtures/solid-policy`;
     const page = `${directory}/expr-page.mx`;
     const consumer = `${directory}/expr-consumer.ts`;
-    // JSX types, or diagnostics decision 161 no longer drops would sit beside
+    // JSX types, or diagnostics that are no longer dropped would sit beside
     // the expression errors this test is about: each element's TS7026, and,
     // with no `ElementChildrenAttribute`, TS2769 on `<Show>`/`<For>` (their
     // children never reach the `children` prop) plus the `<for>` param's TS7006.
@@ -5152,7 +5152,7 @@ describe("custom tag template mappings", () => {
   /**
    * The template writes an expression byte-identical to one the caller writes.
    *
-   * Under the unit model (decision 95) the template is a separate module the
+   * Under the unit model the template is a separate module the
    * caller imports, so its copy never enters the caller's generated text at
    * all — the property these tests assert (no mapping may point at the
    * caller's text for something the caller did not write) now holds by
@@ -5578,7 +5578,7 @@ describe("expression values are mapped in the language service", {
   });
 });
 
-describe("an unmapped diagnostic lands on its enclosing tag in every file kind (decision 161)", {
+describe("an unmapped diagnostic lands on its enclosing tag in every file kind", {
   timeout: TSSERVER_DESCRIBE_TIMEOUT,
 }, () => {
   const REGION_KINDS = ["solid", "preact", "react", "hono"] as const;
@@ -5614,7 +5614,7 @@ describe("an unmapped diagnostic lands on its enclosing tag in every file kind (
       const elements = all.filter((d) => d.code === 7026);
       expect(elements.length).toBeGreaterThan(0);
       expect(all.map(text).join("\n")).not.toContain("position unknown");
-      // Placed on a tag of the source, never at 1:1 (decision 161).
+      // Placed on a tag of the source, never at 1:1.
       for (const d of elements) {
         expect(onSource(source, d)).toMatch(/^<(div|p)\b/);
       }

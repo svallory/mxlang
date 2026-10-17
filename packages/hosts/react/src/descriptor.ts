@@ -1,5 +1,5 @@
 /**
- * The `react-jsx` target descriptor (decisions 129 and 132; unstable).
+ * The `react-jsx` target descriptor (unstable).
  *
  * Importing this module loads `./dialect.ts` (the declarations) only; the
  * compile entry (whole-file and region) is required by a relative path, from

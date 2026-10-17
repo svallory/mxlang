@@ -5,7 +5,7 @@ the TypeScript they lower to. `--astro` additionally composes Astro's language
 plugin and the AstroMX plugin, so `.astro` and `.astro.mx` files and their MX
 imports are checked together.
 
-This is the CI half of decision 81. `tsc` ignores `compilerOptions.plugins`, so
+This is the CI half of MX's TypeScript tooling. `tsc` ignores `compilerOptions.plugins`, so
 [`@mxlang/typescript-plugin`](../typescript-plugin/README.md) does nothing on
 the command line: an editor would report an error that a build silently missed.
 `mx-tsc` closes that gap by handing Volar's `runTsc` the *same* language plugin

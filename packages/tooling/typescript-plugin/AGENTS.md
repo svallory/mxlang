@@ -1,6 +1,6 @@
 # typescript-plugin — agent instructions
 
-## Current target dispatch (decisions 129/132)
+## Current target dispatch
 
 Page compilation selects `lookupFor(policy).target(policy.target)` (a descriptor loaded from a package specifier included) and calls
 `load(core).compileModule` with the full lookup and `typeCheck: true` (decision
@@ -54,7 +54,7 @@ TypeScript must resolve to **one** copy: the TS plugin is handed the `ts` object
 
 **The plugin also has a VSIX-only self-contained build, `bun run build:bundled`** (`build/bundled.ts`, output `bundle/`, gitignored and outside `files`). It inlines `@mxlang/*`, volar and babel, applies `build/cjs-factory.ts` to `index.cjs` (`applyCjsFactory(entry)`), and builds the entries `index` and `ng-worker`. `build/bundled-config.ts` is the one list of entries and externals (`@marko/compiler`, `@astrojs/compiler`, `typescript`, `@angular/compiler-cli`, `@astrojs/language-server`), read by `packages/editors/vscode/scripts/*` too. The VS Code extension's `bun run package` copies `bundle/` into the VSIX; the npm tarball keeps `files` unchanged but also bundles the registry/descriptors and host glue in `dist/`. It is not the answer to `publish-plan-private-deps`.
 
-## `@mxlang/typescript-plugin` and `@mxlang/tsc`: TypeScript for MX files (decision 81)
+## `@mxlang/typescript-plugin` and `@mxlang/tsc`: TypeScript for MX files
 
 `packages/tooling/typescript-plugin` and `packages/tooling/tsc` are the two
 halves of one job: type-check `.solid.mx` and `.mx` from the TS/TSX
@@ -231,7 +231,7 @@ Four facts worth knowing before editing either:
   calls where the last `client` statement stands, so its errors are reported at the authored token and hover and
   completions keep the declared types. A diagnostic outside every mapping is reported on the nearest
   enclosing tag or attribute (else 1:1) with a position marker appended, never
-  dropped (decision 161; see the section below). Two consequences of the
+  dropped (see the section below). Two consequences of the
   projection are known noise, not bugs. Under a tsconfig whose `lib` has no
   `dom`, `window` and `document` in a `client` statement are TS2304/TS2584.
   Adding `dom` would type server code with it too, so there is no clean
@@ -261,7 +261,7 @@ Four facts worth knowing before editing either:
 JSX built-ins the emitter prints as a bare tag** (`Show`/`For`/`Switch`/
 `Match`/`Repeat`/`Errored`/`Loading` from `solid-js`, `Dynamic` from
 `@solidjs/web`) — `@mxlang/host-solid`'s `appendSolidBuiltinImport`, which is the
-`.solid.mx` file kind's `completeTypecheckModule` (decision 154): the region
+`.solid.mx` file kind's `completeTypecheckModule`: the region
 plugin (`createRegionLanguagePlugin`, one per region file kind) calls the
 kind's hook, never a Solid function by name. `@mxlang/host-solid`'s own emitter never imports
 these (see `packages/hosts/solid/AGENTS.md`): the real build pipeline gets
@@ -293,7 +293,7 @@ an ordinary value import do that.
 types rather than deriving them, so it hides both a file's real exports and
 every error inside it. Both examples' `src/mx.d.ts` are deleted; dropping
 `todomvc`'s surfaced a real bug it had been masking (a `<fragment>` wrapper,
-removed by decision 72, rendering as a literal unknown element).
+removed from the language, rendering as a literal unknown element).
 
 `packages/tooling/tsc/src/fixtures/` holds two Solid projects differing in
 one expression. The suite also runs the Astro example's paired
@@ -310,7 +310,7 @@ core reading the callee's `Input`; the *types* come from TypeScript resolving
 the callee module.
 
 **A test that reports through Volar cannot prove what the emitted
-TypeScript checks.** Before decision 161 Volar dropped a diagnostic whose
+TypeScript checks.** Volar by itself drops a diagnostic whose
 position has no mapping, and most of an attribute-tag value is generated code;
 such a diagnostic is now reported at its enclosing tag or attribute, which says little
 about *what* was wrong, so assert on the emitted text for anything about types. The Solid and Preact
@@ -363,7 +363,7 @@ diagnostic; use it for anything about the generated code's types.
   resolved entirely through the emitted `satisfies
   NonNullable<Parameters<typeof Callee>[0]["tag"]>` reference, which
   TypeScript's own live module graph re-checks on every edit regardless of
-  this function (decision 107, option A, next bullet).
+  this function (see the next bullet).
   **Reaching the cap without settling is not silent (compile-deps-cap-warning,
   fix-forward for PR #150).** When the loop falls through all
   `MAX_COMPILE_PASSES` passes still finding a new dependency set or new
@@ -410,7 +410,7 @@ diagnostic; use it for anything about the generated code's types.
   (`createMxLanguagePlugin`, the genuine `compileWithDependencies` loop, and
   `getCompileDiagnostics`), asserting the cap warning lands as a single
   diagnostic with the chain text at the caller's own file.
-- **What follows a callee change in tsserver (decision 107, option A).** A
+- **What follows a callee change in tsserver.** A
   change to the callee's *types* re-checks the caller at once, through
   TypeScript's own module graph (tests: `a callee's Input changing under an
   unchanged caller`). What the caller *compiled to* (the emitted shape and
@@ -511,20 +511,20 @@ Nothing in tsc or this package names a host. Tests:
 
 A top-level `return` in the `---` fence is valid Astro, but `convertToTSX` puts the fence at module level, so TypeScript reports TS1108. `amx-language.ts` closes it twice: `filterSemanticDiagnostics` (tsserver proxy only) and, for every surface including `mx-tsc`, `withFenceVerification`, which gives the mappings lying wholly inside the fence a `CodeInformation` whose `verification.shouldReport` rejects code 1108. Volar's `transformDiagnostic` applies `shouldReport` inside `runTsc` too, and it is the only seam there: `mx-tsc` never holds the decorated program. A 1108 outside the fence (a hoisted `static` block), in `.mx`, or in a plain `.ts` is still reported. The host-dispatch goldens show that mapping's `verification` as `{}` (a function does not serialise). Tests: `packages/tooling/tsc/src/astro-fence-return.test.ts`.
 
-## A diagnostic with no source mapping is never dropped (decision 161)
+## A diagnostic with no source mapping is never dropped
 
 Volar's `transformDiagnostic` returns `undefined` for a diagnostic it cannot map to the source, and both `mx-tsc` (`decorateProgram`) and the tsserver proxy (`getSemanticDiagnostics` and its siblings) filter those out: a page whose errors sit in generated text no mapping covers type-checked clean (whole-file Solid values, an atom inside a region value, scaffolding). `src/unmapped-diagnostics.ts` runs **beneath** Volar, on TypeScript's raw diagnostics: for each one Volar cannot map it adds a mapping from the diagnostic's generated range to the nearest *enclosing* authored span (attribute, then tag, then the file start 1:1; never a preceding sibling) and appends ` (position approximate: generated L:C)` when the diagnostic is the author's, ` (position unknown in this file kind: generated L:C)` when it is the author's in a kind with no `authoredSpans` (it lands at 1:1), ` (in MX-generated code, not yours: an MX bug; generated L:C)` otherwise (per range, not per line), then Volar maps that normally. The author's means: its text is spelled by the author in the source it came from, or mapped authored code is inside or next to its range. The enclosing span comes from the virtual code's optional `authoredSpans()` (`src/authored-spans.ts`, read from the Marko parse: `tag`, `attribute` and `code` spans. Whole-file `.mx` parses the file; a region file records each region the compile hands its host (`mxRegionCompile`'s `source` and `baseOffset`) and parses it in `regionAuthoredSpans`; `.ng.mx` parses each `result.regions` entry (`ngRegionSource` drops a fragment's `<>`/`</>`); `.astro.mx` parses its template from `astroMxTemplateOffset`. Spans are file-absolute; the failed-module stub and a third-party kind that sets no `authoredSpans` stay at 1:1 with the position-unknown suffix): the diagnostic came from the source between the nearest mapped range before and after it, narrowed to what the author spelled there — for an element diagnostic (`<p …>`/`</p>`) the tag of that name; for an identifier or literal a tag or attribute of that name whose name lies in the gap (an attribute with a mapped value ends the gap inside itself), or a whole-token occurrence inside a `code` span (never static text or a quoted attribute string; without spans, the whole gap). Placement reads only the module's own mappings, and overlays are kept after them shortest first (Volar takes the first mapping holding both ends), so the result does not depend on diagnostic order. A wrapper call places its diagnostics as one batch (`approximateUnmappedAll`): each virtual code's texts, ranges, line table and memoized `authoredSpans()` are read once, and its overlays are added and Volar's memos reset once at the end (one by one, 602 TS7026 took 26 s). Only files ending in `.mx` are touched; another language's projection (a plain `.astro` under `--astro`) is left to Volar. The added mapping is `verification`-only (no hover, completion or navigation) and reset into `@volar/source-map`'s memo through two private fields, which `unmapped-diagnostics.test.ts` and the end-to-end tests pin. Each `relatedInformation` entry and each `program.emit()` diagnostic goes through the same function. An exactly mapped diagnostic is returned as the same object.
 
 - **Two attachments, one function.** The tsserver plugin wraps `info.languageService` inside the `createLanguageServicePlugin` callback (before Volar proxies it; the Volar `Language` arrives later through the callback's `setup`). `mx-tsc` replaces the `decorateProgram` export of `@volar/typescript/lib/node/decorateProgram` (`approximateUnmappedInVolar`, once per process) because `runTsc` never hands the program back. That relies on `proxyCreateProgram` reading the export at call time; it throws if the export cannot be replaced, so a Volar change cannot silently bring the drop back. The VSIX inlines Volar, but only the tsserver attachment ships there and it patches nothing.
 - **A deliberate suppression is not a gap.** A range *any* mapping covers is left to Volar even when that mapping's `verification.shouldReport` rejects the code (`.astro.mx` fence TS1108): the host chose to hide it. Only a range no mapping covers is moved.
 - **The language server is out of scope by design:** it publishes core compile diagnostics only, each with its own source position, and runs no type check.
-- Tests: `src/unmapped-diagnostics.test.ts` (unit, with Volar's `transformDiagnostic` as the oracle for "not swallowed"), `index.test.ts` "decision 161" (tsserver plugin), `packages/tooling/tsc/src/unmapped-diagnostics.test.ts` (`mx-tsc`, fixture `unmapped-solid-failing`).
+- Tests: `src/unmapped-diagnostics.test.ts` (unit, with Volar's `transformDiagnostic` as the oracle for "not swallowed"), `index.test.ts` "an unmapped diagnostic lands on its enclosing tag in every file kind" (tsserver plugin), `packages/tooling/tsc/src/unmapped-diagnostics.test.ts` (`mx-tsc`, fixture `unmapped-solid-failing`).
 
 ## Failed compiles produce a typed stub module, never `""`
 
 When a template fails to compile, `createVirtualCode` returns `failedModuleStub(source)` (`src/failed-module-stub.ts`), not an empty string. An empty virtual module is not a module, so each importer gets `TS2306 … is not a module`, printed by `mx-tsc` *before* the real compile error and at the wrong file. Do not revert it to `""`.
 
-The stub is `export default` of an `any`, plus `Input` and every `export`ed name found by a tolerant lexical scan of the failed source (the source did not parse, so a real parse is unavailable; the scan uses `[ \t]+`, never `\s+`, so a half-typed `export type` cannot swallow the next line, and drops reserved words), including destructured exports and `export {…}` lists; `export * [as N] from` lines are copied verbatim. Each name gets a type alias accepting up to 8 type arguments, and a value whose type depends on the declaration's kind: a `function`, `class` or `const`/`let`/`var` whose initializer is an arrow, function expression or class expression (through parentheses, `as`, `satisfies`, `!`; also when named in an `export {…}` list) is a callable, constructible, generic shape (`{ <_0=any…_7=any>(...a): any; new <…>(...a): any; [k: string]: any }`), so `make<number>()` and `new Box<string>()` do not give `TS2347`; every other name (data consts, enums, interfaces, types, `Input`) is plain `any`, so `const n: number = count`, `count + 1`, `count === 1`, `switch`, `for…of`, spread and index use type-check. No single type is both callable with type arguments and assignable to `number`, hence the split. Contextual keywords (`get`, `set`, `type`, `from`, `of`, `async`) and unicode identifiers are kept; only truly reserved words are dropped. The helper names are `__mx$failed$` and `__Mx$Any$` so an export cannot collide with them. Initializers are classified with the TypeScript AST (`ts.createSourceFile`, TSX, only the slice of that one statement, never the whole failed file; anything unparseable is `any`, the safe default), so a JSX value (`export const view = <Card/>`, the canonical `.solid.mx` export) or `(1 + 2)` stays `any`; never classify by regex on the first token. Cost: ~1 ms for a 20k-line file with 100 exports. Known limits: a name the scan cannot see (e.g. an export built by a macro) still reports `TS2305` at the importer; a callback passed to a method of a stubbed value (`list.map((x) => …)`) reports `TS7006` under `noImplicitAny`, which is inherent (an `any` receiver does the same). The stub has no source mappings, so a diagnostic inside it (there should be none) is reported at 1:1 marked as MX-generated code rather than dropped (decision 161). Tests: `describe("failed compile leaves a typed stub module")` in `src/index.test.ts` and the `compile-error-importer` fixture in `packages/tooling/tsc`.
+The stub is `export default` of an `any`, plus `Input` and every `export`ed name found by a tolerant lexical scan of the failed source (the source did not parse, so a real parse is unavailable; the scan uses `[ \t]+`, never `\s+`, so a half-typed `export type` cannot swallow the next line, and drops reserved words), including destructured exports and `export {…}` lists; `export * [as N] from` lines are copied verbatim. Each name gets a type alias accepting up to 8 type arguments, and a value whose type depends on the declaration's kind: a `function`, `class` or `const`/`let`/`var` whose initializer is an arrow, function expression or class expression (through parentheses, `as`, `satisfies`, `!`; also when named in an `export {…}` list) is a callable, constructible, generic shape (`{ <_0=any…_7=any>(...a): any; new <…>(...a): any; [k: string]: any }`), so `make<number>()` and `new Box<string>()` do not give `TS2347`; every other name (data consts, enums, interfaces, types, `Input`) is plain `any`, so `const n: number = count`, `count + 1`, `count === 1`, `switch`, `for…of`, spread and index use type-check. No single type is both callable with type arguments and assignable to `number`, hence the split. Contextual keywords (`get`, `set`, `type`, `from`, `of`, `async`) and unicode identifiers are kept; only truly reserved words are dropped. The helper names are `__mx$failed$` and `__Mx$Any$` so an export cannot collide with them. Initializers are classified with the TypeScript AST (`ts.createSourceFile`, TSX, only the slice of that one statement, never the whole failed file; anything unparseable is `any`, the safe default), so a JSX value (`export const view = <Card/>`, the canonical `.solid.mx` export) or `(1 + 2)` stays `any`; never classify by regex on the first token. Cost: ~1 ms for a 20k-line file with 100 exports. Known limits: a name the scan cannot see (e.g. an export built by a macro) still reports `TS2305` at the importer; a callback passed to a method of a stubbed value (`list.map((x) => …)`) reports `TS7006` under `noImplicitAny`, which is inherent (an `any` receiver does the same). The stub has no source mappings, so a diagnostic inside it (there should be none) is reported at 1:1 marked as MX-generated code rather than dropped. Tests: `describe("failed compile leaves a typed stub module")` in `src/index.test.ts` and the `compile-error-importer` fixture in `packages/tooling/tsc`.
 
 ## Host-policy diagnostics (`TS80003`)
 
@@ -535,7 +535,7 @@ The stub is `export default` of an `any`, plus `Input` and every `export`ed name
 - **Always warnings.** The exit code of `mx-tsc` is unchanged by them (nothing that built before may start failing). `.ng.mx`, `.solid.mx` and `.astro.mx` hosts are fixed by their extension; those plugins resolve the policy only to report.
 - **Staleness (known limit).** The plugin does not watch `package.json`. After you fix it, the warning stays until the `.mx` file is edited (which recompiles it and re-resolves the policy) or the project reloads; the host choice itself is as stale. The language server does not have this limit (it records `package.json` as a dependency). Two tests pin it (`host-policy diagnostics through tsserver`: the same-service edit clears it; fixing `package.json` alone does not). A `package.json` watch is a follow-up; when it lands, flip the pinning test.
 
-## Handler typing on the shared JSX hosts (decision 140)
+## Handler typing on the shared JSX hosts
 
 `mx-language.ts`'s `compileMxVirtual` passes `typeCheck: true` to `compilePreactMx`/`compileReactMx`/`compileHonoMx`, so the virtual code (never the build output) wraps native event handlers as `(fn) satisfies Handler<"tag", "event">`, a type-only form that TypeScript erases on emit — `mx-tsc` emits JavaScript from this same projection, so no helper value or call may ever appear in it (`jsx-handler-emit.test.ts` emits and runs each host). The host's handler type is looked up case-insensitively in its `JSX.IntrinsicElements`; an unknown prop, custom element or dynamic tag is unchecked. A shorthand handler has no source span of its own, so its generated function maps onto the attribute name and errors inside its body land on that name. `mx-tsc` tests: `packages/tooling/tsc/src/jsx-handler-typing.test.ts` (shared sources in `src/fixtures/handler-typing`, one throwaway project per host).
 

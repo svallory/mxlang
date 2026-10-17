@@ -37,7 +37,7 @@ describe("React dialect", () => {
     );
   });
 
-  it("a type-only import does not resolve a capitalized tag (decision 114 parity, #151)", () => {
+  it("a type-only import does not resolve a capitalized tag (#151)", () => {
     // A type-only import binds no runtime value, so `<Widget/>` has nothing
     // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
     // enforce (`import type` excluded from `ctx.imports`).
@@ -57,7 +57,7 @@ describe("React dialect", () => {
     ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
     ["with an attribute", "<TotallyUndefined a=1/>"],
   ])(
-    "rejects a capitalized tag with no import, binding, or taglib entry, %s (decision 114 parity)",
+    "rejects a capitalized tag with no import, binding, or taglib entry, %s",
     (_label, source) => {
       expect(errorOf(source)).toContain(
         "Unable to find entry point for custom tag `<TotallyUndefined>`.",
@@ -166,7 +166,7 @@ describe("React dialect", () => {
     // Marko's own html/dom runtimes never render a string renderer's name
     // as literal text, args or not — see `_dynamic_tag` in
     // `runtime-tags/src/html/dynamic-tag.ts`. args[0] ("x") becomes the
-    // spread attributes source (decision 112): `for...in` over a string
+    // spread attributes source: `for...in` over a string
     // yields its numeric indices, matching Marko's own `_attrs`. React's own
     // renderer (unlike Preact/Hono) rejects a numeric attribute name
     // ("Invalid attribute name: `0`") and drops it, so no attribute renders
@@ -259,7 +259,7 @@ describe("React dialect", () => {
   });
 });
 
-describe("event attributes (decision 101, phase B of dom-events)", () => {
+describe("event attributes (phase B of dom-events)", () => {
   it("recomposes the prop from the DOM event name", () => {
     expect(markup("<button onClick=handler>x</button>")).toBe(
       "<button onClick={handler}>x</button>",
@@ -317,8 +317,7 @@ describe("event attributes (decision 101, phase B of dom-events)", () => {
 });
 
 /**
- * The local extension of decision 116 (firstmate's ruling under decision 116
- * in `notes/decisions-2026-09-10.md`): a non-import PascalCase local
+ * The local extension of the rule for a tag imported from a `.ts` module: a non-import PascalCase local
  * (`static`, a `<const>`, a tag param) whose value core cannot statically
  * prove is a function/arrow/class also lowers as a dynamic tag; a plain
  * `function Foo(){}`/arrow-valued `static const`/`<const>` stays a direct
@@ -415,11 +414,11 @@ describe("local-value-as-tag-parity: non-import local used as a tag (react)", ()
 });
 
 /**
- * Firstmate's follow-up on decision 116: React's own `memo`/`forwardRef`
+ * A follow-up to that rule: React's own `memo`/`forwardRef`
  * return plain OBJECTS (`{ $$typeof, ... }`), not functions — unlike
  * preact/compat's and hono's own `memo`/`forwardRef`, both real functions
  * (measured, see the sibling describe block below). A `memo(Foo)`/
- * `forwardRef(...)` result is "unknown" under decision 116's own
+ * `forwardRef(...)` result is "unknown" under that
  * classification (a `CallExpression`, never statically function-like), so
  * it always routes dynamic — through `mxDynamic`, which before this fix had
  * no branch recognizing a `$$typeof`-carrying object as a component: it fell

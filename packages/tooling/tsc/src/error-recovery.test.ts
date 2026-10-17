@@ -14,7 +14,7 @@ const PAGE = [
 ].join("\n");
 
 it(
-  "prints every error of a file in one run (decision 162)",
+  "prints every error of a file in one run",
   () => {
     const dir = mkdtempSync(join(here, ".tmp-error-recovery-"));
     try {

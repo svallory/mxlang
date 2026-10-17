@@ -178,7 +178,7 @@ describe("a failing vite build names the authored file, not the virtual id", () 
     expect(plain(error.message)).toContain("`<let>` is reactive state");
   });
 
-  it("carries every other error of the file in the message (decision 162)", async () => {
+  it("carries every other error of the file in the message", async () => {
     // Three independent errors: a scriptlet, an `<if>` without a condition,
     // CDATA. A build throws one error; the other two ride in its message.
     const error = await buildError(

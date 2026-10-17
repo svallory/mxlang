@@ -1,7 +1,7 @@
 {
   "name": "@mxlang/angular-checker",
   "version": "0.1.0",
-  "description": "Angular template type-check diagnostics for MX, as plain records (decision 99)",
+  "description": "Angular template type-check diagnostics for MX, as plain records",
   "license": "MIT",
   "repository": {
     "type": "git",

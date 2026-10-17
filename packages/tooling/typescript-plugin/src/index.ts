@@ -116,7 +116,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       ...ambientTypeDiagnostics(typescript, ambientErrors),
     ];
     // Beneath Volar's proxy, so a diagnostic Volar cannot map is moved onto
-    // the nearest mapped span before it would be dropped (decision 161).
+    // the nearest mapped span before it would be dropped.
     // Volar proxies `info.languageService` right after this callback returns.
     let language: Language<string> | undefined;
     approximateUnmappedDiagnostics(

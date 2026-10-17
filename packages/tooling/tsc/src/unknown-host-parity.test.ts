@@ -28,7 +28,7 @@ afterEach(() => {
 
 // `@mxlang/targets` is the language server's dependency, not this
 // package's: resolve it from the server so both sides use the copy the server
-// runs. It is where a tool resolves a policy now (decisions 129/132).
+// runs. It is where a tool resolves a policy now.
 const lsRequire = createRequire(
   join(import.meta.dirname, "../../language-server/package.json"),
 );

@@ -73,7 +73,7 @@ describe("duplicate attribute in a vite build", () => {
         "`class`: the later one at 2:3 wins, so this one is dropped",
       );
       const out = readFileSync(join(projectRoot, "dist", "entry.mjs"), "utf8");
-      // Last-wins in core (decision 135): only the survivor is emitted.
+      // Last-wins in core: only the survivor is emitted.
       expect(out).toContain('class=\\"b\\"');
       expect(out).not.toContain('class=\\"a\\"');
     } finally {

@@ -186,7 +186,7 @@ function resultFor(host: string) {
 }
 
 describe.each(HOSTS)(
-  "native prop diagnostics on $host (decision 140 (b))",
+  "native prop diagnostics on $host",
   ({ host }) => {
     it.each(
       BAD.map((entry, index) => ({
@@ -199,7 +199,7 @@ describe.each(HOSTS)(
       ({ index, column }) => {
         const { mx, plain } = resultFor(host);
         const twin = diagnostics(plain, `Twin${index}\\.tsx`);
-        // Lead ruling: decision 140 follows each host's own JSX types.
+        // Native prop diagnostics follow each host's own JSX types.
         // Hono's index signature accepts camelCase maxLength/tabIndex, foo,
         // key and ref. Preact also declares key:any. Do not invent errors.
         const accepted =

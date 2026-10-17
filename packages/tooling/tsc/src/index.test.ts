@@ -190,11 +190,11 @@ describe("mx-tsc", () => {
   );
 
   it(
-    "reports a whole-file Solid .mx compile error at its own line and column (decision 115)",
+    "reports a whole-file Solid .mx compile error at its own line and column",
     () => {
       // Proves compileSolidUnit's map/mappings are wired correctly through
       // the TS plugin's virtual code (the same route `mx-tsc` uses):
-      // before decision 115's wiring, this host wasn't reachable for a
+      // before that wiring, this host wasn't reachable for a
       // whole-file `.mx` at all through the real entry point.
       const result = run(mxTsc, [
         "--noEmit",

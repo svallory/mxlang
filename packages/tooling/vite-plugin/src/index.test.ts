@@ -378,7 +378,7 @@ describe("mx()", () => {
     });
 
     it("leaves AstroMX's .astro.mx alone: a different host's extension", async () => {
-      // `.astro.mx` (decision 134) belongs to `@mxlang/host-astro`'s own plugin,
+      // `.astro.mx` belongs to `@mxlang/host-astro`'s own plugin,
       // which lowers it to Astro template syntax. It ends in `.mx`, so the
       // plain `endsWith` match would claim it without the foreign-extension
       // guard — this pins that, since the two plugins run in the same Vite
@@ -664,7 +664,7 @@ export default () => <div />;
     });
 
     it("renders <let>'s initial value when `strict` is not set", async () => {
-      // The default policy is unchanged by the option's existence: decision 65
+      // The default policy is unchanged by the option's existence: it
       // renders what Marko's own server render emits.
       const STATEFUL = `export interface Input {}
 <let/count=0/>
@@ -845,8 +845,7 @@ export default () => <div />;
     it("does not resolve an mx.tags entry whose hosts excludes this host", async () => {
       // `resolveTargetPolicy(file).host` (`"html"`, from this fixture's
       // package.json) is passed into `scanCached`; an entry restricted to
-      // `hosts: ["solid"]` must stay invisible to the html scan —
-      // decision 110(a).
+      // `hosts: ["solid"]` must stay invisible to the html scan.
       const dir = mkdtempSync(join(tmpdir(), "mx-vite-hosts-"));
       scratches.push(dir);
       mkdirSync(join(dir, "widgets"), { recursive: true });
@@ -1019,7 +1018,7 @@ export default () => <div />;
       utimesSync(tagFile, when, when);
 
       // The new tag is discovered, so the compile succeeds and the caller
-      // imports it. Under the unit model (decision 95) the tag's own markup
+      // imports it. Under the unit model the tag's own markup
       // stays in its own module, so what proves the rescan is the injected
       // import naming the newly discovered template — not inlined markup.
       const rescanned = await transform.call({}, "<marker/><extra/>\n", id);
@@ -1597,8 +1596,8 @@ export default () => <div />;
       }
     });
 
-    it("invalidates a whole-file Solid .mx caller when an imported callee's Input changes (decision 115)", async () => {
-      // The vite-plugin's own `host === "solid"` branch (decision 115) must
+    it("invalidates a whole-file Solid .mx caller when an imported callee's Input changes", async () => {
+      // The vite-plugin's own `host === "solid"` branch must
       // route through `compileSolidUnit`, and must union its
       // `dependencies` into the reverse map the same way
       // `loadSolidRegionCompile` already does for `.solid.mx` regions —
@@ -1708,8 +1707,8 @@ export default () => <div />;
       vi.resetModules();
     });
 
-    it("compiles a whole-file Solid .mx through the real Solid host, not the html string emitter (decision 115)", async () => {
-      // Before decision 115's wiring, `compileMarko`'s `host === "solid"`
+    it("compiles a whole-file Solid .mx through the real Solid host, not the html string emitter", async () => {
+      // Before that wiring, `compileMarko`'s `host === "solid"`
       // check had no branch at all and fell through to the `@mxlang/target-html`
       // branch: a real `vite build` of a page meant for Solid silently
       // compiled it to the vanilla string emitter instead — plausible
@@ -1736,7 +1735,7 @@ export default () => <div />;
       );
 
       // The html string emitter would produce `__mxOut.write(...)` sink
-      // writes (decision 155) and a runtime import; the Solid host emits JSX
+      // writes and a runtime import; the Solid host emits JSX
       // text and a `<p>` element with no such helper. Asserting the reserved
       // name keeps the negative meaningful — a bare `out +=` would pass
       // vacuously.

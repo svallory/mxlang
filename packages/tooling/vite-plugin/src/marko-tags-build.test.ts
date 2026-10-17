@@ -142,7 +142,7 @@ describe("a .mx page calling a tags/*.mx tag, built with vite (audit case h18)",
     expect(await render("chain", "src/page.mx")).toBe("<div><u>x</u></div>");
   });
 
-  it("a .marko tag is a build error naming the file (decision 172)", async () => {
+  it("a .marko tag is a build error naming the file", async () => {
     html("marko-tag");
     write("marko-tag", "src/tags/card.marko", `<div>\${input.title}</div>`);
     write("marko-tag", "src/page.mx", `<card title="T"/>`);
@@ -217,7 +217,7 @@ describe("the same page through the dev server's transform path", () => {
 /**
  * The JSX hosts import a discovered `tags/x.mx` the same way. A Solid
  * whole-file page does not run Marko's lookup (a `.marko` tag there is an
- * error, decision 172).
+ * error).
  */
 describe("a tags/*.mx tag on the JSX hosts, built with vite", () => {
   const page = `<p><badge label="L"/></p>`;

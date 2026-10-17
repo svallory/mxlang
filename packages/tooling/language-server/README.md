@@ -1,6 +1,6 @@
 # @mxlang/language-server
 
-A small, diagnostics-only LSP server for MX hosts (decision 71/72).
+A small, diagnostics-only LSP server for MX hosts.
 
 ## What it does
 
@@ -48,7 +48,7 @@ hardcoded config that carries no host policy (`host-diagnostics.md` §1), so
 `strictPolicy` forbids it. `tsserver` can't fill the gap either: it never
 opens `.mx` files in the first place (`host-diagnostics.md` §4).
 
-## Why decisions 71/72 require this
+## Why this server exists
 
 > "A host is not done without its editor diagnostics" — a host that defines
 > its own subset of MX (a `strict` policy, a stateful-tag disposition table)
@@ -64,7 +64,7 @@ this by walking upward from the file, looking for the nearest `package.json`:
 1. **`package.json#mx`**, if present: `{ "host": "html" | "astro" |
    "solid", "strict"?: boolean }` (with `"translator"` accepted as a deprecated alias). This is the authoritative source, and
    doubles as the routing config `@mxlang/vite-plugin`/the Bun loader already
-   need for a mixed project (decision 71's "mixed projects" case).
+   need for a mixed project (the "mixed projects" case).
 2. Otherwise, if that `package.json` depends on **exactly one** `@mxlang/*`
    host package (`@mxlang/target-html`, `@mxlang/host-astro`, `@mxlang/host-solid`), use that
    host at its default (non-strict) policy.
@@ -73,7 +73,7 @@ this by walking upward from the file, looking for the nearest `package.json`:
 `@mxlang/host-astro` always compiles under its strict policy (it ships no stateful
 tags), whatever `strict` says. The Solid host also has a fixed profile:
 `host: "solid"` routes a whole-file `.mx` template through
-`compileSolidUnit` (decision 115; the *region* compiler, `compileSolidMx`,
+`compileSolidUnit` (the *region* compiler, `compileSolidMx`,
 is reserved for `.solid.mx`'s embedded MX regions — a whole file has its own
 module scope to place an authored `import` in, which a region spliced into
 someone else's module does not), so stateful Marko tags are rejected the

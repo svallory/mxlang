@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mxTsc, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
 /**
- * `mx.contracts` (decision 142) through `mx-tsc`: a contract-only tag
+ * `mx.contracts` through `mx-tsc`: a contract-only tag
  * declared by a package-level contracts module reports the compiler's
  * positioned error in tsc's own output shape, and a module edit is picked up
  * by the next run — each `mx-tsc` invocation is a fresh process, so Node's
@@ -121,7 +121,7 @@ describe("mx-tsc reports mx.contracts module errors", () => {
   );
 });
 
-describe("mx-tsc on an html package: the wildcard guard (decision 147)", () => {
+describe("mx-tsc on an html package: the wildcard guard", () => {
   it(
     "a wildcard child one typo from an explicit child is an error, not a warning, on a non-data target",
     () => {

@@ -15,7 +15,7 @@ const SOURCE = [
   "<span>fine</span>",
 ].join("\n");
 
-it("reports every error of a file as its own diagnostic (decision 162)", () => {
+it("reports every error of a file as its own diagnostic", () => {
   const dir = mkdtempSync(join(tmpdir(), "mx-plugin-recovery-"));
   try {
     writeFileSync(

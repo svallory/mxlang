@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
-/** Native elements normalize primitive attribute values; component props stay raw (decision 149). */
+/** Native elements normalize primitive attribute values; component props stay raw. */
 describe("react primitive attribute normalization", () => {
   const compile = (source: string) =>
     compileReactMx(source, "/virtual/page.mx").code;
@@ -33,7 +33,7 @@ describe("react primitive attribute normalization", () => {
   });
 });
 
-describe("react string style in a spread (decision 149)", () => {
+describe("react string style in a spread", () => {
   const compile = (source: string) =>
     compileReactMx(source, "/virtual/page.mx").code;
 

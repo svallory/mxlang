@@ -10,7 +10,7 @@ import {
 } from "./test-support.ts";
 
 /**
- * Decision 140 (audit item 3): on the three hosts that share the JSX emitter
+ * On the three hosts that share the JSX emitter
  * (preact, react, hono) a native element's event handler is type-checked
  * against the host's own handler type, through a type-check-only
  * `(fn) satisfies Handler<tag, event>` wrapper in the tooling's virtual code.
@@ -133,7 +133,7 @@ function errorsIn(host: HostName, file: string): Diagnostic[] {
 }
 
 describe.each(HOSTS)(
-  "mx-tsc handler typing on $host (decision 140)",
+  "mx-tsc handler typing on $host",
   ({ host }) => {
     afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
@@ -154,7 +154,7 @@ describe.each(HOSTS)(
     });
 
     it("keeps the valid-handler matrix clean, including the strict `(e)` cases", () => {
-      // Before: every camelCase name decision 101 recomposed to the runtime
+      // Before: every camelCase name recomposed to the runtime
       // spelling (`onKeydown`, `onMousedown`, …) had no contextual type, so
       // `(e) => …` was an implicit-any error (TS7006).
       expect(errorsIn(host, "Valid")).toEqual([]);
@@ -162,7 +162,7 @@ describe.each(HOSTS)(
 
     it("type-checks the body of a shorthand handler", () => {
       const found = errorsIn(host, "ShorthandBody");
-      // The body maps to the authored body (decision 167), so the error
+      // The body maps to the authored body, so the error
       // lands on `nope` exactly: `<button onClick(e) { e.nope(); }>`, column 24.
       expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
         [1, 24, "TS2339"],
@@ -224,7 +224,7 @@ describe.each(HOSTS)(
   },
 );
 
-describe("mx-tsc DOM-typed handlers (decision 140 (a))", () => {
+describe("mx-tsc DOM-typed handlers", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
   it.each(["preact", "hono"] as const)(

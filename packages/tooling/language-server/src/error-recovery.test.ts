@@ -11,7 +11,7 @@ const SOURCE = [
   "<span>fine</span>",
 ].join("\n");
 
-describe("language server error recovery (decision 162)", () => {
+describe("language server error recovery", () => {
   it("publishes one diagnostic per error of the file", () => {
     const diagnostics = diagnoseDocument(SOURCE, "/app/page.mx", {
       target: "html",

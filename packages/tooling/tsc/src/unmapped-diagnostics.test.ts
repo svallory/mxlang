@@ -4,7 +4,7 @@ import { runInProcess } from "./in-process.ts";
 
 /**
  * A diagnostic whose generated position has no source mapping is never
- * dropped (decision 161). A whole-file Solid unit maps its values but no tag,
+ * dropped. A whole-file Solid unit maps its values but no tag,
  * so with no JSX types each element's TS7026 sits in generated text no
  * mapping covers: Volar used to discard them, and `mx-tsc` reported only the
  * mapped `missingName`.

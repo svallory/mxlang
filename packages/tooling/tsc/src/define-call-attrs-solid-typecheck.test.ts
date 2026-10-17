@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
 
 /**
- * Decision 160 on Solid: a `<define>` called with attributes hands them to its
+ * On Solid, a `<define>` called with attributes hands them to its
  * first param as ONE object. `|{ n }|` and `|{ n }, i|` used to fail compile
  * with "cannot close over `n`" (the capture check read the pattern's source
  * text as a name), so a clean run here proves the destructured params bind,

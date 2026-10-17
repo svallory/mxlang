@@ -1,5 +1,5 @@
 /**
- * The language server on `.react.mx` (decision 154): routed by the registry
+ * The language server on `.react.mx`: routed by the registry
  * to `@mxlang/host-react`'s region entry, it reports React's region errors and
  * region parse errors at their file-absolute position, and nothing for a
  * clean document. Type errors are the TypeScript plugin's (and `mx-tsc`'s),

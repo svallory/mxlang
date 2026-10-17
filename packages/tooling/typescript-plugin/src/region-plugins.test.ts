@@ -1,5 +1,5 @@
 /**
- * One region language plugin per region file kind (decision 154): each claims
+ * One region language plugin per region file kind: each claims
  * its own `.<segment>.mx` suffix, a kind that is not built in included, and
  * lowers the regions with its own kind's `compileRegion`.
  */
@@ -73,7 +73,7 @@ describe("two region kinds, two plugins", () => {
 });
 
 describe("a case-variant suffix (X.SOLID.mx) is claimed but not lowered", () => {
-  // Unchanged from before decision 154: the plugin has matched the suffix
+  // Unchanged from before region file kinds existed: the plugin has matched the suffix
   // case-insensitively since it was added, and the parser's `.solid.mx`
   // default left the grammar off for any other case. The language server,
   // Vite and the registry all treat `X.SOLID.mx` as a whole-file `.mx`.

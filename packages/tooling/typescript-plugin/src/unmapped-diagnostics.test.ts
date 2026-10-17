@@ -21,7 +21,7 @@ import {
 
 /**
  * A diagnostic whose generated position has no source mapping is never
- * dropped (decision 161). These tests drive the shared seam with a real Volar
+ * dropped. These tests drive the shared seam with a real Volar
  * `Language` and a hand-written virtual module, so each mapping is exact and
  * what Volar itself does with the result (`transformDiagnostic`, the function
  * that used to return `undefined`) is the oracle.
@@ -696,7 +696,7 @@ describe("approximateUnmapped", () => {
   });
 });
 
-describe("the drop path (decision 161)", () => {
+describe("the drop path", () => {
   // Volar's `transformDiagnostic` is the function that used to swallow a
   // diagnostic it could not map. These fail if a diagnostic that went through
   // the seam is still swallowed there, whatever Volar version is installed.

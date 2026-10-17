@@ -1,6 +1,6 @@
 # vite-plugin — agent instructions
 
-## Current target dispatch (decisions 129/132)
+## Current target dispatch
 
 Whole-file `.mx`/claimed `.marko` compilation selects
 `lookupFor(policy).target(policy.target)` (a descriptor loaded from a package

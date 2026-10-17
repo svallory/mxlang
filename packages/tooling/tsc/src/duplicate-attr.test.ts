@@ -17,8 +17,8 @@ describe("mx-tsc duplicate attributes", () => {
       const stderr = stripVTControlCharacters(result.stderr);
 
       expect(result.status).toBe(0);
-      // Line 3, column 6 (1-based) is the first `class`, the dropped one
-      // (decision 135); the message names the surviving second at 4:3,
+      // Line 3, column 6 (1-based) is the first `class`, the dropped one;
+      // the message names the surviving second at 4:3,
       // 1-based like the position mx-tsc prints.
       expect(stderr).toMatch(/Page\.mx\(3,6\): warning MX_DUPLICATE_ATTRIBUTE/);
       expect(stderr).toContain(

@@ -375,7 +375,7 @@ function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
 /**
  * Makes Volar's program decoration run on diagnostics that already carry an
  * approximate position, so a diagnostic Volar cannot map is reported at the
- * nearest mapped span instead of being dropped (decision 161).
+ * nearest mapped span instead of being dropped.
  *
  * `runTsc` hands the program to Volar's `decorateProgram` inside the patched
  * `tsc.js`, and `mx-tsc` never holds it, so `decorateProgram` is the one place
@@ -633,7 +633,7 @@ function collectBuildGroups(
 /**
  * Runs `tsc` with `.solid.mx` files compiled as their lowered TSX.
  *
- * This is the CI half of decision 81: an editor gets `.solid.mx` types from
+ * This is the CI half of MX's TypeScript tooling: an editor gets `.solid.mx` types from
  * `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc --noEmit` in a
  * build has no tsserver and no plugin host, so the same language plugin is
  * handed to Volar's `runTsc` instead. Both halves share one implementation of

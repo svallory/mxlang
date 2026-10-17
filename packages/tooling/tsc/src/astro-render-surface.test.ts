@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
 
 /**
- * Decision 155: an html unit's default export is `(input) => string` and its
+ * An html unit's default export is `(input) => string` and its
  * `<return>` value comes from `render(input, out)`. Under `--astro` the type
  * surface casts the default export; if that cast hides `.render`, a call to
  * it is TS2339 on *unmapped generated text*, which mx-tsc drops silently, so a

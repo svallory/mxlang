@@ -1,6 +1,6 @@
 # angular-checker — agent instructions
 
-## `@mxlang/angular-checker`: Angular template diagnostics (decision 99)
+## `@mxlang/angular-checker`: Angular template diagnostics
 
 `packages/tooling/angular-checker` runs `@angular/compiler-cli`'s
 `NgtscProgram` over an in-memory `.ts` module (a component with an inline
@@ -12,7 +12,7 @@ records** — `{ file, start, length, code, message, category, source }`.
 cancellation token (callers own the debounce — ruling e).
 
 It is a **separate package from `@mxlang/host-angular`** so the emitter keeps zero
-Angular runtime deps (decision 79); `@angular/core` is a devDependency so the
+Angular runtime deps; `@angular/core` is a devDependency so the
 tests check against real Angular types. `@angular/compiler-cli` is an
 **optional peer dependency** (`>=22.0.0 <23.0.0`, plus a devDependency for the
 tests), never bundled: `resolveCompilerCli(projectDir)` (`src/compiler-cli.ts`)

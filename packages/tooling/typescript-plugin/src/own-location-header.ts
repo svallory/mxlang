@@ -36,7 +36,7 @@ function sameFile(a: string, b: string): boolean {
  * `fileName` still matches. Kleur colourises the line under `FORCE_COLOR`
  * (path, line and column each wrapped in SGR runs), so the match runs on a
  * VT-stripped copy; lines that stay keep their original text. Generic path
- * logic only (decision 126).
+ * logic only.
  */
 export function dropOwnLocationHeader(
   message: string,

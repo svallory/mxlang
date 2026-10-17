@@ -3,7 +3,7 @@ import { compileReactMx } from "./index.ts";
 
 /**
  * A duplicate attribute (`<div class="a" class="b">`) resolves last-wins in
- * core, like stock Marko 6.4.4 (decision 135): the earlier occurrence is
+ * core, like stock Marko 6.4.4: the earlier occurrence is
  * dropped from the output and gets a positioned warning naming the survivor.
  * Never an error. The structured position is core's 0-based column; the
  * message text is 1-based.

@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- **Changed (decision 162):** a failing transform throws the first error and carries the file's other errors in its message.
+- **Changed:** a failing transform throws the first error and carries the file's other errors in its message.
 
-- **Fix (third-party-data-host, decision 148):** a file of a third-party host built on the data target (`post.mesh.mx`) transforms through the host's descriptor into data's output instead of being refused for the host's `defaultTag`.
+- **Fix (third-party-data-host):** a file of a third-party host built on the data target (`post.mesh.mx`) transforms through the host's descriptor into data's output instead of being refused for the host's `defaultTag`.
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
 
@@ -34,11 +34,11 @@
 
 ## 0.1.0 (unreleased)
 
-- **Docs (render-consumers, decision 155):** the comment on the Astro page pipeline describes the default export as `(input) => string`, not `{ value, output }`.
+- **Docs (render-consumers):** the comment on the Astro page pipeline describes the default export as `(input) => string`, not `{ value, output }`.
 
-- **Changed (bridge-host, decision 154):** the default `extensions` are the registry's region file kinds then `.mx` (`defaultExtensions()`, today `.solid.mx, .mx`), resolved lazily by the async hooks; a user's `extensions` still replaces them. A region file is printed with `mx: true` and lowered by the region entry its suffix names, not by the first region kind. Behaviour change: a user-listed extension no region kind serves (`extensions: [".foo.mx"]`, or an opt-in `".astro.mx"`) used to compile through Solid's region entry; it is now the error `no registered host compiles MX regions for "<file>"`. Region kinds are looked up in the file's project lookup (`lookupFor(policy)`), as the language server does.
+- **Changed (bridge-host):** the default `extensions` are the registry's region file kinds then `.mx` (`defaultExtensions()`, today `.solid.mx, .mx`), resolved lazily by the async hooks; a user's `extensions` still replaces them. A region file is printed with `mx: true` and lowered by the region entry its suffix names, not by the first region kind. Behaviour change: a user-listed extension no region kind serves (`extensions: [".foo.mx"]`, or an opt-in `".astro.mx"`) used to compile through Solid's region entry; it is now the error `no registered host compiles MX regions for "<file>"`. Region kinds are looked up in the file's project lookup (`lookupFor(policy)`), as the language server does.
 
-- **Added (default-tag-ladder, decision 145):** the package's `defaultTag` reaches the page compile and each `.solid.mx` region.
+- **Added (default-tag-ladder):** the package's `defaultTag` reaches the page compile and each `.solid.mx` region.
 
 - **Fix (translate-error-callee-file):** a callee syntax error's build header uses the callee file together with its coordinates, not the caller's authored id. Its message stays compact, carrying one caret reason per frame so an aggregate callee's later reasons are not lost; the overlay frame is built from the callee source. Build-render headers print 1-based columns (#227); the transform/overlay's structured `loc.column` stays 0-based.
 
@@ -56,7 +56,7 @@
 
 - **Added (third-party-target, registration PR 7):** the transform compiles through a target loaded from `package.json#mx.target` / `mx.host` (the project's lookup, `lookupFor(policy)`); a failed load fails the transform with the positioned `package.json:line:col: <message>` error through the existing policy-error path.
 
-- **Changed (refactor/vite-plugin, decisions 129 and 132):** whole-file `.mx`
+- **Changed (refactor/vite-plugin):** whole-file `.mx`
   compilation dispatches through `@mxlang/target-registry` (`load(core).compileModule`
   with the full built-in lookup) instead of branching on host names, and
   `.solid.mx` uses the registered region pipeline. Build strictness,
@@ -71,16 +71,16 @@
 
 - **Fix (vite-plugin-colored-marko-header):** under `FORCE_COLOR=1` kleur colourises Marko's `at <path>:L:C` header (and the reason `label`), so the position regex missed the header and a Marko `CompileError` printed `page.mx.tsx:undefined:undefined` with ANSI still in the message. SGR runs are stripped before the position is parsed (`markoPosition`) and before `label` becomes the printed message, matching what `@mxlang/language-server`'s `splitCodeFrame` already does.
 
-- **Added (target-select, decisions 129/132):** `mx.target` selects its host
+- **Added (target-select):** `mx.target` selects its host
   behaviour. Invalid targets and host/target mismatches fail transforms via
   `this.error`, with the manifest's value position and a code frame; repeat
   transforms cannot turn an error into a warning or a silent pass. Existing
   host warnings remain unchanged. Explicit `data` reports the registry's
-  decision 131 addendum restriction naming `parseData` and the tooling TODO.
+  restriction naming `parseData` and the tooling TODO.
 
-- **Changed (refactor/target-open-set, decisions 129 and 132):** host policy and scanning go through `@mxlang/target-registry`'s wrappers over the built-in lookup (a dynamic import, so the plugin's config-loading discipline is unchanged), and `mx.tags[].hosts` is matched on `hostFilterKey(policy.target)` — the same string as before for every built-in. Every compile carries the built-in lookup. An unknown bare word in `mx.tags[].hosts` still warns through `warn()`; a package specifier no longer does.
+- **Changed (refactor/target-open-set):** host policy and scanning go through `@mxlang/target-registry`'s wrappers over the built-in lookup (a dynamic import, so the plugin's config-loading discipline is unchanged), and `mx.tags[].hosts` is matched on `hostFilterKey(policy.target)` — the same string as before for every built-in. Every compile carries the built-in lookup. An unknown bare word in `mx.tags[].hosts` still warns through `warn()`; a package specifier no longer does.
 
-- **Changed (amx-to-astro-mx, decision 134):** `x.astro.mx`, Astro's template kind, is declined by `mx()` (it joins the foreign-extension guard), so a registered `.mx` does not claim it.
+- **Changed (amx-to-astro-mx):** `x.astro.mx`, Astro's template kind, is declined by `mx()` (it joins the foreign-extension guard), so a registered `.mx` does not claim it.
 
 - A Marko mismatched-closing-tag error now reports the opener's position in its reason (`… opening "p" tag at 3:3`), through core. Test expectation updated; no plugin code changed.
 

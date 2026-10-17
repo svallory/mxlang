@@ -4,19 +4,19 @@
 
 - **Added (ls-angular-host-wiring):** Angular-host documents get real compile/translate diagnostics. A whole-file `.mx` under the `angular-template` target compiles through `@mxlang/angular`'s `compile`; a `.ng.mx` compiles whole-file through `compileNgMx`, routed by suffix (never as html, whatever `mx.host` derived), so errors and warnings inside an MX region land at their authored position. Warnings (e.g. a `<for>` with no `by=`) are published too. `@angular/compiler-cli` is never loaded — not a dependency of anything the server imports, and proven absent by `dist-build.test.ts` (resolution fails and the module cache stays clean after both compiles). Angular *template* diagnostics stay with the TypeScript plugin (separate item). A `.ng.mx` reports no callee-dependency list yet, so a watcher edge for an imported tag module is a follow-up. `.ng.mx` region errors carry no code-frame `data` yet (Angular page errors do); also a follow-up with the dependencies work.
 
-- **Changed (decision 162):** one diagnostic per error of the file (core's `TranslateError.errors`).
+- **Changed:** one diagnostic per error of the file (core's `TranslateError.errors`).
 
-- **Changed (third-party-data-host, decision 148):** a third-party host on the data target (`.mesh.mx`) resolves with no diagnostics and compiles whole-file through the host's descriptor; data's errors are positioned in the file. `tsconfig.json` roots at the repo for the shared fixtures; the build config keeps `src`.
+- **Changed (third-party-data-host):** a third-party host on the data target (`.mesh.mx`) resolves with no diagnostics and compiles whole-file through the host's descriptor; data's errors are positioned in the file. `tsconfig.json` roots at the repo for the shared fixtures; the build config keeps `src`.
 
-- **Changed (bridge-host, decision 154):** a region file is routed by suffix through the document's own lookup (`lookupFor(policy)`) to the host whose file kind has a region entry; the file is printed with `mx: true`. `REGION_LANGUAGE_IDS` added; `SOLID_MX_LANGUAGE_IDS` kept as its alias. An unregistered `.<word>.mx` and a third-party host's file (`.mesh.mx`) compile whole-file under the page policy, as before.
+- **Changed (bridge-host):** a region file is routed by suffix through the document's own lookup (`lookupFor(policy)`) to the host whose file kind has a region entry; the file is printed with `mx: true`. `REGION_LANGUAGE_IDS` added; `SOLID_MX_LANGUAGE_IDS` kept as its alias. An unregistered `.<word>.mx` and a third-party host's file (`.mesh.mx`) compile whole-file under the page policy, as before.
 
-- **Changed (solid-rename, decision 154):** the Solid file kind accepts the language ids `solidmx` and `solid`; `SolidMX` is no longer recognised. Zed now sends `solid` because its LSP id is the lowercased language name, and the Zed language is renamed from `SolidMX` to `Solid`. Settings keyed by `"SolidMX"` must use `"Solid"`.
+- **Changed (solid-rename):** the Solid file kind accepts the language ids `solidmx` and `solid`; `SolidMX` is no longer recognised. Zed now sends `solid` because its LSP id is the lowercased language name, and the Zed language is renamed from `SolidMX` to `Solid`. Settings keyed by `"SolidMX"` must use `"Solid"`.
 
 - **Tests (name-sugar-tooling r2):** the mid-edit buffers pin an exact diagnostic count each; `input :` is 1 (the bare `:` is now an error).
 
-- **Tests/Docs (name-sugar-tooling, decision 146 PR 3):** the sugar sigils right after whitespace inside a tag (`<input :`, `<input #`, `<input .`) never crash the server or report more than one error; the server page says it offers no completion or hover of its own, so there is no sugar hover.
+- **Tests/Docs (name-sugar-tooling):** the sugar sigils right after whitespace inside a tag (`<input :`, `<input #`, `<input .`) never crash the server or report more than one error; the server page says it offers no completion or hover of its own, so there is no sugar hover.
 
-- **Added (default-tag-ladder, decision 145):** a package's `mx.<target>.defaultTag` reaches the page compile and each `.solid.mx` region; an invalid one is the one error the policy diagnostics report, positioned at the `package.json` value, and the built-in answers meanwhile.
+- **Added (default-tag-ladder):** a package's `mx.<target>.defaultTag` reaches the page compile and each `.solid.mx` region; an invalid one is the one error the policy diagnostics report, positioned at the `package.json` value, and the built-in answers meanwhile.
 
 - **Fix (translate-error-callee-file):** callee syntax errors are published on the callee URI at its real range. Caller pointers include the file and 1-based line/column and link to that range. An aggregate callee (several Marko parser errors in one file) says how many further errors its code frame holds, on the callee diagnostic and the caller's pointer alike.
 
@@ -28,28 +28,28 @@ When the policy carries `target-not-found`, `target-load-failed`, `target-invali
 
 `diagnoseDocument` compiles through the descriptor a package specifier under `mx.target` / `mx.host` loaded (`policy.descriptor`), with that project's lookup. The new `target-not-found`, `target-load-failed`, `target-invalid-descriptor` and `host-invalid-descriptor` errors reach the document, linked to the key in `package.json`, through the existing policy-diagnostics path. The language server finds a target the project installed even when it runs as the VSIX-bundled copy: the specifier is resolved from the project, never from the bundle.
 
-### Fixed (mx.contracts PR 2, decision 142)
+### Fixed (mx.contracts PR 2)
 
 - Scanned contracts modules, sidecars and tag files are now caller dependencies.
   A watched-file edit re-diagnoses open callers without a page edit, including
   after a failed compile. Bun reloads edited declarations; Node ESM/TS reload
   still requires restart (`sync-esm-reload-node`).
 
-### Added: target selection errors (target-select, decisions 129/132)
+### Added: target selection errors (target-select)
 
 `mx.target` selects its target's host behaviour. Invalid targets and
 host/target mismatches are errors on the document and `package.json`, with
 full value ranges; mismatches link back to `mx.host`. Existing host warnings
-are unchanged. Explicit `data` reports the registry's decision 131 addendum
+are unchanged. Explicit `data` reports the registry's
 error naming `parseData` and `TODO data-target-tooling-dispatch`.
 
-### Changed (refactor/target-open-set, decisions 129 and 132)
+### Changed (refactor/target-open-set)
 
 The server resolves host policy and scans through `@mxlang/target-registry`'s wrappers over the built-in lookup, so it no longer depends on core's deleted closed lists; `diagnoseDocument` takes a policy whose `target` names the target and whose `host` is set only for a target that has one, and matches `mx.tags[].hosts` on `hostFilterKey(policy.target)` — the same string as before for every built-in. Compiles carry the built-in lookup, so a callee importing `AttrTag` from any registered target's package still reads. `isTranslateError` replaces `instanceof TranslateError`, so a positioned error from another copy of core keeps its position and dependencies. No change in the diagnostics published for any document.
 
 ### Changed
 
-- **`x.astro.mx` is routed by kind** (amx-to-astro-mx, decision 134): the server watches `**/*.astro.mx` (it watched `**/*.amx`), and an `.astro.mx` document no longer reaches the `.mx` compile; it is silent, like `.ng.mx`, since Astro-template diagnostics come from `mx-tsc --astro` and the TS plugin.
+- **`x.astro.mx` is routed by kind** (amx-to-astro-mx): the server watches `**/*.astro.mx` (it watched `**/*.amx`), and an `.astro.mx` document no longer reaches the `.mx` compile; it is silent, like `.ng.mx`, since Astro-template diagnostics come from `mx-tsc --astro` and the TS plugin.
 
 ### Fixed
 

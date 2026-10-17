@@ -1,8 +1,8 @@
 # language-server — agent instructions
 
-## `@mxlang/language-server`: diagnostics-only LSP server (decision 71/72)
+## `@mxlang/language-server`: diagnostics-only LSP server
 
-### Current dispatch (decisions 129/132)
+### Current dispatch
 
 `diagnoseDocument` selects `lookupFor(policy).target(policy.target)` (the built-in set plus a descriptor loaded from a package specifier), calls its
 lazy `load(core).compileModule`, and takes strictness from
@@ -20,7 +20,7 @@ Angular descriptor stays `pending` (no `load`) so the TS plugin and Vite keep
 their phase-2 guards, and the LS supplies the compile itself. A `region` pipeline uses its `compileRegion` through
 parser `print`. Both page and region calls pass `targets: lookupFor(policy)`;
 the descriptors forward it rather than narrowing cross-file `AttrTag` sources
-to their own package (decision 126 addendum). A descriptor without `load`
+to their own package. A descriptor without `load`
 stays silent for page compilation too — except that Angular branch. There is no data
 target (`data` is a reserved name the registry refuses). Hand-built policies
 bypass the registry's policy wrapper; `diagnoseDocument`'s TSDoc documents that such a
@@ -39,7 +39,7 @@ The historical mechanism and policy discussion below predates this dispatch
 refactor; its mentions of direct host imports/branches no longer apply.
 
 `packages/tooling/language-server` (`@mxlang/language-server`) exists to close one
-gap decisions 71/72 name explicitly: "a host is not done without its editor
+gap: "a host is not done without its editor
 diagnostics." Marko's own language server (`marko-js/language-server`)
 compiles every `.marko`/`.mx` file with a **hardcoded** compiler config that
 carries no host policy (`Project.getCompiler(dir).compileSync(text,
@@ -51,7 +51,7 @@ reports nothing for it. `tsserver` cannot fill the gap either: it never opens
 is what `@marko/ts-plugin` and `@mxlang/typescript-plugin` type-check). Full
 research: `notes/research/host-diagnostics.md`.
 
-**No TypeScript diagnostics, so nothing here maps a generated position (decision 161).** The server publishes core's compile diagnostics, each carrying its own source position; it never type-checks a generated module, so the "diagnostic with no source mapping is never dropped" rule (spec §12) has nothing to apply to. A thrown error with no position at all is the one thing it does not publish (it goes to `onUnexpectedError`): that is an internal failure, not a diagnostic about the author's file.
+**No TypeScript diagnostics, so nothing here maps a generated position.** The server publishes core's compile diagnostics, each carrying its own source position; it never type-checks a generated module, so the "diagnostic with no source mapping is never dropped" rule (spec §12) has nothing to apply to. A thrown error with no position at all is the one thing it does not publish (it goes to `onUnexpectedError`): that is an internal failure, not a diagnostic about the author's file.
 
 **Scope: diagnostics only.** `textDocumentSync` is the one capability
 advertised. No completion, hover, go-to-definition, or formatting — adding
@@ -80,12 +80,12 @@ superseded run's timer is cleared, never raced) on `didOpen`/`didChange`/
 editor's `didOpen` cannot: which host, and whether `strict`, applies to this
 file. Three branches, in order, walking upward from the file for the nearest
 `package.json`: (1) a `"mx": { "host": ..., "strict"?: ... }` field, the
-authoritative source, which doubles as the routing config decision 71's
+authoritative source, which doubles as the routing config the
 "mixed projects" case already needs for the Vite plugin/Bun loader; (2)
 failing that, if the `package.json` depends on **exactly one** `@mxlang/*`
 host package (`@mxlang/target-html`, `@mxlang/host-astro`), that host at its
 default policy; (3) otherwise, the translator's default (non-strict) policy.
-`@mxlang/host-astro` always compiles under `strictPolicy` (decision 71: it ships
+`@mxlang/host-astro` always compiles under `strictPolicy` (it ships
 no stateful tags) — `resolvePolicyObject` in `diagnose.ts` special-cases
 `host: "astro"` to `strictPolicy` regardless of the field's own `strict`
 value, since that host has no other mode. `host: "solid"` remains a
@@ -113,7 +113,7 @@ reports no callee-dependency list yet (`compileNgMx` exposes none), so a
 watcher edge for an imported tag module is a follow-up. An unknown host on an
 `.mx` page compiles under the resolver's host plus the warning; the parity
 test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`.
-An `.astro.mx` file (decision 134) is routed by kind too, before the
+An `.astro.mx` file is routed by kind too, before the
 `.ng.mx` check, and is deliberately silent: the server does not load
 `@mxlang/host-astro`, so Astro-template diagnostics come from `mx-tsc --astro` and
 the TS plugin, and the file must never reach the `.mx` compile (it ends in
@@ -141,7 +141,7 @@ package's own `README.md` "Editors" for the concrete snippets, including the
 generic-LSP-client `settings.json` shape for VS Code (which ships no
 dedicated extension from this task, per brief scope).
 
-*(Update, task `zed-ls-registration`, decision 77: the Rust scaffold this
+*(Update, task `zed-ls-registration`: the Rust scaffold this
 paragraph names as follow-up now exists — see `packages/editors/zed/AGENTS.md`. VS
 Code still ships no dedicated extension.)*
 
@@ -163,7 +163,7 @@ fresh-worktree caveat as `@mxlang/tsx-bridge`'s `dist/index.js` (see "Build
 before downstream tests" in the root `AGENTS.md`): `bun run verify` builds before it tests,
 so this only bites a standalone `vitest run` of this package.
 
-**Dependent re-diagnosis** (phase 4 tooling, decision 106/107's LS half).
+**Dependent re-diagnosis** (phase 4 tooling).
 `server.ts` keeps `callerDependencies`/`dependencyCallers`, a bidirectional
 edge map between a document URI and the filesystem paths its last compile's
 `dependencies` named. `scheduleDependents(changedUri)` walks
@@ -193,7 +193,7 @@ edit found no caller left to re-diagnose. Fixed in `@mxlang/core`
 (`TranslateError.dependencies`, see `packages/core/AGENTS.md`) and forwarded
 here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 
-**Scan evidence is a dependency too** (`mx.contracts` PR 2, decision 142).
+**Scan evidence is a dependency too** (`mx.contracts` PR 2).
 `diagnoseDocument` adds every `scan.files[].path` to the caller's dependency
 set before compiling: contracts modules, sidecars and scanned tag files do
 not necessarily appear among the compiler's callee-input dependencies.

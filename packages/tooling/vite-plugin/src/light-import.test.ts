@@ -10,7 +10,7 @@ it("shares core state with native lazy descriptor requires", () => {
 
 // The probe counts the Marko compiler (core's bundled one included), Astro's,
 // and the Babel core lowers and prints with (`@babel/core`, `generator`,
-// `traverse`): since decision 197 slice S3a a compile loads no Marko
+// `traverse`): a compile loads no Marko
 // compiler, so Babel is what shows the `.mx` transform ran.
 it("keeps config evaluation and reader registration compiler-lazy", () => {
   const entry = new URL("../dist/index.js", import.meta.url).href;

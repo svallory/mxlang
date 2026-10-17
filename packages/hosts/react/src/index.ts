@@ -20,7 +20,7 @@ import {
 import descriptor from "./descriptor.ts";
 
 /**
- * This package's own target table (decisions 129 and 132): the one descriptor
+ * This package's own target table: the one descriptor
  * it exports, defaulting for a direct entry that names no lookup of its own
  * (design note §5.1, rule (c)). The compile itself runs through
  * `@mxlang/host-preact`'s shared emitter, but the lookup a caller gets by default
@@ -40,7 +40,7 @@ export type { CompileResult, RawSourceMap };
 
 /** Attribute-tag value specialised to React's renderable node type. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default from decision 106
+  // biome-ignore lint/complexity/noBannedTypes: public default
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, ReactNode>;
 

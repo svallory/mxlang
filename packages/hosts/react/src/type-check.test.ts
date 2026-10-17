@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
-// Decision 140: `typeCheck` reaches the shared JSX emitter, with React's own
+// `typeCheck` reaches the shared JSX emitter, with React's own
 // JSX types in the preamble. Unset, the runtime output is unchanged.
 const source = "<button onDblClick=((e) => e.detail)>x</button>";
 

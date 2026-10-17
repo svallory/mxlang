@@ -1,5 +1,5 @@
 /**
- * `mx-tsc` over `.react.mx` region files (decision 154): a type error inside
+ * `mx-tsc` over `.react.mx` region files: a type error inside
  * a region is reported at its authored `.react.mx` line and column, both in
  * a region expression and in an attribute-tag body whose param type comes
  * from a `.react.mx` callee's `Input` (read by the shared JSX callee

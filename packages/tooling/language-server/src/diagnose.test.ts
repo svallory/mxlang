@@ -40,7 +40,7 @@ import {
  * A policy for `host` as the built-in lookup resolves it: the target that host
  * selects, its host name when it has one, and the `strict` flag. Written
  * through the registry rather than as a literal `{ host }`, because the policy
- * names a target first (decisions 129/132) and `html` is a target with no
+ * names a target first and `html` is a target with no
  * host — its legacy `mx.host` value is what selects it.
  */
 function policy(host: string, strict?: boolean): TargetPolicy {
@@ -172,9 +172,9 @@ describe("diagnoseDocument", () => {
     expect(diagnostics[0]?.range.start.line).toBe(0);
   });
 
-  it("reports a whole-file Solid .mx compile error at its own line and column (decision 115)", () => {
+  it("reports a whole-file Solid .mx compile error at its own line and column", () => {
     // Whole-file `.mx` resolved to Solid must go through `compileSolidUnit`,
-    // not the region compiler `compileSolidMx` — before decision 115's
+    // not the region compiler `compileSolidMx` — before that
     // wiring this host was unreachable for a whole-file `.mx` at all here.
     const source = "export interface Input { }\n\n<div>\n";
     const diagnostics = diagnoseDocument(
@@ -461,7 +461,7 @@ describe("the Preact host", () => {
 });
 
 describe("the Astro template file kind", () => {
-  it("routes x.astro.mx by kind, not through the .mx compile (decision 134)", () => {
+  it("routes x.astro.mx by kind, not through the .mx compile", () => {
     // `<let/>` is rejected by the html host's strict compile, so the same
     // text in a plain `.mx` file reports; in an `.astro.mx` file the server
     // must not compile it as an html page.

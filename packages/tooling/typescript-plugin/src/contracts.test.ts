@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import pluginFactory from "./index.ts";
 
 /**
- * `mx.contracts` (decision 142) through the TypeScript plugin: a contract-only
+ * `mx.contracts` through the TypeScript plugin: a contract-only
  * tag declared by a package-level contracts module surfaces the compiler's
  * positioned error as an `MX_*` diagnostic on the `.mx` file. The edit half
  * documents the long-lived-process limitation (TODO `sync-esm-reload-node`):

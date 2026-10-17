@@ -1,5 +1,5 @@
 /**
- * `mx-tsc` over `.hono.mx` region files (decision 154): a type error inside
+ * `mx-tsc` over `.hono.mx` region files: a type error inside
  * a region is reported at its authored `.hono.mx` line and column, both in
  * a region expression and in an attribute-tag body whose param type comes
  * from a `.hono.mx` callee's `Input` (read by the shared JSX callee

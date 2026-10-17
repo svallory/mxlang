@@ -17,7 +17,7 @@ import {
 } from "./test-support.ts";
 
 /**
- * Decision 140, round 2: `mx-tsc` emits JavaScript from the same projection it
+ * `mx-tsc` emits JavaScript from the same projection it
  * type-checks, so the handler wrapper must be erased by TypeScript's emit. A
  * helper *call* survives emit and throws at run time; a `satisfies` does not.
  * Each host: emit with `mx-tsc` (strict, `react-jsx`, the host's
@@ -62,7 +62,7 @@ function handlers(node: unknown, found: Record<string, unknown> = {}) {
 }
 
 describe.each(HOSTS)(
-  "mx-tsc emit on $host (decision 140)",
+  "mx-tsc emit on $host",
   ({ host, jsxImportSource }) => {
     afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 

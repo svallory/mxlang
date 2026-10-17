@@ -1,6 +1,6 @@
 /**
- * `@mxlang/language-server` — diagnostics-only LSP server for MX hosts
- * (decision 71/72). See `README.md` for what it does and does not do.
+ * `@mxlang/language-server` — diagnostics-only LSP server for MX hosts.
+ * See `README.md` for what it does and does not do.
  */
 
 // Bun 1.3.14 (the build pin) drops the bindings of a re-export-only entry

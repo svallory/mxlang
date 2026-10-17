@@ -4,7 +4,7 @@ import { diagnoseDocument } from "./diagnose.ts";
 
 /**
  * Completions on a buffer mid-edit. This language server completes nothing
- * (diagnostics only, decisions 71/72: Marko's own server completes attribute
+ * (diagnostics only: Marko's own server completes attribute
  * names for `.mx`), but an editor asks for completions on a buffer that is
  * mid-edit, and every tool compiles that buffer first. So a sigil right after
  * whitespace inside a tag (`<input :`, `<input #`, `<input .`) must never

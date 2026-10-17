@@ -5,7 +5,7 @@ A [Volar](https://volarjs.dev) language plugin and tsserver plugin that types
 when Astro composition is enabled. Editors report errors inside templates and
 type imports from the file's real exported `Input` interface.
 
-This is the editor half of decision 81. The CI half is
+This is the editor half of MX's TypeScript tooling. The CI half is
 [`@mxlang/tsc`](../tsc/README.md), which hands the *same* language plugin to
 Volar's `runTsc` — one lowering, so an editor and a build cannot disagree about
 whether a file compiles.

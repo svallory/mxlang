@@ -1,5 +1,5 @@
 /**
- * `mx-tsc` over `.preact.mx` region files (decision 154): a type error inside
+ * `mx-tsc` over `.preact.mx` region files: a type error inside
  * a region is reported at its authored `.preact.mx` line and column, both in
  * a region expression and in an attribute-tag body whose param type comes
  * from a `.preact.mx` callee's `Input` (read by the shared JSX callee

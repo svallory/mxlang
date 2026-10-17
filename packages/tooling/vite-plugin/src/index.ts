@@ -244,7 +244,7 @@ export interface MxPluginOptions {
    *
    * A passthrough rather than a policy of this plugin's own: a host that has
    * no reactive target (`@mxlang/host-astro` renders MX to static markup at build
-   * time, decision 71) wants an author's `<let>` to fail the build with a
+   * time) wants an author's `<let>` to fail the build with a
    * loc-bearing error rather than silently render once. The flag reaches
    * `compile()` unchanged; `.solid.mx` is unaffected, since it never goes
    * through the translator at all.
@@ -278,7 +278,7 @@ const TAG_EXT = ".marko";
  * plugin, which this one must decline rather than compile through the `.mx`
  * (`compile()` / string) branch.
  *
- * Today: `.astro.mx` (decision 134), the Astro template kind that
+ * Today: `.astro.mx`, the Astro template kind that
  * `@mxlang/host-astro`'s own plugin lowers. A registered `.mx` would otherwise
  * swallow it: `mx()` rewrote `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin
  * re-resolved that to `x.astro.mx.ts.astro`, and the build failed inside
@@ -798,7 +798,7 @@ function markoEnd(err: {
  * here.
  *
  * `.mx` compiles to a module whose default export is `(input) => string`,
- * carrying the sink entry `render(input, out)` as `.render` (decision 155) (or a JSX component
+ * carrying the sink entry `render(input, out)` as `.render` (or a JSX component
  * module, per the resolved host) via `compileMarko()` — the same whole-file
  * translator `examples/mx-site` and `@mxlang/target-html/bun` use, so a `.mx`
  * template behaves identically whether it is loaded by Vite or by Bun.
@@ -917,7 +917,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    *   callers serving stale output until a restart. A new file's *directory*
    *   is one the scan already recorded, which is what makes the creation
    *   observable.
-   * - The compile result's `dependencies` (decision 106): the callee files
+   * - The compile result's `dependencies`: the callee files
    *   whose `Input` the compiler read to resolve attribute-tag shapes — a
    *   caller imports a component through ordinary ESM, so Vite's graph
    *   *does* contain that edge, but only the compiled module's own HMR
@@ -1056,7 +1056,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     }
 
     // One error is thrown, positioned at the first scan error, and the others
-    // ride in its message (decision 162, the plugin's rule for compile
+    // ride in its message (the plugin's rule for compile
     // errors). A build fails on the first caller that meets a broken tag file,
     // so a scan error already raised in this build is not raised again by the
     // next caller: that would print one identical error per caller of a single
@@ -1129,7 +1129,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   };
 
   /**
-   * Records the callee files one caller's compile read (decision 106) as
+   * Records the callee files one caller's compile read as
    * dependency edges, pruning edges the previous transform held but this one
    * does not. Empty until the core resolver is wired into lowering, so this
    * is a no-op on today's compiles — the map and its invalidation are in
@@ -1644,7 +1644,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
               )
             : [];
           const reason = reasons.length > 0 ? reasons.join("\n") : undefined;
-          // A build throws one error; the file's other errors (decision 162)
+          // A build throws one error; the file's other errors
           // ride in its message, so a fix-all pass sees them in one run.
           const rest =
             otherErrorsText(err) + parseErrorsText(furtherParseErrors, source);

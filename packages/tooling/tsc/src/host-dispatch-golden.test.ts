@@ -139,7 +139,7 @@ const ROWS = [
   // target without declarations), and a bare mx.host naming the loaded host.
   "third-party-ok-let",
   "third-party-host-name",
-  // Decision 145 (the unnamed tag): the package's `mx.<target>.defaultTag`
+  // The unnamed tag: the package's `mx.<target>.defaultTag`
   // reaches every tool's compile (`my-card` from `tags/`), an invalid value
   // is one positioned error at the package.json value in each tool and the
   // built-in answers meanwhile.
@@ -159,7 +159,7 @@ const ALIASED = new Set(ROWS.filter((row) => row.startsWith("alias-")));
 
 // `@mxlang/targets` is the language server's dependency, not this
 // package's: resolve it from the server so both sides use the copy the server
-// runs. It is where the resolver now lives for a tool (decisions 129/132), and
+// runs. It is where the resolver now lives for a tool, and
 // its `resolveTargetPolicyDetailed` is core's, bound to the built-in lookup.
 const lsRequire = createRequire(
   join(here, "..", "..", "language-server", "package.json"),
@@ -178,7 +178,7 @@ const { hostFilterKey, resolveTargetPolicyDetailed } = (await import(
  * The resolved policy as the golden records it: the value `mx.tags[].hosts` is
  * matched against, which is the host name for a hosted target and a hostless
  * target's legacy `mx.host` value (`html`). It is the same string the policy
- * carried before the policy named a target first (decisions 129/132), so every
+ * carried before the policy named a target first, so every
  * row that does not change behaviour keeps its recorded bytes; the tools get
  * the real policy.
  */
@@ -503,7 +503,7 @@ describe("dispatch goldens", () => {
   });
 });
 
-describe("x.astro.mx file kind (decision 134)", () => {
+describe("x.astro.mx file kind", () => {
   it("picks the Astro template plugin, never the plain .mx plugin", () => {
     const astro = pluginFor("/p/card.astro.mx");
     expect(astro.languageId).toBe("astromx");

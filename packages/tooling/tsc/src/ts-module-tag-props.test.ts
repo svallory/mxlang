@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { runInProcess } from "./in-process.ts";
 
 /**
- * Decision 116 routes a tag imported from a `.ts` module (a value import, not
- * a `.mx` default import) through the dynamic call. Its props used to be typed
+ * A tag imported from a `.ts` module (a value import, not a `.mx` default
+ * import) routes through the dynamic call. Its props used to be typed
  * `Record<string, any>`, so a wrong or missing prop compiled silently while the
  * same call to a `.mx` tag reported. The fixture calls one `.ts` tag and one
  * `.mx` control the same four ways; each line is `<Tag ...>` at column 1.

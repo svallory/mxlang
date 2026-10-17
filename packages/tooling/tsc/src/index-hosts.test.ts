@@ -370,7 +370,7 @@ describe("mx-tsc", () => {
         .split("\n")
         .filter((line) => line.includes("): error TS"));
       expect(errors).toHaveLength(3);
-      // `<${input.tag}/n start=1/>` over `typeof Counter`: decision 155 binds
+      // `<${input.tag}/n start=1/>` over `typeof Counter`: the unit's render path binds
       // what the callee's `render` returns, so `n` is Counter's `<return>`
       // value, a number — not the `any` the dynamic helper used to hand back.
       expect(result.output).toContain(

@@ -8,7 +8,7 @@ import type * as ts from "typescript";
 
 /**
  * A diagnostic whose generated position has no source mapping is never
- * dropped (decision 161).
+ * dropped.
  *
  * Volar maps every TypeScript diagnostic from the generated module back to
  * the `.mx` source and *discards* the ones it cannot map
