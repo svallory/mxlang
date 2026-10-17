@@ -1150,7 +1150,8 @@ function emitAttrs(
         // that input only, like a dynamic one. A plain `class="lit"` attribute
         // would reach the input and also land on the callee's host element,
         // where Marko has none.
-        const toInput = styledName === "class" && calleeTakesClass;
+        // Tag-call attribute names are case-sensitive: `CLASS` is not `class`.
+        const toInput = attr.name === "class" && calleeTakesClass;
         const styled =
           toInput ||
           ((styledName === "class" || styledName === "style") &&
@@ -2496,7 +2497,7 @@ class AngularEmitter implements Emitter<string> {
       !attrs.some(
         (a) =>
           (a.kind === "dynamic" && a.name === "class") ||
-          (a.kind === "static" && a.name.toLowerCase() === "class"),
+          (a.kind === "static" && a.name === "class"),
       )
     ) {
       return false;

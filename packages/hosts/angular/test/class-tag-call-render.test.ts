@@ -354,20 +354,28 @@ describe("a static class on a tag call whose callee declares a class input", () 
   });
 
   it("prints the class once on the callee's own element", async () => {
-    const view = await render('<divchild.a class="lit"/>', {});
-    expect(set(view.updated.divs[0] ?? null)).toEqual("a lit");
-    expect(view.hosts).toEqual([null]);
+    const view = await render('<><divchild class="lit"/><divchild.a/></>', {});
+    expect(view.updated.divs.map(set)).toEqual(["lit", "a"]);
+    expect(view.hosts).toEqual([null, null]);
+  });
+
+  it("leaves an uppercase CLASS alone: it is not the class input", async () => {
+    // Tag-call attribute names are case-sensitive: stock gives `input.CLASS`
+    // and no `input.class`, so the input stays unset and the host keeps it.
+    const view = await render('<child CLASS="lit"/>', {});
+    expect(view.inputs).toEqual([undefined]);
+    expect(view.hosts).toEqual(["lit"]);
   });
 
   it("keeps a static class off the host after an update elsewhere", async () => {
     const view = await render(
-      '<><child.a class="lit"/><child class=y/></>',
+      '<><child class="lit"/><child class=y/></>',
       { y: "one" },
       { y: "two" },
     );
     expect(view.hosts).toEqual([null, null]);
-    expect(view.updated.inputs).toEqual([text("a lit"), text("two")]);
-    expect(view.updated.shown).toEqual(["a lit", "two"]);
+    expect(view.updated.inputs).toEqual([text("lit"), text("two")]);
+    expect(view.updated.shown).toEqual(["lit", "two"]);
   });
 
   it("takes a static class written in concise mode", async () => {
@@ -386,9 +394,9 @@ describe("a static class on a tag call whose callee declares a class input", () 
   });
 
   it("leaves a directive's host class on the callee's host element", async () => {
-    const view = await render('<child.a class="lit"/>', {}, undefined, true);
+    const view = await render('<child class="lit"/>', {}, undefined, true);
     expect(set(view.hosts[0] ?? null)).toEqual("dir-class");
-    expect(view.inputs).toEqual([text("a lit")]);
+    expect(view.inputs).toEqual([text("lit")]);
   });
 });
 
