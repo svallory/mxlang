@@ -132,97 +132,94 @@ function errorsIn(host: HostName, file: string): Diagnostic[] {
   return (results.get(host) ?? []).filter((d) => d.file === file);
 }
 
-describe.each(HOSTS)(
-  "mx-tsc handler typing on $host",
-  ({ host }) => {
-    afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
+describe.each(HOSTS)("mx-tsc handler typing on $host", ({ host }) => {
+  afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
-    it("reports a mistyped shorthand handler at the authored handler (p01)", () => {
-      // `<button onClick(a: string, b: string)`: the shorthand has no source
-      // span of its own, so the error lands on the attribute name.
-      const found = errorsIn(host, "P01");
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 9, "TS1360"],
-      ]);
-    });
+  it("reports a mistyped shorthand handler at the authored handler (p01)", () => {
+    // `<button onClick(a: string, b: string)`: the shorthand has no source
+    // span of its own, so the error lands on the attribute name.
+    const found = errorsIn(host, "P01");
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 9, "TS1360"],
+    ]);
+  });
 
-    it("reports a mistyped arrow handler at the authored arrow (p12)", () => {
-      const found = errorsIn(host, "P12");
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 18, "TS1360"],
-      ]);
-    });
+  it("reports a mistyped arrow handler at the authored arrow (p12)", () => {
+    const found = errorsIn(host, "P12");
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 18, "TS1360"],
+    ]);
+  });
 
-    it("keeps the valid-handler matrix clean, including the strict `(e)` cases", () => {
-      // Before: every camelCase name recomposed to the runtime
-      // spelling (`onKeydown`, `onMousedown`, …) had no contextual type, so
-      // `(e) => …` was an implicit-any error (TS7006).
-      expect(errorsIn(host, "Valid")).toEqual([]);
-    });
+  it("keeps the valid-handler matrix clean, including the strict `(e)` cases", () => {
+    // Before: every camelCase name recomposed to the runtime
+    // spelling (`onKeydown`, `onMousedown`, …) had no contextual type, so
+    // `(e) => …` was an implicit-any error (TS7006).
+    expect(errorsIn(host, "Valid")).toEqual([]);
+  });
 
-    it("type-checks the body of a shorthand handler", () => {
-      const found = errorsIn(host, "ShorthandBody");
-      // The body maps to the authored body, so the error
-      // lands on `nope` exactly: `<button onClick(e) { e.nope(); }>`, column 24.
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 24, "TS2339"],
-      ]);
-      expect(found[0]?.message).toContain("nope");
-    });
+  it("type-checks the body of a shorthand handler", () => {
+    const found = errorsIn(host, "ShorthandBody");
+    // The body maps to the authored body, so the error
+    // lands on `nope` exactly: `<button onClick(e) { e.nope(); }>`, column 24.
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 24, "TS2339"],
+    ]);
+    expect(found[0]?.message).toContain("nope");
+  });
 
-    it("reports an error in an arrow handler's body at main's exact column", () => {
-      // `<button onClick=((e) => e.nope())>`: `nope` is column 27 (the same
-      // column without the wrapper). The wrapper's generated parentheses
-      // must not shift positions inside the handler.
-      const found = errorsIn(host, "BodyArrow");
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 27, "TS2339"],
-      ]);
-    });
+  it("reports an error in an arrow handler's body at main's exact column", () => {
+    // `<button onClick=((e) => e.nope())>`: `nope` is column 27 (the same
+    // column without the wrapper). The wrapper's generated parentheses
+    // must not shift positions inside the handler.
+    const found = errorsIn(host, "BodyArrow");
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 27, "TS2339"],
+    ]);
+  });
 
-    it("accepts forwarding an optional callback and an explicit undefined", () => {
-      // The host's prop type allows `undefined`; the check must too.
-      expect(errorsIn(host, "OptionalForward")).toEqual([]);
-      expect(errorsIn(host, "ExplicitUndefined")).toEqual([]);
-    });
+  it("accepts forwarding an optional callback and an explicit undefined", () => {
+    // The host's prop type allows `undefined`; the check must too.
+    expect(errorsIn(host, "OptionalForward")).toEqual([]);
+    expect(errorsIn(host, "ExplicitUndefined")).toEqual([]);
+  });
 
-    it("still rejects a non-function handler value", () => {
-      const found = errorsIn(host, "NonFunction");
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 18, "TS1360"],
-      ]);
-    });
+  it("still rejects a non-function handler value", () => {
+    const found = errorsIn(host, "NonFunction");
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 18, "TS1360"],
+    ]);
+  });
 
-    it("keeps the annotations of a shorthand handler and checks them", () => {
-      const found = errorsIn(host, "ShorthandTyped");
-      expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
-        [1, 9, "TS1360"],
-      ]);
-    });
+  it("keeps the annotations of a shorthand handler and checks them", () => {
+    const found = errorsIn(host, "ShorthandTyped");
+    expect(found.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 9, "TS1360"],
+    ]);
+  });
 
-    it("allocates preamble names that collide with no user binding", () => {
-      // `static const __MxH`, `static const __MxJSX` and `type __MxM` are the
-      // preamble's base names; its own identifiers move aside.
-      expect(errorsIn(host, "Collision")).toEqual([]);
-    });
+  it("allocates preamble names that collide with no user binding", () => {
+    // `static const __MxH`, `static const __MxJSX` and `type __MxM` are the
+    // preamble's base names; its own identifiers move aside.
+    expect(errorsIn(host, "Collision")).toEqual([]);
+  });
 
-    it("leaves custom elements and dynamic tags unchecked", () => {
-      expect(errorsIn(host, "Unchecked")).toEqual([]);
-    });
+  it("leaves custom elements and dynamic tags unchecked", () => {
+    expect(errorsIn(host, "Unchecked")).toEqual([]);
+  });
 
-    // Hono's svg types declare no handlers at all, so there is nothing to
-    // check against (the same silence plain TSX has).
-    it.skipIf(host === "hono")(
-      "checks an svg handler against the svg element",
-      () => {
-        expect(errorsIn(host, "Svg")).toEqual([]);
-        const bad = errorsIn(host, "SvgBad");
-        expect(bad.map((d) => d.code)).toEqual(["TS2339"]);
-        expect(bad[0]?.message).toContain("value");
-      },
-    );
-  },
-);
+  // Hono's svg types declare no handlers at all, so there is nothing to
+  // check against (the same silence plain TSX has).
+  it.skipIf(host === "hono")(
+    "checks an svg handler against the svg element",
+    () => {
+      expect(errorsIn(host, "Svg")).toEqual([]);
+      const bad = errorsIn(host, "SvgBad");
+      expect(bad.map((d) => d.code)).toEqual(["TS2339"]);
+      expect(bad[0]?.message).toContain("value");
+    },
+  );
+});
 
 describe("mx-tsc DOM-typed handlers", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));

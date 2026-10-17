@@ -1,6 +1,6 @@
 ; MX bracket pairs. Base taken from marko-js/zed languages/marko/brackets.scm
 ; (snapshot dd854edec1fab86d23eb24af9691505dfe3856a6), unchanged since: the
-; name-sugar shorthands add no delimiters. scripts/vendor.sh copies this
+; decision 146 shorthands add no delimiters. scripts/vendor.sh copies this
 ; file to languages/mx/brackets.scm.
 
 ; Bracket pairs, in Zed's brackets.scm @open/@close convention (other

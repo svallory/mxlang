@@ -100,7 +100,7 @@ enum TokenType {
   ELEMENT_END,              // zero-width
   TAG_COMMENT,              // hidden: comments inside open tags (no events)
   ESCAPE,                   // hidden: omitted backslashes before "${"
-  ATOM,                     // MX: `:name` in an expression
+  ATOM,                     // MX (decision 156): `:name` in an expression
   RESERVED_ATOM,            // MX: `::name`, reserved for Symbol.for sugar
   EXPR_MORE,                // MX: hidden: an expression resumed after an atom
   ERROR_SENTINEL,
@@ -215,7 +215,7 @@ typedef struct {
   bool resume_lookbehind;    // token resumes a split expression: operator
                              // lookbehind may cross the token start
   bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
-  bool atoms;                // MX: stop before an atom
+  bool atoms;                // MX: stop before an atom (decision 156)
   uint8_t terminator;
 } ExprCfg;
 
@@ -268,7 +268,7 @@ typedef struct {
   uint8_t attr_stage;  // ATTR_*
   uint8_t attr_has_args;
   uint8_t attr_has_type_params;
-  // MX: the attribute whose value is being scanned has
+  // MX (decision 151 ruling 2): the attribute whose value is being scanned has
   // no name and no spread (the tag's default value), so the after-value sugar
   // rule is exempt: `.ident` and `:ident` stay part of the value. Set at the
   // `=` / `:=`; a name scanned before it, or a spread, turns it off.
@@ -285,7 +285,7 @@ typedef struct {
   uint8_t expect_method_open;  // attr-level <T> closed; "(" must follow
   uint8_t block_after_tag;     // "--" ended a concise tag: indent extension
 
-  // MX: an expression token split around an atom. The scan
+  // MX (decision 156): an expression token split around an atom. The scan
   // stops before the atom's ":"; the atom is its own token; then the same
   // expression resumes from `atom_expr` (see scan_atom_piece).
   uint8_t atom_state;   // ATOM_STATE_*
@@ -781,7 +781,7 @@ static void es_consume_ws(EStream *es) {
   }
 }
 
-// MX: the expression resumed from an atom (the
+// MX (decision 146, addendum 5): the expression resumed from an atom (the
 // only thing it contains so far) and has consumed nothing since: the value is
 // a single atom, and ` :name` after it is the name sugar. `s->buf` is emptied
 // when the split resumes (es_init), so whitespace-only means nothing at all
@@ -817,7 +817,7 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
     int32_t next_c = es_peek(es, k);
     // MX: after whitespace, `.ident` and `:ident` (no open `?`) begin a
     // shorthand attribute instead of continuing the value. A default
-    // attribute (no name, no spread) is exempt, so
+    // attribute (no name, no spread) is exempt (decision 151, ruling 2), so
     // the sugar stays part of the value (`<if=a .b>` is member access,
     // `<if=a :b>` one value) and the value keeps Marko's meaning.
     bool exempt = s->attr_default_value &&
@@ -839,7 +839,7 @@ static bool check_for_operators(EStream *es, ExprState *e, bool eol) {
   return false;
 }
 
-// MX: keywords after which an expression is expected, so a
+// MX (decision 156): keywords after which an expression is expected, so a
 // following `:name` is an atom (`return :a`, `case :a:`). `as`/`satisfies`
 // are not here: what follows them is a type.
 static const char *const ATOM_KEYWORDS[] = {
@@ -847,14 +847,14 @@ static const char *const ATOM_KEYWORDS[] = {
     "new",   "return", "throw",  "typeof", "void", "yield", "of", NULL,
 };
 
-// MX: does the ":" at the logical position start an atom?
+// MX (decision 156): does the ":" at the logical position start an atom?
 // Only where an expression is expected: at the start of the expression, or
 // after an operator, punctuator or keyword. Never after the end of an
 // expression (`a ? b :c` is a ternary, `(x :number)` a type), after `.`, or
 // after `/` (a regex or a comment may end there). Strings, template text,
 // regexes and comments never reach here: their sub-scanners consume them.
 // `::name` is one reserved token wherever it appears (`{k::a}` and
-// `a?b::c` are errors), so it is reported as an atom start.
+// `a?b::c` are errors, decision 156), so it is reported as an atom start.
 static bool atom_starts_here(EStream *es, ExprState *e) {
   int32_t n1 = es_peek(es, 1);
   bool reserved = n1 == ':' && is_ident_start_code(es_peek(es, 2));
@@ -1634,7 +1634,7 @@ static void accumulate_tag_name_hash(Scanner *s) {
   }
 }
 
-// MX: the expression scan stopped before an atom. The token
+// MX (decision 156): the expression scan stopped before an atom. The token
 // being emitted ends at the last committed mark; whatever was scanned after
 // it (`atom_pre` chars, held in lookahead) is emitted next as EXPR_MORE, then
 // the atom, then the expression resumes from `e`.
@@ -2827,7 +2827,7 @@ static bool is_attr_shorthand_start(int32_t c, int32_t n1) {
   }
 }
 
-// MX: `=` and `(` end a sugar and start the default
+// MX (decision 146 addendum 4): `=` and `(` end a sugar and start the default
 // value, but a bound `:=` is not supported on one: it stays an error.
 static bool shorthand_takes_no_bound_value(Scanner *s, int32_t c, int32_t n1) {
   if (!s->in_shorthand) return false;
@@ -2918,7 +2918,7 @@ static int scan_tag_name_token(Scanner *s, const bool *valid, EStream *es,
       *result = TAG_NAME_EMPTY;
       return valid[TAG_NAME_EMPTY] ? 1 : 0;
     }
-    // MX: `=` and `(` cannot be part of a sugar,
+    // MX (decision 146 addendum 4): `=` and `(` cannot be part of a sugar,
     // so they end it and start the tag's default value / method.
     if (shorthand_takes_no_bound_value(s, c, n1)) return 0;
     finalize_tag_name(s, c);
@@ -3561,7 +3561,7 @@ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
   // ---- ATTRIBUTE.parse dispatch
   if (c == '=') {
     if (!valid[ATTR_EQ]) return false;
-    // MX: no name was scanned (the tag's default
+    // MX (decision 151, ruling 2): no name was scanned (the tag's default
     // value), so the after-value sugar rule does not apply to this value.
     s->attr_default_value = (s->attr_stage != ATTR_NAME_STAGE);
     es_next_mark(es);
@@ -3702,7 +3702,7 @@ static bool scan_content(Scanner *s, TSLexer *lexer, const bool *valid) {
 // Entry points
 // --------------------------------------------------------------------------
 
-// MX: the pieces of an expression token split around atoms
+// MX (decision 156): the pieces of an expression token split around atoms
 // (begin_atom_split). Every piece but the atom is the hidden EXPR_MORE.
 static void finish_atom_split(Scanner *s, TSLexer *lexer) {
   uint8_t owner = s->atom_owner;

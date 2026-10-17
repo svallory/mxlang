@@ -1,4 +1,4 @@
-// MX's own test (not vendored): the highlight query gives each name-sugar
+// MX's own test (not vendored): the highlight query gives each decision 146
 // shorthand the same capture in both positions, tag-adjacent (`shorthand:`
 // field) and attribute position (no field), in html and concise mode. Runs
 // the query the Zed extension ships (packages/editors/zed/languages/mx, built

@@ -185,54 +185,51 @@ function resultFor(host: string) {
   return result;
 }
 
-describe.each(HOSTS)(
-  "native prop diagnostics on $host",
-  ({ host }) => {
-    it.each(
-      BAD.map((entry, index) => ({
-        source: entry[0],
-        column: entry[2],
-        index,
-      })),
-    )(
-      "reports $source at the authored name with plain TSX's code",
-      ({ index, column }) => {
-        const { mx, plain } = resultFor(host);
-        const twin = diagnostics(plain, `Twin${index}\\.tsx`);
-        // Native prop diagnostics follow each host's own JSX types.
-        // Hono's index signature accepts camelCase maxLength/tabIndex, foo,
-        // key and ref. Preact also declares key:any. Do not invent errors.
-        const accepted =
-          (host === "hono" && [0, 1, 2, 6, 7].includes(index)) ||
-          (host === "preact" && index === 6);
-        expect(twin).toEqual(
-          accepted ? [] : [{ line: 1, column, code: "TS2322" }],
-        );
-        expect(diagnostics(mx, `Bad${index}\\.mx`)).toEqual(twin);
-      },
-    );
-
-    it("keeps the valid prop matrix clean, as plain TSX does", () => {
+describe.each(HOSTS)("native prop diagnostics on $host", ({ host }) => {
+  it.each(
+    BAD.map((entry, index) => ({
+      source: entry[0],
+      column: entry[2],
+      index,
+    })),
+  )(
+    "reports $source at the authored name with plain TSX's code",
+    ({ index, column }) => {
       const { mx, plain } = resultFor(host);
-      expect(diagnostics(plain, "ValidTwin\\.tsx")).toEqual([]);
-      expect(diagnostics(mx, "Valid\\.mx")).toEqual([]);
-      // Do not hide unrelated compiler errors behind the per-file assertions.
-      expect(
-        mx
-          .split("\n")
-          .filter(
-            (line) =>
-              line.includes(": error") && !/Bad\d+\.mx|Style\.mx/.test(line),
-          ),
-      ).toEqual([]);
-    });
+      const twin = diagnostics(plain, `Twin${index}\\.tsx`);
+      // Native prop diagnostics follow each host's own JSX types.
+      // Hono's index signature accepts camelCase maxLength/tabIndex, foo,
+      // key and ref. Preact also declares key:any. Do not invent errors.
+      const accepted =
+        (host === "hono" && [0, 1, 2, 6, 7].includes(index)) ||
+        (host === "preact" && index === 6);
+      expect(twin).toEqual(
+        accepted ? [] : [{ line: 1, column, code: "TS2322" }],
+      );
+      expect(diagnostics(mx, `Bad${index}\\.mx`)).toEqual(twin);
+    },
+  );
 
-    it("checks a static style string by the host's own rules", () => {
-      const { mx, plain } = resultFor(host);
-      const expected =
-        host === "react" ? [{ line: 1, column: 6, code: "TS2559" }] : [];
-      expect(diagnostics(plain, "StyleTwin\\.tsx")).toEqual(expected);
-      expect(diagnostics(mx, "Style\\.mx")).toEqual(expected);
-    });
-  },
-);
+  it("keeps the valid prop matrix clean, as plain TSX does", () => {
+    const { mx, plain } = resultFor(host);
+    expect(diagnostics(plain, "ValidTwin\\.tsx")).toEqual([]);
+    expect(diagnostics(mx, "Valid\\.mx")).toEqual([]);
+    // Do not hide unrelated compiler errors behind the per-file assertions.
+    expect(
+      mx
+        .split("\n")
+        .filter(
+          (line) =>
+            line.includes(": error") && !/Bad\d+\.mx|Style\.mx/.test(line),
+        ),
+    ).toEqual([]);
+  });
+
+  it("checks a static style string by the host's own rules", () => {
+    const { mx, plain } = resultFor(host);
+    const expected =
+      host === "react" ? [{ line: 1, column: 6, code: "TS2559" }] : [];
+    expect(diagnostics(plain, "StyleTwin\\.tsx")).toEqual(expected);
+    expect(diagnostics(mx, "Style\\.mx")).toEqual(expected);
+  });
+});

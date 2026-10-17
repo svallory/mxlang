@@ -15,8 +15,8 @@ index 6bf8c17..5ed06f6 100644
 +++ b/README.md
 @@ -7,7 +7,12 @@ time.
  
- MX is Marko's syntax plus the name sugar (`#id`, `.class` and
- `:name` anywhere in a tag) and atoms (`:name` as a value:
+ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
+ `:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
 -`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`). The grammar is a vendored snapshot of
 +`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`).
 +Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute

@@ -5,7 +5,7 @@ import BaseMx from "../layouts/BaseMx.astro.mx";
 
 // An AstroMX component, not a page: `.astro.mx` cannot be a page, because
 // Astro strips only the last extension of a route file and would route it to
-// `/templates.astro` . `src/pages/templates.astro`
+// `/templates.astro`. `src/pages/templates.astro`
 // imports this component and is the route. The layout and the two components
 // used below are `.astro.mx` too.
 ---

@@ -6,7 +6,7 @@ import { fixturesDir } from "./util/htmljs.mts";
 
 const FIXTURES = await fixturesDir();
 
-// MX name sugar (`apps/docs/docs/design-notes/adr-name-sugar.md`,
+// MX decision 146 (`apps/docs/docs/design-notes/adr-name-sugar.md`,
 // divergence 4): after whitespace, `.ident` ends the previous attribute value
 // and starts a class shorthand, where htmljs-parser keeps `x .y` as one
 // member expression. These exact snippets are removed from the fixture before

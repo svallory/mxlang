@@ -8,7 +8,7 @@
 #      must be exactly what grammar.js generates. Catches a grammar.js edit
 #      committed without regenerating, and a hand-edited src/grammar.json.
 #   2. bun run build:wasm — the wasm the test harness loads.
-#   3. __tests__/mx-shorthand.bun-test.mts — name-sugar trees (upstream
+#   3. __tests__/mx-shorthand.bun-test.mts — decision 146 trees (upstream
 #      branch mx/shorthand-anywhere's suite).
 #   4. __tests__/fixtures.bun-test.mts — every htmljs-parser fixture at the
 #      pinned HTMLJS_REV, compared event by event (fetched once into .cache/).
@@ -17,7 +17,7 @@
 #   4c. test/highlights.bun-test.mts — MX's own: the shorthand captures of
 #      queries/highlights.scm and of the Zed extension's languages/mx copy, in
 #      both positions and both modes.
-#   4d. test/atoms.bun-test.mts — MX's own: atoms (the brief's
+#   4d. test/atoms.bun-test.mts — MX's own: decision 156 atoms (the brief's
 #      sample, every line of Mesh's Invoice entity, the ADR positions) and
 #      their captures in both query copies.
 #   4e. test/corpus.bun-test.mts — MX's own: every case in test/corpus parses

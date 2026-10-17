@@ -14,10 +14,10 @@
 
 ## 0.1.0-alpha.2 (2026-10-05)
 
-Atoms and the tagless `:name=value` line. Four new local
+Atoms (decision 156) and the tagless `:name=value` line. Four new local
 patches, 0006 to 0009 (see `UPSTREAM.md`).
 
-- Patch 0009: the tag's
+- Decision 151 ruling 2 and decision 146 addendum 5 (patch 0009): the tag's
   **default** attribute value is no longer ended at a sugar. `<if=a .b>`,
   `<if=a :b>`, `<if=foo\n  .bar()>`, `<const/x=items\n  .filter(Boolean)/>` and
   `<a=1 .d=2/>` are one value, as core reads them (member access, Marko's
@@ -27,7 +27,7 @@ patches, 0006 to 0009 (see `UPSTREAM.md`).
   following `:name` is the name sugar: `belongs-to=:Customer :customer` is the
   atom plus `name="customer"`, while `=:A.b :c` and `=:a + :b` stay one value.
 
-- Patch 0006: `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. A bound `:=` after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) stays an error: only `=` and `(` end a sugar. Scanner only; `src/` is unchanged.
+- Decision 146 addendum 4 (patch 0006): `=` and `(` end a sugar and start the tag's default value: `<input #x=1/>`, `<input :x=input.y/>`, `<input:x=1/>`, `<input .c=1/>` and concise `input #x=1` parse without `ERROR` (they were errors), as Mesh's `boolean #isOverdue({ self }) { return self.x }` and `kind (p) { b } #name` already did. A bound `:=` after a sugar (`<a :n:=y/>`, `#x:=y`, `.c:=y`) stays an error: only `=` and `(` end a sugar. Scanner only; `src/` is unchanged.
   This is the line Mesh's Invoice entity uses under `set` (`:status=:sent`,
   `:needsReview=true`, `:paidById=({ actor }) => actor.id`): on 0.1.0-alpha.1
   any one of them put an `ERROR` at the root and uncoloured the rest of the file.
@@ -46,7 +46,8 @@ patches, 0006 to 0009 (see `UPSTREAM.md`).
   `${}` inside a template literal inside an expression is not scanned for
   atoms (they stay text there; README, patch 0008, TODO
   `tree-sitter-atoms-template-placeholder`).
-- `::name` is one `reserved_atom` node (reserved for a `Symbol.for` sugar), wherever it appears: `{k::a}` and `a?b::c` are reserved too.
+- `::name` is one `reserved_atom` node (reserved for a `Symbol.for` sugar,
+  decision 156), wherever it appears: `{k::a}` and `a?b::c` are reserved too.
   It is not an `ERROR` node and has no highlight capture; a tool that wants
   the positioned "reserved" error finds it by type.
 - The injected TypeScript never sees an atom: the expression nodes are now
@@ -72,7 +73,7 @@ First version, published as an alpha. A vendored snapshot of
 `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f` (`@marko/tree-sitter` 0.2.0) with
 two local patches (see `UPSTREAM.md`):
 
-- Name sugar: `#id`, `.class` and the new `:name` shorthand
+- Decision 146 name sugar: `#id`, `.class` and the new `:name` shorthand
   (`shorthand_name`) anywhere in a tag, tag-adjacent in any order (carrying the
   `shorthand` field) and in attribute position, first or after any attribute,
   in html and concise mode. After whitespace, `.ident` and `:ident` (with no

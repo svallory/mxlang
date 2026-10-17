@@ -775,8 +775,8 @@ type WritableKeys<T> = {
     ? K
     : never;
 }[keyof T];
-// `node` is a Babel payload, which stays as Babel types it 
-// (it is a Babel payload): its arrays are Babel's, not ours.
+// `node` is a Babel payload, which stays as Babel types it:
+// its arrays are Babel's, not ours.
 type MutableArrayKeys<T> = {
   [K in keyof T]-?: K extends "node"
     ? never

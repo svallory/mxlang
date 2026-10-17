@@ -18,7 +18,7 @@
   "metadata": {
     "version": "0.1.0",
     "license": "MIT",
-    "description": "Tree-sitter grammar for MX (Marko syntax plus the name sugar), vendored from marko-js/tree-sitter",
+    "description": "Tree-sitter grammar for MX (Marko syntax plus the decision 146 name sugar), vendored from marko-js/tree-sitter",
     "links": {
       "repository": "https://github.com/svallory/mxlang"
     }

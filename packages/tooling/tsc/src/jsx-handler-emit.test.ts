@@ -61,88 +61,85 @@ function handlers(node: unknown, found: Record<string, unknown> = {}) {
   return found;
 }
 
-describe.each(HOSTS)(
-  "mx-tsc emit on $host",
-  ({ host, jsxImportSource }) => {
-    afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
+describe.each(HOSTS)("mx-tsc emit on $host", ({ host, jsxImportSource }) => {
+  afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
 
-    it(
-      "emits a module that runs and carries no type-check helper",
-      async () => {
-        const root = mkdtempSync(join(fixtures, `.handler-emit-${host}-`));
-        roots.push(root);
-        mkdirSync(join(root, "src"));
-        writeFileSync(join(root, "src", "Emit.mx"), SOURCE);
-        // Preact and React have no catch-all for custom tags (hono does):
-        // declare `<my-el>` as a consumer would, since plain TSX needs the same.
-        if (host !== "hono") {
-          writeFileSync(
-            join(root, "src", "custom.d.ts"),
-            `import "${host}"; declare module "${host}" { namespace JSX { interface IntrinsicElements { "my-el": Record<string, unknown>; } } }\n`,
-          );
-        }
+  it(
+    "emits a module that runs and carries no type-check helper",
+    async () => {
+      const root = mkdtempSync(join(fixtures, `.handler-emit-${host}-`));
+      roots.push(root);
+      mkdirSync(join(root, "src"));
+      writeFileSync(join(root, "src", "Emit.mx"), SOURCE);
+      // Preact and React have no catch-all for custom tags (hono does):
+      // declare `<my-el>` as a consumer would, since plain TSX needs the same.
+      if (host !== "hono") {
         writeFileSync(
-          join(root, "package.json"),
-          JSON.stringify({ mx: { host } }),
+          join(root, "src", "custom.d.ts"),
+          `import "${host}"; declare module "${host}" { namespace JSX { interface IntrinsicElements { "my-el": Record<string, unknown>; } } }\n`,
         );
-        writeFileSync(
-          join(root, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: {
-              strict: true,
-              module: "esnext",
-              moduleResolution: "bundler",
-              target: "esnext",
-              lib: ["esnext", "dom"],
-              jsx: "react-jsx",
-              jsxImportSource,
-              types: [],
-              noEmit: false,
-              rootDir: "src",
-              outDir: "out",
-              baseUrl: ".",
-              paths: {
-                "@mxlang/core": [
-                  join(repoRoot, "packages", "core", "src", "index.ts"),
-                ],
-              },
-              ignoreDeprecations: "6.0",
+      }
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ mx: { host } }),
+      );
+      writeFileSync(
+        join(root, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            module: "esnext",
+            moduleResolution: "bundler",
+            target: "esnext",
+            lib: ["esnext", "dom"],
+            jsx: "react-jsx",
+            jsxImportSource,
+            types: [],
+            noEmit: false,
+            rootDir: "src",
+            outDir: "out",
+            baseUrl: ".",
+            paths: {
+              "@mxlang/core": [
+                join(repoRoot, "packages", "core", "src", "index.ts"),
+              ],
             },
-            include: ["src/Emit.mx", "src/custom.d.ts"],
-          }),
-        );
-
-        const result = run(mxTsc, ["-p", root]);
-        expect(result.output).toBe("");
-        expect(result.status).toBe(0);
-
-        const out = join(root, "out", "Emit.mx.js");
-        const js = readFileSync(out, "utf8");
-        // Reserved runtime helpers remain; type-check-only names are erased.
-        expect(js).not.toMatch(/__Mx|satisfies/);
-        // Same handlers as the runtime compile, modulo the one paren layer
-        // TypeScript keeps around an erased `satisfies` operand.
-        expect(js).toMatch(
-          /onClick: \(?function \(e\) \{ e\.preventDefault\(\); \}\)?/,
-        );
-        expect(js).toMatch(/onKeyDown: \(?\(e\) => e\.key\)?/);
-
-        const module = await import(pathToFileURL(out).href);
-        const tree = module.default({});
-        const found = handlers(tree);
-        expect(Object.keys(found)).toContain("onKeyDown");
-        expect((found.onKeyDown as (e: unknown) => unknown)({ key: "k" })).toBe(
-          "k",
-        );
-        let prevented = false;
-        (found.onClick as (e: unknown) => void)({
-          preventDefault: () => {
-            prevented = true;
+            ignoreDeprecations: "6.0",
           },
-        });
-        expect(prevented).toBe(true);
-      },
-      SPAWN_TIMEOUT_MS,
-    );
-  },
-);
+          include: ["src/Emit.mx", "src/custom.d.ts"],
+        }),
+      );
+
+      const result = run(mxTsc, ["-p", root]);
+      expect(result.output).toBe("");
+      expect(result.status).toBe(0);
+
+      const out = join(root, "out", "Emit.mx.js");
+      const js = readFileSync(out, "utf8");
+      // Reserved runtime helpers remain; type-check-only names are erased.
+      expect(js).not.toMatch(/__Mx|satisfies/);
+      // Same handlers as the runtime compile, modulo the one paren layer
+      // TypeScript keeps around an erased `satisfies` operand.
+      expect(js).toMatch(
+        /onClick: \(?function \(e\) \{ e\.preventDefault\(\); \}\)?/,
+      );
+      expect(js).toMatch(/onKeyDown: \(?\(e\) => e\.key\)?/);
+
+      const module = await import(pathToFileURL(out).href);
+      const tree = module.default({});
+      const found = handlers(tree);
+      expect(Object.keys(found)).toContain("onKeyDown");
+      expect((found.onKeyDown as (e: unknown) => unknown)({ key: "k" })).toBe(
+        "k",
+      );
+      let prevented = false;
+      (found.onClick as (e: unknown) => void)({
+        preventDefault: () => {
+          prevented = true;
+        },
+      });
+      expect(prevented).toBe(true);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+});

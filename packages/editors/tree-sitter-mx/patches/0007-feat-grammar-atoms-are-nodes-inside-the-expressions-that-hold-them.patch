@@ -4,7 +4,7 @@ Date: Mon, 5 Oct 2026 17:00:00 -0300
 Subject: [PATCH] feat(grammar): atoms are nodes inside the expressions that
  hold them
 
-`:name` where an expression is expected is an `atom` node inside
+Decision 156. `:name` where an expression is expected is an `atom` node inside
 the expression node: attribute values (and bound values and spreads),
 placeholders, tag and attribute arguments, and method bodies. `::name` is one
 `reserved_atom` token wherever it appears.
@@ -39,9 +39,9 @@ index 220c302..6bf8c17 100644
 @@ -6,7 +6,8 @@ its highlight and injection queries, the compiled wasm, and a
  time.
  
- MX is Marko's syntax plus the name sugar (`#id`, `.class` and
+ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
 -`:name` anywhere in a tag). The grammar is a vendored snapshot of
-+`:name` anywhere in a tag) and atoms (`:name` as a value:
++`:name` anywhere in a tag) and decision 156 atoms (`:name` as a value:
 +`default=:draft`, `accept=[:title, :body]`, `self.status === :sent`). The grammar is a vendored snapshot of
  [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
  patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
@@ -100,8 +100,8 @@ index 7ca4f4d..27d367f 100644
      $.element_end, // zero-width: dedent, void, self-closed, EOF, after </x>
      $._tag_comment, // "//..." or "/*...*/" inside an open tag (no events)
      $.escape, // backslash run before an escaped/double-escaped "${"
-+    $.atom, // MX: `:name` where an expression is expected
-+    $.reserved_atom, // MX: `::name`, reserved
++    $.atom, // MX (decision 156): `:name` where an expression is expected
++    $.reserved_atom, // MX: `::name`, reserved (decision 156)
 +    $._expr_more, // MX: an expression resumed after an atom
      $._error_sentinel, // never emitted; detects error recovery
    ],
@@ -111,7 +111,7 @@ index 7ca4f4d..27d367f 100644
  
      close_tag: ($) => seq($.close_tag_start, $.close_tag_name, $.close_tag_end),
 +
-+    // MX: an expression that holds atoms is split by the
++    // MX (decision 156): an expression that holds atoms is split by the
 +    // scanner around each one; the hidden pieces are the expression text, so
 +    // an injection of the whole node (minus its children) never sees an atom.
 +    placeholder_expr: ($) => seq($._placeholder_text, repeat($._atom_piece)),
@@ -130,10 +130,10 @@ index fae2e08..3f6681b 100644
  (close_tag_name) @tag
  (shorthand_id) @constant
  (shorthand_class) @property
-+; Every name-sugar form, tag-adjacent and in attribute position.
++; Every name-sugar form, tag-adjacent and in attribute position (decision 146).
  (shorthand_name) @label
  
-+; MX: an atom value, wherever an expression holds one. The
++; MX (decision 156): an atom value, wherever an expression holds one. The
 +; injections leave atoms out of the TypeScript ranges (they are children of the
 +; expression node), so this capture is the only one on them. `::name` is
 +; reserved and has no capture.
@@ -150,7 +150,7 @@ index d07584e..f8a754a 100644
    ELEMENT_END,              // zero-width
    TAG_COMMENT,              // hidden: comments inside open tags (no events)
    ESCAPE,                   // hidden: omitted backslashes before "${"
-+  ATOM,                     // MX: `:name` in an expression
++  ATOM,                     // MX (decision 156): `:name` in an expression
 +  RESERVED_ATOM,            // MX: `::name`, reserved for Symbol.for sugar
 +  EXPR_MORE,                // MX: hidden: an expression resumed after an atom
    ERROR_SENTINEL,
@@ -192,7 +192,7 @@ index d07584e..f8a754a 100644
 +  bool resume_lookbehind;    // token resumes a split expression: operator
 +                             // lookbehind may cross the token start
 +  bool split_at_shorthand;   // MX: ws + `.ident`/`:ident` ends the value
-+  bool atoms;                // MX: stop before an atom
++  bool atoms;                // MX: stop before an atom (decision 156)
 +  uint8_t terminator;
 +} ExprCfg;
 +
@@ -218,7 +218,7 @@ index d07584e..f8a754a 100644
    uint8_t expect_method_open;  // attr-level <T> closed; "(" must follow
    uint8_t block_after_tag;     // "--" ended a concise tag: indent extension
  
-+  // MX: an expression token split around an atom. The scan
++  // MX (decision 156): an expression token split around an atom. The scan
 +  // stops before the atom's ":"; the atom is its own token; then the same
 +  // expression resumes from `atom_expr` (see scan_atom_piece).
 +  uint8_t atom_state;   // ATOM_STATE_*
@@ -299,7 +299,7 @@ index d07584e..f8a754a 100644
    return false;
  }
  
-+// MX: keywords after which an expression is expected, so a
++// MX (decision 156): keywords after which an expression is expected, so a
 +// following `:name` is an atom (`return :a`, `case :a:`). `as`/`satisfies`
 +// are not here: what follows them is a type.
 +static const char *const ATOM_KEYWORDS[] = {
@@ -307,14 +307,14 @@ index d07584e..f8a754a 100644
 +    "new",   "return", "throw",  "typeof", "void", "yield", "of", NULL,
 +};
 +
-+// MX: does the ":" at the logical position start an atom?
++// MX (decision 156): does the ":" at the logical position start an atom?
 +// Only where an expression is expected: at the start of the expression, or
 +// after an operator, punctuator or keyword. Never after the end of an
 +// expression (`a ? b :c` is a ternary, `(x :number)` a type), after `.`, or
 +// after `/` (a regex or a comment may end there). Strings, template text,
 +// regexes and comments never reach here: their sub-scanners consume them.
 +// `::name` is one reserved token wherever it appears (`{k::a}` and
-+// `a?b::c` are errors), so it is reported as an atom start.
++// `a?b::c` are errors, decision 156), so it is reported as an atom start.
 +static bool atom_starts_here(EStream *es, ExprState *e) {
 +  int32_t n1 = es_peek(es, 1);
 +  bool reserved = n1 == ':' && is_ident_start_code(es_peek(es, 2));
@@ -400,7 +400,7 @@ index d07584e..f8a754a 100644
    }
  }
  
-+// MX: the expression scan stopped before an atom. The token
++// MX (decision 156): the expression scan stopped before an atom. The token
 +// being emitted ends at the last committed mark; whatever was scanned after
 +// it (`atom_pre` chars, held in lookahead) is emitted next as EXPR_MORE, then
 +// the atom, then the expression resumes from `e`.
@@ -496,7 +496,7 @@ index d07584e..f8a754a 100644
  // Entry points
  // --------------------------------------------------------------------------
  
-+// MX: the pieces of an expression token split around atoms
++// MX (decision 156): the pieces of an expression token split around atoms
 +// (begin_atom_split). Every piece but the atom is the hidden EXPR_MORE.
 +static void finish_atom_split(Scanner *s, TSLexer *lexer) {
 +  uint8_t owner = s->atom_owner;

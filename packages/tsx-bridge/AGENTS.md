@@ -25,7 +25,7 @@ Two syntax decisions are settled and encoded in `@mxlang/host-solid`'s lowering 
 - **Void elements need no slash.** `<input value=x>` parses. The set (`area base br col embed hr img input link meta param source track wbr`) is declared to htmljs-parser as `TagType.void`; a void tag written with a closing tag is a parse error.
 - **Shorthand `class` merges with a string or an object; anything else is a parse error.** Shorthand plus a *string* `class="x"` merges to `class="card x"` (shorthand first). Shorthand plus an **object literal** merges to Solid 2's array form, `class={["card", {...}]}`, the string entry always-on and the object toggling; a static `class="x"` present as well folds into that string entry (`class={["card x", {...}]}`) rather than being emitted as a second `class` attribute. Shorthand plus any *other* dynamic `class=` expression (an identifier, a call, a ternary) is a parse error. `#id` shorthand combined with an explicit `id=` is a parse error. `style=` only accepts an object-literal value (`style={color: c()}` → `style={{color: c()}}`); any other `style=` expression is a parse error for v1.
 - **Tag params and attribute tags are generic, not control-tag-only**,
-  for any tag Marko itself accepts them on — the subset rule (`divergences.md`) removed the cases real Marko rejects (tag
+  for any tag Marko itself accepts them on — following Marko, MX removed the cases real Marko rejects (tag
   params on `<if>`, tag params and attribute tags on native HTML elements).
   `<Tag|p1, p2|>body</Tag>` lowers to `<Tag>{(p1, p2) => body}</Tag>`, which is
   what lets Solid's own render-prop components be called from MX

@@ -91,8 +91,8 @@ module.exports = grammar({
     $.element_end, // zero-width: dedent, void, self-closed, EOF, after </x>
     $._tag_comment, // "//..." or "/*...*/" inside an open tag (no events)
     $.escape, // backslash run before an escaped/double-escaped "${"
-    $.atom, // MX: `:name` where an expression is expected
-    $.reserved_atom, // MX: `::name`, reserved
+    $.atom, // MX (decision 156): `:name` where an expression is expected
+    $.reserved_atom, // MX: `::name`, reserved (decision 156)
     $._expr_more, // MX: an expression resumed after an atom
     $._error_sentinel, // never emitted; detects error recovery
   ],
@@ -282,7 +282,7 @@ module.exports = grammar({
 
     close_tag: ($) => seq($.close_tag_start, $.close_tag_name, $.close_tag_end),
 
-    // MX: an expression that holds atoms is split by the
+    // MX (decision 156): an expression that holds atoms is split by the
     // scanner around each one; the hidden pieces are the expression text, so
     // an injection of the whole node (minus its children) never sees an atom.
     placeholder_expr: ($) => seq($._placeholder_text, repeat($._atom_piece)),

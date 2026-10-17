@@ -68,8 +68,8 @@ const injectable = new Map([
  * Capture names whose class is a name of MX's own rather than the capture's.
  * The query uses the editor-theme names so Zed colours them, and pages get a
  * class that says what the text is: an atom value (`:draft` in
- * `default=:draft`) is `ts-atom`, and every name-sugar form
- * (`:name`, tag-adjacent or in attribute position) is `ts-name`.
+ * `default=:draft`, decision 156) is `ts-atom`, and every name-sugar form
+ * (`:name`, tag-adjacent or in attribute position, decision 146) is `ts-name`.
  */
 const RENAMED = new Map([
   ["string.special.symbol", "ts-atom"],
@@ -98,7 +98,7 @@ const ATOMS = new Set(["atom", "reserved_atom"]);
 /**
  * A numeric literal as long as `text` (`:a` -> `0.`, `:sent` -> `0.000`), so
  * the injected TypeScript parses an expression where an atom stands, with
- * every later offset unchanged (the atom parser's stand-in).
+ * every later offset unchanged (the ADR 156 parser's stand-in).
  *
  * @param {string} text
  */

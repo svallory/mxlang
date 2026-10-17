@@ -6,7 +6,7 @@ injects `MX` into its template body):
 
 - `MX` (`.mx`), backed by this monorepo's own
   `packages/editors/tree-sitter-mx`: a vendored `marko-js/tree-sitter` plus
-  the name-sugar shorthands. That package's own `UPSTREAM.md` owns its pin
+  the decision 146 shorthands. That package's own `UPSTREAM.md` owns its pin
   and patches; this file only records how it is wired into the extension.
 - `Solid`, backed by this monorepo's own `packages/editors/tree-sitter-solid` — a
   patched `tree-sitter-typescript` (tsx dialect) with an `mx_element`
@@ -29,7 +29,7 @@ language name.
 
 | Source | Repo | Rev | What's taken |
 |---|---|---|---|
-| Rust extension shape | `marko-js/zed` (`Cargo.toml`, `src/lib.rs`, `extension.toml`) | `dd854edec1fab86d23eb24af9691505dfe3856a6` (repo `main` HEAD at fetch time, via `gh api repos/marko-js/zed/contents/{Cargo.toml,src/lib.rs,extension.toml}` on 2026-09-11 — the same rev already pinned above for the MX queries) | `crate-type = ["cdylib"]`, `zed_extension_api = "0.7.0"` (exact version, matching that `Cargo.toml`'s own unpinned-minor spelling), the `zed::Extension::language_server_command` shape (a `Command` built from a resolved binary path + `--stdio`), and `[language_servers.<key>]`'s `name`/`languages` table shape in `extension.toml`. **Not** taken: marko-js/zed's npm-download machinery (`npm_package_latest_version`/`npm_install_package`, the `did_find_server` cache, the two TS-plugin initialization-options hooks) — the extension keeps it minimal ("no settings, no downloads"), so `src/lib.rs` here only resolves a command path (a local worktree install via `Worktree::read_text_file`, then a global install via `Worktree::which`, then `bunx`, then `npx` — no `node_modules/.bin` walk-up, since `Worktree` exposes no such operation and a plain `std::fs`/`Path` walk cannot see worktree paths under Zed's wasm sandbox) and does no installation of its own. |
+| Rust extension shape | `marko-js/zed` (`Cargo.toml`, `src/lib.rs`, `extension.toml`) | `dd854edec1fab86d23eb24af9691505dfe3856a6` (repo `main` HEAD at fetch time, via `gh api repos/marko-js/zed/contents/{Cargo.toml,src/lib.rs,extension.toml}` on 2026-09-11 — the same rev already pinned above for the MX queries) | `crate-type = ["cdylib"]`, `zed_extension_api = "0.7.0"` (exact version, matching that `Cargo.toml`'s own unpinned-minor spelling), the `zed::Extension::language_server_command` shape (a `Command` built from a resolved binary path + `--stdio`), and `[language_servers.<key>]`'s `name`/`languages` table shape in `extension.toml`. **Not** taken: marko-js/zed's npm-download machinery (`npm_package_latest_version`/`npm_install_package`, the `did_find_server` cache, the two TS-plugin initialization-options hooks) — decision 77's brief is explicit ("keep it minimal: no settings, no downloads"), so `src/lib.rs` here only resolves a command path (a local worktree install via `Worktree::read_text_file`, then a global install via `Worktree::which`, then `bunx`, then `npx` — no `node_modules/.bin` walk-up, since `Worktree` exposes no such operation and a plain `std::fs`/`Path` walk cannot see worktree paths under Zed's wasm sandbox) and does no installation of its own. |
 
 `scripts/vendor.sh` generates `languages/mx/*.scm` the same way as
 `languages/solid/*.scm`, and `.github/workflows/upstream-check.yml`'s
@@ -37,17 +37,19 @@ language name.
 drift check against `marko-js/tree-sitter` itself is the grammar package's
 `scripts/vendor-check.sh` (job `mx-vendor-matches`).
 
-## MX owns its grammar
+## Decision 72 addendum: MX owns its grammar (2026-10-05)
 
-MX syntax is not a strict subset of Marko's, so this extension cannot ride
-`marko-js/tree-sitter` and `marko-js/zed`'s queries unchanged. The `:name` sugar
-(`apps/docs/docs/design-notes/adr-name-sugar.md`; `<input:email>`, `<:email>`) and
+Decision 72 made `.mx` "a strict subset of Marko syntax", which is what let
+this extension ride `marko-js/tree-sitter` and `marko-js/zed`'s queries with
+zero changes. Decision 146 (`apps/docs/docs/design-notes/adr-name-sugar.md`)
+ended that premise: the `:name` sugar (`<input:email>`, `<:email>`) and
 `#id`/`.class`/`:name` in attribute position (`<input type="email" :email
 #main .big>`) are MX syntax that Marko's grammar misparses (`a:b` as one tag
-name, `"email" :email` as one attribute value). So MX syntax is a
+name, `"email" :email` as one attribute value). So since 146 MX syntax is a
 superset of Marko's, and MX owns its grammar: `packages/editors/tree-sitter-mx`,
 a snapshot of Marko's grammar plus patches, named `mx` so it coexists with
-the official Marko extension's `marko` grammar. Everything else (the `.mx` identity, Marko as the reference for every construct MX
+the official Marko extension's `marko` grammar. Everything else decision 72
+says (the `.mx` identity, Marko as the reference for every construct MX
 shares with it) still holds; the grammar follows Marko upstream through its
 pin and `patches/`.
 
@@ -94,7 +96,7 @@ unrelated to this injection: it exists so Zed can compile the grammar for
 files matching `MX`'s `path_suffixes`, not to provide an injectable language
 named `marko`/`Marko` (the injection matches on language *name*, and `MX` ≠
 `Marko`). Injecting `MX` instead would drop the Marko-extension prerequisite
-and give embedded regions the name-sugar shorthands; that is a separate
+and give embedded regions the decision 146 shorthands; that is a separate
 change (TODO `solidmx-inject-mx`).
 
 `extension.toml` deliberately omits `[language_servers.marko]`, `src/lib.rs`
@@ -149,7 +151,7 @@ This script has no `--check` mode (the retired MX language's version did —
 it compared `marko-js/tree-sitter`/`marko-js/zed` pins against upstream
 HEAD). Solid's `highlights.scm` source is `packages/editors/tree-sitter-solid`, a
 local sibling package with no networked upstream HEAD to drift against, so a
-"check" mode here could only ever report success: a gate that
+"check" mode here could only ever report success — decision 55: a gate that
 cannot fail is not a gate. `moon.yml`'s `vendor-check` task and
 `package.json`'s `vendor:check` script were removed along with it.
 `.github/workflows/upstream-check.yml`'s `vendored-files-match` job is the

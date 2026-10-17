@@ -1,4 +1,4 @@
-// MX's own test (not vendored): atoms. `:name` where an
+// MX's own test (not vendored): decision 156 atoms. `:name` where an
 // expression is expected (attribute values, placeholders, tag and attribute
 // arguments, method bodies) is an `atom` node inside the expression node,
 // `::name` is one `reserved_atom` token, and the highlight query captures
@@ -10,7 +10,8 @@
 // mesh notes/team-lead-2026-10-04/briefs/syntax-v3.md), which put an ERROR at
 // the root on 0.1.0-alpha.1 because of its tagless `:name=value` lines.
 //
-// The last block is the default attribute's value: the scanner does not end it at a sugar, except
+// The last block is the default attribute's value (decision 151 ruling 2 and
+// decision 146 addendum 5): the scanner does not end it at a sugar, except
 // after a single atom.
 import assert from "node:assert";
 import fs from "node:fs";
@@ -192,7 +193,7 @@ describe("atoms: Mesh's Invoice entity", () => {
   }
 });
 
-// Where a `:` starts an atom, and where it does not.
+// ADR 156: where a `:` starts an atom, and where it does not.
 const POSITIONS: [name: string, src: string, atoms: string[]][] = [
   ["attribute value", "<div x=:b/>", ["atom::b@7"]],
   ["`x= :b` is the atom", "<div x= :b/>", ["atom::b@8"]],
@@ -241,7 +242,7 @@ const POSITIONS: [name: string, src: string, atoms: string[]][] = [
   ["`a?b::c` is reserved", "<t x=a?b::c/>", ["reserved_atom:::c@8"]],
 ];
 
-describe("atoms: positions", () => {
+describe("atoms: positions (ADR 156)", () => {
   for (const [name, src, expected] of POSITIONS) {
     it(name, () => {
       assert.deepStrictEqual(atoms(src), expected);
@@ -250,9 +251,9 @@ describe("atoms: positions", () => {
 });
 
 // A default attribute's value is the tag's `value=` with no name before the
-// `=`. It is exempt from the after-value rule, so `.ident`
+// `=`. Decision 151 ruling 2 exempts it from the after-value rule, so `.ident`
 // and `:ident` after whitespace stay part of the value (member access, as in
-// Marko); it splits at `:name` when the value is a
+// Marko); decision 146 addendum 5 splits it at `:name` when the value is a
 // single atom. A named attribute (and a spread) keep the rule. Same trees in
 // html and concise mode; the values and the sugar as written.
 function shape(src: string): [values: string[], sugar: string[]] {
@@ -269,7 +270,7 @@ function shape(src: string): [values: string[], sugar: string[]] {
 }
 
 const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
-  // --- the default value is exempt (html mode)
+  // --- decision 151 ruling 2: the default value is exempt (html mode)
   ["<if=a .b></if>", ["=a .b"], []],
   ["<if=a :b></if>", ["=a :b"], []],
   ["<if=a ?? b :c></if>", ["=a ?? b :c"], []],
@@ -283,7 +284,7 @@ const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
   ["<if=a b=1 .c></if>", ["=a", "=1"], [".c"]],
   // A spread is not exempt.
   ["<x ...a.b :c/>", ["...a.b"], [":c"]],
-  // --- a single atom splits at `:name`
+  // --- decision 146 addendum 5: a single atom splits at `:name`
   ["<x=:Customer :customer/>", ["=:Customer"], [":customer"]],
   ["<x=:A.b :c/>", ["=:A.b :c"], []],
   ["<x=:a + :b/>", ["=:a + :b"], []],
@@ -302,7 +303,7 @@ const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
   ["<x y=:a :b/>", ["=:a"], [":b"]],
 ];
 
-describe("default attribute values", () => {
+describe("default attribute values: ruling 2 and addendum 5", () => {
   for (const [src, values, sugar] of DEFAULT_VALUE) {
     it(JSON.stringify(src), () => {
       assert.deepStrictEqual(shape(src), [values, sugar]);

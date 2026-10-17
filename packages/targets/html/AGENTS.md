@@ -170,7 +170,7 @@ and make the template's own input unreachable, and Marko refuses it as a
 duplicate declaration. A **tag param** (`<for|input|>`, `<define/R|input|>`) is
 *accepted*, because it opens a nested scope where an ordinary JS shadow is
 correct — Marko renders those. Rejecting them would be an implementation limit
-stated as a rule, which the policy table forbids. Note the codegen consequence: a
+stated as a rule, which the capability test forbids. Note the codegen consequence: a
 `<for>`'s iterable is bound to a temporary before the loop opens, or a param
 shadowing the name used in the iterable (`<for|input| of=input.items>`) hits
 the temporal dead zone and throws at render time.

@@ -1,10 +1,11 @@
 # Upstream: `marko-js/tree-sitter`
 
 This package is MX's own tree-sitter grammar for `.mx` files: a vendored
-snapshot of Marko's grammar plus local patches. MX syntax is a superset of
-Marko's (`:name` sugar, and `#id`/`.class`/`:name` in attribute position,
-`apps/docs/docs/design-notes/adr-name-sugar.md`), so MX owns its grammar from
-0.2.0 of the Zed extension on (see `packages/editors/zed/UPSTREAM.md`).
+snapshot of Marko's grammar plus local patches. Decision 72 had `.mx` ride
+Marko's grammar unmodified; decision 146 (`:name` sugar, and `#id`/`.class`/
+`:name` in attribute position, `apps/docs/docs/design-notes/adr-name-sugar.md`)
+made MX syntax a superset of Marko's, so MX owns its grammar from 0.2.0 of the
+Zed extension on (decision 72 addendum, see `packages/editors/zed/UPSTREAM.md`).
 
 ## Pin
 
@@ -47,7 +48,8 @@ are regenerated here instead). It adds:
   an identifier start). An attribute value ends at whitespace followed by
   `.ident`, or by `:ident` when no conditional `?` is open
   (`ExprState.cond_depth`, which does not count `??` or `?.`). A value on the
-  sugar (`:x=1`, `#x=1`, `.x=1`) was an error in this patch; patch 0006 removed the `=` half of that rule; a bound `:=` after a sugar is
+  sugar (`:x=1`, `#x=1`, `.x=1`) was an error in this patch; patch 0006 (decision 146
+  addendum 4) removed the `=` half of that rule; a bound `:=` after a sugar is
   still refused (`<a :n:=y/>` is `ERROR`). The new state is serialized.
 - **Grammar** (`grammar.js`): the `shorthand_name` node. Attribute-position
   shorthands use their own external start tokens and are aliased to the same
@@ -80,9 +82,9 @@ is MX's own:
   HEAD (5.18.0) upstream's suite has 53 failures at its own pin; against
   v5.12.0 it has none.
 - `__tests__/fixtures.bun-test.mts` removes three `x .y` snippets from two
-  fixtures before comparing: the name sugar splits `x .y` into a value and a
+  fixtures before comparing: decision 146 splits `x .y` into a value and a
   class shorthand, where htmljs-parser reads one member expression
-  (`adr-name-sugar.md`, divergence 4). The test asserts each snippet is present, so a
+  (ADR 146, divergence 4). The test asserts each snippet is present, so a
   fixture change fails instead of silently comparing less.
 
 `patches/0003-fix-grammar-start-binding-captures-around-their-text.patch`
@@ -119,7 +121,7 @@ is MX's own: `README.md` becomes the package README (what it is, the `/docmd`
 and root exports, the `web-tree-sitter` dependency, what `prepack` builds).
 
 `patches/0006-feat-grammar-equals-and-paren-end-a-sugar-and-start-the-default-value.patch`
-is MX's own:
+is MX's own (decision 146 addendum 4):
 
 - `src/scanner.c`: `shorthand_takes_no_value` is gone. `=` and `(` cannot be part
   of a sugar, so they end it and start the tag's default value or method:
@@ -132,7 +134,7 @@ is MX's own:
   concise (51 cases).
 
 `patches/0007-feat-grammar-atoms-are-nodes-inside-the-expressions-that-hold-them.patch`
-is MX's own (atoms):
+is MX's own (decision 156, atoms):
 
 - `src/scanner.c`: `scan_expr_inner` stops before a `:` that starts an atom
   (`atom_starts_here`: the start of the expression, or after an operator,
@@ -155,7 +157,7 @@ is MX's own (atoms):
 - `README.md`: atoms and the docmd plugin's `ts-atom` / `ts-name` classes.
 - Tests: `test/atoms.bun-test.mts` (MX's own, not vendored): the brief's
   sample as trees, every line of Mesh's Invoice entity
-  (`test/fixtures/mesh-invoice.mx`), the atom positions and the captures of
+  (`test/fixtures/mesh-invoice.mx`), the ADR 156 positions and the captures of
   both query copies.
 
 `patches/0008-docs-readme-an-atom-inside-a-nested-template-placeholder-is-not-recognised.patch`
@@ -164,7 +166,7 @@ of a template literal inside an expression is not recognised; TODO
 `tree-sitter-atoms-template-placeholder`).
 
 `patches/0009-fix-grammar-a-default-attributes-value-is-not-ended-at-a-sugar.patch`
-is MX's own:
+is MX's own (decision 151 ruling 2, decision 146 addendum 5):
 
 - `src/scanner.c`: the after-value sugar rule (`src/scanner.c`'s
   `ExprCfg.split_at_shorthand`, from patch 0001) no longer applies to the tag's
@@ -173,7 +175,7 @@ is MX's own:
   every `=` or `:=` that starts a value (true only when no attribute name was
   scanned before it) and zeroed by a spread, and it is serialized with the
   rest of the tag state.
-- `src/scanner.c`: the one exception: a default
+- `src/scanner.c`: the one exception is decision 146 addendum 5: a default
   value that is a **single atom** still ends at `:name`
   (`belongs-to=:Customer :customer`). `after_single_atom` reads it off the
   resumed (serialized) expression state of the atom split from patch 0007.

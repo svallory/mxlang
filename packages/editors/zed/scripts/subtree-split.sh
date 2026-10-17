@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Splits packages/editors/zed out of this monorepo into a standalone repo
 # whose ROOT holds extension.toml — the shape the Zed extension registry
-# requires (a submodule pointing at a commit of the extension repo).
+# requires (a submodule pointing at a commit of the extension repo; see
+# notes/zed-plan.md decision 6).
 #
 # `git subtree split` rewrites history so every commit touching
 # packages/editors/zed becomes a commit at the repo root, with everything

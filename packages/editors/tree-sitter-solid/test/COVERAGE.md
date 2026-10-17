@@ -1,19 +1,20 @@
 <!-- This is the 74-construct coverage baseline that packages/editors/tree-sitter-solid/test/corpus/*.txt is measured against. Copied verbatim from notes/zed/solidmx-corpus-checklist.md (see UPSTREAM.md "What the corpus is measured against"). -->
 
 <!--
-2026-09-13 re-audit (zed-solidmx-followups): this checklist is stale in two places the corpus itself must not follow:
+2026-09-13 re-audit (zed-solidmx-followups): this checklist predates decision
+72's subset rule and is stale in two places the corpus itself must not follow:
 
-- #33/#36: tag params on `<if>` (`<if=user()|u|>`) are REMOVED — tag params on
-  `<if>` and attribute tags/tag params on native HTML elements are constructs
-  real Marko itself rejects (see `divergences.md`
+- #33/#36: tag params on `<if>` (`<if=user()|u|>`) are REMOVED — decision 72
+  removed tag params on `<if>` and attribute tags/tag params on native HTML
+  elements as constructs real Marko itself rejects (see `divergences.md`
   "Deferred to MX 2"). `test/corpus/control-flow.txt` and the shared
   `.solid.mx` fixtures use `<if=cond()>` with no `|params|`.
-- #50/#72/lowering-table `<fragment>`: REMOVED — `<fragment>` is retired
-  entirely (it was the old `.mx` dialect's own construct, not
+- #50/#72/lowering-table `<fragment>`: REMOVED — decision 72 retired
+  `<fragment>` entirely (it was the old `.mx` dialect's own construct, not
   real Marko). It does not come back for SolidMX or any other host.
 
 The 4 stateful items (#56-59: `<let>`, `<const>`, `<effect>`, `:=`) are
-confirmed still NON-GOAL for lowering (stateful tags are
+confirmed still NON-GOAL for lowering (decision 69/72: stateful tags are
 host errors), but the grammar itself parses them as ordinary tags/attributes
 so the language server can still report the host error — verified against
 `test/corpus/legacy-namespaces.txt` ("Legacy on: namespace scans as a
@@ -327,7 +328,7 @@ This checklist covers every distinct syntactic construct in SolidMX (MX for Soli
 - **Valid in**: `.solid.mx`, expression-position
 - **Spec quote (section 5.2)**: `<for|it, i| of=xs()>` → `<For each={xs()}>{(it, i) => …}</For>`
 - **Example**: `<for|item, i| of=items()><li>${item.name}</li></for>`
-- **Notes**: No `keyed` prop (Solid's default keyed-by-reference form; see `packages/hosts/solid/README.md` "`<for>` binds the row as a value, not an accessor"). Param types: `it: T`, `i: Accessor<number>`.
+- **Notes**: No `keyed` prop (Solid's default keyed-by-reference form; see `packages/hosts/solid/README.md` "`<for>` binds the row as a value, not an accessor" — decision `solid-for-accessor`, 2026-09-15). Param types: `it: T`, `i: Accessor<number>`.
 
 ### 40. `<for>` with `of=` and `by=` (identity-keyed)
 - **Name**: `<for>` identity-keyed iteration
