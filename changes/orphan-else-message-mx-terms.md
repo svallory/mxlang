@@ -1,5 +1,0 @@
----
-packages: [core]
-kind: Fixed
----
-In a file of a dialect whose `messageVocabulary` states an `attribute`, a `file` or a `formatTag`, an `else` or `else-if` with no `if` before it, and a `try`, now report in the file author's words. Before, the message was MX's own: "`else` cannot name a data tag: it is reserved — core consumes the structural names (…) before a target sees them", which tells a dialect user about a "data tag", "core" and a "target" when they wrote a line head. Now an orphan `else` reads "`else` must come right after `if` or `else-if`", and `try` reads "`try` cannot be used in a data file: Data files are static, so they have no render errors to catch; write its content directly", with each tag spelled through the dialect's `formatTag` and the file named by the dialect's `file` noun. The list of structural names is dropped from this message: it was not what the file's author got wrong. A file with no dialect, or a dialect whose vocabulary states none of those members, keeps MX's message byte for byte, and so do the registration checks (a tag file, `mx.tags`, `mx.contracts`, `customTags`), whose reader writes tag sources.
