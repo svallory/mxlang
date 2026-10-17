@@ -39,7 +39,7 @@ An atom is never read inside `static`, `import` or script blocks (scriptlets), w
 
 **Operations on an atom.** An atom is a name, not a value to operate on. Member access, calls and unary operators on it (`:a.length`, `:a(1)`, `-:a`) and an atom in object-key position (`{:a: 1}`) are positioned errors **detected by core, not by Babel**: the numeric stand-in (Parser approach) makes each of them valid JavaScript, so core finds them from the stand-in's atom mark. A computed key, `{[:a]: 1}`, is allowed. Comparison (`x === :a`), array and object elements, template placeholders, function arguments and attribute-tag values are allowed (settled by the lead on 2026-10-05; see Open questions and settled points).
 
-A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the name-sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; the lead's 2026-10-05 atom ruling says only "names may contain `-`".)
+A name matches `[A-Za-z_$][\w$]*(-[\w$]+)*`: `:title`, `:rename-all`, `:primary-key`. This is the name-sugar token without a trailing dash, so `:a-b` is the atom `a-b`, `:a - b` is subtraction, and a trailing `-` is not part of the name. (Proposed by the parser research; the operator's 2026-10-05 atom ruling says only "names may contain `-`".)
 
 **Where a `:` starts an atom (proposed).** Only where an expression is expected: at the start of the value, or after an operator, punctuator or keyword. A `:` is never an atom after the end of an expression, after `.` or `?.`, or after `as`/`satisfies`. So `a ? b :c` is a ternary, `(x :number) => x` is a type annotation, and `a ? :b : :c` is a ternary of two atoms. Strings, template text (the `${}` parts are scanned), regular expressions (decided by the previous token) and comments are never scanned.
 
@@ -57,7 +57,7 @@ An atom is its own IR node, `atom { name, span }`, distinct from `string`. It is
 
 **An atom inside an expression**. Where an atom sits inside any expression, nested cases included (array element, object value, call argument, ternary branch, template placeholder, comparison, function body), the `Expr.node` Babel node is a `StringLiteral` whose `extra.mxAtom` is `{ span }`, the atom's own span. The node's value is the atom's name, so code that only reads strings still works, and code that cares checks `extra.mxAtom`. This node shape is **public API** of `@mxlang/core`, stable like the rest of the IR; the Parser approach section builds it, and Phase B PR 1 documents it in `apps/docs/docs/architecture/ir-spec.md`. A consumer that translates an expression (Mesh turns `filter=({ self }) => self.status === :sent` into SQL) recognises an atom by `extra.mxAtom` and reads its span from there.
 
-**Atom-ness survives the name sugar** (requirement 2 below). The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The IR shape is one rule: **any attribute whose entire value is one atom is a `static` `Attr` with `atom { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
+**Atom-ness survives the name sugar**. The `name` attribute that the sugar sets (`<string :title/>`, `<:status="paid"/>` under `set`) is marked as written-as-atom in the IR. The IR shape is one rule: **any attribute whose entire value is one atom is a `static` `Attr` with `atom { kind: "atom", name, span }`**, which covers `mode=:strict` and the sugar-derived `name` alike; an atom nested anywhere in an expression (an array item, an object value, a call argument) stays a `StringLiteral` with `extra.mxAtom = { span }`. The sugar form is therefore a reference like any other: a contract `name: { type: "atom", ref: ... }` is satisfied and checked by it (and offered by `atomCandidates`), and `name="title"` is a type error where `name` is typed atom.
 
 An atom list (`accept=[:title, :body]` is an expression, not a whole-value atom) arrives in `lowerSource` as an `Expr` whose `node` has array items are `StringLiteral` nodes with `extra.mxAtom`, each with its own span.
 
@@ -73,7 +73,7 @@ The runtime value of an atom is its name as a string literal, on every target: `
 
 ### 4. Contracts
 
-A contract attribute may be declared in these ways (requirements 3, 5 and 9 below):
+A contract attribute may be declared in these ways:
 
 - `{ type: "atom" }`: **open.** Any atom is accepted.
 - `{ type: "atom", values: [...] }`: a set of allowed names, like an enum. An optional `pattern` (a regex source string) restricts the name further, with or without `values`.
@@ -107,13 +107,13 @@ Entry = { kind: "<kind>", from: "id" | "name", scope?: "<ancestor tag name>" | [
 - A reference resolves against every enclosing scope, **innermost first**, and last against the file scope; the first scope that declares the name decides. **No tag "opens a context"**: a scope is an ancestor tag a declaration names, and a contract never says it is a boundary.
 - `uniqueWith` (optional): a declaration also collides with a same-named declaration of the listed kinds in its scope, not just with its own kind.
 
-This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; the lead's 2026-10-05 atom ruling says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the file, which every reference sees. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
+This refines the earlier wording "the enclosing tag's whole subtree" (the lead's earlier ruling and the first draft of this ADR; the operator's 2026-10-05 atom ruling says only "declared in the context the contract defines"). A declaration in a sibling section is still in scope, because the default scope is the file, which every reference sees. What changed: the scope is a named ancestor, not "the enclosing tag" in general, and resolution walks the scopes from the innermost outward.
 
-**Derived declarations** (item 6). A name that no tag states, such as the `listId` a `belongs-to` derives, is added from the vocabulary's `analyze` hook with `ctx.declare(kind, name, { span, scope })`, in the declare phase. It is not a name transform in `declares`. `span` is where an error or go-to for that name should point (the tag that caused the derivation); `scope` has the same meaning and default as above.
+**Derived declarations** (row 6 below). A name that no tag states, such as the `listId` a `belongs-to` derives, is added from the vocabulary's `analyze` hook with `ctx.declare(kind, name, { span, scope })`, in the declare phase. It is not a name transform in `declares`. `span` is where an error or go-to for that name should point (the tag that caused the derivation); `scope` has the same meaning and default as above.
 
-**Duplicates** (item 7). Two declarations of the same name and kind in one scope are a **core error**, a positioned error carrying both spans. This holds for declarations from `declares` and from `ctx.declare` alike.
+**Duplicates** (row 8 below). Two declarations of the same name and kind in one scope are a **core error**, a positioned error carrying both spans. This holds for declarations from `declares` and from `ctx.declare` alike.
 
-**Kinds merge across modules** (item 8). A kind is a plain name. Two contract modules (Mesh's core module and an extension's generated module) that declare the same kind name mean the same kind: their declarations and references share one namespace, and nothing collides between modules unless two declarations are the same name and kind in one scope (the duplicate rule).
+**Kinds merge across modules** (row 7 below). A kind is a plain name. Two contract modules (Mesh's core module and an extension's generated module) that declare the same kind name mean the same kind: their declarations and references share one namespace, and nothing collides between modules unless two declarations are the same name and kind in one scope (the duplicate rule).
 
 #### What a reference needs from the contract system
 
@@ -241,7 +241,7 @@ load: { type: "atom", ref: ["relationship", "computed"] }
 
 so `load=[:items, :total]` is checked against both kinds, and a name declared as neither is an error. `sort` (attribute or computed) and `require` (attribute or argument) are the same shape.
 
-**Arguments scoped to an action.** `string` declares two things by its parent (the Mesh requirements below):
+**Arguments scoped to an action.** `string` declares two things by its parent (row 3 below):
 
 ```text
 string: { declares: [

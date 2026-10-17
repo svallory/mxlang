@@ -68,9 +68,8 @@ Sources of truth, in this order:
 The htmljs-parser fixtures and the Marko fixtures are **evidence of the default
 behaviour, not a gate**.
 
-The name-sugar rules are implemented on `main` and are described here
-as they are, not as planned. The sugar followed by `=value` or `(params) { body }` (`#id`, `.class`, `:name`) lives in core; the sugar after a single-atom default value and the after-value `:` rule live in
-the template parser. The template parser has no atom lexer: it reads `:name`
+The name-sugar rules of ADR 146 are retired from core (see "Retired: the
+former name-sugar rules" below; core has no name sugar). The template parser has no atom lexer: it reads `:name`
 as stock reads it, and atoms exist only as a dialect feature built on the
 parser's triggers ([Atoms](#the-parser-grammar-atoms)).
 

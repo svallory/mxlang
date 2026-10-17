@@ -4992,7 +4992,7 @@ syntax-table API; under the stock parser it is refused in the module file (``
 `table`: needs a template parser with the syntax-table API; the installed
 `htmljs-parser` has none ``).
 
-**`tagRules`** names the core tag-rule preset the dialect's files parse with
+**`tagRules`** names the core tag-rule preset the dialect's files parse with.
 The dialect states it in its own module; every
 tool honours it for the dialect's files, and project config cannot change it. A
 dialect that states none gets `html`, the full rules. A file no dialect claims
