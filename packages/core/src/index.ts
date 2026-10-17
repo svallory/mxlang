@@ -263,12 +263,12 @@ export {
 export { expressionShape, lower, lowerChildren } from "./lower.ts";
 export type {
   ContractAncestor,
-  ContractAtomOrMember,
   ContractAttr,
   ContractAttributeTag,
   ContractCall,
   ContractData,
   ContractExpression,
+  ContractMember,
   ContractString,
   ContractValue,
   DeclaredName,

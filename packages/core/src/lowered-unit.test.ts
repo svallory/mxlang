@@ -217,6 +217,18 @@ describe("the `LoweredUnit` view", () => {
     expect(kinds.e).toMatchObject({
       value: { type: "mx:Expression", code: 'x + "y"' },
     });
+    // The atom inside the expression is one of its `nodes`; its forward is
+    // the plain literal in the payload.
+    const e = kinds.e as {
+      value: { node: { right: unknown }; nodes?: { forward: unknown }[] };
+    };
+    expect(e.value.nodes).toEqual([
+      expect.objectContaining({
+        type: "atom:Atom",
+        span: { sourceStart: 34, sourceEnd: 36 },
+      }),
+    ]);
+    expect(e.value.nodes?.[0]?.forward).toBe(e.value.node.right);
     expect(kinds.b).toEqual({
       name: "b",
       nameSpan: { sourceStart: 38, sourceEnd: 39 },

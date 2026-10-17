@@ -636,8 +636,8 @@ Five facts worth knowing before editing it:
   the map still finds it on a cloned IR. A claimed default value ends
   at a space followed by a `terminatesValue` row (`isClaimedDefault`,
   parser `EXPRESSION.ts`). `ContractAttr` (`lowered-unit.ts`) is the
-  attribute's name plus its value node (`mx:String`, `mx:Expression`,
-  the claimed node, or a dialect's
+  attribute's name plus its value node (`mx:String`, `mx:Expression` with
+  the dialect nodes inside it in `nodes`, the claimed node, or a dialect's
   `mx:Member` mark), or `{ spread: true }`. `lowerTriggers` is the one pass
   that lowers line and attribute nodes, once each, in source order (a
   body's line node right after the walk reaches it), into `loweredNodes`,

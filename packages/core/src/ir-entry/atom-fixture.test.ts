@@ -10,7 +10,8 @@
  *    `Expr.nodes` entry (inside an expression), with its type, span, the
  *    node, its forward and the forward's printed range.
  * 2. The `LoweredUnit` view hands a module the node itself (a whole value)
- *    or the `mx:Expression` it is in.
+ *    or `mx:Expression` with `nodes`; `ContractMember` and
+ *    `ContractExpression.nodes` type it.
  * 3. A contract `type` (or `items`) naming a node type key accepts a node of
  *    that type and refuses anything else, in one positioned diagnostic; a
  *    key the dialect does not register, or one beside `enum`, is a
@@ -41,6 +42,8 @@ import type { Attr, Expr, ExprNode } from "../ir.ts";
 import type {
   ContractAttr,
   ContractExpression,
+  ContractMember,
+  ContractValue,
   LoweredUnit,
 } from "../lowered-unit.ts";
 import { mappedExpr } from "../mapping.ts";
@@ -243,7 +246,7 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     return found;
   };
 
-  it("a whole value is the node, an expression is the `mx:Expression` it is in, frozen", () => {
+  it("a whole value is the node, an expression lists its nodes, frozen", () => {
     const source = "<pick mode=~on n=(x + ~y)/>\n<pick ~named/>";
     const unit = unitOf(source, PICK);
     const [first, second] = unit.calls;
@@ -258,6 +261,13 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     // Inside an expression the node is an entry of the expression's `nodes`.
     const n = attrOf(first?.attrs, "n");
     expect(n.value).toMatchObject({ type: "mx:Expression", code: 'x + "y"' });
+    const nodes = (n.value as ContractExpression).nodes ?? [];
+    expect(nodes.map((each) => [each.type, each.span])).toEqual([
+      ["atom:Atom", { sourceStart: 22, sourceEnd: 24 }],
+    ]);
+    expect(nodes[0]?.forward).toBe(
+      (n.value as { node: { right: object } }).node.right,
+    );
     // The attribute-list form is the static `name` attribute, its node the value.
     expect(attrOf(second?.attrs, "name")).toEqual({
       name: "name",
@@ -265,6 +275,29 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
       label: "`name`",
       value: expect.objectContaining({ type: "atom:Atom", name: "named" }),
     });
+  });
+
+  it("`ContractMember` and `ContractExpression.nodes` type what the view hands a module", () => {
+    const unit = unitOf("<pick mode=~on n=[~a]/>", PICK);
+    const value: ContractValue | null | undefined = attrOf(
+      unit.calls[0]?.attrs,
+      "mode",
+    ).value;
+    // A type-level pin: a member is one arm of `ContractValue`; a dialect's
+    // node is another, which `type` does not narrow, so a module checks the
+    // key and casts.
+    const member: ContractMember = {
+      type: "mx:Member",
+      name: "x",
+      span: { sourceStart: 0, sourceEnd: 2 },
+    };
+    const asValue: ContractValue[] = [member];
+    expect(asValue).toHaveLength(1);
+    expect(value?.type).toBe("atom:Atom");
+    const n = attrOf(unit.calls[0]?.attrs, "n").value as ContractExpression;
+    const nodes: readonly ExprNode[] | undefined = n.nodes;
+    const kind: `${string}:${string}` | undefined = nodes?.[0]?.type;
+    expect(kind).toBe("atom:Atom");
   });
 
   it("a mark the dialect sets on its forward reaches `afterLower` unchanged; core reads none", () => {
@@ -300,6 +333,7 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     const right = (n.node as { right: { extra: { mxAtom: unknown } } }).right;
     expect(marks).toHaveLength(2);
     expect(right.extra.mxAtom).toBe(marks[0]);
+    expect(n.nodes?.[0]?.forward).toBe(right);
     // The IR the host emits holds the same node, mark and all.
     const [, attr] = attrsWith("<div mode=~on n=(x + ~y)/>\n", "/v/a.mx", {
       dialect: marking,

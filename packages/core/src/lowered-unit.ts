@@ -30,7 +30,7 @@ import {
   reservedHookCodeMessage,
 } from "./diagnostic-codes.ts";
 import type { DialectNode } from "./dialect-registry.ts";
-import type { Attr, AttributeTag } from "./ir.ts";
+import type { Attr, AttributeTag, ExprNode } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { hasStaticName, tagNameOf } from "./tag-fields.ts";
 import { attributeTagDeclarationFor } from "./wildcard-children.ts";
@@ -126,6 +126,13 @@ export interface ContractExpression {
   readonly span?: SourceSpan;
   /** Written `name:=value`. */
   readonly bound?: true;
+  /**
+   * The dialect nodes written inside the expression, in source order
+   * (`Expr.nodes`): each node's type, span, the node itself and its forward
+   * (the expression its type's `lower` returned, which `node` holds in the
+   * node's place). Absent when the expression has none.
+   */
+  readonly nodes?: readonly ExprNode[];
 }
 
 /**
@@ -133,7 +140,7 @@ export interface ContractExpression {
  * `{ kind: "member", name }`). Core has no syntax that builds one: it
  * carries the module's value as it wrote it. @unstable
  */
-export interface ContractAtomOrMember {
+export interface ContractMember {
   readonly type: "mx:Member";
   readonly name: string;
   /** The member token as written. */
@@ -145,14 +152,15 @@ export interface ContractAtomOrMember {
  * member, or the node written as the whole value when its type lowered it to
  * a string or a string literal (frozen, as its `parse` returned it; a claimed
  * `mx:String` also carries `raw`, `start` and `end`). A node whose type
- * lowered it to any other expression is that `mx:Expression`. Read `type` first; `type` does not narrow a dialect's node,
+ * lowered it to any other expression is that `mx:Expression`, with the node
+ * in its `nodes`. Read `type` first; `type` does not narrow a dialect's node,
  * so check its key and cast.
  * @unstable
  */
 export type ContractValue =
   | ContractString
   | ContractExpression
-  | ContractAtomOrMember
+  | ContractMember
   | DialectNode;
 
 /**
@@ -275,6 +283,7 @@ function contractValueOf(
     code: attr.value.code,
     ...(attr.value.span ? { span: attr.value.span } : {}),
     ...(attr.kind === "bound" ? { bound: true as const } : {}),
+    ...(attr.value.nodes?.length ? { nodes: attr.value.nodes } : {}),
   });
 }
 

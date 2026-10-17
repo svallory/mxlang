@@ -710,7 +710,7 @@ own, with their meaning, by claiming them. Three `@unstable` parts of
   a frozen `LoweredUnit`:
   - `calls`: every custom tag call with its contract (the listed tag keys
     included), its attributes as written (each value's `type`: `mx:String`,
-    `mx:Expression`, `mx:Member`,
+    `mx:Expression` with the dialect nodes inside it in `nodes`, `mx:Member`,
     the dialect node written as the whole value, `null` for a bare boolean,
     or `{ spread: true }`), its attribute tags at any depth, and its authored
     ancestors with an opaque `scope` per tag instance.
