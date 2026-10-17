@@ -4295,6 +4295,7 @@ describe("tag arguments are blamed over the whole list", () => {
     marked: string,
     message: string | RegExp,
     policy: Policy = fakeDeclarations(),
+    mxShape = false,
   ): void => {
     const start = marked.indexOf("§");
     const text = marked.replace("§", "");
@@ -4309,7 +4310,14 @@ describe("tag arguments are blamed over the whole list", () => {
     };
     let error: unknown;
     try {
-      lowerSource(source, policy);
+      lowerSource(
+        source,
+        policy,
+        undefined,
+        undefined,
+        undefined,
+        mxShape ? toMxShape(source) : undefined,
+      );
     } catch (caught) {
       error = caught;
     }
@@ -4397,9 +4405,39 @@ describe("tag arguments are blamed over the whole list", () => {
       blames(`${IMPORT}Panel(§...xs¶)\n`, SPREAD, panel);
     });
 
-    it("reaches the multiple and spread rules beside attribute tags, which stock does not count as a body", () => {
-      blames(`${IMPORT}<Panel(a, §b¶)><@x/></Panel>\n`, MULTIPLE, panel);
-      blames(`${IMPORT}<Panel(§...xs¶)><@x/></Panel>\n`, SPREAD, panel);
+    // Stock does not count attribute tags as a body. Marko's tree files them
+    // under `attributeTags`; a real MX compile keeps them as body children, so
+    // every row runs on both shapes.
+    describe.each([
+      ["Marko-shaped", false],
+      ["MX-shaped", true],
+    ])("beside attribute tags, %s", (_shape, mxShape) => {
+      it.each([
+        ["<Panel(a, §b¶)><@x/></Panel>", MULTIPLE],
+        ["<Panel(§...xs¶)><@x/></Panel>", SPREAD],
+        ["<Panel(a, §b, c¶)><@x/></Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)><@x>y</@x></Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)>\n  <@x/>\n  <@y/>\n</Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)><!-- c --><@x/></Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)><if=c><@x/></if></Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)><if=c><@x/></if><else><@y/></else></Panel>", MULTIPLE],
+        ["<Panel(a, §b¶)><for|i| of=l><@x/></for></Panel>", MULTIPLE],
+        ["<Panel(\n  a,\n  §b¶\n)><@x/></Panel>", MULTIPLE],
+        ["<Panel(\n  §...xs¶\n)><@x/></Panel>", SPREAD],
+        ["Panel(a, §b¶)\n  @x", MULTIPLE],
+        ["Panel(§...xs¶)\n  @x", SPREAD],
+      ])("reaches the multiple and spread rules for %j", (marked, message) => {
+        blames(`${IMPORT}${marked}\n`, message, panel, mxShape);
+      });
+
+      it.each([
+        "<Panel(§a, b¶)><@x/>text</Panel>",
+        "<Panel(§a, b¶)><@x/><span/></Panel>",
+        "<Panel(§a, b¶) c=1><@x/></Panel>",
+        "<Panel(§a, b¶)><if=c><span/></if></Panel>",
+      ])("still says attributes or a body first for %j", (marked) => {
+        blames(`${IMPORT}${marked}\n`, WITH_ATTRIBUTES, panel, mxShape);
+      });
     });
 
     it("says arguments beside attributes or a body first, over the whole list", () => {

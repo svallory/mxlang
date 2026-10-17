@@ -2456,6 +2456,29 @@ function containsAttributeTags(node: Node): boolean {
 }
 
 /**
+ * A tag's body children without its attribute tags, in both tree shapes.
+ *
+ * Stock Marko files an attribute tag, and an `<if>`/`<else-if>`/`<else>`/
+ * `<for>` that wraps attribute tags, under `attributeTags`, so its body
+ * checks never see them. MX keeps them in the body: `MxAttributeTag` nodes,
+ * and the control tags holding them. The Marko-shaped tree already has them
+ * elsewhere (`node.attributeTags`), so there is nothing to drop.
+ */
+function bodyChildrenWithoutAttributeTags(node: Node): Node[] {
+  return bodyChildren(node).filter((child) => {
+    if (isMxAttributeTag(child)) return false;
+    const name = String(tagNameOf(child) ?? "").replace(/^@/, "");
+    const control =
+      isTagNode(child) &&
+      (name === "if" ||
+        name === "else-if" ||
+        name === "else" ||
+        name === "for");
+    return !(control && containsAttributeTags(child));
+  });
+}
+
+/**
  * Marko forbids mixing a named custom tag's positional args with prop-like
  * input (`assertAttributesOrSingleArg`, `data/marko/packages/compiler/src/
  * babel-utils/assert.js:89-107`) — strict for a named custom tag only.
@@ -2484,9 +2507,13 @@ function rejectArgsWithProps(
       argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
-  if (tagAttributesOf(node).length === 0 && !hasContent(bodyChildren(node))) {
+  if (
+    tagAttributesOf(node).length === 0 &&
+    !hasContent(bodyChildrenWithoutAttributeTags(node))
+  ) {
     // Stock does not count attribute tags as "attributes or body", so several
     // or spread arguments beside them reach the multiple/spread rules first.
+    // (A real compile carries them as body children, hence the filter.)
     rejectMultipleOrSpreadArguments(ctx, node);
     if (!containsAttributeTags(node)) return;
   }

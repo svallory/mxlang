@@ -1865,6 +1865,113 @@ describe("attribute-tag v2 values (executed)", () => {
       );
     },
   );
+
+  // A real compile keeps an attribute tag as a body child of the call, not in
+  // Marko's `attributeTags` field, so these rows run through `compile` rather
+  // than a hand-shaped tree. Stock 6.4.4 (`assertAttributesOrSingleArg`)
+  // refuses several or spread arguments on a named custom tag over the second
+  // argument through the last, or over the lone spread, and does not count
+  // attribute tags as "attributes or body". `§` marks the first blamed
+  // character, `¶` the end.
+  describe("a named custom tag takes one plain argument, through a real compile", () => {
+    const IMPORT = 'import Panel from "./panel.mx"\n';
+    const MULTIPLE = "Tag does not support multiple arguments.";
+    const SPREAD = "Tag does not support spread arguments.";
+    const WITH_BODY =
+      "Tag does not support arguments when attributes or body present.";
+
+    const refusal = (marked: string) => {
+      const start = marked.indexOf("§");
+      const unmarked = marked.replace("§", "");
+      const end = unmarked.indexOf("¶");
+      const text = `${IMPORT}${unmarked.replace("¶", "")}`;
+      const at = (offset: number) => {
+        const lines = text.slice(0, offset).split("\n");
+        return {
+          line: lines.length,
+          column: lines[lines.length - 1]?.length ?? 0,
+        };
+      };
+      let error: unknown;
+      try {
+        compile(src(text), file);
+      } catch (caught) {
+        error = caught;
+      }
+      const from = at(IMPORT.length + start);
+      return {
+        error,
+        expected: {
+          line: from.line,
+          column: from.column,
+          end: at(IMPORT.length + end),
+        },
+      };
+    };
+    const refuses = (marked: string, message: string) => {
+      const { error, expected } = refusal(marked);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toMatchObject({ message, ...expected });
+    };
+
+    it.each([
+      ["<Panel(a, §b¶)/>", MULTIPLE],
+      ["<Panel(a, §b, c¶)/>", MULTIPLE],
+      ["<Panel(a, §...xs¶)/>", MULTIPLE],
+      ["<Panel(...xs, §b¶)/>", MULTIPLE],
+      ["<Panel(§...xs¶)/>", SPREAD],
+      ["<Panel(\n  a,\n  §b¶\n)/>", MULTIPLE],
+      ["<Panel(\n  §...xs¶\n)/>", SPREAD],
+      ["Panel(a, §b¶)", MULTIPLE],
+      ["Panel(§...xs¶)", SPREAD],
+      ["Panel(\n  a,\n  §b¶\n)", MULTIPLE],
+    ])("refuses %j", (marked, message) => {
+      refuses(marked, message);
+    });
+
+    it.each([
+      ["<Panel(a, §b¶)><@x/></Panel>", MULTIPLE],
+      ["<Panel(a, §b, c¶)><@x/></Panel>", MULTIPLE],
+      ["<Panel(a, §...xs¶)><@x/></Panel>", MULTIPLE],
+      ["<Panel(§...xs¶)><@x/></Panel>", SPREAD],
+      ["<Panel(a, §b¶)><@x>y</@x></Panel>", MULTIPLE],
+      ["<Panel(a, §b¶)>\n  <@x/>\n  <@y/>\n</Panel>", MULTIPLE],
+      ["<Panel(a, §b¶)><!-- c --><@x/></Panel>", MULTIPLE],
+      ["<Panel(a, §b¶)><if=c><@x/></if></Panel>", MULTIPLE],
+      ["<Panel(a, §b¶)><if=c><@x/></if><else><@y/></else></Panel>", MULTIPLE],
+      ["<Panel(a, §b¶)><for|i| of=l><@x/></for></Panel>", MULTIPLE],
+      ["<Panel(\n  a,\n  §b¶\n)><@x/></Panel>", MULTIPLE],
+      ["<Panel(\n  §...xs¶\n)><@x/></Panel>", SPREAD],
+      ["Panel(a, §b¶)\n  @x", MULTIPLE],
+      ["Panel(§...xs¶)\n  @x", SPREAD],
+      ["Panel(\n  a,\n  §b¶\n)\n  @x", MULTIPLE],
+    ])(
+      "refuses %j beside attribute tags, as it does without them",
+      (marked, message) => {
+        refuses(marked, message);
+      },
+    );
+
+    it.each([
+      "<Panel(§a, b¶)><@x/>text</Panel>",
+      "<Panel(§a, b¶)><@x/><span/></Panel>",
+      "<Panel(§a, b¶) c=1><@x/></Panel>",
+      "<Panel(§a, b¶)><if=c><span/></if></Panel>",
+      "<Panel(§...xs¶)><@x/>text</Panel>",
+      "<Panel(§a, b¶)>text</Panel>",
+    ])(
+      "still says arguments beside attributes or a body first for %j",
+      (marked) => {
+        refuses(marked, WITH_BODY);
+      },
+    );
+
+    it("takes one plain argument, an empty list and a trailing comma", () => {
+      for (const call of ["<Panel(a)/>", "<Panel()/>", "<Panel(a,)/>"]) {
+        expect(() => compile(src(`${IMPORT}${call}`), file)).not.toThrow();
+      }
+    });
+  });
 });
 
 describe("dynamic tags", () => {
