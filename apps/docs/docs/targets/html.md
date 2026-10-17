@@ -223,8 +223,10 @@ attribute is a compile error naming the attribute and the target.
   pass through verbatim; MX does not invent a policy against inline handler
   strings — it only stops creating one from a function. A *bare* `onClick`
   is HTML's spelling of `true` and renders as the boolean attribute.
-- **`on:` / `oncapture:`** are rejected with a fix-it naming `on-<exact>`:
+- **`on:`** is rejected with a fix-it naming `on-<exact>`:
   `on:click=fn` → `onClick=fn` (or `on-click=fn` for a custom name).
+- **`oncapture:click`** is an ordinary attribute with that full name, as in
+  Marko.
 - On a **component** (a `<define>` or an imported template), an `on*`
   attribute is an ordinary prop, never an event.
 

@@ -71,7 +71,7 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 ## What is an error
 
 - **State and effects**: `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `<id>`, `<await>`, `<log>`, `<debug>`, `client` and `server` blocks, and `:=`. State belongs in the component class.
-- **`class:x`, `style:x`**: not MX syntax. Write an object for `class` or `style`. Angular's `attr.` prefix is not needed either: write the attribute plainly (`data-kind=x`) and MX picks the binding.
+- **`class:x`, `style:x`**: not MX syntax; the only reserved colon prefixes. The error points to an object or array `class=` value (lowered to `[ngClass]`) or an object `style=` value (lowered to `[ngStyle]`). Every other colon name, `attr:x` included, is an ordinary attribute that keeps its full name. Angular's `attr.` prefix is not needed either: write the attribute plainly (`data-kind=x`) and MX picks the binding.
 - **`<return>` and tag variables (`<Tag/x>`)**: an Angular component has no channel to hand a value back to its caller. **`<try>`**: Angular has no template-level error boundary; handle the error in the component and render the fallback with `<if>`.
 - **A refined bound attribute on an optional chain** (`<input value:fn:=q?.a/>`): Marko compiles it with a nullish guard, but Angular's two-way binding needs a writable target, so the error says to bind a name or a member of one. The unrefined `value:=q?.a` emits `[(value)]="q?.a"`.
 - **`on:click`**: the error names `onClick`.

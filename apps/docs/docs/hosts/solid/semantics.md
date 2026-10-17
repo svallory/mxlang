@@ -92,8 +92,10 @@ The handler receives the DOM event. The shared rules are in [Attributes](/langua
 | `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `:=` | State is Solid's | `createSignal`, `createEffect`, an explicit handler, in the TypeScript around the region |
 | `<const>`, `import`, `static` in a region | A region is an expression | Write them in the module |
 | `<define>` inside `<if>`, `<for>` or an attribute tag, or one that reads a value the region introduced | It is hoisted to module scope | Make it a direct child of the region, and pass what it needs as params |
-| `on:x`, `oncapture:x`, `attr:x`, `bool:x`, `use:x` | Removed in Solid 2 | `onX=fn`; a `ref` callback for capture; the plain attribute; `ref=foo(opts)` |
+| `on:x` | Removed in Solid 2, and Marko rejects it too | `onX=fn` for a delegated event, or `on-x=fn` for a custom event name |
 | `<if\|u\|=cond>`, `<@name>` on an HTML element, `<fragment>` | Marko rejects them too | A TSX fragment `<>…</>` for a wrapper. See [Divergences](/divergences-and-mx-2/) |
+
+`oncapture:x`, `attr:x`, `bool:x` and `use:x` are not errors: as in Marko, each is an ordinary attribute that keeps its full name. Only `prop:` has a meaning of its own on Solid (a property write).
 
 ## Whole-file `.mx` on Solid
 

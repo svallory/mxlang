@@ -109,6 +109,12 @@ bind the same event. Each host then writes the handler in its own form — Solid
 gets `onDblClick`, Angular gets `(dblclick)` — from the one resolved name, so
 `onDblClick` and `on-dblclick` produce the same binding everywhere.
 
+On the JSX hosts (Preact, React, Hono) the handler prop is spelled the way
+that host's own JSX types declare it (`onKeydown` and `on-keydown` both emit
+`onKeyDown`), and a DOM event the host's types declare no handler prop for is
+a compile error, never a prop the types reject or the runtime ignores. Each
+host's semantics page lists its spellings.
+
 ```mx
 <button onClick=() => count++>increment</button>
 <video on-loadedmetadata=start/>
@@ -171,11 +177,12 @@ DOM equivalent to suggest.
 `on-<exact>` is never checked: naming an event MX cannot know about is exactly
 what it is for. (`on-` with nothing after the dash is an error.)
 
-### `on:click` and `oncapture:click` are not MX syntax
+### `on:click` is not MX syntax; `oncapture:click` is an ordinary attribute
 
-MX has no event modifiers. `on:*` and `oncapture:*` are handed to the host,
-which rejects them with a fix-it naming the `on-<exact>` form (Solid 2, React
-and Angular all do). To stop an event, call `event.preventDefault()` in the
+MX has no event modifiers. `on:*` is handed to the host, which rejects it with
+a fix-it naming the `on-<exact>` form. A lowercase `oncapture:click` is what
+it is in Marko: an ordinary attribute that keeps its full name, neither an
+event nor a capture-mode listener. To stop an event, call `event.preventDefault()` in the
 handler; for listener options such as `capture` or `passive`, use a `ref`
 callback that calls `addEventListener` itself.
 

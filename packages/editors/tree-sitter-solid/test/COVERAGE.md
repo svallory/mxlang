@@ -192,42 +192,14 @@ This checklist covers every distinct syntactic construct in SolidMX (MX for Soli
 ### 20. Legacy `on:` namespace (parse error)
 - **Name**: `on:` namespace (INVALID)
 - **Valid in**: **NOT VALID in `.solid.mx`** — **PARSE ERROR**
-- **Spec quote (section 4)**: "`on:scroll=fn`, `oncapture:click=fn`, `attr:x=y`, `bool:open=o` | — | **Parse error** in MX for Solid 2."
 - **Example**: ~~`<div on:scroll=handler/>`~~ → Parse error
-- **Fix-it**: "→ fix-it to `onX` (delegated) or a `ref` callback with `addEventListener` (non-delegated/capture)"
-- **Notes**: Marko/Svelte syntax not supported.
+- **Fix-it**: `onX=fn` (delegated) or `on-x=fn` for a custom event name.
+- **Notes**: Marko rejects it too.
 
-### 21. Legacy `oncapture:` namespace (parse error)
-- **Name**: `oncapture:` namespace (INVALID)
-- **Valid in**: **NOT VALID in `.solid.mx`** — **PARSE ERROR**
-- **Spec quote (section 4)**: "(`oncapture:click=fn`, ...)"
-- **Example**: ~~`<div oncapture:click=handler/>`~~ → Parse error
-- **Fix-it**: "→ fix-it to `onX` (delegated) or a `ref` callback with `addEventListener` (non-delegated/capture)"
-- **Notes**: Capture handling now via ref callbacks.
-
-### 22. Legacy `attr:` namespace (parse error)
-- **Name**: `attr:` namespace (INVALID)
-- **Valid in**: **NOT VALID in `.solid.mx`** — **PARSE ERROR**
-- **Spec quote (section 4)**: "`attr:x=y`, ..."
-- **Example**: ~~`<div attr:data-x=value/>`~~ → Parse error
-- **Fix-it**: "→ fix-it to a plain attribute (Solid 2's default attribute behavior already does what these namespaces did in 1.x)"
-- **Notes**: Attributes are now default in Solid 2.
-
-### 23. Legacy `bool:` namespace (parse error)
-- **Name**: `bool:` namespace (INVALID)
-- **Valid in**: **NOT VALID in `.solid.mx`** — **PARSE ERROR**
-- **Spec quote (section 4)**: "`bool:open=o`"
-- **Example**: ~~`<div bool:open=isOpen/>`~~ → Parse error
-- **Fix-it**: "→ fix-it to a plain attribute (Solid 2's default attribute behavior already does what these namespaces did in 1.x)"
-- **Notes**: Properties are now default in Solid 2.
-
-### 24. Legacy `use:` directive (parse error)
-- **Name**: `use:` directive (INVALID)
-- **Valid in**: **NOT VALID in `.solid.mx`** — **PARSE ERROR**
-- **Spec quote (section 4)**: "`use:tooltip=opts` | — | **Parse error** in MX for Solid 2."
-- **Example**: ~~`<div use:tooltip={opts}/>`~~ → Parse error
-- **Fix-it**: "Fix-it: `ref=tooltip(opts)` (directives are now plain functions returning a ref callback, composed via the existing `ref={[a, b(x)]}` array form)"
-- **Notes**: Directives are now via ref callbacks.
+### 21-24. `oncapture:`, `attr:`, `bool:` and `use:` names (ordinary attributes)
+- **Valid in**: `.solid.mx`, as ordinary attributes that keep their full names, as in Marko (spec §4). They are not errors, and they get no Solid 1 namespace meaning.
+- **Example**: `<div oncapture:click=handler/>`, `<div attr:data-x=value/>`, `<div bool:open=isOpen/>`, `<div use:tooltip={opts}/>`
+- **Notes**: Only `on:` (entry 20) is an error. The corpus file still calls these "legacy namespaces"; it pins only that each scans as a region.
 
 ### 25. Ref attribute
 - **Name**: Ref attribute
@@ -684,10 +656,10 @@ The following are summarized from the lowering table. Each is a separate syntact
 | Attribute method | ✓ | ✓ | Block body; can contain MX |
 | Prop namespace | ✓ | ✓ | `prop:` only |
 | `on:` namespace | ✗ | ✗ | Parse error |
-| `oncapture:` namespace | ✗ | ✗ | Parse error |
-| `attr:` namespace | ✗ | ✗ | Parse error |
-| `bool:` namespace | ✗ | ✗ | Parse error |
-| `use:` directive | ✗ | ✗ | Parse error |
+| `oncapture:` name | ✓ | ✓ | Ordinary attribute |
+| `attr:` name | ✓ | ✓ | Ordinary attribute |
+| `bool:` name | ✓ | ✓ | Ordinary attribute |
+| `use:` name | ✓ | ✓ | Ordinary attribute |
 | Ref attribute | ✓ | ✓ | Unchanged |
 | PascalCase component | ✓ | ✓ | Identifier or builtin |
 | Dynamic component | ✓ | ✓ | `<${}/>` lowers to `Dynamic` |
@@ -732,7 +704,7 @@ The following are summarized from the lowering table. Each is a separate syntact
 ## PARSE ERRORS vs. SEMANTIC ERRORS
 
 **Parse Errors (syntax not recognized):**
-- `on:`, `oncapture:`, `attr:`, `bool:`, `use:` namespaces
+- the `on:` namespace
 - `step=` attribute in `<for>`
 - JSX-valued prop as expression (must use attribute tag syntax)
 - Multiple root tags without wrapper or `<fragment>`

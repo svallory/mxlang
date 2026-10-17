@@ -199,9 +199,10 @@ Five facts worth knowing before editing it:
   a third case. **No aliases:** `onDoubleClick` lowers to `doubleclick` and
   core warns without rewriting (`warn(ctx, …)`, positioned at the attribute
   name); core's warning table is the three React spellings whose lowercase is not a DOM
-  event, verified against `lib.dom.d.ts`. `on:*`/`oncapture:*` get no meaning
-  from core and reach the host through the existing modifier hook, which every
-  host rejects with a per-prefix fix-it naming `on-<exact>`.
+  event, verified against `lib.dom.d.ts`. `on:*` gets no meaning from core and
+  reaches the host through the existing modifier hook, which every host
+  rejects with a per-prefix fix-it naming `on-<exact>`; a lowercase
+  `oncapture:*` is an ordinary attribute that keeps its full name, as in Marko.
   **Phase B emission (each host recomposes from `attr.event`):** every JSX
   host looks the prop up in the handler props its own JSX types declare,
   which no derivation can reverse (`keydown` → `onKeyDown`; `dblclick` →

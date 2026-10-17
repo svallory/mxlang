@@ -230,11 +230,13 @@ JSX decides element-vs-component by **case**: `<badge/>` is the DOM element
 This host follows Marko's rule — the taglib lookup, and the template's own
 PascalCase imports and `<define>`s, the same as `@mxlang/target-html` — and renames a
 taglib-discovered component in the emitted JSX, binding `MxBadge` beside it.
-A lowercase `import` or `<define>` is never called as a tag (decision 164): a
-lowercase tag naming one is the native element when it is one (with a
-warning), and a positioned error when it is not and the binding can be a tag
-(`import badge from "./badge.mx"` + `<badge/>`). It used to render a literal
-`<badge>` element with the props as attributes, a silently wrong render.
+A lowercase local binding is never called as a tag: a lowercase tag naming an
+`import` (of a tag module or of a value), a `<define>`, a `<const>`, a tag
+param or a `static`/`export` declaration is the native element when it is one
+(with a warning for a `<define>` or a tag-module import), and Marko's
+positioned local-variable error when it is not
+(`import badge from "./badge.mx"` + `<badge/>`, or
+`import layout from "./layout.ts"` + `<layout/>`).
 
 ## Verification
 

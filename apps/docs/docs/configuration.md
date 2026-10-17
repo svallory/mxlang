@@ -100,6 +100,21 @@ package's own `package.json` (see [Writing a dialect](/custom-tags/dialects/)),
 and MX's config never reads it, in any format. A `package.json` whose `mx`
 holds only `dialect` has no MX config, so an `mx.config.*` beside it applies.
 
+## Mixed projects
+
+A project whose whole-file `.mx` templates compile for more than one host
+routes them by build config, not by file extension (the region kinds such as
+`.solid.mx` are TypeScript modules, a different file kind). The host's Vite plugin or Bun loader takes
+include globs that pick the files it compiles (`src/islands/**/*.mx` for one
+host, the rest for another), and an import query such as `?static` asks for a
+file's static rendering at the import site. A host may forbid tags it cannot
+honour, but it never adds a file convention, so the same `.mx` file reads the
+same way under every host that compiles it.
+
+> **Not released yet.** The include-glob and import-query options of the Vite
+> plugin and the Bun loader are not implemented (mx-ii07); today each `.mx` file compiles for
+> the host its nearest MX config selects.
+
 ## Formats
 
 JSON, YAML and `package.json` are parsed by MX. A JavaScript or TypeScript

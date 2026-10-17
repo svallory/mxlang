@@ -232,10 +232,9 @@ rather than syntactic (60-61, 69, 74-88) and so have no distinct parse to pin.
 
 Note what a corpus entry can and cannot assert here. The MX region is one opaque
 token, so a construct's test pins **that the scanner finds the right region end**
-— not that the construct is semantically valid. The legacy namespaces
-(`on:`/`oncapture:`/`attr:`/`bool:`/`use:`, checklist 20-24), `fallback=<Spin/>`
-(32, 68) and `<for step=>` (46) are all specified as *parse errors*, but they are
-errors raised by `@mxlang/tsx-bridge` during lowering, not by this grammar:
+— not that the construct is semantically valid. `on:` (checklist 20), `fallback=<Spin/>` (32, 68) and `<for step=>` (46) are
+specified as errors, but they are raised during lowering, not by this grammar
+(`oncapture:`/`attr:`/`bool:`/`use:`, checklist 21-24, are ordinary attributes):
 `test/corpus/legacy-namespaces.txt` pins that each still scans as a
 well-formed `mx_element` so the editor highlights the line instead of collapsing
 the rest of the file into an error node. Diagnosing them is the parser's job.

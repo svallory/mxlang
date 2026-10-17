@@ -143,7 +143,9 @@ component-vs-HTML dispatch by **what the tag resolves to, not by case alone**:
 a capitalized tag matching an import binding, a `<define>`, or a tag found by
 MX's `tags/` discovery is a component call; a lowercase tag is never an
 import binding (a lowercase import is not a tag) and is either a discovered
-tag or an HTML element. A tag that resolves to nothing is a compile error
+tag or an HTML element; a lowercase tag naming a local binding (an import of
+any kind, a `<define>`, a `<const>`) that is neither is core's positioned
+local-variable error, in Marko's words. A tag that resolves to nothing is a compile error
 whatever its case: an unresolved PascalCase tag (no HTML element is ever
 capitalized) and an unresolved hyphenated tag such as `<my-widget>` both
 refuse to compile, as in Marko. `.marko` files are not an MX input, so no

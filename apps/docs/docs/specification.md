@@ -1401,9 +1401,8 @@ the same `[attr.name]` route as a dynamic `data-*`/`aria-*` attribute; a static
 one is carried through verbatim.
 
 Core does not treat `prop:`, `oncapture:`, `attr:`, `bool:` or `use:` names as
-modifiers: they preserve their complete names instead of being refused as
-invalid Marko syntax. This corrects decision 10's namespace-removal policy
-against live Marko 6.4.4; a host runtime/compiler still owns how an emitted
+modifiers: they keep their complete names instead of being refused as
+invalid syntax, as in Marko 6.4.4. A host runtime or compiler still owns how an emitted
 name is interpreted (for example Solid's own `prop:` namespace and Astro's
 `set:`/`is:` directives).
 
@@ -1507,8 +1506,8 @@ list is an illustration of where the rule currently bites; it is not the rule.
 know about. `on-` with no name after the dash is an error.
 
 **Native `on:*` is reserved; lowercase `oncapture:*` is an ordinary attribute.**
-Only `on:*` reaches the host's modifier hook for a positioned refusal/fix-it
-(decision 101b, corrected against live Marko 6.4.4). `oncapture:click` retains
+Only `on:*` reaches the host's modifier hook for a positioned refusal/fix-it,
+as in Marko 6.4.4. `oncapture:click` retains
 its complete name and is neither an event nor a capture-mode alias. Core does
 not rewrite either spelling or warn.
 
@@ -5504,7 +5503,9 @@ deferred (decision 85).
 ### Closed questions
 
 1. **Event attribute naming — closed.** §4 (event attributes) states the
-   rule; the per-host spelling is in each host's semantics page.
+   rule: `on:*` is refused by the host, a lowercase `oncapture:*` is an
+   ordinary attribute, and each host spells events the way its declared props
+   do (its semantics page lists them).
 2. **Dynamic tags — closed.** §7 fixes their behavior on every host: a
    string target renders that element (with `args[0]` as its attributes when
    called with arguments), a falsy target renders only the body, a component

@@ -135,7 +135,8 @@ other target can express.
 | `Component` | A JSX element. Attribute tags follow the callee's `AttrTag` declaration: data values are `{ ...attrs, ...nested, content }`, arrays are real reactive arrays, and renderables/content are reusable accessors (`() => JSX`; with params, `(...p) => () => JSX`). Tag params remain the child callback (`{(input) => ...}`) |
 | `.cls` / `#id` shorthand | Folds into a plain `class="…"` / `id="…"` attribute; a `class=` value of any kind alongside `.cls` merges to `class={["cls", value]}`, shorthand first (a string value folds into the plain attribute); on a native element an array class is joined into one string as Marko joins it (numbers and `true` as text, other falsy values skipped, an object's truthy keys), and a component gets the array |
 | `prop:` namespace | Kept as `prop:name={value}` |
-| `on:` / `oncapture:` / `attr:` / `bool:` / `use:` namespaces | Rejected, each with Solid 2's own replacement in the message (`on:x=fn` → `onX=fn`; `oncapture:` → a `ref` callback with `{ capture: true }`; `attr:`/`bool:` → the plain attribute; `use:foo=opts` → `ref=foo(opts)`) |
+| `on:` namespace | Rejected with Solid 2's own replacement in the message (`on:x=fn` → `onX=fn`, or `on-x=fn` for a custom event name) |
+| `oncapture:` / `attr:` / `bool:` / `use:` names | Ordinary attributes that keep their full names, as in Marko |
 | `IfChain`, 1–2 conditioned branches | `<Show when={cond} fallback={...}>` |
 | `IfChain`, 3+ conditioned branches | `<Switch fallback={...}><Match when={cond}>...</Match></Switch>` |
 | `For`, `of=` | `<For each={list} keyed={...}>{(item, i) => body}</For>`; no `keyed` prop (Solid's default keyed-by-reference form) with no `by=`, `keyed={x => x.field}` for a string `by=`, the raw expression otherwise. Reads of each parameter Solid hands as an accessor are rewritten to call it — see the section above |
