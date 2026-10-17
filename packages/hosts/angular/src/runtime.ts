@@ -89,9 +89,13 @@ const classText = (value: unknown): string | null => {
       : Array.isArray(part)
         ? part.map(text).filter(Boolean).join(" ")
         : typeof part === "object"
-          ? Object.keys(part)
-              .filter((key) => (part as Record<string, unknown>)[key])
-              .join(" ")
+          ? (() => {
+              const keys: string[] = [];
+              for (const key in part) {
+                if ((part as Record<string, unknown>)[key]) keys.push(key);
+              }
+              return keys.join(" ");
+            })()
           : String(part);
   return text(value) || null;
 };

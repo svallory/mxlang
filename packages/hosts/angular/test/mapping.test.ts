@@ -194,7 +194,7 @@ describe("mappings: escaping keeps the anchor", () => {
   it("maps an escaped expression whole-to-whole despite the length change", () => {
     // `&&` survives, but `"` in the expression is escaped to `&quot;` for the
     // surrounding HTML attribute, so generated and source lengths differ.
-    const source = '<div title=a+"x"/>';
+    const source = '<my-el title=a+"x"/>';
     const pairs = slicePairs(source);
     const pair = pairs.find((p) => p.source === 'a+"x"');
     expect(pair).toBeDefined();
@@ -204,7 +204,7 @@ describe("mappings: escaping keeps the anchor", () => {
   });
 
   it("maps a `&` escaped in an attribute value", () => {
-    const source = "<div title=a&&b/>";
+    const source = "<my-el title=a&&b/>";
     const pairs = slicePairs(source);
     expect(pairs).toContainEqual({ generated: "a&amp;&amp;b", source: "a&&b" });
   });

@@ -494,13 +494,13 @@ export const REFINE_HELPER_NAMES = REFINE_HELPER_MEMBERS.map(
  * shorthand merged with `class=y` is always such an array, so the array is
  * joined here the way Marko joins it instead: strings as written, numbers and
  * `true` as text, other falsy parts skipped, nested arrays in order, an
- * object's truthy keys. An empty result is `null`, so the attribute is
+ * object's truthy keys (own and inherited, as `for...in` reads them). An empty result is `null`, so the attribute is
  * absent. The binding is re-evaluated on every check, so a value mutated in
  * place still shows. Separate from the other groups: a template needs it only
  * when it holds an array `class`.
  */
 export const CLASS_HELPER_MEMBERS = [
-  '  protected readonly __mxClass = (value: unknown): string | null => { const text = (part: unknown): string => !part ? "" : Array.isArray(part) ? part.map(text).filter(Boolean).join(" ") : typeof part === "object" ? Object.keys(part).filter((key) => (part as Record<string, unknown>)[key]).join(" ") : String(part); return text(value) || null; };',
+  '  protected readonly __mxClass = (value: unknown): string | null => { const text = (part: unknown): string => !part ? "" : Array.isArray(part) ? part.map(text).filter(Boolean).join(" ") : typeof part === "object" ? (() => { const keys: string[] = []; for (const key in part) if ((part as Record<string, unknown>)[key]) keys.push(key); return keys.join(" "); })() : String(part); return text(value) || null; };',
 ];
 const CLASS_HELPER_MARKER = "__mxClass(";
 export const CLASS_HELPER_NAMES = CLASS_HELPER_MEMBERS.map(
@@ -1218,7 +1218,7 @@ function emitAttrs(
           if (name === "class" && shape === "array") {
             // Never `[ngClass]`: it throws on a non-string entry. See
             // `CLASS_HELPER_MEMBERS`. `[attr.class]`, not `[class]`: a `[class]`
-            // string is split into a map that Angular keeps sorted, so the
+            // string is split into a map that Angular reorders, so the
             // words would not come out in the order Marko prints them.
             onClassHelper?.();
             out.write(" [attr.");
@@ -2254,7 +2254,10 @@ class AngularEmitter implements Emitter<string> {
       const variable = this.gensym("__mxAttr");
       lets.set(attr, { ...binding, variable });
       this.out.write(`@let ${variable} = $any(`);
-      this.out.writeMapped(esc(attr.value.code), attr.value.span);
+      // Not `esc`d: a `@let` value is a bare expression, not an attribute
+      // value, and Angular does not decode entities in it (`&quot;` there is a
+      // parse error).
+      this.out.writeMapped(attr.value.code, attr.value.span);
       this.out.write(");");
     }
     const tagStart = this.out.length;

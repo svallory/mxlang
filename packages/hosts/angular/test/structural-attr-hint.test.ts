@@ -564,7 +564,7 @@ describe("known gaps: these keep Marko's message", () => {
 
   it("a directive without `=` is Marko's multiplication and compiles", () => {
     expect(compileMx('<div class="a" *ngIf>y</div>').code).toBe(
-      `${attrLet(0, "&quot;a&quot; *ngIf")}<div [class]="${listBinding(0)}">y</div>`,
+      `${attrLet(0, '"a" *ngIf')}<div [class]="${listBinding(0)}">y</div>`,
     );
   });
 });

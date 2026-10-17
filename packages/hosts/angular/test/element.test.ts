@@ -226,6 +226,12 @@ describe("Element", () => {
     );
   });
 
+  it("does not entity-escape the @let a primitive binding is read through", () => {
+    const out = emit('<div title=("x;" + y)>x</div>');
+    expect(out).toContain('@let __mxAttr = $any("x;" + y);');
+    assertAngularParses(out);
+  });
+
   it("emits [attr.class] through __mxClass for an array-valued class, never [ngClass]", () => {
     const { code, warnings } = compileMx(
       '<div class=["a", cond && "b"]>x</div>',

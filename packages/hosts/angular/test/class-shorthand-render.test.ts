@@ -107,6 +107,33 @@ describe("Angular render: a shorthand class beside class=y", () => {
     expect(concise.classes).toEqual([a, ax, x]);
   });
 
+  it.each([
+    ["a string literal", '"b c"', ["a b c", "a xx b c", "xx b c"]],
+    [
+      "a single-quoted literal with a semicolon",
+      "'b;c'",
+      ["a b;c", "a xx b;c", "xx b;c"],
+    ],
+    ["an object literal", "{k: true, m: false}", ["a k", "a xx k", "xx k"]],
+    ["an array literal", '["p", null, ["q"]]', ["a p q", "a xx p q", "xx p q"]],
+  ])("beside %s", (_name, literal, [a, ax, x]) => {
+    const tag = render(
+      `<div.a class=${literal}/><div.a.\${x} class=${literal}/><div.\${x} class=${literal}/>`,
+      { x: "xx" },
+    );
+    expect(tag.classes).toEqual([a, ax, x]);
+    const concise = render(
+      `div.a class=${literal}\ndiv.a.\${x} class=${literal}\ndiv.\${x} class=${literal}`,
+      { x: "xx" },
+    );
+    expect(concise.classes).toEqual([a, ax, x]);
+  });
+
+  it("includes an object's inherited truthy keys, as for...in does", () => {
+    const y = Object.assign(Object.create({ inh: true }), { own: true });
+    expect(render("<div.a class=y/>", { y }).classes).toEqual(["a own inh"]);
+  });
+
   it("renders a call, a ternary with a string and a ternary with an object", () => {
     const view = render(
       '<div.a class=y.toUpperCase()/><div.a class=on ? "p" : "q"/><div.a class=on ? {k: true} : null/>',
@@ -193,6 +220,7 @@ describe("the __mxClass members agree", () => {
     undefined,
     {},
     { k: 1, m: 0 },
+    Object.assign(Object.create({ inh: 1 }), { own: 1 }),
     [],
     ["p", ["q", [["r"]]], false, 0, null, { x: true }],
   ];
