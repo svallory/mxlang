@@ -50,6 +50,15 @@ const NO_CLASS = [
   "",
 ].join("\n");
 
+// A tag module in concise mode that calls `child` with static classes.
+const CONCISE_CALLER = [
+  "export interface Input {}",
+  'child.a class="lit"',
+  "child.b",
+  'child class="p q"',
+  "",
+].join("\n");
+
 function writeModule(file: string, code: string): void {
   const { outputText } = ts.transpileModule(code, {
     compilerOptions: {
@@ -77,11 +86,12 @@ beforeAll(() => {
     ["child", TAKES_CLASS],
     ["plain", NO_CLASS],
     ["divchild", DIV_CLASS],
+    ["concise", CONCISE_CALLER],
   ] as const) {
     const file = join(dir, "tags", `${name}.mx`);
     writeFileSync(file, source.replace("{{ class }}", "${input.class}"));
   }
-  for (const name of ["child", "plain", "divchild"]) {
+  for (const name of ["child", "plain", "divchild", "concise"]) {
     const file = join(dir, "tags", `${name}.mx`);
     writeModule(
       join(dir, "tags", `${name}.mjs`),
@@ -101,6 +111,8 @@ async function render(
   template: string,
   props: Record<string, unknown>,
   update?: Record<string, unknown>,
+  /** Adds a directive on `mx-child` whose `host: {class}` is "dir-class". */
+  withHostDirective = false,
 ): Promise<{
   inputs: string[];
   hosts: (string | null)[];
@@ -115,10 +127,20 @@ async function render(
   const name = `page${++pageId}`;
   const file = join(dir, `${name}.component.ng.mx`);
   const source = [
-    'import { Component } from "@angular/core";',
+    withHostDirective
+      ? 'import { Component, Directive } from "@angular/core";'
+      : 'import { Component } from "@angular/core";',
     "",
+    ...(withHostDirective
+      ? [
+          '@Directive({ selector: "mx-child", host: { class: "dir-class" } })',
+          "class HostClass {}",
+          "",
+        ]
+      : []),
     "@Component({",
     `  selector: "app-${name}",`,
+    ...(withHostDirective ? ["  imports: [HostClass],"] : []),
     `  template: ${template},`,
     "})",
     "export class Page { x: unknown; y: unknown; }",
@@ -311,5 +333,73 @@ describe("a class on an MX tag call whose callee has no class input", () => {
       y: NESTED,
     });
     expect(view.hosts.map(set)).toEqual([set("a xx m p q r s")]);
+  });
+});
+
+describe("a static class on a tag call whose callee declares a class input", () => {
+  // Marko prints the class only where the callee prints `input.class`: there
+  // is no host element to take it. The input gets the value and the callee's
+  // host element does not also get the class.
+  it.each([
+    ['class="lit"', '<child class="lit"/>', "lit"],
+    ["a shorthand only", "<child.a/>", "a"],
+    ["two shorthands", "<child.a.b/>", "a b"],
+    ["a shorthand beside a static class", '<child.a class="lit"/>', "a lit"],
+    ["a static class of two words", '<child class="p q"/>', "p q"],
+  ])("%s: the input takes it, not the host", async (_name, call, expected) => {
+    const view = await render(call, {});
+    expect(view.inputs).toEqual([text(expected)]);
+    expect(view.hosts).toEqual([null]);
+    expect(view.updated.shown).toEqual([expected]);
+  });
+
+  it("prints the class once on the callee's own element", async () => {
+    const view = await render('<divchild.a class="lit"/>', {});
+    expect(set(view.updated.divs[0] ?? null)).toEqual("a lit");
+    expect(view.hosts).toEqual([null]);
+  });
+
+  it("keeps a static class off the host after an update elsewhere", async () => {
+    const view = await render(
+      '<><child.a class="lit"/><child class=y/></>',
+      { y: "one" },
+      { y: "two" },
+    );
+    expect(view.hosts).toEqual([null, null]);
+    expect(view.updated.inputs).toEqual([text("a lit"), text("two")]);
+    expect(view.updated.shown).toEqual(["a lit", "two"]);
+  });
+
+  it("takes a static class written in concise mode", async () => {
+    const view = await render("<concise/>", {});
+    expect(view.inputs).toEqual([text("a lit"), text("b"), text("p q")]);
+    expect(view.hosts).toEqual([null, null, null]);
+  });
+
+  it("passes a static class with braces and quotes as written", async () => {
+    const view = await render(
+      `<><child class="{{ x }} it's"/><child class='a "b" c'/></>`,
+      {},
+    );
+    expect(view.inputs).toEqual([text("{{ x }} it's"), text('a "b" c')]);
+    expect(view.hosts).toEqual([null, null]);
+  });
+
+  it("leaves a directive's host class on the callee's host element", async () => {
+    const view = await render('<child.a class="lit"/>', {}, undefined, true);
+    expect(set(view.hosts[0] ?? null)).toEqual("dir-class");
+    expect(view.inputs).toEqual([text("a lit")]);
+  });
+});
+
+describe("a static class on a tag call whose callee has no class input", () => {
+  // Nothing to receive it: the host element takes it, as before.
+  it.each([
+    ['class="lit"', '<plain class="lit"/>', "lit"],
+    ["a shorthand only", "<plain.a/>", "a"],
+    ["a shorthand beside a static class", '<plain.a class="lit"/>', "a lit"],
+  ])("%s: the host element takes it", async (_name, call, expected) => {
+    const view = await render(call, {});
+    expect(set(view.hosts[0] ?? null)).toEqual(set(expected));
   });
 });

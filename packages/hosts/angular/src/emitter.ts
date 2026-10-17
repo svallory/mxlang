@@ -1146,11 +1146,17 @@ function emitAttrs(
         // hits the class pipeline exactly like `class=`, so the styled
         // check lowercases, and the binding is emitted lowercase (rev2 L1).
         const styledName = attr.name.toLowerCase();
+        // A callee that declares a `class` input gets a static class through
+        // that input only, like a dynamic one. A plain `class="lit"` attribute
+        // would reach the input and also land on the callee's host element,
+        // where Marko has none.
+        const toInput = styledName === "class" && calleeTakesClass;
         const styled =
-          (styledName === "class" || styledName === "style") &&
-          /[{}]/.test(attr.value);
+          toInput ||
+          ((styledName === "class" || styledName === "style") &&
+            /[{}]/.test(attr.value));
         out.write(" ");
-        if (styled) out.write("[attr.");
+        if (styled) out.write(toInput ? "[" : "[attr.");
         if (styled) {
           out.writeMapped(styledName, attr.nameSpan);
         } else {
@@ -2478,7 +2484,7 @@ class AngularEmitter implements Emitter<string> {
   /**
    * Whether this call's `class` value goes to a `class` input of the callee.
    * True when the callee's `Input` declares `class`; false when it does not,
-   * cannot be read, or the call has no dynamic `class` to place. Without the
+   * cannot be read, or the call has no `class` to place. Without the
    * input Angular binds `[class]` on the callee's host element, where only a
    * joined string is safe.
    */
@@ -2486,7 +2492,13 @@ class AngularEmitter implements Emitter<string> {
     target: Extract<ComponentTarget, { kind: "name" }>,
     attrs: Attr[],
   ): boolean {
-    if (!attrs.some((a) => a.kind === "dynamic" && a.name === "class")) {
+    if (
+      !attrs.some(
+        (a) =>
+          (a.kind === "dynamic" && a.name === "class") ||
+          (a.kind === "static" && a.name.toLowerCase() === "class"),
+      )
+    ) {
       return false;
     }
     const resolvedPath =
