@@ -11,7 +11,7 @@ HTML mode, concise mode, and the delimited blocks. It is written to be
 implementable and testable, not to be read as a tutorial.
 
 Its tables with a **Probes** column are normative, and each row is pinned by
-the probes it cites ([Method](#the-parser-grammar-method-the-tables-and-the-probes-are-the-specification)).
+the probes it cites ([Method](#the-parser-grammar-status-sources-of-truth-and-method-method-the-tables-and-the-probes-are-the-specification)).
 Its prose is informative. Where the language spec and `divergences.md` disagree
 or are silent, the disagreement is recorded in
 [Open questions for the language lead](#the-parser-grammar-open-questions-for-the-language-lead)
