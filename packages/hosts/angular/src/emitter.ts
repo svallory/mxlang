@@ -1614,18 +1614,27 @@ function renamedMemberChain(
 }
 
 /**
- * Does `node` declare a name that Marko scopes to the body it is written in?
- * A `<const>`, a `<define>`, or a tag call that binds its value (`/var`).
+ * Points every call of the `<define>` called `from` at `to`, in `value`: a
+ * `Component` whose target is that define. A nested `<define>` of the same
+ * name shadows it, so the walk stops at one in an array of siblings.
  */
-function declaresName(node: IrNode): boolean {
-  switch (node.kind) {
-    case "Const":
-    case "Define":
-      return true;
-    case "Component":
-      return Boolean(node.var);
-    default:
-      return false;
+function renameDefineCalls(value: unknown, from: string, to: string): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const node = item as { kind?: string; name?: string } | null;
+      if (node?.kind === "Define" && node.name === from) return;
+      renameDefineCalls(item, from, to);
+    }
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.kind === "Component") {
+    const target = record.target as { kind: string; name: string };
+    if (target.kind === "define" && target.name === from) target.name = to;
+  }
+  for (const [key, child] of Object.entries(record)) {
+    if (key !== "node") renameDefineCalls(child, from, to);
   }
 }
 
@@ -2363,19 +2372,7 @@ class AngularEmitter implements Emitter<string> {
       node.name === "html-script";
     if (code) this.codeDepth++;
     if (node.name === "svg") this.svgDepth++;
-    // Marko scopes a name a body declares to that body, an element's
-    // included. Angular scopes a `@let` (and a `#ref`) to the view, which an
-    // element does not open, so a `<const>` or `<define>` written straight in
-    // this body would be visible to the siblings and to what follows, and a
-    // second one of the same name would take the first's value. A body that
-    // declares gets a view of its own, the one `@if (true)` opens, the way an
-    // `<if>`/`<for>` body already has one.
-    const scoped = node.children.some(declaresName);
-    if (scoped) this.out.write("@if (true) {");
-    this.inScope([], () => {
-      for (const child of node.children) this.emitNode(child);
-    });
-    if (scoped) this.out.write("}");
+    for (const child of node.children) this.emitNode(child);
     if (node.name === "svg") this.svgDepth--;
     if (code) this.codeDepth--;
     this.out.write(`</${node.name}>`);
@@ -3010,6 +3007,107 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
+   * The IR the emitter walks, with each `<const>` and `<define>` written directly in a native
+   * element's body renamed to a name of its own, and every read of it in the
+   * rest of that body pointed at the new name.
+   *
+   * Marko scopes a name a body declares to that body, an element's included
+   * (`<const/n=1/><div><const/n=2/>${n}</div>${n}` reads 2, then 1). Angular
+   * scopes a `@let` to a view, and an element does not open one, so the two
+   * `@let n` would share the view and every read would get the first. Opening
+   * a view around the body (`@if (true) { … }`) would scope it, but Angular
+   * projects a control-flow block into a component's `<ng-content select>` by
+   * its single root only, so a body called into a hand-written component by
+   * selector would lose its named slots. A unique `@let` name needs no view:
+   * the DOM, the projection and the comment nodes are untouched, and the
+   * declaration's own value reads the outer `n`, which a shadowing `@let`
+   * cannot do.
+   *
+   * The rewrite is on a private copy of the IR (an emitter never mutates it),
+   * made only when such a `<const>` exists. It follows scope the way
+   * `rewriteAccessorReads` does: a nested `<const>` of the same name, a
+   * `<for>` or `<define>` parameter, and a binding inside one expression all
+   * shadow it.
+   */
+  lowerElementBodyConsts(body: IrNode[]): IrNode[] {
+    const declaresConst = (nodes: unknown): boolean =>
+      (nodes as IrNode[]).some(
+        (node) => node.kind === "Const" || node.kind === "Define",
+      );
+    const seen = new Set<object>();
+    const found = (value: unknown): boolean => {
+      if (!value || typeof value !== "object" || seen.has(value)) return false;
+      seen.add(value);
+      if (Array.isArray(value)) return value.some(found);
+      const record = value as Record<string, unknown>;
+      if (record.kind === "Element" && declaresConst(record.children)) {
+        return true;
+      }
+      return Object.entries(record).some(
+        ([key, child]) => key !== "node" && found(child),
+      );
+    };
+    if (!found(body)) return body;
+
+    const copy = cloneIr(body);
+    const walked = new Set<object>();
+    const walk = (value: unknown): void => {
+      if (!value || typeof value !== "object" || walked.has(value)) return;
+      walked.add(value);
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      if (record.kind === "Element") {
+        const children = record.children as IrNode[];
+        children.forEach((child, index) => {
+          if (child.kind === "Define") {
+            const renamed = this.gensym(`__mxDefine_${child.name}`);
+            const rest = children.slice(index + 1);
+            const own = child.params.includes(child.name) ? [] : child.children;
+            renameDefineCalls([rest, own], child.name, renamed);
+            rewriteAccessorReads(
+              [...rest, ...own],
+              new Map([
+                [
+                  child.name,
+                  {
+                    read: renamed,
+                    assignError: `\`${child.name}\` is a \`<define>\`'s value and cannot be assigned`,
+                  },
+                ],
+              ]),
+            );
+            child.name = renamed;
+            return;
+          }
+          if (child.kind !== "Const") return;
+          const renamed = this.gensym(`__mxConst_${child.name}`);
+          rewriteAccessorReads(
+            children.slice(index + 1),
+            new Map([
+              [
+                child.name,
+                {
+                  read: renamed,
+                  assignError: `\`${child.name}\` is a \`<const>\` and cannot be assigned`,
+                },
+              ],
+            ]),
+          );
+          child.name = renamed;
+        });
+      }
+      for (const [key, child] of Object.entries(record)) {
+        if (key !== "node") walk(child);
+      }
+    };
+    walk(copy);
+    return copy;
+  }
+
+  /**
    * The IR the emitter walks: the body with every read of an attributed
    * `<define>`'s name, after the define, pointed at the `@let` that holds its
    * attributes (`D.a` prints `__mxRow.a`).
@@ -3375,7 +3473,9 @@ export function emitTemplate(
     selectorPrefix,
     joinElementClass,
   );
-  for (const node of emitter.lowerDefineAttributes(ir.body)) {
+  for (const node of emitter.lowerDefineAttributes(
+    emitter.lowerElementBodyConsts(ir.body),
+  )) {
     emitter.emitNode(node);
   }
   // After emission, so a construct with its own more specific error (a

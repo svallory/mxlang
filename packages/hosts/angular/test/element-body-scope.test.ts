@@ -5,9 +5,10 @@
  * `<const/count=1/><div><const/count=2/>${count}</div>${count}` reads `2` in
  * the `<div>` and `1` after it, as it does in an `<if>`, `<for>`, `<try>` or
  * `<define>` body). Angular scopes a `@let` to the view, not to an element, so
- * a native element body that declares a name gets a view of its own; without
- * one, a `<const>` in an element body collides with an outer or sibling one
- * and every read resolves to the first.
+ * a `<const>` written in a native element body gets a `@let` name of its own,
+ * and the reads after it in that body are pointed at it. Without that, a
+ * `<const>` in an element body collides with an outer or sibling one and every
+ * read resolves to the first.
  *
  * Every case runs the emitted template through TestBed (JIT, dev mode, jsdom)
  * and reads the rendered DOM, first render and after an update.
@@ -123,9 +124,34 @@ const CASES: Array<[string, string, string]> = [
     "<div>1</div>1<div>2</div>1 1",
   ],
   [
+    "the inner value reads the outer binding it shadows",
+    "<const/a=1/><div><const/a=a+1/>${a}</div>${a}",
+    "<div>2</div>1",
+  ],
+  [
+    "a shorthand property and a template literal read the inner binding",
+    "<const/a=1/><div><const/a=2/>${[{ a }][0].a}${`t${a}`}</div>${a}",
+    "<div>2t2</div>1",
+  ],
+  [
+    "a nested arrow parameter of the same name keeps its own binding",
+    "<const/a=1/><div><const/a=2/>${[5].map((a) => a + 1).join()}${a}</div>${a}",
+    "<div>62</div>1",
+  ],
+  [
     "a <define> written in two sibling element bodies",
     "<div><define/D>x</define><D/></div><div><define/D>y</define><D/></div>",
     "<div>x</div><div>y</div>",
+  ],
+  [
+    "an inner <define> shadows an outer one of the same name",
+    "<define/D>o</define><div><define/D>i</define><D/></div><D/>",
+    "<div>i</div>o",
+  ],
+  [
+    "a <define> with a parameter written in an element body",
+    "<define/D|v|>[${v}]</define><div><define/D|v|>(${v})</define><D(1)/></div><D(2)/>",
+    "<div>(1)</div>[2]",
   ],
   [
     "concise syntax",
@@ -193,6 +219,63 @@ describe("a tag variable is scoped to the native element body that declares it",
       (root.querySelector("#in") as HTMLElement).click();
       (root.querySelector("#out") as HTMLElement).click();
       expect(page.clicks).toEqual(["2", "1"]);
+    });
+  });
+
+  // A control-flow block projects into `<ng-content select>` by its single
+  // root only, so a body must not be wrapped: a hand-written component called
+  // by selector keeps its named slots.
+  describe("a hand-written component called by selector keeps its slots", () => {
+    const CARD = `[<ng-content select="[h]"></ng-content>]D(<ng-content></ng-content>)`;
+
+    function mountWithCard(source: string): string {
+      const template = emit(source);
+      assertAngularParses(template);
+      class Card {}
+      counter += 1;
+      Component({
+        selector: "mx-card, [card]",
+        template: CARD,
+      })(Card);
+      class Page extends Probe {}
+      Component({
+        selector: `mx-element-body-scope-${counter}`,
+        imports: [Card],
+        template,
+      })(Page);
+      const fixture = TestBed.createComponent(Page);
+      fixture.detectChanges();
+      return (fixture.nativeElement as HTMLElement).innerHTML
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/=""/g, "")
+        .trim();
+    }
+
+    const BODY = "<const/a=1/><b h>${a}</b><i>body</i>";
+
+    it("as a custom element, with a declaring body of two roots", () => {
+      expect(mountWithCard(`<mx-card>${BODY}</mx-card>`)).toBe(
+        "<mx-card>[<b h>1</b>]D(<i>body</i>)</mx-card>",
+      );
+    });
+
+    it("as an attribute-selector host on a native tag", () => {
+      expect(mountWithCard(`<div card>${BODY}</div>`)).toBe(
+        "<div card>[<b h>1</b>]D(<i>body</i>)</div>",
+      );
+    });
+
+    it("when the body shadows an outer name", () => {
+      expect(
+        mountWithCard(
+          "<const/a=0/><mx-card><const/a=1/><b h>${a}</b><i>body ${a}</i></mx-card>${a}",
+        ),
+      ).toBe("<mx-card>[<b h>1</b>]D(<i>body 1</i>)</mx-card>0");
+      expect(
+        mountWithCard(
+          "<const/a=0/><div card><const/a=1/><b h>${a}</b><i>body ${a}</i></div>${a}",
+        ),
+      ).toBe("<div card>[<b h>1</b>]D(<i>body 1</i>)</div>0");
     });
   });
 });
