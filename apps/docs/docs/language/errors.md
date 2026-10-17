@@ -264,7 +264,7 @@ is the tag `a::b`.
 ### Atoms and the contract
 
 > **Being replaced.** These checks are core's atom support as it ships today;
-> they leave core with the atom removal, after which a dialect that builds
+> they leave core with the atom removal (mx-g1tw), after which a dialect that builds
 > atoms checks them itself.
 
 Atoms are a dialect feature (see the [specification](/specification/), "`:name` in an expression"). When

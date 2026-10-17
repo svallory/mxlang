@@ -31,7 +31,7 @@ const icon: CustomTag = {
 
 An attribute declaration supports:
 
-- `type`: `"string"`, `"number"`, `"boolean"`, `"expression"`, `"array"`, `"function"` or `"atom"` (`"atom"` leaves core with the atom removal; see below). `array` accepts a literal array and `function` accepts an arrow function, a function expression or the method shorthand (a function expression and the method shorthand reach the contract only on a host that resolves attribute methods, `resolveAttributeMethod`; any other host rejects them before the contract runs); a literal of another type is an error, while an identifier, call, member or conditional is accepted because its type is unknowable.
+- `type`: `"string"`, `"number"`, `"boolean"`, `"expression"`, `"array"`, `"function"` or `"atom"` (`"atom"` leaves core with the atom removal (mx-g1tw); see below). `array` accepts a literal array and `function` accepts an arrow function, a function expression or the method shorthand (a function expression and the method shorthand reach the contract only on a host that resolves attribute methods, `resolveAttributeMethod`; any other host rejects them before the contract runs); a literal of another type is an error, while an identifier, call, member or conditional is accepted because its type is unknowable.
 - `items`: with `type: "array"`, the literal element type (`"string"`, `"number"` or `"boolean"`). A non-literal element passes. `items` without `type: "array"`, and `enum` with `array` or `function`, are registration errors.
 - `required`: reject a call that omits the attribute.
 - `enum`: accept only one of the listed string literals.
@@ -46,7 +46,7 @@ Declaring `attributes` makes a closed contract: undeclared attributes and spread
 
 > **Being replaced.** `type: "atom"` is core's atom support as it ships today.
 > Atoms are a dialect feature: the `atom` type leaves core with the atom
-> removal, and a dialect that wants atoms checks them through
+> removal (mx-g1tw), and a dialect that wants atoms checks them through
 > `contractFields`, `checkContract` and `afterLower`.
 
 `type: "atom"` accepts a whole-value atom that a dialect built. An atom where the contract says `string` (or any other non-atom type), and a string where it says `atom`, are type errors (``attribute `x` must be string, got atom``), positioned at the value.

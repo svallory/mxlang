@@ -9,7 +9,7 @@ description: "Catalogue of MX's own syntax tree: where it departs from Marko's A
 > describes Marko's AST, the starting point; sections 2 to 9 specify the MX
 > node types, their positions and errors, and how the front end and lowering
 > use them. Where a section describes interim code that the AST replaces (the
-> IR's atoms in §4.3, which leave core with the atom removal, and the
+> IR's atoms in §4.3, which leave core with the atom removal (mx-g1tw), and the
 > shorthand merge in §6.1a), it says so. Every statement about Marko,
 > htmljs-parser or the current code cites the file and symbol it was read
 > from (Marko's installed bundle by line), or a probe that was run.
