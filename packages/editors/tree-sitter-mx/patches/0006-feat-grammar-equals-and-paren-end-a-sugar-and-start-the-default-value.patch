@@ -3,7 +3,7 @@ From: Saulo Vallory <saulovallory@gmail.com>
 Date: Mon, 5 Oct 2026 14:00:00 -0300
 Subject: [PATCH] feat(grammar): `=` and `(` end a sugar and start the default value
 
-Decision 146 addendum 4. `#x=1`, `.c=1`, `:x=input.y` and `<input:x=1/>` were
+`#x=1`, `.c=1`, `:x=input.y` and `<input:x=1/>` were
 errors (the scanner refused a value right after a shorthand); they now parse
 as the shorthand followed by the tag's default value, as `kind #name({ p }) {
 b }` and `kind (p) { b } #name` already did. `src/scanner.c` drops
@@ -21,7 +21,7 @@ index bb889be7a..26b2e0352 100644
      "<a x=y as T/>",
      "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
    ],
-+  // Decision 146 addendum 4: `=` and `(` cannot be part of a sugar, so they end
++  // `=` and `(` cannot be part of a sugar, so they end
 +  // it and start the tag's default value (or method). Formerly errors.
    [
 -    "name with value is an error",
@@ -107,7 +107,7 @@ index 51882c919..d07584e76 100644
 -// MX: a value on the sugar (`:x=1`, or `#x=1` / `.x=1` in attribute
 -// position) is an error: the sugar is the whole attribute.
 -static bool shorthand_takes_no_value(Scanner *s, int32_t c, int32_t n1) {
-+// MX (decision 146 addendum 4): `=` and `(` end a sugar and start the default
++// MX: `=` and `(` end a sugar and start the default
 +// value, but a bound `:=` is not supported on one: it stays an error.
 +static bool shorthand_takes_no_bound_value(Scanner *s, int32_t c, int32_t n1) {
    if (!s->in_shorthand) return false;
@@ -122,7 +122,7 @@ index 51882c919..d07584e76 100644
        return valid[TAG_NAME_EMPTY] ? 1 : 0;
      }
 -    if (shorthand_takes_no_value(s, c, n1)) return 0;
-+    // MX (decision 146 addendum 4): `=` and `(` cannot be part of a sugar,
++    // MX: `=` and `(` cannot be part of a sugar,
 +    // so they end it and start the tag's default value / method.
 +    if (shorthand_takes_no_bound_value(s, c, n1)) return 0;
      finalize_tag_name(s, c);

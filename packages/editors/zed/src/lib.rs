@@ -4,7 +4,7 @@ use zed_extension_api::{self as zed, LanguageServerId, Result};
 // auto-detects the `--stdio` transport). Unlike marko-js/zed's `MarkoExtension`
 // (which downloads @marko/language-server from npm into the extension's own
 // working directory), this extension does no installation of its own — see
-// decision 77 / the brief: "keep it minimal: no settings, no downloads".
+// the brief: "keep it minimal: no settings, no downloads".
 //
 // Resolution order, cheapest and most explicit first:
 //   1. A local install under the worktree, detected via `Worktree::read_text_file`

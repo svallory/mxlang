@@ -6,12 +6,11 @@ Ships seven languages:
   tree-sitter grammar, `[grammars.mx]` from `packages/editors/tree-sitter-mx`:
   `marko-js/tree-sitter` at `7fb20382b9b0c97c8bdbceee0e0641bea11dd00f`
   (`@marko/tree-sitter` v0.2.0, the rev the official `marko-js/zed` extension
-  pins) plus the decision 146 shorthands (`:name`, and `#id`/`.class`/`:name`
-  in attribute position). `scripts/vendor.sh` builds `languages/mx/*.scm`:
+  pins) plus the name-sugar shorthands (`:name`, and `#id`/`.class`/`:name` in
+  attribute position). `scripts/vendor.sh` builds `languages/mx/*.scm`:
   highlights and injections from that package's `queries/`, brackets and
-  outline from `base/mx/` (taken from `marko-js/zed`). Decision 72 had `.mx`
-  ride Marko's grammar unmodified; since decision 146 MX syntax is a superset
-  of Marko's, so MX owns its grammar (decision 72 addendum, `UPSTREAM.md`).
+  outline from `base/mx/` (taken from `marko-js/zed`). Marko's grammar
+  misparses the name sugar, so MX owns its grammar (see `UPSTREAM.md`).
   Real `.marko` files are covered by installing the official
   [`marko-js/zed`](https://github.com/marko-js/zed) extension directly, a
   separate `Marko` language (and `marko` grammar) unrelated to this one.
@@ -53,7 +52,7 @@ silently skipping the build.
 
 ## Language server
 
-`@mxlang/language-server` (decision 71/72/77) is a diagnostics-only LSP
+`@mxlang/language-server` is a diagnostics-only LSP
 server; see `packages/tooling/language-server/README.md` for what it does and does
 not do. This package's `src/lib.rs` resolves the command to launch it, in
 order:
@@ -169,7 +168,7 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
 - `HonoMX` (`.hono.mx`): the same again, with Hono host diagnostics from
   `@mxlang/language-server`.
 
-`.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx` (decision 134):
+`.astro.mx` follows the same rule as `.solid.mx` and `.ng.mx`:
 it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks
 `AstroMX`.
 
@@ -248,7 +247,7 @@ See `UPSTREAM.md` "Bump procedure — Solid" for the full steps.
 
 There is no `vendor:check` script — Solid's highlights source is a local
 sibling package, not a networked upstream, so a "check for drift" mode could
-only ever report success (decision 55: a gate that cannot fail is not a
+only ever report success (a gate that cannot fail is not a
 gate). `.github/workflows/upstream-check.yml`'s `vendored-files-match` job
 does the check that matters instead: regenerate and diff against committed
 output.
@@ -257,7 +256,7 @@ output.
 
 The Zed extension registry needs a repo whose **root** holds
 `extension.toml` (a submodule pinned to a commit, plus an `extensions.toml`
-entry — see `notes/zed-plan.md` decision 6). This monorepo's
+entry). This monorepo's
 `packages/editors/zed` is not that shape, so at publish time:
 
 ```sh

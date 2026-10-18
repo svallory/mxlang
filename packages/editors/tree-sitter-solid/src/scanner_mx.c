@@ -3,7 +3,7 @@
 // This file is MX's own. Upstream's shared scanner is included as
 // `common/scanner.h` and is NOT edited: keeping the MX additions here means an
 // upstream bump that changes `scanner.h` fails loudly at the vendor step
-// instead of silently merging into our code (plan decision 5, Z2).
+// instead of silently merging into our code.
 //
 // ---------------------------------------------------------------------------
 // WHAT THIS SCANNER DOES

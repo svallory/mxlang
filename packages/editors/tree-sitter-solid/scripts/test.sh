@@ -27,9 +27,9 @@ cd "$HERE"
 # vendor/ is .gitignore'd, so a freshly created worktree has none and every
 # step below fails with "Failed to load language" — the grammar cannot compile
 # without the vendored tsx scanner. Vendoring here rather than documenting it as
-# manual setup: `bun run verify` is supposed to pass from a clone (decision 59),
-# and a gate that needs an undocumented prerequisite is a gate that fails for
-# reasons unrelated to the change under test.
+# manual setup: `bun run verify` is supposed to pass from a clone, and a gate
+# that needs an undocumented prerequisite is a gate that fails for reasons
+# unrelated to the change under test.
 if [ ! -d "vendor/tree-sitter-typescript" ]; then
   echo "==> vendor/ is absent (fresh worktree); running scripts/vendor.sh"
   ./scripts/vendor.sh

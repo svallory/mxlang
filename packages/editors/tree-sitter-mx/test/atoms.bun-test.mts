@@ -1,4 +1,4 @@
-// MX's own test (not vendored): decision 156 atoms. `:name` where an
+// MX's own test (not vendored): atoms. `:name` where an
 // expression is expected (attribute values, placeholders, tag and attribute
 // arguments, method bodies) is an `atom` node inside the expression node,
 // `::name` is one `reserved_atom` token, and the highlight query captures
@@ -10,9 +10,8 @@
 // mesh notes/team-lead-2026-10-04/briefs/syntax-v3.md), which put an ERROR at
 // the root on 0.1.0-alpha.1 because of its tagless `:name=value` lines.
 //
-// The last block is the default attribute's value (decision 151 ruling 2 and
-// decision 146 addendum 5): the scanner does not end it at a sugar, except
-// after a single atom.
+// The last block is the default attribute's value: the scanner does not end it
+// at a sugar, except after a single atom.
 import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
@@ -251,11 +250,11 @@ describe("atoms: positions (ADR 156)", () => {
 });
 
 // A default attribute's value is the tag's `value=` with no name before the
-// `=`. Decision 151 ruling 2 exempts it from the after-value rule, so `.ident`
-// and `:ident` after whitespace stay part of the value (member access, as in
-// Marko); decision 146 addendum 5 splits it at `:name` when the value is a
-// single atom. A named attribute (and a spread) keep the rule. Same trees in
-// html and concise mode; the values and the sugar as written.
+// `=`. It is exempt from the after-value rule, so `.ident` and `:ident` after
+// whitespace stay part of the value (member access, as in Marko), but it is
+// split at `:name` when the value is a single atom. A named attribute (and a
+// spread) keep the rule. Same trees in html and concise mode; the values and
+// the sugar as written.
 function shape(src: string): [values: string[], sugar: string[]] {
   const doc = root(src);
   assert.ok(!doc.hasError, doc.toString());
@@ -270,7 +269,7 @@ function shape(src: string): [values: string[], sugar: string[]] {
 }
 
 const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
-  // --- decision 151 ruling 2: the default value is exempt (html mode)
+  // --- the default value is exempt (html mode)
   ["<if=a .b></if>", ["=a .b"], []],
   ["<if=a :b></if>", ["=a :b"], []],
   ["<if=a ?? b :c></if>", ["=a ?? b :c"], []],
@@ -284,7 +283,7 @@ const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
   ["<if=a b=1 .c></if>", ["=a", "=1"], [".c"]],
   // A spread is not exempt.
   ["<x ...a.b :c/>", ["...a.b"], [":c"]],
-  // --- decision 146 addendum 5: a single atom splits at `:name`
+  // --- a single atom splits at `:name`
   ["<x=:Customer :customer/>", ["=:Customer"], [":customer"]],
   ["<x=:A.b :c/>", ["=:A.b :c"], []],
   ["<x=:a + :b/>", ["=:a + :b"], []],

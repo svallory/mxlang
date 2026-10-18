@@ -1,4 +1,4 @@
-// MX decision 146: `#id`, `.class` and `:name` shorthands anywhere in a
+// MX name sugar: `#id`, `.class` and `:name` shorthands anywhere in a
 // tag: tag-adjacent in any order, and in attribute position (first, or after
 // any attribute) in html and concise mode. htmljs-parser has no `:name`
 // sugar and reads the attribute-position forms differently (see the ADR), so
@@ -183,7 +183,7 @@ const CASES: [name: string, src: string, tree: string][] = [
     "<a x=y as T/>",
     "(document (element (open_tag_start) (tag_name (tag_name_fragment)) (attr_name) (attr_value (attr_eq) (attr_value_expr)) (open_tag_end_self) (element_end)))",
   ],
-  // Decision 146 addendum 4: `=` and `(` cannot be part of a sugar, so they end
+  // `=` and `(` cannot be part of a sugar, so they end
   // it and start the tag's default value (or method). Formerly errors.
   [
     "name with a value sets the default value",

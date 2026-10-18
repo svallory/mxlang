@@ -4,7 +4,7 @@ Date: Mon, 5 Oct 2026 20:40:00 -0300
 Subject: [PATCH] fix(grammar): a default attribute's value is not ended at a
  sugar
 
-Decision 151 ruling 2 and decision 146 addendum 5. The scanner ended *every*
+The scanner ended *every*
 attribute value at whitespace followed by `.ident` or `:ident`, so the editor
 read `<if=a .b>` and `<a=1 .d=2/>` as shorthand attributes where core keeps
 member access and the value whole (TODO
@@ -13,7 +13,7 @@ tree-sitter-mx-default-attr-exemption).
 - `src/scanner.c`: `attr_default_value` is set at the `=` (or a nameless
   `:=`) that starts a value and cleared by a spread, so the split is skipped
   for the tag's default value only; a named attribute (and a spread) keep the
-  rule. The one exception is decision 146 addendum 5: a default value that is
+  rule. The one exception: a default value that is
   a single atom still ends at `:name` (`belongs-to=:Customer :customer`),
   which `after_single_atom` recognises from the resumed expression state. The
   flag is serialized.
@@ -32,7 +32,7 @@ index f8a754a8d..67c6a87bd 100644
    uint8_t attr_stage;  // ATTR_*
    uint8_t attr_has_args;
    uint8_t attr_has_type_params;
-+  // MX (decision 151 ruling 2): the attribute whose value is being scanned has
++  // MX: the attribute whose value is being scanned has
 +  // no name and no spread (the tag's default value), so the after-value sugar
 +  // rule is exempt: `.ident` and `:ident` stay part of the value. Set at the
 +  // `=` / `:=`; a name scanned before it, or a spread, turns it off.
@@ -44,7 +44,7 @@ index f8a754a8d..67c6a87bd 100644
    }
  }
  
-+// MX (decision 146, addendum 5): the expression resumed from an atom (the
++// MX: the expression resumed from an atom (the
 +// only thing it contains so far) and has consumed nothing since: the value is
 +// a single atom, and ` :name` after it is the name sugar. `s->buf` is emptied
 +// when the split resumes (es_init), so whitespace-only means nothing at all
@@ -68,7 +68,7 @@ index f8a754a8d..67c6a87bd 100644
 -    if (e->cfg.split_at_shorthand && is_ident_start_code(es_peek(es, k + 1)) &&
 +    // MX: after whitespace, `.ident` and `:ident` (no open `?`) begin a
 +    // shorthand attribute instead of continuing the value. A default
-+    // attribute (no name, no spread) is exempt (decision 151, ruling 2), so
++    // attribute (no name, no spread) is exempt, so
 +    // the sugar stays part of the value (`<if=a .b>` is member access,
 +    // `<if=a :b>` one value) and the value keeps Marko's meaning.
 +    bool exempt = s->attr_default_value &&
@@ -85,7 +85,7 @@ index f8a754a8d..67c6a87bd 100644
    // ---- ATTRIBUTE.parse dispatch
    if (c == '=') {
      if (!valid[ATTR_EQ]) return false;
-+    // MX (decision 151, ruling 2): no name was scanned (the tag's default
++    // MX: no name was scanned (the tag's default
 +    // value), so the after-value sugar rule does not apply to this value.
 +    s->attr_default_value = (s->attr_stage != ATTR_NAME_STAGE);
      es_next_mark(es);

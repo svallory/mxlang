@@ -68,8 +68,8 @@ const injectable = new Map([
  * Capture names whose class is a name of MX's own rather than the capture's.
  * The query uses the editor-theme names so Zed colours them, and pages get a
  * class that says what the text is: an atom value (`:draft` in
- * `default=:draft`, decision 156) is `ts-atom`, and every name-sugar form
- * (`:name`, tag-adjacent or in attribute position, decision 146) is `ts-name`.
+ * `default=:draft`) is `ts-atom`, and every name-sugar form (`:name`,
+ * tag-adjacent or in attribute position) is `ts-name`.
  */
 const RENAMED = new Map([
   ["string.special.symbol", "ts-atom"],
