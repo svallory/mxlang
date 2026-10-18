@@ -4648,7 +4648,6 @@ function secondDefaultExportIn(
   for (const statement of body) {
     if (statement.type !== "ImportDeclaration") continue;
     for (const specifier of statement.specifiers ?? []) {
-      if (typeOnlyCounts) continue;
       if (statement.importKind === "type" || specifier.importKind === "type")
         typeOnly.add(specifier.local?.name);
     }
@@ -4976,7 +4975,7 @@ function refuseUnsupportedImport(node: Node): void {
  * empty statement, as in Marko: it declares and runs nothing.
  */
 function staticBody(line: string): string {
-  return line === "static" ? "" : line.replace(/^static\s+/, "");
+  return line.replace(/^static\s*/, "");
 }
 
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
@@ -5001,7 +5000,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     ctx,
     node,
     name === "static" ? staticBody(line) : line,
-    name === "static" ? (/^static\s+/.exec(line)?.[0].length ?? 0) : 0,
+    name === "static" ? (/^static\s*/.exec(line)?.[0].length ?? 0) : 0,
     name,
   );
 

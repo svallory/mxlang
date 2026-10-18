@@ -34,6 +34,8 @@ const LONE_STATIC: [string, string][] = [
     "a lone static before a static statement",
     "static\nstatic const a = 1\n<div/>",
   ],
+  ["a lone static with only a semicolon", "static;\n<div/>"],
+  ["a lone static in concise mode", "div\n  span\nstatic\n"],
   ["a lone static after a tag", "<div/>\nstatic\n<span/>"],
   ["a lone static with trailing spaces", "static   \n<div/>"],
 ];
