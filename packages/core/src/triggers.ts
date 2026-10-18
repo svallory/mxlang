@@ -467,7 +467,7 @@ function refuseRowInModuleStatement(
   const at = container.start + hit.start;
   raise(
     INVALID_TRIGGER_USE_CODE,
-    `\`${text}\` (the \`${hit.row.id}\` trigger) cannot be written in a \`${owner.keyword}\` statement: the trigger lowers inside an expression of the template, and a module statement runs outside it. Move it into a \`<const>\` or write it in the template`,
+    `\`${text}\` (the \`${hit.row.id}\` trigger) cannot be written in ${owner.keyword === "export" ? "an" : "a"} \`${owner.keyword}\` statement: the trigger lowers inside an expression of the template, and a module statement runs outside it. Move it into a \`<const>\` or write it in the template`,
     { type: "MxTrigger", start: at, end: container.start + hit.end },
   );
 }

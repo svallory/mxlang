@@ -28,7 +28,7 @@ function lowered(source: string, dialect?: Dialect) {
 }
 
 const MESSAGE = (text: string, id: string, keyword = "static") =>
-  `\`${text}\` (the \`${id}\` trigger) cannot be written in a \`${keyword}\` statement: the trigger lowers inside an expression of the template, and a module statement runs outside it. Move it into a \`<const>\` or write it in the template`;
+  `\`${text}\` (the \`${id}\` trigger) cannot be written in ${keyword === "export" ? "an" : "a"} \`${keyword}\` statement: the trigger lowers inside an expression of the template, and a module statement runs outside it. Move it into a \`<const>\` or write it in the template`;
 
 describe("a dialect expression row in a static statement", () => {
   const cases: [string, string, number, number, string][] = [
