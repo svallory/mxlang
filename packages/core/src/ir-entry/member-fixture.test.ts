@@ -407,8 +407,19 @@ describe("a `member:Member` contract slot", () => {
     expect(run("member:Member", "&dueOn")).toEqual([]);
   });
 
-  it("`member:Member` passes an expression with no knowable type, as any node-type slot does", () => {
-    expect(run("member:Member", "slot=(a.b)")).toEqual([]);
+  it("`member:Member` refuses an expression that is no member, in the fixture's words (core passes it)", () => {
+    const result = lowerSource("sort slot=(a.b)\n", "/v/entity.mx", {
+      dialect: memberSyntax,
+      customTags: { sort: contract("member:Member") },
+    });
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        message: "attribute `slot` must be a member, got an expression",
+        code: "FIXTURE_MEMBER_SLOT",
+        line: 1,
+        column: 11,
+      }),
+    ]);
   });
 
   it("`expression` accepts a member", () => {
@@ -513,14 +524,52 @@ describe("one member per slot, and the member type's refusals", () => {
     ...memberSyntax,
     nodeTypes: { ...memberSyntax.nodeTypes, ...atomSyntax.nodeTypes },
   };
-  const slot = (type: "member:Member" | "member:Atom", source: string) =>
-    parse(source, {
+  const slot = (
+    type: "member:Member" | "member:Atom",
+    source: string,
+    full = false,
+  ) => {
+    const { diagnostics } = parse(source, {
       dialect: withAtoms,
       customTags: { sort: { attributes: { load: { type } } } },
-    }).diagnostics.map((d) => d.message);
+    });
+    return full ? diagnostics : diagnostics.map((d) => d.message);
+  };
 
   it("M5: a `member:Member` slot accepts a dynamic value that is one member", () => {
     expect(slot("member:Member", "sort load=&visible\n")).toEqual([]);
+  });
+
+  it.each([
+    ["sort load=(&visible && x)\n", 11],
+    ["sort load=(a.b)\n", 11],
+  ])(
+    "M5: a `member:Member` slot refuses an expression around a member: %j",
+    (source, column) => {
+      const diagnostics = slot("member:Member", source, true);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          message: "attribute `load` must be a member, got an expression",
+          code: "FIXTURE_MEMBER_SLOT",
+          line: 1,
+          column,
+        }),
+      ]);
+    },
+  );
+
+  it("`sort load=&visible` is a dynamic attribute whose expression is one member node and its forward", () => {
+    const [sort] = tags(
+      ir("sort load=&visible\n", "/v/entity.mx", { dialect: memberSyntax })
+        .body,
+    );
+    const load = attrNamed(sort as SpannedTag, "load");
+    if (load.kind !== "dynamic") throw new Error(load.kind);
+    expect(load).not.toHaveProperty("node");
+    expect(load.value.code).toBe("self.visible");
+    expect(load.value.nodes).toHaveLength(1);
+    expect(load.value.nodes?.[0]?.type).toBe("member:Member");
+    expect(load.value.nodes?.[0]?.forward).toBe(load.value.node);
   });
 
   it("M5: a `member:Member` slot refuses a string, as any node-type slot does", () => {
@@ -571,8 +620,22 @@ describe("one member per slot, and the member type's refusals", () => {
       expect.objectContaining({
         message:
           "one member per slot: `&d` cannot also set `member`, which the member at 1:10 already holds",
+        code: "MX_INVALID_TRIGGER_USE",
         line: 1,
         column: 12,
+        end: expect.objectContaining({ line: 1, column: 14 }),
+      }),
+    ]);
+  });
+
+  it("`once` also refuses a written attribute of the slot's name after a member", () => {
+    const result = parse("sort &d member=x\n");
+    expect(result.ir).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "MX_INVALID_TRIGGER_USE",
+        line: 1,
+        column: 8,
       }),
     ]);
   });
@@ -604,7 +667,7 @@ describe("a dialect that still relies on the old member marks", () => {
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         message: expect.stringContaining(
-          "an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value or a node of a registered type",
+          '`{ kind: "member" }` was removed; register a member node type and place `{ type: "<id>:Member", name, span }`',
         ),
         line: 1,
         column: 9,

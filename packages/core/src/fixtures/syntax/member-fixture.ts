@@ -59,6 +59,21 @@ export interface MemberNode {
   readonly span: { readonly sourceStart: number; readonly sourceEnd: number };
 }
 
+/** The expression inside a type wrapper (`x as T`, `x!`, `x satisfies T`, `<T>x`, `(x)`). */
+function unwrapped(node: object): object {
+  let current = node as { type?: string; expression?: object };
+  while (
+    current.expression &&
+    (current.type === "TSAsExpression" ||
+      current.type === "TSNonNullExpression" ||
+      current.type === "TSSatisfiesExpression" ||
+      current.type === "TSTypeAssertion" ||
+      current.type === "ParenthesizedExpression")
+  )
+    current = current.expression as typeof current;
+  return current;
+}
+
 const memberSyntax = {
   id: "member",
   name: "Fixture",
@@ -114,6 +129,38 @@ const memberSyntax = {
           ctx.attribute("name", name),
           ...(ctx.value ? [ctx.attribute("value", ctx.value)] : []),
         ]);
+    }
+  },
+  afterLower(unit) {
+    // A `member:Member` slot takes a member and nothing else. Core's node-type
+    // check passes an expression with no knowable type (`a.b`, `&a && x`);
+    // this refuses it: the value is a member node, or an expression that is
+    // exactly one member node's forward.
+    for (const call of unit.calls) {
+      for (const attr of call.attrs) {
+        if ("spread" in attr || attr.value?.type !== "mx:Expression") continue;
+        if (call.contract.attributes?.[attr.name]?.type !== "member:Member")
+          continue;
+        const expression = attr.value as unknown as {
+          node: object;
+          span?: { sourceStart: number; sourceEnd: number };
+          nodes?: readonly { type: string; forward: object }[];
+        };
+        const [only, ...rest] = expression.nodes ?? [];
+        if (
+          only?.type === "member:Member" &&
+          rest.length === 0 &&
+          only.forward === unwrapped(expression.node)
+        )
+          continue;
+        unit.fail(
+          `attribute ${attr.label} must be a member, got an expression`,
+          {
+            code: "FIXTURE_MEMBER_SLOT",
+            ...(expression.span ? { at: expression.span } : {}),
+          },
+        );
+      }
     }
   },
 } satisfies Dialect;

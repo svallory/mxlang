@@ -5239,7 +5239,7 @@ row's id and `<text>` for the trigger's text:
 | The hook returns an object it did not build | `` the `<id>` trigger's `lowerTrigger` must return what `ctx.expression`, `ctx.attribute` or `ctx.child` built `` |
 | The hook throws | `` the `<id>` trigger's `lowerTrigger` threw: <message> `` (a `TranslateError` it throws is kept as is) |
 | `ctx.expression` is not given a Babel expression node | `` the `<id>` trigger's `lowerTrigger`: `ctx.expression` takes a Babel expression node, got <what> `` |
-| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value, `{ kind: "member", name }` or a node of a registered type (`{ type: "dialect:Type", … }`)`` |
+| A bad constructor argument | ``the `<id>` trigger's `lowerTrigger`: `ctx.attribute` takes a non-empty attribute name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes a non-empty tag name``; ``the `<id>` trigger's `lowerTrigger`: `ctx.child` takes an array of `ctx.attribute` results``; ``the `<id>` trigger's `lowerTrigger`: an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value or a node of a registered type (`{ type: "dialect:Type", … }`)`` |
 | The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
@@ -5373,7 +5373,8 @@ starts with (for top-level `|` alternatives, the prefix they all share), else th
 be identical to a mark of another, whatever the position. Two literal marks are
 identical when they are the same text; two character sets, when they share a
 character; a literal and a character set, when the literal is one character of
-the set; character sets are compared by first character. A prefix is not a clash: `%`, `%.` and `%:` may all be installed,
+the set. A character set is the first characters its `chars` lists; the rest
+of `match` is not compared. A prefix is not a clash: `%`, `%.` and `%:` may all be installed,
 since a file is read with the table of the one dialect it routes to, so the
 marks of different dialects never compete in one scanner. Within one table, one first character arms at most one row per list, and
 a table with two rows on one first character is refused when it is validated.

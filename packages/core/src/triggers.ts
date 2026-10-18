@@ -960,6 +960,13 @@ function checkAttributeValue(
     ) {
       return;
     }
+    if ((value as { kind?: unknown }).kind === "member") {
+      raise(
+        DIALECT_HOOK_ERROR_CODE,
+        `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`{ kind: "member" }\` was removed; register a member node type and place \`{ type: "<id>:Member", name, span }\``,
+        trigger,
+      );
+    }
     const type = (value as { type?: unknown }).type;
     if (isRegistryKey(type)) {
       const registered = nodeTypeRegistry(dialect).get(type);
