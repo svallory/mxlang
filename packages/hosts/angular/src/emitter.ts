@@ -1682,7 +1682,8 @@ function visitIrRecords(
 
 /**
  * How many times each name is declared in `body`: a `<const>`, a `<define>`
- * and its parameters, a `<for>` parameter, a tag call's `/var`. A destructuring
+ * and its parameters, a `<for>` parameter, a tag call's `/var`, an Angular
+ * template reference or variable. A destructuring
  * pattern counts every identifier in it, which can only over-count.
  */
 function declaredNameCounts(body: IrNode[]): Map<string, number> {
@@ -1694,6 +1695,19 @@ function declaredNameCounts(body: IrNode[]): Map<string, number> {
     }
   };
   visitIrRecords(body, (record) => {
+    // An Angular template reference (`#a`, `ref-a`), a template variable
+    // (`let-a` on an `<ng-template>`) and a structural directive's microsyntax
+    // (`*ngFor="let a of xs"`, `*ngIf="x as a"`) declare names in the view.
+    if (Array.isArray(record.attrs)) {
+      for (const attr of record.attrs as Array<{
+        name?: string;
+        value?: unknown;
+      }>) {
+        const written = /^(?:#|ref-|let-)(.+)$/.exec(attr.name ?? "");
+        if (written) declare(written[1]);
+        if (attr.name?.startsWith("*")) declare(attr.value);
+      }
+    }
     switch (record.kind) {
       case "Const":
         declare(record.name);

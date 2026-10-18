@@ -161,7 +161,9 @@ function authoredNamesIn(
   );
   if (!region) return message;
   let result = message;
-  for (const [generated, authored] of Object.entries(region.authoredNames)) {
+  for (const [generated, authored] of Object.entries(
+    region.authoredNames ?? {},
+  )) {
     result = result.replace(
       new RegExp(
         `(?<![\\w$])${generated.replace(/\$/g, "\\$")}(?![\\w$])`,

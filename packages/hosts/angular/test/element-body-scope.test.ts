@@ -167,6 +167,21 @@ describe("a tag variable is scoped to the native element body that declares it",
     });
   }
 
+  // A template reference or variable of the same name is in the same view as a
+  // `@let`, and Angular refuses the pair (NG8017): the const is renamed.
+  describe("beside an Angular template reference or variable of the same name", () => {
+    it("an #a on an input renders the const", () => {
+      expect(
+        mount("<main><input #a/><div><const/a=1/>${a}</div></main>").html(),
+      ).toBe("<main><input><div>1</div></main>");
+    });
+    it("a ref-a on an input renders the const", () => {
+      expect(
+        mount("<main><input ref-a/><div><const/a=1/>${a}</div></main>").html(),
+      ).toBe("<main><input><div>1</div></main>");
+    });
+  });
+
   // Controls: these already scoped on main (their body is a view).
   describe("controls", () => {
     it("an <if> body", () => {

@@ -44,6 +44,7 @@ function messages(template: string, code: number): string[] {
 }
 
 const UNUSED_LET = -998112;
+const DUPLICATE_LET = -998017;
 const TWO_WAY_LET = -99998005;
 
 describe("an Angular diagnostic about a <const> names it as written", () => {
@@ -65,6 +66,25 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       expect(found).toHaveLength(1);
       expect(found[0]).toContain("non-signal @let declaration 'a'");
       expect(found[0]).not.toContain("__mx");
+    });
+  });
+
+  describe("when an Angular template reference or variable has the name", () => {
+    it.each([
+      ["a #ref", "<main><input #a/><div><const/a=1/>${a}</div></main>"],
+      [
+        "a ref- reference",
+        "<main><input ref-a/><div><const/a=1/>${a}</div></main>",
+      ],
+      [
+        "an <ng-template> variable",
+        "<main><ng-template let-a><div><const/a=1/>${a}</div></ng-template></main>",
+      ],
+    ])("%s: no NG8017, the @let is renamed", (_label, source) => {
+      expect(messages(source, DUPLICATE_LET)).toEqual([]);
+      expect(compileNgMx(ngMx(source), "/p/x.component.ng.mx").code).toContain(
+        "@let __mxConst_a = 1;",
+      );
     });
   });
 

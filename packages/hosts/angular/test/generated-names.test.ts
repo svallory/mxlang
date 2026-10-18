@@ -80,6 +80,31 @@ const RENAMED: Array<[string, string, string]> = [
     "<div><ng-template #__mxDefine_D> x </ng-template></div><div><ng-template #__mxDefine_D1> y </ng-template></div>",
   ],
   [
+    "a template reference has the name",
+    "<main><input #a/><div><const/a=1/>${a}</div></main>",
+    "<main><input #a><div>@let __mxConst_a = 1;{{ __mxConst_a }}</div></main>",
+  ],
+  [
+    "a ref- template reference has the name",
+    "<main><input ref-a/><div><const/a=1/>${a}</div></main>",
+    "<main><input ref-a><div>@let __mxConst_a = 1;{{ __mxConst_a }}</div></main>",
+  ],
+  [
+    "an <ng-template> variable has the name",
+    "<main><ng-template let-a><div><const/a=1/>${a}</div></ng-template></main>",
+    "<main><ng-template let-a><div>@let __mxConst_a = 1;{{ __mxConst_a }}</div></ng-template></main>",
+  ],
+  [
+    "a structural directive declares the name",
+    '<ul><li *ngFor="let a of items"><div><const/a=1/></div></li></ul>',
+    '<ul><li *ngFor="let a of items"><div>@let __mxConst_a = 1;</div></li></ul>',
+  ],
+  [
+    "a structural directive declares the name with as",
+    '<main><div *ngIf="x as a"><const/a=1/></div></main>',
+    '<main><div *ngIf="x as a">@let __mxConst_a = 1;</div></main>',
+  ],
+  [
     "the name is read after the body, where it means something else",
     "<div><const/x=1/>${x}</div>${x}",
     "<div>@let __mxConst_x = 1;{{ __mxConst_x }}</div>{{ x }}",
