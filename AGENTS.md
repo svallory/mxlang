@@ -74,6 +74,7 @@ The docs highlight every ```` ```mx ```` fence, and the landing example, with th
   translator source/test files listed in `biome.json`. Those strings
   intentionally contain Marko `${...}` syntax or generated JavaScript
   template source and must remain ordinary string literals.
+- `scripts/biome-plugins/no-declare-call-statement.grit` (a Biome plugin, error severity everywhere) bans the statement `declare(x);`: Bun 1.3.14, the CI pin, erases it as an ambient declaration under `bun run`, `bun test` and `bun build` (fixed in Bun 1.4.2). Rename the helper; method calls and expression uses are unaffected.
 - `packages/targets/html/src/translate.test.ts` keeps
   `noTemplateCurlyInString` enabled at info severity because its existing
   occurrence-level suppressions would become stale if the rule were disabled.

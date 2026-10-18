@@ -1,0 +1,9 @@
+// Bun 1.3.14 (the CI pin) erases a statement `declare(x);` as an ambient
+// declaration under `bun run`, `bun test` and `bun build`. Fixed in Bun 1.4.2.
+// Other TypeScript keyword names (abstract, namespace, module, type, global,
+// readonly, as, satisfies, ...) were probed on 1.3.14 and are kept.
+// Method calls (`x.declare()`) and expression uses (`const y = declare(x)`)
+// are kept too, so only the statement form is matched.
+JsExpressionStatement(expression=`declare($args)`) as $statement where {
+  register_diagnostic(span=$statement, message="The statement `declare(...)` is erased by Bun 1.3.14's TypeScript transpiler as an ambient declaration. Rename the helper.", severity="error")
+}
