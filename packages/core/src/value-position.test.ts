@@ -297,7 +297,7 @@ describe("a value node's `lower` may return `ctx.expression`", () => {
     });
   });
 
-  it("a string literal whose `lower` marks it (`extra.mxAtom`) is still a static attribute with the node beside it; core reads no mark", () => {
+  it("a string literal a node's `lower` returns is a static attribute with the node beside it; the literal carries no mark", () => {
     const atoms: Dialect = {
       ...REF_DIALECT,
       nodeTypes: {
@@ -308,11 +308,7 @@ describe("a value node's `lower` may return `ctx.expression`", () => {
             return ctx.expression({
               type: "StringLiteral",
               value: name,
-              extra: {
-                raw: JSON.stringify(name),
-                rawValue: name,
-                mxAtom: { span: node.span },
-              },
+              extra: { raw: JSON.stringify(name), rawValue: name },
             });
           },
         } satisfies NodeType<Ref>,

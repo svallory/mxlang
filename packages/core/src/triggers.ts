@@ -67,7 +67,7 @@ import {
   undeclaredFields,
 } from "./dialect-registry.ts";
 import { nodeOfForward, recordForward } from "./expr-nodes.ts";
-import type { ExprNode, Member, MxMemberMark } from "./ir.ts";
+import type { ExprNode } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { voiceOf } from "./message-vocabulary.ts";
@@ -91,13 +91,6 @@ import type {
   TriggerUse,
   TriggerValueForm,
 } from "./syntax-table.ts";
-
-/** The member a whole-value `StringLiteral` stands for (`extra.mxMember`), or `undefined`. */
-export function memberOf(node: Node): Member | undefined {
-  const mark: MxMemberMark | undefined = node?.extra?.mxMember;
-  if (node?.type !== "StringLiteral" || !mark) return undefined;
-  return { kind: "member", name: mark.name, span: mark.span };
-}
 
 /** The trigger lists, by their `MxTrigger.position`. */
 const TRIGGER_LISTS = {
@@ -967,13 +960,6 @@ function checkAttributeValue(
     ) {
       return;
     }
-    if (
-      (value as { kind?: unknown }).kind === "member" &&
-      typeof (value as { name?: unknown }).name === "string" &&
-      (value as { name: string }).name !== ""
-    ) {
-      return;
-    }
     const type = (value as { type?: unknown }).type;
     if (isRegistryKey(type)) {
       const registered = nodeTypeRegistry(dialect).get(type);
@@ -997,7 +983,7 @@ function checkAttributeValue(
   }
   raise(
     DIALECT_HOOK_ERROR_CODE,
-    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value, \`{ kind: "member", name }\` or a node of a registered type (\`{ type: "dialect:Type", … }\`)`,
+    `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: an attribute value is \`true\`, a string, a \`ctx.expression\` result, the trigger's own method value or a node of a registered type (\`{ type: "dialect:Type", … }\`)`,
     trigger,
   );
 }
@@ -1442,21 +1428,15 @@ function containerOf(ctx: Ctx, node: Node, start: number, end: number): Node {
   };
 }
 
-/** The `StringLiteral` a static string or member value lowers through. */
-function literal(
-  ctx: Ctx,
-  value: string,
-  start: number,
-  end: number,
-  extra: Record<string, unknown> = {},
-): Node {
+/** The `StringLiteral` a static string value lowers through. */
+function literal(ctx: Ctx, value: string, start: number, end: number): Node {
   return {
     type: "StringLiteral",
     start,
     end,
     loc: locOf(ctx, start, end),
     value,
-    extra: { raw: JSON.stringify(value), rawValue: value, ...extra },
+    extra: { raw: JSON.stringify(value), rawValue: value },
   };
 }
 
@@ -1522,7 +1502,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       text: printed(ctx, node, trigger),
     });
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
-  } else if (isRegistryKey((value as { type?: unknown }).type)) {
+  } else {
     // A node of a registered type lowers through its type's `lower` in value
     // position, as a node a value row claimed does, and stays beside what
     // it lowered to.
@@ -1548,23 +1528,6 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       container = lowered;
     }
     placedNode = node;
-  } else {
-    const member = value as { name: string; span?: SourceSpan };
-    const span = member.span ?? text;
-    const mark = { mxMember: { span, name: member.name } };
-    // The value spans the name where the text spells it (`dueOn` in
-    // `&dueOn`), as a string value does; the mark keeps the whole token.
-    const at = member.span ? -1 : spelled.indexOf(member.name);
-    const [start, end] =
-      at > 0
-        ? [text.sourceStart + at, text.sourceStart + at + member.name.length]
-        : [span.sourceStart, span.sourceEnd];
-    container = containerOf(
-      ctx,
-      literal(ctx, member.name, start, end, mark),
-      start,
-      end,
-    );
   }
   const authored = attr.options?.authored === true;
   const lowered: Node = {

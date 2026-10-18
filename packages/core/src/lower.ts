@@ -200,7 +200,6 @@ import type {
   ImportName,
   Ir,
   IrNode,
-  Member,
   Position,
   TagAlias,
   TagTrigger,
@@ -288,7 +287,6 @@ import {
 import {
   childrenWithTriggers,
   lowerTriggers,
-  memberOf,
   valueNodeOf,
 } from "./triggers.ts";
 import { withoutTsWrappers } from "./ts-unwrap.ts";
@@ -2086,10 +2084,6 @@ function lowerAttrNamed(
     return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
-    // A whole-value member a dialect built
-    // (`ctx.attribute(name, { kind: "member", name })`), marked
-    // `extra.mxMember`.
-    const member = memberOf(value);
     // A whole value that is one registered node (`mx:String`, or a
     // dialect's type whose `lower` gave this string or string literal,
     // claimed by a value or expression row or placed by `ctx.attribute`)
@@ -2097,9 +2091,7 @@ function lowerAttrNamed(
     // string every target emits, so a data consumer or contract can tell
     // it from `"strict"`.
     // A parenthesized node (`=(~on)`) is its forward alone: the node too.
-    const node = member
-      ? undefined
-      : (valueNodeOf(attr) ?? nodeOfForward(value));
+    const node = valueNodeOf(attr) ?? nodeOfForward(value);
     return {
       kind: "static",
       name,
@@ -2107,7 +2099,6 @@ function lowerAttrNamed(
       valueSpan: exprSpan(ctx, value),
       nameSpan,
       loc,
-      ...(member ? { member } : {}),
       ...(node ? { node } : {}),
     };
   }
@@ -2180,7 +2171,6 @@ function lowerAttrs(
   const lowered = withoutParserTwins(tagAttributesOf(node)).map((attr: Node) =>
     lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
   );
-  rejectSecondMember(lowered);
   const attrs = resolveDuplicateAttrs(ctx, lowered);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
 }
@@ -2208,33 +2198,6 @@ function withoutParserTwins(attrs: Node[]): Node[] {
       next.start === attr.start
     );
   });
-}
-
-/**
- * A second member in one name slot (`sort asc &c &d`) is an error, not a
- * duplicate dropped with a warning: a dialect's attribute name is a slot, and
- * two members in it is a mistake the author must see. Positioned at the second
- * member.
- */
-function rejectSecondMember(attrs: readonly Attr[]): void {
-  const first = new Map<string, Member>();
-  for (const attr of attrs) {
-    if (attr.kind !== "static" || !attr.member) continue;
-    const held = first.get(attr.name);
-    if (!held) {
-      first.set(attr.name, attr.member);
-      continue;
-    }
-    raise(
-      INVALID_ATTRIBUTE_CODE,
-      `one member per slot: \`${attr.name}\` already holds \`${held.name}\`, so this member cannot also set it`,
-      {
-        type: "MxTrigger",
-        start: attr.member.span.sourceStart,
-        end: attr.member.span.sourceEnd,
-      },
-    );
-  }
 }
 
 /**

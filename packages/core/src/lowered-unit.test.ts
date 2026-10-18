@@ -269,7 +269,7 @@ describe("the `LoweredUnit` view", () => {
     expect("defaultTag" in (byTag.group ?? {})).toBe(false);
   });
 
-  it("hands a whole-value member a module built as `mx:Member`", () => {
+  it("hands a whole-value member a module built as its own node type", () => {
     const unit = unitOf(
       "<open &due/>",
       { open: tags.open as CustomTag },
@@ -278,7 +278,7 @@ describe("the `LoweredUnit` view", () => {
     );
     expect(unit.calls[0]?.attrs).toEqual([
       expect.objectContaining({
-        value: expect.objectContaining({ type: "mx:Member", name: "due" }),
+        value: expect.objectContaining({ type: "member:Member", name: "due" }),
       }),
     ]);
   });

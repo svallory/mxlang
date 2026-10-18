@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 6;
+export const IR_VERSION = 7;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -194,37 +194,6 @@ export interface ExprNode {
   code?: { start: number; end: number };
 }
 
-/**
- * A member reference a layer-2 dialect produced, for a value slot that names a
- * member of the enclosing declaration (Mesh's `&dueOn` after a kind). Its
- * runtime value is the name as a string literal on every target; the IR keeps
- * it distinct so a contract (`type: "member"`) or a data consumer can tell it
- * from a string. `span` covers the whole authored token, sigil included.
- */
-export interface Member {
-  kind: "member";
-  name: string;
-  span: SourceSpan;
-}
-
-/**
- * `extra.mxMember` on a node a dialect built for a member reference: on the
- * `StringLiteral` of a whole-value member (core reads it into {@link Member}),
- * and on whatever expression the module hands `ctx.expression` inside an
- * expression (`self.status` for Mesh's `&status`). `name` is the member's name,
- * `span` the authored token, sigil included. Public API, as stable as the IR.
- *
- * Marks on a dialect's nodes (`extra.mxMember`, and a dialect's own
- * `extra.mxAtom`) reach every later reader unchanged: core never strips or
- * rewrites them. They stay for one alpha (0.1.0-alpha.33, the release
- * that adds `Expr.nodes`) and go in 0.1.0-alpha.34; a dialect reads its
- * nodes from `Expr.nodes`/`Attr.node` instead.
- */
-export interface MxMemberMark {
-  span: SourceSpan;
-  name: string;
-}
-
 /** The syntax-level value shape known while resolving an expression. */
 export type ExprShape = "object" | "array" | "string" | "other";
 
@@ -338,17 +307,11 @@ export type Attr =
        */
       nameSpan: SourceSpan;
       /**
-       * Set when the whole value is one member reference a dialect produced
-       * `value` is the member's name, which is what every target emits.
-       */
-      member?: Member;
-      /**
        * Set when the whole value is one registered node (`mode=:strict`,
        * claimed by a value row, or placed by a trigger's
        * `ctx.attribute(name, node)`) whose type lowered it to this string,
        * or to a string literal. The node is as parsed, frozen, keyed
-       * `dialect:Type`; `value` is the string every target emits. Never set
-       * together with `member`.
+       * `dialect:Type`; `value` is the string every target emits.
        */
       node?: DialectNode;
     } & IrBase &

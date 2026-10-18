@@ -4174,14 +4174,16 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   literal is `static`; nothing is evaluated.
 - **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
   shape: it goes up by one with every change a reader can observe (a node kind
-  or field added, removed, renamed or given a new meaning). It is `6`: `2` added
+  or field added, removed, renamed or given a new meaning). It is `7`: `2` added
   a static `Attr`'s `node` (a dialect's node, §13.9.9), `3` added a
   `DelegatedTag`'s `tag.definedIn` (§9.2), `4` added a `Define`'s `attrs`
   (§5.4), and `5` added `valueSpan` to a dynamic, bound, event and spread
   `Attr` (the value as written, wrapper included) and made a named
   attribute's `span` end where its written value ends. `6` replaced an
   `Expr`'s `atoms` and a static `Attr`'s `atom` with `Expr.nodes`, the dialect
-  nodes written inside an expression (§13.9.9).
+  nodes written inside an expression (§13.9.9). `7` removed a static `Attr`'s
+  `member` and the `Member` type: a member is a dialect node type like any
+  other (§13.9.6).
 
 #### 13.7.3 Tag rules presets
 
@@ -5183,8 +5185,7 @@ UTF-16 range. `ctx` is frozen and offers exactly:
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
   replaces the trigger's stand-in; as an attribute value it is that value.
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
-  attribute), a string, a `ctx.expression` result, a whole-value
-  `{ kind: "member", name, span? }`, or a node of a type the dialect registers
+  attribute), a string, a `ctx.expression` result, or a node of a type the dialect registers
   (`{ type: "atom:Atom", span, … }`, §13.9.9). Core lowers such a node through
   its type's `lower` in the value position, as if a value row had claimed it
   there, and keeps it on the attribute (`Attr.node`, or `Expr.nodes` when its
@@ -5247,41 +5248,39 @@ row's id and `<text>` for the trigger's text:
 A `=value` is also lowered as an expression with its own triggers, and a member
 in a method body or in call arguments lowers like any other expression position.
 
-#### 13.9.6 The `"member"` contract type
+#### 13.9.6 A member is a dialect node type
 
-A member is the whole-value reference a dialect produces for a sigil like
-Mesh's `&`: not text, not an atom. Core knows no sigil; it knows the **shape**.
+A member is the reference a dialect produces for a sigil like Mesh's `&`: not
+text, not an atom. Core has no member vocabulary and no member contract type.
+A dialect that has members registers a node type for them (`mesh:Member`, say,
+with a `schema`, §13.9.9) and names it from its rows; core knows a member only
+as a node of a registered type and its forward.
 
-- In an expression, a member is whatever Babel node the dialect handed
-  `ctx.expression`, marked `extra.mxMember = { span, name }` (`MxMemberMark`);
-  `span` covers the authored token, sigil included.
-- As a whole attribute value it is one of two forms: the static value `ctx.attribute`
-  builds with `{ kind: "member", name, span? }` (Mesh's `sort asc &dueOn`), lowered
-  to a static `Attr` whose `member` field is `{ kind: "member", name, span }`
-  (`Member`); or a **dynamic** attribute whose value is exactly one marked member
-  (`on:load=&visible`).
+- In an expression, a member is an entry of the expression's `Expr.nodes`; its
+  forward is whatever Babel node the type's `lower` returned through
+  `ctx.expression` (`self.status` for `&status`). `span` covers the authored
+  token, sigil included. Core sets no mark on the forward.
+- As a whole attribute value it is the node placed with
+  `ctx.attribute(name, { type: "mesh:Member", span, name })` (Mesh's
+  `sort asc &dueOn`): a `static` attribute with the node on `Attr.node` and the
+  string every target emits as `value`. A value that is exactly one member
+  (`on:load=&visible`) is a **dynamic** attribute whose `Expr.nodes` lists it.
 
-`CustomTagAttribute.type` takes `"member"`, a sibling of a node-type slot
-(`type: "atom:Atom"`, §13.9.9). It accepts **both** forms and nothing else:
-
-| Declared `type` | A member | A dialect node (`atom:Atom`) |
-|---|---|---|
-| `"member"` | accepted | refused: ``attribute `x` must be a member, got atom:Atom`` (a string, a bare attribute or any other expression is named the same way) |
-| `"atom:Atom"` | refused: ``attribute `x` must be atom:Atom, got a member`` | accepted |
-| `"expression"` | accepted | accepted |
+A contract slot types a member with the node type's key, as it types an atom
+(`type: "mesh:Member"`, §13.9.9). The slot accepts the node in both forms and
+refuses a string, a number, an array, a function or a node of another type
+(``attribute `x` must be mesh:Member, got string``). `"expression"` accepts a
+member too. `type: "member"` is a registration error that names the fix.
 
 Whether a member names something that exists is the dialect's `afterLower`
-check, not the contract's. There is no union type: a kind with a node slot and a
-member slot declares two slots.
+check, not the contract's.
 
-**One member per name slot.** A second member in the same name slot (`sort asc &c
-&d`) is a positioned error, not a duplicate-attribute warning: ``one member per
-slot: `sort` already holds `c`, so this member cannot also set it``.
-
-In the IR (and so in `lowerSource`'s, §13.7.2) a whole-value member is a `static`
-attribute carrying `member: { kind: "member", name, span }`, where `name` is the
-member's name without its sigil and `span` covers the token, sigil included. A
-member inside an expression is not that kind: its node carries `extra.mxMember`.
+**One member per name slot.** A second attribute of the same name in one tag
+list is a duplicate that core resolves to the later one, so `afterLower` never
+sees the earlier. A dialect that wants the second member refused asks for it
+where it places the first: `ctx.attribute(name, node, { once: message })`
+refuses a second attribute of that name at the later one, with the dialect's
+message (``one member per slot: `&d` cannot also set `member`…``).
 
 #### 13.9.7 Provenance of a built child: `trigger`
 
@@ -5296,15 +5295,16 @@ names no trigger.
 
 Core ships no dialect: a dialect owns its rows. As an example of the hook API,
 take a member sigil `&` in all three lists, built on the public hook API only
-and importing types only.
-
-Its row is `{ id: "member", chars: "&", match: <an identifier after &>, standIn:
-"identifier", node: { call: "member" } }`, and it lowers to four shapes:
+and importing types only. It registers a `Member` node type (`member:Member`,
+with a `schema`), and its rows are `{ id: "member", chars: "&", match: <an
+identifier after &>, standIn: "identifier", node: { call: "member" } }` in the
+attribute and line lists and the same row naming `{ type: "Member", dialect:
+"member" }` in the expression list. It lowers to four shapes:
 
 | Position | Source | Lowers to |
 |---|---|---|
-| expression | `&status` | `self.status`, a `MemberExpression` marked `extra.mxMember` |
-| attribute | `sort asc &dueOn` | the static attribute `member`, value `{ kind: "member", name: "dueOn" }`; a value after it (`&dueOn=1`, `&dueOn(x) { … }`) is refused at the member: `` `&dueOn` is a member reference and takes no value `` |
+| expression | `&status` | a `member:Member` node in `Expr.nodes` whose forward is `self.status`, a `MemberExpression` |
+| attribute | `sort asc &dueOn` | the static attribute `member` with a `member:Member` node on `Attr.node` (`ctx.attribute("member", { type: "member:Member", name: "dueOn", span })`); a value after it (`&dueOn=1`, `&dueOn(x) { … }`) is refused at the member: `` `&dueOn` is a member reference and takes no value `` |
 | tagless line | `&title` | a `member` child tag with a static `name` |
 | tagless line | `&amount=expr` | the same, plus a dynamic `value` |
 
@@ -5442,10 +5442,9 @@ The IR lists each node in the expression's `Expr.nodes`, in source order: an
 expression finds a dialect node by identity) and `code`, the range of
 `Expr.code` the forward is printed at. A source map maps the text around a node
 one to one and each node to its printed range. A mark a dialect sets on its
-forward (`extra.mxAtom`, `extra.mxMember`) reaches every later reader, its own
-`afterLower` included, unchanged: core reads no `extra.mxAtom`, still reads
-`extra.mxMember` for the `"member"` slot (§13.9.6), and strips neither. Both
-marks go in 0.1.0-alpha.34; `Expr.nodes` and `Attr.node` replace them.
+forward reaches every later reader, its own `afterLower` included, unchanged:
+core reads no mark from a forward and sets none. A dialect finds its nodes in
+`Expr.nodes` and `Attr.node`.
 
 **A node-type slot.** A contract attribute typed by a registered node type
 (`type: "atom:Atom"`, or `items: "atom:Atom"` under `type: "array"`) accepts a

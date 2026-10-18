@@ -79,13 +79,13 @@ Mesh is the first layer-2 user and the acceptance test. Its module carries
 what used to be MX core:
 
 - **Members** (`&name`) in all three trigger lists, one row
-  (`{ id: "member", chars: "&", standIn: "identifier", node: { call: "member" } }`):
-  in an expression `&status` lowers to `self.status` marked
-  `extra.mxMember = { span, name }` (`[&a, &b]` is an array of marked
-  members); after a kind (`sort asc &dueOn`) it is a static value
-  `{ kind: "member", name: "dueOn" }`, one per name slot, checked by the
-  contract type `type: "member"` (which also takes a value that is one
-  member, `load=&visible`); on a tagless line (`&title`, `&amount=qty * price`) it is
+  (`{ id: "member", chars: "&", standIn: "identifier", node: { call: "member" } }`),
+  a node type the dialect registers itself (`mesh:Member`): in an expression
+  `&status` is a node whose forward is `self.status`, listed in `Expr.nodes`
+  (`[&a, &b]` is an array of two); after a kind (`sort asc &dueOn`) it is a
+  static value with the node on `Attr.node`, one per name slot (the row asks
+  for it with `once`), and a contract slot `type: "mesh:Member"` takes it in
+  either place, a value that is one member (`load=&visible`) included; on a tagless line (`&title`, `&amount=qty * price`) it is
   a `member` child tag with a static `name` and a dynamic `value`. `&&`,
   `a &b` and `&=` stay operators.
 

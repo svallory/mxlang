@@ -54,13 +54,14 @@ describe("attribute arguments", () => {
     expect(argsOf(attr(firstTag("x a()\n"), "a"))).toEqual([]);
   });
 
-  it("`a(&b)` carries the member the dialect built", () => {
+  it("`a(&b)` carries the member node the dialect built", () => {
     const a = attr(firstTag("x a(&b)\n", { dialect: memberSyntax }), "a");
     const [arg] = "args" in a ? (a.args ?? []) : [];
     expect(arg?.code).toBe("self.b");
-    expect(arg?.node).toMatchObject({
-      extra: { mxMember: { name: "b" } },
-    });
+    expect(arg?.node).toMatchObject({ type: "MemberExpression" });
+    expect(arg?.nodes).toMatchObject([
+      { type: "member:Member", node: { name: "b" } },
+    ]);
   });
 
   it("an attribute written without parentheses has no `args` key", () => {

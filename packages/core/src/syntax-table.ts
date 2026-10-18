@@ -222,10 +222,8 @@ export interface TriggerMethod {
 
 /**
  * The value of an attribute `ctx.attribute` builds: `true` (a bare
- * attribute), a string, an expression, the trigger's own method value, a
- * member, or a node of one of the dialect's registered types.
- * `{ kind: "member", name }` is a whole-value member the module builds;
- * core has no syntax that builds one. A node (`{ type: "atom:Atom", span,
+ * attribute), a string, an expression, the trigger's own method value, or a
+ * node of one of the dialect's registered types. A node (`{ type: "atom:Atom", span,
  * ...fields }`) lowers through its type's `lower` in value position, as a
  * node a value row claimed does, and stays on the IR beside what it lowered
  * to (`Attr.node`, or `Expr.nodes`); its `span` defaults to the part of the
@@ -238,11 +236,6 @@ export type TriggerAttributeValue =
   | string
   | TriggerExpression
   | TriggerMethod
-  | {
-      readonly kind: "member";
-      readonly name: string;
-      readonly span?: SourceSpan;
-    }
   | {
       /** The node's registry key; every field but `type` and `span` is its type's own. */
       readonly type: `${string}:${string}`;

@@ -22,7 +22,6 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "member"
     | `${string}:${string}`; // a node type the file's dialect registers, `atom:Atom`
   items?: "string" | "number" | "boolean" | `${string}:${string}`;
   required?: boolean;

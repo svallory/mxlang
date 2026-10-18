@@ -2,7 +2,8 @@
  * The `&` member shapes through `lowerSource` with the member fixture dialect
  * (`../fixtures/syntax/member-fixture.ts`) loaded two ways: a dialect package naming it in `mx.dialect.module`, and
  * the `dialect` option. Then the cases that must not be members, and the
- * `"member"` contract type's acceptance matrix. Core's `triggers.test.ts`
+ * `member:Member` contract slot's acceptance matrix; a member is a node type the
+ * fixture dialect registers, and core has no member vocabulary. Core's `triggers.test.ts`
  * pins the same module through `compileSource`; these pin what the entry
  * point hands a consumer, since its options (`unknownTags`, `customTags`,
  * `dialect`) change the path.
@@ -14,6 +15,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
 import atomSyntax, { ATOM_VALUE } from "../fixtures/syntax/atom-fixture.ts";
+import { MEMBER } from "../fixtures/syntax/member-fixture.ts";
 import type { Attr, DelegatedTag } from "../ir.ts";
 import type { Dialect } from "../syntax-table.ts";
 import {
@@ -86,7 +88,7 @@ function exprOf(tag: SpannedTag, name: string) {
 }
 
 describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
-  it("`() => &status === done`: a marked `self.status`, the rest unchanged", () => {
+  it("`() => &status === done`: a `Member` node whose forward is `self.status`, the rest unchanged", () => {
     const [file, options] = load();
     const source = "rule check=(() => &status === done)\n";
     const [rule] = tags(ir(source, file, options).body);
@@ -103,19 +105,24 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
           type: "MemberExpression",
           object: { type: "Identifier", name: "self" },
           property: { type: "Identifier", name: "status" },
-          extra: {
-            mxMember: {
-              span: { sourceStart: 18, sourceEnd: 25 },
-              name: "status",
-            },
-          },
         },
         right: { type: "Identifier", name: "done" },
       },
     });
+    // The member is listed by node; its forward is the very object `node`
+    // holds, and nothing is marked on it.
+    const forward = (check.node as any).body.left;
+    expect(check.nodes).toHaveLength(1);
+    expect(check.nodes?.[0]).toMatchObject({
+      type: "member:Member",
+      span: { sourceStart: 18, sourceEnd: 25 },
+      node: { type: "member:Member", name: "status" },
+    });
+    expect(check.nodes?.[0]?.forward).toBe(forward);
+    expect(forward.extra).toBeUndefined();
   });
 
-  it("`load=[&customer, &other]`: an array of marked members", () => {
+  it("`load=[&customer, &other]`: an array of members, each a node beside its forward", () => {
     const [file, options] = load();
     const [rule] = tags(
       ir("rule load=[&customer, &other]\n", file, options).body,
@@ -128,25 +135,19 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
         {
           type: "MemberExpression",
           property: { name: "customer" },
-          extra: {
-            mxMember: {
-              span: { sourceStart: 11, sourceEnd: 20 },
-              name: "customer",
-            },
-          },
         },
         {
           type: "MemberExpression",
           property: { name: "other" },
-          extra: {
-            mxMember: {
-              span: { sourceStart: 22, sourceEnd: 28 },
-              name: "other",
-            },
-          },
         },
       ],
     });
+    expect(value.nodes?.map((n) => [n.type, n.span])).toEqual([
+      ["member:Member", { sourceStart: 11, sourceEnd: 20 }],
+      ["member:Member", { sourceStart: 22, sourceEnd: 28 }],
+    ]);
+    const [first, second] = (value.node as any).elements;
+    expect(value.nodes?.map((n) => n.forward)).toEqual([first, second]);
   });
 
   it("`sort asc &dueOn`: the static member variant, never the expression form", () => {
@@ -159,18 +160,20 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
         nameSpan: { sourceStart: 5, sourceEnd: 8 },
       },
       {
-        // A whole-value member is a `static` attribute carrying `member`.
+        // A whole-value member is a `static` attribute whose `node` is the
+        // dialect's `member:Member`; core adds no member field.
         kind: "static",
         name: "member",
         value: "dueOn",
-        member: {
-          kind: "member",
+        node: {
+          type: "member:Member",
           name: "dueOn",
           span: { sourceStart: 9, sourceEnd: 15 },
         },
         span: { sourceStart: 9, sourceEnd: 15 },
       },
     ]);
+    expect((sort as SpannedTag).attrs[1]).not.toHaveProperty("member");
   });
 
   it("`&title`: a `member` child with a static `name`", () => {
@@ -212,7 +215,7 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
     expect(amount?.trigger).toMatchObject({ id: "member", text: "&amount" });
   });
 
-  it("`&amount=qty * price` under a concise block: a dynamic `value`, marks inside it", () => {
+  it("`&amount=qty * price` under a concise block: a dynamic `value`, the member inside it a node", () => {
     const [file, options] = load();
     const source = "set\n  &title\n  &amount=qty * &price\n";
     const [set] = tags(ir(source, file, options).body);
@@ -227,11 +230,11 @@ describe.each(LOADERS)("the five member cases, via %s", (_, load) => {
     expect(value.value.node).toMatchObject({
       type: "BinaryExpression",
       left: { type: "Identifier", name: "qty" },
-      right: {
-        type: "MemberExpression",
-        extra: { mxMember: { name: "price" } },
-      },
+      right: { type: "MemberExpression" },
     });
+    expect(value.value.nodes).toMatchObject([
+      { type: "member:Member", node: { name: "price" } },
+    ]);
   });
 });
 
@@ -367,13 +370,16 @@ describe("what is not a member", () => {
   );
 });
 
-describe('the `"member"` contract type', () => {
+describe("a `member:Member` contract slot", () => {
   const contract = (
-    type: "member" | "member:Atom" | "expression",
+    type: "member:Member" | "member:Atom" | "expression",
   ): CustomTag => ({
     attributes: { slot: { type } },
   });
-  const run = (type: "member" | "member:Atom" | "expression", value: string) =>
+  const run = (
+    type: "member:Member" | "member:Atom" | "expression",
+    value: string,
+  ) =>
     lowerSource(`sort ${value}\n`, "/v/entity.mx", {
       dialect: {
         ...memberSyntax,
@@ -385,16 +391,24 @@ describe('the `"member"` contract type', () => {
             { ...ATOM_VALUE, node: { type: "Atom", dialect: "member" } },
           ],
         },
-        nodeTypes: atomSyntax.nodeTypes,
+        nodeTypes: { ...memberSyntax.nodeTypes, ...atomSyntax.nodeTypes },
         // The member lands in the declared slot.
         lowerTrigger: (_id, text, span, ctx) =>
-          ctx.attribute("slot", { kind: "member", name: text.slice(1), span }),
+          ctx.attribute("slot", {
+            type: "member:Member",
+            name: text.slice(1),
+            span,
+          }),
       },
       customTags: { sort: contract(type) },
     }).diagnostics.map((diagnostic) => diagnostic.message);
 
-  it("`member` accepts a member", () => {
-    expect(run("member", "&dueOn")).toEqual([]);
+  it("`member:Member` accepts a member", () => {
+    expect(run("member:Member", "&dueOn")).toEqual([]);
+  });
+
+  it("`member:Member` passes an expression with no knowable type, as any node-type slot does", () => {
+    expect(run("member:Member", "slot=(a.b)")).toEqual([]);
   });
 
   it("`expression` accepts a member", () => {
@@ -404,20 +418,19 @@ describe('the `"member"` contract type', () => {
   it("a node type refuses a member", () => {
     expect(run("member:Atom", "&dueOn")).toEqual([
       expect.stringContaining(
-        "attribute `slot` must be member:Atom, got a member",
+        "attribute `slot` must be member:Atom, got member:Member",
       ),
     ]);
   });
 
   it.each([
     ["member:Atom", "slot=~due-on"],
-    ["a string", 'slot="dueOn"'],
-    ["an expression", "slot=(a.b)"],
-    ["a bare attribute", "slot"],
-  ])("`member` refuses %s", (got, value) => {
-    expect(run("member", value)).toEqual([
+    ["string", 'slot="dueOn"'],
+    ["boolean", "slot"],
+  ])("`member:Member` refuses %s", (got, value) => {
+    expect(run("member:Member", value)).toEqual([
       expect.stringContaining(
-        `attribute \`slot\` must be a member, got ${got}`,
+        `attribute \`slot\` must be member:Member, got ${got}`,
       ),
     ]);
   });
@@ -431,7 +444,10 @@ describe("the unknown-tag scan takes the module too (PR 450's parseMxDocument)",
       unknownTags: "reject",
       customTags: {
         sort: {
-          attributes: { asc: { type: "boolean" }, member: { type: "member" } },
+          attributes: {
+            asc: { type: "boolean" },
+            member: { type: "member:Member" },
+          },
         },
       },
     });
@@ -495,22 +511,22 @@ describe("one member per slot, and the member type's refusals", () => {
   // `Atom`, under this dialect's id), so the slot is a node-type slot.
   const withAtoms: Dialect = {
     ...memberSyntax,
-    nodeTypes: atomSyntax.nodeTypes,
+    nodeTypes: { ...memberSyntax.nodeTypes, ...atomSyntax.nodeTypes },
   };
-  const slot = (type: "member" | "member:Atom", source: string) =>
+  const slot = (type: "member:Member" | "member:Atom", source: string) =>
     parse(source, {
       dialect: withAtoms,
       customTags: { sort: { attributes: { load: { type } } } },
     }).diagnostics.map((d) => d.message);
 
-  it("M5: a `member` slot accepts a dynamic value that is one member", () => {
-    expect(slot("member", "sort load=&visible\n")).toEqual([]);
+  it("M5: a `member:Member` slot accepts a dynamic value that is one member", () => {
+    expect(slot("member:Member", "sort load=&visible\n")).toEqual([]);
   });
 
-  it("M5: a `member` slot refuses an expression around a member", () => {
-    expect(slot("member", "sort load=(&visible && x)\n")).toEqual([
+  it("M5: a `member:Member` slot refuses a string, as any node-type slot does", () => {
+    expect(slot("member:Member", 'sort load="visible"\n')).toEqual([
       expect.stringContaining(
-        "attribute `load` must be a member, got an expression",
+        "attribute `load` must be member:Member, got string",
       ),
     ]);
   });
@@ -518,17 +534,17 @@ describe("one member per slot, and the member type's refusals", () => {
   it("M5: a node-type slot refuses the dynamic form too", () => {
     expect(slot("member:Atom", "sort load=&visible\n")).toEqual([
       expect.stringContaining(
-        "attribute `load` must be member:Atom, got a member",
+        "attribute `load` must be member:Atom, got member:Member",
       ),
     ]);
   });
 
   it.each([
-    ["member", "sort load=(&visible as any)\n"],
-    ["member", "sort load=(&visible!)\n"],
-    ["member", "sort load=((&visible as any) satisfies unknown)\n"],
+    ["member:Member", "sort load=(&visible as any)\n"],
+    ["member:Member", "sort load=(&visible!)\n"],
+    ["member:Member", "sort load=((&visible as any) satisfies unknown)\n"],
     ["member:Atom", "sort load=(&visible as any)\n"],
-    ["member", "sort load=(1 as number)\n"],
+    ["member:Member", "sort load=(1 as number)\n"],
   ] as const)(
     "a `%s` slot: %s gives the same diagnostics with `stripTypes: false`",
     (type, source) => {
@@ -543,7 +559,7 @@ describe("one member per slot, and the member type's refusals", () => {
       ).toEqual(byDefault);
       // The three member rows are accepted, the other two refused.
       expect(byDefault.length).toBe(
-        type === "member" && source.includes("&") ? 0 : 1,
+        type === "member:Member" && source.includes("&") ? 0 : 1,
       );
     },
   );
@@ -554,10 +570,66 @@ describe("one member per slot, and the member type's refusals", () => {
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         message:
-          "one member per slot: `member` already holds `c`, so this member cannot also set it",
+          "one member per slot: `&d` cannot also set `member`, which the member at 1:10 already holds",
         line: 1,
         column: 12,
       }),
     ]);
+  });
+});
+
+describe("a dialect that still relies on the old member marks", () => {
+  const legacy = (lowerTrigger: Dialect["lowerTrigger"]): Dialect => ({
+    id: "legacy",
+    name: "Legacy",
+    table: {
+      expressionTriggers: [MEMBER],
+      attributeTriggers: [MEMBER],
+    },
+    lowerTrigger,
+  });
+
+  it('`ctx.attribute(name, { kind: "member" })` is a positioned error naming what to place instead', () => {
+    const dialect = legacy((_id, text, span, ctx) =>
+      ctx.attribute("member", {
+        kind: "member",
+        name: text.slice(1),
+        span,
+      } as never),
+    );
+    const result = lowerSource("sort asc &dueOn\n", "/v/entity.mx", {
+      dialect,
+    });
+    expect(result.ir).toBeUndefined();
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "an attribute value is `true`, a string, a `ctx.expression` result, the trigger's own method value or a node of a registered type",
+        ),
+        line: 1,
+        column: 9,
+      }),
+    ]);
+  });
+
+  it("`extra.mxMember` on an expression is not read: no `Attr.member`, no node, the mark left alone", () => {
+    const dialect = legacy((_id, text, span, ctx) =>
+      ctx.expression({
+        type: "MemberExpression",
+        object: { type: "Identifier", name: "self" },
+        property: { type: "Identifier", name: text.slice(1) },
+        computed: false,
+        extra: { mxMember: { name: text.slice(1), span } },
+      }),
+    );
+    const result = lowerSource("sort load=&visible\n", "/v/entity.mx", {
+      dialect,
+    });
+    expect(result.diagnostics).toEqual([]);
+    const [sort] = tags(result.ir?.body ?? []);
+    const load = attrNamed(sort as SpannedTag, "load");
+    if (load.kind !== "dynamic") throw new Error(load.kind);
+    expect(load).not.toHaveProperty("member");
+    expect(load.value.nodes).toBeUndefined();
   });
 });

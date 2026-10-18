@@ -640,8 +640,8 @@ Five facts worth knowing before editing it:
   at a space followed by a `terminatesValue` row (`isClaimedDefault`,
   parser `EXPRESSION.ts`). `ContractAttr` (`lowered-unit.ts`) is the
   attribute's name plus its value node (`mx:String`, `mx:Expression` with
-  the dialect nodes inside it in `nodes`, the claimed node, or a dialect's
-  `mx:Member` mark), or `{ spread: true }`. `lowerTriggers` is the one pass
+  the dialect nodes inside it in `nodes`, or the claimed node), or
+  `{ spread: true }`. `lowerTriggers` is the one pass
   that lowers line and attribute nodes, once each, in source order (a
   body's line node right after the walk reaches it), into `loweredNodes`,
   a cache keyed by the AST node that `attributesWithTriggers` and
@@ -652,9 +652,8 @@ Five facts worth knowing before editing it:
   Core's own lowering stays
   direct until PR 6 is done with `lower.ts`. Tests:
   `src/dialect-registry.test.ts`.
-  A whole-value member is a static `Attr` with `member` (`memberOf`);
-  `type: "member"` is checked in `custom-tags.ts`
-  (`checkMemberAttr`). Core ships no dialect and no `./syntax/*` export: a dialect owns its
+  A member is a dialect node type like an atom (`Attr.node`, `Expr.nodes`).
+  Core ships no dialect and no `./syntax/*` export: a dialect owns its
   rows, and Mesh's atoms, name sugars and `&` members live in Mesh (core has
   no name sugars of its own). Core's
   tests of the claim process (`src/triggers.test.ts`, `src/spans.test.ts`,
@@ -1508,11 +1507,12 @@ stable version.
   (`exprWithNodes`); `mappedExpr` maps each forward to its printed range.
   Hosts mapping an expression should call `mappedExpr(expr)`, not
   `mapped(expr.code, expr.span)`.
-- **Marks a dialect sets are its own.** Core reads no `extra.mxAtom`, still
-  reads `extra.mxMember` (the `type: "member"` slot), and strips neither: a
-  mark on a forward reaches the dialect's `afterLower` and every later
-  reader unchanged (`ir-entry/atom-fixture.test.ts`). Both marks go in
-  0.1.0-alpha.34.
+- **Core has no member or atom vocabulary and reads no mark.** A member is a
+  node type the dialect registers (`ir-entry/member-fixture.test.ts`), like an
+  atom: `Attr.node` for a whole value, `Expr.nodes` inside an expression, a
+  contract slot `type: "<id>:Member"`. A dialect that wants one member per
+  name slot asks for it with `ctx.attribute`'s `once` option; `afterLower`
+  cannot see the earlier duplicate, which core has already dropped.
 - **Core has no atom contract layer.** `transformCustomTag` records a
   `ContractFact` (`src/contract-facts.ts`: definition, call, authored
   ancestor nodes) per call in `ctx.contractFacts`, and `ctx.declare` from

@@ -22,7 +22,10 @@ import { coreBabel } from "./babel.ts";
 import { compileSource } from "./compile.ts";
 import { newCtx, TranslateError } from "./core.ts";
 import atomSyntax, { ATOM_NODE } from "./fixtures/syntax/atom-fixture.ts";
-import memberSyntax, { MEMBER } from "./fixtures/syntax/member-fixture.ts";
+import memberSyntax, {
+  MEMBER,
+  MEMBER_NODE,
+} from "./fixtures/syntax/member-fixture.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Attr, Ir, IrNode } from "./ir.ts";
 import { lowerChildren } from "./lower.ts";
@@ -47,11 +50,11 @@ const memberAndAtom: Dialect = {
   table: {
     ...memberSyntax.table,
     expressionTriggers: [
-      MEMBER,
+      MEMBER_NODE,
       { ...ATOM_NODE, node: { type: "Atom", dialect: "member" } },
     ],
   },
-  nodeTypes: atomSyntax.nodeTypes,
+  nodeTypes: { ...memberSyntax.nodeTypes, ...atomSyntax.nodeTypes },
 };
 
 const declarations = {
@@ -144,16 +147,21 @@ describe("the member dialect through the `dialect` option", () => {
       property: { type: "Identifier", name: "status" },
       start: 18,
       end: 25,
-      extra: {
-        mxMember: { name: "status", span: { sourceStart: 18, sourceEnd: 25 } },
-      },
     });
+    // The member is a node of the dialect's type beside its forward, and
+    // core marks nothing on the forward.
+    expect((body.left as { extra?: object }).extra).toBeUndefined();
     // The atom is a node of the dialect's type, its forward a plain literal.
     expect(body.right).toMatchObject({ type: "StringLiteral", value: "sent" });
     expect((body.right as { extra: object }).extra ?? {}).not.toHaveProperty(
       "mxAtom",
     );
     expect(check.value.nodes).toEqual([
+      expect.objectContaining({
+        type: "member:Member",
+        span: { sourceStart: 18, sourceEnd: 25 },
+        forward: body.left,
+      }),
       expect.objectContaining({
         type: "member:Atom",
         span: { sourceStart: 30, sourceEnd: 35 },
@@ -162,7 +170,7 @@ describe("the member dialect through the `dialect` option", () => {
     ]);
   });
 
-  it("`[&a, &b]` is an array of marked members", () => {
+  it("`[&a, &b]` is an array of members, each a node", () => {
     const [rule] = elements(
       irOf("rule load=[&a, &b]\n", undefined, memberSyntax).body,
     );
@@ -171,10 +179,14 @@ describe("the member dialect through the `dialect` option", () => {
     expect(load.value.node).toMatchObject({
       type: "ArrayExpression",
       elements: [
-        { type: "MemberExpression", extra: { mxMember: { name: "a" } } },
-        { type: "MemberExpression", extra: { mxMember: { name: "b" } } },
+        { type: "MemberExpression", property: { name: "a" } },
+        { type: "MemberExpression", property: { name: "b" } },
       ],
     });
+    expect(load.value.nodes?.map((n) => n.type)).toEqual([
+      "member:Member",
+      "member:Member",
+    ]);
   });
 
   it("an attribute trigger is a static attribute carrying the member", () => {
@@ -184,8 +196,8 @@ describe("the member dialect through the `dialect` option", () => {
     expect(attr(sort as Element, "member")).toMatchObject({
       kind: "static",
       value: "dueOn",
-      member: {
-        kind: "member",
+      node: {
+        type: "member:Member",
         name: "dueOn",
         span: { sourceStart: 9, sourceEnd: 15 },
       },
@@ -221,11 +233,11 @@ describe("the member dialect through the `dialect` option", () => {
     expect(value.value.code).toBe("qty * self.price");
     expect(value.value.node).toMatchObject({
       type: "BinaryExpression",
-      right: {
-        type: "MemberExpression",
-        extra: { mxMember: { name: "price" } },
-      },
+      right: { type: "MemberExpression", property: { name: "price" } },
     });
+    expect(value.value.nodes).toMatchObject([
+      { type: "member:Member", node: { name: "price" } },
+    ]);
     // Named at the `=`, zero width: the default-attribute convention.
     expect(value.nameSpan).toEqual({ sourceStart: 25, sourceEnd: 25 });
   });
@@ -242,12 +254,9 @@ describe("the member dialect through the `dialect` option", () => {
       },
     };
     irOf("sort asc &a\n  &b=&c\nrule x=&d\n", undefined, counting);
-    expect(seen).toEqual([
-      "attribute:&a",
-      "expression:&c",
-      "line:&b",
-      "expression:&d",
-    ]);
+    // A member in an expression (`&c`, `&d`) is a node: its type lowers it,
+    // not the trigger hook.
+    expect(seen).toEqual(["attribute:&a", "line:&b"]);
   });
 });
 
@@ -280,7 +289,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
       irOf("sort asc &dueOn\n", join(dir, "a.mesh.mx")).body,
     );
     expect(attr(sort as Element, "member")).toMatchObject({
-      member: { name: "dueOn" },
+      node: { type: "member:Member", name: "dueOn" },
     });
     expect(resolveSyntaxOf(join(dir, "a.mx")).isDefault).toBe(true);
   });
@@ -325,7 +334,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
 
   it("an edited dialect is resolved again (Vitest keeps its own module registry, so not re-evaluated here)", () => {
     const { packageDir } = dialectProject(dir, {
-      module: `export default { table: { attributeTriggers: [${JSON.stringify(MEMBER)}] }, lowerTrigger: (id, text, span, ctx) => ctx.attribute("m", { kind: "member", name: text.slice(1) }) };`,
+      module: `export default { table: { attributeTriggers: [${JSON.stringify(MEMBER)}] }, lowerTrigger: (id, text, span, ctx) => ctx.attribute("m", { type: "member:Member", name: text.slice(1) }) };`,
     });
     const file = join(packageDir, "index.mjs");
     const page = join(dir, "page.tst");
@@ -639,9 +648,10 @@ describe("a hook's result is checked", () => {
     "%j: a `=value` the hook drops is an error at the value",
     (source, line, column) => {
       const dropping = dialectWith(rows, {
+        nodeTypes: memberSyntax.nodeTypes,
         lowerTrigger: (_id, text, span, ctx) =>
           ctx.attribute("member", {
-            kind: "member",
+            type: "test:Member",
             name: text.slice(1),
             span,
           }),
@@ -814,7 +824,7 @@ describe("a fragment lowers with its syntax", () => {
     );
     const [sort] = elements(lowerChildren(ctx, body));
     expect(attr(sort as Element, "member")).toMatchObject({
-      member: { name: "dueOn" },
+      node: { type: "member:Member", name: "dueOn" },
     });
   });
 });

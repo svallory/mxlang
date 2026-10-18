@@ -585,12 +585,12 @@ const ROWS: Row[] = [
       id: "t",
       name: "MX",
       table: MEMBER_TABLE,
-      // A member in an expression, as the fixture dialect lowers it.
-      lowerTrigger: (_id: string, text: string, span: unknown, ctx: never) =>
-        (ctx as { attribute: (n: string, v: unknown) => unknown }).attribute(
-          "member",
-          { kind: "member", name: text.slice(1), span },
-        ),
+      // A name in an expression, lowered to an identifier.
+      lowerTrigger: (_id: string, text: string, _span: unknown, ctx: never) =>
+        (ctx as { expression: (n: object) => unknown }).expression({
+          type: "Identifier",
+          name: text.slice(1),
+        }),
     } as never,
   }),
   lowerRow("MX_DIALECT_ERROR", "<x/>\n<y/>\n", 2, 0, {

@@ -136,20 +136,7 @@ export interface ContractExpression {
 }
 
 /**
- * A whole-value member a syntax module built (`ctx.attribute`'s
- * `{ kind: "member", name }`). Core has no syntax that builds one: it
- * carries the module's value as it wrote it. @unstable
- */
-export interface ContractMember {
-  readonly type: "mx:Member";
-  readonly name: string;
-  /** The member token as written. */
-  readonly span?: SourceSpan;
-}
-
-/**
- * An attribute's value in a contract view: a string, an expression, a
- * member, or the node written as the whole value when its type lowered it to
+ * An attribute's value in a contract view: a string, an expression, or the node written as the whole value when its type lowered it to
  * a string or a string literal (frozen, as its `parse` returned it; a claimed
  * `mx:String` also carries `raw`, `start` and `end`). A node whose type
  * lowered it to any other expression is that `mx:Expression`, with the node
@@ -157,11 +144,7 @@ export interface ContractMember {
  * so check its key and cast.
  * @unstable
  */
-export type ContractValue =
-  | ContractString
-  | ContractExpression
-  | ContractMember
-  | DialectNode;
+export type ContractValue = ContractString | ContractExpression | DialectNode;
 
 /**
  * One attribute of a call as written: its name and its value node, `null`
@@ -262,13 +245,6 @@ function contractValueOf(
 ): ContractValue | null {
   if (attr.kind === "boolean") return null;
   if (attr.kind === "static") {
-    if (attr.member) {
-      return Object.freeze({
-        type: "mx:Member" as const,
-        name: attr.member.name,
-        span: attr.member.span,
-      });
-    }
     // The node a value row claimed, as parsed (frozen).
     if (attr.node) return attr.node;
     return Object.freeze({

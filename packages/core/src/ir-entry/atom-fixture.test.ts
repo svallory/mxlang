@@ -10,8 +10,7 @@
  *    `Expr.nodes` entry (inside an expression), with its type, span, the
  *    node, its forward and the forward's printed range.
  * 2. The `LoweredUnit` view hands a module the node itself (a whole value)
- *    or `mx:Expression` with `nodes`; `ContractMember` and
- *    `ContractExpression.nodes` type it.
+ *    or `mx:Expression` with `nodes`; `ContractExpression.nodes` types it.
  * 3. A contract `type` (or `items`) naming a node type key accepts a node of
  *    that type and refuses anything else, in one positioned diagnostic; a
  *    key the dialect does not register, or one beside `enum`, is a
@@ -19,9 +18,7 @@
  * 4. `ctx.declare` still works for a module.
  * 5. `values`, `pattern`, `ref` and `declares` are the module's to claim.
  * 6. `mappedExpr` maps each node to its forward (typecheck).
- * 7. A mark a dialect sets on its forward (`extra.mxAtom`) reaches every
- *    later reader unchanged; core no longer reads it.
- * 8. A node placed by `ctx.attribute` lowers through its type; a node of a
+ * 7. A node placed by `ctx.attribute` lowers through its type; a node of a
  *    type the dialect does not register is a positioned error.
  */
 import {
@@ -42,7 +39,6 @@ import type { Attr, Expr, ExprNode } from "../ir.ts";
 import type {
   ContractAttr,
   ContractExpression,
-  ContractMember,
   ContractValue,
   LoweredUnit,
 } from "../lowered-unit.ts";
@@ -305,71 +301,21 @@ describe("the `LoweredUnit` view of a dialect's node", () => {
     });
   });
 
-  it("`ContractMember` and `ContractExpression.nodes` type what the view hands a module", () => {
+  it("`ContractExpression.nodes` types what the view hands a module", () => {
     const unit = unitOf("<pick mode=~on n=[~a]/>", PICK);
     const value: ContractValue | null | undefined = attrOf(
       unit.calls[0]?.attrs,
       "mode",
     ).value;
-    // A type-level pin: a member is one arm of `ContractValue`; a dialect's
-    // node is another, which `type` does not narrow, so a module checks the
-    // key and casts.
-    const member: ContractMember = {
-      type: "mx:Member",
-      name: "x",
-      span: { sourceStart: 0, sourceEnd: 2 },
-    };
-    const asValue: ContractValue[] = [member];
+    // A type-level pin: a dialect's node is an arm of `ContractValue` that
+    // `type` does not narrow, so a module checks the key and casts.
+    const asValue: ContractValue[] = value ? [value] : [];
     expect(asValue).toHaveLength(1);
     expect(value?.type).toBe("atom:Atom");
     const n = attrOf(unit.calls[0]?.attrs, "n").value as ContractExpression;
     const nodes: readonly ExprNode[] | undefined = n.nodes;
     const kind: `${string}:${string}` | undefined = nodes?.[0]?.type;
     expect(kind).toBe("atom:Atom");
-  });
-
-  it("a mark the dialect sets on its forward reaches `afterLower` unchanged; core reads none", () => {
-    // Marks stay for 0.1.0-alpha.33 and go in 0.1.0-alpha.34: a dialect
-    // that still sets `extra.mxAtom` on its forward (Mesh's atoms do, in
-    // this release) gets it back on the same node, untouched.
-    const marks: object[] = [];
-    const marking: Dialect = {
-      ...atomSyntax,
-      nodeTypes: {
-        Atom: {
-          keys: [],
-          schema: { fields: { name: "data" }, slot: ["expression", "value"] },
-          parse: (text: string) => ({ name: text.slice(1) }),
-          print: (node: { name: string }) => `~${node.name}`,
-          lower: (node: { name: string; span: object }, ctx) => {
-            const mark = Object.freeze({ span: node.span, name: node.name });
-            marks.push(mark);
-            return ctx.expression({
-              type: "StringLiteral",
-              value: node.name,
-              extra: {
-                raw: JSON.stringify(node.name),
-                rawValue: node.name,
-                mxAtom: mark,
-              },
-            });
-          },
-        },
-      },
-    };
-    const unit = unitOf("<pick n=(x + ~y) mode=~on/>", PICK, marking);
-    const n = attrOf(unit.calls[0]?.attrs, "n").value as ContractExpression;
-    const right = (n.node as { right: { extra: { mxAtom: unknown } } }).right;
-    expect(marks).toHaveLength(2);
-    expect(right.extra.mxAtom).toBe(marks[0]);
-    expect(n.nodes?.[0]?.forward).toBe(right);
-    // The IR the host emits holds the same node, mark and all.
-    const [, attr] = attrsWith("<div mode=~on n=(x + ~y)/>\n", "/v/a.mx", {
-      dialect: marking,
-    });
-    const forward = (dynamicOf(attr).node as { right: { extra: object } })
-      .right;
-    expect(forward.extra).toMatchObject({ mxAtom: { name: "y" } });
   });
 });
 
@@ -482,10 +428,19 @@ describe("a contract `type` naming a node type key", () => {
     expect(
       messages(
         "<pick/>",
+        tags({ pick: { attributes: { mode: { type: "member" } } } }),
+        {},
+      )[0],
+    ).toContain(
+      '`type: "member"` was removed; declare a node type the file\'s dialect registers (`dialect:Type`), and place a member as a node of that type',
+    );
+    expect(
+      messages(
+        "<pick/>",
         tags({ pick: { attributes: { mode: { type: "object" } } } }),
       )[0],
     ).toContain(
-      '`type: "object"` is not a type; use one of string, number, boolean, expression, array, function, member, or a node type the file\'s dialect registers (`atom:Atom`)',
+      '`type: "object"` is not a type; use one of string, number, boolean, expression, array, function, or a node type the file\'s dialect registers (`atom:Atom`)',
     );
   });
 

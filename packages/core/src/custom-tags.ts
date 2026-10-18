@@ -118,12 +118,6 @@ export interface CustomTagAttribute {
    * call, member or conditional has no knowable type and is accepted, as for
    * `string` and `number`.
    *
-   * `member` accepts exactly a member a syntax module produced, in either form:
-   * the static value after a kind (`asc &dueOn` in Mesh) or a dynamic value
-   * that is one marked member (`on:load=&visible`); nothing else. An
-   * `expression` slot accepts a member too, a node-type slot refuses both
-   * forms.
-   *
    * A node type key (`dialect:Type`, one the file's dialect registers in
    * `Dialect.nodeTypes`) accepts a value written as one node of that type,
    * as the whole value (`mode=:strict`, claimed by a value row or placed by
@@ -141,7 +135,6 @@ export interface CustomTagAttribute {
     | "expression"
     | "array"
     | "function"
-    | "member"
     | `${string}:${string}`;
   /**
    * The element type of an `array` attribute: a literal type, or a node
@@ -1409,7 +1402,7 @@ export function buildersFor(
 type NodeTypeKey = `${string}:${string}`;
 
 interface LiteralValue {
-  type: "string" | "number" | "boolean" | "member" | NodeTypeKey;
+  type: "string" | "number" | "boolean" | NodeTypeKey;
   value: string | number | boolean;
 }
 
@@ -1452,7 +1445,7 @@ function literalValue(attr: Attr): LiteralValue | null {
     // (`Attr.sugar`) reads as its string for every contract but its own
     // type's.
     return {
-      type: attr.member ? "member" : (staticNodeType(attr) ?? "string"),
+      type: staticNodeType(attr) ?? "string",
       value: attr.value,
     };
   }
@@ -1556,7 +1549,6 @@ function nodeShape(written: Node | null | undefined): string | null {
 /** The written type of an attribute's value, or `null` when it cannot be known. */
 function attrShape(attr: Attr): string | null {
   if (attr.kind === "static") {
-    if (attr.member) return "member";
     return staticNodeType(attr) ?? "string";
   }
   if (attr.kind === "boolean") return "boolean";
@@ -1620,7 +1612,7 @@ function checkCompositeAttr(
 /**
  * Checks a node-type attribute (`type: "dialect:Type"`) against its written
  * shape: one node of that type, as the whole value or as an expression that
- * is the node's forward. A string, a number, an array, a function, a member
+ * is the node's forward. A string, a number, an array, a function
  * or a node of another type is a type error at the offending value; an
  * identifier, call, member or conditional has no knowable type and passes.
  * Which values of the type are allowed is the claiming module's business.
@@ -1638,17 +1630,6 @@ function checkNodeAttr(
   const at = valueLoc(attr, locate);
   // A node of the type, a sugar's included, satisfies the slot.
   if (attr.kind === "static" && dialectTypeOf(attr.node) === type) return;
-  // A member is not a node, in either form (spec §13.9.6).
-  if (isMemberValue(attr)) {
-    failForOwner(
-      INVALID_ATTRIBUTE_VALUE_CODE,
-      owner,
-      `${voice.attribute} ${attrLabel(attr)} must be ${type}, got a member${expected}`,
-      at,
-      undefined,
-      attrEndOf(attr),
-    );
-  }
   // A plain string against a declaration that uses a key the module
   // claims: the module may word it itself (it can list the values), so
   // the shape check stays core's but its error is queued behind the module's
@@ -1783,47 +1764,6 @@ function checkNodeListAttr(
     }
     refuse(message, where);
   }
-}
-
-/**
- * A member value, in both forms the `"member"` type accepts: the static value
- * after a kind (`asc &dueOn`), and a dynamic attribute whose value is exactly
- * one marked member (`on:load=&visible`).
- */
-function isMemberValue(attr: Attr): boolean {
-  if (attr.kind === "static") return attr.member !== undefined;
-  return (
-    attr.kind === "dynamic" &&
-    !!withoutTsWrappers(attr.value.node)?.extra?.mxMember
-  );
-}
-
-/**
- * A `type: "member"` slot takes exactly a member a dialect produced, in either
- * form (`isMemberValue`); an atom, a string, a bare attribute or any other
- * expression is refused, naming what was written.
- */
-function checkMemberAttr(
-  owner: Owner,
-  attr: Exclude<Attr, { kind: "spread" }>,
-  locate?: Locate,
-  voice: Voice = MX_VOICE,
-): void {
-  if (isMemberValue(attr)) return;
-  const got =
-    attr.kind === "static"
-      ? (staticNodeType(attr) ?? "a string")
-      : attr.kind === "boolean"
-        ? `a bare ${voice.attribute}`
-        : "an expression";
-  failForOwner(
-    INVALID_ATTRIBUTE_VALUE_CODE,
-    owner,
-    `${voice.attribute} ${attrLabel(attr)} must be a member, got ${got}`,
-    valueLoc(attr, locate),
-    undefined,
-    attrEndOf(attr),
-  );
 }
 
 function isLiteralAttr(attr: Attr): boolean {
@@ -2290,8 +2230,6 @@ function validateAttributes(
         locate,
         claims,
       );
-    } else if (declaration.type === "member") {
-      checkMemberAttr(owner, attr, locate, voice);
     } else if (
       declaration.type === "array" &&
       isNodeTypeKey(declaration.items)
@@ -2325,7 +2263,7 @@ function validateAttributes(
     }
     if (
       declaration.type === "expression" &&
-      ((attr.kind === "static" && !dialectTypeOf(attr.node) && !attr.member) ||
+      ((attr.kind === "static" && !dialectTypeOf(attr.node)) ||
         attr.kind === "boolean")
     ) {
       failForOwner(
@@ -2564,7 +2502,7 @@ function usesClaimedKey(
 /** The text of an attribute written as a plain string (not a node, not a member, not an expression), else undefined. */
 function plainStringOf(attr: Attr): string | undefined {
   if (attr.kind === "static") {
-    return dialectTypeOf(attr.node) || attr.member ? undefined : attr.value;
+    return dialectTypeOf(attr.node) ? undefined : attr.value;
   }
   if (attr.kind !== "dynamic") return undefined;
   const node = withoutTsWrappers(attr.value.node);
@@ -2736,7 +2674,6 @@ const ATTRIBUTE_TYPES = [
   "expression",
   "array",
   "function",
-  "member",
 ] as const;
 
 /**
@@ -2771,7 +2708,9 @@ function rejectContradictoryAttribute(
       INVALID_CONTRACT_CODE,
       type === "atom"
         ? `\`type: "atom"\` was removed; declare a node type the file's dialect registers (\`${node}\`), or \`{ type: "array", items: "${node}" }\` for a list`
-        : `\`type: ${JSON.stringify(type)}\` is not a type; use one of ${ATTRIBUTE_TYPES.join(", ")}, or a node type the file's dialect registers (\`${node}\`)`,
+        : type === "member"
+          ? `\`type: "member"\` was removed; declare a node type the file's dialect registers (\`${node}\`), and place a member as a node of that type`
+          : `\`type: ${JSON.stringify(type)}\` is not a type; use one of ${ATTRIBUTE_TYPES.join(", ")}, or a node type the file's dialect registers (\`${node}\`)`,
     );
   }
   if (declaration.items !== undefined) {

@@ -708,11 +708,11 @@ in an expression is plain JavaScript, as in Marko. A dialect that has atoms
 registers them as a node type of its own (`atom:Atom`, say) and names it from
 an expression row and a value row; its `lower` returns the string literal the
 atom stands for. A whole-value atom is a `static` attribute with the node on
-`Attr.node`; an atom inside an expression is an entry of `Expr.nodes`. A mark
-a dialect sets on a forward (`extra.mxAtom`, `extra.mxMember`) reaches every
-later reader, its own `afterLower` included, unchanged; core reads no
-`extra.mxAtom`. Both marks go in 0.1.0-alpha.34: read `Expr.nodes` and
-`Attr.node` instead.
+`Attr.node`; an atom inside an expression is an entry of `Expr.nodes`. Core
+marks nothing on a forward and reads no mark from one: a dialect finds its
+nodes in `Expr.nodes` and `Attr.node`. A member is a node type the dialect
+registers the same way (`mesh:Member`, say), and a contract slot names it
+(`type: "mesh:Member"`).
 
 ### Contract checks in a dialect: `contractFields`, `checkContract` and `afterLower(unit)`
 
@@ -731,11 +731,11 @@ own, with their meaning, by claiming them. Three `@unstable` parts of
   types: `type: "atom:Atom"` (any `id:Type` the file's dialect registers)
   accepts one node of that type, written as the whole value or as an
   expression that is the node's forward, and `items: "atom:Atom"` makes an
-  array of them. A string, number, array, function, member or node of
+  array of them. A string, number, array, function or node of
   another type in that slot is a positioned error; an identifier or a call
   has no knowable type and passes. A type the dialect does not register is a
-  registration error. `type: "member"` is the same check for the members a
-  dialect builds.
+  registration error. A member is such a node type too (`type: "mesh:Member"`);
+  `type: "member"` is a registration error.
 - `checkContract(tag, contract, ctx)` runs at registration for every
   contract that uses a listed key, at any depth, called or not. `contract`
   is plain data (`attributes`, `attributeTags`, `children` and the listed
@@ -750,7 +750,7 @@ own, with their meaning, by claiming them. Three `@unstable` parts of
   a frozen `LoweredUnit`:
   - `calls`: every custom tag call with its contract (the listed tag keys
     included), its attributes as written (each value's `type`: `mx:String`,
-    `mx:Expression` with the dialect nodes inside it in `nodes`, `mx:Member`,
+    `mx:Expression` with the dialect nodes inside it in `nodes`,
     the dialect node written as the whole value, `null` for a bare boolean,
     or `{ spread: true }`), its attribute tags at any depth, and its authored
     ancestors with an opaque `scope` per tag instance.

@@ -189,7 +189,6 @@ may set. An inline object stays a table only. A trigger whose `node` is
   `ctx.operator`, `"spread"`, `"key"`, or `null`), so a module can refuse a
   use in its own words with `ctx.fail(message)`, a positioned error at the
   trigger. Core still refuses a property name after the hook returns.
-  A replacement marked `extra.mxAtom` is spliced and mapped as an atom.
 
   Core positions the result from the trigger. A result that does not fit
   the position, a `=value` the hook leaves out, a trigger written where a
@@ -221,14 +220,9 @@ may set. An inline object stays a table only. A trigger whose `node` is
     frozen; a claimed `mx:String` also has `raw`, `start` and `end`), or
     `null` for a bare attribute. A claimed node whose type lowered it to
     `ctx.expression` is the value that expression makes, as if written
-    there: `mx:Expression`, or `mx:String` for a string literal (`mx:Atom`
-    when the literal is atom-marked). Each carries `nameSpan`,
+    there: `mx:Expression`, or `mx:String` for a string literal. Each carries `nameSpan`,
     `label` (how core's diagnostics name it) and `authored` (the sugar that
     wrote it). A spread is `{ spread: true, span }`.
-  - Removal work, not part of what `ContractAttr` offers: a value typed
-    `mx:Atom` or `mx:Member` (`name`, `span`) is a leftover mark of the atom
-    and member sugars, kept only until the atoms-and-members dialect carries
-    them as its own value nodes. Do not build on it.
   - `attributeTags` nest to any depth. Each carries the declaration its
     parent's contract has for it, wildcards resolved, as `contract`.
   - `ancestors` are the authored tags around the call, outermost first,
@@ -252,7 +246,7 @@ may set. An inline object stays a table only. A trigger whose `node` is
     `pattern`, `ref` (attribute) and `declares` (tag).
   - Listing one turns core's registration check and its file-level check
     of that key off.
-  - Core keeps the whole-value shape check (`type: "atom"`, `"member"`)
+  - Core keeps the whole-value shape check (a node-type slot, `type: "atom:Atom"`)
     and `ctx.declare`.
     Core never reads a claimed key to word that check: the module's
     `describeAttribute` does. A plain string against a declaration with a
