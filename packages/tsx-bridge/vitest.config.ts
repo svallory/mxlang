@@ -6,6 +6,8 @@ import { defineConfig } from "vitest/config";
 // Node it would pass against the very bug it exists to catch.
 export default defineConfig({
   test: {
+    // No global state (audited: no vi.mock, no globalThis writes).
+    isolate: false,
     exclude: ["**/node_modules/**", "src/mx/region-compile.bun.test.ts"],
   },
 });

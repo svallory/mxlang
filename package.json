@@ -32,7 +32,8 @@
     "oracle:custom-tags": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/fixtures-custom-tags/run.ts",
     "oracle:angular": "bun run --tsconfig-override=tsconfig.base.json packages/oracle/src/report-angular.ts",
     "changelog:assemble": "bun run scripts/assemble-changelog.ts",
-    "changelog:check": "bun run scripts/check-changelog-fragment.ts"
+    "changelog:check": "bun run scripts/check-changelog-fragment.ts",
+    "typecheck:incr": "bun run scripts/typecheck.ts"
   },
   "devDependencies": {
     "@babel/code-frame": "7.29.7",
