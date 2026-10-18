@@ -1819,7 +1819,7 @@ function lowerConstPattern(
             (key?.type !== "Identifier" && key?.type !== "StringLiteral")
           ) {
             fail(
-              "a computed key (`{ [k]: v }`) in a `<const>` pattern is not supported: use an identifier or a string literal key, as Marko does.",
+              "only an identifier or a string literal key is supported in a `<const>` pattern (`{ [k]: v }` and `{ 0: v }` are not), as in Marko. Use a name or a quoted key.",
               at((property.start ?? 1) - 1),
             );
           }
@@ -3378,32 +3378,60 @@ class AngularEmitter implements Emitter<string> {
     return copy;
   }
 
-  /** Where the pattern of `node` starts in the source: its line from the tag's position. */
-  private patternStart(node: Extract<IrNode, { kind: "Const" }>): Position {
-    const line = this.ctx.source.split("\n")[node.loc.line - 1];
-    const found = line?.indexOf(node.name, node.loc.column) ?? -1;
-    return found < 0 ? node.loc : { ...node.loc, column: found };
+  /**
+   * The pattern of `node` as written, with where it starts: read from the
+   * source after the tag's `/`, up to its closing bracket, so a multi-line
+   * pattern is positioned inside it. The tag's position and the name the IR
+   * holds when the source does not show the same pattern there.
+   */
+  private patternSource(node: Extract<IrNode, { kind: "Const" }>): {
+    text: string;
+    start: Position;
+  } {
+    const source = this.ctx.source;
+    const lines = source.split("\n");
+    let from = node.loc.column;
+    for (let index = 0; index < node.loc.line - 1; index += 1) {
+      from += (lines[index]?.length ?? 0) + 1;
+    }
+    const slash = source.indexOf("/", from);
+    const fallback = { text: node.name, start: node.loc };
+    if (slash < 0) return fallback;
+    let depth = 0;
+    let end = slash + 1;
+    for (; end < source.length; end += 1) {
+      const char = source[end];
+      if (char === "{" || char === "[") depth += 1;
+      else if (char === "}" || char === "]") depth -= 1;
+      if (depth === 0 && end > slash + 1) break;
+    }
+    const text = source.slice(slash + 1, end + 1);
+    const squash = (value: string): string => value.replace(/\s+/g, "");
+    if (squash(text) !== squash(node.name)) return fallback;
+    const before = source.slice(0, slash + 1).split("\n");
+    return {
+      text,
+      start: {
+        ...node.loc,
+        line: before.length,
+        column: before.at(-1)?.length ?? 0,
+      },
+    };
   }
 
   private constPatternLets(
     node: Extract<IrNode, { kind: "Const" }>,
   ): Array<Extract<IrNode, { kind: "Const" }>> {
-    const written = node.name;
+    const { text: written, start } = this.patternSource(node);
     const temp = (): string => {
       const name = this.gensym("__mxPattern");
-      this.authoredNames.set(name, written);
+      this.authoredNames.set(name, node.name);
       return name;
     };
     const root = temp();
     return [
       { ...node, name: root },
-      ...lowerConstPattern(
-        written,
-        root,
-        node,
-        temp,
-        this.patternStart(node),
-      ).map(
+      ...lowerConstPattern(written, root, node, temp, start).map(
         (bound): Extract<IrNode, { kind: "Const" }> => ({
           kind: "Const",
           loc: node.loc,
