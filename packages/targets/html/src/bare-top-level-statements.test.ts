@@ -7,14 +7,14 @@
  */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
 let dir = "";
 beforeAll(() => {
-  dir = mkdtempSync(join(homedir(), "tmp", "bare-top-level-"));
+  dir = mkdtempSync(join(tmpdir(), "bare-top-level-"));
 });
 afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
