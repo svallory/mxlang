@@ -680,9 +680,11 @@ const colonDialect = dialectWith({
 
 describe("a reserved structural name in a data file", () => {
   const MX_INTERNAL = /\b(core|target|data tag)\b/;
+  // Under `structural: "reject"` an orphan `else` is the `if` construct instead.
+  const PASS: LowerSourceOptions = { structural: "pass" };
 
   it("an orphan `else` names the tags it needs through the voice", () => {
-    expect(messages("else\n  entity\n", colonDialect)).toEqual([
+    expect(messages("else\n  entity\n", colonDialect, PASS)).toEqual([
       "`:else` must come right after `:if` or `:else-if`",
     ]);
   });
@@ -692,12 +694,13 @@ describe("a reserved structural name in a data file", () => {
       messages(
         'if=x\n  entity name="e"\nelse\n  entity name="e"\nelse\n  entity name="e"\n',
         colonDialect,
+        PASS,
       ),
     ).toEqual(["`:else` must come right after `:if` or `:else-if`"]);
   });
 
   it("an orphan `else-if` names the tags it needs through the voice", () => {
-    expect(messages("else-if=x\n  entity\n", colonDialect)).toEqual([
+    expect(messages("else-if=x\n  entity\n", colonDialect, PASS)).toEqual([
       "`:else-if` must come right after `:if` or `:else-if`",
     ]);
   });
@@ -719,7 +722,7 @@ describe("a reserved structural name in a data file", () => {
         "else-if=x\n  entity\n",
         "try\n  entity\n",
       ]) {
-        for (const message of messages(source, dialect)) {
+        for (const message of messages(source, dialect, PASS)) {
           expect(message).not.toMatch(MX_INTERNAL);
         }
       }
@@ -731,6 +734,7 @@ describe("a reserved structural name in a data file", () => {
       messages(
         "else\n  entity\n",
         dialectWith({ attribute: { one: "option", many: "options" } }),
+        PASS,
       ),
     ).toEqual(["`<else>` must come right after `<if>` or `<else-if>`"]);
   });
@@ -740,7 +744,7 @@ describe("a reserved structural name in a data file", () => {
       formatTag: ({ name }: { name: string }) =>
         name === "entity" ? "ENTITY" : undefined,
     });
-    expect(messages("else\n  entity\n", own)).toEqual([
+    expect(messages("else\n  entity\n", own, PASS)).toEqual([
       "`<else>` must come right after `<if>` or `<else-if>`",
     ]);
     expect(messages("try\n  entity\n", own)).toEqual([
@@ -756,8 +760,10 @@ describe("a reserved structural name in a data file", () => {
         "else-if=x\n  entity\n",
         "try\n  entity\n",
       ]) {
-        expect(messages(source, dialect)).toEqual(messages(source, undefined));
-        expect(messages(source, dialect)[0]).toContain(
+        expect(messages(source, dialect, PASS)).toEqual(
+          messages(source, undefined, PASS),
+        );
+        expect(messages(source, dialect, PASS)[0]).toContain(
           "cannot name a data tag",
         );
       }
