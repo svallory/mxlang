@@ -1745,7 +1745,21 @@ function lowerConstPattern(
   root: string,
   node: { loc: Position },
   temp: () => string,
+  /** Where the pattern text starts in the source, when it can be found. */
+  start: Position = node.loc,
 ): PatternLet[] {
+  // A node whose position is `offset` characters into the written pattern.
+  const at = (offset: number): { loc: Position } => {
+    const before = pattern.slice(0, Math.max(0, offset)).split("\n");
+    const last = before.at(-1) ?? "";
+    return {
+      loc: {
+        ...start,
+        line: start.line + before.length - 1,
+        column: before.length === 1 ? start.column + last.length : last.length,
+      },
+    };
+  };
   const wrapped = `(${pattern} = 0)`;
   let target: PatternNode;
   try {
@@ -1761,6 +1775,16 @@ function lowerConstPattern(
     );
   }
   const out: PatternLet[] = [];
+  const held = new Set<string>([root]);
+  // A path (`root.a`) read more than once would run a getter more than once
+  // where JavaScript reads the field once: hold it in a generated `@let`.
+  const hold = (value: string): string => {
+    if (held.has(value)) return value;
+    const name = temp();
+    held.add(name);
+    out.push({ name, generated: true, code: value });
+    return name;
+  };
   const bind = (n: PatternNode, value: string): void => {
     switch (n.type) {
       case "Identifier":
@@ -1770,39 +1794,56 @@ function lowerConstPattern(
         const right = n.right;
         const left = n.left;
         if (!right || !left) return;
-        const fallback = `${value} === undefined ? ${wrapped.slice(right.start ?? 0, right.end ?? 0)} : ${value}`;
+        const read = hold(value);
+        const fallback = `${read} === undefined ? (${wrapped.slice(right.start ?? 0, right.end ?? 0)}) : ${read}`;
         if (left.type === "Identifier") {
           out.push({ name: left.name ?? "", generated: false, code: fallback });
           return;
         }
-        const held = temp();
-        out.push({ name: held, generated: true, code: fallback });
-        bind(left, held);
+        const defaulted = temp();
+        held.add(defaulted);
+        out.push({ name: defaulted, generated: true, code: fallback });
+        bind(left, defaulted);
         return;
       }
-      case "ObjectPattern":
-        for (const property of n.properties ?? []) {
+      case "ObjectPattern": {
+        const props = n.properties ?? [];
+        const from = props.length > 1 ? hold(value) : value;
+        for (const property of props) {
           if (property.type === "RestElement" || !property.value) {
-            fail(PATTERN_REST_MESSAGE, node);
+            fail(PATTERN_REST_MESSAGE, at((property.start ?? 1) - 1));
           }
           const key = property.key;
+          if (
+            property.computed ||
+            (key?.type !== "Identifier" && key?.type !== "StringLiteral")
+          ) {
+            fail(
+              "a computed key (`{ [k]: v }`) in a `<const>` pattern is not supported: use an identifier or a string literal key, as Marko does.",
+              at((property.start ?? 1) - 1),
+            );
+          }
           const step =
-            key?.type === "Identifier" && !property.computed
+            key.type === "Identifier"
               ? `.${key.name}`
-              : `[${JSON.stringify(key?.value)}]`;
-          bind(property.value, `${value}${step}`);
+              : `[${JSON.stringify(key.value)}]`;
+          bind(property.value, `${from}${step}`);
         }
         return;
-      case "ArrayPattern":
-        (n.elements ?? []).forEach((element, index) => {
+      }
+      case "ArrayPattern": {
+        const items = n.elements ?? [];
+        const from = items.filter(Boolean).length > 1 ? hold(value) : value;
+        items.forEach((element, index) => {
           if (!element) return;
           if (element.type === "RestElement" && element.argument) {
-            bind(element.argument, `${value}.slice(${index})`);
+            bind(element.argument, `${from}.slice(${index})`);
             return;
           }
-          bind(element, `${value}[${index}]`);
+          bind(element, `${from}[${index}]`);
         });
         return;
+      }
       default:
         fail(
           `\`<const/${pattern}>\` binds a form this host cannot read as a template expression. Bind the value to a name and read its fields.`,
@@ -3337,6 +3378,13 @@ class AngularEmitter implements Emitter<string> {
     return copy;
   }
 
+  /** Where the pattern of `node` starts in the source: its line from the tag's position. */
+  private patternStart(node: Extract<IrNode, { kind: "Const" }>): Position {
+    const line = this.ctx.source.split("\n")[node.loc.line - 1];
+    const found = line?.indexOf(node.name, node.loc.column) ?? -1;
+    return found < 0 ? node.loc : { ...node.loc, column: found };
+  }
+
   private constPatternLets(
     node: Extract<IrNode, { kind: "Const" }>,
   ): Array<Extract<IrNode, { kind: "Const" }>> {
@@ -3349,7 +3397,13 @@ class AngularEmitter implements Emitter<string> {
     const root = temp();
     return [
       { ...node, name: root },
-      ...lowerConstPattern(written, root, node, temp).map(
+      ...lowerConstPattern(
+        written,
+        root,
+        node,
+        temp,
+        this.patternStart(node),
+      ).map(
         (bound): Extract<IrNode, { kind: "Const" }> => ({
           kind: "Const",
           loc: node.loc,

@@ -12,7 +12,7 @@
  * Stock Marko 6.4.4 compiles every pattern here (`bun run --cwd
  * packages/stock-marko probe`), except a computed key (`{ [k]: v }`: "Only
  * identifier and string literal keys are supported when destructuring"),
- * which MX refuses at the same place. The rendered values are JavaScript's
+ * which MX refuses at the key. The rendered values are JavaScript's
  * destructuring semantics, which Marko emits as written.
  *
  * Render rows run the emitted template through TestBed (JIT, dev mode, jsdom),
@@ -93,12 +93,22 @@ describe("the emitted template", () => {
     [
       "a default applies to undefined only",
       "<const/{ a = 1 }=input.o/>${a}",
-      "@let __mxPattern = input.o;@let a = __mxPattern.a === undefined ? 1 : __mxPattern.a;{{ a }}",
+      "@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a;@let a = __mxPattern1 === undefined ? (1) : __mxPattern1;{{ a }}",
     ],
     [
       "a nested pattern with a default holds the defaulted value once",
       "<const/{ a: { b } = {} }=input.o/>${b}",
-      "@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a === undefined ? {} : __mxPattern.a;@let b = __mxPattern1.b;{{ b }}",
+      "@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a;@let __mxPattern2 = __mxPattern1 === undefined ? ({}) : __mxPattern1;@let b = __mxPattern2.b;{{ b }}",
+    ],
+    [
+      "a conditional default is parenthesized",
+      "<const/{ a = input.p ? 1 : 2 }=input.o/>${a}",
+      "@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a;@let a = __mxPattern1 === undefined ? (input.p ? 1 : 2) : __mxPattern1;{{ a }}",
+    ],
+    [
+      "a nested pattern binding two names reads the field once",
+      "<const/{ a: { b, c } }=input.o/>${b}${c}",
+      "@let __mxPattern = input.o;@let __mxPattern1 = __mxPattern.a;@let b = __mxPattern1.b;@let c = __mxPattern1.c;{{ b }}{{ c }}",
     ],
     [
       "an empty pattern still evaluates the initializer",
@@ -242,26 +252,56 @@ describe("a form Angular cannot express is refused at the <const>", () => {
     throw new Error(`expected a refusal for ${source}`);
   }
 
-  const ROWS: Array<[string, string, number, number]> = [
-    ["an object rest", "<const/{ a, ...rest }=input.o/>${a}", 1, 0],
+  // [label, source, message needle, line, column]: the position is the
+  // refused part of the pattern (`...rest`, `[k]`), not the tag.
+  const ROWS: Array<[string, string, string, number, number]> = [
+    [
+      "an object rest",
+      "<const/{ a, ...rest }=input.o/>${a}",
+      "object rest",
+      1,
+      12,
+    ],
     [
       "an object rest in an element body",
       "<div>\n  <const/{ a, ...rest }=input.o/>${a}\n</div>",
+      "object rest",
       2,
-      2,
+      14,
     ],
     [
       "an object rest in a nested pattern",
       "<main>\n<div>\n  <const/{ a: { ...rest } }=input.o/>${rest}\n</div></main>",
+      "object rest",
       3,
+      16,
+    ],
+    [
+      "a computed key",
+      "<const/{ [input.k]: v }=input.o/>${v}",
+      "computed key",
+      1,
+      9,
+    ],
+    [
+      "a computed key naming a const",
+      "<const/k='a'/>\n<const/{ [k]: v }=input.o/>${v}",
+      "computed key",
       2,
+      9,
+    ],
+    [
+      "a computed key in a nested pattern",
+      "<div>\n  <const/{ a: { [k]: v } }=input.o/>${v}\n</div>",
+      "computed key",
+      2,
+      16,
     ],
   ];
-  for (const [label, source, line, column] of ROWS) {
+  for (const [label, source, needle, line, column] of ROWS) {
     it(label, () => {
       const error = refusal(source);
-      expect(error.message).toContain("object rest");
-      expect(error.message).toContain("Name each field you need");
+      expect(error.message).toContain(needle);
       expect(error).toMatchObject({ line, column });
     });
   }
