@@ -705,6 +705,42 @@ describe("a reserved structural name in a data file", () => {
     ]);
   });
 
+  describe("under structural reject the construct is worded through the voice", () => {
+    const REJECT: LowerSourceOptions = { structural: "reject" };
+
+    it.each(["else\n  entity\n", "else-if=x\n  entity\n"])(
+      "colon dialect: %j",
+      (source) => {
+        expect(messages(source, colonDialect, REJECT)).toEqual([
+          "Kit files are static, so they do not evaluate `:if`",
+        ]);
+      },
+    );
+
+    it("a bare dialect keeps the tail Mesh parses", () => {
+      const bare = dialectWith({
+        formatTag: ({ name }: { name: string }) => name,
+      });
+      for (const source of ["else\n  entity\n", "else-if=x\n  entity\n"]) {
+        const [message, ...rest] = messages(source, bare, REJECT);
+        expect(rest).toEqual([]);
+        expect(message).toMatch(/\bevaluate `(for|if)`$/);
+      }
+    });
+
+    it("a throwing formatTag is the dialect hook error, at the tag", () => {
+      const throwing = dialectWith({
+        formatTag: () => {
+          throw new Error("no tags");
+        },
+      });
+      const found = diagnose("else\n  entity\n", throwing, REJECT);
+      expect(found.map((d) => [d.code, d.line, d.column])).toEqual([
+        [DIALECT_HOOK_ERROR_CODE, 1, 0],
+      ]);
+    });
+  });
+
   it("`try` says what a data file cannot do and what to write instead", () => {
     expect(messages("try\n  entity\n", colonDialect)).toEqual([
       "`:try` cannot be used in a Kit file: Kit files are static, so they have no render errors to catch; write its content directly",
