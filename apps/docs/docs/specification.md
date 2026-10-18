@@ -5370,8 +5370,15 @@ when its dialect loads, naming the dialect, the type and the piece.
 declaration, if any, and its direct dependencies that declare one. Their
 marking characters are disjoint: a row's mark is the literal text its `match`
 starts with (for top-level `|` alternatives, the prefix they all share), else the characters of its `chars`, and no mark of one dialect may
-equal, be a prefix of, or have as a prefix a mark of another (`%` against
-`%.`), whatever the position. When a file's dialect loads, core compares it with
+be identical to a mark of another, whatever the position. Two literal marks are
+identical when they are the same text; two character sets, when they share a
+character; a literal and a character set, when the literal is one character of
+the set. A prefix is not a clash: `%`, `%.` and `%:` may all be installed,
+since a file is read with the table of the one dialect it routes to, so the
+marks of different dialects never compete in one scanner. Within one table the
+scanner is unchanged: one first character arms at most one row per list, and
+a table with two rows on one first character is refused when it is validated.
+When a file's dialect loads, core compares it with
 the others; a clash is one `MX_INVALID_DIALECT_MODULE` error in the loading
 dialect's module at 1:0 that names both dialects, both rows and the shared
 mark, and says to change one row's `chars` and `match` or to remove one

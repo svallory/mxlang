@@ -634,8 +634,11 @@ the piece):
 
 Across the dialects a project installs (its own declaration and its direct
 dependencies that declare one), marking characters are disjoint: no two rows of
-different dialects start with the same text, and none starts with text that is a
-prefix of another's (`%` against `%.`; `%.` against `%:` is fine). The check
+different dialects have an identical mark. A prefix is not a clash: `%`, `%.`
+and `%:` may all be installed, because a file is read with the table of the one
+dialect it routes to. Within one table, one first character arms at most one
+row per list. A literal mark and a character set clash only when the literal is
+one character of the set. The check
 runs when a file's dialect is routed from a project, and for a caller that
 passes the `dialect` option too: with an absolute file name inside a project,
 the option is compared with that project's installed dialects (an installed

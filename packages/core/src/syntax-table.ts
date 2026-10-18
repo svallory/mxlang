@@ -1493,7 +1493,7 @@ export function fileTagRules(
  * Loads the dialect `filename` routes to, then checks its marks against the
  * other dialects its project installs (the project's own declaration and its
  * direct dependencies that declare one, `discoverDialects`): two of them
- * sharing a marking character or prefix is an error in the module of the
+ * with an identical mark is an error in the module of the
  * dialect being loaded, naming both. Not cached, so editing either module
  * clears it. A peer whose module does not load is skipped here; its own
  * files report why.

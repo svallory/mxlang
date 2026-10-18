@@ -3,8 +3,11 @@
  * two dialects installed in one project share one. A row's mark is what
  * starts the forms it claims: the literal text its `match` starts with (the
  * `%.` of `%\.name`), or, when `match` starts with a class or a group, the
- * characters of its `chars`. Two marks overlap when one is a prefix of the
- * other (`%` and `%.`), or when their character sets share a character.
+ * characters of its `chars`. Two marks clash only when they are identical:
+ * the same literal text, or character sets sharing a character, or a
+ * one-character literal inside a set. A prefix is no clash (`%` and `%.`
+ * may both be installed): the dialects' tables never meet in one scanner, and
+ * within one table a first character arms one row.
  * Core reads no dialect's own vocabulary here: it compares the table rows.
  */
 import type { SyntaxTable, Trigger } from "./syntax-table.ts";
@@ -148,13 +151,16 @@ function marksOf(table: Partial<SyntaxTable> | undefined): Mark[] {
 const hasCode = (mark: Mark, code: number): boolean =>
   mark.ranges.some(([from, to]) => code >= from && code <= to);
 
+/**
+ * The text two marks share when they are identical, else `undefined`. Two
+ * literals are identical when equal; two character sets when they share a
+ * character; a literal and a set when the literal is one character of the
+ * set (a longer literal only has the set's character as a prefix, and a
+ * prefix is no clash).
+ */
 function overlap(a: Mark, b: Mark): string | undefined {
   if (a.prefix !== "" && b.prefix !== "") {
-    return a.prefix.startsWith(b.prefix)
-      ? b.prefix
-      : b.prefix.startsWith(a.prefix)
-        ? a.prefix
-        : undefined;
+    return a.prefix === b.prefix ? a.prefix : undefined;
   }
   if (a.prefix === "" && b.prefix === "") {
     for (const [from, to] of a.ranges) {
@@ -165,6 +171,28 @@ function overlap(a: Mark, b: Mark): string | undefined {
     }
     return undefined;
   }
+  const [prefixed, set] = a.prefix !== "" ? [a, b] : [b, a];
+  const points = [...prefixed.prefix];
+  if (points.length !== 1) return undefined;
+  return hasCode(set, points[0]?.codePointAt(0) as number)
+    ? prefixed.prefix
+    : undefined;
+}
+
+/**
+ * The text two marks share when one equals, is a prefix of, or has as a
+ * prefix the other: how core's own marks are compared, since core reads
+ * that text itself before any row is tried.
+ */
+function sharedText(a: Mark, b: Mark): string | undefined {
+  if (a.prefix !== "" && b.prefix !== "") {
+    return a.prefix.startsWith(b.prefix)
+      ? b.prefix
+      : b.prefix.startsWith(a.prefix)
+        ? a.prefix
+        : undefined;
+  }
+  if (a.prefix === "" && b.prefix === "") return overlap(a, b);
   const [prefixed, set] = a.prefix !== "" ? [a, b] : [b, a];
   const first = prefixed.prefix.codePointAt(0) as number;
   return hasCode(set, first) ? String.fromCodePoint(first) : undefined;
@@ -229,7 +257,7 @@ export function findCoreMarkClash(
 ): CoreMarkClash | undefined {
   for (const own of marksOf(table)) {
     for (const core of CORE_MARKS[own.list] ?? []) {
-      const mark = overlap(own, {
+      const mark = sharedText(own, {
         row: "",
         list: own.list,
         index: -1,

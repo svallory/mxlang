@@ -440,22 +440,45 @@ describe("the dialects installed in one project have disjoint marks", () => {
     expect(error.file).toMatch(/node_modules\/@acme\/b\/index\.mjs$/);
   });
 
-  it("a prefix overlap counts: `%` against `%.`", () => {
+  it("a prefix is no clash: `%` and `%.` load together", () => {
     markPackage("a", ".aaa", "%", "%\\.[a-z]+");
     markPackage("b", ".bbb", "%", "%[a-z]+");
-    const error = caught(() =>
-      irOf("div x=(%.a)\n", undefined, join(dir, "page.aaa")),
-    );
-    expect(error.message).toContain(`${SHARED} "%"`);
+    const ir = irOf("div x=(%.a)\n", undefined, join(dir, "page.aaa"));
+    expect(ir.body).toHaveLength(1);
+    const other = irOf("div x=(%a)\n", undefined, join(dir, "page.bbb"));
+    expect(other.body).toHaveLength(1);
   });
 
-  it("a longer prefix against a shorter one is an overlap", () => {
+  it("a longer prefix against a shorter one is no clash", () => {
     markPackage("a", ".aaa", "%", "%\\.[a-z]+");
     markPackage("b", ".bbb", "%", "%\\.x[a-z]+");
+    const ir = irOf("div x=(%.a)\n", undefined, join(dir, "page.aaa"));
+    expect(ir.body).toHaveLength(1);
+  });
+
+  it("`%`, `%.` and `%:` load together", () => {
+    markPackage("a", ".aaa", "%", "%\\.[a-z]+");
+    markPackage("b", ".bbb", "%", "%:[a-z]+");
+    markPackage("c", ".ccc", "%", "%[0-9]+");
+    expect(
+      irOf("div x=(%.a)\n", undefined, join(dir, "page.aaa")).body,
+    ).toHaveLength(1);
+    expect(
+      irOf("div x=(%:a)\n", undefined, join(dir, "page.bbb")).body,
+    ).toHaveLength(1);
+  });
+
+  it("identical longer marks clash: `%.` against `%.`", () => {
+    markPackage("a", ".aaa", "%", "%\\.[a-z]+");
+    markPackage("b", ".bbb", "%", "%\\.[0-9]+");
     const error = caught(() =>
       irOf("div x=(%.a)\n", undefined, join(dir, "page.aaa")),
     );
-    expect(error.message).toContain(`${SHARED} "%."`);
+    expect(error.diagnosticCode).toBe("MX_INVALID_DIALECT_MODULE");
+    expect(error.message).toBe(
+      `${SHARED} "%.": the \`a-row\` row of \`a\` (\`table.expressionTriggers\`) and the \`b-row\` row of \`b\` (\`table.expressionTriggers\`). A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove one of the two dependencies`,
+    );
+    expect([error.line, error.column]).toEqual([1, 0]);
   });
 
   it("disjoint marks load", () => {
@@ -498,10 +521,16 @@ describe("a `dialect` option is checked against its project's installed dialects
     expect([error.line, error.column]).toEqual([1, 0]);
   });
 
-  it("a prefix clash counts on the option path too", () => {
+  it("a prefix is no clash on the option path either", () => {
     markPackage("b", ".bbb", "~", "~\\.[a-z]+");
+    expect(irOf("div x=(~a)\n", atomDialect(), FILE()).body).toHaveLength(1);
+  });
+
+  it("an identical longer mark clashes on the option path", () => {
+    markPackage("b", ".bbb", "~", "~[0-9]+");
     const error = optionError(atomDialect());
     expect(error.message).toContain(`${CLASH} "~"`);
+    expect([error.line, error.column]).toEqual([1, 0]);
   });
 
   it("a bare table is checked as well", () => {
@@ -715,9 +744,13 @@ describe("findMarkOverlap", () => {
       "!",
     ],
     ["a range covering a character", row("a-z", "[a-z]"), row("m", "m"), "m"],
-    ["a prefix of another", row("%", "%"), row("%", "%\\.a"), "%"],
-    ["a longer prefix first", row("%", "%\\.a"), row("%", "%"), "%"],
-    ["a prefix against a class", row("%", "%\\.a"), row("%-&", "[%-&]"), "%"],
+    ["identical literals", row("%", "%\\.[a-z]"), row("%", "%\\.[0-9]"), "%."],
+    [
+      "a one-character literal in a class",
+      row("%", "%"),
+      row("%-&", "[%-&]"),
+      "%",
+    ],
   ])("%s overlaps", (_, a, b, mark) => {
     expect(findMarkOverlap(table(a), table(b))?.mark).toBe(mark);
   });
@@ -725,6 +758,14 @@ describe("findMarkOverlap", () => {
   it.each([
     ["different characters", row("~", "~a"), row("!", "!a")],
     ["prefixes that differ", row("%", "%\\.a"), row("%", "%:a")],
+    ["a prefix of another", row("%", "%"), row("%", "%\\.a")],
+    ["a longer prefix first", row("%", "%\\.a"), row("%", "%")],
+    ["`%.` against `%:`", row("%", "%\\.a"), row("%", "%:a")],
+    [
+      "a longer literal against a class",
+      row("%", "%\\.a"),
+      row("%-&", "[%-&]"),
+    ],
     [
       "a prefix against a class without its first character",
       row("%", "%\\.a"),
@@ -735,9 +776,10 @@ describe("findMarkOverlap", () => {
   });
 
   it("an optional character after the mark is not part of it", () => {
-    // `%` then maybe `.`: the mark is `%`, so it clashes with a bare `%`.
+    // `%` then maybe `.`: the mark is `%`, identical to a bare `%` row's.
     expect(
-      findMarkOverlap(table(row("%", "%\\.?a")), table(row("%", "%b")))?.mark,
+      findMarkOverlap(table(row("%", "%\\.?a")), table(row("%", "%[0-9]")))
+        ?.mark,
     ).toBe("%");
   });
 
@@ -745,21 +787,30 @@ describe("findMarkOverlap", () => {
     expect(
       findMarkOverlap(
         table(row(":", "::(?:[a-z]+)?|:[a-z]+")),
-        table(row(":", ":a[a-z]*")),
+        table(row(":", ":[a-z]*")),
       )?.mark,
     ).toBe(":");
     expect(
       findMarkOverlap(table(row("ac", "ab|cd")), table(row("c", "c[0-9]")))
         ?.mark,
     ).toBe("c");
+    // The longer `:a` is a prefix-extension of `:`, not identical to it.
+    expect(
+      findMarkOverlap(
+        table(row(":", "::(?:[a-z]+)?|:[a-z]+")),
+        table(row(":", ":a[a-z]*")),
+      ),
+    ).toBeUndefined();
   });
 
   it("a `|` inside a group or a class is no alternative", () => {
     expect(
-      findMarkOverlap(table(row("~", "~(?:a|b)")), table(row("~", "~c")))?.mark,
+      findMarkOverlap(table(row("~", "~(?:a|b)")), table(row("~", "~[0-9]")))
+        ?.mark,
     ).toBe("~");
     expect(
-      findMarkOverlap(table(row("%", "%[|]a")), table(row("%", "%:a")))?.mark,
+      findMarkOverlap(table(row("%", "%[|]a")), table(row("%", "%[0-9]")))
+        ?.mark,
     ).toBe("%");
   });
 
