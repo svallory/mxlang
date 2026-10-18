@@ -5183,9 +5183,9 @@ UTF-16 range. `ctx` is frozen and offers exactly:
 - `ctx.valueForm`: how that value is written, read-only: `"="`, `":="`,
   `"method"`, `"async-method"`, `"arguments"` (`(args)` with no body) or `null`.
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
-  replaces the trigger's stand-in; as an attribute value it is that value. Core does not strip,
-  rename or rewrite the keys of the node's `extra`, so a dialect may keep its
-  own marks there (for example `extra.mxTransaction`).
+  replaces the trigger's stand-in; as an attribute value it is that value.
+  Core does not strip, rename or rewrite the keys of the node's `extra`, so a
+  dialect may keep its own marks there (for example `extra.mxTransaction`).
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
   attribute), a string, a `ctx.expression` result, or a node of a type the dialect registers
   (`{ type: "atom:Atom", span, … }`, §13.9.9). Core lowers such a node through

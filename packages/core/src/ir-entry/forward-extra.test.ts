@@ -341,6 +341,7 @@ describe("the `extra` of a `ctx.expression` node from a `{ call }` row passes th
 
   it("`cloneIr` keeps the node by reference, and `{ nodes: true }` copies its marks", () => {
     const { ir, value } = loweredCall(INSIDE);
+    expect(insideOf(findExpr(cloneIr(ir)))).toBe(insideOf(value));
     expect(insideOf(findExpr(cloneIr(ir))).extra).toEqual(TX_MARK());
     const copied = insideOf(findExpr(cloneIr(ir, { nodes: true })));
     expect(copied).not.toBe(insideOf(value));
