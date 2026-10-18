@@ -249,11 +249,11 @@ export function attributeHelpers(
  * an element description, matching
  * \`@mxlang/target-html\`'s \`renderDynamic\` and \`@mxlang/host-solid\`'s inline dispatch.
  *
- * Marko parity: a *string* target called with arguments uses \`payload[0]\`
- * (Marko's \`args[0]\`) as its element attributes, not the trailing props
- * object's attribute tags — Marko's translator appends that object *after* the
- * positional args (\`renderer(...args, { content, ... })\`), so it never lands
- * at \`args[0]\` and \`_dynamic_tag\`'s string branch
+ * Marko parity: a *string* target called with arguments uses
+ * \`payload[0]\` (Marko's \`args[0]\`) as its element attributes, not the
+ * trailing props object's attribute tags — Marko's translator appends that
+ * object *after* the positional args (\`renderer(...args, { content, ... })\`),
+ * so it never lands at \`args[0]\` and \`_dynamic_tag\`'s string branch
  * (\`runtime-tags/src/html/dynamic-tag.ts\`) never reads it. Content still
  * renders regardless: Marko threads it as its own parameter to
  * \`_dynamic_tag\`, independent of the input, so the emitter (\`component()\`)
@@ -345,14 +345,14 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
 }
 /**
  * __mxDynamic for a call that binds /var: a target with a render path (a
- * compiled unit that declares <return>) is called through .render, which
- * hands back the { value, output } pair — the value binds the /var, the
- * output renders, and the pair object itself never reaches JSX. Any other
- * callee has no value channel, so value is undefined and the output is
- * whatever __mxDynamic renders. Typed any on value: the callee's shape is
- * unknown statically (html's __mxRenderDynamic binds unknown for the same
- * case), and the binding feeds a JSX child position the host's element types
- * already accept any node for.
+ * compiled unit that declares <return>) is called through
+ * .render, which hands back the { value, output } pair — the value binds the
+ * /var, the output renders, and the pair object itself never reaches JSX.
+ * Any other callee has no value channel, so value is undefined and the
+ * output is whatever __mxDynamic renders. Typed any on value: the callee's
+ * shape is unknown statically (html's __mxRenderDynamic binds unknown for
+ * the same case), and the binding feeds a JSX child position the host's
+ * element types already accept any node for.
  */
 function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?: boolean): { value: any; output: any } {
   if (

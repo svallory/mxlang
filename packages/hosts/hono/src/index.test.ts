@@ -505,7 +505,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
   });
 
   /**
-   * A follow-up: hono/jsx's own `memo`/ `forwardRef` return real FUNCTIONS
+   * A follow-up: hono/jsx's own `memo`/`forwardRef` return real FUNCTIONS
    * (measured, unlike React's own — see `@mxlang/host-react`'s sibling
    * suite), so `mxDynamic`'s pre-existing `typeof target === "function"`
    * branch already handled them, unaffected by `mxIsHostComponentObject`.

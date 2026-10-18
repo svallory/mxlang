@@ -142,10 +142,10 @@ Five things are worth knowing before editing `src/ng-mx.ts`:
   Two bare roots are the parser's `MultipleRoots` error, not a lowering.
 - **The template is a backtick literal**, with `` ` ``, `${` and `\`
   escaped (reversing the design note's A4 divergence 3). The reversal is a
-  mapping decision, not a taste one: the spike measured that a
-  double-quoted emit hands back Angular diagnostics in *escaped*
-  coordinates, forcing an escape-aware inverse hop at every newline in
-  every template, while a backtick emit is 1:1.
+  mapping decision, not a taste one: the spike measured that a double-quoted
+  emit hands back Angular diagnostics in *escaped* coordinates, forcing an
+  escape-aware inverse hop at every newline in every template, while a backtick
+  emit is 1:1.
 - **This host owns the surrounding module**, so it appends each used MX tag
   and each needed Angular directive to `imports:` *and* emits their
   `import` statements — the one AST edit no other host performs (A4

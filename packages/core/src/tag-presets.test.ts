@@ -1,5 +1,5 @@
 // The tag rules presets against the tables the targets build today: `html`
-// is the html target's table, `markup` the JSX/Solid/Astro/ Angular hosts'
+// is the html target's table, `markup` the JSX/Solid/Astro/Angular hosts'
 // plus open-tag-only `<const>`/`<return>`, and `none` knows only the module
 // statements and those two.
 import { WEB_ELEMENTS } from "@mxlang/web-elements";

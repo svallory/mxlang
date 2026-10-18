@@ -20,11 +20,11 @@
  *   reaches this translator on a pin bump rather than through a hand-edited
  *   set — ADR 0001's entire point.
  *
- * The disposition table below is the interesting part. The test for each
- * construct is not "can this code lower it" but "does this target emit bytes
- * for it": a construct that only configures behaviour after the first render
- * is *inert* — accepted, with no output — and only a construct a synchronous
- * string render genuinely cannot express is an error.
+ * The disposition table below is the interesting part. The test
+ * for each construct is not "can this code lower it" but "does this target
+ * emit bytes for it": a construct that only configures behaviour after the
+ * first render is *inert* — accepted, with no output — and only a construct a
+ * synchronous string render genuinely cannot express is an error.
  */
 
 import * as babelParser from "@babel/parser";
@@ -130,10 +130,10 @@ const TAGS: Record<string, Disposition> = {
   // `<return>` is **not** listed here. It was, and the reason it gave — "a
   // module compiled to `(input) => string` has no parent to return to" — was
   // true only while a tag template was expanded into its caller. Under the
-  // unit model a tag is its own module and its caller invokes it, so there is
-  // a caller to return to: the unit's `render(input, out)` writes into the
-  // caller's sink and returns the value. The core owns the grammar, in the
-  // tag's own compilation.
+  // unit model a tag is its own module and its caller invokes
+  // it, so there is a caller to return to: the unit's `render(input, out)`
+  // writes into the caller's sink and returns the value. The
+  // core owns the grammar, in the tag's own compilation.
 };
 
 /**
@@ -884,9 +884,9 @@ export const DYNAMIC = DYNAMIC_TAG;
 /**
  * What `resolveDelegatedTag` decides about a tag this host claims, for its emitter.
  *
- * Recorded while the Marko node is still in hand (the `data` slot), so the
- * emitter never re-inspects one to recover a decision the resolver already
- * made.
+ * Recorded while the Marko node is still in hand (the `data` slot),
+ * so the emitter never re-inspects one to recover a decision the resolver
+ * already made.
  */
 export type DelegatedTagData =
   /** `<let>`/`<const>`: bind the initial value at render scope. */
@@ -1299,8 +1299,8 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   if (!__mxTarget) {
-    // Marko parity: a falsy renderer (null, undefined, false, 0, "") renders
-    // no tag of its own; content renders independently.
+    // Marko parity: a falsy renderer (null, undefined, false,
+    // 0, "") renders no tag of its own; content renders independently.
     if (__mxProps.content) __mxSink.write(__mxProps.content());
     return;
   }
@@ -1347,13 +1347,13 @@ function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record
 // one (its last three signatures' inputs differ) stays loose.
 const DYNAMIC_PROPS = `type __MxDynamicProps<T> = 0 extends 1 & T ? Record<string, any> : [NonNullable<T>] extends [{ render: (input: infer I, out: never) => unknown }] ? I : [NonNullable<T>] extends [{ (input: infer A, ...__mxA: any): unknown; (input: infer B, ...__mxA: any): unknown; (input: infer C, ...__mxA: any): unknown }] ? [unknown] extends [B] ? C : [B] extends [C] ? [C] extends [B] ? [unknown] extends [A] ? C : [A] extends [C] ? [C] extends [A] ? C : Record<string, any> : Record<string, any> : Record<string, any> : Record<string, any> : Record<string, any>;`;
 
-// A statically named tag that is not known to be a compiled template (a
-// hand-written function, or a \`.ts\` barrel re-export of one). Typed the way
-// the call is made: through \`render\` when the callee has one (a compiled
-// template, whose default export a host may present differently: Astro's type
-// surface gives it Astro's props), else as the callee itself, so the call
-// site's props are checked as a plain \`Callee(props)\` call, generics
-// included.
+// A statically named tag that is not known to be a compiled
+// template (a hand-written function, or a \`.ts\` barrel re-export of one).
+// Typed the way the call is made: through \`render\` when the callee has one
+// (a compiled template, whose default export a host may present differently:
+// Astro's type surface gives it Astro's props), else as the callee itself, so
+// the call site's props are checked as a plain \`Callee(props)\` call,
+// generics included.
 const RENDER_TAG = `function __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {
   const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };
   return ((__mxInput: unknown) => {
@@ -1378,8 +1378,8 @@ const INPUT_OF = `type __MxInputOf<F> = [F] extends [{ render: (input: infer I, 
  * Both `finalizeModule`'s helper injection and `brandRender` key off this exact
  * line, so it is written once rather than twice.
  */
-// Always `: string`: a unit that declares `<return>` returns its value from
-// `render`, not from the default export.
+// Always `: string`: a unit that declares `<return>`
+// returns its value from `render`, not from the default export.
 const DEFAULT_EXPORT =
   /\nexport default function ([A-Za-z_$][\w$]*)\(input: (Input(?: & \{ content\?: \(\) => string \})?)\): string \{/;
 

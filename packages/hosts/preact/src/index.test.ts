@@ -779,7 +779,7 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 });
 
 /**
- * preact/compat's own `memo`/ `forwardRef` return real FUNCTIONS (measured,
+ * preact/compat's own `memo`/`forwardRef` return real FUNCTIONS (measured,
  * unlike React's own — see the sibling describe block in
  * `@mxlang/host-react`'s suite), so `mxDynamic`'s pre-existing `typeof target
  * === "function"` branch already handled them. The one real gap on this host

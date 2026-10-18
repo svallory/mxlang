@@ -216,8 +216,8 @@ function collectModuleScope(
     // A type-only import binds no runtime value, so it must not resolve a
     // capitalized tag reference — the same exclusion `programBindings` already
     // applies for `moduleBindings`. Both the whole declaration's own kind
-    // (`import type Widget from "..."`) and a single specifier's (`import {
-    // type Widget } from "..."`) count.
+    // (`import type Widget from "..."`) and a single specifier's
+    // (`import { type Widget } from "..."`) count.
     if (statement.importKind === "type") continue;
     const specifier = statement.source?.value;
     if (typeof specifier !== "string") continue;

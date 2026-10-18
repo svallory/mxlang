@@ -1538,7 +1538,7 @@ export function lowerAstroMx(
     checkReservedSource(match?.[1] ?? "", 2, 0, FENCE_SOURCE);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
     // Local extension of the capitalized-import rule: a fence binding's
-    // own non-import value — a top-level `const`/`function`/ `class` the
+    // own non-import value — a top-level `const`/`function`/`class` the
     // `---` fence declares — is classified the same way `.solid.mx`'s
     // `moduleBindings` is (`unknownModuleBindings`), so `const Tag =
     // "div"` used as `<Tag/>` routes dynamic instead of a direct call

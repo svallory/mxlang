@@ -439,8 +439,8 @@ export function unicodeWhitespaceTwinMismatches(
 /**
  * [input, events | atoms], each Unicode-whitespace input (U+00A0) beside its
  * ASCII-space twin. 22 of these changed from the merge base: division after
- * `)`, a word or a number, the terminator look-behind after an operator, `
- * >=`, and a comment in HTML text.
+ * `)`, a word or a number, the terminator look-behind after an operator,
+ * ` >=`, and a comment in HTML text.
  */
 export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
   [

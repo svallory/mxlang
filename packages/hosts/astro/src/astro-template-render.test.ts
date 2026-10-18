@@ -416,7 +416,7 @@ describe("conditional Astro named slots", () => {
 });
 
 // The local extension of the capitalized-import rule: a fence-declared
-// `const`/`function`/ `class` used as a tag classifies by whether its value
+// `const`/`function`/`class` used as a tag classifies by whether its value
 // is statically a function/arrow/class. A fence import already routes through
 // the import rule (`isComponent`/`ctx.imports`); this covers the non-import
 // fence binding the unresolved-tag fix (`unresolved-tag-jsx-astro-angular`)
