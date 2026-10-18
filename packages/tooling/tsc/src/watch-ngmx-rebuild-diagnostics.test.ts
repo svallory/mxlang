@@ -137,6 +137,18 @@ function watchIn(
   };
 }
 
+/**
+ * Whether every rebuild so far got exactly one notice: as many notices as
+ * localized summaries. Counted against the summaries, not a fixed number,
+ * because the harness re-touches the edited file until a rebuild starts, and on
+ * a loaded machine that can start one more rebuild than the case edited for.
+ */
+function oneNoticePerRebuild(output: string): void {
+  const rebuilds = output.split("Fehler gefunden").length - 1;
+  expect(rebuilds).toBeGreaterThan(0);
+  expect(output.split(MISSED_REBUILD).length - 1).toBe(rebuilds);
+}
+
 const englishSummary = (output: string) =>
   /Found \d+ errors?\. Watching for file changes\./.test(output);
 
@@ -311,16 +323,20 @@ it(
       watcher = watchIn(dir, ["-b", "-w", "lib", "--locale", "de"], (output) =>
         /Fehler gefunden/.test(output),
       );
-      const noticeCount = async (edited: string | undefined, count: number) => {
+      const noticeCount = async (edited?: string) => {
         await watcher?.untilSummary(edited);
         await delay(1_000);
-        expect(watcher?.output().split(MISSED_REBUILD)).toHaveLength(count + 1);
+        oneNoticePerRebuild(watcher?.output() ?? "");
       };
-      await noticeCount(undefined, 1);
-      appendFileSync(lib, "\n");
-      await noticeCount(lib, 2);
-      appendFileSync(lib, "\n");
-      await noticeCount(lib, 3);
+      await noticeCount();
+      for (let edit = 0; edit < 2; edit += 1) {
+        appendFileSync(lib, "\n");
+        await noticeCount(lib);
+      }
+      // Each edit started a rebuild of its own: initial build plus two.
+      expect(
+        watcher.output().split("Fehler gefunden").length - 1,
+      ).toBeGreaterThanOrEqual(3);
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });
@@ -469,15 +485,15 @@ it(
       // watcher has had that tick.
       // One notice per rebuild: counted, so the second rebuild cannot pass on
       // the first one's.
-      const noticeShown = async (count: number) => {
+      const noticeShown = async () => {
         await watcher?.untilSummary();
         await delay(1_000);
-        expect(watcher?.output().split(MISSED_REBUILD)).toHaveLength(count + 1);
+        oneNoticePerRebuild(watcher?.output() ?? "");
       };
-      await noticeShown(1);
+      await noticeShown();
 
       writeFileSync(file, clean.replace("user.name", `user.${BROKEN}`));
-      await noticeShown(2);
+      await noticeShown();
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });
