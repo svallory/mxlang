@@ -168,6 +168,7 @@ import {
   NEAR_EXPLICIT_CHILD_CODE,
   NO_LOWERING_CODE,
   NOT_A_DOM_EVENT_CODE,
+  NOT_IN_DATA_FILE_CODE,
   REPEATED_ATTRIBUTE_TAG_CODE,
   RESERVED_EFFECT_TAG_CODE,
   RESERVED_TAG_CODE,
@@ -6441,6 +6442,20 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     disposition &&
     (disposition.kind === "error" || disposition.kind === "unsupported")
   ) {
+    // An orphan `else` belongs to the `if` construct, which `structural:
+    // "reject"` reports; the reserved-name refusal would name the wrong rule.
+    if (
+      ctx.structural === "reject" &&
+      (name === "else" || name === "else-if") &&
+      disposition.code === NOT_IN_DATA_FILE_CODE
+    ) {
+      throw structuralConstructError(
+        "if",
+        posOf(ctx, node),
+        voiceOfCtx(ctx),
+        blameEndOffset(node),
+      );
+    }
     raiseDisposition(ctx, name, disposition, node);
   }
   // Module code is checked after a host's refusal of the statement, so a host

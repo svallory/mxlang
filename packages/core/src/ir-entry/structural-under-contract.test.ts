@@ -773,3 +773,124 @@ describe("structural: reject, a for or if written with a head the construct woul
     );
   });
 });
+
+describe("structural: reject, an orphan else or else-if is the if construct", () => {
+  const reservedText = (name: string) =>
+    `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
+  const eaters: Record<string, CustomTag> = {
+    ...customTags,
+    eater: { children: { box: { repeatable: true } }, transform: () => [] },
+  };
+  const reject = { structural: "reject", unknownTags: "reject" } as const;
+  const run = (
+    source: string,
+    options: Parameters<typeof lowerSource>[2],
+    tags: Record<string, CustomTag> | undefined = eaters,
+  ) => {
+    const result = lowerSource(source, "/t.mx", {
+      ...(tags ? { customTags: tags } : {}),
+      ...options,
+    });
+    expect(result.ir).toBeUndefined();
+    return result.diagnostics.map((d) => [d.code, d.line, d.column, d.message]);
+  };
+  const indent = (text: string, by: string) =>
+    text
+      .split("\n")
+      .map((line) => by + line)
+      .join("\n");
+
+  const forms: ReadonlyArray<readonly [string, string, string]> = [
+    ["an orphan else with a body", "<else>\n  <box/>\n</else>", "else"],
+    ["an empty orphan else", "<else/>", "else"],
+    ["an orphan else-if(x)", "<else-if(x)>\n  <box/>\n</else-if>", "else-if"],
+    ["an orphan else-if=x", "<else-if=x>\n  <box/>\n</else-if>", "else-if"],
+  ];
+  const wrappers: ReadonlyArray<
+    readonly [string, (s: string) => string, number]
+  > = [
+    ["at the root", (s) => `${s}\n`, 0],
+    [
+      "under a closed parent",
+      (s) => `<entity>\n${indent(s, "  ")}\n</entity>\n`,
+      2,
+    ],
+    [
+      "under a transforming tag",
+      (s) => `<eater>\n${indent(s, "  ")}\n</eater>\n`,
+      2,
+    ],
+    [
+      "two contracts deep",
+      (s) =>
+        `<entity>\n  <section>\n${indent(s, "    ")}\n  </section>\n</entity>\n`,
+      4,
+    ],
+  ];
+
+  describe.each(wrappers)("%s", (_where, wrap, col) => {
+    it.each(forms)("reject: %s is one error, at the tag", (_l, src, name) => {
+      // The tag sits on line `n` of the wrapped source; find it.
+      const wrapped = wrap(src);
+      const line =
+        wrapped
+          .split("\n")
+          .findIndex((l) => l.trimStart().startsWith(`<${name}`)) + 1;
+      expect(run(wrapped, reject)).toEqual([
+        ["MX_STRUCTURAL_CONSTRUCT", line, col, IF],
+      ]);
+    });
+  });
+
+  it("reject: an else after a non-if sibling is the construct, at the else", () => {
+    expect(run("<plain/>\n<else>\n  <box/>\n</else>\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 0, IF],
+    ]);
+    expect(run("<plain>\n  <box/>\n  <else/>\n</plain>\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 3, 2, IF],
+    ]);
+  });
+
+  it("reject: concise orphan else and else-if", () => {
+    expect(run("else\n  box\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+    ]);
+    expect(run("else-if=x\n  box\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+    ]);
+  });
+
+  it("reject: an else after an if keeps the one report, at the if", () => {
+    expect(run("<if=a><box/></if>\n<else><box/></else>\n", reject)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+    ]);
+  });
+
+  it("reject: an else that follows a closed if chain is reported once", () => {
+    expect(
+      run(
+        "<if=a><box/></if>\n<else><box/></else>\n<else><box/></else>\n",
+        reject,
+      ),
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 3, 0, IF]]);
+  });
+
+  it("ends the message with the backticked if, as Mesh parses it", () => {
+    expect(run("<else/>\n", reject)[0]?.[3]).toMatch(/\bevaluate `<if>`$/);
+  });
+
+  describe("pass, unset and no dialect keep the reserved-name text", () => {
+    it.each([
+      ["pass", { structural: "pass", unknownTags: "reject" } as const, eaters],
+      ["unset", { unknownTags: "reject" } as const, eaters],
+      ["no dialect", {} as const, undefined],
+    ])("%s", (_mode, options, tags) => {
+      expect(run("<else>\n  <box/>\n</else>\n", options, tags)).toEqual([
+        ["MX_NOT_IN_DATA_FILE", 1, 0, reservedText("else")],
+      ]);
+      expect(run("<else-if=x>\n  <box/>\n</else-if>\n", options, tags)).toEqual(
+        [["MX_NOT_IN_DATA_FILE", 1, 0, reservedText("else-if")]],
+      );
+    });
+  });
+});
