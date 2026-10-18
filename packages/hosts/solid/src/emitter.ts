@@ -668,7 +668,7 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
 );
 
 /**
- * Whether a capitalized tag resolves (operator, approved): Marko's own rule (a
+ * Whether a capitalized tag resolves: Marko's own rule (a
  * scope binding first, then taglib lookup, else unresolved) applied to
  * `.solid.mx`'s larger scope.
  *
@@ -2923,7 +2923,7 @@ export class SolidEmitter implements Emitter<string> {
     );
     // A function/component target called with arguments gets
     // `renderer(...args, props)`; only a *string* (native-element) target is
-    // handled differently — the two are disjoint, not in conflict. For a string
+    // handled differently. For a string
     // target with arguments, args[0] (Marko's own `args[0] || {}`,
     // `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`) becomes the
     // element's attributes *instead of* this call's attribute-tag props,

@@ -302,7 +302,7 @@ const DEFAULT_VALUE: [src: string, values: string[], sugar: string[]][] = [
   ["<x y=:a :b/>", ["=:a"], [":b"]],
 ];
 
-describe("default attribute values: ruling 2 and addendum 5", () => {
+describe("default attribute values and the sugar after them", () => {
   for (const [src, values, sugar] of DEFAULT_VALUE) {
     it(JSON.stringify(src), () => {
       assert.deepStrictEqual(shape(src), [values, sugar]);

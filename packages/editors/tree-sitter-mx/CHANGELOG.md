@@ -20,8 +20,8 @@ Atoms and the tagless `:name=value` line. Four new local patches, 0006 to 0009
 - Patch 0009: the tag's **default** attribute value is no longer ended at a
   sugar. `<if=a .b>`, `<if=a :b>`, `<if=foo\n  .bar()>`,
   `<const/x=items\n  .filter(Boolean)/>` and `<a=1 .d=2/>` are one value, as core
-  reads them (member access, Marko's meaning), in html and concise mode; a named attribute keeps the split
-  (`x=a :b`, `x=a .b`) and a bound `:=` value with no name is the default
+  reads them (member access, Marko's meaning), in html and concise mode; a named attribute keeps
+  the split (`x=a :b`, `x=a .b`) and a bound `:=` value with no name is the default
   value too. **Except** when the default value is a single atom, where a
   following `:name` is the name sugar: `belongs-to=:Customer :customer` is the
   atom plus `name="customer"`, while `=:A.b :c` and `=:a + :b` stay one value.

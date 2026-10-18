@@ -43,11 +43,11 @@ This extension rides `marko-js/tree-sitter` and `marko-js/zed`'s queries as
 its base. The name sugar (`apps/docs/docs/design-notes/adr-name-sugar.md`) is
 MX syntax that Marko's grammar misparses: the `:name` sugar (`<input:email>`,
 `<:email>`) and `#id`/`.class`/`:name` in attribute position (`<input
-type="email" :email #main .big>`) read as `a:b` as one tag name and `"email"
-:email` as one attribute value. So MX owns its grammar:
+type="email" :email #main .big>`): Marko's grammar reads `a:b` as one tag name
+and `"email" :email` as one attribute value. So MX owns its grammar:
 `packages/editors/tree-sitter-mx`, a snapshot of Marko's grammar plus patches,
 named `mx` so it coexists with the official Marko extension's `marko` grammar.
-Everything else (the `.mx` identity, Marko as the reference for every construct
+Everything else about `.mx` (its identity, Marko as the reference for every construct
 MX shares with it) still holds; the grammar follows Marko upstream through its
 pin and `patches/`.
 

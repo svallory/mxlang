@@ -603,8 +603,7 @@ export function createEmitter(
 
     // `value:=expr` binds two ways in full Marko: the initial value renders,
     // and later edits write back. A one-shot render has no write path, so the
-    // initial value is the whole of it, and what Marko's own server render
-    // emits.
+    // initial value is the whole of it, as in Marko's own server render.
     // Phase B of `dom-events` (design note §8): an expression-valued event
     // handler needs a runtime, and this target renders once to a string. A
     // *string*-valued handler (`onclick="…"`) is an ordinary static attribute

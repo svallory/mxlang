@@ -451,8 +451,8 @@ export interface Ctx {
   /**
    * A file-local, non-import PascalCase binding (a `static`/module-scope
    * `const`, a `<const>`) whose value core could not statically prove is a
-   * function, arrow function, or class (the dynamic routing of a non-`.mx`
-   * value import, extended to local bindings; see the spec,
+   * function, arrow function, or class (the dynamic routing of a value import
+   * that is not a `.mx` default import, extended to local bindings; see the spec,
    * `apps/docs/docs/specification.md` §7). A tag param is always a member of
    * this set too (its runtime value can never be inspected at lowering time);
    * see `lowerFor`/`lowerDefine`, which add every param name here alongside
@@ -1857,7 +1857,8 @@ export function isMarkoOrMxSpecifier(specifier: string): boolean {
 
 /**
  * Whether an expression node is one core can prove, at lowering time, always
- * evaluates to a function/class value, extending that routing to local bindings
+ * evaluates to a function/class value, extending the dynamic routing of value
+ * imports to local bindings
  * (`function Foo(){}`/`class Foo{}` stay a direct call; `const Foo = lazy(...)`
  * or any other opaque expression is "unknown" and
  * lowers dynamic). Deliberately narrow: no alias-chasing through another
