@@ -60,10 +60,21 @@ describe("no-declare-call-statement", () => {
     ["a statement inside a block", "if (c) {\n  declare(x);\n}\n"],
     ["a statement inside a loop body", "for (const x of xs) declare(x);\n"],
     ["a statement split over two lines", "declare\n(x);\n"],
+    ["an optional call", "declare?.(1);\n"],
+    ["a call with type arguments", "declare<number>(1);\n"],
+    ["a non-null call", "declare!(1);\n"],
+    ["a call with a type assertion", "declare(1) as any;\n"],
+    ["a tagged template", "declare`x`;\n"],
+    ["a .call", "declare.call(null, 1);\n"],
+    ["a .apply", "declare.apply(null, [1]);\n"],
+    ["a computed member call", "declare[`call`](null, 1);\n"],
+    ["a comma expression", "declare(1), y;\n"],
+    ["a binary expression", "declare(1) + 1;\n"],
+    ["a logical expression", "declare(1) || f(1);\n"],
   ])("fails on %s", (_name, source) => {
     const { failed, output } = lint(source);
     expect(failed).toBe(true);
-    expect(output).toContain("erased by Bun 1.3.14");
+    expect(output).toContain("Bun 1.3.14's TypeScript transpiler erases");
     expect(output).toContain("Rename the helper");
   });
 
@@ -79,9 +90,14 @@ describe("no-declare-call-statement", () => {
       "type(x);\nabstract(x);\nnamespace(x);\nmodule(x);\nglobal(x);\n",
     ],
     ["a differently named helper", "countName(x);\n"],
+    ["a name that starts with declare", "declareX(x);\ndeclare$(x);\n"],
+    ["a parenthesized callee", "(declare)(1);\n"],
+    ["a parenthesized call", "(declare(1));\n"],
+    ["a void call", "void declare(1);\n"],
+    ["an awaited call", "async function f() {\n  await declare(1);\n}\n"],
   ])("passes on %s", (_name, source) => {
     const { failed, output } = lint(source);
-    expect(output).not.toContain("erased by Bun");
+    expect(output).not.toContain("transpiler erases");
     expect(failed).toBe(false);
   });
 
@@ -98,8 +114,8 @@ describe("no-declare-call-statement", () => {
     writeFileSync(
       mutated,
       readFileSync(join(here, ruleFile), "utf8").replace(
-        "`declare($args)`",
-        "`other($args)`",
+        'r"declare(?:',
+        'r"other(?:',
       ),
     );
     expect(lint("declare(x);\n", mutated).failed).toBe(false);
