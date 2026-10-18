@@ -40,6 +40,7 @@ function attempt(
 
 const refusing = host({ kind: "unsupported", hint: "Write it elsewhere." });
 const supporting = host();
+const erroring = host({ kind: "error", reason: "No script here." });
 
 const BAD_BODY = "<script>const = 1;</script>";
 
@@ -57,6 +58,15 @@ describe("a host that declares <script> unsupported", () => {
       "`<script>` is not supported in embedded MX. Write it elsewhere.",
     );
     expect([error?.line, error?.column]).toEqual([1, 0]);
+  });
+
+  it("a write to a const in the body is not read", () => {
+    const error = attempt(
+      "<const/c=1/>\n<div/>\n<script>c = 2;</script>",
+      refusing,
+    );
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect([error?.line, error?.column]).toEqual([3, 0]);
   });
 
   it("a nested script with a bad body", () => {
@@ -81,5 +91,14 @@ describe("a host without the unsupported row", () => {
 
   it("accepts a valid body", () => {
     expect(attempt("<script>go()</script>", supporting)).toBeUndefined();
+  });
+});
+
+describe("a host whose <script> row is `error`, not `unsupported`", () => {
+  it("keeps the body error ahead of the refusal", () => {
+    const error = attempt(BAD_BODY, erroring);
+    expect(error?.diagnosticCode).not.toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect(error?.message).toContain("Unexpected token");
+    expect([error?.line, error?.column]).toEqual([1, 14]);
   });
 });

@@ -771,7 +771,9 @@ accepted, as in Marko; a body that does not parse (a syntax error, a decorator,
 JSX, a proposal that is not part of the language, an HTML comment) is a compile
 error, `MX_INVALID_STATEMENT`, positioned at the error, and no target compiles
 it (a target that emits nothing for the body still refuses it). A body that
-holds a `${…}` placeholder is not read. The text of the error is Babel's own,
+holds a `${…}` placeholder is not read. On a host that does not support `<script>`, the
+host's refusal is the tag's only error: its body and its head are not read, so none of the
+errors in this section is reported for it. The text of the error is Babel's own,
 except for a decorator, JSX, a proposal, an `assert { … }` import attribute and
 the CommonJS forms `import x = require(…)` and `export = value`, which say what
 to write instead. In a concise-mode body (`--` lines, or two `--` blocks) the
@@ -783,7 +785,7 @@ its body. Any other attribute (`async`, `src`, `type`, `defer`, `id`, `class`, a
 `.class` shorthand, an attribute with a method or arguments of its own, …), a bound or
 modified value (`value:=x`, `value:no-update=x`), a spread, and any placeholder, whether
 in code, in a quoted string, in a regular expression or in an HTML comment, is a compile
-error, `MX_INERT_TAG_SHAPE`, on every target: the tag is client code, not an html
+error, `MX_INERT_TAG_SHAPE`, on every target that supports `<script>`: the tag is client code, not an html
 element, so the attribute would be discarded and the placeholder was never read. The error
 is positioned at the attribute (a shorthand at its own spelling) or at the `${…}` (its
 whole range). For an attribute its text says to use `<html-script>`, the tag for a native

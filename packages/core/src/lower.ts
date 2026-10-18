@@ -1067,9 +1067,9 @@ function scriptTextOf(ctx: Ctx, runs: readonly Node[]): string {
  * text); such a body is not read.
  */
 function scriptBodyOf(ctx: Ctx, tag: Node): ScriptBody | null {
+  if (hostRefusesScript(ctx)) return null;
   const cached = scriptBodies.get(tag);
   if (cached !== undefined) return cached;
-  if (hostRefusesScript(ctx)) return null;
   const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
   const [first] = children;
   let body: ScriptBody | null = null;

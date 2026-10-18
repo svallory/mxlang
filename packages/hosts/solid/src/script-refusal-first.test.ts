@@ -55,6 +55,15 @@ describe("Solid: a <script> is refused before its body is read", () => {
     expect(unit(source)).toEqual(expected);
   });
 
+  it("a write to a const in the body is not read", () => {
+    expect(region("<const/c=1/>\n<div/>\n<script>c = 2;</script>")).toEqual({
+      message: REFUSAL,
+      code: CODE,
+      line: 3,
+      column: 0,
+    });
+  });
+
   it("a concise script with a bad body", () => {
     const source = "script\n  --\n  const = 1;\n  --";
     expect(region(source)).toMatchObject({ message: REFUSAL, code: CODE });
