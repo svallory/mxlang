@@ -559,6 +559,59 @@ describe("a dialect's node types are validated", () => {
       'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be a non-empty string, the name core\'s messages show for the type in place of `ref:Ref` (`label: "atom"`)',
     ],
     [
+      "a multi-line `label`",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: "a\nb" } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be one line with no backticks and no leading or trailing space (got "a\\nb"): core puts it inside its messages',
+    ],
+    [
+      "a `label` with backticks",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: "`atom`" } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be one line with no backticks and no leading or trailing space (got "`atom`"): core puts it inside its messages',
+    ],
+    [
+      "a `label` with surrounding space",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: " atom " } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be one line with no backticks and no leading or trailing space (got " atom "): core puts it inside its messages',
+    ],
+    [
+      "a `label` that is a core type name",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: "string" } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` cannot be `string`: that is the name of one of core\'s own types, and a message would read "must be string, got string"',
+    ],
+    [
+      "two node types with one `label`",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: {
+          Ref: { ...RefType, label: "ref" },
+          Other: { ...RefType, label: "ref" },
+        },
+      },
+      "dialect `ref`, node type `Other`: `dialect.nodeTypes.Other.label` is `ref`, which node type `Ref` of this dialect already uses: two types with one label cannot be told apart in a message",
+    ],
+    [
       "no `print`",
       {
         id: "ref",

@@ -212,7 +212,7 @@ nodeTypes: {
 With that, `` attribute `mode` must be atom:Atom, got string `` reads `` attribute `mode` must be atom, got string ``, `` must be array, got atom:Atom `` reads `` must be array, got atom ``, and `` must be string, got atom:Atom `` reads `` must be string, got atom ``.
 
 - **`label` is optional.** A type without one shows its key, and the message is exactly what it was.
-- **One non-empty string.** Anything else (an empty or blank string, a number) fails the dialect at load, in your module, naming the dialect and the type.
+- **One non-empty string.** Anything else (an empty or blank string, a number) fails the dialect at load, in your module, naming the dialect and the type. So does a label that spans lines, holds a backtick, starts or ends with a space, is the name of a core type (`string`, `number`, `boolean`, `expression`, `array`, `function`, `object`), or is already another type's label in your dialect.
 - **What it covers.** The type names in the contract value checks: the type a slot asks for, and the type of the value that was written. Combine it with `messageVocabulary` freely.
 - **What it does not cover.** Messages to you, the dialect's author, keep the key: a contract that names an unregistered type, a row that names a type, and the errors for a `parse`, `lower` or `schema` that breaks its contract. They tell you what to spell, and the spelling is the key.
 

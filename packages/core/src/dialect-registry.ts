@@ -186,6 +186,17 @@ export const MX_DIALECT: { readonly id: string; readonly name: string } =
 /** A dialect id: lower-case words joined by `-`. */
 export const DIALECT_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
+/** The names core's own value types go by in a message; no label may take one. */
+const CORE_TYPE_LABELS = [
+  "string",
+  "number",
+  "boolean",
+  "expression",
+  "array",
+  "function",
+  "object",
+];
+
 /** A node type name: PascalCase. */
 const TYPE_NAME = /^[A-Z][A-Za-z0-9]*$/;
 
@@ -687,6 +698,7 @@ export function checkDialectNodeTypes(
     );
   }
   const types = nodeTypes as Record<string, unknown>;
+  const labels = new Map<string, string>();
   for (const [type, nodeType] of Object.entries(types)) {
     const at = `${path}nodeTypes.${type}`;
     if (!TYPE_NAME.test(type)) {
@@ -707,13 +719,27 @@ export function checkDialectNodeTypes(
         );
       }
     }
-    if (
-      shape.label !== undefined &&
-      (typeof shape.label !== "string" || shape.label.trim() === "")
-    ) {
-      fail(
-        `dialect \`${id}\`, node type \`${type}\`: \`${at}.label\` must be a non-empty string, the name core's messages show for the type in place of \`${id}:${type}\` (\`label: "atom"\`)`,
-      );
+    if (shape.label !== undefined) {
+      const who = `dialect \`${id}\`, node type \`${type}\`: \`${at}.label\``;
+      const label = shape.label;
+      if (typeof label !== "string" || label.trim() === "") {
+        fail(
+          `${who} must be a non-empty string, the name core's messages show for the type in place of \`${id}:${type}\` (\`label: "atom"\`)`,
+        );
+      } else if (/[\r\n`]/.test(label) || label !== label.trim()) {
+        fail(
+          `${who} must be one line with no backticks and no leading or trailing space (got ${JSON.stringify(label)}): core puts it inside its messages`,
+        );
+      } else if (CORE_TYPE_LABELS.includes(label)) {
+        fail(
+          `${who} cannot be \`${label}\`: that is the name of one of core's own types, and a message would read "must be ${label}, got ${label}"`,
+        );
+      } else if (labels.has(label)) {
+        fail(
+          `${who} is \`${label}\`, which node type \`${labels.get(label)}\` of this dialect already uses: two types with one label cannot be told apart in a message`,
+        );
+      }
+      labels.set(label as string, type);
     }
     for (const hook of ["parse", "print", "lower"] as const) {
       if (typeof shape[hook] !== "function") {

@@ -5375,7 +5375,10 @@ when its dialect loads, naming the dialect, the type and the piece.
   written. A type with no label shows its key, and every message is then
   unchanged. A label that is not a non-empty string is
   `MX_INVALID_DIALECT_MODULE` when the dialect loads, naming the dialect and
-  the type. The messages to the dialect's own author (registration, row and
+  the type, as is one that spans lines, holds a backtick, has leading or
+  trailing space, is a core type's name (`string`, `number`, `boolean`,
+  `expression`, `array`, `function`, `object`) or is another type's label in
+  the same dialect. The messages to the dialect's own author (registration, row and
   hook errors, which name the key a declaration or a row must spell) keep the
   key.
 
