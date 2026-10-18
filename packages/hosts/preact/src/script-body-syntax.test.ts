@@ -1,10 +1,9 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
 /**
- * A `<script>` body that does not parse is refused on a JSX host, ahead of the
- * host's own refusal of `<script>` (`MX_UNSUPPORTED_CONSTRUCT`): core reads the
- * body for its analyses first, the way it reads a stale read in a handler
- * before the host refuses the handler. Whole file and `.preact.mx` region
- * alike; a region reports the position in the surrounding file.
+ * Preact does not support `<script>`, so a `<script>` body that does not parse
+ * is not read: the host's refusal (`MX_UNSUPPORTED_CONSTRUCT`) is the only
+ * error, at the tag. Whole file and `.preact.mx` region alike; a region
+ * reports the position in the surrounding file.
  */
 import { createTargetLookup } from "@mxlang/core";
 import { print } from "@mxlang/tsx-bridge";
@@ -15,8 +14,8 @@ import { compilePreactMx, compilePreactRegion } from "./index.ts";
 const targets = createTargetLookup([descriptor]);
 const FILE = "/fixtures/script-body/Panel.preact.mx";
 
-const DECORATOR =
-  "Decorators are not read inside a `<script>` body: its text is TypeScript without decorator syntax. Move the decorated class to a `.ts` module and import it, or apply the decorator as a plain function call";
+const REFUSAL = "`<script>` is not supported in embedded MX on Preact.";
+const CODE = "MX_UNSUPPORTED_CONSTRUCT";
 
 // biome-ignore lint/suspicious/noExplicitAny: a caught TranslateError, read by field
 function thrown(run: () => unknown): any {
@@ -29,26 +28,25 @@ function thrown(run: () => unknown): any {
 }
 
 describe("a whole-file <script> body on Preact", () => {
-  it("is refused at the decorator", () => {
+  it("a decorator in the body is not read: the host refusal comes alone", () => {
     const error = thrown(() =>
       compilePreactMx("<div/>\n<script>\n@d class C {}\n</script>", "page.mx"),
     );
-    expect(error.diagnosticCode).toBe("MX_INVALID_STATEMENT");
-    expect(error.message).toBe(DECORATOR);
-    expect([error.line, error.column]).toEqual([3, 0]);
-    expect(error.end).toEqual({ line: 3, column: 2 });
+    expect(error.diagnosticCode).toBe(CODE);
+    expect(error.message).toContain(REFUSAL);
+    expect([error.line, error.column]).toEqual([2, 0]);
   });
 
-  it("is refused at a syntax error", () => {
+  it("a syntax error in the body is not read: the host refusal comes alone", () => {
     const error = thrown(() =>
       compilePreactMx("<div/>\n<script>\nconst = 1;\n</script>", "page.mx"),
     );
-    expect(error.diagnosticCode).toBe("MX_INVALID_STATEMENT");
-    expect(error.message).toBe("Unexpected token");
-    expect([error.line, error.column]).toEqual([3, 6]);
+    expect(error.diagnosticCode).toBe(CODE);
+    expect(error.message).toContain(REFUSAL);
+    expect([error.line, error.column]).toEqual([2, 0]);
   });
 
-  it("is left to the host's own refusal when it parses", () => {
+  it("a body that parses gets the same refusal", () => {
     const error = thrown(() =>
       compilePreactMx("<div/>\n<script>\nconst n = 1;\n</script>", "page.mx"),
     );
@@ -69,17 +67,17 @@ describe("a <script> body in a .preact.mx region", () => {
       }),
     );
 
-  it("reports a line below the first at the file's line, not the region's", () => {
+  it("reports the tag at the file's line, not the region's", () => {
     const error = region("<div/>\n<script>\n@d class C {}\n</script>");
-    expect(error.diagnosticCode).toBe("MX_INVALID_STATEMENT");
-    expect([error.line, error.column]).toEqual([5, 0]);
-    expect(error.end).toEqual({ line: 5, column: 2 });
+    expect(error.diagnosticCode).toBe(CODE);
+    expect(error.message).toContain(REFUSAL);
+    expect([error.line, error.column]).toEqual([4, 0]);
   });
 
   it("adds the region's column on the region's first line", () => {
-    // `<script>const = 1;` starts the region: 4 + 8 (`<script>`) + 6.
     const error = region("<script>const = 1;</script>");
-    expect([error.line, error.column]).toEqual([3, 18]);
+    expect(error.diagnosticCode).toBe(CODE);
+    expect([error.line, error.column]).toEqual([3, 4]);
   });
 
   it("is found in the module the bridge reads", () => {
@@ -98,7 +96,7 @@ describe("a <script> body in a .preact.mx region", () => {
           >,
       }),
     );
-    expect(error.message).toContain("Decorators are not read");
-    expect(error.loc).toMatchObject({ line: 6, column: 0 });
+    expect(error.message).toContain(REFUSAL);
+    expect(error.loc).toMatchObject({ line: 5, column: 6 });
   });
 });
