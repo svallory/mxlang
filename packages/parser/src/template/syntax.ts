@@ -1,13 +1,13 @@
 /**
- * The syntax table (decision 182; design note `language-extensions/core.md`,
- * "The syntax table"): one plain-data object per parse that parametrizes the
- * grammar. No field is a function, so a native lexer can take the same
- * struct; everything the parser needs is compiled from the data once per
- * table (`compileSyntax`, cached per object).
+ * The syntax table (design note `language-extensions/core.md`, "The syntax
+ * table"): one plain-data object per parse that parametrizes the grammar. No
+ * field is a function, so a native lexer can take the same struct; everything
+ * the parser needs is compiled from the data once per table (`compileSyntax`,
+ * cached per object).
  *
- * `DEFAULT_SYNTAX` is the `.mx` row: the stock Marko grammar, with no
- * trigger, so `:x` in an expression is JavaScript, as in Marko. A dialect
- * that wants atoms arms an expression row on `:`.
+ * `DEFAULT_SYNTAX` is the `.mx` row: the stock Marko grammar, with no trigger,
+ * so `:x` in an expression is JavaScript, as in Marko. A dialect that wants
+ * atoms arms an expression row on `:`.
  */
 import type { TagType as TagTypeValue } from "./util/constants.ts";
 import * as TagType from "./util/tag-type.ts";
@@ -28,8 +28,8 @@ export type StandIn = "number" | "identifier" | "keep";
 /**
  * What core builds from a trigger (lowering, not this parser): a built-in
  * stand-in, a `{ call }` to the dialect's `lowerTrigger`, or a node type the
- * dialect registered (`{ type, dialect }`, decision 202 item 3; tag and
- * attribute position only until expression-position node types land).
+ * dialect registered (`{ type, dialect }`; tag and attribute position only
+ * until expression-position node types land).
  */
 export type TriggerNode =
   | "string"
@@ -52,9 +52,9 @@ export interface Trigger {
   /**
    * Attribute triggers only: `"refuse"` makes a value after the trigger
    * (`=`, `:=` or a method's `(`, after optional whitespace) a parse error
-   * positioned there, ``The `#main` shorthand takes no value.`` (decision
-   * 183: `#id` and `.class` take none). Omitted: the trigger takes an
-   * `=value` or a method value `(params) { body }`.
+   * positioned there, ``The `#main` shorthand takes no value.`` (`#id` and
+   * `.class` take none). Omitted: the trigger takes an `=value` or a method
+   * value `(params) { body }`.
    */
   readonly value?: "refuse";
 }
@@ -97,7 +97,7 @@ export interface SyntaxTable {
   readonly expressionTriggers: readonly Trigger[];
   /** Armed on the first character of an attribute name. */
   readonly attributeTriggers: readonly Trigger[];
-  /** Armed at the start of a tagless concise line (decision 182 addendum 1). */
+  /** Armed at the start of a tagless concise line. */
   readonly lineTriggers: readonly Trigger[];
   /**
    * Tried on an attribute's whole value once the parser knows where it ends
@@ -110,10 +110,9 @@ export interface SyntaxTable {
   /** Text position; empty on the `.mx` row, always (layer 3 only). */
   readonly textTriggers: readonly Trigger[];
   /**
-   * Tag types computed before the parse, keyed by the full written static
-   * tag name (decision 182 addenda 2 and 3); a name absent is html, a
-   * dynamic or `@` name is never looked up, and `statement` applies only on
-   * a concise line. Empty on the default row.
+   * Tag types computed before the parse, keyed by the full written static tag
+   * name; a name absent is html, a dynamic or `@` name is never looked up, and
+   * `statement` applies only on a concise line. Empty on the default row.
    */
   readonly tagTypes: Readonly<Record<string, TagTypeValue>>;
   /** Reserved: the language of embedded expressions. */
@@ -168,7 +167,7 @@ const REFUSED: Record<ListName, { chars: string; why: string }> = {
     chars: "<>/=,;()[]",
     why: "it is attribute or open-tag syntax",
   },
-  // Decision 182 addendum 1; `$` because `inlineScript` is always on here.
+  // `$` because `inlineScript` is always on here.
   lineTriggers: {
     chars: "<-/@$",
     why: "it starts a tag, a delimited block, a comment, an attribute tag or an inline script",
@@ -185,9 +184,9 @@ const REFUSED: Record<ListName, { chars: string; why: string }> = {
 
 /**
  * Validates a table, which may come from untyped code (a dialect's `table`,
- * or one a consumer passes): its shape, then the rules of core.md "Validation" and decision 182
- * addendum 1, then what this parser does not support yet. Returns every
- * problem; empty means the parser can take the table.
+ * or one a consumer passes): its shape, then the rules of core.md "Validation",
+ * then what this parser does not support yet. Returns every problem; empty
+ * means the parser can take the table.
  */
 export function validateSyntaxTable(table: unknown): SyntaxDiagnostic[] {
   return validate(table, undefined);

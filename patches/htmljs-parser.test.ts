@@ -397,42 +397,42 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
   });
 
   it.each(UNICODE_WHITESPACE_ROWS)(
-    "Unicode whitespace in a look-behind (addendum 11): %j",
+    "Unicode whitespace in a look-behind: %j",
     (input, expected) => {
       expect(renderWhitespaceEvents(wsMod, input)).toBe(expected);
     },
   );
 
   it.each(CONCISE_DASH_ROWS)(
-    "concise `--` after Unicode whitespace (addendum 12): %j",
+    "concise `--` after Unicode whitespace: %j",
     (input, events, ranges) => {
       expect(renderWhitespaceEvents(wsMod, input)).toBe(events);
       expect(renderAttrRanges(mod, input)).toBe(ranges);
     },
   );
 
-  it("Unicode whitespace in a look-behind renders as an ASCII space (addendum 11)", () => {
+  it("Unicode whitespace in a look-behind renders as an ASCII space", () => {
     const { total, bad } = unicodeWhitespaceTwinMismatches(wsMod);
     expect(total).toBe(2_432);
     expect(bad).toEqual([]);
   });
 
   it.each(AFTER_VALUE_ON_HOLD_ROWS)(
-    "the after-value identifier start is ASCII, on hold (addendum 15): %j",
+    "the after-value identifier start is ASCII, on hold: %j",
     (input, expected) => {
       expect(renderAtoms(mod, input, true)).toBe(expected);
     },
   );
 
   it.each(NON_WORD_ROWS)(
-    "a symbol is no word character, as in stock (addendum 13): %j",
+    "a symbol is no word character, as in stock: %j",
     (input, expected) => {
       expect(renderAtoms(mod, input, true)).toBe(expected);
     },
   );
 
   it.each(ATOM_AFTER_SYMBOL_ROWS)(
-    "a `:` after a symbol reads as the source copy (addendum 13): %j",
+    "a `:` after a symbol reads as the source copy: %j",
     (input, twin) => {
       for (const code of [input, twin]) {
         expect(renderAtoms(mod, code, true)).toBe(
@@ -442,26 +442,26 @@ describe.each(builds)("non-ASCII identifiers (%s)", (_name, build) => {
     },
   );
 
-  it("a symbol renders as an ASCII non-word (addendum 13)", () => {
+  it("a symbol renders as an ASCII non-word", () => {
     const { total, bad } = nonWordTwinMismatches(mod);
     expect(total).toBe(6_660);
     expect(bad).toEqual([]);
   });
 
-  it("an identifier character renders as an ASCII letter (addendum 13)", () => {
+  it("an identifier character renders as an ASCII letter", () => {
     const { total, bad } = extraWordTwinMismatches(mod);
     expect(total).toBe(4_662);
     expect(bad).toEqual([]);
   });
 
   it.each(BODY_TEXT_ROWS)(
-    "body text before `//` is text after Unicode whitespace (addendum 13): %j",
+    "body text before `//` is text after Unicode whitespace: %j",
     (input, expected) => {
       expect(renderWhitespaceEvents(wsMod, input)).toBe(expected);
     },
   );
 
-  it("body text after Unicode whitespace renders as after a letter (addendum 13)", () => {
+  it("body text after Unicode whitespace renders as after a letter", () => {
     const { total, bad } = bodyTextTwinMismatches(wsMod);
     expect(total).toBe(114);
     expect(bad).toEqual([]);
@@ -520,9 +520,9 @@ describe.each(builds)("the parser never throws (%s)", (_name, build) => {
   });
 });
 
-// The parser grammar's probe corpus (decision 165): the same probes the
-// source copy runs, against both builds. Probes that use the base-position
-// API are the source copy's alone.
+// The parser grammar's probe corpus: the same probes the source copy runs,
+// against both builds. Probes that use the base-position API are the source
+// copy's alone.
 describe.each(builds)("parser grammar probes (%s)", (_name, mod) => {
   it.each(PORTABLE_PROBES.map((probe) => [probe.id, probe] as const))(
     "%s",

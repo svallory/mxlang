@@ -174,8 +174,8 @@ let lazyScope = false;
 const dynSerial = { n: 0 };
 
 /**
- * `<define>`s hoisted to module scope during the current compile (decision
- * 110b), and the gensym'd binding each author name resolves to.
+ * `<define>`s hoisted to module scope during the current compile, and the
+ * gensym'd binding each author name resolves to.
  *
  * A `.solid.mx` **region** is an expression spliced into someone else's
  * module — the same reason `compileSolidMx` hoists a discovered tag's
@@ -585,7 +585,7 @@ function inLazyScope<T>(emit: () => T): T {
  * `SolidEmitter.define`'s existing guard still rejects `<define>` with a
  * positioned error instead of hoisting into a list nothing consumes (which
  * emitted a call to an undeclared function — a runtime `ReferenceError`,
- * not a compile error; decision 110b's "positioned error, not wrong code"
+ * not a compile error; the "positioned error, not wrong code" rule
  * violated silently before this flag existed).
  */
 export function collectReturnVars(
@@ -668,9 +668,9 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
 );
 
 /**
- * Whether a capitalized tag resolves, per decision 114's ruling (operator,
- * approved): Marko's own rule (a scope binding first, then taglib lookup,
- * else unresolved) applied to `.solid.mx`'s larger scope.
+ * Whether a capitalized tag resolves (operator, approved): Marko's own rule (a
+ * scope binding first, then taglib lookup, else unresolved) applied to
+ * `.solid.mx`'s larger scope.
  *
  * By the time core asks `isComponent`, a capitalized name has already failed
  * every *MX-level* route: core structural tags, `<try>` (`isDelegatedTag`), an
@@ -683,8 +683,8 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
  *
  * - **The surrounding TypeScript module binds the name as a value** — an
  *   import or a top-level `const`/`function`/`class` in the module the
- *   region is embedded in (decision 113's shadowing already applies before
- *   this: `ctx.imports` only contains what is *visible* at this point,
+ *   region is embedded in (shadowing already applies before this:
+ *   `ctx.imports` only contains what is *visible* at this point,
  *   `packages/tsx-bridge/src/mx/bridge.ts`'s `visibleModuleBindings`). Folded
  *   into `ctx.imports` at the call site (`compileSolidMx`, `index.ts`)
  *   rather than a new `Ctx` field, since core's precedence order already
@@ -771,7 +771,7 @@ export const solidDeclarations: HostDeclarations = {
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
-  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
@@ -1215,20 +1215,19 @@ function renderAttr(
         "bound attribute (`:=`) is Marko reactive state; use Solid state and an explicit event handler",
         attr,
       );
-    // Phase B of `dom-events` (decision 101): recompose Solid's prop from the
-    // DOM event name core resolved, never the authored spelling, so
-    // `onDblClick` and `on-dblclick` emit byte-identically. `solidEventPropName`
-    // looks up `@solidjs/web`'s own declared spelling (`onDblClick`,
-    // `onKeyDown`, vendored in `event-names.ts`) rather than capitalizing
-    // just the first letter: Solid's runtime lowercases whatever follows
-    // `on` regardless of casing, so both spellings bind the same DOM event,
-    // but only the declared one satisfies `jsx.d.ts`'s exact prop-name keys
-    // (else TS2322, since e.g. `onDblclick` is not a key `HTMLAttributes`
-    // declares). Solid has no custom-event prop (its own types only declare
-    // the DOM names), so a name JSX cannot spell as one identifier — a
-    // custom DOM event such as `my-event` from `on-my-event` — is a
-    // positioned error naming the `ref` route, the same escape hatch Solid's
-    // own docs give for listener options.
+    // Phase B of `dom-events`: recompose Solid's prop from the DOM event name
+    // core resolved, never the authored spelling, so `onDblClick` and
+    // `on-dblclick` emit byte-identically. `solidEventPropName` looks up
+    // `@solidjs/web`'s own declared spelling (`onDblClick`, `onKeyDown`,
+    // vendored in `event-names.ts`) rather than capitalizing just the first
+    // letter: Solid's runtime lowercases whatever follows `on` regardless of
+    // casing, so both spellings bind the same DOM event, but only the declared
+    // one satisfies `jsx.d.ts`'s exact prop-name keys (else TS2322, since e.g.
+    // `onDblclick` is not a key `HTMLAttributes` declares). Solid has no
+    // custom-event prop (its own types only declare the DOM names), so a name
+    // JSX cannot spell as one identifier — a custom DOM event such as
+    // `my-event` from `on-my-event` — is a positioned error naming the `ref`
+    // route, the same escape hatch Solid's own docs give for listener options.
     case "event": {
       if (!/^[A-Za-z0-9]+$/.test(attr.event)) {
         return fail(
@@ -2671,15 +2670,13 @@ export class SolidEmitter implements Emitter<string> {
    * because a hoisted `<define>` is, at the JS level, exactly what html's
    * already is: an ordinary function, not a Solid component with props.
    *
-   * Decision 160: with no tag arguments the attributes (spreads included),
-   * attribute tags and `content` travel as ONE object bound to the first
-   * param, `{}` when the call carries none; a define with no params ignores
-   * them. With tag arguments (decision 109, revised to Marko's own shape,
-   * ruling 2026-10-09) the args fill the params positionally and ONE
-   * trailing object — the attribute tags by their names plus `content` — is
-   * appended as the next argument, filling the first unfilled param, every
-   * param after it reading `undefined`; a spread cannot ride it and is
-   * rejected.
+   * With no tag arguments the attributes (spreads included), attribute tags and
+   * `content` travel as ONE object bound to the first param, `{}` when the call
+   * carries none; a define with no params ignores them. With tag arguments
+   * (Marko's own shape) the args fill the params positionally and ONE trailing
+   * object — the attribute tags by their names plus `content` — is appended as
+   * the next argument, filling the first unfilled param, every param after it
+   * reading `undefined`; a spread cannot ride it and is rejected.
    */
   #defineComponent(
     node: Extract<IrNode, { kind: "Component" }>,
@@ -2771,10 +2768,10 @@ export class SolidEmitter implements Emitter<string> {
     ).length;
     let args: MappedCode[];
     if (node.args.length === 0) {
-      // Decision 160: without tag arguments the attributes (spreads
-      // included), attribute tags and `content` travel as ONE object bound
-      // to the first param, `{}` when the call carries none (Marko 6.4.4). A
-      // define with no params ignores them.
+      // Without tag arguments the attributes (spreads included), attribute
+      // tags and `content` travel as ONE object bound to the first param,
+      // `{}` when the call carries none (Marko 6.4.4). A define with no
+      // params ignores them.
       if (target.params.length === 0) {
         args = [];
       } else {
@@ -2789,14 +2786,13 @@ export class SolidEmitter implements Emitter<string> {
         ];
       }
     } else {
-      // Decision 109, revised to Marko's own shape (ruling 2026-10-09,
-      // measured on stock Marko 6.4.4): ONE trailing object — the attribute
-      // tags by their names plus `content` — is appended as the next
-      // argument, so it fills the first unfilled param and every param after
-      // it reads `undefined`; nothing is bound by name, not even a param
-      // sharing an attribute tag's name. When the args already fill every
-      // fixed param and the define has no rest param Marko drops the extras
-      // entirely; with a rest param the object follows the args wherever they
+      // Marko's own shape (measured on stock Marko 6.4.4): ONE trailing object
+      // — the attribute tags by their names plus `content` — is appended as the
+      // next argument, so it fills the first unfilled param and every param
+      // after it reads `undefined`; nothing is bound by name, not even a param
+      // sharing an attribute tag's name. When the args already fill every fixed
+      // param and the define has no rest param Marko drops the extras entirely;
+      // with a rest param the object follows the args wherever they
       // stop (`|a, ...rest|` with `<D(1, 2)>x</D>` reads `rest = [2, { content }]`).
       // Params left unfilled are
       // still passed as `undefined` for the type checker (TS2554), matching
@@ -2880,8 +2876,8 @@ export class SolidEmitter implements Emitter<string> {
       );
     }
 
-    // A decision-116-routed dynamic target (`valueImportBinding` set) still
-    // names a real, in-scope import — the emitted call is
+    // A dynamic target routed from a value import (`valueImportBinding` set)
+    // still names a real, in-scope import — the emitted call is
     // `mxDyn0 = AttrCallee; ... <Dynamic component={mxDyn0} .../>`, with
     // `AttrCallee` imported verbatim — so typed attribute-tag checking can
     // still reference it for `Parameters<typeof AttrCallee>[0][...]`,
@@ -2919,25 +2915,25 @@ export class SolidEmitter implements Emitter<string> {
       when: `typeof ${value} === "string"`,
     };
     const attrs = renderAttrs(node.attrs, true, native);
-    // A decision-116 import target is a component, never a native element.
+    // A value-import target is a component, never a native element.
     const tags = attributeTagProps(
       node.attrTagProps,
       owner,
       owner === undefined ? native : undefined,
     );
-    // decision 112 (lead ruling 2026-09-28): 109 governs a function/
-    // component target called with arguments (`renderer(...args, props)`);
-    // 112 governs only a *string* (native-element) target — the two are
-    // disjoint, not in conflict. For a string target with arguments, args[0]
-    // (Marko's own `args[0] || {}`, `runtime-tags/src/html/dynamic-tag.ts`'s
-    // `_dynamic_tag`) becomes the element's attributes *instead of* this
-    // call's attribute-tag props, matching html's `renderDynamic` and the
-    // shared JSX `mxDynamic`; content still renders regardless, since Marko
-    // threads it independently of the input. A function/component target
-    // is unaffected: `tags` keeps applying exactly as decision 109 left it.
-    // Which branch applies is a run-time fact (`value`'s resolved type), so
-    // this emits two `<Dynamic>` elements behind the existing type-switch
-    // rather than trying to make one JSX attribute list conditional.
+    // A function/component target called with arguments gets
+    // `renderer(...args, props)`; only a *string* (native-element) target is
+    // handled differently — the two are disjoint, not in conflict. For a string
+    // target with arguments, args[0] (Marko's own `args[0] || {}`,
+    // `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`) becomes the
+    // element's attributes *instead of* this call's attribute-tag props,
+    // matching html's `renderDynamic` and the shared JSX `mxDynamic`; content
+    // still renders regardless, since Marko threads it independently of the
+    // input. A function/component target is unaffected: `tags` keeps applying
+    // unchanged. Which branch applies is a run-time fact (`value`'s resolved
+    // type), so this emits two `<Dynamic>` elements behind the existing
+    // type-switch rather than trying to make one JSX attribute list
+    // conditional.
     if (node.args.length > 0 && attrGuardUse) attrGuardUse.spread = true;
     const stringArgsAttrs =
       node.args.length > 0
@@ -2954,13 +2950,13 @@ export class SolidEmitter implements Emitter<string> {
             "}",
           )
         : "";
-    // decision 116, Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s
-    // `_dynamic_tag`, `normalizeDynamicRenderer`): a target that is neither
-    // a string nor a function has no renderer, so the tag itself renders
-    // nothing — but its own body content still renders, threaded
-    // independently of the target. `fallback` is the plain-JSX rendering of
-    // that body (or `null` for a self-closing/no-content call), used only in
-    // this else branch; the `<Dynamic>` branches above it are unaffected.
+    // Marko parity (`runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`,
+    // `normalizeDynamicRenderer`): a target that is neither a string nor a
+    // function has no renderer, so the tag itself renders nothing — but its own
+    // body content still renders, threaded independently of the target.
+    // `fallback` is the plain-JSX rendering of that body (or `null` for a
+    // self-closing/no-content call), used only in this else branch; the
+    // `<Dynamic>` branches above it are unaffected.
     const guard = (
       rendered: (tagsProps: MappedCode | string) => MappedCode | string,
       fallback: MappedCode | string,
@@ -2992,11 +2988,11 @@ export class SolidEmitter implements Emitter<string> {
             ),
       );
     if (!node.content || raw) {
-      // No body content to fall back to (a self-closing tag, or content
-      // that is already-rendered raw HTML) — the else branch passes the
-      // resolved value through unchanged, exactly as before decision 116:
-      // a caller reading `input.content` and forwarding it as `<${input.content}/>`
-      // must still see a real Solid element pass through here, never `null`.
+      // No body content to fall back to (a self-closing tag, or content that is
+      // already-rendered raw HTML) — the else branch passes the resolved value
+      // through unchanged: a caller reading `input.content` and forwarding it
+      // as `<${input.content}/>` must still see a real Solid element pass
+      // through here, never `null`.
       // Marko parity: a falsy renderer (null, undefined, false, 0, the
       // empty string) renders nothing — `{0}` in Solid JSX renders "0" as
       // text — so the pass-through collapses falsy values to `null`. A

@@ -100,8 +100,8 @@ export const ngMxPositionCheck: MxRegionPositionCheck = (
 /**
  * Escapes an emitted Angular template for a backtick template literal.
  *
- * Decision 99 reverses A4 divergence 3's double-quoted form. The hazard that
- * ruling named is real — a template literal makes `${` a live substitution,
+ * This reverses A4 divergence 3's double-quoted form. The hazard that
+ * divergence named is real — a template literal makes `${` a live substitution,
  * and `${` can legitimately appear in MX text — but escaping it is the same
  * text-escaping treatment this host already applies to `{`/`}`/`@`, so it is
  * neutralised rather than accepted. What settled the reversal is the mapping
@@ -169,7 +169,7 @@ export interface NgMxRegion {
 export interface CompileNgMxOptions {
   /** Custom tags already discovered and loaded by the calling integration. */
   customTags?: Record<string, CustomTag>;
-  /** `package.json#mx.angular-template.defaultTag`, already validated (decision 145). */
+  /** `package.json#mx.angular-template.defaultTag`, already validated. */
   defaultTag?: string;
   /**
    * Collects positioned warnings. Unset, the per-region warnings are still
@@ -179,7 +179,7 @@ export interface CompileNgMxOptions {
   /** The element-name prefix for an MX tag, `mx.angular.tagSelectorPrefix`. */
   tagSelectorPrefix?: string;
   /**
-   * The registered targets this compile runs under (decisions 129 and 132).
+   * The registered targets this compile runs under.
    * Defaults to this package's own descriptor, which is right for a direct
    * entry; a tool compiling several targets passes the built-in registry's
    * lookup, so a callee importing `AttrTag` from another registered target's
@@ -337,7 +337,7 @@ function lowerRegion(
   // Marko's "Unable to find entry point" (LiUNA gap G7).
   //
   // A `.marko` import is seeded like any other: core reports it at the tag
-  // when it is used as one (decision 172), and leaves it alone otherwise.
+  // when it is used as one, and leaves it alone otherwise.
   const specifiers = base.importSpecifiers ?? new Map<string, string>();
   for (const [name, specifier] of specifiers) {
     ctx.importSpecifiers.set(name, specifier);
@@ -611,11 +611,11 @@ function walk(node: unknown, visit: (node: NgMxNode) => void): void {
 /**
  * Appends the tags a template called to its own `@Component({ imports: [...] })`.
  *
- * **A4 divergence 5, and the edit no other host performs.** Decision 95(3)
- * gives one injected import per module per tag; on Angular the injected
- * symbol must *also* reach the decorator's `imports:` array or the template
- * cannot use the component at all — a silent empty render rather than an
- * error, which is why this is done rather than warned about.
+ * **A4 divergence 5, and the edit no other host performs.** Import injection
+ * gives one injected import per module per tag; on Angular the injected symbol
+ * must *also* reach the decorator's `imports:` array or the template cannot use
+ * the component at all — a silent empty render rather than an error, which is
+ * why this is done rather than warned about.
  *
  * Round 1 of the design note put this in the parser bridge, as Solid's
  * import injection is. It is owned here instead: "add an import" is generic,

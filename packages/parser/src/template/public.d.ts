@@ -126,9 +126,8 @@ export interface Lexer {
 }
 
 /**
- * A template lexer calling `handlers` (decision 182: `options.syntax` is the
- * syntax table, a plain object validated at run time; omitted means the
- * default row).
+ * A template lexer calling `handlers` (`options.syntax` is the syntax table,
+ * a plain object validated at run time; omitted means the default row).
  */
 export declare function createParser(
   handlers: Handlers,

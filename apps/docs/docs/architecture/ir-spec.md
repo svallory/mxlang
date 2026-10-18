@@ -238,7 +238,7 @@ A named custom tag's argument form is exclusive (Marko's `assertAttributesOrSing
 | `define` | `name`, `params` | A `<define>` in scope and the params it declared. |
 | `dynamic` | `expr`, `valueImportBinding?` | `<${expr}/>`, resolved at run time. `valueImportBinding` is set only when core synthesized this target (a PascalCase tag bound to a value import that is not a `.marko`/`.mx` default import, or to a local value core cannot prove is a function/class); its `expr` is synthesized (`node: null`, no span). |
 
-Pinned by `lower.test.ts` › "Component resolves an import binding as its target", "Component records a define target with its declared params", and the "decision 116" and "local-value-as-tag" tests (the first name is the test's own title).
+Pinned by `lower.test.ts` › "Component resolves an import binding as its target", "Component records a define target with its declared params", "a .ts default import routes to a dynamic Component target, not a name call", and the "local-value-as-tag" tests.
 
 ### 5.8 `IfChain` and `Branch`
 

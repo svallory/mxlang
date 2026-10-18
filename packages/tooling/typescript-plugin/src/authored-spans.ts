@@ -38,16 +38,15 @@ const NOT_CODE = new Set([
 ]);
 
 /**
- * Every tag and attribute of a whole-file `.mx` source, as file-absolute
- * spans: the authored constructs an unmappable diagnostic can be reported on
- * (decision 161). Beside them, every piece of code the author wrote (a
- * placeholder's expression, an attribute value other than a quoted string, a
- * tag's arguments, variable, parameters or dynamic name, a statement): where an
- * identifier or literal counts as spelled by the author. Read from the same
- * MX parse core lowers from, so it agrees with what the compiler saw. A
- * source that does not parse has none, and its diagnostics fall back to the
- * file start. `baseOffset` shifts every span, for a source that is a slice of
- * a larger file.
+ * Every tag and attribute of a whole-file `.mx` source, as file-absolute spans:
+ * the authored constructs an unmappable diagnostic can be reported on. Beside
+ * them, every piece of code the author wrote (a placeholder's expression, an
+ * attribute value other than a quoted string, a tag's arguments, variable,
+ * parameters or dynamic name, a statement): where an identifier or literal
+ * counts as spelled by the author. Read from the same MX parse core lowers
+ * from, so it agrees with what the compiler saw. A source that does not parse
+ * has none, and its diagnostics fall back to the file start. `baseOffset`
+ * shifts every span, for a source that is a slice of a larger file.
  *
  * The spans are the ones the Marko-tree walk produced before port PR 5,
  * measured equal over every whole-file `.mx` in the repository: a module

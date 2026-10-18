@@ -31,16 +31,16 @@ export interface ExpressionMeta extends Meta {
    */
   claimDefault: boolean;
   /**
-   * MX (decision 182): a syntax table's expression triggers are armed here
-   * where an expression is expected. Set for attribute values, spreads and
-   * arguments, tag arguments, placeholders, method-shorthand bodies (an
-   * attribute value) and the `${}` of a template inside one of those; never
-   * for statement tags or scriptlets.
+   * MX: a syntax table's expression triggers are armed here where an expression
+   * is expected. Set for attribute values, spreads and arguments, tag
+   * arguments, placeholders, method-shorthand bodies (an attribute value) and
+   * the `${}` of a template inside one of those; never for statement tags or
+   * scriptlets.
    */
   triggers: boolean;
   /**
-   * MX: where the last expression trigger (decision 182) lexed in this
-   * expression ends (-1: none). Its text is an operand, never a keyword.
+   * MX: where the last expression trigger lexed in this expression ends (-1:
+   * none). Its text is an operand, never a keyword.
    */
   atomEnd: number;
   /** MX: the comments read so far, which trigger lexing looks behind past. */
@@ -167,9 +167,9 @@ export const EXPRESSION: StateDefinition<ExpressionMeta> = {
         continue;
       }
 
-      // MX (decision 182): a syntax-table expression trigger, armed by its
-      // first character where an operand is expected, in the expressions
-      // that arm triggers. The default row has no trigger set.
+      // MX: a syntax-table expression trigger, armed by its first character
+      // where an operand is expected, in the expressions that arm triggers. The
+      // default row has no trigger set.
       if (
         this.syntax.expression !== null &&
         expression.triggers &&
@@ -494,11 +494,11 @@ function checkForOperators(
   if (!expression.operators) return false;
 
   const { pos, data } = parser;
-  // MX (decision 156 addendum 11): Unicode whitespace right before the
-  // whitespace or newline that got here is part of the same run, so look
-  // behind past it (`a +\u00a0 b` and `a +\u00a0\n` read as `a +  b` and
-  // `a + \n`, where the first space looks behind at `+`). Only that set is
-  // skipped, never ASCII whitespace, so ASCII-only input is unchanged.
+  // MX: Unicode whitespace right before the whitespace or newline that got here
+  // is part of the same run, so look behind past it (`a +\u00a0 b` and
+  // `a +\u00a0\n` read as `a +  b` and `a + \n`, where the first space looks
+  // behind at `+`). Only that set is skipped, never ASCII whitespace, so
+  // ASCII-only input is unchanged.
   if (
     lookBehindForOperator(
       expression,
@@ -542,9 +542,9 @@ function checkForOperators(
         expression,
       )
     ) {
-      // MX (decision 182): a space and then an attribute trigger that sets
-      // `terminatesValue` ends an attribute value. A row whose claim
-      // declines ends nothing: the value reads on as if no row matched.
+      // MX: a space and then an attribute trigger that sets `terminatesValue`
+      // ends an attribute value. A row whose claim declines ends nothing: the
+      // value reads on as if no row matched.
       if (
         parser.syntax.terminators &&
         matchTrigger(parser.syntax.attribute!, data, nextNonSpace)?.trigger
@@ -690,8 +690,7 @@ function isClaimedDefault(
  * MX: whether an attribute value may end at `pos`, the start of the next
  * token after whitespace: a named attribute's (or spread's) value, or a
  * default value a value row claims whole, with no `?` open (a ` :x` there
- * is the ternary's). The guard of the syntax table's `terminatesValue`
- * (decision 182).
+ * is the ternary's). The guard of the syntax table's `terminatesValue`.
  */
 function valueMayEndAt(
   expression: ExpressionMeta,
@@ -888,8 +887,8 @@ function isDigitCode(code: number) {
   return code >= CODE.NUMBER_0 && code <= CODE.NUMBER_9;
 }
 
-// MX (decision 182): words after which an expression is expected, so an
-// expression trigger may follow them (`typeof &a`, `return :b`).
+// MX: words after which an expression is expected, so an expression trigger may
+// follow them (`typeof &a`, `return :b`).
 const operandKeywords = [
   "await",
   "case",
@@ -909,15 +908,15 @@ const operandKeywords = [
 ] as const;
 
 /**
- * MX (decision 182): at an armed character, lexes an expression trigger when
- * its matcher matches and an operand is expected here: never inside a word,
- * never continuing a punctuator of the same character (`a &&b` is a logical
- * and, not `&` and `&b`), and only where `expectsExpression` holds, or right
- * after a ternary's `?` (below). It declines, silently, when the text after
- * the match would continue the token (`continuesToken`,
- * `stopsShortOfToken`): the character is then lexed as if no trigger were
- * armed (`:aé` under an ASCII matcher). Records the span for `read`,
- * announces it through `onTrigger`, and returns whether it consumed it.
+ * MX: at an armed character, lexes an expression trigger when its matcher
+ * matches and an operand is expected here: never inside a word, never
+ * continuing a punctuator of the same character (`a &&b` is a logical and, not
+ * `&` and `&b`), and only where `expectsExpression` holds, or right after a
+ * ternary's `?` (below). It declines, silently, when the text after the match
+ * would continue the token (`continuesToken`, `stopsShortOfToken`): the
+ * character is then lexed as if no trigger were armed (`:aé` under an ASCII
+ * matcher). Records the span for `read`, announces it through `onTrigger`, and
+ * returns whether it consumed it.
  */
 function lexTrigger(
   parser: Parser,
@@ -1075,8 +1074,8 @@ function isOperatorWord(
   const word = data.slice(wordStart, end + 1);
   if (!(operandKeywords as readonly string[]).includes(word)) return false;
   if (word === "of" || (word === "yield" && atColon)) {
-    // A comment is skipped exactly as whitespace is (decision 156 addendum
-    // 8): `for (x /*c*/ of :b)` reads as `for (x  of :b)`.
+    // A comment is skipped exactly as whitespace is: `for (x /*c*/ of :b)`
+    // reads as `for (x  of :b)`.
     let j = wordStart - 1;
     for (;;) {
       while (j >= expression.start && isUnicodeWhitespaceCode(data.charCodeAt(j))) j--;
@@ -1152,8 +1151,8 @@ function closesTypeArguments(
 }
 
 /**
- * Whether the `.` at `at` ends a spread's `...` (decision 156 addendum 8:
- * `[...await :b]`), not a member access (`a.await`, `a?.typeof`).
+ * Whether the `.` at `at` ends a spread's `...` (`[...await :b]`), not a
+ * member access (`a.await`, `a?.typeof`).
  */
 function isSpreadEnd(data: string, at: number) {
   return (
@@ -1165,7 +1164,7 @@ function isSpreadEnd(data: string, at: number) {
 
 /**
  * Where the word that ends at `end` (inclusive) starts, not before `min`: a
- * surrogate pair is one character (decision 156 addendum 13).
+ * surrogate pair is one character.
  */
 function wordStartOf(data: string, end: number, min: number) {
   let start = end + 1 - (wordWidthBefore(data, end) || 1);

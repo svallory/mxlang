@@ -24,7 +24,7 @@ state files and MX's own patches, so the rule asks every editor to change lines
 that are outside their task and that upstream owns. The exemption was requested
 by the repo's lead, who owns the tooling.
 
-## The syntax table (decision 182)
+## The syntax table
 
 `src/template/syntax.ts` holds `SyntaxTable` (plain data, no function field),
 `DEFAULT_SYNTAX` (the `.mx` row, today's grammar) and `validateSyntaxTable`;
@@ -67,11 +67,11 @@ atoms and the name sugars as a dialect would (test fixtures, run by
 `src/template/mx-sugar-module.test.ts` over the corpora of
 `src/template/mx-atoms.cases.ts`). Nothing is lowered here.
 Block tags and filters (`MxBlockTag`, `MxFilter`, ast §4.5) are raw body
-children in HTML content. Tag types come from the table's `tagTypes`
-(addenda 2 and 3), never from a handler's return: the front end passes
-`ParseOptions.tagTypes`, or builds them before the parse by pre-scanning the
-source with `tagShape` (`src/frontend/tag-types.ts`, interim until PR C
-builds them in core), restarting with any name the scan missed.
+children in HTML content. Tag types come from the table's `tagTypes`, never
+from a handler's return: the front end passes `ParseOptions.tagTypes`, or
+builds them before the parse by pre-scanning the source with `tagShape`
+(`src/frontend/tag-types.ts`, interim until PR C builds them in core),
+restarting with any name the scan missed.
 `src/template/PROVENANCE.md` lists every place the table touches.
 
 ## `src/frontend/` (the MX AST front end)
@@ -96,8 +96,8 @@ builds them in core), restarting with any name the scan missed.
   ``x<a x=`${<a>``, `$ {a`, `${x`) gets `MX_INPUT_ENDS_IN_DELIMITER` ("the
   input ends inside `(`…`)` opened here", spanning the outermost opener left
   open), where the template parser and stock htmljs-parser are silent;
-  the tags are closed at the end and kept (decision 161). Pinned in
-  `input-ends.test.ts` and the corpus.
+  the tags are closed at the end and kept. Pinned in `input-ends.test.ts` and
+  the corpus.
 - `corpus.test.ts` runs the 1,717 grammar probes and compares each tree's
   projection with `corpus.snapshot.json`. A deliberate change regenerates it:
   `FRONTEND_SNAPSHOT_UPDATE=1 bunx vitest run --root ../.. --project @mxlang/parser frontend/corpus`,

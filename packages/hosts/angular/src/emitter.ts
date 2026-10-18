@@ -190,7 +190,7 @@ export const angularDeclarations: HostDeclarations = {
   hostName: "Angular",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
-  // The ladder (decision 145): the parent's contract `defaultTag`, then
+  // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:
   // it sets no `allowContractDefaultTag: false`.
@@ -218,25 +218,24 @@ export const angularDeclarations: HostDeclarations = {
     if (taglibId !== undefined) return ELEMENT_TAGLIBS.has(taglibId);
     return !/^[A-Z]/.test(name);
   },
-  // Decision 114: routing by PascalCase alone made `<TotallyUndefined/>` —
-  // no import, binding, or taglib entry — a "component" that emitted
-  // `<mx-totally-undefined>` plus a step-1 import warning, where Marko
-  // 6.4.4 fails at compile time. A name is a component here only when
-  // something resolves it: a file-local binding (an import, a `<define>`),
-  // or a taglib entry — and no HTML element is ever capitalized, so any
-  // taglib hit for a capitalized name is a component, not an element.
-  // Anything else falls past this to the core's unresolved-tag guard and
-  // `rejectUnknownTag` below.
+  // Routing by PascalCase alone made `<TotallyUndefined/>` — no import,
+  // binding, or taglib entry — a "component" that emitted
+  // `<mx-totally-undefined>` plus a step-1 import warning, where Marko 6.4.4
+  // fails at compile time. A name is a component here only when something
+  // resolves it: a file-local binding (an import, a `<define>`), or a taglib
+  // entry — and no HTML element is ever capitalized, so any taglib hit for a
+  // capitalized name is a component, not an element. Anything else falls past
+  // this to the core's unresolved-tag guard and `rejectUnknownTag` below.
   isComponent: (name, ctx) => {
     if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
     const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
     if (taglibId === undefined) return false;
     return !ELEMENT_TAGLIBS.has(taglibId);
   },
-  // Marko's own compile error for a tag nothing resolves (decision 114),
-  // reported through the core's unresolved-tag guard rather than this
-  // host's old casing-only fallback. The message is core's own constant,
-  // shared verbatim with every other Marko-parity host.
+  // Marko's own compile error for a tag nothing resolves, reported through
+  // the core's unresolved-tag guard rather than this host's old casing-only
+  // fallback. The message is core's own constant, shared verbatim with every
+  // other Marko-parity host.
   rejectUnknownTag(name, node) {
     rawFail(unknownTagMessage(name), node);
   },
@@ -280,7 +279,7 @@ export const angularDeclarations: HostDeclarations = {
   },
   // Only native `class:`, `style:` and `on:` prefixes reach this hook.
   // Other colon names (including `attr:` and `oncapture:`) are ordinary
-  // attributes in Marko, not invalid modifier syntax (decision 86 follow-up).
+  // attributes in Marko, not invalid modifier syntax.
   rejectModifier(attr): void {
     // SAFETY: core passes a raw Marko attribute whose name/modifier are strings.
     const { name, modifier } = attr as unknown as {
@@ -350,15 +349,14 @@ function esc(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
-// Phase B of `dom-events` (decision 101): core lowers an element's
-// `on<Name>`/`on-<exact>` to `kind: "event"` carrying the resolved DOM name,
-// so this host recomposes `(${attr.event})=` from it and the invented
-// `IRREGULAR_EVENTS` table this file used to carry is gone — `onDoubleClick`
-// is *not* rewritten to `dblclick` (no aliases, decision 101 (c)); core warns
-// and the binding emits `(doubleclick)` exactly as written. A lowercase
-// `onclick=fn` never reaches the `event` kind (the core's `/^on[A-Z-]/` gate
-// keeps it `dynamic`), so the `dynamic` case below maps it, as decision 101
-// requires for this host.
+// Phase B of `dom-events`: core lowers an element's `on<Name>`/`on-<exact>` to
+// `kind: "event"` carrying the resolved DOM name, so this host recomposes
+// `(${attr.event})=` from it and the invented `IRREGULAR_EVENTS` table this
+// file used to carry is gone — `onDoubleClick` is *not* rewritten to
+// `dblclick` (no aliases); core warns and the binding emits `(doubleclick)`
+// exactly as written. A lowercase `onclick=fn` never reaches the `event` kind
+// (the core's `/^on[A-Z-]/` gate keeps it `dynamic`), so the `dynamic` case
+// below maps it on this host.
 const LOWERCASE_EVENT = /^on[a-z]+$/;
 // `once=`/`onto=` are ordinary words, not events — spec §4 names `once`, and
 // the element tests pin both as plain property bindings.
@@ -371,8 +369,8 @@ const ELEMENT_TAGLIBS = new Set(["marko-html", "marko-svg", "marko-math"]);
 
 /**
  * A dynamic attribute with no Angular DOM property to bind emits
- * `[attr.name]`; every other dynamic attribute stays `[name]` (A1 design note,
- * decision 86).
+ * `[attr.name]`; every other dynamic attribute stays `[name]` (A1 design
+ * note).
  *
  * Two families qualify: `data-*`/`aria-*` (Angular has no `.dataFoo`/
  * `.ariaFoo` DOM property for most of these), and a name carrying `:`, which
@@ -1014,10 +1012,10 @@ function writeAttributeName(
  * mapped run, so a diagnostic on the directive name lands after the prefix.
  */
 /**
- * Marko's primitive attribute values (decision 149) as an Angular template
- * expression over a `@let` that holds the authored expression (`$any`, since a
- * strict template rejects `=== false` on a `string`), so it is
- * evaluated and type-checked once, at its authored position.
+ * Marko's primitive attribute values as an Angular template expression over a
+ * `@let` that holds the authored expression (`$any`, since a strict template
+ * rejects `=== false` on a `string`), so it is evaluated and type-checked
+ * once, at its authored position.
  *
  * - `attr`: `[attr.name]` removes the attribute on null/undefined only, so
  *   `false` (Marko omits) and `true` (Marko prints bare) are folded in.
@@ -1195,7 +1193,7 @@ function emitAttrs(
         out.write(" ");
         writeAttributeName(out, attr.name, attr.nameSpan);
         break;
-      // Phase B of `dom-events` (decision 101): Angular's `(x)` binds a real
+      // Phase B of `dom-events`: Angular's `(x)` binds a real
       // DOM event name, and core resolved it — `on<Name>` lowercased,
       // `on-<exact>` verbatim — so both forms emit `(${attr.event})=` from
       // the one source of truth: `onClick` and `on-click` both give
@@ -1223,11 +1221,11 @@ function emitAttrs(
         }
         if (isElement && LOWERCASE_EVENT.test(name) && !NOT_EVENTS.has(name)) {
           // `onclick=fn` (lowercase, expression) on a native element: not
-          // event-shaped for the core kind, but decision 101 maps it on this
-          // host — Angular's `(click)` is the binding an inline handler
-          // string would have driven, so a function value routes there
-          // instead of a dead `[onclick]` property binding. On a component
-          // call the same attribute stays the callee's `[onclick]` input.
+          // event-shaped for the core kind, but this host maps it — Angular's
+          // `(click)` is the binding an inline handler string would have
+          // driven, so a function value routes there instead of a dead
+          // `[onclick]` property binding. On a component call the same
+          // attribute stays the callee's `[onclick]` input.
           out.write(" (");
           out.writeMapped(name.slice(2), attr.nameSpan, "event");
           out.write(')="');
@@ -1303,7 +1301,7 @@ function emitAttrs(
           out.write(primitiveExpression(variable, form));
           out.write('"');
         } else if (NO_PROPERTY_BINDING.test(name)) {
-          // A1 (design note), decision 86: Angular property vs attribute
+          // A1 (design note): Angular property vs attribute
           // binding is the emitter's own call, not an author-written
           // modifier — native `class:`/`style:` are reserved, but `attr:`
           // and other non-reserved colon names are ordinary complete names.
@@ -2385,9 +2383,9 @@ class AngularEmitter implements Emitter<string> {
     // Text runs are deliberately unmapped: a diagnostic never points at
     // literal text, and mapping it would shadow the expressions inside the
     // same element with a coarser span.
-    // Decision 141: Marko already normalized this retained space. Angular's
-    // default whitespace pass would erase it again; `&ngsp;` keeps one actual
-    // space without changing the consumer's global preserveWhitespaces policy.
+    // Marko already normalized this retained space. Angular's default
+    // whitespace pass would erase it again; `&ngsp;` keeps one actual space
+    // without changing the consumer's global preserveWhitespaces policy.
     this.out.write(
       this.codeDepth === 0 && node.value === " "
         ? "&ngsp;"
@@ -2559,12 +2557,11 @@ class AngularEmitter implements Emitter<string> {
         this.emitDefineCall(node, node.target);
         return;
       case "dynamic":
-        // Decision 116's routing lands here: a capitalized tag bound to a
-        // value import that is not a `.mx` default import, or to a local
-        // whose value the core could not statically prove (a `<for>` tag
-        // param, a `lazy(...)` const). The callee is a runtime value, so
-        // the call emits the same `ngComponentOutlet` an authored
-        // `<${expr}/>` does — `valueImportBinding` has no use on this
+        // A capitalized tag bound to a value import that is not a `.mx` default
+        // import, or to a local whose value the core could not statically prove
+        // (a `<for>` tag param, a `lazy(...)` const), lands here. The callee is
+        // a runtime value, so the call emits the same `ngComponentOutlet` an
+        // authored `<${expr}/>` does — `valueImportBinding` has no use on this
         // host, which has no type surface to spend it on. An authored
         // `<${expr}/>` itself still arrives through `DelegatedTag` (the
         // `DYNAMIC_TAG` sentinel), never through this branch.
@@ -2599,8 +2596,8 @@ class AngularEmitter implements Emitter<string> {
     // it came from; anything else reaching here is a *bound* local with no
     // tag module behind it (a `<const>`/param the core proved callable),
     // and the bare-name rule is all this host can apply. An *unbound*
-    // capitalized name never reaches this method at all: decision 114's
-    // core guard rejects it first.
+    // capitalized name never reaches this method at all: the core's
+    // unresolved-tag guard rejects it first.
     const tagModule = this.tagModules.get(target.name);
     const selector =
       tagModule?.selector ?? `${this.selectorPrefix}${kebabCase(target.name)}`;

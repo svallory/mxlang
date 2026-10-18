@@ -33,7 +33,7 @@ export type {
   MxTrigger,
 };
 
-/** Options of `parse` (ast §7.1, §5.3; decision 182). */
+/** Options of `parse` (ast §7.1, §5.3). */
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
   /** The syntax table (`@mxlang/parser`'s `SyntaxTable`); omitted means `DEFAULT_SYNTAX`. */

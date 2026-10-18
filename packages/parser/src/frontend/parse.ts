@@ -1,13 +1,12 @@
 /**
- * The MX front end (decision 158; ast §7): drives the template parser
+ * The MX front end (ast §7): drives the template parser
  * (`../template`) and builds the MX AST from its events, one handler per row
  * of the ast §7 event table.
  *
  * Nodes are built as private mutable builders and copied into plain read-only
  * objects once the parse ends (`finish`), so no node is mutated after it is
- * attached to its parent (decision 163 addendum 5). Offsets are file-absolute
- * at creation: the fragment base is added when a node is made, never by a
- * later walk (ast §5.3).
+ * attached to its parent. Offsets are file-absolute at creation: the fragment
+ * base is added when a node is made, never by a later walk (ast §5.3).
  */
 import type {
   MxBlockTag,
@@ -58,20 +57,20 @@ export type { MxBlockTag, MxFilter, MxTrigger };
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
   /**
-   * The syntax table (decision 182); omitted means `DEFAULT_SYNTAX`, today's
+   * The syntax table; omitted means `DEFAULT_SYNTAX`, today's
    * grammar. A table that does not validate is a `TypeError`.
    */
   readonly syntax?: SyntaxTable;
   /**
-   * Tag types keyed by the full written static name (decision 182 addenda
-   * 2, 3), the template parser's only source of a tag's type. Omitted, the
-   * table's own `tagTypes` are used when it has any, else they are built
-   * from `tagShape` and `statementKeywords` by pre-scanning the source
-   * (interim until PR C). Checked before the parse against the statement
-   * rule (a `TypeError` when it contradicts it): a statement keyword may
-   * only be `statement`, and is filled in when absent; no other name may be.
-   * A static tag whose entry disagrees with `tagShape`'s body mode is
-   * `MX_TAG_TYPES_MISMATCH` at its name, parsed with the table's type.
+   * Tag types keyed by the full written static name, the template parser's
+   * only source of a tag's type. Omitted, the table's own `tagTypes` are used
+   * when it has any, else they are built from `tagShape` and
+   * `statementKeywords` by pre-scanning the source (interim until PR C).
+   * Checked before the parse against the statement rule (a `TypeError` when
+   * it contradicts it): a statement keyword may only be `statement`, and is
+   * filled in when absent; no other name may be. A static tag whose entry
+   * disagrees with `tagShape`'s body mode is `MX_TAG_TYPES_MISMATCH` at its
+   * name, parsed with the table's type.
    */
   readonly tagTypes?: Readonly<Record<string, TagTypeValue>>;
   /**
@@ -116,7 +115,7 @@ class ClaimThrow {
   readonly error: unknown;
 }
 
-/** Decision 161's wording for an error that is never the author's. */
+/** The wording for an error that is never the author's. */
 const MX_BUG = "not yours: an MX bug";
 
 const BODY_MODES: ReadonlySet<string> = new Set<MxBodyMode>([
@@ -192,15 +191,15 @@ export interface TagBuilder extends Builder {
 }
 
 /**
- * The whitespace layer of a normalizing body (ast §3.8, decision 166 item
- * 2): Marko's `onText` rule, reproduced. A pure whitespace run that starts
- * with a line break is layout and produces no node; otherwise the leading
- * newline-led run is dropped by what the previous sibling is (a placeholder
- * keeps it), and the trailing one is settled by what comes next — the
- * settle runs at the next content push, at a tag close, and at the end of
- * the parse, exactly where Marko's `onNext` fires. Inner whitespace
- * collapses to one space in `value`; `valueSpan` covers the trimmed text
- * before the collapse (Marko's `withLoc` range).
+ * The whitespace layer of a normalizing body (ast §3.8): Marko's `onText`
+ * rule, reproduced. A pure whitespace run that starts with a line break is
+ * layout and produces no node; otherwise the leading newline-led run is
+ * dropped by what the previous sibling is (a placeholder keeps it), and the
+ * trailing one is settled by what comes next — the settle runs at the next
+ * content push, at a tag close, and at the end of the parse, exactly where
+ * Marko's `onNext` fires. Inner whitespace collapses to one space in `value`;
+ * `valueSpan` covers the trimmed text before the collapse (Marko's `withLoc`
+ * range).
  */
 const LAYOUT_WHITESPACE = /^(?:[\n\r][ \t\n\r\f]*)?(?:[\n\r][ \t\n\r\f]*)?$/;
 const LEADING_BREAK = /^[\n\r][ \t\n\r\f]*/;
@@ -232,11 +231,10 @@ export function parse(source: string, options: ParseOptions): MxDocument {
       ...(options.tagTypes ? { tagTypes: options.tagTypes } : {}),
     });
   }
-  // So is a table that contradicts the statement rule (decision 182
-  // addenda 2, 3): checked before the parse, so it can never reach the
-  // template parser as a statement the front end did not expect (an
-  // attribute dropped, a tag re-nested) or the reverse. `tagShape`'s answers
-  // are kept for the parse, which asks each name once.
+  // So is a table that contradicts the statement rule: checked before the
+  // parse, so it can never reach the template parser as a statement the front
+  // end did not expect (an attribute dropped, a tag re-nested) or the reverse.
+  // `tagShape`'s answers are kept for the parse, which asks each name once.
   const shapes = new Map<string, MxBodyMode>();
   const problems = statementRuleProblems(
     givenTagTypes(options),
@@ -507,10 +505,8 @@ class FrontEnd {
     // stops with no error and no close events (parser-grammar OQ 19; stock
     // htmljs-parser 5.18.0 is silent too), or reports a range past the end
     // (`$ {a`), or reports nothing at all (`${x`). A silent drop is
-    // forbidden (decision 161), so the front end reports
-    // `MX_INPUT_ENDS_IN_DELIMITER` at the opener, then closes the tags there,
-    // keeping the tree; this supersedes the deferral of decision 163
-    // addendum 9 (Q8).
+    // forbidden, so the front end reports `MX_INPUT_ENDS_IN_DELIMITER` at the
+    // opener, then closes the tags there, keeping the tree.
     if (!this.templateError) this.inputEndsInDelimiter();
     if (!this.templateError && this.stack.length > 0) {
       for (let i = this.stack.length - 1; i >= 0; i--) {
@@ -716,9 +712,9 @@ class FrontEnd {
         text.startsWith("$!{") &&
         error.code.startsWith("BABEL_")
       ) {
-        // Decision 166 item 1: `$!{…}` as an attribute value gets its own
-        // code; the message and position are today's, byte for byte (there
-        // is no dedicated message today — the Babel error is the report).
+        // `$!{…}` as an attribute value gets its own code; the message and
+        // position are today's, byte for byte (there is no dedicated message
+        // today — the Babel error is the report).
         error = {
           ...error,
           code: "MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE",
@@ -726,8 +722,7 @@ class FrontEnd {
         };
       } else if (hints === "attr-value" && /^\{[\s\S]*\}$/.test(text.trim())) {
         // Marko's `withWrappedAttrValueHint` (ast §3.13 item 2); the text is
-        // today's, byte for byte (ruling 1 keeps today's wording, hint
-        // appended).
+        // today's, byte for byte (today's wording, hint appended).
         error = {
           ...error,
           message: `${error.message}${error.message.endsWith(".") ? "" : "."}${wrappedAttrValueHint(text, { offset: start, line: position.line, column: position.column }, end, subTriggers)}`,
@@ -858,7 +853,7 @@ class FrontEnd {
   }
 
   /**
-   * `onTrigger` (decision 182): an expression trigger waits for its
+   * `onTrigger`: an expression trigger waits for its
    * container; an attribute trigger joins its tag's attributes; a line
    * trigger is a child of the enclosing body. A value's container is built
    * now, after the expression triggers inside it were announced.
@@ -1130,10 +1125,10 @@ class FrontEnd {
   }
 
   /**
-   * The tag's type is the template parser's, from the table (`tagTypes`,
-   * decision 182 addenda 2 and 3); this handler decides nothing. It checks
-   * that the table agrees with the body mode it records, so a name the
-   * table missed fails loudly instead of parsing with the wrong type.
+   * The tag's type is the template parser's, from the table (`tagTypes`);
+   * this handler decides nothing. It checks that the table agrees with the
+   * body mode it records, so a name the table missed fails loudly instead of
+   * parsing with the wrong type.
    */
   onOpenTagName(template: Ranges.Template): void {
     const concise = this.openStart === undefined;
@@ -1148,8 +1143,8 @@ class FrontEnd {
       concise &&
       this.options.statementKeywords.has(written as MxStatementKeyword)
     ) {
-      // Decision 163 addendum 7 (Q4): a concise line only; nested, the
-      // template parser reports ROOT_TAG_ONLY itself, as today.
+      // A concise line only; nested, the template parser reports
+      // ROOT_TAG_ONLY itself, as today.
       this.statement = {
         keyword: written as MxStatementKeyword,
         start: template.start,
@@ -1171,7 +1166,7 @@ class FrontEnd {
       };
     } else if (written.startsWith("@")) {
       // An attribute tag is never asked: its body is html, and `tagShape`
-      // only sees names that are tags (decision 163 addendum 8).
+      // only sees names that are tags.
       type = "MxAttributeTag";
       name = { value: written.slice(1), span: this.span(template) };
     } else {
@@ -1411,12 +1406,12 @@ class FrontEnd {
   }
 
   /**
-   * The open tag a head event belongs to. Interim (decision 163 addendum 9):
-   * a concise line that opens a tag with no name (`,` alone, `,// c`) gets
-   * head events and the open tag's end but no `onOpenTagName`
-   * (parser-grammar, "a named close tag when the open tag never got its
-   * name", g1683); the tag is unnamed, at its first head event. PR 2b
-   * records MX_TAG_NAME_MISSING here instead; today's path crashes.
+   * The open tag a head event belongs to. Interim: a concise line that opens
+   * a tag with no name (`,` alone, `,// c`) gets head events and the open
+   * tag's end but no `onOpenTagName` (parser-grammar, "a named close tag when
+   * the open tag never got its name", g1683); the tag is unnamed, at its
+   * first head event. PR 2b records MX_TAG_NAME_MISSING here instead; today's
+   * path crashes.
    */
   headTag(at: number): TagBuilder {
     const top = this.top;
@@ -1473,9 +1468,9 @@ class FrontEnd {
         args: null,
       });
     } else {
-      // Decision 163 addendum 12: the split is kept as data, and the name
-      // is the head before the last colon — `nameSpan` covers the head only.
-      // A trailing colon is an empty modifier with a zero-width span after it.
+      // The split is kept as data, and the name is the head before the last
+      // colon — `nameSpan` covers the head only. A trailing colon is an empty
+      // modifier with a zero-width span after it.
       // An empty head is the default value, as Marko fills it with `value`
       // (`:b` is `value:b`, `:` is `value:`).
       const colon = text.lastIndexOf(":");
@@ -1784,9 +1779,9 @@ class FrontEnd {
   }
 
   /**
-   * Ends every open tag at the stop point (ast §3.13, decision 163 addendum
-   * 8): its end is the error's start or the furthest part attached to it,
-   * whichever is later; the parse delivers no further event.
+   * Ends every open tag at the stop point (ast §3.13): its end is the error's
+   * start or the furthest part attached to it, whichever is later; the parse
+   * delivers no further event.
    */
   stopAll(at: number): void {
     if (this.stopped) return;
@@ -1795,9 +1790,9 @@ class FrontEnd {
     const statement = this.statement;
     this.statement = undefined;
     if (statement) {
-      // A statement the error cut short is kept (decision 163 addendum 10):
-      // its range runs to the error's start or its last part, whichever is
-      // later; `end` is that range right-trimmed, as for every statement.
+      // A statement the error cut short is kept: its range runs to the
+      // error's start or its last part, whichever is later; `end` is that range
+      // right-trimmed, as for every statement.
       this.pushStatement(statement, Math.max(at, statement.nameEnd));
     }
     for (let i = this.stack.length - 1; i >= 0; i--) {

@@ -1,5 +1,5 @@
 /**
- * `MxTrigger` (decision 182, PR A) in the front end: where each position's
+ * `MxTrigger` (PR A) in the front end: where each position's
  * node sits, its exact offsets, the stand-in the payload parsed, the span
  * invariant with triggers, and that the default row changes no tree.
  */

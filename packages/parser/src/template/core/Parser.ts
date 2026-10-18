@@ -73,7 +73,7 @@ export type TriggerClaim = (
   end: number,
 ) => unknown;
 
-/** MX (decision 182): a lexed trigger's span and the stand-in `read` gives it. */
+/** MX: a lexed trigger's span and the stand-in `read` gives it. */
 export interface TriggerSpan extends Range {
   standIn: "number" | "identifier";
 }
@@ -106,27 +106,30 @@ export class Parser {
   declare public lines: undefined | number[]; // Keeps track of line indexes to provide line/column info.
   declare public options: Options;
   /**
-   * MX (decision 182): each raw open tag, as tag-name start -> open-tag-end
-   * start. A read of exactly that range (`@marko/compiler`'s `rawValue`,
-   * which `<style>` uses) gets the source, never stand-ins; any other read,
-   * a mixed tag name's template (`<foo-${&a}>`) included, gets stand-ins.
+   * MX: each raw open tag, as tag-name start -> open-tag-end start. A read of
+   * exactly that range (`@marko/compiler`'s `rawValue`, which `<style>` uses)
+   * gets the source, never stand-ins; any other read, a mixed tag name's
+   * template (`<foo-${&a}>`) included, gets stand-ins.
    */
   declare public rawOpenTags: Map<number, number>;
   /**
-   * MX (decision 182): the syntax table's compiled triggers. The default row
-   * compiles to no sets, so every check is one `null` test.
+   * MX: the syntax table's compiled triggers. The default row compiles to no
+   * sets, so every check is one `null` test.
    */
   declare public syntax: CompiledSyntax;
   /**
-   * MX (decision 182): the span and stand-in of every trigger lexed so far
-   * whose stand-in is not `"keep"`, in source order.
+   * MX: the span and stand-in of every trigger lexed so far whose stand-in is
+   * not `"keep"`, in source order.
    */
   declare public triggers: TriggerSpan[];
-  /** MX (decision 182): where the last trigger lexed starts (-1: none). */
+  /** MX: where the last trigger lexed starts (-1: none). */
   declare public lastTriggerStart: number;
   /** MX: the `claim` option; absent means every matched row claims. */
   declare public claim: TriggerClaim | undefined;
-  /** MX: what `claim` answered, by position and trigger start, so a re-lex within this parse asks once. */
+  /**
+   * MX: what `claim` answered, by position and trigger start, so a re-lex
+   * within this parse asks once.
+   */
   declare public claims: Map<string, unknown>;
 
   constructor(
@@ -149,12 +152,11 @@ export class Parser {
   }
 
   /**
-   * MX (decision 182): `text` (the source of `range`) with every trigger
-   * that lies wholly inside `range` replaced by its same-length stand-in
-   * (`standInText`), so a sub-parser reads it at the authored offsets. A
-   * read of exactly a raw open tag (`rawOpenTags`) gets the source; a partly
-   * covered span reads the source. The first candidate trigger is found by
-   * binary search.
+   * MX: `text` (the source of `range`) with every trigger that lies wholly
+   * inside `range` replaced by its same-length stand-in (`standInText`), so a
+   * sub-parser reads it at the authored offsets. A read of exactly a raw open
+   * tag (`rawOpenTags`) gets the source; a partly covered span reads the
+   * source. The first candidate trigger is found by binary search.
    */
   standIn(text: string, range: Range) {
     if (this.rawOpenTags.get(range.start) === range.end) return text;
@@ -239,9 +241,9 @@ export class Parser {
   }
 
   /**
-   * MX (decision 182): records a lexed trigger's span for `read` (unless its
-   * stand-in is `"keep"`). Returns false for a trigger already recorded: a
-   * re-lex never records or announces one twice.
+   * MX: records a lexed trigger's span for `read` (unless its stand-in is
+   * `"keep"`). Returns false for a trigger already recorded: a re-lex never
+   * records or announces one twice.
    */
   recordTrigger(trigger: CompiledTrigger, start: number, end: number) {
     if (start <= this.lastTriggerStart) return false;
@@ -438,10 +440,10 @@ export class Parser {
 
   getPreviousNonWhitespaceCharCode(start = -1) {
     let behind = start;
-    // MX (decision 156 addendum 11): Unicode whitespace too.
+    // MX: Unicode whitespace too.
     while (isUnicodeWhitespaceCode(this.lookAtCharCodeAhead(behind))) behind--;
     const code = this.lookAtCharCodeAhead(behind);
-    // MX (decision 156 addendum 13): a surrogate pair is one code point.
+    // MX: a surrogate pair is one code point.
     if (code >= 0xdc00 && code <= 0xdfff) {
       const high = this.lookAtCharCodeAhead(behind - 1);
       if (high >= 0xd800 && high <= 0xdbff) {

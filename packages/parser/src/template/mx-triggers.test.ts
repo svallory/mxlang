@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * The syntax table (decision 182, PR A) at the template parser: triggers in
- * expression, attribute and line position, their same-length stand-ins,
+ * The syntax table (PR A) at the template parser: triggers in expression,
+ * attribute and line position, their same-length stand-ins,
  * `terminatesValue`, validation, and the default row's parity.
  *
  * Events are rendered compactly, as the atom row's cases do (`mx-atoms.cases.ts`):
@@ -22,9 +22,9 @@ import {
 import { ATOM, CLASS, ID, NAME } from "./test-support/sugar-rows.ts";
 
 /**
- * Mesh's member trigger (decision 182 addendum 2), the first table row. Its
- * matcher takes the identifier charset of names (Unicode letters, marks,
- * digits, connectors; review 439 B1), so it ends where the token does.
+ * Mesh's member trigger, the first table row. Its matcher takes the identifier
+ * charset of names (Unicode letters, marks, digits, connectors; review 439 B1),
+ * so it ends where the token does.
  */
 const MEMBER: Trigger = {
   id: "member",
@@ -95,7 +95,7 @@ function render(
   return out.join(" ");
 }
 
-describe("the & member row (decision 182 addendum 1)", () => {
+describe("the & member row", () => {
   it.each([
     // Expression position.
     [
@@ -325,7 +325,7 @@ describe("review 439 round 1", () => {
     );
   });
 
-  it("terminatesValue keeps decision 146's ternary guard (Opus B2)", () => {
+  it("terminatesValue keeps the ternary guard (Opus B2)", () => {
     const name = table({
       attributeTriggers: [
         {

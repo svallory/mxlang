@@ -1,6 +1,5 @@
 /**
- * The vanilla HTML host's string emitter, over `@mxlang/core`'s IR
- * (decision 79).
+ * The vanilla HTML host's string emitter, over `@mxlang/core`'s IR.
  *
  * The core lowers a template to an `Ir`; this file turns that tree into the
  * emitted module's lines. Nothing here walks a Marko node: every decision was
@@ -75,7 +74,7 @@ const INDENT = "  ";
  *
  * Validates spread keys, which are only known at run time. Anything containing
  * a space, quote, `/` or `>` could end the attribute name and start live markup
- * inside the tag, so it is skipped rather than emitted (decisions 42/44).
+ * inside the tag, so it is skipped rather than emitted.
  */
 const ATTR_NAME_PATTERN = "/^[A-Za-z_:][-A-Za-z0-9_:.]*$/";
 
@@ -138,7 +137,7 @@ interface State {
   /** Serial for local arrays and source temporaries in attribute-tag loops. */
   attrTagTemp: number;
   /**
-   * The sink the next write goes to (decision 155).
+   * The sink the next write goes to.
    *
    * `__mxOut` everywhere except inside a `<try>` body, which writes to its
    * own buffered sub-sink so a throw can drop the half-rendered body.
@@ -566,16 +565,16 @@ export function createEmitter(
    *
    * Static values are baked into the literal and escaped at compile time, so
    * the emitted double-quoted style is independent of the author's quoting — a
-   * single-quoted `title='a" onerror="…'` cannot close the attribute early
-   * (decision 42). A spread emits a runtime loop that validates each key.
+   * single-quoted `title='a" onerror="…'` cannot close the attribute early.
+   * A spread emits a runtime loop that validates each key.
    */
   /**
    * An attribute's value expression. A refined bound attribute (`v:fn:=q`)
    * renders as the unrefined one: Marko's change handler (`q = fn(next)`) is
    * client-only and this target renders once. Under `typeCheck` (the tooling
-   * projection, decision 140; never the module that runs) the value is
-   * `(false && fn(q), q)`, so `fn` applied to the bound value's type is
-   * checked and mapped to the modifier.
+   * projection; never the module that runs) the value is `(false && fn(q), q)`,
+   * so `fn` applied to the bound value's type is checked and mapped to the
+   * modifier.
    */
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode =>
     options.typeCheck && attr.kind === "bound" && attr.refinement
@@ -604,14 +603,13 @@ export function createEmitter(
 
     // `value:=expr` binds two ways in full Marko: the initial value renders,
     // and later edits write back. A one-shot render has no write path, so the
-    // initial value is the whole of it — decision 65's "evaluate initial
-    // value" row, and what Marko's own server render emits.
-    // Phase B of `dom-events` (decision 101, design note §8): an expression-
-    // valued event handler needs a runtime, and this target renders once to
-    // a string. A *string*-valued handler (`onclick="…"`) is an ordinary
-    // static attribute and passes through verbatim above; only a function
-    // value reaches this kind, and it is rejected rather than silently
-    // emitted as dead inline JS.
+    // initial value is the whole of it, and what Marko's own server render
+    // emits.
+    // Phase B of `dom-events` (design note §8): an expression-valued event
+    // handler needs a runtime, and this target renders once to a string. A
+    // *string*-valued handler (`onclick="…"`) is an ordinary static attribute
+    // and passes through verbatim above; only a function value reaches this
+    // kind, and it is rejected rather than silently emitted as dead inline JS.
     if (attr.kind === "event") {
       fail(
         `\`${attr.name}\` is an event handler and requires a runtime; @mxlang/target-html renders once to a string`,
@@ -694,7 +692,7 @@ export function createEmitter(
    * runs before the spread that follows it, a key keeps its first slot when a
    * later spread overwrites it, and a `null`/`undefined` spread is ignored. A
    * browser keeps the FIRST duplicate of a concatenated string, so the same
-   * result is built explicitly here (decision 135 and its addendum).
+   * result is built explicitly here.
    *
    * `<input>` is the exception, as it is in Marko: its attributes are one merge
    * in authored order, nothing written first, because a controlled `value` is
@@ -867,9 +865,9 @@ export function createEmitter(
       }
     }
 
-    // Decision 106: cardinality and value shape come from the callee's Input,
-    // already resolved by core. The legacy flat occurrence list is retained
-    // for tooling only; v2 hosts emit exclusively from this plan.
+    // Cardinality and value shape come from the callee's Input, already
+    // resolved by core. The legacy flat occurrence list is retained for
+    // tooling only; v2 hosts emit exclusively from this plan.
     for (const prop of attrTagProps) {
       setProp(
         prop.name,
@@ -1019,8 +1017,8 @@ export function createEmitter(
     state,
 
     text(node) {
-      // Already decision 33: Marko's own `onText` dropped newline-bearing
-      // whitespace runs and collapsed the rest before the lowerer saw them.
+      // Marko's own `onText` dropped newline-bearing whitespace runs and
+      // collapsed the rest before the lowerer saw them.
       literal(node.value);
     },
 
@@ -1078,10 +1076,10 @@ export function createEmitter(
       // that range through its two ends. Only the braces: an attribute's own
       // mapping inside stays the one an error on that attribute takes.
       // A dynamic target carries no name span. A value-import tag (a `.ts`
-      // module, decision 116) is written as its binding: the call's span
-      // starts at its `<` in HTML syntax and at the name in concise syntax,
-      // which only the source tells apart. An authored `${expr}` target maps
-      // onto the expression.
+      // module) is written as its binding: the call's span starts at its `<`
+      // in HTML syntax and at the name in concise syntax, which only the
+      // source tells apart. An authored `${expr}` target maps onto the
+      // expression.
       const braceSpan = (() => {
         if (node.nameSpan) return node.nameSpan;
         if (node.target.kind !== "dynamic") return null;
@@ -1118,8 +1116,7 @@ export function createEmitter(
         // `parts` carries spreads in source order too: dropping them here (the
         // shape this replaced) silently lost every spread on a dynamic tag.
         // The helper writes into the sink and returns the callee's `render`
-        // value, which is what a `/var` on the dynamic tag binds (decision
-        // 155).
+        // value, which is what a `/var` on the dynamic tag binds.
         push(
           concatMapped(
             node.var ? `const ${node.var} = ` : "",
@@ -1150,11 +1147,10 @@ export function createEmitter(
         // `<Row(input.a)/>` — Marko's tag-argument form, and the ordinary way
         // to call a `<define>` that declares params.
         //
-        // Decision 109, revised to Marko's own shape (ruling 2026-10-09):
-        // args combine with a body/attribute tag (Marko's lenient
-        // dynamic-tag rule, `rejectArgsWithProps`; core has already rejected
-        // a plain attribute alongside args, so `parts` here only ever holds
-        // `content`/attribute-tag values). Measured on stock Marko 6.4.4:
+        // Marko's own shape: args combine with a body/attribute tag (Marko's
+        // lenient dynamic-tag rule, `rejectArgsWithProps`; core has already
+        // rejected a plain attribute alongside args, so `parts` here only ever
+        // holds `content`/attribute-tag values). Measured on stock Marko 6.4.4:
         // the call appends ONE trailing object `{ ...attributeTags, content }`
         // as the next argument, so it lands in the first unfilled parameter
         // and every parameter after it reads `undefined` — nothing is bound
@@ -1168,11 +1164,10 @@ export function createEmitter(
         // function the define declared (a type checker counts a missing
         // argument as an error even though JS tolerates it).
         //
-        // Without args the call is Marko's (decision 160): the attributes
-        // (spreads included, in source order), attribute tags and `content`
-        // travel as ONE object bound to the first param, `{}` when the call
-        // carries none; rest params stay `undefined`. A define with no params
-        // ignores them.
+        // Without args the call is Marko's: the attributes (spreads included,
+        // in source order), attribute tags and `content` travel as ONE object
+        // bound to the first param, `{}` when the call carries none; rest
+        // params stay `undefined`. A define with no params ignores them.
         // A rest param is never padded: Marko leaves it `[]` when nothing
         // fills it, and an `undefined` here would make it `[undefined]`.
         const fixedParamCount = target.params.filter(
@@ -1216,16 +1211,16 @@ export function createEmitter(
         return;
       }
 
-      // Decision 155: a tag call passes this unit's sink down, and `/var`
-      // binds what the callee's `render` returns. A discovered tag, a unit
-      // known to declare `<return>`, or this module's own export (a
-      // self-recursive tag) is a compiled template, so its `render` is called
-      // directly. Anything else may be a hand-written function, a
-      // `.ts` barrel re-export of a template, or a template: `__mxRenderTag`
-      // renders through `.render` when the callee has one and writes the
-      // returned string otherwise. Its type follows that runtime choice: a
-      // callee with `render` is called with `render`'s Input, and any other
-      // callee is checked exactly as a plain `Callee(props)` call would be.
+      // A tag call passes this unit's sink down, and `/var` binds what the
+      // callee's `render` returns. A discovered tag, a unit known to declare
+      // `<return>`, or this module's own export (a self-recursive tag) is a
+      // compiled template, so its `render` is called directly. Anything else
+      // may be a hand-written function, a `.ts` barrel re-export of a template,
+      // or a template: `__mxRenderTag` renders through `.render` when the
+      // callee has one and writes the returned string otherwise. Its type
+      // follows that runtime choice: a callee with `render` is called with
+      // `render`'s Input, and any other callee is checked exactly as a plain
+      // `Callee(props)` call would be.
       if (node.returnsValue || target.binding || callee === selfName) {
         push(
           concatMapped(
@@ -1833,7 +1828,7 @@ function inSourceOrder(
  * Builds the emitted TypeScript module for one resolved template.
  *
  * The module shape is fixed (S3): the runtime import, the author's hoisted
- * module scope, their `Input` interface, then the two entries of decision 155:
+ * module scope, their `Input` interface, then the two entries:
  *
  * - the default export, `(input) => string`, named after the file: it creates
  *   a sink, renders into it, and returns the string;
@@ -1886,10 +1881,10 @@ export function emitModuleWithMappings(
     `${name}.render = __mxRender;`,
     "",
     // A unit that declares `<return>` returns the value from `render` and
-    // writes its output to the sink, so the value never travels in the
-    // output (decision 155). Its return type is left un-annotated so it is
-    // *inferred* from the `<return>` expression: that inference is what
-    // gives a `/var` binding at the call site its type (C6).
+    // writes its output to the sink, so the value never travels in the output.
+    // Its return type is left un-annotated so it is *inferred* from the
+    // `<return>` expression: that inference is what gives a `/var` binding at
+    // the call site its type (C6).
     `function __mxRender(input: ${inputType}, __mxOut: __MxOut)${
       ir.returnValue ? "" : ": void"
     } {`,
