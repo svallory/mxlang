@@ -406,7 +406,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
       return;
     }
     if (isContainer(value)) {
-      refuseRowInModuleStatement(table.expressionTriggers, value, owner);
+      refuseRowInModuleStatement(ctx, table.expressionTriggers, value, owner);
       lowerExpressionTriggers(ctx, run, value, owner);
       return;
     }
@@ -431,23 +431,28 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   return true;
 }
 
+const MODULE_CODE_KEYWORDS = new Set(["static", "server", "client", "export"]);
+
 /**
  * A dialect expression row written in a module statement (`static`,
- * `server`, `client`) is refused at its first character: the
+ * `server`, `client`, `export`) is refused at its first character: the
  * statement is module code the parser announces no trigger in, so the row
  * would reach the module as the JavaScript it looks like (`~zz`, a bitwise
  * NOT), and its lowering may read the render scope a module statement has
  * not (spec §13.9.9).
  */
-const MODULE_CODE_KEYWORDS = new Set(["static", "server", "client"]);
-
 function refuseRowInModuleStatement(
+  ctx: Ctx,
   rows: readonly Trigger[],
   container: Node,
   owner: Node | null,
 ): void {
   if (
     rows.length === 0 ||
+    // A structural-reject file refuses the statement itself, in its own words.
+    ctx.structural === "reject" ||
+    // `export static …` is the parser's error, which stays.
+    /^export\s+(static|server|client)\b/.test(String(container.source)) ||
     container.type !== "MxStatements" ||
     owner?.type !== "MxModuleStatement" ||
     !MODULE_CODE_KEYWORDS.has(owner.keyword) ||

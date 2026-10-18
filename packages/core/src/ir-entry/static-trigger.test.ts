@@ -81,6 +81,38 @@ describe("a dialect expression row in a static statement", () => {
     },
   );
 
+  it.each([
+    ["server", "server const z = ~zz;\n<div/>", 17],
+    ["client", "client const z = ~zz;\n<div/>", 17],
+    ["export", "export const z = ~zz;\n<div/>", 17],
+    ["export", "export function f() { return ~zz; }\n<div/>", 29],
+  ])("a `%s` statement is refused too", (keyword, source, col) => {
+    const { diagnostics, code } = lowered(source, atom);
+    expect(code).toEqual([]);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      code: "MX_INVALID_TRIGGER_USE",
+      message: MESSAGE("~zz", "atom-node", keyword),
+      line: 1,
+      column: col,
+    });
+  });
+
+  it('under `structural: "reject"` the structural error stands alone', () => {
+    const run = (source: string) =>
+      lowerSource(source, "/v/entity.mx", {
+        dialect: member,
+        structural: "reject",
+      }).diagnostics.map((each) => each.code);
+    expect(run("static const z = 1 &zz;\n<div/>")).toEqual([
+      "MX_STRUCTURAL_CONSTRUCT",
+    ]);
+    // Babel refuses `&zz` first, as it did before: never the row error.
+    expect(run("static const z = &zz;\n<div/>")).not.toContain(
+      "MX_INVALID_TRIGGER_USE",
+    );
+  });
+
   it("the member row (`&`, not JavaScript there) gives the row's error, not Babel's", () => {
     const { diagnostics } = lowered("static const z = &zz;\n<div/>", member);
     expect(diagnostics).toHaveLength(1);
@@ -140,6 +172,16 @@ describe("what stays byte-identical", () => {
       expect(diagnostics).toEqual([]);
       expect(code).toEqual([body]);
     }
+  });
+
+  it("`server`, `client` and `export` without a row keep their text", () => {
+    for (const keyword of ["server", "client", "export"]) {
+      const body = "const z = 1 + 2;";
+      expect(lowered(`${keyword} ${body}\n<div/>`, atom).diagnostics).toEqual(
+        [],
+      );
+    }
+    expect(lowered("export const z = ~zz;\n<div/>").diagnostics).toEqual([]);
   });
 
   it("`export static` keeps the parser's error", () => {
@@ -212,6 +254,35 @@ describe("the matching is the template scanner's", () => {
     expect(hit('"a\\"~zz"')).toBeUndefined();
     expect(hit("/~zz/.test(x)")).toBeUndefined();
     expect(hit("a / ~zz")).toEqual(["sigil", "~zz"]);
+  });
+
+  it("valid JavaScript and TypeScript the template reads as no row", () => {
+    const mesh = [row("atom", ":", ":[a-z]+"), row("member", "&", "&[a-z]+")];
+    for (const code of [
+      "const m = i++ &mask;",
+      "const m = i-- &mask;",
+      "const m = x! &y;",
+      "type T = Array<X> &Y;",
+      "const m = /a/ &b;",
+      "function f(a?:string) {}",
+      "let x!:number;",
+      "class A { p?:string; q!:number }",
+      "const z = c ? x! :y;",
+      "const z = c ? i++ :y;",
+      "const o = { key:value };",
+    ]) {
+      expect([code, firstRowIn(code, mesh)?.row.id]).toEqual([code, undefined]);
+    }
+  });
+
+  it("a row after a spread, an operator or a statement head is found", () => {
+    expect(hit("[...~zz]")).toEqual(["sigil", "~zz"]);
+    expect(hit("if (a) ~zz;")).toEqual(["sigil", "~zz"]);
+    expect(hit("a ? ~zz : 1")).toEqual(["sigil", "~zz"]);
+    expect(hit("x = i + ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("typeof ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("if (x) /~zz/.test(s)")).toBeUndefined();
+    expect(hit("a = ~zzé")).toBeUndefined();
   });
 
   it("no rows, no hit", () => {
