@@ -18,6 +18,7 @@ MX compiles to Angular's block syntax (`@if`, `@for`, `@let`), never the older `
 | `class=["a", y]`, or a shorthand beside `class=`: `<div.a class=y/>` | `[class]="__mxClass(['a', y])"`: the same class set Marko prints (falsy parts skipped); Angular may order the words differently |
 | the same `class=` on an MX tag call whose `Input` declares `class` | `[class]="['a', y]"`, `[class]="y"`: the callee's `class` input gets the value as written, as Marko hands it to `input.class`. A static class (`<Card class="lit"/>`, `<Card.a/>`) goes to the input the same way and not also onto the callee's host element |
 | `<const/x=expr/>` | `@let x = expr;`. In the body of a native element (`<div><const/x=1/>…</div>`) `x` gets a name of its own: see below |
+| `<const/{ a, b: n }=obj/>`, `<const/[x, y]=list/>` | one `@let` that holds the initializer, then one `@let` per name: `@let __mxPattern = obj;@let a = __mxPattern.a;@let n = __mxPattern.b;`. See "A destructuring `<const>`" below |
 | `<define/Row\|p\|>` and `<Row(value)/>` | an `<ng-template>` with `let-` params, and `ngTemplateOutlet` |
 | an MX tag call | the tag's component element |
 | `<${Comp} x=1/>`, or a tag named by a module-scope `const` | `<ng-container [ngComponentOutlet]="Comp" [ngComponentOutletInputs]="…">`; content and tag arguments are errors |
@@ -38,6 +39,15 @@ When a name is renamed, the new name is part of the expression text Angular hash
 An Angular `@let` cannot read an outer binding of the same name in its own value: `<const/a=a+1/>` inside an `<if>` or `<for>` body reads itself, not the outer `a`. Name the inner binding differently.
 
 Give `<for>` a `by`: Angular requires `track`. A loop without one emits `track $index`, and MX warns once per file, since reordering such a list re-renders its rows.
+
+### A destructuring `<const>`
+
+Angular's `@let` takes one name and a template expression cannot destructure, so a pattern becomes plain `@let`s. The initializer is held once in a generated `@let` (`__mxPattern`), and each name the pattern binds reads from it: `<const/{ a, b }=input.o/>` is `@let __mxPattern = input.o;@let a = __mxPattern.a;@let b = __mxPattern.b;`, and the initializer is evaluated once however many names there are.
+
+- An object field is `.field` (`["a-b"]` for a string key, a renamed field `{ a: n }` binds `n`), an array element is `[index]`, a nested pattern reads through the path (`{ a: { b } }` binds `b` from `.a.b`), and an array rest (`[h, ...t]`) is `.slice(1)`, so the value must be an array.
+- A default (`{ a = 1 }`) is `x.a === undefined ? 1 : x.a`: it applies to `undefined` only, as in JavaScript, never to `null`. It may read a name bound earlier in the same pattern (`{ a, b = a }`). A nested pattern with a default (`{ a: { b } = {} }`) holds the defaulted value in a further generated `@let`.
+- Every bound name is an ordinary `<const>` for the rename above: it keeps the name you wrote unless another declaration or a read outside its body shares it, then it is renamed with its reads (`@let __mxConst_a = __mxPattern1.a;`). Angular's diagnostics print the name you wrote; the generated holder prints as the pattern (`@let {} is declared…` for an empty pattern, the only case where Angular reports the holder).
+- An **object rest** (`{ a, ...rest }`) is an error at the `<const>`: a template expression cannot copy the remaining fields of an object. Name the fields you need, or bind the object to a name and read `.field` from it. A computed key (`{ [k]: v }`) is an error in Marko too.
 
 ## Attributes: property or attribute binding?
 
@@ -91,5 +101,6 @@ The expression is evaluated once, in an `@let` before the element. This step loa
 - **`<return>` and tag variables (`<Tag/x>`)**: an Angular component has no channel to hand a value back to its caller. **`<try>`**: Angular has no template-level error boundary; handle the error in the component and render the fallback with `<if>`.
 - **A refined bound attribute on an optional chain** (`<input value:fn:=q?.a/>`): Marko compiles it with a nullish guard, but Angular's two-way binding needs a writable target, so the error says to bind a name or a member of one. The unrefined `value:=q?.a` emits `[(value)]="q?.a"`.
 - **`on:click`**: the error names `onClick`.
+- **An object rest in a `<const>` pattern** (`<const/{ a, ...rest }=obj/>`): a template expression cannot copy the remaining fields of an object. Name each field, or bind the object to a name and read `.field` from it.
 
 Angular template syntax written as literal text (`{{ name }}`, `@if (x) {`, `@for`, `@let name = …;`) in any text node, `<pre>`, `<code>` and `<textarea>` included, compiles to literal text and gets a **warning** that points to the MX form (`${name}`, `<if>`, `<for>`, `<const>`) and to the escape for text you mean literally. Braces inside an expression attribute value or already escaped do not warn, and an `@` keyword warns only before real block syntax.
