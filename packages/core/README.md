@@ -634,8 +634,10 @@ the piece):
 
 Across the dialects a project installs (its own declaration and its direct
 dependencies that declare one), marking characters are disjoint: no two rows of
-different dialects start with the same character, and none starts with a prefix
-of another's (`%` against `%.`). The first clash is an error in the module of the
+different dialects start with the same text, and none starts with text that is a
+prefix of another's (`%` against `%.`; `%.` against `%:` is fine). The check
+runs when a file's dialect is routed from a project; a caller that passes the
+`dialect` option is not checked. The first clash is an error in the module of the
 dialect being loaded, naming both dialects and both rows.
 
 `print(parse(text))` gives the text back. `<sort to=~user.name>` lowers to a

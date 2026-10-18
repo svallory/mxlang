@@ -105,7 +105,7 @@ describe("a node type must declare its pieces", () => {
     [
       "no `schema`",
       { schema: undefined },
-      'dialect `atom`, node type `Atom`: `dialect.nodeTypes.Atom.schema` is required. Declare `schema: { fields: { name: "data" }, slot: ["expression"] }`',
+      'dialect `atom`, node type `Atom`: `dialect.nodeTypes.Atom.schema` is required. Declare `schema: { fields: { name: "data" }, slot: ["expression","value"] }`',
     ],
     [
       "a `schema` that is not an object",
@@ -181,6 +181,21 @@ describe("a node type must declare its pieces", () => {
       expect([error.file, error.line, error.column]).toEqual([FILE(), 1, 0]);
     },
   );
+
+  it("a missing `schema` suggests the slot of the rows that name the type", () => {
+    const dialect = atomDialect({ schema: undefined });
+    const error = caught(() => irOf("div\n", dialect, FILE()));
+    expect(error.message).toContain(
+      'Declare `schema: { fields: { name: "data" }, slot: ["expression","value"] }`',
+    );
+    const valueOnly = {
+      ...dialect,
+      table: { valueTriggers: [ROW("value")] },
+    } as Dialect;
+    expect(caught(() => irOf("div\n", valueOnly, FILE())).message).toContain(
+      'slot: ["value"] }`',
+    );
+  });
 
   it("a row naming the type at a position outside its `slot` says which slot it declares", () => {
     const dialect = atomDialect({
@@ -508,6 +523,28 @@ describe("findMarkOverlap", () => {
     // `%` then maybe `.`: the mark is `%`, so it clashes with a bare `%`.
     expect(
       findMarkOverlap(table(row("%", "%\\.?a")), table(row("%", "%b")))?.mark,
+    ).toBe("%");
+  });
+
+  it("top-level alternatives mark their shared prefix: Mesh's atom row against `:a`", () => {
+    expect(
+      findMarkOverlap(
+        table(row(":", "::(?:[a-z]+)?|:[a-z]+")),
+        table(row(":", ":a[a-z]*")),
+      )?.mark,
+    ).toBe(":");
+    expect(
+      findMarkOverlap(table(row("ac", "ab|cd")), table(row("c", "c[0-9]")))
+        ?.mark,
+    ).toBe("c");
+  });
+
+  it("a `|` inside a group or a class is no alternative", () => {
+    expect(
+      findMarkOverlap(table(row("~", "~(?:a|b)")), table(row("~", "~c")))?.mark,
+    ).toBe("~");
+    expect(
+      findMarkOverlap(table(row("%", "%[|]a")), table(row("%", "%:a")))?.mark,
     ).toBe("%");
   });
 

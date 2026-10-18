@@ -53,8 +53,48 @@ function rangesOf(chars: string): (readonly [number, number])[] {
   return ranges;
 }
 
-/** The literal text `match` (a regular expression source) must start with. */
+/** `match` split at its top-level `|` (outside groups, classes and escapes). */
+function alternatives(match: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let inClass = false;
+  let current = "";
+  for (let i = 0; i < match.length; i++) {
+    const char = match[i] as string;
+    if (char === "\\") {
+      current += char + (match[++i] ?? "");
+      continue;
+    }
+    if (inClass) {
+      if (char === "]") inClass = false;
+    } else if (char === "[") inClass = true;
+    else if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (char === "|" && depth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/**
+ * The literal text `match` (a regular expression source) must start with:
+ * for top-level alternatives, the longest prefix they all share.
+ */
 function literalPrefix(match: string): string {
+  const parts = alternatives(match).map(alternativePrefix);
+  return parts.reduce((common, each) => {
+    let n = 0;
+    while (n < common.length && n < each.length && common[n] === each[n]) n++;
+    return common.slice(0, n);
+  });
+}
+
+function alternativePrefix(match: string): string {
   const points = [...match];
   let out = "";
   let i = 0;

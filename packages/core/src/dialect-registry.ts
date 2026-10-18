@@ -718,8 +718,36 @@ export function checkDialectNodeTypes(
         );
       }
     }
-    checkSchema(id, type, at, shape.schema, shape.keys as string[], fail);
+    checkSchema(
+      id,
+      type,
+      at,
+      shape.schema,
+      shape.keys as string[],
+      fail,
+      value.table,
+    );
   }
+}
+
+/** The positions of the rows that name `dialect:type`, for the slot a message suggests. */
+function slotsNamed(
+  table: unknown,
+  dialect: string,
+  type: string,
+): ClaimPosition[] {
+  const found: ClaimPosition[] = [];
+  if (isRecord(table)) {
+    for (const [list, position] of Object.entries(ROW_LISTS)) {
+      if (position === undefined || !Array.isArray(table[list])) continue;
+      const names = (table[list] as unknown[]).some((row) => {
+        const node = isRecord(row) ? row.node : undefined;
+        return isRecord(node) && node.type === type && node.dialect === dialect;
+      });
+      if (names) found.push(position);
+    }
+  }
+  return found.length > 0 ? found : ["expression"];
 }
 
 const SCHEMA_KINDS = ["node", "expression", "data"];
@@ -738,11 +766,12 @@ function checkSchema(
   schema: unknown,
   keys: readonly string[],
   fail: (message: string) => never,
+  table?: unknown,
 ): void {
   const who = `dialect \`${dialect}\`, node type \`${type}\``;
   if (schema === undefined) {
     fail(
-      `${who}: \`${at}.schema\` is required. Declare \`schema: { fields: { name: "data" }, slot: ["expression"] }\`: every field \`parse\` returns, as \`"node"\` (a child node, listed in \`keys\`), \`"expression"\` (a host expression) or \`"data"\`, and the positions the type fills`,
+      `${who}: \`${at}.schema\` is required. Declare \`schema: { fields: { name: "data" }, slot: ${JSON.stringify(slotsNamed(table, dialect, type))} }\`: every field \`parse\` returns, as \`"node"\` (a child node, listed in \`keys\`), \`"expression"\` (a host expression) or \`"data"\`, and the positions the type fills`,
     );
   }
   if (!isRecord(schema)) {

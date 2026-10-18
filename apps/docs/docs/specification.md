@@ -5353,14 +5353,16 @@ when its dialect loads, naming the dialect, the type and the piece.
 **Disjoint marks.** The dialects a project installs are its own `mx.dialect`
 declaration, if any, and its direct dependencies that declare one. Their
 marking characters are disjoint: a row's mark is the literal text its `match`
-starts with, else the characters of its `chars`, and no mark of one dialect may
+starts with (for top-level `|` alternatives, the prefix they all share), else the characters of its `chars`, and no mark of one dialect may
 equal, be a prefix of, or have as a prefix a mark of another (`%` against
 `%.`), whatever the position. When a file's dialect loads, core compares it with
 the others; a clash is one `MX_INVALID_DIALECT_MODULE` error in the loading
 dialect's module at 1:0 that names both dialects, both rows and the shared
 mark, and says to change one row's `chars` and `match` or to remove one
 dependency. A dialect whose own module does not load is skipped in the
-comparison; its files report why.
+comparison; its files report why. The comparison happens when a file is routed
+to its dialect from its project; a caller that passes the `dialect` option
+directly is not compared with anything.
 
 **The claim.** Every row naming a node type goes through one process. At
 a trigger position the parser finds the row whose `match` matches and asks the
