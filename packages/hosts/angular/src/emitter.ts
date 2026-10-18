@@ -1702,6 +1702,121 @@ function bodiesOf(record: Record<string, unknown>): IrNode[][] {
   }
 }
 
+/** The slice of a Babel pattern node `lowerConstPattern` reads. */
+interface PatternNode {
+  type: string;
+  start?: number | null;
+  end?: number | null;
+  name?: string;
+  computed?: boolean;
+  key?: PatternNode & { value?: unknown };
+  value?: PatternNode;
+  left?: PatternNode;
+  right?: PatternNode;
+  argument?: PatternNode;
+  properties?: PatternNode[];
+  elements?: Array<PatternNode | null>;
+}
+
+/** One `@let` a `<const>` destructuring pattern lowers to. */
+interface PatternLet {
+  name: string;
+  /** A generated name that holds an intermediate value, not an authored one. */
+  generated: boolean;
+  /** The Angular expression it is set to. */
+  code: string;
+}
+
+/**
+ * A `<const>` destructuring pattern as `@let`s, in the order they must be
+ * written: one per name the pattern binds, each reading from `root` (the
+ * generated `@let` that holds the initializer, so it is evaluated once) or
+ * from an earlier one.
+ *
+ * Angular's `@let` takes a single name and a template expression has no
+ * destructuring, so `{ a, b: { c = 1 } }` becomes `a = root.a` and
+ * `c = root.b.c === undefined ? 1 : root.b.c`. A default applies for
+ * `undefined` only, as in JavaScript. An array pattern reads by index and an
+ * array rest (`[x, ...r]`) by `slice`, so those need an array. An object rest
+ * has no expression form and is refused at the `<const>`.
+ */
+function lowerConstPattern(
+  pattern: string,
+  root: string,
+  node: { loc: Position },
+  temp: () => string,
+): PatternLet[] {
+  const wrapped = `(${pattern} = 0)`;
+  let target: PatternNode;
+  try {
+    target = (
+      babelParser.parseExpression(wrapped, {
+        plugins: ["typescript"],
+      }) as unknown as { left: PatternNode }
+    ).left;
+  } catch {
+    fail(
+      `\`<const/${pattern}>\` is not a destructuring pattern this host can read. Bind the value to a name and read its fields.`,
+      node,
+    );
+  }
+  const out: PatternLet[] = [];
+  const bind = (n: PatternNode, value: string): void => {
+    switch (n.type) {
+      case "Identifier":
+        out.push({ name: n.name ?? "", generated: false, code: value });
+        return;
+      case "AssignmentPattern": {
+        const right = n.right;
+        const left = n.left;
+        if (!right || !left) return;
+        const fallback = `${value} === undefined ? ${wrapped.slice(right.start ?? 0, right.end ?? 0)} : ${value}`;
+        if (left.type === "Identifier") {
+          out.push({ name: left.name ?? "", generated: false, code: fallback });
+          return;
+        }
+        const held = temp();
+        out.push({ name: held, generated: true, code: fallback });
+        bind(left, held);
+        return;
+      }
+      case "ObjectPattern":
+        for (const property of n.properties ?? []) {
+          if (property.type === "RestElement" || !property.value) {
+            fail(PATTERN_REST_MESSAGE, node);
+          }
+          const key = property.key;
+          const step =
+            key?.type === "Identifier" && !property.computed
+              ? `.${key.name}`
+              : `[${JSON.stringify(key?.value)}]`;
+          bind(property.value, `${value}${step}`);
+        }
+        return;
+      case "ArrayPattern":
+        (n.elements ?? []).forEach((element, index) => {
+          if (!element) return;
+          if (element.type === "RestElement" && element.argument) {
+            bind(element.argument, `${value}.slice(${index})`);
+            return;
+          }
+          bind(element, `${value}[${index}]`);
+        });
+        return;
+      default:
+        fail(
+          `\`<const/${pattern}>\` binds a form this host cannot read as a template expression. Bind the value to a name and read its fields.`,
+          node,
+        );
+    }
+  };
+  bind(target, root);
+  return out;
+}
+
+const PATTERN_REST_MESSAGE =
+  "an object rest (`{ a, ...rest }`) in a `<const>` pattern has no Angular template equivalent: a template expression cannot copy the remaining fields of an object. Name each field you need (`{ a, b }`), or bind the object to a name and read `.field` from it.";
+
 /**
  * How many times each name is declared in `body`: a `<const>`, a `<define>`
  * and its parameters, a `<for>` parameter, a tag call's `/var`, an Angular
@@ -3176,6 +3291,76 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
+   * The IR with each `<const>` destructuring pattern (`<const/{ a, b }=obj/>`,
+   * `<const/[x, y]=list/>`) written as plain `<const>`s: a generated one that
+   * holds the initializer, so it is evaluated once, then one per name the
+   * pattern binds (`lowerConstPattern`). Angular's `@let` takes one name and
+   * a template expression cannot destructure, so the pattern itself cannot be
+   * emitted.
+   *
+   * Runs before `lowerElementBodyConsts`, so every bound name is an ordinary
+   * `<const>` there: it joins the collision accounting, is renamed on a
+   * collision, and shadows the way a plain one does. The generated names map
+   * to the pattern the author wrote, so a diagnostic that quotes one (an
+   * unused `@let` of an empty pattern) prints the pattern.
+   *
+   * The rewrite is on a private copy of the IR, made only when a pattern
+   * exists.
+   */
+  lowerConstPatterns(body: IrNode[]): IrNode[] {
+    const isPattern = (record: Record<string, unknown>): boolean =>
+      record.kind === "Const" && !IDENTIFIER.test(String(record.name));
+    if (!visitIrRecords(body, isPattern)) return body;
+
+    const copy = cloneIr(body);
+    const walked = new Set<object>();
+    const walk = (value: unknown): void => {
+      if (!value || typeof value !== "object" || walked.has(value)) return;
+      walked.add(value);
+      if (Array.isArray(value)) {
+        for (let index = 0; index < value.length; index += 1) {
+          const child = value[index] as IrNode | undefined;
+          if (child?.kind === "Const" && !IDENTIFIER.test(child.name)) {
+            const lowered = this.constPatternLets(child);
+            value.splice(index, 1, ...lowered);
+            index += lowered.length - 1;
+          }
+        }
+        for (const item of value) walk(item);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (!NON_TEMPLATE_KEYS.has(key)) walk(child);
+      }
+    };
+    walk(copy);
+    return copy;
+  }
+
+  private constPatternLets(
+    node: Extract<IrNode, { kind: "Const" }>,
+  ): Array<Extract<IrNode, { kind: "Const" }>> {
+    const written = node.name;
+    const temp = (): string => {
+      const name = this.gensym("__mxPattern");
+      this.authoredNames.set(name, written);
+      return name;
+    };
+    const root = temp();
+    return [
+      { ...node, name: root },
+      ...lowerConstPattern(written, root, node, temp).map(
+        (bound): Extract<IrNode, { kind: "Const" }> => ({
+          kind: "Const",
+          loc: node.loc,
+          name: bound.name,
+          init: { code: bound.code, shape: "other", node: null },
+        }),
+      ),
+    ];
+  }
+
+  /**
    * The IR the emitter walks, with each `<const>` and `<define>` written
    * directly in the body of a native element, an MX tag call or an attribute
    * tag (`bodiesOf`) that shares its name with another declaration or read
@@ -3203,9 +3388,9 @@ class AngularEmitter implements Emitter<string> {
    * `@let` in a two-way binding) quote the name the author typed. Any doubt
    * renames; a template without a collision never shows `__mxConst_a`.
    *
-   * A destructuring `<const/{ a, b }=…/>` names no one binding, so it is left
-   * as written. A renamed declaration keeps its authored name for MX's own
-   * messages and for the checker (`renamedDeclarations`).
+   * A destructuring `<const/{ a, b }=…/>` is already one `<const>` per bound
+   * name here (`lowerConstPatterns`). A renamed declaration keeps its authored
+   * name for MX's own messages and for the checker (`renamedDeclarations`).
    *
    * The rewrite is on a private copy of the IR (an emitter never mutates it),
    * made only when such a `<const>` exists. It follows scope the way
@@ -3216,9 +3401,7 @@ class AngularEmitter implements Emitter<string> {
   lowerElementBodyConsts(body: IrNode[]): IrNode[] {
     const declaresConst = (nodes: unknown): boolean =>
       (nodes as IrNode[]).some(
-        (node) =>
-          node.kind === "Define" ||
-          (node.kind === "Const" && IDENTIFIER.test(node.name)),
+        (node) => node.kind === "Define" || node.kind === "Const",
       );
     const seen = new Set<object>();
     const found = (value: unknown): boolean => {
@@ -3268,9 +3451,7 @@ class AngularEmitter implements Emitter<string> {
             child.name = renamed;
             return;
           }
-          // A destructuring `<const/{ a, b }=…/>` names no one binding to
-          // rename: it is left as it was.
-          if (child.kind !== "Const" || !IDENTIFIER.test(child.name)) return;
+          if (child.kind !== "Const") return;
           const renamed = this.gensym(`__mxConst_${child.name}`);
           this.authoredNames.set(renamed, child.name);
           rewriteAccessorReads(
@@ -3309,7 +3490,6 @@ class AngularEmitter implements Emitter<string> {
       for (const children of bodiesOf(record)) {
         children.forEach((child, index) => {
           if (child.kind !== "Const" && child.kind !== "Define") return;
-          if (child.kind === "Const" && !IDENTIFIER.test(child.name)) return;
           const name = child.name;
           if (declared.get(name) !== 1 || ANGULAR_IMPLICIT_NAMES.has(name)) {
             return;
@@ -3704,7 +3884,7 @@ export function emitTemplate(
     joinElementClass,
   );
   for (const node of emitter.lowerDefineAttributes(
-    emitter.lowerElementBodyConsts(ir.body),
+    emitter.lowerElementBodyConsts(emitter.lowerConstPatterns(ir.body)),
   )) {
     emitter.emitNode(node);
   }

@@ -203,30 +203,29 @@ describe("a tag variable is scoped to the native element body that declares it",
     });
   });
 
-  // A destructuring name declares several bindings, so there is no one name to
-  // rename. It is emitted exactly as it was before the rename existed (these
-  // strings are what main emits).
-  describe("a destructuring <const> in an element body is left as it was", () => {
+  // A destructuring pattern lowers to one `<const>` per bound name
+  // (`const-destructuring.test.ts`), so each name is renamed on a collision.
+  describe("a destructuring <const> in an element body is one <const> per name", () => {
     const ROWS: Array<[string, string, string]> = [
       [
         "an object pattern",
-        "<div><const/{ a, b }={a:1,b:2}/>${a}${b}</div>",
-        "<div>@let { a, b } = {a:1,b:2};{{ a }}{{ b }}</div>",
+        "<div><const/{ a, b }=o/>${a}${b}</div>",
+        "<div>@let __mxPattern = o;@let a = __mxPattern.a;@let b = __mxPattern.b;{{ a }}{{ b }}</div>",
       ],
       [
         "an array pattern",
         "<div><const/[a, b]=[1,2]/>${a}${b}</div>",
-        "<div>@let [a, b] = [1,2];{{ a }}{{ b }}</div>",
+        "<div>@let __mxPattern = [1,2];@let a = __mxPattern[0];@let b = __mxPattern[1];{{ a }}{{ b }}</div>",
       ],
       [
         "beside a const of the same name in the outer body",
-        "<const/{ a }={a:1}/><div><const/{ a, b }={a:2,b:2}/>${a}${b}</div>${a}",
-        "@let { a } = {a:1};<div>@let { a, b } = {a:2,b:2};{{ a }}{{ b }}</div>{{ a }}",
+        "<const/{ a }=o/><div><const/{ a, b }=p/>${a}${b}</div>${a}",
+        "@let __mxPattern = o;@let a = __mxPattern.a;<div>@let __mxPattern1 = p;@let __mxConst_a = __mxPattern1.a;@let b = __mxPattern1.b;{{ __mxConst_a }}{{ b }}</div>{{ a }}",
       ],
       [
         "beside a plain const in the same body, which is renamed when its name is read outside",
-        "<div><const/{ a }={a:1}/><const/c=2/>${a}${c}</div>${c}",
-        "<div>@let { a } = {a:1};@let __mxConst_c = 2;{{ a }}{{ __mxConst_c }}</div>{{ c }}",
+        "<div><const/{ a }=o/><const/c=2/>${a}${c}</div>${c}",
+        "<div>@let __mxPattern = o;@let a = __mxPattern.a;@let __mxConst_c = 2;{{ a }}{{ __mxConst_c }}</div>{{ c }}",
       ],
     ];
     for (const [label, source, expected] of ROWS) {

@@ -247,6 +247,69 @@ describe("a <const> in an MX tag call body", () => {
   }, 60_000);
 });
 
+describe("a diagnostic about a <const> destructuring pattern names what the author wrote", () => {
+  it("NG8112 on an unused name of an object pattern", () => {
+    const found = messages(
+      "<section><const/{ a, b }={ a: 1, b: 2 }/>${a}</section>",
+      UNUSED_LET,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain(
+      "@let b is declared but its value is never read",
+    );
+    expect(found[0]).not.toContain("__mx");
+  });
+
+  it("NG8112 on an unused name of an array pattern with a default", () => {
+    const found = messages(
+      "<section><const/[a, b = 3]=[1]/>${a}</section>",
+      UNUSED_LET,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("@let b is declared");
+    expect(found[0]).not.toContain("__mx");
+  });
+
+  it("NG8112 on a renamed name of a pattern names it as written", () => {
+    const compiled = compileNgMx(
+      ngMx(
+        "<main><const/{ a }={ a: 1 }/>${a}<div><const/{ a }={ a: 2 }/></div></main>",
+      ),
+      "/p/x.component.ng.mx",
+    );
+    expect(compiled.regions[0]?.authoredNames).toMatchObject({
+      __mxConst_a: "a",
+      __mxPattern1: "{ a }",
+    });
+    const found = messages(
+      "<main><const/{ a }={ a: 1 }/>${a}<div><const/{ a }={ a: 2 }/></div></main>",
+      UNUSED_LET,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("@let a is declared");
+    expect(found[0]).not.toContain("__mx");
+  });
+
+  it("NG8112 on an empty pattern prints the pattern, not the generated holder", () => {
+    const found = messages(
+      "<section><const/{}={ a: 1 }/></section>",
+      UNUSED_LET,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("@let {} is declared");
+    expect(found[0]).not.toContain("__mx");
+  });
+
+  it("two sibling bodies binding the same pattern name raise no duplicate-declaration error", () => {
+    expect(
+      messages(
+        "<main><div><const/{ a }={ a: 1 }/>${a}</div><div><const/{ a }={ a: 2 }/>${a}</div></main>",
+        DUPLICATE_LET,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("mapNgMxDiagnostics prints the authored name", () => {
   const source = ngMx(
     "<main><div><const/a=1/></div><div><const/a=2/></div><div><const/a1=3/></div><p>${a1}</p></main>",
