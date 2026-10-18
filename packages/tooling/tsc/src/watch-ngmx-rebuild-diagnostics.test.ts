@@ -120,7 +120,9 @@ function watchIn(
         if (
           edited &&
           Date.now() >= nextTouch &&
-          !/File change detected|File_?änderung/i.test(output.slice(since))
+          !/File change detected|Dateiänderung erkannt/i.test(
+            output.slice(since),
+          )
         ) {
           appendFileSync(edited, "\n");
           nextTouch = Date.now() + 2_500;
