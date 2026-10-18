@@ -110,6 +110,13 @@ export interface Voice {
   dynamicTag(source: string, trigger?: TagTrigger, example?: string): string;
   /** The bare spelling of `tag`, without backticks. */
   spell(tag: MessageTag): string;
+  /**
+   * What a message calls a type: the `NodeType.label` of the dialect's node
+   * type `type` names (`mesh:Atom`), else `type` itself. Core's own type
+   * names (`string`, `array`) and keys no node type of the dialect owns
+   * come back unchanged.
+   */
+  nodeType(type: string): string;
 }
 
 /**
@@ -149,8 +156,24 @@ function describe(value: unknown): string {
   return `a ${typeof value}`;
 }
 
-/** Builds a voice from a dialect's vocabulary (all members optional). */
-function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
+const NO_LABELS: ReadonlyMap<string, string> = new Map();
+
+/** The `label` of each node type of `dialect` that has one, by registry key. */
+function labelsOf(dialect: Dialect | undefined): ReadonlyMap<string, string> {
+  const labels = new Map<string, string>();
+  if (!dialect) return labels;
+  for (const [type, nodeType] of Object.entries(dialect.nodeTypes ?? {})) {
+    const label = (nodeType as { label?: unknown }).label;
+    if (typeof label === "string") labels.set(`${dialect.id}:${type}`, label);
+  }
+  return labels;
+}
+
+/** Builds a voice from a dialect's vocabulary (all members optional) and its node type labels. */
+function buildVoice(
+  vocabulary: MessageVocabulary | undefined,
+  labels: ReadonlyMap<string, string> = NO_LABELS,
+): Voice {
   const one = vocabulary?.attribute?.one ?? "attribute";
   const many = vocabulary?.attribute?.many ?? "attributes";
   const article = vocabulary?.attribute?.article ?? articleFor(one);
@@ -218,6 +241,7 @@ function buildVoice(vocabulary: MessageVocabulary | undefined): Voice {
     dynamicTag: (source, trigger, example) =>
       marked(source, "dynamic", trigger, example),
     spell,
+    nodeType: (type) => labels.get(type) ?? type,
   };
   return Object.freeze(voice);
 }
@@ -229,26 +253,29 @@ const voices = new WeakMap<object, Voice>();
 
 /**
  * The voice of a file's dialect: {@link MX_VOICE} for none, or for a dialect
- * that states no vocabulary. Cached per dialect object.
+ * that states no vocabulary and labels no node type. Cached per dialect
+ * object.
  */
 export function voiceOf(dialect: Dialect | undefined): Voice {
-  const vocabulary = dialect?.messageVocabulary;
+  if (!dialect) return MX_VOICE;
+  const known = voices.get(dialect);
+  if (known !== undefined) return known;
+  const vocabulary = dialect.messageVocabulary;
+  const labels = labelsOf(dialect);
   // A vocabulary that states none of the members a message reads (`{}`, or
-  // only the unused `tree`) speaks exactly as MX's voice does.
+  // only the unused `tree`), and no node type label, speaks exactly as MX's
+  // voice does.
   if (
-    !dialect ||
-    !vocabulary ||
-    (vocabulary.attribute === undefined &&
-      vocabulary.file === undefined &&
-      vocabulary.formatTag === undefined)
+    labels.size === 0 &&
+    (!vocabulary ||
+      (vocabulary.attribute === undefined &&
+        vocabulary.file === undefined &&
+        vocabulary.formatTag === undefined))
   ) {
     return MX_VOICE;
   }
-  let voice = voices.get(dialect);
-  if (voice === undefined) {
-    voice = buildVoice(vocabulary);
-    voices.set(dialect, voice);
-  }
+  const voice = buildVoice(vocabulary, labels);
+  voices.set(dialect, voice);
   return voice;
 }
 

@@ -526,7 +526,37 @@ describe("a dialect's node types are validated", () => {
         table: {},
         nodeTypes: { Ref: { ...RefType, lowerTrigger: () => {} } },
       },
-      "`dialect.nodeTypes.Ref.lowerTrigger` is not a node type field (keys, parse, print, lower, schema)",
+      "`dialect.nodeTypes.Ref.lowerTrigger` is not a node type field (keys, parse, print, lower, schema, label)",
+    ],
+    [
+      "an empty `label`",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: "" } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be a non-empty string, the name core\'s messages show for the type in place of `ref:Ref` (`label: "atom"`)',
+    ],
+    [
+      "a blank `label`",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: "  " } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be a non-empty string, the name core\'s messages show for the type in place of `ref:Ref` (`label: "atom"`)',
+    ],
+    [
+      "a `label` that is not a string",
+      {
+        id: "ref",
+        name: "Ref",
+        table: {},
+        nodeTypes: { Ref: { ...RefType, label: 7 as never } },
+      },
+      'dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.label` must be a non-empty string, the name core\'s messages show for the type in place of `ref:Ref` (`label: "atom"`)',
     ],
     [
       "no `print`",
@@ -677,7 +707,7 @@ export default {
     expect(error.file).toBe(join(pkg, "index.mjs"));
     expect([error.line, error.column]).toEqual([1, 0]);
     expect(error.message).toBe(
-      "`nodeTypes.Ref.printed` is not a node type field (keys, parse, print, lower, schema)",
+      "`nodeTypes.Ref.printed` is not a node type field (keys, parse, print, lower, schema, label)",
     );
   });
 });

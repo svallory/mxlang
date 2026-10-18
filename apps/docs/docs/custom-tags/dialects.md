@@ -199,6 +199,23 @@ With that, `` `<string>`: unknown attribute `bogus` `` reads `` `string`: unknow
 - **A wrong vocabulary fails the dialect at load**, in your module: it is not an object, a member is not one of the four, `attribute` is not an `{ one, many, article? }` object, `file` is neither a string nor such an object, a noun is empty, multi-line or holds a backtick, `article` is not `"a"` or `"an"`, or `formatTag` is not a function.
 - **`.mx` files are unchanged.** A dialect with no `messageVocabulary` reads in MX's own words ("Data files are static, so ...").
 
+## Readable type names in core's messages: `label`
+
+A contract that says `type: "atom:Atom"` makes core write `option mode must be atom:Atom, got string`. The key is how you register and name the type; your users may not know it. Give the node type a `label` and core's messages to a file's author show it instead.
+
+```ts
+nodeTypes: {
+  Atom: { label: "atom", keys: [], schema, parse, print, lower },
+},
+```
+
+With that, `` attribute `mode` must be atom:Atom, got string `` reads `` attribute `mode` must be atom, got string ``, `` must be array, got atom:Atom `` reads `` must be array, got atom ``, and `` must be string, got atom:Atom `` reads `` must be string, got atom ``.
+
+- **`label` is optional.** A type without one shows its key, and the message is exactly what it was.
+- **One non-empty string.** Anything else (an empty or blank string, a number) fails the dialect at load, in your module, naming the dialect and the type.
+- **What it covers.** The type names in the contract value checks: the type a slot asks for, and the type of the value that was written. Combine it with `messageVocabulary` freely.
+- **What it does not cover.** Messages to you, the dialect's author, keep the key: a contract that names an unregistered type, a row that names a type, and the errors for a `parse`, `lower` or `schema` that breaks its contract. They tell you what to spell, and the spelling is the key.
+
 ## Passing your dialect to a call
 
 A front end that calls `compileSource`, `parseFragment` or `lowerSource` with `dialect: YOUR_DIALECT` should pass a deep-frozen object. Core validates the object it is given and remembers the result only when the object is deep-frozen, that is, it and every plain object and array inside it (`table`, its rows, `contracts`) are frozen: a deep-frozen dialect is validated once, any other again on every call, because a mutable object can change between calls. A dialect frozen only at the top, with an unfrozen `table` or `contracts` inside, is validated again on every call, so a change to those is seen. RegExps and functions inside it need not be frozen. Freeze the nested objects and arrays too (a deep freeze) to have the dialect validated once. The dialect your users load from your package's module needs none of this: core validates it once per revision of the module file.

@@ -5325,6 +5325,7 @@ dialect registers its own under its `id`, in `nodeTypes`, keyed by a PascalCase
 interface NodeType<N extends DialectNode> {
   keys: readonly string[];                                  // child-node fields; [] for a leaf
   schema: NodeSchema;                                       // required
+  label?: string;                                           // the name messages show for the type; the key without it
   parse(text: string, span: SourceSpan, ctx: ClaimContext): Omit<N, "type" | "span"> | undefined;
   print(node: N): string;                                   // print(parse(text)) is text
   lower(node: N, ctx: TriggerContext): TriggerResult;
@@ -5365,6 +5366,18 @@ when its dialect loads, naming the dialect, the type and the piece.
   (see "The expression position" below). It is a new object for each node: a
   forward that another node already stands for is an error at the later node.
 - The **printer** is `print`; `print(parse(text))` is `text`.
+- The **label** (`NodeType.label`) is optional: a non-empty string that core's
+  messages to a file's author show for the type in place of its key
+  (`label: "atom"` on `mesh:Atom` turns `option mode must be mesh:Atom, got
+  string` into `option mode must be atom, got string`, and `must be array, got
+  mesh:Atom` into `must be array, got atom`). It covers the type names in
+  the contract value checks: `type`, `items`, and the type of the value
+  written. A type with no label shows its key, and every message is then
+  unchanged. A label that is not a non-empty string is
+  `MX_INVALID_DIALECT_MODULE` when the dialect loads, naming the dialect and
+  the type. The messages to the dialect's own author (registration, row and
+  hook errors, which name the key a declaration or a row must spell) keep the
+  key.
 
 **Disjoint marks.** The dialects a project installs are its own `mx.dialect`
 declaration, if any, and its direct dependencies that declare one. Their

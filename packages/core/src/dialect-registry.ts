@@ -142,6 +142,15 @@ export interface NodeType<N extends DialectNode = DialectNode> {
   lower(node: N, ctx: TriggerContext): TriggerResult;
   /** The node's fields and the positions it fills (required). */
   readonly schema: NodeSchema;
+  /**
+   * The name core's messages to a file's author show for the type, in place
+   * of its registry key (`label: "atom"` for `mesh:Atom`: `option mode must
+   * be atom, got string`). Optional: without it the key is shown. A
+   * non-empty string; registering a bad one is an invalid-dialect error.
+   * Messages to the dialect's own author (registration, row and hook errors)
+   * keep the key.
+   */
+  readonly label?: string;
 }
 
 /** One entry of the registry. */
@@ -690,11 +699,21 @@ export function checkDialectNodeTypes(
     }
     const shape = nodeType as Record<string, unknown>;
     for (const key of Object.keys(shape)) {
-      if (!["keys", "parse", "print", "lower", "schema"].includes(key)) {
+      if (
+        !["keys", "parse", "print", "lower", "schema", "label"].includes(key)
+      ) {
         fail(
-          `\`${at}.${key}\` is not a node type field (keys, parse, print, lower, schema)`,
+          `\`${at}.${key}\` is not a node type field (keys, parse, print, lower, schema, label)`,
         );
       }
+    }
+    if (
+      shape.label !== undefined &&
+      (typeof shape.label !== "string" || shape.label.trim() === "")
+    ) {
+      fail(
+        `dialect \`${id}\`, node type \`${type}\`: \`${at}.label\` must be a non-empty string, the name core's messages show for the type in place of \`${id}:${type}\` (\`label: "atom"\`)`,
+      );
     }
     for (const hook of ["parse", "print", "lower"] as const) {
       if (typeof shape[hook] !== "function") {

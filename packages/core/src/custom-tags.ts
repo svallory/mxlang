@@ -1576,7 +1576,7 @@ function checkCompositeAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `${voice.attribute} ${attrLabel(attr)} must be ${declaration.type}, got ${shape}`,
+      `${voice.attribute} ${attrLabel(attr)} must be ${declaration.type}, got ${voice.nodeType(shape)}`,
       attr.loc,
       undefined,
       attrEndOf(attr),
@@ -1599,7 +1599,7 @@ function checkCompositeAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `${voice.attribute} ${attrLabel(attr)} item ${index + 1} must be ${declaration.items}, got ${got}`,
+      `${voice.attribute} ${attrLabel(attr)} item ${index + 1} must be ${voice.nodeType(declaration.items)}, got ${voice.nodeType(got)}`,
       start
         ? { ...attr.loc, line: start.line, column: start.column }
         : attr.loc,
@@ -1643,7 +1643,7 @@ function checkNodeAttr(
     claims.defer(
       codedError(
         INVALID_ATTRIBUTE_VALUE_CODE,
-        `${ownerText(owner)}: ${voice.attribute} ${attrLabel(attr)} must be ${type}, got string${expected}`,
+        `${ownerText(owner)}: ${voice.attribute} ${attrLabel(attr)} must be ${voice.nodeType(type)}, got string${expected}`,
         at.line,
         at.column,
         at.file,
@@ -1656,7 +1656,7 @@ function checkNodeAttr(
     failForOwner(
       INVALID_ATTRIBUTE_VALUE_CODE,
       owner,
-      `${voice.attribute} ${attrLabel(attr)} must be ${type}, got ${shape}${expected}`,
+      `${voice.attribute} ${attrLabel(attr)} must be ${voice.nodeType(type)}, got ${voice.nodeType(shape)}${expected}`,
       at,
       undefined,
       attrEndOf(attr),
@@ -1713,7 +1713,7 @@ function checkNodeListAttr(
       single.span.sourceEnd,
     );
     refuse(
-      `${label} must be array, got ${items}; write it as a list: \`[${text || "…"}]\``,
+      `${label} must be array, got ${voice.nodeType(items)}; write it as a list: \`[${text || "…"}]\``,
       at,
     );
   }
@@ -1731,7 +1731,10 @@ function checkNodeListAttr(
   }
   const shape = attrShape(attr);
   if (shape && shape !== "array") {
-    refuse(`${label} must be array, got ${shape}${expected}`, at);
+    refuse(
+      `${label} must be array, got ${voice.nodeType(shape)}${expected}`,
+      at,
+    );
   }
   if (
     (attr.kind !== "dynamic" && attr.kind !== "bound") ||
@@ -1748,7 +1751,7 @@ function checkNodeListAttr(
     const where = start
       ? { ...attr.loc, line: start.line, column: start.column }
       : attr.loc;
-    const message = `${label} item ${index + 1} must be ${items}, got ${got}${expected}`;
+    const message = `${label} item ${index + 1} must be ${voice.nodeType(items)}, got ${voice.nodeType(got)}${expected}`;
     const literal = withoutTsWrappers(element);
     if (deferring && literal?.type === "StringLiteral") {
       claims.defer(
@@ -2255,7 +2258,7 @@ function validateAttributes(
       failForOwner(
         INVALID_ATTRIBUTE_VALUE_CODE,
         owner,
-        `${voice.attribute} ${attrLabel(attr)} must be ${declaration.type}, got ${literal.type}`,
+        `${voice.attribute} ${attrLabel(attr)} must be ${voice.nodeType(declaration.type)}, got ${voice.nodeType(literal.type)}`,
         valueAt(attr, locate),
         undefined,
         attrEndOf(attr),
@@ -2296,7 +2299,7 @@ function validateAttributes(
         failForOwner(
           INVALID_ATTRIBUTE_VALUE_CODE,
           owner,
-          `${voice.attribute} ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${literal.type}`,
+          `${voice.attribute} ${attrLabel(attr)} must be a string from ${listEnum(declaration.enum)}, got ${voice.nodeType(literal.type)}`,
           attr.loc,
           undefined,
           attrEndOf(attr),
