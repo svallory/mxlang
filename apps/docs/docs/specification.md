@@ -5365,6 +5365,10 @@ when its dialect loads, naming the dialect, the type and the piece.
 - The **forward** is the expression `lower` returns through `ctx.expression`
   (see "The expression position" below). It is a new object for each node: a
   forward that another node already stands for is an error at the later node.
+  Core does not strip, rename or rewrite the keys of a forward's `extra`, and a
+  dialect may keep its own marks there (for example `extra.mxTransaction`):
+  every consumer read, `Expr.node`, `Expr.nodes[].forward` and a `LoweredUnit`'s
+  expression, sees the forward the dialect returned, with its `extra` intact.
 - The **printer** is `print`; `print(parse(text))` is `text`.
 - The **label** (`NodeType.label`) is optional: a non-empty string that core's
   messages to a file's author show for the type in place of its key
