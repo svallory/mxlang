@@ -117,9 +117,9 @@ export function deferredDefaultTagProblems(
  *
  * Runs on the parsed tree (never the source), top-down, so an unnamed
  * ancestor is already resolved when it shows up in a descendant's `parents`.
- * The same walk records which tags a parent's `children["*"]` claims,
- * so an unnamed tag inside a wildcard child reads the matched
- * contract's `defaultTag`.
+ * The same walk records which tags a parent's `children["*"]` claims, so an
+ * unnamed tag inside a wildcard child reads the matched contract's
+ * `defaultTag`.
  */
 export function resolveUnnamedTags(ctx: Ctx, body: readonly Node[]): void {
   const walk = (

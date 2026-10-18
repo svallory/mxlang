@@ -8,9 +8,9 @@
  * `.solid.mx`), not something this ambient declaration can derive on its own.
  *
  * The default export renders to a string; its `render` property is the sink
- * entry, `render(input, out)`, which writes to `out` and
- * returns the template's `<return>` value. The same entry is the module's
- * named `render` export.
+ * entry, `render(input, out)`, which writes to `out` and returns the
+ * template's `<return>` value. The same entry is the module's named `render`
+ * export.
  *
  * `.marko` has no declaration here: `.mx` is the only extension either loader
  * accepts, since MX only supports the MX 1.0 subset of Marko syntax.

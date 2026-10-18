@@ -33,9 +33,9 @@ export interface AttrMeta extends Meta {
   /** Range of an `async` keyword already confirmed to modify a method. */
   asyncMethod: undefined | Range;
   /**
-   * MX: the attribute trigger this attribute is, its matched
-   * text, whether it is announced (false on a re-lex), its `(args)` (written
-   * with no body), and whether `onTrigger` was called for it already.
+   * MX: the attribute trigger this attribute is, its matched text, whether it
+   * is announced (false on a re-lex), its `(args)` (written with no body), and
+   * whether `onTrigger` was called for it already.
    */
   trigger:
     | undefined
@@ -78,8 +78,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
     // Catches the paths that leave the attribute without resolving a pending
     // `async`, notably EOF part way through typing `<div async onCl`.
     flushPendingAsync(this, attr);
-    // MX: a trigger with `(args)` and no value ends with the
-    // attribute, as a named attribute's arguments do.
+    // MX: a trigger with `(args)` and no value ends with the attribute, as a
+    // named attribute's arguments do.
     if (attr.trigger && !attr.trigger.announced) {
       announceAttrTrigger(this, attr, undefined, undefined);
     }
@@ -310,8 +310,8 @@ export const ATTRIBUTE: StateDefinition<AttrMeta> = {
         } else {
           flushPendingAsync(this, attr); // args without a body is not a method
           attr.args = true;
-          // MX: an attribute trigger's arguments are announced
-          // with it (core decides what they mean).
+          // MX: an attribute trigger's arguments are announced with it (core
+          // decides what they mean).
           if (attr.trigger) attr.trigger.args = { start, end, value };
           else {
             this.options.onAttrArgs?.({

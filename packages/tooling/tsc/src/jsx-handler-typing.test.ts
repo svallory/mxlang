@@ -208,8 +208,8 @@ describe.each(HOSTS)("mx-tsc handler typing on $host", ({ host }) => {
     expect(errorsIn(host, "Unchecked")).toEqual([]);
   });
 
-  // Hono's svg types declare no handlers at all, so there is nothing to
-  // check against (the same silence plain TSX has).
+  // Hono's svg types declare no handlers at all, so there is nothing to check
+  // against (the same silence plain TSX has).
   it.skipIf(host === "hono")(
     "checks an svg handler against the svg element",
     () => {

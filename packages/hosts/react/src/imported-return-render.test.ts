@@ -156,10 +156,10 @@ describe("an imported tag that declares <return>, rendered on React", () => {
 
 describe("a dynamic tag whose callee declares <return>, rendered on React", () => {
   // The verifier's fixture (dynamic-tag-return-unit-object-object): before
-  // the render path reached this host, `__mxDynamic` passed the
-  // returning unit's `{ value, output }` pair straight through and React
-  // threw "Objects are not valid as a React child". The unit's `.render` is
-  // now the value channel; the default export renders the body.
+  // the render path reached this host, `__mxDynamic` passed the returning
+  // unit's `{ value, output }` pair straight through and React threw
+  // "Objects are not valid as a React child". The unit's `.render` is now
+  // the value channel; the default export renders the body.
   it("renders the body and binds /var, reached directly", async () => {
     expect(
       await renderCaller("<div><${Counter}/n start=1/><p>${n}</p></div>"),

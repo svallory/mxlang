@@ -1,6 +1,6 @@
 /**
- * The fragment front door: parse a *substring* of a larger file
- * as Marko, with positions reported against the enclosing file.
+ * The fragment front door: parse a *substring* of a larger file as Marko,
+ * with positions reported against the enclosing file.
  *
  * The consumer is a host whose MX lives inside another language — the Solid host's
  * `.solid.mx`, where an MX region starts partway into a TSX file. Marko's
@@ -83,9 +83,8 @@ import { registerSyntax } from "./triggers.ts";
  *
  * `@marko/compiler` requires *a* translator and resolves `marko/translator`
  * when none is given. This one registers no taglibs beyond Marko's own
- * built-ins and core's (the statement tags are the language's,
- * so every parse knows them) and no `translate` visitors, so `compileSync`
- * parses and stops.
+ * built-ins and core's (the statement tags are the language's, so every parse
+ * knows them) and no `translate` visitors, so `compileSync` parses and stops.
  */
 const STATEMENT_ENTRY: [string, unknown] = [
   STATEMENT_TAGLIB_ID,
@@ -235,8 +234,8 @@ export interface FragmentBase {
   nativeTags?: NativeTags;
   /**
    * The product name diagnostics use where core's own wording says "MX";
-   * see `TranslatorOptions.productName`. Unset, the
-   * dialect's `name`, and `MX` for MX's own default row.
+   * see `TranslatorOptions.productName`. Unset, the dialect's `name`,
+   * and `MX` for MX's own default row.
    */
   productName?: string;
   /**

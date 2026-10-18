@@ -114,16 +114,16 @@ export function isWordCode(code: number) {
 const ID_CONTINUE = /^\p{ID_Continue}$/u;
 
 /**
- * MX: a word character wherever the parser looks
- * behind or ahead to decide whether a word starts or ends. `code` is a code
- * point. At or above U+0080 it is a word character when it is `ID_Continue`
- * or U+200C or U+200D (ECMAScript's IdentifierPart), so `é`, `名` and `𝑥`
- * are words (`x=é / 2` divides, `énew` is no keyword, `é!` is postfix) and
- * `©`, `×`, `…`, emoji and a lone surrogate are not, as in stock
- * htmljs-parser. The ASCII test stays a comparison and the regex runs only
- * above it. Use `wordWidthBefore` and `wordWidthAt` on a string, which read
- * a surrogate pair as one code point. `isWordCode` stays ASCII for the
- * callers that only skip ahead over a word.
+ * MX: a word character wherever the parser looks behind or ahead to decide
+ * whether a word starts or ends. `code` is a code point. At or above U+0080
+ * it is a word character when it is `ID_Continue` or U+200C or U+200D
+ * (ECMAScript's IdentifierPart), so `é`, `名` and `𝑥` are words (`x=é / 2`
+ * divides, `énew` is no keyword, `é!` is postfix) and `©`, `×`, `…`, emoji
+ * and a lone surrogate are not, as in stock htmljs-parser. The ASCII test
+ * stays a comparison and the regex runs only above it. Use
+ * `wordWidthBefore` and `wordWidthAt` on a string, which read a surrogate
+ * pair as one code point. `isWordCode` stays ASCII for the callers that
+ * only skip ahead over a word.
  */
 export function isUnicodeWordCode(code: number) {
   return code >= 0x80 ? isNonAsciiWordCode(code) : isWordCode(code);

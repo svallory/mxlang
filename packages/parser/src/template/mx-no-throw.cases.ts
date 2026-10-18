@@ -422,11 +422,10 @@ export const NAMELESS_TAG_ROWS: [string, string][] = [
 ];
 
 /**
- * template-parser-nameless-tag-throw: the
- * tags that never get a name. A `,` line, `<,>`, `<,/>`, a `</>` and head
- * parts (an attribute, shorthand, argument or variable) before any name, with
- * a comment before a name, each inside and outside a parent, HTML and
- * concise.
+ * template-parser-nameless-tag-throw: the tags that never get a name. A `,`
+ * line, `<,>`, `<,/>`, a `</>` and head parts (an attribute, shorthand,
+ * argument or variable) before any name, with a comment before a name, each
+ * inside and outside a parent, HTML and concise.
  */
 const NAMELESS_PIECES = [
   ",",

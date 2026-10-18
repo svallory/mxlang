@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { createMxLanguagePlugin, MX_LANGUAGE_ID } from "./mx-language.ts";
 
 /**
- * The handler wrapper must not move any position inside
- * a handler: a diagnostic or a hover on `e` or on a body reference maps to the
- * authored offset, exactly as it does without the wrapper. The mapping is
- * resolved with Volar's own `SourceMap`, the lookup hover and diagnostics use.
+ * The handler wrapper must not move any position inside a handler: a
+ * diagnostic or a hover on `e` or on a body reference maps to the authored
+ * offset, exactly as it does without the wrapper. The mapping is resolved with
+ * Volar's own `SourceMap`, the lookup hover and diagnostics use.
  */
 const here = new URL("./fixtures/", import.meta.url).pathname;
 const HOSTS = ["preact", "react", "hono"] as const;

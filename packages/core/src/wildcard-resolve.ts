@@ -60,10 +60,9 @@ export interface WildcardMatch {
 
 /**
  * The names core itself consumes, which no wildcard entry may claim. "Unknown"
- * is target-neutral: no core structural name, no core-owned
- * custom tag, no `customTags` entry. A host's own claims and native elements
- * are not consulted, which is why a wildcard can only fire inside a contract
- * parent.
+ * is target-neutral: no core structural name, no core-owned custom tag, no
+ * `customTags` entry. A host's own claims and native elements are not
+ * consulted, which is why a wildcard can only fire inside a contract parent.
  */
 const CORE_NAMES = new Set([
   ...CONTROL_FLOW_TAGS,
@@ -104,11 +103,11 @@ function isBuiltin(name: string, ctx: WildcardContext): boolean {
 }
 
 /**
- * Why a parent's `"*"` may not claim `name` (target-neutral), or
- * `undefined` when no rung of the target resolves it: not a core structural
- * name, not a core-owned or registered custom tag, not a built-in of the
- * target. A native element is eligible: inside a contract parent the contract
- * decides, and the host's native-element fallback applies only outside one.
+ * Why a parent's `"*"` may not claim `name` (target-neutral), or `undefined`
+ * when no rung of the target resolves it: not a core structural name, not a
+ * core-owned or registered custom tag, not a built-in of the target. A native
+ * element is eligible: inside a contract parent the contract decides, and the
+ * host's native-element fallback applies only outside one.
  */
 export function wildcardIneligibility(
   name: string,

@@ -1473,11 +1473,11 @@ describe("build: .ng.mx round 2 review", () => {
   it("treats a .solid.mx under tags/ as a rejection, never as .ng.mx", () => {
     // `build()` is a direct entry, so it resolves its targets from this
     // package's own descriptor unless the caller passes a lookup of its own
-    // (design note §5.1, rule (c)). `solid` is therefore not a file kind it
-    // knows, and the tag lookup reports it: the file cannot be
-    // called as a tag. What must not happen either way is the `.ng.mx`
-    // wording, which would tell the author the wrong thing about a file this
-    // host does not own.
+    // (design note §5.1, rule (c)). `solid` is therefore not a file kind
+    // it knows, and the tag lookup reports it: the file cannot be called
+    // as a tag. What must not happen either way is the `.ng.mx` wording,
+    // which would tell the author the wrong thing about a file this host
+    // does not own.
     writeProject({
       "package.json": JSON.stringify({
         mx: { host: "angular", angular: { include: ["src/**/*.mx"] } },

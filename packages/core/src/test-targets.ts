@@ -1,11 +1,11 @@
 /**
  * A registered set for tests that need one (unstable).
  *
- * Core names no target and no host, so a test that needs a
- * `TargetLookup` must bring its own. This is that own: invented names, a
- * shape borrowed from the built-in set (a hostless target carrying a
- * deprecated legacy `mx.host` value, hosted targets, one of them with a file
- * kind), and nothing that could be mistaken for a real host.
+ * Core names no target and no host, so a test that needs a `TargetLookup`
+ * must bring its own. This is that own: invented names, a shape borrowed from
+ * the built-in set (a hostless target carrying a deprecated legacy `mx.host`
+ * value, hosted targets, one of them with a file kind), and nothing that
+ * could be mistaken for a real host.
  *
  * Test-only: the module lives beside the tests because nothing in core's own
  * runtime may hold a set of targets.

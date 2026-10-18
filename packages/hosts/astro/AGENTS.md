@@ -87,13 +87,12 @@ Four facts worth knowing before editing it:
   `component-export` and `props` when absent, with no else branch. Left alone
   the build would succeed and emit an `<astro-island client="load">` whose
   loader falls back to `Promise.resolve({default:()=>()=>{}})` — an island that
-  silently does nothing, on a host whose claim is shipping no client JS.
-  The directive is meant to be an error, so
-  `renderToStaticMarkup` throws on `metadata.hydrate` (Astro's own fourth
-  argument; `AstroComponentMetadata.hydrate` is
-  `'load'|'idle'|'visible'|'media'|'only'`, and `displayName` names the
-  component). `examples/astro-static/e2e/build-errors.spec.ts` asserts the
-  failing build.
+  silently does nothing, on a host whose claim is shipping no client JS. The
+  directive is meant to be an error, so `renderToStaticMarkup` throws on
+  `metadata.hydrate` (Astro's own fourth argument;
+  `AstroComponentMetadata.hydrate` is `'load'|'idle'|'visible'|'media'|'only'`,
+  and `displayName` names the component).
+  `examples/astro-static/e2e/build-errors.spec.ts` asserts the failing build.
 
 ### `.astro.mx`: AstroMX templates
 

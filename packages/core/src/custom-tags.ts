@@ -627,8 +627,8 @@ export interface CustomTag {
   /**
    * What an unnamed tag (`<#id>`, `<.class>`) directly inside this tag stands
    * for: the parent contract, the top rung of the ladder. A tag that is a
-   * reachable, plain-parsing tag of the target; the registry
-   * checks it, and a host that forbids per-tag default tags refuses it.
+   * reachable, plain-parsing tag of the target; the registry checks it, and a
+   * host that forbids per-tag default tags refuses it.
    */
   defaultTag?: string;
   parseOptions?: CustomTagParseOptions;
@@ -2019,8 +2019,8 @@ export function validateCustomTagChildren(
   const allowedNames = (): string =>
     explicit.map(([name]) => voice.tag(name)).join(", ") || "none";
   // Check order: an explicit entry, then the `"*"` entries in order (the
-  // lowerer already matched them, recorded on the child), then the
-  // closed record's own error.
+  // lowerer already matched them, recorded on the child), then the closed
+  // record's own error.
   const notAllowed = (
     node: Extract<ChildNode, { kind: "ChildTag" }>,
   ): { message: string; guidance?: string } => {
@@ -2518,8 +2518,8 @@ function validateAttributeTags(
   }
   // A `"*"` entry's cardinality is per matched name: two `<@row>` under one
   // non-repeatable entry is one error naming `row` (for attribute tags).
-  // `required` cannot apply: a wildcard has no single name
-  // to require, and registration rejects the key.
+  // `required` cannot apply: a wildcard has no single name to require, and
+  // registration rejects the key.
   for (const [name, { entry, loc }] of wildcardMatches) {
     const range = attributeTagOccurrenceRange(tree, name);
     if (entry.repeatable !== true && range.max > 1) {
@@ -4179,8 +4179,7 @@ export function transformCustomTag(
   node: Node,
 ): IrNode[] {
   // A contract-only tag (no `transform`, no template) is valid on a name the
-  // active host claims; anywhere else a call has nothing to
-  // expand to.
+  // active host claims; anywhere else a call has nothing to expand to.
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
   const voice = voiceOfCtx(ctx);
   const owner = lazyOwner(() => tagLabelAt(call, voice));

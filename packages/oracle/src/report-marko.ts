@@ -1,21 +1,21 @@
 import { runStockTable } from "./report-marko-stock";
 
 /**
- * `oracle:marko`: parity check between Marko's own
- * toolchain and `@mxlang/target-html`'s output for the stock `.marko` fixture
- * set at `packages/targets/html/fixtures-marko/`.
+ * `oracle:marko`: parity check between Marko's own toolchain and
+ * `@mxlang/target-html`'s output for the stock `.marko` fixture set at
+ * `packages/targets/html/fixtures-marko/`.
  *
- * The `.mx` dialect and `@mxlang/html` are retired, so the table this
- * script used to print for `packages/mx-html/fixtures-mx/` is gone — there is
- * only one dialect (stock Marko) and one table now, `runStockTable()`'s.
+ * The `.mx` dialect and `@mxlang/html` are retired, so the table this script
+ * used to print for `packages/mx-html/fixtures-mx/` is gone — there is only
+ * one dialect (stock Marko) and one table now, `runStockTable()`'s.
  *
  * `--strict` is accepted for CLI symmetry with `oracle -- --strict`, but does
  * not change behaviour here: a recorded, reasoned skip/divergence (a
  * fixture's `meta.json`, see `fixtures/README.md`'s "oracle:marko" section)
  * never fails the run, in either mode — that classification is the settled
  * state, not unfinished work. Only an unclassified mismatch, a malformed
- * `meta.json`, or too few fixtures processed fails it (a gate
- * must assert it did work, not merely that nothing failed).
+ * `meta.json`, or too few fixtures processed fails it (a gate must assert it
+ * did work, not merely that nothing failed).
  */
 
 const args = process.argv.slice(2);

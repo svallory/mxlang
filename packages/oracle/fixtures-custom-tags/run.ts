@@ -191,10 +191,10 @@ const EXPECTED_ROWS = FIXTURES.length * HOSTS;
 /**
  * A module the entry imports, written beside it under the entry's own name.
  *
- * A template tag is a compilation unit: the caller emits
- * `import $mx_Icon1 from "./tags/icon.mx"` rather than expanding the template
- * inline, so the tag's own compiled module has to exist on disk beside the
- * caller for that import to resolve.
+ * A template tag is a compilation unit: the caller emits `import $mx_Icon1
+ * from "./tags/icon.mx"` rather than expanding the template inline, so the
+ * tag's own compiled module has to exist on disk beside the caller for that
+ * import to resolve.
  */
 interface SiblingModule {
   /** The specifier the caller imports, exactly as emitted (`./tags/icon.mx`). */
@@ -535,8 +535,8 @@ export async function runCustomTagFixtures(): Promise<CustomTagFixtureRow[]> {
     );
   }
 
-  // A gate must assert it did the work, not only that nothing
-  // failed. A fixture that silently stopped running is a failure here.
+  // A gate must assert it did the work, not only that nothing failed. A
+  // fixture that silently stopped running is a failure here.
   if (rows.length !== EXPECTED_ROWS) {
     throw new Error(
       `custom-tag count gate: ran ${rows.length} rows, expected ${EXPECTED_ROWS} (${FIXTURES.length} fixtures x ${HOSTS} hosts)`,

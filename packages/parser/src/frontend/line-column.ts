@@ -1,8 +1,7 @@
 /**
- * `lineColumnAt(document, offset)` (ast §5.2): a
- * file offset to a 1-based line and 0-based column, the fragment base
- * applied (ast §5.3). The line-start index is private: the document stays
- * plain data.
+ * `lineColumnAt(document, offset)` (ast §5.2): a file offset to a 1-based
+ * line and 0-based column, the fragment base applied (ast §5.3). The
+ * line-start index is private: the document stays plain data.
  */
 import type { MxFragmentBase } from "@mxlang/babel/mx-ast";
 

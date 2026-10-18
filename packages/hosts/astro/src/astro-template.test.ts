@@ -905,10 +905,10 @@ describe("a tag that returns a value", () => {
 
   it("explains why /var can't bind (fence-before-template ordering) and shows the fence-call workaround", () => {
     // Ruling 2026-09-28 (TODO amx-tag-var): this is a structural host limit
-    // (a host-cannot), not a missing feature, so the message
-    // says why rather than reading like a TODO — and points at the one route
-    // that already works: calling the unit directly from the `---` fence's
-    // own TypeScript, where it is an ordinary function call.
+    // (a host-cannot), not a missing feature, so the message says why rather
+    // than reading like a TODO — and points at the one route that already
+    // works: calling the unit directly from the `---` fence's own
+    // TypeScript, where it is an ordinary function call.
     expect(() =>
       lowerAstroMx(
         "---\n---\n<div><counter/n start=1/></div>\n",
@@ -916,8 +916,8 @@ describe("a tag that returns a value", () => {
         { customTags: { counter } },
       ),
     ).toThrow(
-      // The route it names must be one that works: the
-      // default export returns markup only, so the value comes from `render`.
+      // The route it names must be one that works: the default export
+      // returns markup only, so the value comes from `render`.
       /Astro runs the `---` fence before the template renders.*Call the unit directly from the fence instead.*import \{ createOut \} from "@mxlang\/host-astro\/runtime"; const value = Mx_Counter\d*\.render\(\{ \.\.\. \}, createOut\(\)\)/s,
     );
   });

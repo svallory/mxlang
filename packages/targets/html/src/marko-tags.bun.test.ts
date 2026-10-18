@@ -5,8 +5,8 @@ import markoPlugin from "./bun.ts";
 
 /**
  * A `.mx` page calling a tag from `tags/`, compiled and run for real through
- * the Bun loader. A `.marko` file is no MX input: it is never
- * loaded here, and a call that finds one is a compile error.
+ * the Bun loader. A `.marko` file is no MX input: it is never loaded here,
+ * and a call that finds one is a compile error.
  */
 
 // Inside the package, not `tmpdir()`: the emitted modules import `@mxlang/target-html`

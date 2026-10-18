@@ -116,8 +116,8 @@ describe("tags/<name>/index.mx", () => {
 });
 
 /**
- * A `marko.json` is not read: a tag it maps to an `.mx`
- * template or to a renderer is an unknown tag, never an import.
+ * A `marko.json` is not read: a tag it maps to an `.mx` template or to a
+ * renderer is an unknown tag, never an import.
  */
 describe("a marko.json registers nothing", () => {
   write(

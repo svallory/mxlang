@@ -59,10 +59,10 @@ function brandedTailRe(name: string): RegExp {
 /**
  * `export const layout = "../layouts/Base.astro";`, MX's frontmatter
  * equivalent of Markdown's `layout` key — matched as a plain string literal,
- * the only shape supported. Captured and stripped from
- * the hoisted module scope (a `.astro` specifier is metadata for this
- * transform, not a value the compiled module has any use for at runtime) so
- * the wrapper can turn it into a real import instead.
+ * the only shape supported. Captured and stripped from the hoisted module
+ * scope (a `.astro` specifier is metadata for this transform, not a value the
+ * compiled module has any use for at runtime) so the wrapper can turn it into
+ * a real import instead.
  */
 const LAYOUT_EXPORT_RE = /^export const layout = (["'])((?:(?!\1).)*)\1;\n?/m;
 

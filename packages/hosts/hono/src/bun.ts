@@ -52,10 +52,10 @@ export function mxFilter(targets: TargetLookup): RegExp {
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
- * compiles under. It defaults to this package's own
- * descriptor, which is what a plain `import "@mxlang/host-hono/bun"` wants; a
- * caller compiling for several targets passes the built-in registry's lookup
- * instead (design note §5.1, rule (c)).
+ * compiles under. It defaults to this package's own descriptor, which is what
+ * a plain `import "@mxlang/host-hono/bun"` wants; a caller compiling for
+ * several targets passes the built-in registry's lookup instead (design note
+ * §5.1, rule (c)).
  */
 export function createHonoBunPlugin(
   targets: TargetLookup = honoTargets,

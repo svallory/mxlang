@@ -165,9 +165,9 @@ export const CONCISE_HTML_CONTENT: StateDefinition = {
         }
       }
 
-      // MX: a block tag or filter opener at a concise line
-      // start would otherwise read as a tag name (`{%`); it goes in a text
-      // line instead.
+      // MX: a block tag or filter opener at a concise line start would
+      // otherwise read as a tag name (`{%`); it goes in a text line
+      // instead.
       if (
         this.syntax.contentStops.length &&
         this.syntax.contentStops.includes(code)

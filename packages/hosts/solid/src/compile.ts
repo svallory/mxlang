@@ -86,16 +86,16 @@ export interface CompileSolidMxOptions {
   /**
    * Every value the surrounding `.solid.mx` module binds at its top level —
    * import locals plus top-level `const`/`function`/`class` names, type-only
-   * bindings excluded. A capitalized tag a region references
-   * may resolve through this scope as well as `importSpecifiers`.
+   * bindings excluded. A capitalized tag a region references may resolve
+   * through this scope as well as `importSpecifiers`.
    */
   moduleBindings?: ReadonlySet<string>;
   /**
    * The subset of `importSpecifiers`' bindings that are a *default* import
    * from a `.marko`/`.mx` source — Marko's own statically-resolved
-   * component case. A capitalized tag bound to a name in
-   * this set lowers as a direct component call, exactly as before value
-   * imports became dynamic tags; any other value import (named, namespace, or a default from any
+   * component case. A capitalized tag bound to a name in this set lowers as
+   * a direct component call, exactly as before value imports became dynamic
+   * tags; any other value import (named, namespace, or a default from any
    * other extension) lowers as a dynamic tag instead.
    */
   importDefaultFromMarkoOrMx?: ReadonlySet<string>;
@@ -105,8 +105,7 @@ export interface CompileSolidMxOptions {
    * The subset of `moduleBindings`' *non-import* names (a top-level
    * `const`/`function`/`class` the surrounding module declares) whose value
    * `@mxlang/tsx-bridge`'s `programBindings` could not statically prove is a
-   * function/arrow/class — the local extension of the value-import
-   * rule. A
+   * function/arrow/class — the local extension of the value-import rule. A
    * capitalized tag bound to a name in this set lowers as a dynamic tag
    * instead of the direct call `moduleBindings` alone would give it; a plain
    * `function Foo(){}`/`class Foo{}`/`const Foo = () => {}` is absent from
@@ -150,8 +149,8 @@ export interface CompileSolidMxResult {
    */
   hoistedImports: HoistedImport[];
   /**
-   * `<define>`s this region hoisted to module scope, as
-   * module-level statement text.
+   * `<define>`s this region hoisted to module scope, as module-level
+   * statement text.
    *
    * A region is an expression, so it cannot hold a function declaration
    * either — the same reason `hoistedImports` exists, for the author's own
@@ -375,12 +374,12 @@ export function compileSolidMx(
     }
   }
   // A capitalized tag also resolves through the surrounding TypeScript
-  // module's own top-level value bindings — not just its
-  // imports, since a region has no module scope of its own for a
-  // function/class/const the author wrote right there in the same file to
-  // live in. Folded into `ctx.imports` rather than a new `Ctx` field: core's
-  // precedence order already treats that set as "the file resolves this name
-  // to a value", which is exactly what a module-scope binding is too.
+  // module's own top-level value bindings — not just its imports, since a
+  // region has no module scope of its own for a function/class/const the
+  // author wrote right there in the same file to live in. Folded into
+  // `ctx.imports` rather than a new `Ctx` field: core's precedence order
+  // already treats that set as "the file resolves this name to a value",
+  // which is exactly what a module-scope binding is too.
   if (options.moduleBindings) {
     for (const name of options.moduleBindings) ctx.imports.add(name);
   }
@@ -389,10 +388,10 @@ export function compileSolidMx(
       ctx.unknownLocalValue.add(name);
     }
   }
-  // Only a *default* import from a `.marko`/`.mx` source is
-  // Marko's own statically-resolved component case; every other value
-  // import lowers as a dynamic tag. `moduleBindings` folds every top-level
-  // value binding into `ctx.imports` with no source tracking (correct: a
+  // Only a *default* import from a `.marko`/`.mx` source is Marko's own
+  // statically-resolved component case; every other value import lowers as
+  // a dynamic tag. `moduleBindings` folds every top-level value binding
+  // into `ctx.imports` with no source tracking (correct: a
   // `const`/`function`/`class` has no specifier to check), so this set is
   // populated from `importSpecifiers`' own default-import bindings only.
   if (options.importDefaultFromMarkoOrMx) {
@@ -572,14 +571,14 @@ function mappedStatement(
 /**
  * Compiles a whole `.mx` file to a Solid component module.
  *
- * This is the tag-unit entry point: a `tags/icon.mx` is an
- * ordinary `.mx` file that compiles, per host, into a module exporting the
- * tag, and the caller emits an import plus a call. It differs from
- * `compileSolidMx` in exactly one way, and it is the reason both exist: a
- * *region* is an expression inside someone else's module, so module-level MX
- * statements are an error there, while a *file* is a module of its own and
- * they are placed — the author's `import`s and `static` blocks at module
- * scope, their `export interface Input` as the component's props.
+ * This is the tag-unit entry point: a `tags/icon.mx` is an ordinary `.mx`
+ * file that compiles, per host, into a module exporting the tag, and the
+ * caller emits an import plus a call. It differs from `compileSolidMx` in
+ * exactly one way, and it is the reason both exist: a *region* is an
+ * expression inside someone else's module, so module-level MX statements are
+ * an error there, while a *file* is a module of its own and they are placed —
+ * the author's `import`s and `static` blocks at module scope, their `export
+ * interface Input` as the component's props.
  */
 export function compileSolidUnit(
   source: string,

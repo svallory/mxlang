@@ -1,6 +1,6 @@
 /**
- * The whole-file front door: a Marko template in, an emitted
- * module out, with the host's policy deciding everything host-specific.
+ * The whole-file front door: a Marko template in, an emitted module out,
+ * with the host's policy deciding everything host-specific.
  *
  * Named `compileSource`, not `compileFile`: it takes source text, and a host
  * is free to keep its own disk-reading `compileFile(filename)` as its public
@@ -94,11 +94,11 @@ export interface CompileResult {
   map: RawSourceMap;
   /**
    * Every file the callee-`Input` resolver read while compiling this file,
-   * including followed `import type` targets. An integration
-   * invalidates this file's module when one of these changes — the Vite
-   * plugin does from phase 1a — so a callee's `Input` edit cannot leave a
-   * caller serving a stale attribute-tag shape. Empty until lowering
-   * actually resolves a callee (task 1b wires the resolver in).
+   * including followed `import type` targets. An integration invalidates this
+   * file's module when one of these changes — the Vite plugin does from phase
+   * 1a — so a callee's `Input` edit cannot leave a caller serving a stale
+   * attribute-tag shape. Empty until lowering actually resolves a callee
+   * (task 1b wires the resolver in).
    */
   dependencies: string[];
 }
@@ -276,10 +276,10 @@ function translatorClaiming(
   // on its first call (`deferredContractError`).
   rejectRegistration(host.customTags, claimed);
   const customTags = customTagTaglib(host.customTags);
-  // Core's own taglib is always registered, so `static`,
-  // `import`, `export`, `client`, `server` and `class` are statement tags to
-  // the parser on every target. A host that already lists it (html) keeps its
-  // own entry, and no host names the set.
+  // Core's own taglib is always registered, so `static`, `import`, `export`,
+  // `client`, `server` and `class` are statement tags to the parser on every
+  // target. A host that already lists it (html) keeps its own entry, and no
+  // host names the set.
   const hostTaglibs = host.taglibs ?? [];
   const coreTaglib: Array<[string, unknown]> =
     host.statementTags === false ||
@@ -623,8 +623,8 @@ export function compileSource(
       }
     }
     // The parse-error rewrites below treat an `errors` list as Marko's own
-    // aggregate of parse errors; this one holds the thrown error itself,
-    // so it is set aside for them and put back after.
+    // aggregate of parse errors; this one holds the thrown error itself, so
+    // it is set aside for them and put back after.
     const recorded = isTranslateError(error) ? error.errors : undefined;
     if (recorded && isTranslateError(error)) error.errors = undefined;
     annotateCloseTagOpener(error, source);

@@ -11,9 +11,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 
 /**
  * These shape/lowering fixtures use bare capitalized tags with no import —
- * they exercise how a component call lowers, not tag resolution. Since
- * an unresolved capitalized tag is a compile error, every
- * capitalized identifier the fixture source uses is declared bound (as
+ * they exercise how a component call lowers, not tag resolution. Since an
+ * unresolved capitalized tag is a compile error, every capitalized
+ * identifier the fixture source uses is declared bound (as
  * `mxModuleBindings` would be for a real caller's surrounding module),
  * matching Marko's own rule (`tag.scope.hasBinding(tagName)`) that any
  * in-scope binding — real or not — is what actually decides resolvability.
@@ -68,8 +68,8 @@ function expectSyntaxError(
 }
 
 /**
- * Tag params on components make the children a function. This
- * is what lets MX call Solid's own render-prop components natively.
+ * Tag params on components make the children a function. This is what lets
+ * MX call Solid's own render-prop components natively.
  */
 describe("tag params make the children a function", () => {
   it("lowers params on a component to a callback child", () => {
@@ -120,16 +120,15 @@ describe("tag params make the children a function", () => {
 });
 
 /**
- * `<@name>` inside a tag body becomes the prop `name` on
- * that tag.
+ * `<@name>` inside a tag body becomes the prop `name` on that tag.
  */
 describe("attribute tags become props", () => {
   it("uses an imported callee's Input from the surrounding module", () => {
-    // `AttrCallee` is a `.tsx` default import (a plain
-    // function, the "host component" case), not `.marko`/`.mx`, so it
-    // lowers as a dynamic tag rather than a direct `<AttrCallee .../>`
-    // call — `valueImportBinding` still lets the typed attribute-tag check
-    // reference `AttrCallee` for `Parameters<typeof AttrCallee>[0][...]`.
+    // `AttrCallee` is a `.tsx` default import (a plain function, the "host
+    // component" case), not `.marko`/`.mx`, so it lowers as a dynamic tag
+    // rather than a direct `<AttrCallee .../>` call — `valueImportBinding`
+    // still lets the typed attribute-tag check reference `AttrCallee` for
+    // `Parameters<typeof AttrCallee>[0][...]`.
     const filename = join(HERE, "fixtures", "caller.solid.mx");
     const source =
       'import AttrCallee from "./attr-callee.tsx";\nconst el = <AttrCallee><@item>typed</@item></AttrCallee>;';
@@ -162,9 +161,9 @@ describe("attribute tags become props", () => {
     // whose name and type arguments land on different lines was printed as
     // `NonNullable(\n<Parameters<...>>)`, which is not TypeScript.
     //
-    // `AttrCallee` is a `.tsx` default import, so it lowers
-    // as a dynamic tag (see the test above) — the assertion here is on the
-    // generated `satisfies` type staying intact, unaffected by that change.
+    // `AttrCallee` is a `.tsx` default import, so it lowers as a dynamic
+    // tag (see the test above) — the assertion here is on the generated
+    // `satisfies` type staying intact, unaffected by that change.
     const filename = join(HERE, "fixtures", "caller.solid.mx");
     const source = [
       'import AttrCallee from "./attr-callee.tsx";',

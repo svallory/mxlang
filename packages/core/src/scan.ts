@@ -7,9 +7,9 @@
  * explicitly named directories carrying directory-level defaults. The result
  * is the `customTags` map every host, loader, plugin and the language server
  * already accept (P1) — discovery is the only thing this module adds.
- * `mx.contracts` adds package-level declaration maps, evaluated
- * eagerly on a cache miss to learn their names and parser options. Sidecars
- * retain the static/lazy loading behavior described below.
+ * `mx.contracts` adds package-level declaration maps, evaluated eagerly on a
+ * cache miss to learn their names and parser options. Sidecars retain the
+ * static/lazy loading behavior described below.
  *
  * Three properties shape the implementation, each load-bearing:
  *
@@ -293,9 +293,9 @@ function routeOf(
  * A file-kind segment is known to a lookup when a registered target declares
  * a host module file kind with that segment: `.solid.mx` (the Solid host),
  * `.ng.mx` (the Angular host's per-region file kind) and `.astro.mx` (the
- * Astro host's template file kind) for the built-in lookup.
- * The closed list core used to hold is gone: the lookup
- * answers, and core holds no segment of any host's name.
+ * Astro host's template file kind) for the built-in lookup. The closed list
+ * core used to hold is gone: the lookup answers, and core holds no segment of
+ * any host's name.
  */
 
 /**
@@ -337,10 +337,10 @@ export function hostModuleSegment(
  * `scanCustomTags` and `discoverProjectTags` cannot drift on the rule.
  *
  * A `<base>.<word>.mx` file name under `tags/` is never a callable tag
- * (design note §5.1 rule (d)): the concise syntax `x.ng` and
- * the tag form `<x.ng/>` both parse as tag `x` with shorthand class `ng`, so
- * no syntax can reach such an entry and indexing it would create a dead tag.
- * Two messages, both positional at the file:
+ * (design note §5.1 rule (d)): the concise syntax `x.ng` and the tag form
+ * `<x.ng/>` both parse as tag `x` with shorthand class `ng`, so no syntax can
+ * reach such an entry and indexing it would create a dead tag. Two messages,
+ * both positional at the file:
  *
  * 1. `<word>` is a file-kind segment the lookup knows (`.ng.mx`, `.solid.mx`,
  *    `.astro.mx`): today's wording, unchanged — it is a host module file,
@@ -596,11 +596,10 @@ function isPackageSpecifier(value: string): boolean {
 
 /**
  * The diagnostics a set of recorded `hosts` restrictions deserves under
- * `lookup` (design note §5). A value that is neither a
- * host value the lookup accepts nor shaped like a package specifier is a
- * bare unknown word and gets today's warning, byte-identical; a package
- * specifier is silent, since a project may name a host package it does not
- * depend on.
+ * `lookup` (design note §5). A value that is neither a host value the
+ * lookup accepts nor shaped like a package specifier is a bare unknown word
+ * and gets today's warning, byte-identical; a package specifier is silent,
+ * since a project may name a host package it does not depend on.
  *
  * Only a full registry may validate host names: an own-descriptor subset
  * cannot know whether a peer restriction is valid. Call sites with an

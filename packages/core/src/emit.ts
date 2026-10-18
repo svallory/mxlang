@@ -14,8 +14,7 @@
  * body's bindings (so a host must not re-shadow), and `Hoisted` nodes must
  * precede the construct that produced them. Driving the walk once here means a
  * second host inherits those rules instead of re-deriving them — which is the
- * concrete payoff of Solid becoming "emitter
- * number three".
+ * concrete payoff of Solid becoming "emitter number three".
  *
  * A host that needs to render a child list itself — a component's `content`
  * block, an attribute tag's body — calls `drive` recursively with its own

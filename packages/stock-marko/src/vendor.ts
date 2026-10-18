@@ -1,12 +1,12 @@
 /**
- * The vendored, unpatched htmljs-parser 5.18.0 (the stock
- * reference). `vendor/htmljs-parser-5.18.0.tgz` is the published npm
- * tarball, byte for byte: its sha512 equals the integrity `bun.lock`
- * records for `htmljs-parser@5.18.0`. Bun's `patchedDependencies` patches
- * every installed copy of that name/version — including an npm-alias
- * install (`htmljs-parser-stock`, measured 2026-10-06: the alias lands
- * patched) — so the stock bytes live here as a tarball and are extracted
- * to the OS temp dir on first use.
+ * The vendored, unpatched htmljs-parser 5.18.0 (the stock reference).
+ * `vendor/htmljs-parser-5.18.0.tgz` is the published npm tarball, byte
+ * for byte: its sha512 equals the integrity `bun.lock` records for
+ * `htmljs-parser@5.18.0`. Bun's `patchedDependencies` patches every
+ * installed copy of that name/version — including an npm-alias install
+ * (`htmljs-parser-stock`, measured 2026-10-06: the alias lands patched) —
+ * so the stock bytes live here as a tarball and are extracted to the OS
+ * temp dir on first use.
  *
  * Provenance: fetched from
  * `https://registry.npmjs.org/htmljs-parser/-/htmljs-parser-5.18.0.tgz`;

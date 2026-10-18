@@ -370,9 +370,10 @@ describe("mx-tsc", () => {
         .split("\n")
         .filter((line) => line.includes("): error TS"));
       expect(errors).toHaveLength(3);
-      // `<${input.tag}/n start=1/>` over `typeof Counter`: the unit's render path binds
-      // what the callee's `render` returns, so `n` is Counter's `<return>`
-      // value, a number — not the `any` the dynamic helper used to hand back.
+      // `<${input.tag}/n start=1/>` over `typeof Counter`: the unit's render
+      // path binds what the callee's `render` returns, so `n` is Counter's
+      // `<return>` value, a number — not the `any` the dynamic helper used to
+      // hand back.
       expect(result.output).toContain(
         "Dyn.mx(10,8): error TS2339: Property 'toUpperCase' does not exist on type 'number'",
       );

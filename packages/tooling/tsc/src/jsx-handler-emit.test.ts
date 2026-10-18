@@ -17,11 +17,11 @@ import {
 } from "./test-support.ts";
 
 /**
- * `mx-tsc` emits JavaScript from the same projection it
- * type-checks, so the handler wrapper must be erased by TypeScript's emit. A
- * helper *call* survives emit and throws at run time; a `satisfies` does not.
- * Each host: emit with `mx-tsc` (strict, `react-jsx`, the host's
- * `jsxImportSource`, `esnext`), import the emitted module, render it.
+ * `mx-tsc` emits JavaScript from the same projection it type-checks, so the
+ * handler wrapper must be erased by TypeScript's emit. A helper *call*
+ * survives emit and throws at run time; a `satisfies` does not. Each host:
+ * emit with `mx-tsc` (strict, `react-jsx`, the host's `jsxImportSource`,
+ * `esnext`), import the emitted module, render it.
  */
 const HOSTS = [
   { host: "preact", jsxImportSource: "preact" },

@@ -65,13 +65,14 @@ import { astroDefaultTag } from "./default-tag.ts";
  * A single constant, referenced everywhere this extension is matched (here and
  * in the Zed language definition), so a change of spelling is a one-line edit.
  *
- * **Components and layouts only, never pages**. Astro's route collection keys on
- * `path.extname(basename)`, which returns only the **last** extension, so
- * `.astro.mx` can never be registered with `addPageExtension`. Measured against `astro@7.3.2`: a `page.astro.mx`
- * under `src/pages` routes to `/page.astro`, with a literal `.astro` in the
- * URL, and `injectRoute` cannot repair it. The integration reports such a file
- * as an error (`pages-guard.ts`) and tells the author to write `page.astro`
- * and import the component, or to write the page as `.mx`.
+ * **Components and layouts only, never pages**. Astro's route collection keys
+ * on `path.extname(basename)`, which returns only the **last** extension, so
+ * `.astro.mx` can never be registered with `addPageExtension`. Measured
+ * against `astro@7.3.2`: a `page.astro.mx` under `src/pages` routes to
+ * `/page.astro`, with a literal `.astro` in the URL, and `injectRoute` cannot
+ * repair it. The integration reports such a file as an error
+ * (`pages-guard.ts`) and tells the author to write `page.astro` and import
+ * the component, or to write the page as `.mx`.
  */
 export const ASTRO_MX_EXT = ".astro.mx";
 

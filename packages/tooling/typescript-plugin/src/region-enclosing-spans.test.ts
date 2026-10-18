@@ -14,8 +14,8 @@ import {
 } from "./unmapped-diagnostics.ts";
 
 /**
- * The file kinds that are not MX throughout expose the spans of
- * their MX regions, so an unmappable diagnostic lands on its enclosing tag.
+ * The file kinds that are not MX throughout expose the spans of their MX
+ * regions, so an unmappable diagnostic lands on its enclosing tag.
  */
 
 const FILE = "/p/page.mx";

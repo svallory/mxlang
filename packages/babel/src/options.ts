@@ -317,8 +317,8 @@ function createDefaultOptions(): OptionsWithDefaults {
     mxImportDefaultFromMarkoOrMx: undefined,
     // MX FORK: same reasoning — the import positions.
     mxImportSites: undefined,
-    // MX FORK: same reasoning again — the
-    // non-function-like module-scope binding set.
+    // MX FORK: same reasoning again — the non-function-like module-scope
+    // binding set.
     mxUnknownModuleBindings: undefined,
     startIndex: 0,
     // Column (0-based) from which to start counting source. Useful for

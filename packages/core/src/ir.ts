@@ -474,18 +474,18 @@ export interface Branch extends IrBase {
  * A tag the core does not own, handed to the host with its parts resolved.
  *
  * The escape hatch is deliberately narrow: the *core's* structural tags are
- * real IR kinds, and everything a host defines for itself
- * (`<try>`, `<html-comment>`, a `server` block, a future `<signal>`) arrives
- * here with its name, attributes, children and attribute tags already
- * resolved, so the host emits rather than re-parses. The Marko node itself is
- * not carried: a host that needs a field the IR does not model records it in
- * `data` from `resolveDelegatedTag`, while the node is still in hand.
+ * real IR kinds, and everything a host defines for itself (`<try>`,
+ * `<html-comment>`, a `server` block, a future `<signal>`) arrives here with
+ * its name, attributes, children and attribute tags already resolved, so the
+ * host emits rather than re-parses. The Marko node itself is not carried: a
+ * host that needs a field the IR does not model records it in `data` from
+ * `resolveDelegatedTag`, while the node is still in hand.
  */
 /**
- * How a wildcard child was written. The tag's `name` is the canonical tag whose
- * contract it matched (the authored name itself for an
- * inline contract); this records the spelling the author wrote. Present only
- * when a parent's `children["*"]` entry matched.
+ * How a wildcard child was written. The tag's `name` is the canonical tag
+ * whose contract it matched (the authored name itself for an inline
+ * contract); this records the spelling the author wrote. Present only when a
+ * parent's `children["*"]` entry matched.
  */
 export interface TagAlias {
   /** The tag name as written (`title` in `<title>`). */
@@ -651,14 +651,14 @@ export type ComponentTarget =
   /**
    * `<${expr}/>`, resolved at run time by the host.
    *
-   * `valueImportBinding` is set only when this target was synthesized by
-   * the dynamic routing of a capitalized tag bound to a value import that isn't
-   * a `.marko`/`.mx` default import, never for an author's own
-   * `<${expr}/>`. It names the local binding so `readCalleeInput` can still
-   * resolve the callee's declared `Input` for typed attribute-tag checking,
-   * exactly as it does for `kind: "name"`, even though the tag now lowers
-   * dynamically at runtime. An authored dynamic tag stays unresolved, since
-   * its expression is not in general a single known binding.
+   * `valueImportBinding` is set only when this target was synthesized by the
+   * dynamic routing of a capitalized tag bound to a value import that isn't
+   * a `.marko`/`.mx` default import, never for an author's own `<${expr}/>`.
+   * It names the local binding so `readCalleeInput` can still resolve the
+   * callee's declared `Input` for typed attribute-tag checking, exactly as
+   * it does for `kind: "name"`, even though the tag now lowers dynamically
+   * at runtime. An authored dynamic tag stays unresolved, since its
+   * expression is not in general a single known binding.
    */
   | { kind: "dynamic"; expr: Expr; valueImportBinding?: string };
 
@@ -941,8 +941,8 @@ export type IrNode =
        *
        * This is what dedupe and authored-import reuse key on: a template is
        * reused by resolved path. Two specifiers can spell one file —
-       * `./tags/icon.mx` and `./tags/../tags/icon.mx` — and resolving
-       * is what collapses them to one entry. Set with `synthesized`, absent
+       * `./tags/icon.mx` and `./tags/../tags/icon.mx` — and resolving is what
+       * collapses them to one entry. Set with `synthesized`, absent
        * otherwise.
        */
       resolvedPath?: string;

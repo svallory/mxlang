@@ -137,9 +137,9 @@ describe("custom tag transforms", () => {
   });
 
   it("keeps `on*` on a custom tag call a dynamic prop, not an event", () => {
-    // The `isElement` gate: a custom tag is a call, so its
-    // `onClick` is the tag author's own prop contract, not a DOM event. Only a
-    // native element lowers `on<Name>` to `kind: "event"`.
+    // The `isElement` gate: a custom tag is a call, so its `onClick` is the
+    // tag author's own prop contract, not a DOM event. Only a native element
+    // lowers `on<Name>` to `kind: "event"`.
     let seen: TagCall | null = null;
     const capture: CustomTag = {
       attributes: { onClick: { type: "expression" } },
@@ -1640,9 +1640,9 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
     );
     const forNode = find(ir.body, "For");
     // A tag param's runtime value can never be inspected at lowering time,
-    // so it is always "unknown" and
-    // routes dynamic — it still wins over the registered custom tag
-    // (proving the shadowing itself), just not as a direct `"name"` call.
+    // so it is always "unknown" and routes dynamic — it still wins over the
+    // registered custom tag (proving the shadowing itself), just not as a
+    // direct `"name"` call.
     expect(find(forNode.children, "Component").target).toMatchObject({
       kind: "dynamic",
       valueImportBinding: "Panel",
@@ -1740,9 +1740,9 @@ describe("local scope bindings shadow a registered custom tag (IR-level)", () =>
 });
 
 /**
- * A custom tag that declares only a contract (no `transform`, no
- * template) is valid on a name the active host claims. Core validates the call,
- * then lowers it to the same `DelegatedTag` an unregistered claimed tag would be.
+ * A custom tag that declares only a contract (no `transform`, no template) is
+ * valid on a name the active host claims. Core validates the call, then
+ * lowers it to the same `DelegatedTag` an unregistered claimed tag would be.
  */
 describe("contract-only custom tags", () => {
   const attribute: CustomTag = {

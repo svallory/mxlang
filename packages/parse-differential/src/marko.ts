@@ -408,11 +408,10 @@ function attribute(ctx: Ctx, attr: Node): { start: number; line: string }[] {
       },
     ];
   }
-  // Rule A2: Marko's `name` is the head before
-  // the last colon and `modifier` the tail; MX carries the head in
-  // `name`/`nameSpan` plus the modifier and its own span — the neutral line
-  // shows the split (the authored name, then the head's span) instead of a
-  // rejoined string.
+  // Rule A2: Marko's `name` is the head before the last colon and
+  // `modifier` the tail; MX carries the head in `name`/`nameSpan` plus the
+  // modifier and its own span — the neutral line shows the split (the
+  // authored name, then the head's span) instead of a rejoined string.
   const head = attr.name ?? "";
   const mod = attr.modifier;
   const authored = rejoinAttributeName(head, mod);

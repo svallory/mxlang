@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
-// `typeCheck` reaches the shared JSX emitter, with Hono's own
-// JSX types in the preamble. Unset, the runtime output is unchanged.
+// `typeCheck` reaches the shared JSX emitter, with Hono's own JSX types
+// in the preamble. Unset, the runtime output is unchanged.
 const source = "<button onClick=((e) => e.detail)>x</button>";
 
 it("wraps handlers against Hono's JSX types only under typeCheck", () => {

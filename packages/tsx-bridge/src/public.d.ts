@@ -275,9 +275,10 @@ declare module "@mxlang/tsx-bridge" {
   export function isVoidTag(name: string | null): boolean;
 
   /**
-   * Solid JSX built-ins that resolve with no import of their own: the real Solid build pipeline auto-imports these, a compiler stage
-   * the type-check projection and MX's own resolvability check never run
-   * through. Shared by `@mxlang/typescript-plugin` and `@mxlang/host-solid`.
+   * Solid JSX built-ins that resolve with no import of their own: the real
+   * Solid build pipeline auto-imports these, a compiler stage the type-check
+   * projection and MX's own resolvability check never run through. Shared by
+   * `@mxlang/typescript-plugin` and `@mxlang/host-solid`.
    */
   export const SOLID_BUILTIN_TAGS: ReadonlyArray<{
     name: string;
@@ -327,9 +328,9 @@ declare module "@mxlang/tsx-bridge" {
 
   /**
    * The subset of `sourceBindings`' non-import names whose value is not
-   * statically a function/arrow/class — the local counterpart of the default-import set.
-   * See `source-bindings.ts`'s `unknownProgramBindings` for the full
-   * contract.
+   * statically a function/arrow/class — the local counterpart of the
+   * default-import set. See `source-bindings.ts`'s `unknownProgramBindings`
+   * for the full contract.
    */
   export function unknownSourceBindings(
     source: string,

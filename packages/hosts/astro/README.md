@@ -137,11 +137,11 @@ This integration relies on Astro's undocumented and non-semver `addPageExtension
 
 ## Pages
 
-An `.mx` file directly under `src/pages` is a **page**, not a
-component. The integration calls Astro's `addPageExtension(".mx")`, so
-`src/pages/about.mx` routes to `/about` the way `about.astro` would. `.marko`
-is not an extension this integration registers at all, so a `.marko` file
-anywhere in the project is simply not MX's.
+An `.mx` file directly under `src/pages` is a **page**, not a component. The
+integration calls Astro's `addPageExtension(".mx")`, so `src/pages/about.mx`
+routes to `/about` the way `about.astro` would. `.marko` is not an extension
+this integration registers at all, so a `.marko` file anywhere in the project
+is simply not MX's.
 
 ```mx
 // src/pages/hello.mx
@@ -288,9 +288,9 @@ does not support reads "`<let>` is not supported in embedded MX on Astro.", then
 sentence saying why or what to write instead.
 
 - **Stateful tags** — `<let>`, `<effect>`, `<lifecycle>`, `<script>`, `client`
-  blocks, `<id>`. Same stance as `.mx` under this host: static
-  markup at build time, no reactive runtime, so "this needs a runtime" is a
-  build error rather than markup that renders once and never updates.
+  blocks, `<id>`. Same stance as `.mx` under this host: static markup at
+  build time, no reactive runtime, so "this needs a runtime" is a build error
+  rather than markup that renders once and never updates.
 - **`<await>`** — needs a suspense-capable renderer.
 - **`<return>`** — hands a value to a parent template; an Astro component has
   none.

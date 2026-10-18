@@ -2,9 +2,9 @@
 
 ## `@mxlang/targets`: the built-in target table
 
-Private package (**unstable**, like the contract in
-`@mxlang/core`'s "Target contract" section). It statically imports each host
-package's `./descriptor` subpath and exports:
+Private package (**unstable**, like the contract in `@mxlang/core`'s "Target
+contract" section). It statically imports each host package's `./descriptor`
+subpath and exports:
 
 - `builtinTargets`: the seven built-in `TargetDescriptor`s, the hosts in
   `mx.host` order (`html`, `astro-html`, `solid-jsx`, `preact-jsx`, `react-jsx`,
@@ -19,8 +19,8 @@ package's `./descriptor` subpath and exports:
   `PIPELINES` maps the template segments (`ng`, `astro`), and a built-in
   file kind with neither throws at import.
 - `regionFileKinds(lookup?)`, `regionFileKind(file, lookup?)`,
-  `regionCompileFor(file, options)`: the region file kinds of
-  a lookup (the built-in one, or `lookupFor(policy)`), the one a file's exact
+  `regionCompileFor(file, options)`: the region file kinds of a lookup (the
+  built-in one, or `lookupFor(policy)`), the one a file's exact
   `.<segment>.mx` suffix names, and the parser hook that lowers its regions.
   Every tool routes region files through these, never by a segment name. An
   unregistered `.<word>.mx` and a kind without `compileRegion` (a template

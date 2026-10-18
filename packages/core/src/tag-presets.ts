@@ -1,6 +1,6 @@
 /**
- * Tag rules presets: the tag-table entries a dialect or a
- * target picks by name instead of assembling taglibs.
+ * Tag rules presets: the tag-table entries a dialect or a target picks by
+ * name instead of assembling taglibs.
  *
  * - `html`: the html target's full table. The target's native elements with
  *   their HTML parse rules, plus every entry of core's taglib (`if`, `for`,

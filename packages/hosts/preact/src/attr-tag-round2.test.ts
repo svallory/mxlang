@@ -186,8 +186,8 @@ describe("generated names do not shadow authored bindings", () => {
         }),
       ).toBe("<p>ok</p>");
     });
-    // A `marko.json` registers nothing: its lowercase tag is the
-    // native element, so no alias is named and an authored `MxBadge` stands.
+    // A `marko.json` registers nothing: its lowercase tag is the native
+    // element, so no alias is named and an authored `MxBadge` stands.
     it(`${host}: a lowercase marko.json tag is native beside an authored MxBadge`, async () => {
       const compile = await compilerFor(host);
       const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-alias-`));
@@ -213,8 +213,8 @@ describe("generated names do not shadow authored bindings", () => {
         rmSync(scratch, { recursive: true, force: true });
       }
     });
-    // `import badge from "./row.mx"` + `<badge/>` is
-    // not a tag, on every target.
+    // `import badge from "./row.mx"` + `<badge/>` is not a tag, on every
+    // target.
     it(`${host}: a lowercase tag naming a tag import that is no element is an error`, async () => {
       await expect(
         renderFixture(host, {
@@ -718,8 +718,8 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
   it.each(hosts)(
     "%s: a `<define>` call carries its attribute tag through instead of dropping it",
     async (host) => {
-      // `<define>` has no declared `Input`, so the untyped-callee
-      // fallback applies: `<@head>` carries no attributes, so `head` arrives
+      // `<define>` has no declared `Input`, so the untyped-callee fallback
+      // applies: `<@head>` carries no attributes, so `head` arrives
       // renderable (the body itself), read directly with `<${head}/>`. As in
       // Marko the call's one attributes object is the define's first param,
       // so the define destructures it.

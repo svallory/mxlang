@@ -57,14 +57,13 @@ export type AttrTag<
     };
 
 /**
- * This package's own target lookup: the one
- * descriptor it exports, bound by `createTargetLookup`. What a direct entry
- * compiles under when the caller names no lookup of its own (design note
- * §5.1, rule (c)) — the loader, `loadMx`, `example.ts`. A tool that compiles
- * for several targets at once passes the full registry's lookup through
- * `options.targets` instead, since core asks the lookup which packages
- * export `AttrTag` and which file-kind segments exist, and this table holds
- * only this package's answers.
+ * This package's own target lookup: the one descriptor it exports, bound by
+ * `createTargetLookup`. What a direct entry compiles under when the caller
+ * names no lookup of its own (design note §5.1, rule (c)) — the loader,
+ * `loadMx`, `example.ts`. A tool that compiles for several targets at once
+ * passes the full registry's lookup through `options.targets` instead, since
+ * core asks the lookup which packages export `AttrTag` and which file-kind
+ * segments exist, and this table holds only this package's answers.
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 

@@ -129,9 +129,9 @@ function tag(node: Node): NTag {
         const args = item.args
           ? ` args ${code(item.args.source, item.args.start)}`
           : "";
-        // Rule A2: MX's own split fields — the
-        // name is the head, and the authored text is the head + colon +
-        // modifier, read from the spans, not from `name`.
+        // Rule A2: MX's own split fields — the name is the head, and the
+        // authored text is the head + colon + modifier, read from the
+        // spans, not from `name`.
         const authored =
           item.name === null
             ? null

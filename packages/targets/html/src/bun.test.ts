@@ -17,8 +17,8 @@ import { htmlTargets } from "./index.ts";
  * Makes `@mxlang/target-html` resolvable from a fixture that declares its own
  * `package.json`, which otherwise ends the self-reference lookup that lets a
  * file inside this package import the package by name. Every compiled module
- * imports the runtime (`createOut`), so a real consumer has the
- * package installed; this stands in for that install.
+ * imports the runtime (`createOut`), so a real consumer has the package
+ * installed; this stands in for that install.
  */
 function linkRuntime(pkgDir: string): void {
   mkdirSync(join(pkgDir, "node_modules", "@mxlang"), { recursive: true });
@@ -84,8 +84,8 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
-  // The default export keeps `(input) => string`, and the sink
-  // entry is reachable both as `X.render` and as the named `render` export.
+  // The default export keeps `(input) => string`, and the sink entry is
+  // reachable both as `X.render` and as the named `render` export.
   test("a loaded .mx module exposes render(input, out) beside its default export", async () => {
     Bun.plugin(markoPlugin);
 
@@ -115,8 +115,8 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
-  // Core reports every error of a file. Bun prints one thrown
-  // error, so the others ride in its message.
+  // Core reports every error of a file. Bun prints one thrown error, so the
+  // others ride in its message.
   test("a failing .mx module's error names every error of the file", async () => {
     Bun.plugin(markoPlugin);
     const dir = mkdtempSync(join(import.meta.dirname, ".recovery-"));

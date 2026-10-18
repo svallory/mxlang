@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 //
-// Verify a published artifact from a consumer's side. The unit
-// tests in `pack-hygiene.test.ts` read the tarball's file list and its `.d.ts`
-// import specifiers; this probe proves the consequence. For every packaged
-// library it packs the real tarball, installs it (plus its declared deps) into
-// a scratch project OUTSIDE the repo, and typechecks a file that imports every
-// `exports` subpath with `skipLibCheck: false` — which typechecks the
-// package's own `.d.ts` (and every declaration it drags in), the way a strict
-// consumer does. A `.d.ts` that imports an undeclared module (G8, PR #174)
-// fails here, not in the workspace, where hoisting hides it.
+// Verify a published artifact from a consumer's side. The unit tests in
+// `pack-hygiene.test.ts` read the tarball's file list and its `.d.ts` import
+// specifiers; this probe proves the consequence. For every packaged library it
+// packs the real tarball, installs it (plus its declared deps) into a scratch
+// project OUTSIDE the repo, and typechecks a file that imports every `exports`
+// subpath with `skipLibCheck: false` — which typechecks the package's own
+// `.d.ts` (and every declaration it drags in), the way a strict consumer does.
+// A `.d.ts` that imports an undeclared module (G8, PR #174) fails here, not in
+// the workspace, where hoisting hides it.
 //
 // It must be able to fail:
 //   - NEGATIVE case: `@mxlang/target-html` WITHOUT its optional peer `@types/bun`

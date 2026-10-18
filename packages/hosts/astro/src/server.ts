@@ -105,10 +105,10 @@ export async function renderToStaticMarkup(
   // loader falls back to a no-op hydrator — an island that silently does
   // nothing, on a host whose whole claim is shipping no client JS.
   //
-  // The directive is meant to be an error, so the failure is
-  // raised here rather than left to be discovered in a bundle. `metadata` is
-  // Astro's own fourth argument and `hydrate` holds the directive's value
-  // (`load`, `idle`, `visible`, `media` or `only`).
+  // The directive is meant to be an error, so the failure is raised here
+  // rather than left to be discovered in a bundle. `metadata` is Astro's own
+  // fourth argument and `hydrate` holds the directive's value (`load`,
+  // `idle`, `visible`, `media` or `only`).
   if (metadata?.hydrate) {
     throw new Error(
       `\`${metadata.displayName}\` is an MX component and renders statically: ` +
@@ -137,8 +137,8 @@ export async function renderToStaticMarkup(
     }
   }
 
-  // The default export always returns the markup, including
-  // for a unit that declares `<return>`: its value is what the sink entry
+  // The default export always returns the markup, including for a unit that
+  // declares `<return>`: its value is what the sink entry
   // `Component.render(input, out)` returns, and Astro has nowhere to put it —
   // an `.astro.mx` template has no statement position to bind one in, and
   // `/var` there is refused for that reason.

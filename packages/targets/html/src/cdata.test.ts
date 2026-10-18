@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
 /**
- * `<![CDATA[…]]>` and `<?…?>` are positioned errors on every
- * target, as they are in Marko 6.4.4. Before it, core's IR had no node for
- * either, so both were dropped in lowering — `<a><![CDATA[ x ]]></a>`
- * compiled to `"<a></a>"` with no diagnostic at all.
+ * `<![CDATA[…]]>` and `<?…?>` are positioned errors on every target, as
+ * they are in Marko 6.4.4. Before it, core's IR had no node for either, so
+ * both were dropped in lowering — `<a><![CDATA[ x ]]></a>` compiled to
+ * `"<a></a>"` with no diagnostic at all.
  *
  * The raw-text half of the same story is pinned here rather than in core,
  * because "is this CDATA or is this text" is a *parser* answer and Marko's own
@@ -85,9 +85,9 @@ describe("CDATA sections and XML declarations (html)", () => {
   it("does not reject a CDATA-looking string in `<script>` or an attribute", () => {
     // `<script>` is raw text too, so its body is one `MarkoText` node. The
     // html emitter does not write a `<script>` body's text in template mode
-    // (pre-existing, and nothing to do with CDATA), so what is pinned
-    // here is the *node*: no CDATA error is raised. The node kind itself is
-    // pinned in core's `lower.test.ts`.
+    // (pre-existing, and nothing to do with CDATA), so what is pinned here is
+    // the *node*: no CDATA error is raised. The node kind itself is pinned in
+    // core's `lower.test.ts`.
     expect(() =>
       compile(
         '<script>var s = "<![CDATA[x]]>";</script>\n',

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
  * Primitive attribute values on native elements render as Marko 6.4.4's html
- * output does, compared as parsed DOM against a live Marko
- * render of the same source (`scripts/attribute-value-probe.ts marko
- * --parity`, direct form: Angular rejects spreads). Real Angular renders in
- * TestBed/jsdom with unknown-property errors enabled.
+ * output does, compared as parsed DOM against a live Marko render of the same
+ * source (`scripts/attribute-value-probe.ts marko --parity`, direct form:
+ * Angular rejects spreads). Real Angular renders in TestBed/jsdom with
+ * unknown-property errors enabled.
  *
  * Documented divergence, pinned below: `style` strings are parsed as CSS by
  * Angular, so a non-declaration (`x`, `true`) renders no attribute.

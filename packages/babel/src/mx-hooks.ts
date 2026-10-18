@@ -254,20 +254,21 @@ export interface MxRegionCompileInput<TTag = unknown> {
   moduleBindings: ReadonlySet<string>;
   /**
    * The subset of `importSpecifiers`' bindings that are a *default* import
-   * from a `.marko`/`.mx` source — Marko's own statically-resolved
-   * component case (`@mxlang/core`'s `isMarkoOrMxSpecifier`).
-   * A host lowers a capitalized tag bound to a name in this set as a direct
-   * component call; any other value import
-   * (named, namespace, or a default from any other extension) lowers as a
-   * dynamic tag instead, matching Marko's own `_dynamic_tag` runtime
-   * dispatch. Not itself filtered by anything `importSpecifiers` isn't —
-   * every name here is already a member of `importSpecifiers`.
+   * from a `.marko`/`.mx` source — Marko's own statically-resolved component
+   * case (`@mxlang/core`'s `isMarkoOrMxSpecifier`). A host lowers a
+   * capitalized tag bound to a name in this set as a direct component call;
+   * any other value import (named, namespace, or a default from any other
+   * extension) lowers as a dynamic tag instead, matching Marko's own
+   * `_dynamic_tag` runtime dispatch. Not itself filtered by anything
+   * `importSpecifiers` isn't — every name here is already a member of
+   * `importSpecifiers`.
    */
   importDefaultFromMarkoOrMx: ReadonlySet<string>;
   /**
-   * Where each `importSpecifiers` binding's `import` statement starts (1-based
-   * line, 0-based column), so a host can position the lowercase-tag-names-an-import warning at
-   * the import. A name may be absent; the warning then omits the position.
+   * Where each `importSpecifiers` binding's `import` statement starts
+   * (1-based line, 0-based column), so a host can position the
+   * lowercase-tag-names-an-import warning at the import. A name may be
+   * absent; the warning then omits the position.
    */
   importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /**
@@ -302,10 +303,10 @@ export interface MxRegionCompileResult {
    */
   hoistedImports?: HoistedImport[];
   /**
-   * `<define>`s the region hoisted to module scope. A region
-   * is an expression, so it cannot hold a function declaration either — same
-   * reason `hoistedImports` exists, for an author's own construct instead of
-   * a discovered tag's synthesized import.
+   * `<define>`s the region hoisted to module scope. A region is an
+   * expression, so it cannot hold a function declaration either — same reason
+   * `hoistedImports` exists, for an author's own construct instead of a
+   * discovered tag's synthesized import.
    */
   hoistedDefines?: HoistedDefine[];
   /**

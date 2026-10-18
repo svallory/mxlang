@@ -1,7 +1,7 @@
 /**
- * The probe corpus of the parser grammar: the normative
- * content of `apps/docs/docs/architecture/parser-grammar.md` is its tables,
- * and every table row there cites the probes below that pin it.
+ * The probe corpus of the parser grammar: the normative content of
+ * `apps/docs/docs/architecture/parser-grammar.md` is its tables, and every
+ * table row there cites the probes below that pin it.
  *
  * `grammar-spec.corpus.json` holds the probes. Each has a stable `id` (never
  * renumbered; the document cites it), the `input`, the `options` that matter

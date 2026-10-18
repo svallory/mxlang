@@ -664,8 +664,8 @@ export default () => <div />;
     });
 
     it("renders <let>'s initial value when `strict` is not set", async () => {
-      // The default policy is unchanged by the option's existence: it
-      // renders what Marko's own server render emits.
+      // The default policy is unchanged by the option's existence: it renders
+      // what Marko's own server render emits.
       const STATEFUL = `export interface Input {}
 <let/count=0/>
 <p>\${count}</p>
@@ -1018,9 +1018,9 @@ export default () => <div />;
       utimesSync(tagFile, when, when);
 
       // The new tag is discovered, so the compile succeeds and the caller
-      // imports it. Under the unit model the tag's own markup
-      // stays in its own module, so what proves the rescan is the injected
-      // import naming the newly discovered template — not inlined markup.
+      // imports it. Under the unit model the tag's own markup stays in its own
+      // module, so what proves the rescan is the injected import naming the
+      // newly discovered template — not inlined markup.
       const rescanned = await transform.call({}, "<marker/><extra/>\n", id);
       expect(rescanned?.code).toMatch(
         /import\s+\$mx_\w+\s+from\s+"[^"]*extra\.mx"/,
@@ -1735,10 +1735,9 @@ export default () => <div />;
       );
 
       // The html string emitter would produce `__mxOut.write(...)` sink
-      // writes and a runtime import; the Solid host emits JSX
-      // text and a `<p>` element with no such helper. Asserting the reserved
-      // name keeps the negative meaningful — a bare `out +=` would pass
-      // vacuously.
+      // writes and a runtime import; the Solid host emits JSX text and a
+      // `<p>` element with no such helper. Asserting the reserved name keeps
+      // the negative meaningful — a bare `out +=` would pass vacuously.
       expect(result?.code).toContain('<p class="x">');
       expect(result?.code).not.toContain("__mxOut.write(");
       expect(result?.code).not.toContain('from "@mxlang/target-html"');

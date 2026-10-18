@@ -67,9 +67,9 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
         break;
       default: {
         const tag = this.activeTag!;
-        // MX: the syntax table's `tagTypes`,
-        // computed before the parse, decides; a handler that still returns
-        // a type (`@marko/compiler`'s taglib, bundled into core) wins.
+        // MX: the syntax table's `tagTypes`, computed before the parse,
+        // decides; a handler that still returns a type (`@marko/compiler`'s
+        // taglib, bundled into core) wins.
         const tagType =
           this.options.onOpenTagName?.({
             start,
@@ -285,11 +285,11 @@ export function prepareStatement(
 }
 
 /**
- * MX: a tag's type from the table, keyed by the
- * full written static name (`input:email` is its own key). A dynamic name
- * or an attribute tag (`@name`) is never looked up; a name absent is html;
- * `statement` applies only on a concise line, so the HTML-mode spelling of
- * a statement word stays html.
+ * MX: a tag's type from the table, keyed by the full written static name
+ * (`input:email` is its own key). A dynamic name or an attribute tag
+ * (`@name`) is never looked up; a name absent is html; `statement` applies
+ * only on a concise line, so the HTML-mode spelling of a statement word
+ * stays html.
  */
 function tableTagType(
   parser: Parser,

@@ -1151,8 +1151,8 @@ function closesTypeArguments(
 }
 
 /**
- * Whether the `.` at `at` ends a spread's `...` (`[...await :b]`), not a
- * member access (`a.await`, `a?.typeof`).
+ * Whether the `.` at `at` ends a spread's `...` (`[...await :b]`), not a member
+ * access (`a.await`, `a?.typeof`).
  */
 function isSpreadEnd(data: string, at: number) {
   return (

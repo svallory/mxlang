@@ -162,8 +162,8 @@ describe("Hono dialect", () => {
     // Marko's own html/dom runtimes never render a string renderer's name
     // as literal text, args or not — see `_dynamic_tag` in
     // `runtime-tags/src/html/dynamic-tag.ts`. args[0] ("x") becomes the
-    // spread attributes source: `for...in` over a string
-    // yields its numeric indices, matching Marko's own `_attrs`.
+    // spread attributes source: `for...in` over a string yields its
+    // numeric indices, matching Marko's own `_attrs`.
     const { dirname, join } = await import("node:path");
     const { tmpdir } = await import("node:os");
     const { mkdtempSync, rmSync, symlinkSync, writeFileSync } = await import(
@@ -289,8 +289,8 @@ describe("event attributes (phase B of dom-events)", () => {
   });
 
   it("emits onChange for the change event and leaves hono's input alias to hono", () => {
-    // Hono's runtime binds `onChange` to the `input` event
-    // for React compatibility; MX emits the prop unchanged and documents the
+    // Hono's runtime binds `onChange` to the `input` event for React
+    // compatibility; MX emits the prop unchanged and documents the
     // divergence rather than papering over it.
     expect(markup("<input onChange=handler>")).toBe(
       "<input onChange={handler} />",
@@ -328,11 +328,10 @@ describe("event name spellings", () => {
 });
 
 /**
- * A capitalized tag bound to a value import that is not a
- * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
- * itself, exercised with an ordinary `import { X } from "./target.ts"` and
- * an ordinary `<X>`/`<X/>` call, compiled and rendered for real through
- * `hono/jsx`.
+ * A capitalized tag bound to a value import that is not a `.marko`/`.mx`
+ * default import lowers as a dynamic tag — the routing itself, exercised
+ * with an ordinary `import { X } from "./target.ts"` and an ordinary
+ * `<X>`/`<X/>` call, compiled and rendered for real through `hono/jsx`.
  */
 describe("value import used as a tag (hono)", () => {
   async function renderImportedTag(
@@ -506,11 +505,10 @@ describe("local-value-as-tag-parity: non-import local used as a tag (hono)", () 
   });
 
   /**
-   * A follow-up: hono/jsx's own `memo`/
-   * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see
-   * `@mxlang/host-react`'s sibling suite), so `mxDynamic`'s pre-existing
-   * `typeof target === "function"` branch already handled them, unaffected
-   * by `mxIsHostComponentObject`.
+   * A follow-up: hono/jsx's own `memo`/ `forwardRef` return real FUNCTIONS
+   * (measured, unlike React's own — see `@mxlang/host-react`'s sibling
+   * suite), so `mxDynamic`'s pre-existing `typeof target === "function"`
+   * branch already handled them, unaffected by `mxIsHostComponentObject`.
    *
    * React's raw `memo(Foo)`/`forwardRef(...)` object does NOT work on this
    * host either, through `mxDynamic` or otherwise — measured directly:

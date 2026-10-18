@@ -8,9 +8,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { lowerAstroMx } from "./astro-template.ts";
 
 /**
- * Duplicate attributes on Astro, by RENDERING. Core drops the earlier occurrence of a
- * repeated name; whether `{...x}` next to the survivor still lets a browser see
- * the spread's value depends on how Astro renders the tag, so the output is
+ * Duplicate attributes on Astro, by RENDERING. Core drops the earlier occurrence
+ * of a repeated name; whether `{...x}` next to the survivor still lets a browser
+ * see the spread's value depends on how Astro renders the tag, so the output is
  * rendered with Astro's own compiler and container and read the way a browser
  * reads it (the first duplicate wins).
  */

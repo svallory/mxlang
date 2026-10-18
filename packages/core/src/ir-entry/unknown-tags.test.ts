@@ -277,8 +277,8 @@ describe('unknownTags: "reject"', () => {
           { message: "`<x>` is not a known tag", line: 4 },
         ],
       ],
-      // Core recovers per tag: the `<define>` after the
-      // `<attributes>` error is reached and reports its own.
+      // Core recovers per tag: the `<define>` after the `<attributes>`
+      // error is reached and reports its own.
       ["<define/>\n", [attributes, { message: "<define>", line: 3 }]],
     ];
     for (const [trailer, rest] of trailers) {

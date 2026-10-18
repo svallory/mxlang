@@ -1,10 +1,10 @@
 /**
- * A dialect's table (PR C): a file
- * routed to a dialect package by its extension parses with that dialect's
- * table, resolved from the nearest manifest; the table's own problems are
- * positioned in the dialect's module, tables are interned by hash, the
- * removed `mx.syntax` is an error at its key, and the constructs core cannot
- * lower yet fail loudly while a default-row project never pays for them.
+ * A dialect's table (PR C): a file routed to a dialect package by its
+ * extension parses with that dialect's table, resolved from the nearest
+ * manifest; the table's own problems are positioned in the dialect's module,
+ * tables are interned by hash, the removed `mx.syntax` is an error at its
+ * key, and the constructs core cannot lower yet fail loudly while a
+ * default-row project never pays for them.
  */
 import {
   mkdirSync,

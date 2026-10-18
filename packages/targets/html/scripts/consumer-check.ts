@@ -1,15 +1,16 @@
 #!/usr/bin/env bun
 //
-// Verifies the artifact as a consumer gets it, from a clone/tarball. `bun run typecheck`/`test` exercise this package's
-// *source*, against its own tsconfig; neither proves that a real npm
-// installer, resolving only `package.json` `exports`/`types`, can actually
-// reach a working `dist/`. This script does: it packs the real tarball,
-// installs it into a scratch project *outside* the repo (so bun's workspace
-// resolution cannot silently paper over a broken `exports` map), compiles a
-// template through the public API and through the Bun loader, typechecks
-// the consumer's own `.ts` against the published `.d.ts`, and deletes the
-// scratch project. It must be able to fail: run it with `dist/` missing (or
-// pass `--simulate-missing-dist`) and it fails loud, not silent.
+// Verifies the artifact as a consumer gets it, from a clone/tarball. `bun
+// run typecheck`/`test` exercise this package's *source*, against its own
+// tsconfig; neither proves that a real npm installer, resolving only
+// `package.json` `exports`/`types`, can actually reach a working `dist/`.
+// This script does: it packs the real tarball, installs it into a scratch
+// project *outside* the repo (so bun's workspace resolution cannot silently
+// paper over a broken `exports` map), compiles a template through the
+// public API and through the Bun loader, typechecks the consumer's own
+// `.ts` against the published `.d.ts`, and deletes the scratch project. It
+// must be able to fail: run it with `dist/` missing (or pass
+// `--simulate-missing-dist`) and it fails loud, not silent.
 //
 // Run from anywhere: `bun run packages/targets/html/scripts/consumer-check.ts`.
 // Wired into `bun run verify` at the root.

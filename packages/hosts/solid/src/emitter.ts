@@ -668,9 +668,8 @@ const SOLID_BUILTIN_TAG_NAMES = new Set(
 );
 
 /**
- * Whether a capitalized tag resolves: Marko's own rule (a
- * scope binding first, then taglib lookup, else unresolved) applied to
- * `.solid.mx`'s larger scope.
+ * Whether a capitalized tag resolves: Marko's own rule (a scope binding first,
+ * then taglib lookup, else unresolved) applied to `.solid.mx`'s larger scope.
  *
  * By the time core asks `isComponent`, a capitalized name has already failed
  * every *MX-level* route: core structural tags, `<try>` (`isDelegatedTag`), an

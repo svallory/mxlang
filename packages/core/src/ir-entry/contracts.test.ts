@@ -17,9 +17,9 @@ import { testTargetLookup } from "../test-targets.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * `mx.contracts` through `lowerSource`: a dialect package whose
- * entire vocabulary is one contracts module — no sidecars, no `tags/`
- * directory — reaches `lowerSource` through the one-liner a consumer writes:
+ * `mx.contracts` through `lowerSource`: a dialect package whose entire
+ * vocabulary is one contracts module — no sidecars, no `tags/` directory —
+ * reaches `lowerSource` through the one-liner a consumer writes:
  * `getCustomTags(file, { targets, host: null })` handed to `lowerSource` as
  * `customTags`. The 25 tag names are copied from the Ash resource fixture
  * (`fixtures/ash-resource/post.mx`, the mash-shaped dialect that was

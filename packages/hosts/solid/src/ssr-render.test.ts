@@ -47,9 +47,9 @@ function renderSolidMx(
     // declares (e.g. a local `function Row(input) {...}`) must be supplied
     // here the same way a real caller's surrounding module would be.
     moduleBindings: sourceBindings(setup).bindings,
-    // Classified the same way a real
-    // `.solid.mx` compile classifies its surrounding module, through
-    // `@mxlang/tsx-bridge`'s `unknownSourceBindings`.
+    // Classified the same way a real `.solid.mx` compile classifies its
+    // surrounding module, through `@mxlang/tsx-bridge`'s
+    // `unknownSourceBindings`.
     unknownModuleBindings: unknownSourceBindings(setup),
   });
   const imports = [...hoistedImports, ...hoistedDefines]
@@ -104,11 +104,11 @@ function renderApp(
 
 /**
  * Same real-Solid-pipeline rendering as `renderApp`, but for a *real import*
- * rather than a module-scope declaration — dynamic routing of value imports is scoped
- * to import bindings, so `renderApp`'s `setup`-string approach (always a
- * local `const`/`function`, never an import) cannot exercise it at all.
- * Writes `targetSource` to a real sibling `.tsx` file (may contain JSX) and
- * imports it — a non-`.marko`/`.mx` extension either way, which is all
+ * rather than a module-scope declaration — dynamic routing of value imports
+ * is scoped to import bindings, so `renderApp`'s `setup`-string approach
+ * (always a local `const`/`function`, never an import) cannot exercise it at
+ * all. Writes `targetSource` to a real sibling `.tsx` file (may contain JSX)
+ * and imports it — a non-`.marko`/`.mx` extension either way, which is all
  * the value-import routing checks.
  */
 function renderAppWithImport(
@@ -740,11 +740,11 @@ describe("Solid SSR render: dynamic tag", () => {
     ).toThrow();
   });
 
-  // Disjoint from the args-with-body rule above, which
-  // governs only a function/component target. A *string* target called with
-  // arguments uses args[0] as its element attributes, matching Marko's own
-  // `_dynamic_tag` (`runtime-tags/src/html/dynamic-tag.ts`) and the fix
-  // already applied to html's `renderDynamic` and the shared JSX `mxDynamic`.
+  // Disjoint from the args-with-body rule above, which governs only a
+  // function/component target. A *string* target called with arguments uses
+  // args[0] as its element attributes, matching Marko's own `_dynamic_tag`
+  // (`runtime-tags/src/html/dynamic-tag.ts`) and the fix already applied to
+  // html's `renderDynamic` and the shared JSX `mxDynamic`.
   describe("string target with arguments (Marko parity)", () => {
     it("uses args[0] as the element's attributes", () => {
       const html = renderApp(
@@ -796,14 +796,14 @@ describe("Solid SSR render: dynamic tag", () => {
     });
   });
 
-  // A capitalized tag bound to a value import that is not a
-  // `.marko`/`.mx` default import lowers as a dynamic tag — the same
-  // `<Dynamic>` dispatch the authored `<${expr}>` tests above exercise,
-  // reached instead through an ordinary `import { X } from "./x.ts"` and
-  // an ordinary `<X>`/`<X/>` call. Executed through the same real Solid
-  // SSR pipeline (`renderApp` -> `@solidjs/babel-plugin` -> `@solidjs/web`
-  // `renderToString`), proving the routing dispatches the way `<Dynamic>`
-  // actually resolves a value at runtime.
+  // A capitalized tag bound to a value import that is not a `.marko`/`.mx`
+  // default import lowers as a dynamic tag — the same `<Dynamic>` dispatch
+  // the authored `<${expr}>` tests above exercise, reached instead through
+  // an ordinary `import { X } from "./x.ts"` and an ordinary `<X>`/`<X/>`
+  // call. Executed through the same real Solid SSR pipeline (`renderApp`
+  // -> `@solidjs/babel-plugin` -> `@solidjs/web` `renderToString`),
+  // proving the routing dispatches the way `<Dynamic>` actually resolves a
+  // value at runtime.
   describe("value import used as a tag", () => {
     // This routing is scoped to *import* bindings — a module-scope
     // declaration (`const Tag = "div"`, a local `function`) is never an

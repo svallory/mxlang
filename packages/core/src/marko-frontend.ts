@@ -15,12 +15,11 @@
  * `compileSync` (`parseFragmentNative` delegates to `parseFragment`). The
  * whole file goes with the Marko readers in PR 6 (slice S5).
  *
- * Until then core's build bundles that layer into
- * `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to
- * MX's own template parser (`packages/parser/src/template/`). The build
- * defines `MX_MARKO_FRONTEND` as that file's path relative to
- * `dist/index.js`, so a registry install of core installs no npm
- * `htmljs-parser` at all.
+ * Until then core's build bundles that layer into `dist/marko-frontend.cjs`,
+ * with the `htmljs-parser` specifier resolved to MX's own template parser
+ * (`packages/parser/src/template/`). The build defines `MX_MARKO_FRONTEND`
+ * as that file's path relative to `dist/index.js`, so a registry install of
+ * core installs no npm `htmljs-parser` at all.
  *
  * From source (this repo's tests and tools) `MX_MARKO_FRONTEND` is undefined
  * and the three modules come from the workspace install, where the root

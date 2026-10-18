@@ -1,10 +1,10 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the inputs are MX source with ${…} placeholders
 /**
- * `MX_INPUT_ENDS_IN_DELIMITER` (no silent drop). At end of
- * input inside a concise open delimiter the template parser (like stock
- * htmljs-parser 5.18.0) stops with no error and no close events; the front
- * end reports the outermost delimiter left open, spanning its opener, and
- * keeps the tree with the open tags closed. The corpus probes are in
+ * `MX_INPUT_ENDS_IN_DELIMITER` (no silent drop). At end of input inside a
+ * concise open delimiter the template parser (like stock htmljs-parser
+ * 5.18.0) stops with no error and no close events; the front end reports
+ * the outermost delimiter left open, spanning its opener, and keeps the
+ * tree with the open tags closed. The corpus probes are in
  * `corpus.test.ts`; these pin the text.
  */
 import { describe, expect, it } from "vitest";

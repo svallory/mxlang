@@ -1,8 +1,8 @@
 /**
- * The IR entry point's checks: what `lowerSource` verifies on
- * the IR before it hands it out. Moved from `@mxlang/data`'s tree projection
- * (`build.ts`), minus the projection: the same walk, in the same order, with
- * the same messages, so every diagnostic keeps its text and position.
+ * The IR entry point's checks: what `lowerSource` verifies on the IR before
+ * it hands it out. Moved from `@mxlang/data`'s tree projection (`build.ts`),
+ * minus the projection: the same walk, in the same order, with the same
+ * messages, so every diagnostic keeps its text and position.
  *
  * The rejects:
  *
@@ -288,9 +288,9 @@ function requiredNameSpan(attr: NamedAttr, what: string): void {
  * The rule is deliberately narrow, and it is about *what a name can be*, not
  * about what is idiomatic: a concise `$!{x}` line parses as a tag called
  * `$!{x}` and a `$const x = 1` scriptlet as a tag called `$const`; MX has no
- * scriptlets and no placeholder can name a tag, so those two
- * shapes are rejected and everything else is a name, XML-style namespaced
- * (`svg:rect`) and non-ASCII names included.
+ * scriptlets and no placeholder can name a tag, so those two shapes are
+ * rejected and everything else is a name, XML-style namespaced (`svg:rect`)
+ * and non-ASCII names included.
  */
 function unusableTagName(name: string): boolean {
   return (
@@ -1112,8 +1112,8 @@ function insideUnknownTagLabel(range: UnknownTagRange, voice: Voice): string {
 
 /**
  * Labels, never drops, the errors strictly inside an unknown tag's element
- * (no diagnostic is dropped). An unknown tag has no contract, so
- * what is reported inside it (its children's own unknown names, a `parents`/
+ * (no diagnostic is dropped). An unknown tag has no contract, so what is
+ * reported inside it (its children's own unknown names, a `parents`/
  * `children` error that is only the symptom of the typo) may disappear once the
  * tag is declared, while an independent mistake (a `/var`, a `<!doctype>`, a
  * structural `<if>`, an unknown attribute on a declared tag) stays; the label

@@ -178,8 +178,8 @@ Three facts worth knowing before touching it:
 - **Arguments with a body or attribute tag, and a string target with
   arguments, are disjoint, not in conflict: the first governs a
   function/component target; the second governs only a string
-  (native-element) target.** For a string target
-  called with arguments, `args[0]` (Marko's own `args[0] || {}`,
+  (native-element) target.** For a string target called with arguments,
+  `args[0]` (Marko's own `args[0] || {}`,
   `runtime-tags/src/html/dynamic-tag.ts`'s `_dynamic_tag`) becomes the
   element's attributes *instead of* this call's attribute-tag props,
   matching html's `renderDynamic` and the shared JSX `mxDynamic` — content

@@ -1,12 +1,12 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * template-parser-ascii-only-lookbehinds: the
- * look-behinds and look-aheads htmljs-parser 5.18.0 wrote with an ASCII-only
- * word class, outside the atom path. A non-ASCII identifier character is a
- * word character there too (any code unit at or above U+0080 that is not
- * Unicode whitespace or a line terminator), so each non-ASCII input renders
- * exactly as the same input with an ASCII letter in its place. Run against
- * this source copy (`mx-unicode-words.test.ts`) and both patched npm builds
+ * template-parser-ascii-only-lookbehinds: the look-behinds and look-aheads
+ * htmljs-parser 5.18.0 wrote with an ASCII-only word class, outside the atom
+ * path. A non-ASCII identifier character is a word character there too (any
+ * code unit at or above U+0080 that is not Unicode whitespace or a line
+ * terminator), so each non-ASCII input renders exactly as the same input with
+ * an ASCII letter in its place. Run against this source copy
+ * (`mx-unicode-words.test.ts`) and both patched npm builds
  * (`patches/htmljs-parser.test.ts`). Events render as in `mx-atoms.cases.ts`.
  */
 import {
@@ -363,10 +363,10 @@ export function renderWhitespaceEvents(
 }
 
 /**
- * The Unicode whitespace and line terminators
- * (`isUnicodeSpaceCode`) behave as ASCII whitespace in every look-behind.
- * Each form puts `W` where a look-behind asks "is this whitespace"; every
- * code point is one UTF-16 unit, like the space, so offsets never shift.
+ * The Unicode whitespace and line terminators (`isUnicodeSpaceCode`)
+ * behave as ASCII whitespace in every look-behind. Each form puts `W`
+ * where a look-behind asks "is this whitespace"; every code point is one
+ * UTF-16 unit, like the space, so offsets never shift.
  */
 const WS_EXPRESSION_FORMS = [
   // `getPreviousNonWhitespaceCharCode` → `canFollowDivision`.
@@ -437,10 +437,10 @@ export function unicodeWhitespaceTwinMismatches(
 }
 
 /**
- * [input, events | atoms], each Unicode-whitespace
- * input (U+00A0) beside its ASCII-space twin. 22 of these changed from the
- * merge base: division after `)`, a word or a number, the terminator
- * look-behind after an operator, ` >=`, and a comment in HTML text.
+ * [input, events | atoms], each Unicode-whitespace input (U+00A0) beside its
+ * ASCII-space twin. 22 of these changed from the merge base: division after
+ * `)`, a word or a number, the terminator look-behind after an operator, `
+ * >=`, and a comment in HTML text.
  */
 export const UNICODE_WHITESPACE_ROWS: [string, string][] = [
   [
@@ -701,12 +701,11 @@ export const BODY_TEXT_ROWS: [string, string][] = [
 ];
 
 /**
- * A code point at or above U+0080 is a word
- * character only when it is `ID_Continue`, or U+200C or U+200D; a surrogate
- * pair is one code point and a lone surrogate is none. Each row is the
- * reading of stock htmljs-parser 5.18.0 (Marko's), measured on the unpatched
- * npm build: a symbol is no identifier, so it is no word in any look-behind
- * or look-ahead.
+ * A code point at or above U+0080 is a word character only when it is
+ * `ID_Continue`, or U+200C or U+200D; a surrogate pair is one code point and
+ * a lone surrogate is none. Each row is the reading of stock htmljs-parser
+ * 5.18.0 (Marko's), measured on the unpatched npm build: a symbol is no
+ * identifier, so it is no word in any look-behind or look-ahead.
  */
 export const NON_WORD_ROWS: [string, string][] = [
   ["<div x=a >©>c</div>", '<div> @x ="a"'],
@@ -735,10 +734,10 @@ export const NON_WORD_ROWS: [string, string][] = [
 /**
  * The atom row (`ATOMS_SYNTAX`) arms after a non-identifier symbol, as after
  * ASCII punctuation (`%` here); stock reports an error for both forms. Neither
- * input is valid Marko or JavaScript. The symbol used to be a word
- * character, so `\u00d7:await` read as a key and no atom lexed. Each is pinned
- * beside its ASCII twin; the patched build, which lexes no atom, reads both as
- * the source copy's default row does.
+ * input is valid Marko or JavaScript. The symbol used to be a word character,
+ * so `\u00d7:await` read as a key and no atom lexed. Each is pinned beside its
+ * ASCII twin; the patched build, which lexes no atom, reads both as the source
+ * copy's default row does.
  */
 export const ATOM_AFTER_SYMBOL_ROWS: [string, string, string][] = [
   [

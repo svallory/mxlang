@@ -81,13 +81,13 @@ it("keeps accessor content and signal-backed arrays reactive in the client runti
         importSpecifiers: new Map([["Row", "./Row.tsx"]]),
       },
     );
-    // `Row` is a `.tsx` default import, so it lowers as a
-    // dynamic tag, emitted as a JSX child-expression container (`{...}`) —
-    // correct only *inside* JSX, not directly as `render(() => code)`,
-    // which is a plain arrow-body position. Wrapped in a fragment either
-    // way: unwrap `compiled.code`'s own braces first when it has them, so
-    // the fragment adds exactly one JSX-container pair rather than nesting
-    // a second (invalid) `{{...}}`.
+    // `Row` is a `.tsx` default import, so it lowers as a dynamic tag,
+    // emitted as a JSX child-expression container (`{...}`) — correct only
+    // *inside* JSX, not directly as `render(() => code)`, which is a plain
+    // arrow-body position. Wrapped in a fragment either way: unwrap
+    // `compiled.code`'s own braces first when it has them, so the fragment
+    // adds exactly one JSX-container pair rather than nesting a second
+    // (invalid) `{{...}}`.
     const bare = compiled.code.startsWith("{")
       ? compiled.code.slice(1, -1)
       : compiled.code;

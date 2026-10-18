@@ -48,11 +48,12 @@ independent of the root pins, which still track Solid 1 for the oracle's
 disagree; do not "fix" one to match the other.
 
 Type-checking `.solid.mx` imports from `.tsx` uses
-`@mxlang/typescript-plugin`'s virtual-`.tsx` projection (spec section 7.2), loaded through `compilerOptions.plugins` in each example's
-`tsconfig.json`. The old ambient `src/mx.d.ts` shims are **deleted** and must
-not come back: a shim asserts types instead of deriving them, so it hides both
-each file's real exports and every error inside the file. Each example's
-`typecheck` script is `mx-tsc --noEmit`, not `tsc --noEmit` — `tsc` ignores
+`@mxlang/typescript-plugin`'s virtual-`.tsx` projection (spec section 7.2),
+loaded through `compilerOptions.plugins` in each example's `tsconfig.json`. The
+old ambient `src/mx.d.ts` shims are **deleted** and must not come back: a shim
+asserts types instead of deriving them, so it hides both each file's real
+exports and every error inside the file. Each example's `typecheck` script is
+`mx-tsc --noEmit`, not `tsc --noEmit` — `tsc` ignores
 `compilerOptions.plugins`.
 
 `examples/mx-site` is a plain-string example: a Hono-on-Bun server and a

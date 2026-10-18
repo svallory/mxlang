@@ -110,11 +110,11 @@ export interface ResolveContext {
   /** The file making the call, for relative resolution and `require.resolve`. */
   importer: string;
   /**
-   * The registered targets in hand. Required: the
-   * reader asks it which packages export the `AttrTag` type and which
-   * file-kind segments exist, and core holds no list to fall back on — a
-   * caller that forgot it would accept a foreign `AttrTag` import and read a
-   * host module file as a Marko template, both silently.
+   * The registered targets in hand. Required: the reader asks it which
+   * packages export the `AttrTag` type and which file-kind segments exist,
+   * and core holds no list to fall back on — a caller that forgot it would
+   * accept a foreign `AttrTag` import and read a host module file as a Marko
+   * template, both silently.
    */
   targets: TargetLookup;
   /** A tool-supplied resolver (tsconfig paths, vite alias), tried first. */
@@ -149,11 +149,11 @@ export type CalleeInputReader = (request: {
 /**
  * The packages `AttrTag` may be imported from as the ambient type: this
  * package plus every registered target's own package, asked of the caller's
- * lookup rather than kept here: core names no
- * package. A third-party target that re-exports `AttrTag` from
- * `@mxlang/core` needs no descriptor entry; one that ships its own declares
- * it as its `packageName`, which `attrTagSources` reports. Targets of one
- * host may share a package, so the set is deduped.
+ * lookup rather than kept here: core names no package. A third-party target
+ * that re-exports `AttrTag` from `@mxlang/core` needs no descriptor entry;
+ * one that ships its own declares it as its `packageName`, which
+ * `attrTagSources` reports. Targets of one host may share a package, so the
+ * set is deduped.
  */
 const attrTagSourceSets = new WeakMap<TargetLookup, ReadonlySet<string>>();
 
@@ -616,8 +616,8 @@ function resolveTarget(
 ): ResolvedTarget {
   // A `kind: "name"` target resolves by its own name. A dynamic target
   // resolves the same way only when `valueImportBinding` names the value
-  // import lowering routed through this target — never for an author's
-  // own `<${expr}/>`, which has no single known binding to resolve. A local
+  // import lowering routed through this target — never for an author's own
+  // `<${expr}/>`, which has no single known binding to resolve. A local
   // `<define>` has no file to read either way.
   const name =
     target.kind === "name"
@@ -718,13 +718,12 @@ function probeFile(
 /**
  * Resolves one import specifier to an absolute file, synchronously.
  *
- * A tool's `resolveImport` is tried first, then a relative or
- * absolute specifier is probed against the importing file's directory with
- * the MX extension list, then a bare specifier goes through
- * `require.resolve` from that directory, the way `scan.ts` resolves sidecar
- * imports. `importer` names the file the specifier was written in — a type
- * import inside a callee resolves against the callee's directory, not the
- * caller's.
+ * A tool's `resolveImport` is tried first, then a relative or absolute
+ * specifier is probed against the importing file's directory with the MX
+ * extension list, then a bare specifier goes through `require.resolve` from
+ * that directory, the way `scan.ts` resolves sidecar imports. `importer`
+ * names the file the specifier was written in — a type import inside a callee
+ * resolves against the callee's directory, not the caller's.
  */
 export function resolveSpecifier(
   specifier: string,
@@ -1873,9 +1872,9 @@ class InputAnalyzer {
   }
 
   /**
-   * Scans an `attrs` config recursively: `AttrTag` members
-   * become `nested` declarations, non-`AttrTag` members are plain attrs and
-   * are not interpreted, and a non-closed `attrs` type sets `nestedOpen`.
+   * Scans an `attrs` config recursively: `AttrTag` members become `nested`
+   * declarations, non-`AttrTag` members are plain attrs and are not
+   * interpreted, and a non-closed `attrs` type sets `nestedOpen`.
    */
   private scanAttrs(
     attrsType: Node,

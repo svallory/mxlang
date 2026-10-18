@@ -8,8 +8,8 @@
  * root) with their message text and ranges, and the nameless concise tag.
  *
  * What is NOT here, on purpose (ast §3.13): a duplicate default value
- * (lowering's `MX_DUPLICATE_DEFAULT`) and the bracket/numeric
- * shorthand errors (lowering's).
+ * (lowering's `MX_DUPLICATE_DEFAULT`) and the bracket/numeric shorthand
+ * errors (lowering's).
  */
 
 import type { MxErrorCode, MxParseError } from "@mxlang/babel/mx-ast";

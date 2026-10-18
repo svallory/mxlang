@@ -1,6 +1,6 @@
 /**
- * `hostTagViewOf` / `hostAttributeViewOf` (ast §6.4; PR 6
- * slice S4 groundwork): the plain-data view the hooks move to.
+ * `hostTagViewOf` / `hostAttributeViewOf` (ast §6.4; PR 6 slice S4
+ * groundwork): the plain-data view the hooks move to.
  *
  * Differential against the Marko-shaped view every hook receives today
  * (`markoViewOf`): each input is compiled through `compileSource` with a

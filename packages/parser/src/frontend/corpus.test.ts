@@ -42,22 +42,22 @@ const tagShape = (name: string): MxBodyMode =>
 const NONE: ReadonlySet<MxStatementKeyword> = new Set();
 
 /**
- * The corpus consumer answers "statement"
- * for an HTML-mode `<static …>`, so these probes pin RESERVED_TAG_NAME; the
- * front end answers `tagShape` there and records no template error. PR 2b's
- * MX_STATEMENT_IN_HTML_MODE takes their place on the error
- * list now that the front-end rules are wired in.
+ * The corpus consumer answers "statement" for an HTML-mode `<static …>`, so
+ * these probes pin RESERVED_TAG_NAME; the front end answers `tagShape`
+ * there and records no template error. PR 2b's MX_STATEMENT_IN_HTML_MODE
+ * takes their place on the error list now that the front-end rules are
+ * wired in.
  */
 const STATEMENT_IN_HTML_MODE = new Set(["g0234", "g1274"]);
 
 /**
  * End of input inside a concise open delimiter (parser-grammar OQ 19): the
  * template parser stops with no error and no close events. The front end
- * reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (no silent
- * drop) and closes the open tags there. These are the probes that end in an open concise
- * delimiter; the clamp fires on g0368 g0370 g0373 g0374 g0375 g0376 g0377
- * g0378 g0866 g1318 g1522 (its rule is a class, asserted below, not this
- * list).
+ * reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener (no silent drop) and
+ * closes the open tags there. These are the probes that end in an open
+ * concise delimiter; the clamp fires on g0368 g0370 g0373 g0374 g0375 g0376
+ * g0377 g0378 g0866 g1318 g1522 (its rule is a class, asserted below, not
+ * this list).
  */
 const SILENT_EOF = new Set([
   "g0368",

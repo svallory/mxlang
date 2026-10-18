@@ -4,10 +4,10 @@ import descriptor from "./descriptor.ts";
 import { compilePreactMx } from "./index.ts";
 
 /**
- * `typeCheck` is a tooling-only mode. Unset, the output is the
- * runtime output, byte for byte; set, every native element's event handler is
- * checked with the type-only `(fn) satisfies __MxH<"tag", "event">` (erased on
- * emit, so it can never reach a running module).
+ * `typeCheck` is a tooling-only mode. Unset, the output is the runtime output,
+ * byte for byte; set, every native element's event handler is checked with the
+ * type-only `(fn) satisfies __MxH<"tag", "event">` (erased on emit, so it can
+ * never reach a running module).
  */
 const compile = (source: string, typeCheck?: boolean) =>
   compilePreactMx(source, "/fixtures/test.mx", { typeCheck });

@@ -124,13 +124,14 @@ export { emitModule, emitModuleWithMappings };
 
 /** Attribute-tag value specialised to Preact's renderable child type. */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: public default (no attribute-tag config)
+  // biome-ignore lint/complexity/noBannedTypes: public default (no
+  // attribute-tag config)
   C extends AttrTagConfig = {},
 > = AttrTagOf<C, ComponentChildren>;
 
 /**
- * This package's own target table: the one descriptor
- * it exports. The default for a direct entry that names no lookup of its own
+ * This package's own target table: the one descriptor it exports. The default
+ * for a direct entry that names no lookup of its own
  * (`@mxlang/host-preact/bun` and its siblings, which route through here — see
  * design note §5.1, rule (c)). A tool compiling several targets passes the
  * full registry's lookup through `options.targets` instead.

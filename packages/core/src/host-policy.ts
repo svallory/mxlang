@@ -2,10 +2,10 @@
  * Policy resolution (brief §2, `host-diagnostics.md` §3): which target a file
  * compiles through, plus that target's strictness.
  *
- * **Unstable contract.** `mx.target` selects a
- * registered target directly; `mx.host` selects its host's default target.
- * If both resolve, they must agree. A mismatch is an error, with the
- * explicit target handed on so later diagnostics are not drowned.
+ * **Unstable contract.** `mx.target` selects a registered target directly;
+ * `mx.host` selects its host's default target. If both resolve, they must
+ * agree. A mismatch is an error, with the explicit target handed on so
+ * later diagnostics are not drowned.
  *
  * Rule, in order:
  *
@@ -54,9 +54,9 @@
  * one set of branch tests. Unlike the rest of this package it touches
  * `node:fs`, which is why it is its own module rather than part of `core.ts`.
  *
- * **No target and no host is named here**. The lookup is a
- * required parameter on every entry point: a caller that forgot it gets a
- * type error, not a silently closed-over list.
+ * **No target and no host is named here**. The lookup is a required
+ * parameter on every entry point: a caller that forgot it gets a type
+ * error, not a silently closed-over list.
  */
 
 import { basename, dirname, join } from "node:path";

@@ -1,10 +1,10 @@
 /**
- * The IR entry point: parse, lower, check and return core's
- * IR, for a consumer that interprets the tree itself (a dialect such as
- * Mesh) rather than emitting a host's code. Replaces `@mxlang/data`'s
- * `parseData`: with `tagRules: "none"`, every diagnostic it reported is
- * reported at the same text and position (the default `html` rules reject
- * files `parseData` accepted, such as `<input><child/></input>`).
+ * The IR entry point: parse, lower, check and return core's IR, for a
+ * consumer that interprets the tree itself (a dialect such as Mesh) rather
+ * than emitting a host's code. Replaces `@mxlang/data`'s `parseData`: with
+ * `tagRules: "none"`, every diagnostic it reported is reported at the same
+ * text and position (the default `html` rules reject files `parseData`
+ * accepted, such as `<input><child/></input>`).
  *
  * An error means `ir: undefined` (no partial IR) and every independent error
  * the source has, each positioned, earliest first: every parse error (the
@@ -99,22 +99,20 @@ export type { Spanned, SpannedIr } from "./spans.ts";
 /** @unstable */
 export interface LowerSourceOptions {
   /**
-   * Contract-only custom tags, by call name. A name core
-   * reserves (`if`, `for`, `try`, …) cannot be defined: the definition is
-   * dropped, the call lowers as core's construct, and each call site is an
-   * `MX_RESERVED_TAG` error (the name's 1:0 when it is never called). A name
-   * the file's dialect reserves is refused the same way, unless the call
-   * passes that dialect as `dialect`: its own front end's definitions are
-   * the dialect's.
+   * Contract-only custom tags, by call name. A name core reserves (`if`,
+   * `for`, `try`, …) cannot be defined: the definition is dropped, the call
+   * lowers as core's construct, and each call site is an `MX_RESERVED_TAG`
+   * error (the name's 1:0 when it is never called). A name the file's dialect
+   * reserves is refused the same way, unless the call passes that dialect as
+   * `dialect`: its own front end's definitions are the dialect's.
    */
   customTags?: Record<string, CustomTag>;
   /**
-   * The dialect, or a bare syntax table, for a
-   * consumer that builds its own (Mesh passes its dialect, hooks included);
-   * omitted, the dialect the file's extension routes to. A
-   * trigger, block tag or filter nothing lowers (a `{ call }` trigger with
-   * no `lowerTrigger`) is a positioned diagnostic ("`<id>` trigger has no
-   * lowering yet").
+   * The dialect, or a bare syntax table, for a consumer that builds its own
+   * (Mesh passes its dialect, hooks included); omitted, the dialect the
+   * file's extension routes to. A trigger, block tag or filter nothing
+   * lowers (a `{ call }` trigger with no `lowerTrigger`) is a positioned
+   * diagnostic ("`<id>` trigger has no lowering yet").
    */
   dialect?: SyntaxTable | Dialect;
   /**
@@ -255,8 +253,8 @@ function declaredTagNames(
 
 /**
  * The preset `filename` parses under: the call's `tagRules`, else its
- * dialect's. A dialect that fails to resolve throws
- * the error the compile would raise.
+ * dialect's. A dialect that fails to resolve throws the error the compile
+ * would raise.
  */
 function presetOf(
   options: LowerSourceOptions,

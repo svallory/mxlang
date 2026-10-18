@@ -213,8 +213,8 @@ function templateOf(code: string): string | null {
   const quoted = code.match(/^ {2}template: (".*"),$/m);
   if (quoted) return JSON.parse(quoted[1] as string) as string;
   // A `.ng.mx` module emits a **backtick** template literal rather than a
-  // double-quoted string, so the two module kinds need two
-  // patterns. Unescaping is the inverse of `escapeTemplateLiteral`'s three
+  // double-quoted string, so the two module kinds need two patterns.
+  // Unescaping is the inverse of `escapeTemplateLiteral`'s three
   // substitutions, and `\\` must come last or it would consume the
   // backslashes the other two just removed.
   const backticked = code.match(/^ {2}template: `([\s\S]*?)`,$/m);
@@ -342,8 +342,8 @@ export function isDerivedFrom(
       );
     // A DOM event name, checked against the actual derivation — never waved
     // through on the source's shape alone. `onClick` -> `click`: lowercased
-    // exactly as written, with NO aliases (`onDoubleClick`
-    // is `(doubleclick)`, never `dblclick`). `on-my-event` -> `my-event`
+    // exactly as written, with NO aliases (`onDoubleClick` is
+    // `(doubleclick)`, never `dblclick`). `on-my-event` -> `my-event`
     // verbatim. A native element's lowercase `onclick=fn` -> `click`.
     case "event":
       if (/^on[A-Z]/.test(source)) {
@@ -780,8 +780,8 @@ export function runAngularTable(update: boolean): {
 
     // An error fixture may carry its own `tags/` directory, exactly like a
     // pass fixture: a rejection that only fires on a *resolved* call (an
-    // unresolved capitalized tag is its own error, checked
-    // first) needs the tag to exist somewhere discoverable.
+    // unresolved capitalized tag is its own error, checked first) needs
+    // the tag to exist somewhere discoverable.
     const hasTagsDir = existsSync(join(dir, "tags"));
     const compilePath = hasTagsDir
       ? stageWithTags(dir, input)

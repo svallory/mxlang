@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { compileNgMx } from "../src/ng-mx.ts";
 import { assertAngularParses } from "./helpers.ts";
 
-// `input` is imported by almost every modern
-// Angular component (signal inputs): it is a value import, so never a tag.
+// `input` is imported by almost every modern Angular component (signal
+// inputs): it is a value import, so never a tag.
 function ngMx(importLine: string, template: string): string {
   return [
     'import { Component } from "@angular/core";',

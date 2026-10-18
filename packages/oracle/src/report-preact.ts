@@ -27,15 +27,15 @@ import { renderPreact } from "./preact-render";
  * ## Skips
  *
  * A fixture is skipped only for a construct this host *declares* unsupported
- * — "this target cannot", never "my code cannot" — and
- * each one names the construct. They are listed in `SKIPS` below rather than
- * in the fixtures' own `meta.json`, because a fixture's `meta.json` records
- * what *Marko* does with it and is shared with `oracle:marko`; a Preact skip
- * is this runner's fact, not the fixture's.
+ * — "this target cannot", never "my code cannot" — and each one names the
+ * construct. They are listed in `SKIPS` below rather than in the fixtures'
+ * own `meta.json`, because a fixture's `meta.json` records what *Marko* does
+ * with it and is shared with `oracle:marko`; a Preact skip is this runner's
+ * fact, not the fixture's.
  *
- * The run fails if the fixture glob expands to nothing, if a
- * fixture is missing a file, or if fewer than MIN_FIXTURES were processed — a
- * gate must assert it did work, not merely that nothing failed.
+ * The run fails if the fixture glob expands to nothing, if a fixture is
+ * missing a file, or if fewer than MIN_FIXTURES were processed — a gate must
+ * assert it did work, not merely that nothing failed.
  */
 
 const MIN_FIXTURES = 45; // was 43; +2 for static-block-import and static-block-export

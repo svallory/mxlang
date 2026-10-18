@@ -112,8 +112,8 @@ describe("preact: `tags/` shapes", () => {
     expect(code).not.toContain("tags/x.marko");
   });
 
-  // A `marko.json` is not read: what it maps is no tag, so a
-  // lowercase name stays the element it spells and nothing is imported.
+  // A `marko.json` is not read: what it maps is no tag, so a lowercase name
+  // stays the element it spells and nothing is imported.
   describe("a marko.json registers nothing", () => {
     it("a template tag stays a native element", () => {
       const file = project({

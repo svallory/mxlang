@@ -1,8 +1,8 @@
 /**
- * Unresolved-tag parity: an unresolved capitalized tag is
- * Marko 6.3.51's compile error on Angular too — "Unable to find entry point
- * for custom tag `<Name>`." — routed through the same core check every
- * other Marko-parity host wires into (`rejectUnknownTag`; html #149, Solid
+ * Unresolved-tag parity: an unresolved capitalized tag is Marko 6.3.51's
+ * compile error on Angular too — "Unable to find entry point for custom tag
+ * `<Name>`." — routed through the same core check every other Marko-parity
+ * host wires into (`rejectUnknownTag`; html #149, Solid
  * #151, preact/react/hono/astro #156), never the casing-only fallback that
  * used to emit `<mx-totally-undefined>` and a step-1 import warning.
  */

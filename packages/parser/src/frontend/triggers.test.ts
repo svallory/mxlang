@@ -1,7 +1,7 @@
 /**
- * `MxTrigger` (PR A) in the front end: where each position's
- * node sits, its exact offsets, the stand-in the payload parsed, the span
- * invariant with triggers, and that the default row changes no tree.
+ * `MxTrigger` (PR A) in the front end: where each position's node sits, its
+ * exact offsets, the stand-in the payload parsed, the span invariant with
+ * triggers, and that the default row changes no tree.
  */
 import { describe, expect, it } from "vitest";
 import { PROBES } from "../template/grammar-spec.cases.ts";

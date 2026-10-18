@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
 import { compileReactMx } from "./index.ts";
 
-// `typeCheck` reaches the shared JSX emitter, with React's own
-// JSX types in the preamble. Unset, the runtime output is unchanged.
+// `typeCheck` reaches the shared JSX emitter, with React's own JSX types
+// in the preamble. Unset, the runtime output is unchanged.
 const source = "<button onDblClick=((e) => e.detail)>x</button>";
 
 it("wraps handlers against React's JSX types only under typeCheck", () => {

@@ -1,10 +1,10 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * `.hono.mx` region goldens: every fixture under
- * `fixtures/region/<name>/` is printed through the parser with this host's
- * region entry, the printed module is checked against its golden
- * (`__golden__/output.txt`), and the module is rendered for real with Hono's
- * own JSX renderer (`JSXNode.toString()`) and checked against `expected.html`.
+ * `.hono.mx` region goldens: every fixture under `fixtures/region/<name>/` is
+ * printed through the parser with this host's region entry, the printed module
+ * is checked against its golden (`__golden__/output.txt`), and the module is
+ * rendered for real with Hono's own JSX renderer (`JSXNode.toString()`) and
+ * checked against `expected.html`.
  *
  * A fixture may carry `props.json` (the default export's props) and sibling
  * whole-file `.mx` tags (`counter.mx`, `tags/badge.mx`), which are compiled

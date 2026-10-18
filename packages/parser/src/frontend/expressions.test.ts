@@ -1,11 +1,10 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the inputs are MX source with ${…} placeholders
 /**
- * The expression layer (ast §4.1, §4.1a, §7.1): every
- * container's parsed Babel payload, its positions (file-absolute at
- * creation, fragment base included), the atom payload shape, the failure
- * that is data (`node: null`, `error` in `errors` in start order), and the
- * read-only contract (payloads never mutated after creation; containers
- * never share a node).
+ * The expression layer (ast §4.1, §4.1a, §7.1): every container's parsed
+ * Babel payload, its positions (file-absolute at creation, fragment base
+ * included), the atom payload shape, the failure that is data (`node:
+ * null`, `error` in `errors` in start order), and the read-only contract
+ * (payloads never mutated after creation; containers never share a node).
  */
 import type { MxDocument, MxExpression, MxText } from "@mxlang/babel/mx-ast";
 import { describe, expect, it } from "vitest";

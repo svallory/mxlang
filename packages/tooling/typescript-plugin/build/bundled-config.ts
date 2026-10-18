@@ -18,10 +18,9 @@ export const BUNDLED_OUTDIR = "bundle";
  * Left external AND shipped beside the plugin (copied with their dependency
  * closure): `@astrojs/compiler` reads files next to itself (its wasm), so it
  * cannot be inlined, and the Babel packages are the ones `@mxlang/core`
- * requires at run time (`src/babel.ts`). The
- * Marko parse layer is not here: it comes with `@mxlang/core`'s dist as
- * `marko-frontend.cjs`, which `scripts/bundled-build.ts`
- * copies into the bundle directory.
+ * requires at run time (`src/babel.ts`). The Marko parse layer is not here:
+ * it comes with `@mxlang/core`'s dist as `marko-frontend.cjs`, which
+ * `scripts/bundled-build.ts` copies into the bundle directory.
  */
 export const BUNDLED_INSTALLED = [
   "@astrojs/compiler",

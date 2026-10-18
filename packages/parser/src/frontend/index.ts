@@ -1,8 +1,8 @@
 /**
- * The MX front end (PR 3 of the parser port): the
- * package's second entry point, beside the template parser. `parse` builds
- * the MX AST of `apps/docs/docs/architecture/ast.md`; the option types are
- * re-exported from `@mxlang/babel/mx-ast`, where the AST's types live.
+ * The MX front end (PR 3 of the parser port): the package's second entry
+ * point, beside the template parser. `parse` builds the MX AST of
+ * `apps/docs/docs/architecture/ast.md`; the option types are re-exported
+ * from `@mxlang/babel/mx-ast`, where the AST's types live.
  */
 export type {
   MxBodyMode,

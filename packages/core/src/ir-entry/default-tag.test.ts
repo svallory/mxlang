@@ -4,13 +4,13 @@ import type { DelegatedTag } from "../ir.ts";
 import { type LowerSourceOptions, lowerSource, type Spanned } from "./index.ts";
 
 /**
- * The default tag as `lowerSource` sees it: the built-in
- * `object`, the `defaultTag` option, and a parent contract's `defaultTag`.
- * Core's own `default-tag*.test.ts` and `contract-default-tag.test.ts` pin the
- * resolver and the ladder against test policies; these pin that the entry
- * point's declarations (`object` always known, no contract of its own) wire
- * the ladder up and report its errors. Nothing there lowers a source through
- * the entry point, so no case below is a duplicate of one there.
+ * The default tag as `lowerSource` sees it: the built-in `object`, the
+ * `defaultTag` option, and a parent contract's `defaultTag`. Core's own
+ * `default-tag*.test.ts` and `contract-default-tag.test.ts` pin the resolver
+ * and the ladder against test policies; these pin that the entry point's
+ * declarations (`object` always known, no contract of its own) wire the ladder
+ * up and report its errors. Nothing there lowers a source through the entry
+ * point, so no case below is a duplicate of one there.
  */
 
 const customTags: Record<string, CustomTag> = {

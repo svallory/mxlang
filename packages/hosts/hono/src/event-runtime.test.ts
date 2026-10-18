@@ -1,8 +1,8 @@
 /**
  * hono's emitted handler props use the names its JSX types declare
- * (`onKeyDown`, `onDoubleClick`), and `hono/jsx/dom` must still
- * bind them to the DOM events. The old `onKeydown`/`onDblclick` spellings bound
- * too (the renderer lowercases the name), so this is a regression guard.
+ * (`onKeyDown`, `onDoubleClick`), and `hono/jsx/dom` must still bind them to
+ * the DOM events. The old `onKeydown`/`onDblclick` spellings bound too (the
+ * renderer lowercases the name), so this is a regression guard.
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";

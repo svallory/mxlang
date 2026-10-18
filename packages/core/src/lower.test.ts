@@ -293,8 +293,8 @@ describe("one fixture per IR kind", () => {
     const ir = lowerSource("<p>hello</p>\n");
     const text = find(ir.body, "Text");
     expect(text.value).toBe("hello");
-    // Marko's own `onText` is applied before the lowerer sees
-    // the node; a second normalization here would collapse twice.
+    // Marko's own `onText` is applied before the lowerer sees the node; a
+    // second normalization here would collapse twice.
     expect(text.loc.line).toBe(1);
   });
 
@@ -748,8 +748,8 @@ describe("one fixture per IR kind", () => {
     expect(component.attributeTags[1]?.block.params).toEqual(["year"]);
   });
 
-  // The dynamic-tag/`<define>` rule is relaxed; a named custom
-  // tag (`target.kind === "name"`) stays on Marko's strict
+  // The dynamic-tag/`<define>` rule is relaxed; a named custom tag
+  // (`target.kind === "name"`) stays on Marko's strict
   // `assertAttributesOrSingleArg`-equivalent rule, unaffected. Regression
   // coverage for that boundary: before this test, every existing assertion
   // of "Tag does not support arguments..." exercised the dynamic-tag path
@@ -3362,8 +3362,8 @@ describe("`on*` outside a native element stays a prop", () => {
 });
 
 /**
- * Native `on:*` is reserved; lowercase `oncapture:*` is an
- * ordinary colon name in Marko, not an event or a capture-mode alias.
+ * Native `on:*` is reserved; lowercase `oncapture:*` is an ordinary colon
+ * name in Marko, not an event or a capture-mode alias.
  */
 describe("reserved `on:` and ordinary `oncapture:`", () => {
   it("hands only on: to resolveModifier, with no event lowering or warning", () => {
@@ -3480,13 +3480,13 @@ describe("<for by=> loop-param scope", () => {
 });
 
 /**
- * A repeated attribute name on one tag resolves to its LAST
- * occurrence, in core, so the IR carries one attribute per resolved name and no
- * host or delegated-tag consumer ever sees a duplicate. The earlier ones get a
- * duplicate-attribute warning each. Marko 6.4.4 is the reference: `class="a" id="x"
- * class="b"` compiles to `<div id=x class=b>` (the survivor keeps its own
- * position), the dropped value is never evaluated, and `class`/`style` do not
- * merge.
+ * A repeated attribute name on one tag resolves to its LAST occurrence, in
+ * core, so the IR carries one attribute per resolved name and no host or
+ * delegated-tag consumer ever sees a duplicate. The earlier ones get a
+ * duplicate-attribute warning each. Marko 6.4.4 is the reference: `class="a"
+ * id="x" class="b"` compiles to `<div id=x class=b>` (the survivor keeps its
+ * own position), the dropped value is never evaluated, and `class`/`style` do
+ * not merge.
  */
 describe("duplicate attributes resolve last-wins", () => {
   const panel = fakeDeclarations({
@@ -4553,10 +4553,10 @@ describe("tag arguments are blamed over the whole list", () => {
 });
 
 /**
- * The tag-argument rejection is Marko 6.4.3's own message,
- * verbatim (probed against stock marko 6.4.3), so the two languages never
- * diverge on the same construct. The event-handler hint stays, as a second
- * sentence after Marko's exact text.
+ * The tag-argument rejection is Marko 6.4.3's own message, verbatim (probed
+ * against stock marko 6.4.3), so the two languages never diverge on the
+ * same construct. The event-handler hint stays, as a second sentence after
+ * Marko's exact text.
  */
 describe("tag-argument messages are Marko 6.4.3's own", () => {
   const messageOf = (source: string, policy = fakeDeclarations()): string => {
@@ -4629,9 +4629,8 @@ describe("a /var a host cannot bind is reported at the /var", () => {
 
 describe("a host that binds a dynamic tag's /var opts in", () => {
   // `HostDeclarations.bindsDynamicTagVar`: the host's dynamic dispatch reaches
-  // a returning unit's render path, so core lets the binding
-  // through to the IR instead of refusing it. Without the flag the refusal
-  // above stands.
+  // a returning unit's render path, so core lets the binding through to the IR
+  // instead of refusing it. Without the flag the refusal above stands.
   const policy = (): Policy => ({
     ...fakeDeclarations(),
     bindsDynamicTagVar: true,
@@ -5296,8 +5295,8 @@ describe("hybrid attribute tags, MX-shaped (PR 4 slice 1)", () => {
       },
     });
     // The hook only records; core's own field guard then rejects the tag.
-    // Hooks see the Marko-shaped view of the MX node
-    // (`markoViewOf`), so the first attribute tag reads as Marko's.
+    // Hooks see the Marko-shaped view of the MX node (`markoViewOf`), so the
+    // first attribute tag reads as Marko's.
     expect(() => mx(source, policy)).toThrowError(/attribute tag `@a`/);
     expect(seen.map((node) => [node.type, node.name.value])).toEqual([
       ["MarkoTag", "@a"],

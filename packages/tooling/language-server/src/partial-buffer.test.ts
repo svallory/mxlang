@@ -4,12 +4,12 @@ import { diagnoseDocument } from "./diagnose.ts";
 
 /**
  * Completions on a buffer mid-edit. This language server completes nothing
- * (diagnostics only: Marko's own server completes attribute
- * names for `.mx`), but an editor asks for completions on a buffer that is
- * mid-edit, and every tool compiles that buffer first. So a sigil right after
- * whitespace inside a tag (`<input :`, `<input #`, `<input .`) must never
- * crash a tool: the server returns diagnostics (a parse error at the cursor
- * at worst). The TypeScript plugin half is in its own package.
+ * (diagnostics only: Marko's own server completes attribute names for `.mx`),
+ * but an editor asks for completions on a buffer that is mid-edit, and every
+ * tool compiles that buffer first. So a sigil right after whitespace inside a
+ * tag (`<input :`, `<input #`, `<input .`) must never crash a tool: the
+ * server returns diagnostics (a parse error at the cursor at worst). The
+ * TypeScript plugin half is in its own package.
  */
 
 const target = defaultTarget();

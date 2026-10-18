@@ -3,11 +3,11 @@
  * tag file becomes an Angular component", task 1.7).
  *
  * A tag file is an ordinary `.mx` file that compiles, per host, into a module
- * exporting the tag (`notes/investigations/tag-unit-design.md`
- * §1.1). On every other host that module's default export is a function. An
- * Angular component is a class with a decorator — there is no template-only
- * form — so this host emits a real standalone component module instead, and
- * the caller references it through its selector rather than by calling it.
+ * exporting the tag (`notes/investigations/tag-unit-design.md` §1.1). On
+ * every other host that module's default export is a function. An Angular
+ * component is a class with a decorator — there is no template-only form — so
+ * this host emits a real standalone component module instead, and the caller
+ * references it through its selector rather than by calling it.
  */
 
 import { readFileSync } from "node:fs";

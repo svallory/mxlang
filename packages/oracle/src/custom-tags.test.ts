@@ -67,8 +67,8 @@ it("runs every custom tag fixture through all six hosts", {
   );
 
   expect(result.status).toBe(0);
-  // Assert the count, so a fixture or a host that silently
-  // stopped running is a failure rather than an unnoticed absence.
+  // Assert the count, so a fixture or a host that silently stopped running is
+  // a failure rather than an unnoticed absence.
   expect(result.stdout).toContain(
     `${FIXTURES.length * HOSTS.length - SKIPPED.length}/${FIXTURES.length * HOSTS.length} rows passed, ${SKIPPED.length} skipped(reason)`,
   );

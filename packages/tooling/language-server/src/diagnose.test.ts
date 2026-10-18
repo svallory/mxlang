@@ -174,8 +174,8 @@ describe("diagnoseDocument", () => {
 
   it("reports a whole-file Solid .mx compile error at its own line and column", () => {
     // Whole-file `.mx` resolved to Solid must go through `compileSolidUnit`,
-    // not the region compiler `compileSolidMx` — before that
-    // wiring this host was unreachable for a whole-file `.mx` at all here.
+    // not the region compiler `compileSolidMx` — before that wiring this
+    // host was unreachable for a whole-file `.mx` at all here.
     const source = "export interface Input { }\n\n<div>\n";
     const diagnostics = diagnoseDocument(
       source,

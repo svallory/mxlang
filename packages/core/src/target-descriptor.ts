@@ -12,9 +12,9 @@
  * a lazy, synchronous `load()`: importing one is cheap, and the heavy imports
  * (`@marko/compiler`) happen only when a tool calls `load()`.
  *
- * Core names no target and no host. Open-set questions (is
- * this a known target? which values does `mx.host` accept? which file-kind
- * segments exist?) are asked of a `TargetLookup` that the caller builds with
+ * Core names no target and no host. Open-set questions (is this a known
+ * target? which values does `mx.host` accept? which file-kind segments
+ * exist?) are asked of a `TargetLookup` that the caller builds with
  * `createTargetLookup` and passes in.
  */
 
@@ -251,8 +251,8 @@ export interface TargetDescriptor {
   readonly packageName: string;
   /**
    * The built-in tag an unnamed tag (`<#id>`, `<.class>`) stands for in this
-   * target's output. Required: a target with no answer would
-   * leave the shorthand meaningless. It is the last rung of the ladder; a
+   * target's output. Required: a target with no answer would leave the
+   * shorthand meaningless. It is the last rung of the ladder; a
    * `mx.<target>.defaultTag` in the package, a host's `defaultTag` and a
    * parent contract's `defaultTag` all outrank it.
    *
@@ -284,8 +284,8 @@ export interface TargetDescriptor {
    * Marko translator whose taglib answers how a tag parses (void, text,
    * whitespace-preserving) in this target's own compiles. Absent means
    * `translator`, or the default target's, answers. Used to check that a
-   * `defaultTag` is a plain tag; unlike `translator` it is
-   * never the mapping pass's.
+   * `defaultTag` is a plain tag; unlike `translator` it is never the
+   * mapping pass's.
    */
   readonly parseTranslator?: unknown;
 
@@ -324,10 +324,11 @@ export interface TargetDescriptor {
    * The `package.json` key this target's per-target config lives under,
    * `mx[configKey]` (`defaultTag` today), when it is not the target's own
    * `name`. A renamed target keeps its historical config key so user config
-   * survives the rename: the former tree target read `mx.data.*`. Every `mx[<name>]` config read goes through it, in core and in the
-   * registry. A bare word, like a target name, and never a key `mx` reserves
-   * (`dialect`: a dialect package's identity block, not target config).
-   * Default: the target's `name`.
+   * survives the rename: the former tree target read `mx.data.*`. Every
+   * `mx[<name>]` config read goes through it, in core and in the registry. A
+   * bare word, like a target name, and never a key `mx` reserves (`dialect`:
+   * a dialect package's identity block, not target config). Default: the
+   * target's `name`.
    */
   readonly configKey?: string;
 }

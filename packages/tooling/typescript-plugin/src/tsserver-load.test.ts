@@ -196,8 +196,8 @@ async function expectPluginLoaded(
     expect(diagnostics.map((d) => d.code)).toEqual([2322]);
     // The real compiled type (a skipped plugin would have reported TS2307),
     // and the exact wording an agent reads: the default export is typed as
-    // its signature plus its sink entry, so TypeScript prints
-    // `(input: Input) => string` rather than `typeof Comp`.
+    // its signature plus its sink entry, so TypeScript prints `(input:
+    // Input) => string` rather than `typeof Comp`.
     expect(diagnostics[0]?.text).toBe(
       "Type '((input: Input) => string) & { render: (input: Input, __mxOut: __MxOut) => void; }' is not assignable to type 'number'.",
     );

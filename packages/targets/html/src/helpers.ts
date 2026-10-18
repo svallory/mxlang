@@ -702,8 +702,8 @@ export function loadMx<I = Record<string, unknown>>(
   // — including a caller-supplied `customTags` in the key would only ever
   // create spurious cache misses for options that were never honored.
   const targets = options.targets ?? htmlTargets;
-  // The package's `defaultTag` shapes the compile, so it is in
-  // the key: an edited config recompiles. An explicit option wins over it.
+  // The package's `defaultTag` shapes the compile, so it is in the key: an
+  // edited config recompiles. An explicit option wins over it.
   const configured =
     options.defaultTag === undefined && existsSync(abs)
       ? scanOwn(abs, targets)

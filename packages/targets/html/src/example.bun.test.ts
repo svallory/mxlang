@@ -57,8 +57,9 @@ const EXPECTED_STDERR: Record<string, string> = {
   "spread-between-props": twice(
     warning("spread-between-props", "name", "3:39"),
   ),
-  // The `duplicate-attrs*` fixtures exist to lock last-wins duplicate attributes against Marko
-  // in the oracles, so each prints its dropped-attribute warnings.
+  // The `duplicate-attrs*` fixtures exist to lock last-wins duplicate
+  // attributes against Marko in the oracles, so each prints its
+  // dropped-attribute warnings.
   "duplicate-attrs": twice(
     warning("duplicate-attrs", "class", "1:23"),
     warning("duplicate-attrs", "title", "2:23"),

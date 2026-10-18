@@ -50,10 +50,10 @@ import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import descriptor from "./descriptor.ts";
 
 /**
- * This package's own target table: the one descriptor
- * it exports, defaulting for a direct entry that names no lookup of its own
- * (`mxTemplates()`; design note §5.1, rule (c)). A tool compiling several
- * targets passes the built-in registry's lookup through `options.targets`.
+ * This package's own target table: the one descriptor it exports, defaulting
+ * for a direct entry that names no lookup of its own (`mxTemplates()`; design
+ * note §5.1, rule (c)). A tool compiling several targets passes the built-in
+ * registry's lookup through `options.targets`.
  */
 const ownTargets: TargetLookup = createTargetLookup([descriptor]);
 const ATTRIBUTE_VALUE_EXPRESSION = "__mxAttrValue";
@@ -1041,12 +1041,12 @@ export function createEmitter(
             node,
           );
         }
-        // `valueImportBinding` is set only by the classified
-        // routing (an import, or the local extension's fence-binding
-        // classification) — never by an authored `<${expr}/>`, which has no
-        // tag name to name in the error. Give this case its own wording
-        // (lead's ruling): the author wrote `<Tag/>`, not `<${expr}>`, and
-        // the generic dynamic-tag message would misdescribe what they wrote.
+        // `valueImportBinding` is set only by the classified routing (an
+        // import, or the local extension's fence-binding classification) —
+        // never by an authored `<${expr}/>`, which has no tag name to name in
+        // the error. Give this case its own wording (lead's ruling): the
+        // author wrote `<Tag/>`, not `<${expr}>`, and the generic dynamic-tag
+        // message would misdescribe what they wrote.
         if (node.target.valueImportBinding) {
           fail(
             `\`<${node.target.valueImportBinding}>\` is bound in the frontmatter to a value MX can't prove is a component, and @mxlang/host-astro can't render a tag name decided at runtime. Bind it to a component (an import, function or class), or use a lowercase element.`,
@@ -1460,9 +1460,9 @@ export function lowerAstroMx(
     /** Positioned non-fatal diagnostics collected by editor/build tooling. */
     warnings?: MxWarning[];
     /**
-     * The registered targets this lowering runs under. Defaults to this package's own descriptor (right for a
-     * direct entry); a tool compiling several targets passes the built-in registry's
-     * lookup.
+     * The registered targets this lowering runs under. Defaults to this
+     * package's own descriptor (right for a direct entry); a tool compiling
+     * several targets passes the built-in registry's lookup.
      */
     targets?: TargetLookup;
   } = {},
@@ -1537,13 +1537,13 @@ export function lowerAstroMx(
     }
     checkReservedSource(match?.[1] ?? "", 2, 0, FENCE_SOURCE);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
-    // Local extension of the capitalized-import rule: a fence
-    // binding's own non-import value — a top-level `const`/`function`/
-    // `class` the `---` fence declares — is classified the same way
-    // `.solid.mx`'s `moduleBindings` is (`unknownModuleBindings`), so
-    // `const Tag = "div"` used as `<Tag/>` routes dynamic instead of a
-    // direct call that throws `"Tag is not a function"` at build time.
-    // Skipped when the fence itself already failed to parse above —
+    // Local extension of the capitalized-import rule: a fence binding's
+    // own non-import value — a top-level `const`/`function`/ `class` the
+    // `---` fence declares — is classified the same way `.solid.mx`'s
+    // `moduleBindings` is (`unknownModuleBindings`), so `const Tag =
+    // "div"` used as `<Tag/>` routes dynamic instead of a direct call
+    // that throws `"Tag is not a function"` at build time. Skipped when
+    // the fence itself already failed to parse above —
     // `unknownSourceBindings` would only re-derive the identical failure
     // through its own independent parse.
     for (const name of unknownSourceBindings(match?.[1] ?? "", FENCE_SOURCE)) {

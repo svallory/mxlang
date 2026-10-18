@@ -1,7 +1,8 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
- * The syntax table (PR B) at the template parser: block tags
- * and filters in HTML content, and the precomputed `tagTypes`. Events render compactly, as in `mx-triggers.test.ts`.
+ * The syntax table (PR B) at the template parser: block tags and filters
+ * in HTML content, and the precomputed `tagTypes`. Events render
+ * compactly, as in `mx-triggers.test.ts`.
  */
 import { describe, expect, it } from "vitest";
 import { PROBES } from "./grammar-spec.cases.ts";

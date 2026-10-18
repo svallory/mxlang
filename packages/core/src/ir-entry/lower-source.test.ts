@@ -14,9 +14,9 @@ import {
 } from "./index.ts";
 
 /**
- * `lowerSource`, the IR entry point. The diagnostics it reports
- * replaced `@mxlang/data`'s `parseData` text for text and position for
- * position; the pinned cases below are the ones a first cut got wrong.
+ * `lowerSource`, the IR entry point. The diagnostics it reports replaced
+ * `@mxlang/data`'s `parseData` text for text and position for position; the
+ * pinned cases below are the ones a first cut got wrong.
  */
 
 function tagOf(node: { kind: string } | undefined): Spanned<DelegatedTag> {
@@ -159,9 +159,8 @@ const NATIVE_RULE_NAMES = [
 ];
 
 /**
- * An absent `tagRules` is the strict `html` preset (a
- * dialect that chooses no tag rules gets the full HTML rules). Mesh passes
- * `none` itself.
+ * An absent `tagRules` is the strict `html` preset (a dialect that chooses
+ * no tag rules gets the full HTML rules). Mesh passes `none` itself.
  */
 describe("absent `tagRules`: the strict `html` preset", () => {
   it.each([
@@ -212,9 +211,9 @@ describe("absent `tagRules`: the strict `html` preset", () => {
 });
 
 /**
- * An absent `tagRules` is the dialect's own: the
- * `dialect` option's, else the one the file routes to; `html` when it
- * states none. The call's `tagRules` wins.
+ * An absent `tagRules` is the dialect's own: the `dialect` option's,
+ * else the one the file routes to; `html` when it states none. The
+ * call's `tagRules` wins.
  */
 describe("absent `tagRules`: the dialect's preset", () => {
   const VOID_CHILD = "<input><child/></input>\n";

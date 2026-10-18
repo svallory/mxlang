@@ -169,10 +169,11 @@ on `<@placeholder>`) and `#id`/`.class` shorthand-merge errors.
 
 ## What is not in this package
 
-Per the resolve-then-emit split, nothing Solid-specific lives in `@mxlang/core` beyond the
-IR fields every Marko-syntax host needs to carry regardless of target
-(`ForSource.range.step`, `For.key`) — `Show`/`Switch`/`Repeat`, the JSX
-shape, and every lowering row above are this package's own. `rg -n
+Per the resolve-then-emit split, nothing Solid-specific lives in
+`@mxlang/core` beyond the IR fields every Marko-syntax host needs to carry
+regardless of target (`ForSource.range.step`, `For.key`) —
+`Show`/`Switch`/`Repeat`, the JSX shape, and every lowering row above are
+this package's own. `rg -n
 'lowerIfChain|lowerFor|lowerElement|lowerDynamicAttr' packages` and `rg -n
 'solid|Show|Switch|Repeat' packages/core/src` should each return only hits
 in this package (or nothing).

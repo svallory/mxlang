@@ -92,8 +92,8 @@ describe("Define", () => {
   });
 
   it("compiles a call with an empty body exactly like the self-closing form", () => {
-    // `<Row(1)></Row>` has no content (`content` stays `null`),
-    // so the empty closing form must keep compiling, byte-identical.
+    // `<Row(1)></Row>` has no content (`content` stays `null`), so the empty
+    // closing form must keep compiling, byte-identical.
     const closed = emit("<define/Row|a|>${a}</define><Row(1)></Row>");
     const selfClosed = emit("<define/Row|a|>${a}</define><Row(1)/>");
     expect(closed).toBe(selfClosed);

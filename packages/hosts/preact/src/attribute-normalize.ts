@@ -1,8 +1,8 @@
 /**
  * Primitive attribute values on native elements, normalized to what Marko
- * 6.4.4's html output renders. One source shared by the three
- * JSX hosts; hoisted into the emitted module like core's validation helpers,
- * never a runtime dependency. Component props do not pass through it.
+ * 6.4.4's html output renders. One source shared by the three JSX hosts;
+ * hoisted into the emitted module like core's validation helpers, never a
+ * runtime dependency. Component props do not pass through it.
  *
  * Marko's rules, measured by real render:
  *  - generic/data/aria/value: `null`/`undefined`/`false` omit, `true` is a

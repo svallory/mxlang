@@ -85,9 +85,9 @@ export namespace Ranges {
   }
 
   /**
-   * MX: a syntax-table trigger. `start`/`end` cover the whole
-   * construct: the matched text, plus `=value` for an attribute or line
-   * trigger that has one. `text` is what the matcher matched.
+   * MX: a syntax-table trigger. `start`/`end` cover the whole construct: the
+   * matched text, plus `=value` for an attribute or line trigger that has
+   * one. `text` is what the matcher matched.
    */
   export interface Trigger extends Range {
     id: string;
@@ -130,15 +130,14 @@ export type TagType = (typeof _TagType)[keyof typeof _TagType];
 export interface ParserOptions {
   onError?(data: Ranges.Error): void;
   /**
-   * MX: a syntax-table trigger was lexed; one call per
-   * trigger, after its `=value` (if any) was lexed. `read()` of its `text`
-   * returns its stand-in.
+   * MX: a syntax-table trigger was lexed; one call per trigger, after its
+   * `=value` (if any) was lexed. `read()` of its `text` returns its
+   * stand-in.
    */
   onTrigger?(data: Ranges.Trigger): void;
   /**
-   * MX: a syntax table's block tag (`{% … %}`) in HTML
-   * content: the whole form, and its raw body (between `open` and `close`)
-   * as `value`.
+   * MX: a syntax table's block tag (`{% … %}`) in HTML content: the whole
+   * form, and its raw body (between `open` and `close`) as `value`.
    */
   onBlockTag?(data: Ranges.Value): void;
   /** MX: a syntax table's filter in HTML content. */

@@ -8,13 +8,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import pluginFactory from "./index.ts";
 
 /**
- * `mx.contracts` through the TypeScript plugin: a contract-only
- * tag declared by a package-level contracts module surfaces the compiler's
- * positioned error as an `MX_*` diagnostic on the `.mx` file. The edit half
- * documents the long-lived-process limitation (TODO `sync-esm-reload-node`):
- * tsserver keeps running, Node's ESM loader cache survives `require.cache`
- * eviction, so the edited module's exports stay stale until restart — the
- * diagnostic is pinned unchanged here, and `mx-tsc`'s fresh-process run in
+ * `mx.contracts` through the TypeScript plugin: a contract-only tag declared
+ * by a package-level contracts module surfaces the compiler's positioned error
+ * as an `MX_*` diagnostic on the `.mx` file. The edit half documents the
+ * long-lived-process limitation (TODO `sync-esm-reload-node`): tsserver keeps
+ * running, Node's ESM loader cache survives `require.cache` eviction, so the
+ * edited module's exports stay stale until restart — the diagnostic is pinned
+ * unchanged here, and `mx-tsc`'s fresh-process run in
  * `tsc/src/contracts.test.ts` proves the edit itself is correct.
  *
  * The contract rides `<style>`, a name the html host claims: a contract-only

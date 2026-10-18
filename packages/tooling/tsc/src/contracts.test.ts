@@ -13,13 +13,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mxTsc, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
 /**
- * `mx.contracts` through `mx-tsc`: a contract-only tag
- * declared by a package-level contracts module reports the compiler's
- * positioned error in tsc's own output shape, and a module edit is picked up
- * by the next run — each `mx-tsc` invocation is a fresh process, so Node's
- * stale-ESM-exports limitation for long-lived processes (TODO
- * `sync-esm-reload-node`) does not apply here; a fresh process re-reads the
- * edited module. Trees are built in a temp dir like the other mx-tsc tests.
+ * `mx.contracts` through `mx-tsc`: a contract-only tag declared by a
+ * package-level contracts module reports the compiler's positioned error in
+ * tsc's own output shape, and a module edit is picked up by the next run —
+ * each `mx-tsc` invocation is a fresh process, so Node's stale-ESM-exports
+ * limitation for long-lived processes (TODO `sync-esm-reload-node`) does not
+ * apply here; a fresh process re-reads the edited module. Trees are built in
+ * a temp dir like the other mx-tsc tests.
  *
  * The contract rides `<style>`, a name the html host claims: a contract-only
  * tag is only valid where the active target delegates the name.

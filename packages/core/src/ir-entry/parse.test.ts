@@ -708,10 +708,10 @@ describe("contract-only custom tags", () => {
 });
 
 describe("duplicate attributes", () => {
-  // Last-wins in core merged, so this is the flip the test
-  // has been carrying since round 1: core drops the earlier occurrence and
-  // warns on **it**, naming the survivor. Before it, both attributes reached
-  // the IR; now exactly one does.
+  // Last-wins in core merged, so this is the flip the test has been carrying
+  // since round 1: core drops the earlier occurrence and warns on **it**,
+  // naming the survivor. Before it, both attributes reached the IR; now
+  // exactly one does.
   it("warns on the dropped occurrence and keeps only the survivor", () => {
     const result = lowerSource(`<x b=1 b=2/>\n`, "/t.mx");
     expect(result.ir).toBeDefined();
@@ -1973,9 +1973,9 @@ describe("a warning with no source position is file-level too", () => {
 describe("valueless default-attribute modifier (Mesh span bug)", () => {
   const options = { structural: "reject" } as const;
 
-  // The bare `:Todo` is `name="Todo"` sugar; the Mesh bug was
-  // an invariant failure on every valueless modifier attribute, so the
-  // regression rows use the spellings that are still modifiers.
+  // The bare `:Todo` is `name="Todo"` sugar; the Mesh bug was an invariant
+  // failure on every valueless modifier attribute, so the regression rows use
+  // the spellings that are still modifiers.
   it.each([
     ["x:foo", "<a x:foo/>"],
     ["x:", "<a x:/>"],

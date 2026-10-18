@@ -58,9 +58,9 @@ export function buildHeader(
     header += `${open}Add to ${tsFilename}: ${lines}${close}\n`;
   }
   if (eventMembers.length > 0) {
-    // Same audience as the imports line: a page's own class must declare the
-    // event invoker members its template calls, or take them
-    // from the runtime subpath.
+    // Same audience as the imports line: a page's own class must declare
+    // the event invoker members its template calls, or take them from the
+    // runtime subpath.
     const members = eventMembers.map((m) => `\`${m.trim()}\``).join(" and ");
     header += `${open}Add to the component class in ${tsFilename}: ${members}, ${EVENT_HELPER_RUNTIME_OPTION}${close}\n`;
   }

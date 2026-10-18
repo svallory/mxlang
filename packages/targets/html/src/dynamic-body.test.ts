@@ -73,10 +73,10 @@ describe("a body forwarded through <${input.content}/> (html, Marko parity)", ()
   });
 });
 
-// Body-text whitespace follows stock Marko, asserted on a plain
-// element's own content rather than on a forwarded body. Expected HTML is what
-// stock Marko 6.4.4 (`bun run --cwd packages/stock-marko probe`, @marko/compiler
-// 5.42.11 on the stock htmljs-parser) emits for the same source.
+// Body-text whitespace follows stock Marko, asserted on a plain element's own
+// content rather than on a forwarded body. Expected HTML is what stock Marko
+// 6.4.4 (`bun run --cwd packages/stock-marko probe`, @marko/compiler 5.42.11 on
+// the stock htmljs-parser) emits for the same source.
 describe("element body whitespace, Marko 6.4.4 parity", () => {
   it.each([
     [

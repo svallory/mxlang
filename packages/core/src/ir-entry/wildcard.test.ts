@@ -108,10 +108,9 @@ describe("wildcard-matched tags in the IR", () => {
 });
 
 /**
- * One meaning of "built-in": the
- * names the entry point's declarations list in `builtinTags` (`object`) are
- * built-ins for a `children["*"]` wildcard exactly as they are for the
- * `defaultTag` check.
+ * One meaning of "built-in": the names the entry point's declarations list
+ * in `builtinTags` (`object`) are built-ins for a `children["*"]` wildcard
+ * exactly as they are for the `defaultTag` check.
  */
 describe("builtinTags and the wildcard", () => {
   const holders: Record<string, CustomTag> = {

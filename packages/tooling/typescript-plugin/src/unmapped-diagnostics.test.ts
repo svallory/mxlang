@@ -21,10 +21,10 @@ import {
 
 /**
  * A diagnostic whose generated position has no source mapping is never
- * dropped. These tests drive the shared seam with a real Volar
- * `Language` and a hand-written virtual module, so each mapping is exact and
- * what Volar itself does with the result (`transformDiagnostic`, the function
- * that used to return `undefined`) is the oracle.
+ * dropped. These tests drive the shared seam with a real Volar `Language` and
+ * a hand-written virtual module, so each mapping is exact and what Volar
+ * itself does with the result (`transformDiagnostic`, the function that used
+ * to return `undefined`) is the oracle.
  */
 
 const FILE = "/p/page.mx";

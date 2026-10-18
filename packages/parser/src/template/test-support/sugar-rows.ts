@@ -1,9 +1,8 @@
 /**
  * The atoms-and-sugars dialect's rows (`lang-ext-move-sugars-to-mesh`,
- * slice a1): MX's atoms and name sugars as
- * layer-2 syntax-table rows. Core has no name sugars of its own; these
- * rows are test fixtures. `mx-sugar-module.test.ts` runs the atom corpora
- * through the atom row.
+ * slice a1): MX's atoms and name sugars as layer-2 syntax-table rows. Core
+ * has no name sugars of its own; these rows are test fixtures.
+ * `mx-sugar-module.test.ts` runs the atom corpora through the atom row.
  *
  * The attribute rows' matchers take exactly the attribute-name extent the
  * built-in lexer gives a static sugar (`#a.b:c`, `.c:b`, `::x`, `:a:b`,

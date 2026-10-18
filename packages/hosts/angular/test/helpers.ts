@@ -57,9 +57,9 @@ export function emitWithTags(source: string, tagNames: string[]): string {
 /**
  * Compiles `source` with every tag in `tagNames` discovered from a trivial
  * stub at `tags/<kebab>.mx`, so a capitalized tag call has a binding to
- * resolve through — an *unresolved* capitalized tag is
- * Marko's compile error, so a test for the resolved-call path (selector,
- * projection, the step-1 import warning) must give the tag a real home.
+ * resolve through — an *unresolved* capitalized tag is Marko's compile
+ * error, so a test for the resolved-call path (selector, projection, the
+ * step-1 import warning) must give the tag a real home.
  *
  * The temp project lives until the test file is done, so a caller can keep
  * reading `dir` while it asserts on the compile. `filename` is relative to

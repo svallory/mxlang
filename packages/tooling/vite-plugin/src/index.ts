@@ -278,12 +278,11 @@ const TAG_EXT = ".marko";
  * plugin, which this one must decline rather than compile through the `.mx`
  * (`compile()` / string) branch.
  *
- * Today: `.astro.mx`, the Astro template kind that
- * `@mxlang/host-astro`'s own plugin lowers. A registered `.mx` would otherwise
- * swallow it: `mx()` rewrote `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin
- * re-resolved that to `x.astro.mx.ts.astro`, and the build failed inside
- * `compileMarko`. Any other multi-dot MX extension belonging to another host
- * goes here.
+ * Today: `.astro.mx`, the Astro template kind that `@mxlang/host-astro`'s own
+ * plugin lowers. A registered `.mx` would otherwise swallow it: `mx()` rewrote
+ * `x.astro.mx` to `x.astro.mx.ts`, the Astro plugin re-resolved that to
+ * `x.astro.mx.ts.astro`, and the build failed inside `compileMarko`. Any other
+ * multi-dot MX extension belonging to another host goes here.
  *
  * Declared as a list rather than inferred from the dot count so the rule is
  * stated where it can be read: a shorter extension never claims a file whose
@@ -1056,11 +1055,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     }
 
     // One error is thrown, positioned at the first scan error, and the others
-    // ride in its message (the plugin's rule for compile
-    // errors). A build fails on the first caller that meets a broken tag file,
-    // so a scan error already raised in this build is not raised again by the
-    // next caller: that would print one identical error per caller of a single
-    // tag file. A new error, in another file or at another position, still is.
+    // ride in its message (the plugin's rule for compile errors). A build
+    // fails on the first caller that meets a broken tag file, so a scan error
+    // already raised in this build is not raised again by the next caller:
+    // that would print one identical error per caller of a single tag file. A
+    // new error, in another file or at another position, still is.
     const fresh = failing.filter((diagnostic) => {
       const key = scanKey(diagnostic);
       if (raised.has(key)) return false;
@@ -1129,11 +1128,11 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   };
 
   /**
-   * Records the callee files one caller's compile read as
-   * dependency edges, pruning edges the previous transform held but this one
-   * does not. Empty until the core resolver is wired into lowering, so this
-   * is a no-op on today's compiles — the map and its invalidation are in
-   * place ahead of the first dependency arriving.
+   * Records the callee files one caller's compile read as dependency edges,
+   * pruning edges the previous transform held but this one does not. Empty
+   * until the core resolver is wired into lowering, so this is a no-op on
+   * today's compiles — the map and its invalidation are in place ahead of
+   * the first dependency arriving.
    */
   const recordDependencies = (
     caller: string,
@@ -1644,8 +1643,8 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
               )
             : [];
           const reason = reasons.length > 0 ? reasons.join("\n") : undefined;
-          // A build throws one error; the file's other errors
-          // ride in its message, so a fix-all pass sees them in one run.
+          // A build throws one error; the file's other errors ride in its
+          // message, so a fix-all pass sees them in one run.
           const rest =
             otherErrorsText(err) + parseErrorsText(furtherParseErrors, source);
           const own =

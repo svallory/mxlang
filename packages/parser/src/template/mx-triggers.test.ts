@@ -1,8 +1,8 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the cases are MX source, whose `${…}` is a placeholder, not a JS template
 /**
  * The syntax table (PR A) at the template parser: triggers in expression,
- * attribute and line position, their same-length stand-ins,
- * `terminatesValue`, validation, and the default row's parity.
+ * attribute and line position, their same-length stand-ins, `terminatesValue`,
+ * validation, and the default row's parity.
  *
  * Events are rendered compactly, as the atom row's cases do (`mx-atoms.cases.ts`):
  * `<tag>`, `@name`, `="value"` (as `read()` returns it, so stand-ins show),

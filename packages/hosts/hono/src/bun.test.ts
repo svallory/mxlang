@@ -100,10 +100,10 @@ describe("@mxlang/host-hono/bun", () => {
     Bun.plugin(honoPlugin);
 
     // Through the real plugin's own `getCustomTags(path, { host: "hono" })`
-    // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]`
-    // must be invisible from the hono loader. A
-    // nested package.json under the package root, so the upward walk stops
-    // there rather than reaching the package's own.
+    // call: a `package.json#mx.tags` entry declaring `hosts: ["solid"]` must
+    // be invisible from the hono loader. A nested package.json under the
+    // package root, so the upward walk stops there rather than reaching the
+    // package's own.
     const base = join(import.meta.dirname, "..");
     const pkgDir = join(base, "hosts-fixture");
     const tagsDir = join(pkgDir, "widgets");

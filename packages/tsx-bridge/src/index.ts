@@ -160,13 +160,14 @@ function parseWithDiagnosticText(source: string, options: ParserOptions) {
 
 /**
  * Reads the surrounding TypeScript module's scope before lowering any MX
- * region: every import specifier (local binding -> module) and every value that scope binds at its top level
- * (`programBindings`) — a capitalized tag a region references may resolve
- * through either. The real parse must lower a region immediately so Babel
- * can keep parsing the expression, but a callee import or a value binding a
- * region depends on may appear anywhere in the module. A declaration-only
- * pre-pass replaces every region with `null`, avoiding host work and giving
- * us Babel's exact grammar rather than a regex approximation.
+ * region: every import specifier (local binding -> module) and every value
+ * that scope binds at its top level (`programBindings`) — a capitalized tag
+ * a region references may resolve through either. The real parse must lower
+ * a region immediately so Babel can keep parsing the expression, but a
+ * callee import or a value binding a region depends on may appear anywhere
+ * in the module. A declaration-only pre-pass replaces every region with
+ * `null`, avoiding host work and giving us Babel's exact grammar rather
+ * than a regex approximation.
  */
 function collectModuleScope(
   source: string,
@@ -192,10 +193,10 @@ function collectModuleScope(
   } as ParserOptions) as unknown as File;
   checkReservedBindings(file);
   const imports = new Map<string, string>();
-  // Only a *default* import from a `.marko`/`.mx` source is
-  // Marko's own statically-resolved component case; every other value
-  // import (named, namespace, or a default from any other extension) lowers
-  // as a dynamic tag on the host side.
+  // Only a *default* import from a `.marko`/`.mx` source is Marko's own
+  // statically-resolved component case; every other value import (named,
+  // namespace, or a default from any other extension) lowers as a dynamic
+  // tag on the host side.
   const importDefaultFromMarkoOrMx = new Set<string>();
   // Where each binding's `import` statement starts, for the lowercase-tag-names-an-import warning.
   const importSites = new Map<string, { line: number; column: number }>();
@@ -213,10 +214,10 @@ function collectModuleScope(
   }>) {
     if (statement.type !== "ImportDeclaration") continue;
     // A type-only import binds no runtime value, so it must not resolve a
-    // capitalized tag reference — the same exclusion
-    // `programBindings` already applies for `moduleBindings`. Both the whole
-    // declaration's own kind (`import type Widget from "..."`) and a single
-    // specifier's (`import { type Widget } from "..."`) count.
+    // capitalized tag reference — the same exclusion `programBindings` already
+    // applies for `moduleBindings`. Both the whole declaration's own kind
+    // (`import type Widget from "..."`) and a single specifier's (`import {
+    // type Widget } from "..."`) count.
     if (statement.importKind === "type") continue;
     const specifier = statement.source?.value;
     if (typeof specifier !== "string") continue;
@@ -416,10 +417,9 @@ function hoistRegionImports(file: File, filename: string): void {
   // `entry.code` as text — the latter ties this pass to the exact string
   // `SolidEmitter.define` happens to generate today (`function <name>(`),
   // which already broke once (`$` is a regex metacharacter that silently
-  // never matched) and would break again for any
-  // future generator shape (an arrow function, a multi-line signature) that
-  // still satisfies `HoistedDefine.code`'s contract without matching that
-  // one pattern.
+  // never matched) and would break again for any future generator shape (an
+  // arrow function, a multi-line signature) that still satisfies
+  // `HoistedDefine.code`'s contract without matching that one pattern.
   const parsedDefines = hoistedDefineNodes.map((entry) =>
     babelParse(entry.code, {
       sourceType: "module",

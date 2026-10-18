@@ -1,9 +1,9 @@
-// Bundles `@marko/compiler`'s parse layer into
-// `dist/marko-frontend.cjs`, with the `htmljs-parser` specifier resolved to
-// MX's own template parser (`packages/parser/src/template/`), so a registry
-// install of `@mxlang/core` parses `.mx` with MX's rules and installs no npm
-// `htmljs-parser`. `src/marko-frontend.ts` loads the file; the main build
-// defines `MX_MARKO_FRONTEND` as its path. Deleted when the MX AST replaces
+// Bundles `@marko/compiler`'s parse layer into `dist/marko-frontend.cjs`,
+// with the `htmljs-parser` specifier resolved to MX's own template parser
+// (`packages/parser/src/template/`), so a registry install of `@mxlang/core`
+// parses `.mx` with MX's rules and installs no npm `htmljs-parser`.
+// `src/marko-frontend.ts` loads the file; the main build defines
+// `MX_MARKO_FRONTEND` as its path. Deleted when the MX AST replaces
 // `@marko/compiler`.
 //
 // One CommonJS bundle, one entry exporting the compiler, its Babel and the

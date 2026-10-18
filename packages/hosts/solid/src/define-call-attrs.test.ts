@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
- * On Solid, `<Row n=1/>` against a `<define>` hands the define's
- * first param ONE attribute object, as Marko 6.4.4 does. It used to emit
+ * On Solid, `<Row n=1/>` against a `<define>` hands the define's first param
+ * ONE attribute object, as Marko 6.4.4 does. It used to emit
  * `__mx_DefineRow1(undefined)`, and `|{ n }|` failed compile ("cannot close
  * over `n`"). Every case here EXECUTES the output (Solid SSR in a Bun
  * subprocess), because the old defect compiled clean and crashed at render.
@@ -125,10 +125,11 @@ const CASES: Array<[string, string, string, string]> = [
     "",
     "<ul><li>12</li></ul>",
   ],
-  // Matching Marko's own shape (measured on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
-  // trailing object `{ ...attributeTags, content }` as the next argument, so
-  // it lands in the first unfilled param and every param after it reads
-  // `undefined` — nothing is bound by name. These four pin each shape.
+  // Matching Marko's own shape (measured on stock Marko 6.4.4): a `<define>`
+  // call WITH tag arguments appends ONE trailing object `{ ...attributeTags,
+  // content }` as the next argument, so it lands in the first unfilled param
+  // and every param after it reads `undefined` — nothing is bound by name.
+  // These four pin each shape.
   [
     "tag arguments bind the body to the first unfilled param as a trailing object",
     "<define/Row|a, b|><li>${a}${b.content}</li></define><Row(1)>text</Row>",
@@ -304,10 +305,11 @@ describe("solid: a <define> call passes its attributes as the first param", () =
     ).toThrow(/cannot close over `missing`/);
   });
 
-  // Pre-existing limit, unchanged by passing one attribute object: the capture check does not
-  // consult the module's own bindings (the spec says imports are fine; only a
-  // define's params, sibling defines and globals pass today). Pinned so a
-  // change to it is deliberate; reported to the lead as a separate item.
+  // Pre-existing limit, unchanged by passing one attribute object: the capture
+  // check does not consult the module's own bindings (the spec says imports
+  // are fine; only a define's params, sibling defines and globals pass today).
+  // Pinned so a change to it is deliberate; reported to the lead as a separate
+  // item.
   it("reports a module binding read in a define body as a capture", () => {
     expect(() =>
       compile(

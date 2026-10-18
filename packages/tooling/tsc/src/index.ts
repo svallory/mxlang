@@ -633,12 +633,12 @@ function collectBuildGroups(
 /**
  * Runs `tsc` with `.solid.mx` files compiled as their lowered TSX.
  *
- * This is the CI half of MX's TypeScript tooling: an editor gets `.solid.mx` types from
- * `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc --noEmit` in a
- * build has no tsserver and no plugin host, so the same language plugin is
- * handed to Volar's `runTsc` instead. Both halves share one implementation of
- * the lowering, which is what keeps an editor and CI from disagreeing about
- * whether a file type-checks.
+ * This is the CI half of MX's TypeScript tooling: an editor gets `.solid.mx`
+ * types from `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc
+ * --noEmit` in a build has no tsserver and no plugin host, so the same language
+ * plugin is handed to Volar's `runTsc` instead. Both halves share one
+ * implementation of the lowering, which is what keeps an editor and CI from
+ * disagreeing about whether a file type-checks.
  */
 export function runMxTsc(): void {
   const code = runMxTscBody();

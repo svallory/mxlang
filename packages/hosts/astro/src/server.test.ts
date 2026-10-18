@@ -229,8 +229,8 @@ describe("client:* directives are an error", () => {
 
   // An imported `.mx` tag that declares `<return>` reaches Astro as an
   // ordinary component call, and Astro, not the call site, invokes it. Its
-  // default export returns the markup alone (the value is what
-  // `render(input, out)` returns), so the renderer hands that string on as is.
+  // default export returns the markup alone (the value is what `render(input,
+  // out)` returns), so the renderer hands that string on as is.
   it("renders the markup of a unit that declares <return>, never its value", async () => {
     const component = await compileComponent(
       "returns",

@@ -77,9 +77,9 @@ export interface CompileOptions {
   /**
    * Rejects reactive constructs (`<let>`, `<effect>`, `<lifecycle>`,
    * `<script>`, `client` blocks, `<id>`) by name instead of rendering their
-   * initial value or treating them as inert. Folded from `.mx`'s dialect
-   * as an opt-in stance for an author who wants those
-   * constructs to be a compile error rather than silently accepted.
+   * initial value or treating them as inert. Folded from `.mx`'s dialect as
+   * an opt-in stance for an author who wants those constructs to be a
+   * compile error rather than silently accepted.
    */
   strict?: boolean;
   /** `package.json#mx.html.defaultTag`, already validated; the unnamed tag's name when set. */
@@ -93,10 +93,10 @@ export interface CompileOptions {
    */
   runtimeFrom?: string;
   /**
-   * Type-only projection for tooling: the module is
-   * type-checked, never run. Adds checks that have no runtime meaning, such
-   * as a bound attribute's refinement (`v:fn:=q` references `fn`). Build
-   * callers leave it unset.
+   * Type-only projection for tooling: the module is type-checked, never
+   * run. Adds checks that have no runtime meaning, such as a bound
+   * attribute's refinement (`v:fn:=q` references `fn`). Build callers leave
+   * it unset.
    */
   typeCheck?: boolean;
   /**
@@ -147,10 +147,9 @@ export function compileHtml(
       warnings: options.warnings,
       resolveImport: options.resolveImport,
       targets: options.targets,
-      // This host emits from the core's IR. `postEmit` still
-      // appends the helpers a template actually calls and brands the default
-      // export, both of which are properties of this target rather than of
-      // the core.
+      // This host emits from the core's IR. `postEmit` still appends the
+      // helpers a template actually calls and brands the default export,
+      // both of which are properties of this target rather than of the core.
       emitIr: (ir) => {
         emitted = emitModuleWithMappings(
           ir,

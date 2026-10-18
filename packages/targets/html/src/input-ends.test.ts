@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
 /**
- * Input that ends inside a concise open delimiter. The front
- * end's `MX_INPUT_ENDS_IN_DELIMITER` is raised last: where main's compile
+ * Input that ends inside a concise open delimiter. The front end's
+ * `MX_INPUT_ENDS_IN_DELIMITER` is raised last: where main's compile
  * reported an error for such input, that error still comes first, with
  * main's text (its position is now the tag's, where main's tag had none);
  * the new error fires only where main compiled.

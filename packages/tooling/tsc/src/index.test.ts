@@ -194,8 +194,8 @@ describe("mx-tsc", () => {
     () => {
       // Proves compileSolidUnit's map/mappings are wired correctly through
       // the TS plugin's virtual code (the same route `mx-tsc` uses):
-      // before that wiring, this host wasn't reachable for a
-      // whole-file `.mx` at all through the real entry point.
+      // before that wiring, this host wasn't reachable for a whole-file
+      // `.mx` at all through the real entry point.
       const result = run(mxTsc, [
         "--noEmit",
         "-p",

@@ -69,12 +69,11 @@ export function mxFilter(targets: TargetLookup): RegExp {
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
- * compiles under. It defaults to this package's own
- * descriptor, which is what a plain `import "@mxlang/target-html/bun"` wants; a
- * caller that compiles for several targets (the oracle, a tool with the
- * built-in registry in hand) passes that lookup instead, so the loader
- * recognises every registered host's file kinds rather than only html's own
- * (design note §5.1, rule (c)).
+ * compiles under. It defaults to this package's own descriptor, which is what a
+ * plain `import "@mxlang/target-html/bun"` wants; a caller that compiles for
+ * several targets (the oracle, a tool with the built-in registry in hand)
+ * passes that lookup instead, so the loader recognises every registered host's
+ * file kinds rather than only html's own (design note §5.1, rule (c)).
  */
 export function createHtmlBunPlugin(
   targets: TargetLookup = htmlTargets,

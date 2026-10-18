@@ -197,8 +197,8 @@ describe("mx.host values", () => {
   it("the unknown-host message lists the same values, byte-identically", () => {
     // The text every existing project sees. The list is every non-deprecated
     // value the lookup accepts, in registration order, with the deprecated one
-    // named apart — which is exactly what the closed list produced (the wording does not
-    // change).
+    // named apart — which is exactly what the closed list produced (the wording
+    // does not change).
     const { diagnostics } = resolveTargetPolicyDetailed(
       project({ mx: { host: "bogus" } }),
     );

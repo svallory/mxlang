@@ -87,10 +87,10 @@ export function uncalledTagFileMessage(
 }
 
 /**
- * The one diagnostic for a `.marko` file used as a tag: the
- * same text on every target, whichever lookup, import or `tags/` shape led to
- * it. `.marko` is not an MX input, so it is never compiled, never a native
- * element and never an emitted import.
+ * The one diagnostic for a `.marko` file used as a tag: the same text on every
+ * target, whichever lookup, import or `tags/` shape led to it. `.marko` is not
+ * an MX input, so it is never compiled, never a native element and never an
+ * emitted import.
  */
 export function markoFileTagMessage(
   filename: string,

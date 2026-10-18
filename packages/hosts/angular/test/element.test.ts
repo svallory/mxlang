@@ -94,9 +94,9 @@ describe("Element", () => {
   });
 
   it("emits `on-<exact>` as an event binding from core's resolved name", () => {
-    // Phase B of `dom-events`: core lowers `on-my-event` to
-    // the `event` kind carrying `event: "my-event"` verbatim, and Angular's
-    // `(x)` can bind it — the phase-A `[on-my-event]=` passthrough is gone.
+    // Phase B of `dom-events`: core lowers `on-my-event` to the `event`
+    // kind carrying `event: "my-event"` verbatim, and Angular's `(x)` can
+    // bind it — the phase-A `[on-my-event]=` passthrough is gone.
     const out = emit("<div on-my-event=f>x</div>");
     expect(out).toBe('<div (my-event)="__mxOn(f, this, $event)">x</div>');
     assertAngularParses(out);
@@ -146,10 +146,10 @@ describe("Element", () => {
   });
 
   it("emits onDoubleClick as (doubleclick) with core's warning, never a rewrite", () => {
-    // No aliases: `onDoubleClick` lowercases to
-    // `doubleclick`, which is not a DOM event; core warns at the attribute
-    // name and the binding emits exactly what was written. The old
-    // IRREGULAR_EVENTS table that rewrote this to `(dblclick)` is deleted.
+    // No aliases: `onDoubleClick` lowercases to `doubleclick`, which is not
+    // a DOM event; core warns at the attribute name and the binding emits
+    // exactly what was written. The old IRREGULAR_EVENTS table that rewrote
+    // this to `(dblclick)` is deleted.
     const { code, warnings } = compileMx(
       "<button onDoubleClick=handler>x</button>",
     );

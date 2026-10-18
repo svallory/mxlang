@@ -1,9 +1,9 @@
 /**
  * The Angular paths that scan for themselves (`build()`, the virtual tag
  * reader the editor and the checker use) read `mx.angular-template.defaultTag`
- * through core's shared check over this host's own lookup and
- * the file's scanned tags. A rejected value is dropped, the built-in answers,
- * and the diagnostic goes to the caller's own channel.
+ * through core's shared check over this host's own lookup and the file's
+ * scanned tags. A rejected value is dropped, the built-in answers, and the
+ * diagnostic goes to the caller's own channel.
  */
 import {
   type ContractDefaultTagInput,

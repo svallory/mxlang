@@ -203,9 +203,9 @@ export const ATOMS: [string, string][] = [
   // Review round 4 (PR #342): contextual keywords as identifiers, unary `!`,
   // and every `${}` (in raw-text bodies and tag names too).
   ["<div x=f(of, :b)/>", '<div> @x atom(b@13-15) ="f(of, 0.)"'],
-  // template-parser-ascii-only-lookbehinds: after
-  // a spread's `...`, `await`, `typeof` and `new` are operators, not member
-  // names, so the atom lexes.
+  // template-parser-ascii-only-lookbehinds: after a spread's `...`,
+  // `await`, `typeof` and `new` are operators, not member names, so the
+  // atom lexes.
   ["<div x=[...await :b]/>", '<div> @x atom(b@17-19) ="[...await 0.]"'],
   ["<div x=[...typeof :b]/>", '<div> @x atom(b@18-20) ="[...typeof 0.]"'],
   ["<div x=[...new :b]/>", '<div> @x atom(b@15-17) ="[...new 0.]"'],
@@ -312,9 +312,10 @@ export const ATOMS: [string, string][] = [
     "<div x=(c ? y as Foo</* < */T> :z)/>",
     '<div> @x atom(z@31-33) ="(c ? y as Foo</* < */T> 0.)"',
   ],
-  // A non-ASCII operand (atom-lookbehind-non-ascii): a real atom still lexes where TypeScript cannot own the `:`
-  // (after `,`, an operator, an operator keyword, a string, template or
-  // comment holding non-ASCII text), exactly as with an ASCII letter.
+  // A non-ASCII operand (atom-lookbehind-non-ascii): a real atom still
+  // lexes where TypeScript cannot own the `:` (after `,`, an operator, an
+  // operator keyword, a string, template or comment holding non-ASCII
+  // text), exactly as with an ASCII letter.
   ["<div x=[é, :b]/>", '<div> @x atom(b@11-13) ="[é, 0.]"'],
   ["<div x=f(é, :b)/>", '<div> @x atom(b@12-14) ="f(é, 0.)"'],
   ["<div x=é || :b/>", '<div> @x atom(b@12-14) ="é || 0."'],
@@ -958,9 +959,8 @@ export const NOT_ATOMS: [string, string][] = [
   ["<div x=c ? yield :b/>", '<div> @x ="c ? yield :b"'],
   ["<div x=(c ? yield :b : d)/>", '<div> @x ="(c ? yield :b : d)"'],
   ["<div x={ k: yield :b }/>", '<div> @x ="{ k: yield :b }"'],
-  // Pinned: `(a<b> :c)` with no open `?` takes
-  // TypeScript's reading (type arguments), so no atom; core's hint names the
-  // ambiguity.
+  // Pinned: `(a<b> :c)` with no open `?` takes TypeScript's reading (type
+  // arguments), so no atom; core's hint names the ambiguity.
   ["<div x=(a<b> :c)/>", '<div> @x ="(a<b> :c)"'],
   // Review round 5 (R3): TypeScript's reading wins at every nesting depth:
   // a type argument list's closing `>` and a run of postfix `!` end an
@@ -1774,10 +1774,10 @@ export function unicodeWhitespaceMismatches(mod: AtomParserModule): {
 }
 
 /**
- * The other whitespace the atom look-behind skips,
- * besides the run right before the `:`: between a run of postfix `!`, before
- * a contextual keyword (`of`, `await`), and around a comment. Each Unicode
- * whitespace character renders as an ASCII space in every atom position.
+ * The other whitespace the atom look-behind skips, besides the run right
+ * before the `:`: between a run of postfix `!`, before a contextual keyword
+ * (`of`, `await`), and around a comment. Each Unicode whitespace character
+ * renders as an ASCII space in every atom position.
  */
 export function unicodeWhitespaceLoopMismatches(mod: AtomParserModule): {
   total: number;

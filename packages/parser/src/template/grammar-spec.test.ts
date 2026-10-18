@@ -1,9 +1,9 @@
 /**
- * The parser grammar's probe corpus against this source copy,
- * and the link between the corpus and the document: every row of a normative
- * table in `parser-grammar.md` cites a probe, every cited probe exists, and
- * every probe is cited. See `grammar-spec.cases.ts` for the corpus format and
- * the regeneration command.
+ * The parser grammar's probe corpus against this source copy, and the link
+ * between the corpus and the document: every row of a normative table in
+ * `parser-grammar.md` cites a probe, every cited probe exists, and every
+ * probe is cited. See `grammar-spec.cases.ts` for the corpus format and the
+ * regeneration command.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

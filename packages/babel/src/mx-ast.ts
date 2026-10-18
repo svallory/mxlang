@@ -108,9 +108,9 @@ export type MxErrorCode =
   | "MX_INVALID_TAG_NAME";
 
 /**
- * A syntax-table trigger (ast §4.4): `&status` in an expression
- * (in its container's `triggers`), an attribute (in `attributes`) or a
- * tagless concise line (a child). Not lowered by the front end.
+ * A syntax-table trigger (ast §4.4): `&status` in an expression (in its
+ * container's `triggers`), an attribute (in `attributes`) or a tagless
+ * concise line (a child). Not lowered by the front end.
  */
 export interface MxTrigger extends MxNodeBase {
   readonly type: "MxTrigger";
@@ -196,9 +196,9 @@ export interface MxBlockTag extends MxNodeBase {
 }
 
 /**
- * A syntax table's filter (ast §4.5), `::markdown:: … ::`: a
- * child of the enclosing body, its name and its raw body. Core's
- * `lowerFilter` returns IR for it.
+ * A syntax table's filter (ast §4.5), `::markdown:: … ::`: a child of the
+ * enclosing body, its name and its raw body. Core's `lowerFilter` returns
+ * IR for it.
  */
 export interface MxFilter extends MxNodeBase {
   readonly type: "MxFilter";

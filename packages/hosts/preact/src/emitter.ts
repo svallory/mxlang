@@ -53,12 +53,12 @@ import { type JsxDialect, preactDialect } from "./dialect.ts";
  * The Marko tags this host refuses, each with a hint naming what to write
  * instead.
  *
- * Same shape as `@mxlang/host-solid`'s table, and for the same reason: these are
- * Marko's *own* reactivity, and this target has its own. The capability
- * test holds: core words the refusal ("`<let>` is not supported in embedded MX on
- * Preact."), and a hint, where there is one, says where the equivalent lives,
- * never "not implemented". `<effect>` has no hint: it is not an MX tag on any
- * target, so no host points it anywhere.
+ * Same shape as `@mxlang/host-solid`'s table, and for the same reason: these
+ * are Marko's *own* reactivity, and this target has its own. The capability
+ * test holds: core words the refusal ("`<let>` is not supported in embedded MX
+ * on Preact."), and a hint, where there is one, says where the equivalent
+ * lives, never "not implemented". `<effect>` has no hint: it is not an MX tag
+ * on any target, so no host points it anywhere.
  *
  * `client`/`server` blocks and the `<else>` chain errors are not tag support
  * refusals; they keep their own words.
@@ -108,10 +108,10 @@ function statefulErrors(
     },
     // `<return>` is **not** an error here. It was, on the grounds that "a
     // component returns its own markup" — true while a tag template was
-    // expanded into its caller, but under the unit model the
-    // tag is its own module and the caller invokes it, so it has a caller to
-    // return to. A returning unit's component returns `{ value, output }`
-    // and the call site unwraps it; the core owns the grammar.
+    // expanded into its caller, but under the unit model the tag is its own
+    // module and the caller invokes it, so it has a caller to return to. A
+    // returning unit's component returns `{ value, output }` and the call
+    // site unwraps it; the core owns the grammar.
     else: { kind: "error", reason: "`<else>` must follow an `<if>`" },
     "else-if": { kind: "error", reason: "`<else-if>` must follow an `<if>`" },
   };
@@ -274,15 +274,16 @@ export function createJsxDeclarations(
       // Unresolved, it takes `rejectUnknownTag` below.
       return !isComponentName(name) && !name.includes(":");
     },
-    // Resolves a capitalized tag only when it genuinely resolves: a scope binding (checked here for a direct caller of this
-    // function; `lower.ts`'s own `fileLocalBinding` already covers the
-    // whole-file `.mx` precedence path before `isComponent` is ever asked)
-    // or a taglib entry. A name matching neither used to fall through to a
-    // bare `isComponentName` (casing-only) check, so `<TotallyUndefined/>`
-    // — no import, binding, or taglib entry — silently emitted a JSX
-    // reference to nothing: a runtime `ReferenceError` on this target
-    // rather than the Marko-parity compile error `rejectUnknownTag` (below)
-    // now reports through `lower.ts`'s unresolved-tag guard.
+    // Resolves a capitalized tag only when it genuinely resolves: a scope
+    // binding (checked here for a direct caller of this function;
+    // `lower.ts`'s own `fileLocalBinding` already covers the whole-file
+    // `.mx` precedence path before `isComponent` is ever asked) or a taglib
+    // entry. A name matching neither used to fall through to a bare
+    // `isComponentName` (casing-only) check, so `<TotallyUndefined/>` — no
+    // import, binding, or taglib entry — silently emitted a JSX reference to
+    // nothing: a runtime `ReferenceError` on this target rather than the
+    // Marko-parity compile error `rejectUnknownTag` (below) now reports
+    // through `lower.ts`'s unresolved-tag guard.
     isComponent: (name, ctx) => {
       if (ctx.defines?.has(name) || ctx.imports?.has(name)) return true;
       const taglibId = ctx.tagTable?.getTag(name)?.taglibId;
@@ -864,10 +865,10 @@ export class PreactEmitter implements Emitter<string> {
           `\`:=\` is Marko's two-way binding; ${this.#dialect.name} has no equivalent — pass the value and an explicit \`onInput\` handler`,
           attr,
         );
-      // Phase B of `dom-events`: recompose the prop from the
-      // DOM event name core resolved — `on` + capitalized (`click` →
-      // `onClick`), with each dialect's own spellings (`keydown` →
-      // `onKeyDown`, React's `onDoubleClick`, `onFocus`, `onBlur`) through
+      // Phase B of `dom-events`: recompose the prop from the DOM event name
+      // core resolved — `on` + capitalized (`click` → `onClick`), with each
+      // dialect's own spellings (`keydown` → `onKeyDown`, React's
+      // `onDoubleClick`, `onFocus`, `onBlur`) through
       // `JsxDialect.eventPropNames`. A custom DOM event name JSX cannot spell
       // errors uniformly on all three shared targets.
       case "event": {
@@ -1055,8 +1056,8 @@ export class PreactEmitter implements Emitter<string> {
       // The `as any` after it ends the check there: `satisfies` keeps the
       // value's own type, so without it the JSX prop re-checks the same value
       // against the same handler type and reports a second error (TS2322)
-      // beside the mapped TS1360, on the unmapped prop, which used
-      // to be dropped.
+      // beside the mapped TS1360, on the unmapped prop, which used to be
+      // dropped.
       case "event": {
         const name = this.#eventPropName(attr);
         if (this.#typeCheck && tag !== undefined && NATIVE_TAG.test(tag)) {
@@ -1185,9 +1186,9 @@ export class PreactEmitter implements Emitter<string> {
    *
    * A name JSX cannot spell as one identifier — a custom DOM event such as
    * `my-event` from `on-my-event` — is a uniform error on all three shared
-   * targets: even where a runtime could bind it, the same
-   * MX source must not silently do nothing on another. The `ref` route the
-   * error names works identically on Preact, React and hono.
+   * targets: even where a runtime could bind it, the same MX source must not
+   * silently do nothing on another. The `ref` route the error names works
+   * identically on Preact, React and hono.
    */
   #eventPropName(attr: Attr & { kind: "event" }): string {
     if (!/^[A-Za-z0-9]+$/.test(attr.event)) {
@@ -1345,8 +1346,8 @@ export class PreactEmitter implements Emitter<string> {
   /** An attribute tag's body in this host's renderable shape. */
   #attributeTagRenderable(tag: AttributeTag, key?: string): MappedCode {
     // `hasBody` distinguishes `<@x/>` from a body whose rendered expression
-    // happens to be empty. The former is `undefined`, not a
-    // null JSX child or an empty fragment.
+    // happens to be empty. The former is `undefined`, not a null JSX child
+    // or an empty fragment.
     if (!tag.hasBody) return concatMapped("undefined");
     const children = meaningful(tag.block.children);
     // Attribute-tag bodies cross a component boundary as host renderables.
@@ -1992,9 +1993,9 @@ export class PreactEmitter implements Emitter<string> {
       // small `mxDynamic` helper into the module (mirroring `@mxlang/target-html`'s
       // `renderDynamic`) instead of writing the expression there directly.
       this.#runtimeImports.add("__mxDynamic");
-      // Marko parity: args combine with a body/attribute
-      // tag (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only
-      // a plain attribute alongside args is still rejected
+      // Marko parity: args combine with a body/attribute tag
+      // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only a
+      // plain attribute alongside args is still rejected
       // (`rejectArgsWithProps`, core), so `node.attrs` here holds no named
       // attribute when args are present. With content/attribute tags to
       // carry, the trailing props object rides alongside the args array,
@@ -2045,11 +2046,11 @@ export class PreactEmitter implements Emitter<string> {
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`
         : "";
       // A `/var` on a dynamic tag binds the callee's render path's value
-      // `__mxDynamicPair` returns the `{ value, output }`
-      // pair a returning unit's `.render` hands back, with `undefined` for
-      // any callee without one. Same statement-position rule as the static
-      // path above: the call hoists to the component body, so a callback
-      // scope is rejected rather than silently relocated.
+      // `__mxDynamicPair` returns the `{ value, output }` pair a returning
+      // unit's `.render` hands back, with `undefined` for any callee
+      // without one. Same statement-position rule as the static path above:
+      // the call hoists to the component body, so a callback scope is
+      // rejected rather than silently relocated.
       if (node.var) {
         if (this.#callbackScope) {
           fail(
@@ -2159,8 +2160,8 @@ export class PreactEmitter implements Emitter<string> {
     // it is bound to, so a component Marko resolved under such a name is
     // emitted under a capitalized alias the module binds instead. A target
     // core already bound (a registered taglib tag whose name an authored
-    // import or define also takes) is called by
-    // that binding: aliasing the authored name would call the import.
+    // import or define also takes) is called by that binding: aliasing the
+    // authored name would call the import.
     const name = node.target.binding ?? componentAlias(node.target.name);
     if (!node.target.binding && name !== node.target.name) {
       this.#aliases.add(node.target.name);
@@ -2206,9 +2207,9 @@ export class PreactEmitter implements Emitter<string> {
           }
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
-        // The unit's render path: `.render` is the compiled
-        // unit's own function returning the `{ value, output }` pair; the
-        // default export returns only the output.
+        // The unit's render path: `.render` is the compiled unit's own
+        // function returning the `{ value, output }` pair; the default
+        // export returns only the output.
         this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(this.#slot(`${temp}.output`));

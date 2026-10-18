@@ -513,11 +513,11 @@ describe("scanCustomTags", () => {
     writeFileSync(join(dir, "package.json"), '{"name":"footag"}');
     writeFileSync(join(dir, "tags", "widget.foo.mx"), "");
 
-    // `foo` is no file-kind segment the lookup knows, so this
-    // is not the host-module case: it is excluded because it cannot be
-    // called. `<widget.foo>` and concise `widget.foo` both parse as tag
-    // `widget` with shorthand class `foo` (measured on Marko 6.3.51), so no
-    // syntax reaches such a tag and indexing it would be a dead name.
+    // `foo` is no file-kind segment the lookup knows, so this is not the
+    // host-module case: it is excluded because it cannot be called.
+    // `<widget.foo>` and concise `widget.foo` both parse as tag `widget`
+    // with shorthand class `foo` (measured on Marko 6.3.51), so no syntax
+    // reaches such a tag and indexing it would be a dead name.
     const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
     expect(Object.keys(result.customTags)).toEqual([]);
     expect(result.diagnostics).toHaveLength(1);

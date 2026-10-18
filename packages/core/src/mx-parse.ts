@@ -1,7 +1,7 @@
 /**
  * The MX front end as the compiler's parse (port PR 5): `compileSource` and
- * `parseFragment` parse through `@mxlang/parser`'s front
- * end and hand `lower()` the `MxDocument` body.
+ * `parseFragment` parse through `@mxlang/parser`'s front end and hand
+ * `lower()` the `MxDocument` body.
  *
  * Three pieces of `@marko/compiler`'s `compileSync` survive here, so the
  * switch changes no output and no diagnostic (the PR 5 ruling "keep today's
@@ -558,10 +558,10 @@ export function pendingFrontEndError(
 
 /**
  * `MX_INPUT_ENDS_IN_DELIMITER`: input that ends inside a concise open
- * delimiter, where Marko's parser was silent. Lowering raises it
- * last (`endOfInputError`), so whatever main reported for such input (a
- * lowering error on the cut tag, `Tag does not support arguments.`) still
- * wins, and it fires only where nothing else would.
+ * delimiter, where Marko's parser was silent. Lowering raises it last
+ * (`endOfInputError`), so whatever main reported for such input (a lowering
+ * error on the cut tag, `Tag does not support arguments.`) still wins, and it
+ * fires only where nothing else would.
  */
 const INPUT_ENDS_IN_DELIMITER = "MX_INPUT_ENDS_IN_DELIMITER";
 

@@ -85,8 +85,8 @@ export interface DefaultTagContext {
 export interface HostDeclarations {
   /**
    * Whether a parent contract's `defaultTag` may decide the unnamed tag on
-   * this host. Absent means yes; `false` makes the rung
-   * unavailable and a contract declaring one a registration error.
+   * this host. Absent means yes; `false` makes the rung unavailable and a
+   * contract declaring one a registration error.
    */
   allowContractDefaultTag?: boolean;
   /**
@@ -130,13 +130,13 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
-   * Whether this host implements the `<define>` call rule: a `<define>` called with
-   * attributes, spreads, attribute tags or a body passes ONE object of them to
-   * the define's first param (Marko 6.4.4's shape), so `|p|` and `|{ n }|`
-   * both read it. That rule holds for every target; this flag
-   * only marks the hosts that already implement it, and is removed when every
-   * host implements it (tracked by TODOs `define-call-attrs-solid`
-   * and `define-call-attrs-angular`). Core uses it to warn about a multi-param
+   * Whether this host implements the `<define>` call rule: a `<define>` called
+   * with attributes, spreads, attribute tags or a body passes ONE object of
+   * them to the define's first param (Marko 6.4.4's shape), so `|p|` and `|{ n
+   * }|` both read it. That rule holds for every target; this flag only marks
+   * the hosts that already implement it, and is removed when every host
+   * implements it (tracked by TODOs `define-call-attrs-solid` and
+   * `define-call-attrs-angular`). Core uses it to warn about a multi-param
    * define called that way (only the first param receives anything) on those
    * hosts alone; a host behind on the rule keeps its older per-param lookup
    * and gets no warning.
@@ -178,10 +178,10 @@ export interface HostDeclarations {
   isDelegatedTag?(name: string, ctx: Ctx, shape?: "bare" | "tagged"): boolean;
   /**
    * Whether this host's dynamic-tag dispatch reaches a returning unit's
-   * render path (the compiled unit exposes `.render`,
-   * which hands back the `{ value, output }` pair), so a `/var` on a dynamic
-   * tag binds at run time instead of being refused. Absent or false, core
-   * refuses the binding at the `/var` — never a silent drop.
+   * render path (the compiled unit exposes `.render`, which hands back the `{
+   * value, output }` pair), so a `/var` on a dynamic tag binds at run time
+   * instead of being refused. Absent or false, core refuses the binding at
+   * the `/var` — never a silent drop.
    */
   bindsDynamicTagVar?: boolean;
   /**
@@ -193,9 +193,9 @@ export interface HostDeclarations {
    * decision; the original Marko node is deliberately absent from `DelegatedTag`,
    * so emission cannot fall back to walking parser nodes.
    *
-   * Also the seam a user-tag macro needs: a user-defined tag with
-   * compile-time meaning hands its resolved form to every host through this
-   * channel, since the core cannot know what the macro decided.
+   * Also the seam a user-tag macro needs: a user-defined tag with compile-time
+   * meaning hands its resolved form to every host through this channel, since
+   * the core cannot know what the macro decided.
    */
   resolveDelegatedTag?(
     name: string,

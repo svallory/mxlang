@@ -75,10 +75,10 @@ function resolved(
 }
 
 /**
- * The html target's descriptor, by name (`@mxlang/targets` is
- * the umbrella, the registry plus every target). Light like the rest of this
- * entry; the target's full entry is the `./html` subpath. `@mxlang/data` is
- * not re-exported: that package is deleted.
+ * The html target's descriptor, by name (`@mxlang/targets` is the umbrella,
+ * the registry plus every target). Light like the rest of this entry; the
+ * target's full entry is the `./html` subpath. `@mxlang/data` is not
+ * re-exported: that package is deleted.
  */
 export { html as htmlTarget };
 

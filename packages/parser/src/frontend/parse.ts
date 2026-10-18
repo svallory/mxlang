@@ -1,7 +1,7 @@
 /**
- * The MX front end (ast §7): drives the template parser
- * (`../template`) and builds the MX AST from its events, one handler per row
- * of the ast §7 event table.
+ * The MX front end (ast §7): drives the template parser (`../template`) and
+ * builds the MX AST from its events, one handler per row of the ast §7 event
+ * table.
  *
  * Nodes are built as private mutable builders and copied into plain read-only
  * objects once the parse ends (`finish`), so no node is mutated after it is
@@ -57,8 +57,8 @@ export type { MxBlockTag, MxFilter, MxTrigger };
 export interface ParseOptions extends MxFrontEndOptions {
   readonly base?: MxFragmentBase;
   /**
-   * The syntax table; omitted means `DEFAULT_SYNTAX`, today's
-   * grammar. A table that does not validate is a `TypeError`.
+   * The syntax table; omitted means `DEFAULT_SYNTAX`, today's grammar. A
+   * table that does not validate is a `TypeError`.
    */
   readonly syntax?: SyntaxTable;
   /**
@@ -853,10 +853,10 @@ class FrontEnd {
   }
 
   /**
-   * `onTrigger`: an expression trigger waits for its
-   * container; an attribute trigger joins its tag's attributes; a line
-   * trigger is a child of the enclosing body. A value's container is built
-   * now, after the expression triggers inside it were announced.
+   * `onTrigger`: an expression trigger waits for its container; an attribute
+   * trigger joins its tag's attributes; a line trigger is a child of the
+   * enclosing body. A value's container is built now, after the expression
+   * triggers inside it were announced.
    */
   onTrigger(event: Ranges.Trigger): void {
     const text = this.slice(event.text);

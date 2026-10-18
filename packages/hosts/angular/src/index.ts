@@ -36,7 +36,8 @@ import { compileSourceWithHint } from "./structural-attr-hint.ts";
  * `@Input()` value in authored TypeScript.
  */
 export type AttrTag<
-  // biome-ignore lint/complexity/noBannedTypes: the public default for an attribute tag with no config
+  // biome-ignore lint/complexity/noBannedTypes: the public default for an
+  // attribute tag with no config
   C extends AttrTagConfig = {},
 > = C extends AttrTagConfig ? never : never;
 

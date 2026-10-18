@@ -5,10 +5,10 @@ import type { HostDeclarations } from "./declarations.ts";
 import { testTargetLookup } from "./test-targets.ts";
 
 /**
- * The `productName` compile option: a language packaged on top
- * of MX passes its name, and every diagnostic where core's own wording says
- * "MX" says that name instead. Unset, the default, every message is
- * byte-identical to before the option existed.
+ * The `productName` compile option: a language packaged on top of MX passes
+ * its name, and every diagnostic where core's own wording says "MX" says
+ * that name instead. Unset, the default, every message is byte-identical to
+ * before the option existed.
  */
 
 const targets = testTargetLookup();

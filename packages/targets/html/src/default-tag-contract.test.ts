@@ -1,8 +1,8 @@
 /**
- * The parent-contract rung of the ladder, through a real
- * compile: a parent's contract `defaultTag` beats the package config, the
- * config beats the built-in; structural parents are skipped; an unnamed tag
- * under an attribute tag reads its declaration.
+ * The parent-contract rung of the ladder, through a real compile: a parent's
+ * contract `defaultTag` beats the package config, the config beats the
+ * built-in; structural parents are skipped; an unnamed tag under an attribute
+ * tag reads its declaration.
  */
 import type { AttributeTag, CustomTag, IrNode } from "@mxlang/core";
 import { describe, expect, it } from "vitest";

@@ -139,9 +139,9 @@ const ROWS = [
   // target without declarations), and a bare mx.host naming the loaded host.
   "third-party-ok-let",
   "third-party-host-name",
-  // The unnamed tag: the package's `mx.<target>.defaultTag`
-  // reaches every tool's compile (`my-card` from `tags/`), an invalid value
-  // is one positioned error at the package.json value in each tool and the
+  // The unnamed tag: the package's `mx.<target>.defaultTag` reaches every
+  // tool's compile (`my-card` from `tags/`), an invalid value is one
+  // positioned error at the package.json value in each tool and the
   // built-in answers meanwhile.
   "default-tag-html",
   "default-tag-invalid",
@@ -178,9 +178,8 @@ const { hostFilterKey, resolveTargetPolicyDetailed } = (await import(
  * The resolved policy as the golden records it: the value `mx.tags[].hosts` is
  * matched against, which is the host name for a hosted target and a hostless
  * target's legacy `mx.host` value (`html`). It is the same string the policy
- * carried before the policy named a target first, so every
- * row that does not change behaviour keeps its recorded bytes; the tools get
- * the real policy.
+ * carried before the policy named a target first, so every row that does not
+ * change behaviour keeps its recorded bytes; the tools get the real policy.
  */
 function recordedPolicy(policy: Parameters<typeof diagnoseDocument>[2]): {
   host: string;

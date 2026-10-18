@@ -6,8 +6,8 @@ import { htmlEquals } from "./normalize-html";
 import { renderTranslator } from "./translator-render";
 
 /**
- * `oracle:marko`'s one table: parity between Marko's own
- * toolchain and `@mxlang/target-html` for the stock `.marko` fixture set.
+ * `oracle:marko`'s one table: parity between Marko's own toolchain and
+ * `@mxlang/target-html` for the stock `.marko` fixture set.
  *
  * There is no dialect to compare it against any more (`.mx` and
  * `@mxlang/target-html` are retired), so this asks a single, narrow question: for
@@ -21,9 +21,9 @@ import { renderTranslator } from "./translator-render";
  * are stripped (they have no expressions-only equivalent and their ids are
  * random per compile).
  *
- * The run fails if the glob expands to nothing, if a fixture is
- * missing one of its three files, or if fewer than MIN_FIXTURES were
- * processed — a gate must assert it did work, not merely that nothing failed.
+ * The run fails if the glob expands to nothing, if a fixture is missing one
+ * of its three files, or if fewer than MIN_FIXTURES were processed — a gate
+ * must assert it did work, not merely that nothing failed.
  */
 
 const MIN_FIXTURES = 44; // was 42; +2 for static-block-import and static-block-export (import/export inside a static block)
@@ -32,9 +32,9 @@ interface FixtureMeta {
   /**
    * "skip" is never compiled. "divergence" is compiled and expected to
    * differ from `expected.html`. "error" is compiled and expected to throw
-   * on *both* sides, matching `errorPattern` — this is a closed
-   * class: a construct the translator now rejects the same way Marko does,
-   * so `expected.html` plays no role and both throwing the same message is
+   * on *both* sides, matching `errorPattern` — this is a closed class: a
+   * construct the translator now rejects the same way Marko does, so
+   * `expected.html` plays no role and both throwing the same message is
    * itself the pass.
    */
   marko?: "skip" | "divergence" | "error";

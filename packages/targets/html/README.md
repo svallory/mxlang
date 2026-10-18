@@ -231,9 +231,9 @@ loaders' example apps do this).
 
 ## Editor and formatter support for `.mx`
 
-No packages ship for these. Marko's syntax is MX's default, so
-Marko's own tooling works on most `.mx` files by aliasing the extension; a
-construct that only MX has (see `divergences.md`) is not understood by it:
+No packages ship for these. Marko's syntax is MX's default, so Marko's own
+tooling works on most `.mx` files by aliasing the extension; a construct that
+only MX has (see `divergences.md`) is not understood by it:
 
 - **VS Code**: map `.mx` to the Marko language so the official Marko
   extension's syntax highlighting and language server apply:
@@ -304,14 +304,14 @@ Kept from `.mx`'s dialect: the reactive-tags-as-errors stance above, and the
 `input`-shadowing check (`checkBinding`) — already the default in both
 policies, not `strict`-only, since a `<let>`/`<const>` binding named `input`
 silently breaking the template's own input is a bug in either policy, not a
-stricter preference. Dropped (these were conventions of the
-old `.mx` walk, not capabilities the target lacks, so they do not survive as
-a policy — stock Marko's own conventions replace them unconditionally, not
-just outside `strict`): the explicit-import requirement (Marko's taglib +
-`tags/` discovery works in both policies), the `export interface Input`
-requirement (already optional — Marko allows arbitrary TS), `<fragment>`
-(Marko templates and bodies are multi-root already), and lowercase-by-scope
-tag resolution (replaced by MX's own element table, `@mxlang/web-elements`).
+stricter preference. Dropped (these were conventions of the old `.mx` walk,
+not capabilities the target lacks, so they do not survive as a policy —
+stock Marko's own conventions replace them unconditionally, not just outside
+`strict`): the explicit-import requirement (Marko's taglib + `tags/`
+discovery works in both policies), the `export interface Input` requirement
+(already optional — Marko allows arbitrary TS), `<fragment>` (Marko
+templates and bodies are multi-root already), and lowercase-by-scope tag
+resolution (replaced by MX's own element table, `@mxlang/web-elements`).
 
 ## What this proves
 
@@ -532,9 +532,9 @@ that nothing failed.
 
 ## Pins
 
-No Marko tag lookup runs in a compile. Core's tag table reads
-the core taglib (`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`),
-which declares the core tags' parse options (statement tags, control flow,
-`openTagOnly`, raw-text bodies), and the HTML, SVG and MathML elements of
-`@mxlang/web-elements`, which this target hands core as its `nativeTags`; core
-hands the MX front end each tag's shape from that table.
+No Marko tag lookup runs in a compile. Core's tag table reads the core taglib
+(`CORE_TAGLIB`, `@mxlang/core`'s `taglib/core-tags.json`), which declares the
+core tags' parse options (statement tags, control flow, `openTagOnly`, raw-text
+bodies), and the HTML, SVG and MathML elements of `@mxlang/web-elements`, which
+this target hands core as its `nativeTags`; core hands the MX front end each
+tag's shape from that table.

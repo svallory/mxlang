@@ -39,10 +39,10 @@ directory yet (nothing imports it).
 
 ## Changes after the copy
 
-The `:name` sugar's attribute-value rules, applied as ordinary source edits. They are the bun patch
-`patches/htmljs-parser@5.18.0.patch`, whose hunks edit the built
-`dist/index.js` and `dist/index.mjs`; each hunk (identical in both builds) maps
-to one place in `src/`:
+The `:name` sugar's attribute-value rules, applied as ordinary source edits.
+They are the bun patch `patches/htmljs-parser@5.18.0.patch`, whose hunks edit
+the built `dist/index.js` and `dist/index.mjs`; each hunk (identical in both
+builds) maps to one place in `src/`:
 
 | Patch hunk (dist) | Source location |
 |---|---|

@@ -348,8 +348,8 @@ describe("Solid IR lowering", () => {
     ],
     // attribute-tag-silent-drops B1: a repeated `<@item>` used to emit the
     // `item=` prop twice (JSX last-wins), losing every occurrence but the
-    // last. It becomes an array; each body-only occurrence gets
-    // the renderable accessor shape for this untyped callee.
+    // last. It becomes an array; each body-only occurrence gets the
+    // renderable accessor shape for this untyped callee.
     [
       "repeated attribute tag becomes an array",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
@@ -1339,8 +1339,8 @@ describe("compileSolidUnit", () => {
     // gated on the shared `hoistedDefines`/`defineBindings` module state
     // alone, which `collectReturnVars` set for every caller including this
     // one — so a `<define>` here compiled clean but emitted a call to a
-    // function nothing declares (a runtime ReferenceError; the
-    // hoisting's own "positioned error, not wrong code" violated silently).
+    // function nothing declares (a runtime ReferenceError; the hoisting's
+    // own "positioned error, not wrong code" violated silently).
     let error: unknown;
     try {
       compileSolidUnit(`<define/Row>x</define><Row/>`, {
@@ -1382,14 +1382,14 @@ describe("compileSolidUnit", () => {
       const regionImports = compiled.hoistedImports
         .map((entry) => entry.code)
         .join("\n");
-      // `Row` is a `.tsx` default import, so `compiled.code`
-      // is now a dynamic-tag call, emitted as a JSX child-expression
-      // container (`{...}`) — correct only *inside* JSX, not in a plain
-      // `const view = ...` assignment position, where a leading `{...}`
-      // parses as an object literal instead. Wrapped in a fragment either
-      // way: unwrap `compiled.code`'s own braces first when it has them, so
-      // the fragment adds exactly one JSX-container pair rather than
-      // nesting a second (invalid) `{{...}}`.
+      // `Row` is a `.tsx` default import, so `compiled.code` is now a
+      // dynamic-tag call, emitted as a JSX child-expression container
+      // (`{...}`) — correct only *inside* JSX, not in a plain `const view =
+      // ...` assignment position, where a leading `{...}` parses as an
+      // object literal instead. Wrapped in a fragment either way: unwrap
+      // `compiled.code`'s own braces first when it has them, so the
+      // fragment adds exactly one JSX-container pair rather than nesting a
+      // second (invalid) `{{...}}`.
       const bare = compiled.code.startsWith("{")
         ? compiled.code.slice(1, -1)
         : compiled.code;
@@ -1546,11 +1546,11 @@ describe("event error positions", () => {
 });
 
 /**
- * A capitalized tag bound to a value import that is not a
- * `.marko`/`.mx` default import lowers as a dynamic tag on Solid too — the
- * same `<Dynamic component=…>` shape an authored `<${expr}>` already
- * produces, with `moduleBindings` supplying the import the way a real
- * caller's surrounding TypeScript module does.
+ * A capitalized tag bound to a value import that is not a `.marko`/`.mx`
+ * default import lowers as a dynamic tag on Solid too — the same `<Dynamic
+ * component=…>` shape an authored `<${expr}>` already produces, with
+ * `moduleBindings` supplying the import the way a real caller's
+ * surrounding TypeScript module does.
  */
 describe("value import used as a tag (solid)", () => {
   it("a .ts value import compiles to Dynamic, not a direct JSX call", () => {
@@ -1580,10 +1580,10 @@ describe("value import used as a tag (solid)", () => {
   });
 
   it("a module-scope local function (not an import) still compiles to a direct JSX call, not Dynamic", () => {
-    // Dynamic routing covers value *imports* only. A
-    // locally declared `function`/`const`/`class` used as a tag — the most
-    // common Solid module-scope-component pattern — keeps today's direct
-    // lowering on every host.
+    // Dynamic routing covers value *imports* only. A locally declared
+    // `function`/`const`/`class` used as a tag — the most common Solid
+    // module-scope-component pattern — keeps today's direct lowering on
+    // every host.
     const code = compileSolidMx("<Layout/>", {
       filename: "fixture.solid.mx",
       moduleBindings: new Set(["Layout"]),

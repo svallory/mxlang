@@ -1,7 +1,7 @@
 /**
  * The `HostDeclarations` the IR entry point (`lowerSource`) lowers under:
- * delegate everything, so every non-structural tag arrives in
- * the IR as a `DelegatedTag` and the checks (`checks.ts`) read it.
+ * delegate everything, so every non-structural tag arrives in the IR as a
+ * `DelegatedTag` and the checks (`checks.ts`) read it.
  *
  * What the declarations intercept *before* delegation:
  *
@@ -105,8 +105,8 @@ export function entryDeclarations(
       nativeTags,
       attrTags: 2,
       builtinTags: BUILTIN_TAGS,
-      // The ladder: the parent's contract `defaultTag`, then
-      // the caller's `defaultTag`, then the built-in `object`.
+      // The ladder: the parent's contract `defaultTag`, then the caller's
+      // `defaultTag`, then the built-in `object`.
       resolveDefaultTag: (_node, parents, context) =>
         contractDefaultTag(parents, context, BUILTIN_TAGS) ??
         context.configured ??

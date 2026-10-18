@@ -12,10 +12,10 @@ import { brandRender } from "./translate.ts";
  * Per-rule tests for the stock-Marko translator.
  *
  * Two things are pinned here that the fixtures cannot pin. The fixtures assert
- * rendered HTML for constructs that *work*; these assert the policy table
- * — which constructs are accepted with no output (inert), which
- * are errors because the target genuinely cannot express them, and the
- * conventions that differ from `@mxlang/target-html`'s dialect.
+ * rendered HTML for constructs that *work*; these assert the policy table —
+ * which constructs are accepted with no output (inert), which are errors
+ * because the target genuinely cannot express them, and the conventions that
+ * differ from `@mxlang/target-html`'s dialect.
  *
  * The distinction the table turns on: a construct that only configures
  * behaviour after the first render is inert, and one that contributes output
@@ -449,10 +449,10 @@ describe("bindings may not shadow the input parameter", () => {
   });
 
   it("carries an attribute tag through a `<define>` call instead of dropping it", async () => {
-    // `<define>` has no declared `Input`, so the untyped-callee
-    // fallback applies: `<@head>` carries no attributes, so `head` arrives
-    // renderable (the body itself), read directly with `<${head}/>`. The call
-    // passes one attribute object, so the define destructures it.
+    // `<define>` has no declared `Input`, so the untyped-callee fallback
+    // applies: `<@head>` carries no attributes, so `head` arrives renderable
+    // (the body itself), read directly with `<${head}/>`. The call passes one
+    // attribute object, so the define destructures it.
     const html = await renderModules(
       {
         "entry.mx":
@@ -508,11 +508,11 @@ describe("bindings may not shadow the input parameter", () => {
     );
   });
 
-  // Marko's own shape (measured
-  // on stock Marko 6.4.4): a `<define>` call WITH tag arguments appends ONE
-  // trailing object `{ ...attributeTags, content }` as the next argument, so
-  // it lands in the first unfilled param and every param after it reads
-  // `undefined` — nothing is bound by name. These four pin each shape.
+  // Marko's own shape (measured on stock Marko 6.4.4): a `<define>` call
+  // WITH tag arguments appends ONE trailing object `{ ...attributeTags,
+  // content }` as the next argument, so it lands in the first unfilled param
+  // and every param after it reads `undefined` — nothing is bound by name.
+  // These four pin each shape.
   it("binds the body to the first unfilled param, not to a param named content", async () => {
     const html = await renderModules(
       {
@@ -773,9 +773,9 @@ describe("statement blocks", () => {
   // This host used to reject `<return>` outright, on the grounds that "a
   // module compiled to `(input) => string` has no parent to return to". That
   // was true only while a tag template was expanded into its caller. Under
-  // the unit model every `.mx` file is a module and a caller
-  // invokes it, so the tag has somewhere to return to — and a *page* is not
-  // a special case: it is a module that returns a value nobody reads yet.
+  // the unit model every `.mx` file is a module and a caller invokes it, so
+  // the tag has somewhere to return to — and a *page* is not a special case:
+  // it is a module that returns a value nobody reads yet.
   it("accepts <return> in a page, with the same meaning as in a tag", () => {
     const { code } = compile(src("<p>x</p>\n<return=42/>"), file);
 
@@ -858,10 +858,10 @@ describe("a type-only import does not resolve a tag", () => {
 });
 
 /**
- * The Marko render model: a unit writes into its caller's sink
- * through `render(input, out)` and `<return>` is `render`'s return value, so a
- * caller that only holds the default export (a dynamic tag, a `.ts` barrel
- * re-export) still renders the body and can bind the value.
+ * The Marko render model: a unit writes into its caller's sink through
+ * `render(input, out)` and `<return>` is `render`'s return value, so a caller
+ * that only holds the default export (a dynamic tag, a `.ts` barrel re-export)
+ * still renders the body and can bind the value.
  */
 describe("the render sink", () => {
   const counter = [
@@ -927,8 +927,8 @@ describe("the render sink", () => {
     expect(html).toBe("<div><span>4</span></div>");
   });
 
-  // Binds through the sink; the TODO `dynamic-tag-var-silent-drop`
-  // on html is closed here (the oracle fixture is
+  // Binds through the sink; the TODO `dynamic-tag-var-silent-drop` on html
+  // is closed here (the oracle fixture is
   // `fixtures-marko/dynamic-tag-var`).
   it("binds /var on a dynamic tag to the callee's render value", async () => {
     const html = await renderModules(
@@ -2097,8 +2097,8 @@ describe("dynamic tags", () => {
     );
   });
 
-  // A string-target dynamic tag called with arguments uses
-  // `args[0]` as its input (attributes), matching Marko's own
+  // A string-target dynamic tag called with arguments uses `args[0]` as its
+  // input (attributes), matching Marko's own
   // `runtime-tags/src/html/dynamic-tag.ts` `_dynamic_tag` (`typeof renderer
   // === "string"` branch: `const input = (inputIsArgs ? args[0] : ...) ||
   // {}`). Previously `renderDynamic` ignored `args` entirely for a string
@@ -2167,9 +2167,9 @@ describe("dynamic tags", () => {
   });
 });
 
-// A capitalized tag bound to a value import that is not a
-// `.marko`/`.mx` default import lowers as a dynamic tag, matching Marko's
-// own `_dynamic_tag` runtime dispatch for the six measured value kinds
+// A capitalized tag bound to a value import that is not a `.marko`/`.mx`
+// default import lowers as a dynamic tag, matching Marko's own
+// `_dynamic_tag` runtime dispatch for the six measured value kinds
 // (`scratch/reports/value-import-as-tag-parity.md`). Each case here uses an
 // ordinary `import X from "./target.ts"` (or `{ X }`) and an ordinary
 // `<X>`/`<X/>` call — the routing itself, not the `<${expr}>` syntax already
@@ -2775,13 +2775,13 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
-// Ref custom-tags-local-bindings: a file-local *scope*
-// binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
-// `<define/Box|Panel|>` param — shadows a registered custom tag of the same
-// name too, scoped to where the binding is in effect. IR-level coverage
-// lives in `packages/core/src/custom-tags.test.ts`; these are the executed
-// renders the brief required, against the real `compile()` entry point and a
-// real registered custom tag.
+// Ref custom-tags-local-bindings: a file-local *scope* binding —
+// `<const/Panel=…/>`, a `<for|Panel|>` param, a `<define/Box|Panel|>` param
+// — shadows a registered custom tag of the same name too, scoped to where
+// the binding is in effect. IR-level coverage lives in
+// `packages/core/src/custom-tags.test.ts`; these are the executed renders
+// the brief required, against the real `compile()` entry point and a real
+// registered custom tag.
 describe("local scope bindings shadow a registered custom tag (executed)", () => {
   const panel: CustomTag = {
     transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],

@@ -166,8 +166,8 @@ export function defaultTagScopeFor(
 /** What `defaultTagScopeFor` needs. */
 export interface DefaultTagScopeInput {
   /**
-   * A directory of the package. Not read: the tag table
-   * reads no directory (no `marko.json`, no `tags-dir`).
+   * A directory of the package. Not read: the tag table reads no directory
+   * (no `marko.json`, no `tags-dir`).
    */
   dir?: string;
   translator: unknown;

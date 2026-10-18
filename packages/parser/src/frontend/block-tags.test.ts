@@ -1,8 +1,8 @@
 /**
  * Syntax table PR B, in the front end: `MxBlockTag` and `MxFilter` nodes,
- * and the precomputed `tagTypes`: the explicit option, the
- * interim pre-scan, and that the parser's types always agree with the body
- * modes the tree records.
+ * and the precomputed `tagTypes`: the explicit option, the interim pre-scan,
+ * and that the parser's types always agree with the body modes the tree
+ * records.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";

@@ -32,8 +32,9 @@ const ASYNC_METHOD_START = new Set([
  * End of input inside a concise open delimiter (parser-grammar OQ 19):
  * today's parser is silent and its tags there carry no position. The front
  * end reports `MX_INPUT_ENDS_IN_DELIMITER` at the opener and closes the tags
- * at the end (no silent drop). TODO `concise-eof-interpolation-drops-event` (the template parser
- * still reports no event for g0380 g0381 g0382) stays open.
+ * at the end (no silent drop). TODO `concise-eof-interpolation-drops-event`
+ * (the template parser still reports no event for g0380 g0381 g0382) stays
+ * open.
  */
 const SILENT_EOF = new Set([
   "g0368",

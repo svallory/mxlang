@@ -196,8 +196,8 @@ not detect a template that renders `[object Object]`.
 ## Errors
 
 Every construct this target cannot express is a compile error naming the
-construct and where its equivalent lives — the spec's capability test, "this target
-cannot", never "not implemented".
+construct and where its equivalent lives — the spec's capability test, "this
+target cannot", never "not implemented".
 
 | construct | message names |
 | --- | --- |

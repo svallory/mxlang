@@ -101,8 +101,8 @@ describe("Solid language plugin", {
   it("does not inject an import for an mx.tags entry whose hosts excludes solid", () => {
     // Same shape as the test above, but through an `mx.tags` entry
     // restricted to a different host: `createSolidMxLanguagePlugin`'s scan
-    // must honor `hosts`, so no import is minted and the
-    // region's `<gizmo>` reference stays unresolved.
+    // must honor `hosts`, so no import is minted and the region's
+    // `<gizmo>` reference stays unresolved.
     const dir = mkdtempSync(join(tmpdir(), "mx-solid-hosts-"));
     try {
       mkdirSync(join(dir, "widgets"), { recursive: true });
@@ -731,8 +731,8 @@ describe("MX language plugin", {
     expect(plugin.getLanguageId("/src/card.mx")).toBe("mx");
     expect(plugin.getLanguageId("/src/card.marko")).toBeUndefined();
     expect(plugin.getLanguageId("/src/card.solid.mx")).toBeUndefined();
-    // `.astro.mx` ends in `.mx` but goes to the Astro template
-    // plugin, never to this one.
+    // `.astro.mx` ends in `.mx` but goes to the Astro template plugin, never to
+    // this one.
     expect(plugin.getLanguageId("/src/card.astro.mx")).toBeUndefined();
     expect(
       createAmxLanguagePlugin(ts).getLanguageId("/src/card.astro.mx"),
@@ -2154,11 +2154,10 @@ describe("MX language plugin", {
       expect(callerErrors(project)).toEqual([]);
     });
 
-    // The documented limitation. A type change
-    // reaches the caller through TypeScript's own module graph, but what the
-    // caller *compiled to* (here the shape inferred while the callee did not
-    // exist, and the warning that came with it) is only replaced when the
-    // caller is compiled again.
+    // The documented limitation. A type change reaches the caller through
+    // TypeScript's own module graph, but what the caller *compiled to* (here
+    // the shape inferred while the callee did not exist, and the warning
+    // that came with it) is only replaced when the caller is compiled again.
     it("keeps what the caller compiled to until the caller itself is compiled again", () => {
       const lateCallee = `${directory}/LateCard.mx`;
       const lateCaller = `${directory}/LateCaller.mx`;
@@ -5152,12 +5151,12 @@ describe("custom tag template mappings", () => {
   /**
    * The template writes an expression byte-identical to one the caller writes.
    *
-   * Under the unit model the template is a separate module the
-   * caller imports, so its copy never enters the caller's generated text at
-   * all — the property these tests assert (no mapping may point at the
-   * caller's text for something the caller did not write) now holds by
-   * construction rather than by the mapping pass being careful. They are kept
-   * as the regression that would catch expansion returning by any route.
+   * Under the unit model the template is a separate module the caller
+   * imports, so its copy never enters the caller's generated text at all —
+   * the property these tests assert (no mapping may point at the caller's
+   * text for something the caller did not write) now holds by construction
+   * rather than by the mapping pass being careful. They are kept as the
+   * regression that would catch expansion returning by any route.
    */
   const CALLER = [
     "static const helper = { count: 1 };",

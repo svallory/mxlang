@@ -1,9 +1,9 @@
 /**
- * `mx-tsc` over `.react.mx` region files: a type error inside
- * a region is reported at its authored `.react.mx` line and column, both in
- * a region expression and in an attribute-tag body whose param type comes
- * from a `.react.mx` callee's `Input` (read by the shared JSX callee
- * reader). The passing twin is the same project with both errors fixed.
+ * `mx-tsc` over `.react.mx` region files: a type error inside a region is
+ * reported at its authored `.react.mx` line and column, both in a region
+ * expression and in an attribute-tag body whose param type comes from a
+ * `.react.mx` callee's `Input` (read by the shared JSX callee reader). The
+ * passing twin is the same project with both errors fixed.
  */
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";

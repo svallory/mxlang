@@ -21,8 +21,9 @@ checker.dispose();
 
 ## Why this package exists separately
 
-`@mxlang/host-angular` (the emitter) ships **no Angular runtime dependency**. The Q1 diagnostics path needs
-`@angular/compiler-cli` at check time, so it lives here instead, as a tooling package.
+`@mxlang/host-angular` (the emitter) ships **no Angular runtime
+dependency**. The Q1 diagnostics path needs `@angular/compiler-cli` at check
+time, so it lives here instead, as a tooling package.
 
 `@angular/compiler-cli` is an **optional peer dependency**
 (`>=22.0.0 <23.0.0`), resolved **from the user's project at runtime** and never

@@ -18,8 +18,8 @@ describe("mx-tsc duplicate attributes", () => {
 
       expect(result.status).toBe(0);
       // Line 3, column 6 (1-based) is the first `class`, the dropped one;
-      // the message names the surviving second at 4:3,
-      // 1-based like the position mx-tsc prints.
+      // the message names the surviving second at 4:3, 1-based like the
+      // position mx-tsc prints.
       expect(stderr).toMatch(/Page\.mx\(3,6\): warning MX_DUPLICATE_ATTRIBUTE/);
       expect(stderr).toContain(
         "duplicate attribute `class`: the later one at 4:3 wins, so this one is dropped",

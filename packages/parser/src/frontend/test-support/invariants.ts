@@ -101,11 +101,11 @@ export function checkInvariants(
         within(`${path}.valueSpan`, node.valueSpan, node);
         break;
       case "MxTrigger": {
-        // The span starts with the matched text; `=value`, if
-        // any, follows it after `=` and whitespace, and ends the span. A
-        // method value follows it after whitespace and ends the span; its
-        // `async`, written before the text, starts the span but not the
-        // method (review 460 F1).
+        // The span starts with the matched text; `=value`, if any, follows
+        // it after `=` and whitespace, and ends the span. A method value
+        // follows it after whitespace and ends the span; its `async`,
+        // written before the text, starts the span but not the method
+        // (review 460 F1).
         if (node.value?.type === "MxMethod") {
           within(`${path}.value`, node.value, node);
           if (node.value.end !== node.end)
@@ -362,8 +362,8 @@ export function checkInvariants(
           if (node.source !== slice)
             fail(path, "source is not the span's text");
           within(`${path}.outer`, node, node.outer);
-          // Present only when non-empty; each trigger is an
-          // operand inside the container.
+          // Present only when non-empty; each trigger is an operand inside the
+          // container.
           if ("triggers" in node) {
             if (node.triggers.length === 0)
               fail(path, "an empty triggers list");

@@ -1,8 +1,8 @@
 /**
- * The callee-`Input` reader, driven against real fixture
- * files on disk. Every test asserts the full returned object — shape,
- * cardinality, nested declarations and callee spans — not a fragment, so a
- * field 1b codes against cannot drift silently.
+ * The callee-`Input` reader, driven against real fixture files on disk.
+ * Every test asserts the full returned object — shape, cardinality, nested
+ * declarations and callee spans — not a fragment, so a field 1b codes
+ * against cannot drift silently.
  *
  * `.mx` callees read through the template-metadata compile/cache, so those
  * tests need a real lowering `Ctx` (`ResolveContext.ctx`) and therefore run

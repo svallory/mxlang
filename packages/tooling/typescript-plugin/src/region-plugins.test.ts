@@ -1,7 +1,7 @@
 /**
- * One region language plugin per region file kind: each claims
- * its own `.<segment>.mx` suffix, a kind that is not built in included, and
- * lowers the regions with its own kind's `compileRegion`.
+ * One region language plugin per region file kind: each claims its own
+ * `.<segment>.mx` suffix, a kind that is not built in included, and lowers
+ * the regions with its own kind's `compileRegion`.
  */
 import type { HostFileKind, HostRegionInput } from "@mxlang/core";
 import ts from "typescript";

@@ -17,9 +17,9 @@
  * dependency already exists; adding them here would make the oracle depend on
  * the whole toolchain in order to test discovery.
  *
- * Counted: the suite asserts how many integrations it covered,
- * so an integration silently not running is a failure rather than a smaller
- * green run.
+ * Counted: the suite asserts how many integrations it covered, so an
+ * integration silently not running is a failure rather than a smaller green
+ * run.
  */
 
 import { existsSync, readFileSync } from "node:fs";

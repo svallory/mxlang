@@ -556,9 +556,9 @@ describe("mxDynamic's three value kinds (rendered)", () => {
     // to emit whatever arguments it was called with — it never renders the
     // tag name as literal text. `mxDynamic` must not fall through to
     // returning the bare string here. args[0] ("x", a non-object) becomes
-    // the spread attributes source: `for...in` over a string
-    // yields its numeric indices, matching Marko's own `_attrs`'s `for
-    // (const name in data)` over the same non-object value.
+    // the spread attributes source: `for...in` over a string yields its
+    // numeric indices, matching Marko's own `_attrs`'s `for (const name in
+    // data)` over the same non-object value.
     const html = await renderCompiled('<${input.tag}("x", 2)/>', {
       tag: "span",
     });
@@ -594,10 +594,10 @@ describe("mxDynamic's three value kinds (rendered)", () => {
 });
 
 /**
- * A capitalized tag bound to a value import that is not a
- * `.marko`/`.mx` default import lowers as a dynamic tag — the routing
- * itself, exercised with an ordinary `import { X } from "./target.ts"` and
- * an ordinary `<X>`/`<X/>` call, not `<${expr}>` syntax.
+ * A capitalized tag bound to a value import that is not a `.marko`/`.mx`
+ * default import lowers as a dynamic tag — the routing itself, exercised
+ * with an ordinary `import { X } from "./target.ts"` and an ordinary
+ * `<X>`/`<X/>` call, not `<${expr}>` syntax.
  */
 describe("value import used as a tag (preact)", () => {
   async function renderImportedTag(
@@ -736,11 +736,11 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 
   it("a conditional string-or-component local is unknown and lowers as a dynamic tag", async () => {
     // The chosen function is called and its return value used, matching the
-    // plain-function divergence measured for the import case
-    // above — but a JSX host renders a returned *string* as escaped text
-    // (there is no raw-HTML-from-string channel without
-    // `dangerouslySetInnerHTML`), so the markup comes back escaped rather
-    // than parsed, unlike html's target.
+    // plain-function divergence measured for the import case above — but a
+    // JSX host renders a returned *string* as escaped text (there is no
+    // raw-HTML-from-string channel without `dangerouslySetInnerHTML`), so
+    // the markup comes back escaped rather than parsed, unlike html's
+    // target.
     const html = await renderLocalTag(
       [
         'static function A() { return "<span>a</span>"; }',
@@ -779,16 +779,15 @@ describe("local-value-as-tag-parity: non-import local used as a tag (preact)", (
 });
 
 /**
- * preact/compat's own `memo`/
- * `forwardRef` return real FUNCTIONS (measured, unlike React's own — see the
- * sibling describe block in `@mxlang/host-react`'s suite), so `mxDynamic`'s
- * pre-existing `typeof target === "function"` branch already handled them.
- * The one real gap on this host is React's own `memo`/`forwardRef` reached
- * indirectly — a `.tsx` value import can bring in an object built with
- * React's real `memo` even inside a Preact app (e.g. through `react-dom`
- * interop or a shared library) — exercised here directly against `mxDynamic`
- * to prove the fix in `@mxlang/host-preact`'s emitter covers every host that
- * shares it.
+ * preact/compat's own `memo`/ `forwardRef` return real FUNCTIONS (measured,
+ * unlike React's own — see the sibling describe block in
+ * `@mxlang/host-react`'s suite), so `mxDynamic`'s pre-existing `typeof target
+ * === "function"` branch already handled them. The one real gap on this host
+ * is React's own `memo`/`forwardRef` reached indirectly — a `.tsx` value
+ * import can bring in an object built with React's real `memo` even inside a
+ * Preact app (e.g. through `react-dom` interop or a shared library) —
+ * exercised here directly against `mxDynamic` to prove the fix in
+ * `@mxlang/host-preact`'s emitter covers every host that shares it.
  */
 describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic path (preact)", () => {
   async function renderWithLibrary(entrySource: string): Promise<string> {
@@ -873,8 +872,8 @@ describe("local-value-as-tag-parity: memo()/forwardRef() objects on the dynamic 
 });
 
 /**
- * Attribute-tag rendered shape, executed through Preact
- * rather than asserted only as emitted source text.
+ * Attribute-tag rendered shape, executed through Preact rather than asserted
+ * only as emitted source text.
  */
 describe("attribute tag values (executed)", () => {
   /**
@@ -996,9 +995,9 @@ describe("attribute tag values (executed)", () => {
 });
 
 describe("component aliases", () => {
-  // A lowercase tag is a native element or a registered tag,
-  // never a call to an imported binding. A `marko.json` registers nothing,
-  // so the tag it maps stays the element it spells.
+  // A lowercase tag is a native element or a registered tag, never a call
+  // to an imported binding. A `marko.json` registers nothing, so the tag it
+  // maps stays the element it spells.
   it("leaves a lowercase marko.json tag a native element", async () => {
     const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import(
       "node:fs"
@@ -1258,12 +1257,12 @@ describe("import precedence over registered custom tags", () => {
   });
 });
 
-// Ref custom-tags-local-bindings: a file-local *scope*
-// binding — `<const/Panel=…/>`, a `<for|Panel|>` param, a
-// `<define/Box|Panel|>` param — shadows a registered custom tag of the same
-// name too, scoped to where the binding is in effect. IR-level coverage
-// lives in `packages/core/src/custom-tags.test.ts`; this is the executed
-// render the brief required on a second real JSX host.
+// Ref custom-tags-local-bindings: a file-local *scope* binding —
+// `<const/Panel=…/>`, a `<for|Panel|>` param, a `<define/Box|Panel|>` param
+// — shadows a registered custom tag of the same name too, scoped to where
+// the binding is in effect. IR-level coverage lives in
+// `packages/core/src/custom-tags.test.ts`; this is the executed render the
+// brief required on a second real JSX host.
 describe("local scope bindings shadow a registered custom tag (executed)", () => {
   const panel: CustomTag = {
     transform: (_call, ctx) => [ctx.build.element("mx-marker", [], [])],
@@ -1400,10 +1399,11 @@ describe("a unit that returns a value", () => {
       "/fixtures/tags/counter.mx",
     ).code;
 
-    // The unit render-path model on this host: the body function returns the pair
-    // and binds it as `.render`; the default export returns only the output,
-    // so any caller without static knowledge of the unit (a dynamic tag, a
-    // hand-written TSX import) renders the body, never the pair object.
+    // The unit render-path model on this host: the body function returns the
+    // pair and binds it as `.render`; the default export returns only the
+    // output, so any caller without static knowledge of the unit (a dynamic
+    // tag, a hand-written TSX import) renders the body, never the pair
+    // object.
     expect(code).toContain("return { value: input.start + 1, output: (<>");
     expect(code).toMatch(
       /function CounterUnit\(props: Input\) \{[\s\S]*return \{ value:/,

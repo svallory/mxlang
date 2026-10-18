@@ -10,9 +10,9 @@
  * Positions are file-absolute at creation: the sub-parse receives the
  * container's offset, line and column, so every payload node's `start`, `end`
  * and `loc` (with `index`) already addresses the original file (ast §4.1,
- * §5.3) — there is no post-hoc shift walk. Expression triggers
- * are parsed from their same-length stand-in, and the payload marks each
- * with `extra.mxTrigger` (`markTriggers`).
+ * §5.3) — there is no post-hoc shift walk. Expression triggers are parsed
+ * from their same-length stand-in, and the payload marks each with
+ * `extra.mxTrigger` (`markTriggers`).
  *
  * A failure is data (ast §3.13 item 2): `node` is null and the error's
  * message and position are today's, byte for byte, with the position bounded
@@ -410,8 +410,7 @@ function recoverPastStandIns(
 /**
  * Parses one container. `text` is the authored slice, `at` the position of
  * its first character and `end` the file-absolute end of the slice;
- * `triggers` its expression triggers, local spans in source
- * order.
+ * `triggers` its expression triggers, local spans in source order.
  */
 export function subParse(
   kind: ContainerKind,

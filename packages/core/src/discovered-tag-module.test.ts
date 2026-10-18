@@ -102,8 +102,8 @@ describe("resolveDiscoveredTagModule", () => {
 /**
  * A tag a translator's own taglib registers (a third-party target's; no
  * built-in target registers a lowercase tag since a `marko.json` stopped being
- * read) is the host's tag, not a binding of the same name,
- * and needs the hook to have something to call.
+ * read) is the host's tag, not a binding of the same name, and needs the hook
+ * to have something to call.
  */
 describe("a tag a translator taglib registers", () => {
   function lowerWithTaglib(source: string, declarations: Policy): Ir {

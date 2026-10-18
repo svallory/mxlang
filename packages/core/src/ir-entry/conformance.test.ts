@@ -186,8 +186,8 @@ const INTENDED: Record<
     pattern: /^Unexpected token(, expected ",")?$/,
     cases: ["atom in expression", "mesh-invoice", "whole-value atom"],
   },
-  // Marko behaviour is the default: a tag with no argument
-  // contract takes none, as in stock Marko
+  // Marko behaviour is the default: a tag with no argument contract takes
+  // none, as in stock Marko
   tagArguments: {
     pattern: /Tag does not support arguments/,
     cases: [
@@ -212,8 +212,8 @@ const INTENDED: Record<
       "unary-as-member-expression",
     ],
   },
-  // Marko behaviour is the default, the JS string rule: a
-  // newline inside a quoted string is a syntax error; stock Marko refuses it
+  // Marko behaviour is the default, the JS string rule: a newline inside a
+  // quoted string is a syntax error; stock Marko refuses it
   newlineInString: {
     pattern: /Unterminated string constant/,
     cases: ["attr-multi-line-string", "placeholder-within-string-newlines"],

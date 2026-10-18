@@ -192,12 +192,12 @@ describe("astro-static", () => {
   });
 
   it("/templates renders .astro.mx components: MX template, Astro semantics", async () => {
-    // The route is `templates.astro` (a page cannot be
-    // `.astro.mx`); it imports `Templates.astro.mx`,
-    // and the layout and both components are `.astro.mx` too: an Astro
-    // component whose template is MX, lowered to Astro template syntax and
-    // compiled by Astro itself. This asserts each construct the lowering
-    // table claims, on real rendered output rather than on emitted code.
+    // The route is `templates.astro` (a page cannot be `.astro.mx`); it
+    // imports `Templates.astro.mx`, and the layout and both components are
+    // `.astro.mx` too: an Astro component whose template is MX, lowered to
+    // Astro template syntax and compiled by Astro itself. This asserts each
+    // construct the lowering table claims, on real rendered output rather
+    // than on emitted code.
     const response = await page.goto(`${baseUrl}/templates`, {
       waitUntil: "networkidle",
     });

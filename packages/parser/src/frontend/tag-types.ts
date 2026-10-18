@@ -1,7 +1,7 @@
 /**
- * The front end's `tagTypes`, built before the
- * parse from the two per-target inputs, so the template parser decides tag
- * types from the table alone and no handler returns a decision.
+ * The front end's `tagTypes`, built before the parse from the two per-target
+ * inputs, so the template parser decides tag types from the table alone and
+ * no handler returns a decision.
  *
  * INTERIM until PR C (`lang-ext-syntax-table`), which builds the table in
  * core from the taglib and discovered `parseOptions`, where the set of tag
@@ -98,9 +98,10 @@ function typeOf(mode: MxBodyMode): TagTypeValue | undefined {
 }
 
 /**
- * The table for `source`, keyed by the full written static name: a statement keyword is `statement` (the parser applies it only on a
- * concise line), any other name its `tagShape` body mode's type. `@name` is
- * never asked (an attribute tag's body is html).
+ * The table for `source`, keyed by the full written static name: a
+ * statement keyword is `statement` (the parser applies it only on a concise
+ * line), any other name its `tagShape` body mode's type. `@name` is never
+ * asked (an attribute tag's body is html).
  */
 /** `tagTypes[name]` as an own property: a tag named `toString` is not a function. */
 export function ownTagType(
