@@ -17,7 +17,7 @@ import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import { findMarkOverlap } from "./dialect-marks.ts";
 import type { Ir } from "./ir.ts";
-import type { Dialect, Trigger } from "./syntax-table.ts";
+import { type Dialect, defaultSyntax, type Trigger } from "./syntax-table.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -478,6 +478,221 @@ describe("the dialects installed in one project have disjoint marks", () => {
     markPackage("a", ".aaa", "~", "~[a-z]+");
     const ir = irOf("div x=(~a)\n", undefined, join(dir, "page.aaa"));
     expect(ir.body).toHaveLength(1);
+  });
+});
+
+describe("a `dialect` option is checked against its project's installed dialects", () => {
+  const CLASH =
+    "the `dialect` option `atom` (Atoms) and the installed dialect `b` (B) both mark";
+  const optionError = (dialect: Dialect, file = FILE()) =>
+    caught(() => irOf("div x=(~a)\n", dialect, file));
+
+  it("a clash with an installed dialect is an error naming both, at the file", () => {
+    markPackage("b", ".bbb", "~", "~[0-9]+");
+    const error = optionError(atomDialect());
+    expect(error.diagnosticCode).toBe("MX_INVALID_DIALECT_MODULE");
+    expect(error.message).toBe(
+      `${CLASH} "~": the \`tilde-expression\` row of \`atom\` (\`table.expressionTriggers\`) and the \`b-row\` row of \`b\` (\`table.expressionTriggers\`). A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove the dependency on \`b\``,
+    );
+    expect(error.file).toBe(FILE());
+    expect([error.line, error.column]).toEqual([1, 0]);
+  });
+
+  it("a prefix clash counts on the option path too", () => {
+    markPackage("b", ".bbb", "~", "~\\.[a-z]+");
+    const error = optionError(atomDialect());
+    expect(error.message).toContain(`${CLASH} "~"`);
+  });
+
+  it("a bare table is checked as well", () => {
+    markPackage("b", ".bbb", "~", "~[0-9]+");
+    const error = caught(() =>
+      irOf(
+        "div x=(~a)\n",
+        {
+          ...defaultSyntax(),
+          expressionTriggers: [
+            {
+              id: "tilde",
+              chars: "~",
+              match: "~[a-z]+",
+              standIn: "identifier",
+              node: "identifier",
+            },
+          ],
+        } as unknown as Dialect,
+        FILE(),
+      ),
+    );
+    expect(error.message).toContain(
+      'the `dialect` option\'s table and the installed dialect `b` (B) both mark "~"',
+    );
+    expect([error.line, error.column]).toEqual([1, 0]);
+  });
+
+  it("a bare table equal to an installed dialect's table is that dialect", () => {
+    const row = {
+      id: "tilde",
+      chars: "~",
+      match: "~[a-z]+",
+      standIn: "identifier",
+      node: "identifier",
+    };
+    dialectProject(dir, {
+      packageName: "@acme/b",
+      manifest: { id: "b", name: "B", extensions: [".bbb"] },
+      module: `export default { table: { expressionTriggers: [${JSON.stringify(row)}] } };`,
+    });
+    const table = {
+      ...defaultSyntax(),
+      expressionTriggers: [row],
+    } as unknown as Dialect;
+    expect(irOf("div x=(~a)\n", table, FILE()).body).toHaveLength(1);
+  });
+
+  it("disjoint marks pass", () => {
+    markPackage("b", ".bbb", "!", "![a-z]+");
+    expect(irOf("div x=(~a)\n", atomDialect(), FILE()).body).toHaveLength(1);
+  });
+
+  it("the installed copy of the passed dialect is not a clash", () => {
+    markPackage("atom", ".aaa", "~", "~[a-z]+");
+    expect(irOf("div x=(~a)\n", atomDialect(), FILE()).body).toHaveLength(1);
+  });
+
+  it("a peer whose module does not load is skipped", () => {
+    markPackage("b", ".bbb", "~", "~[0-9]+");
+    dialectProject(dir, {
+      packageName: "@acme/b",
+      manifest: { id: "b", name: "B", extensions: [".bbb"] },
+      module: "throw new Error('broken');",
+    });
+    expect(irOf("div x=(~a)\n", atomDialect(), FILE()).body).toHaveLength(1);
+  });
+
+  it("no project: a file with no package.json, or a virtual name, is not compared", () => {
+    expect(irOf("div x=(~a)\n", atomDialect(), FILE()).body).toHaveLength(1);
+    markPackage("b", ".bbb", "~", "~[0-9]+");
+    // A relative name is not resolved against the working directory.
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      expect(irOf("div x=(~a)\n", atomDialect(), "page.mx").body).toHaveLength(
+        1,
+      );
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("a clash with core's own marks is refused before any project is read", () => {
+    const opener = {
+      ...atomDialect(),
+      table: {
+        attributeTriggers: [
+          { ...ROW("attribute"), chars: "<", match: "<[a-z]+" },
+        ],
+      },
+    } as unknown as Dialect;
+    const error = caught(() => irOf("div x=(1)\n", opener, FILE()));
+    expect(error.diagnosticCode).toBe("MX_INVALID_DIALECT_MODULE");
+    expect(error.message).toContain("is not a valid dialect");
+    expect(error.message).toContain("attributeTriggers[0]");
+    expect([error.line, error.column]).toEqual([1, 0]);
+  });
+
+  it("a frozen dialect is compared again when the project gains a dialect", () => {
+    markPackage("b", ".bbb", "!", "![a-z]+");
+    const deepFreeze = <T>(value: T): T => {
+      if (value && typeof value === "object") {
+        for (const field of Object.values(value)) deepFreeze(field);
+        Object.freeze(value);
+      }
+      return value;
+    };
+    const frozen = deepFreeze(atomDialect());
+    expect(irOf("div x=(~a)\n", frozen, FILE()).body).toHaveLength(1);
+    expect(irOf("div x=(~a)\n", frozen, FILE()).body).toHaveLength(1);
+    markPackage("c", ".ccc", "~", "~[0-9]+");
+    expect(optionError(frozen).message).toContain(
+      "the `dialect` option `atom` (Atoms) and the installed dialect `c` (C) both mark",
+    );
+  });
+});
+
+describe("a row cannot mark text core reads itself", () => {
+  const rowAt = (chars: string, match: string) =>
+    ({ ...ROW("attribute"), chars, match }) as Trigger;
+  const optionOf = (row: Trigger): Dialect =>
+    ({
+      ...atomDialect(),
+      table: { attributeTriggers: [row] },
+    }) as unknown as Dialect;
+
+  it.each([
+    ["a spread", ".", "\\.\\.\\.[a-z]+", '"..."', "a spread (`...`)"],
+    [
+      "the parameters of a tag",
+      "|",
+      "\\|[a-z]+",
+      '"|"',
+      "a tag's parameters (`|`)",
+    ],
+    ["a prefix of a spread", ".", "\\.\\.[a-z]+", '".."', "a spread (`...`)"],
+  ])(
+    "%s as a row's mark is refused for the `dialect` option",
+    (_, chars, match, mark, what) => {
+      const error = caught(() =>
+        irOf("div x=(1)\n", optionOf(rowAt(chars, match)), FILE()),
+      );
+      expect(error.diagnosticCode).toBe("MX_INVALID_DIALECT_MODULE");
+      expect(error.message).toBe(
+        `the \`dialect\` option is not a valid dialect: \`dialect.table.attributeTriggers[0]\` (row \`tilde-attribute\`) marks ${mark}, which core reads itself in that position as ${what}; core's reading wins, so the row would never fire. Change \`chars\` and \`match\` of the row to start with another character`,
+      );
+      expect(error.file).toBe(FILE());
+      expect([error.line, error.column]).toEqual([1, 0]);
+    },
+  );
+
+  it("a bare table is refused the same way", () => {
+    const row = { ...rowAt("|", "\\|[a-z]+"), node: "attribute" };
+    const error = caught(() =>
+      irOf(
+        "div x=(1)\n",
+        { ...defaultSyntax(), attributeTriggers: [row] } as unknown as Dialect,
+        FILE(),
+      ),
+    );
+    expect(error.message).toBe(
+      "the `dialect` option is not a valid syntax table: `dialect.attributeTriggers[0]` (row `tilde-attribute`) marks \"|\", which core reads itself in that position as a tag's parameters (`|`); core's reading wins, so the row would never fire. Change `chars` and `match` of the row to start with another character",
+    );
+    expect([error.line, error.column]).toEqual([1, 0]);
+  });
+
+  it("the routed path refuses it in the dialect's module", () => {
+    dialectProject(dir, {
+      packageName: "@acme/p",
+      manifest: { id: "p", name: "P", extensions: [".ppp"] },
+      module: `export default { table: { attributeTriggers: [{ id: "bar", chars: "|", match: "\\\\|[a-z]+", standIn: "keep", node: { call: "bar" } }] }, lowerTrigger() {} };`,
+    });
+    const error = caught(() => irOf("div\n", undefined, join(dir, "page.ppp")));
+    expect(error.message).toContain(
+      '`table.attributeTriggers[0]` (row `bar`) marks "|", which core reads itself in that position as a tag\'s parameters',
+    );
+    expect(error.file).toMatch(/node_modules\/@acme\/p\/index\.mjs$/);
+    expect([error.line, error.column]).toEqual([1, 0]);
+  });
+
+  it("other marks in that position are not refused: `:` and `&`", () => {
+    for (const [chars, match] of [
+      [":", ":[a-z]+"],
+      ["&", "&[a-z]+"],
+    ]) {
+      const row = rowAt(chars as string, match as string);
+      const error = caught(() => irOf("div x=(1)\n", optionOf(row), FILE()));
+      // Past the table check: the row names a type outside its slot.
+      expect(error.message).not.toContain("core reads itself");
+    }
   });
 });
 

@@ -51,7 +51,11 @@ import {
   type RouteDialectOptions,
   routeDialect,
 } from "./dialect-discovery.ts";
-import { findMarkOverlap } from "./dialect-marks.ts";
+import {
+  findCoreMarkClash,
+  findMarkOverlap,
+  type MarkOverlap,
+} from "./dialect-marks.ts";
 import {
   checkDialectNodeTypes,
   forgetNodeTypeRegistry,
@@ -963,7 +967,20 @@ function overlayTable(
   if (!parser) fail(`\`${path}\`: ${NEEDS_MX_PARSER}`);
   const problems = (parser as MxTemplateParser).validateSyntaxTable(table);
   if (problems.length > 0) fail(describeProblems(problems, path));
+  const own = coreMarkProblem(table, path);
+  if (own) fail(own);
   return intern(structuredClone(table));
+}
+
+/**
+ * Why a row cannot start with the text it does: the parser reads that text
+ * itself (a spread, a tag's parameters) before any row is tried, so the row
+ * would never fire.
+ */
+function coreMarkProblem(table: SyntaxTable, path: string): string | undefined {
+  const clash = findCoreMarkClash(table);
+  if (!clash) return undefined;
+  return `\`${path}.${clash.list}[${clash.index}]\` (row \`${clash.row}\`) marks ${JSON.stringify(clash.mark)}, which core reads itself in that position as ${clash.what} (\`${clash.coreMark}\`); core's reading wins, so the row would never fire. Change \`chars\` and \`match\` of the row to start with another character`;
 }
 
 /** The first `{ call }` trigger of a table, with its field path, in list order. */
@@ -1498,17 +1515,39 @@ function resolveManifestSyntax(
     const other = peerDialect(peer);
     const clash = other && findMarkOverlap(dialect.table, other.table);
     if (!clash || !other) continue;
-    const named = (id: string, name: string) =>
-      id === name ? `\`${id}\`` : `\`${id}\` (${name})`;
     throw codedError(
       INVALID_DIALECT_MODULE_CODE,
-      `dialects ${named(loaded.manifest.id, dialect.name)} and ${named(peer.id, other.name)} are installed in one project and both mark ${JSON.stringify(clash.mark)}: the \`${clash.first.row}\` row of \`${loaded.manifest.id}\` (\`table.${clash.first.list}\`) and the \`${clash.second.row}\` row of \`${peer.id}\` (\`table.${clash.second.list}\`). A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove one of the two dependencies`,
+      markClashMessage(
+        { id: loaded.manifest.id, name: dialect.name, row: clash.first },
+        { id: peer.id, name: other.name, row: clash.second },
+        clash.mark,
+      ),
       1,
       0,
       loaded.file,
     );
   }
   return resolved;
+}
+
+/** The message for two installed dialects whose marks clash, shared by the routed and the `dialect` option paths. */
+function markClashMessage(
+  first: { id: string; name: string; row: MarkOverlap["first"] },
+  second: { id: string; name: string; row: MarkOverlap["second"] },
+  mark: string,
+  option?: { bare: boolean },
+): string {
+  const named = (id: string, name: string) =>
+    id === name ? `\`${id}\`` : `\`${id}\` (${name})`;
+  const rows = (who: string, row: MarkOverlap["first"]) =>
+    `the \`${row.row}\` row of ${who} (\`table.${row.list}\`)`;
+  if (option) {
+    const label = option.bare
+      ? "the `dialect` option's table"
+      : `the \`dialect\` option ${named(first.id, first.name)}`;
+    return `${label} and the installed dialect ${named(second.id, second.name)} both mark ${JSON.stringify(mark)}: ${rows(option.bare ? "the table" : `\`${first.id}\``, first.row)} and ${rows(`\`${second.id}\``, second.row)}. A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove the dependency on \`${second.id}\``;
+  }
+  return `dialects ${named(first.id, first.name)} and ${named(second.id, second.name)} are installed in one project and both mark ${JSON.stringify(mark)}: ${rows(`\`${first.id}\``, first.row)} and ${rows(`\`${second.id}\``, second.row)}. A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove one of the two dependencies`;
 }
 
 /** The dialect a peer manifest declares, loaded (and cached) on its own; `undefined` when its module fails. */
@@ -1679,10 +1718,16 @@ export function explicitSyntaxOf(
     const table = explicitSyntax(value, filename);
     const unregistered = unregisteredNodeRow(table, undefined, "dialect");
     if (unregistered) fail(`the \`dialect\` option: ${unregistered}`);
+    if (table !== DEFAULT_ROW) {
+      checkOptionMarks(value, table, filename, isDeepFrozen(value));
+    }
     return table === DEFAULT_ROW ? DEFAULT_RESOLVED : { table };
   }
   const known = explicitModules.get(value);
-  if (known) return known;
+  if (known) {
+    checkOptionMarks(value, known.table, filename, true);
+    return known;
+  }
   // A dialect that is not deep-frozen can change between calls: what core
   // remembers about it (the claimed contract fields, the node type registry,
   // the contract entries checked under that claim) is dropped, so this call
@@ -1714,6 +1759,7 @@ export function explicitSyntaxOf(
   const unregistered = unregisteredNodeRow(table, dialect, "dialect.table");
   if (unregistered) invalid(unregistered);
   const resolved: ResolvedSyntax = { table, dialect };
+  checkOptionMarks(value, table, filename, cacheable);
   // Only a deep-frozen dialect is remembered: a nested object left unfrozen
   // could change, so a partly frozen one is validated on every call.
   if (cacheable) explicitModules.set(value, resolved);
@@ -1757,11 +1803,118 @@ export function explicitSyntax(
         `the \`dialect\` option is not a valid syntax table: ${describeProblems(problems, "dialect")}`,
       );
     }
+    const own = coreMarkProblem(table, "dialect");
+    if (own) {
+      fail(`the \`dialect\` option is not a valid syntax table: ${own}`);
+    }
   }
   // Only a deep-frozen table is remembered: one with any unfrozen nested
   // object or array could change, so it is validated on every call.
   if (isDeepFrozen(table)) validExplicit.add(table);
   return table;
+}
+
+const TRIGGER_LISTS = [
+  "expressionTriggers",
+  "attributeTriggers",
+  "lineTriggers",
+  "valueTriggers",
+  "textTriggers",
+] as const;
+
+/**
+ * The explicit `dialect` options already compared with their project's
+ * installed dialects: per option object (a table or a dialect, deep-frozen
+ * only), the `package.json` it was compared in and the peers it passed
+ * against, each with its module's mtime. A call finds the same peers
+ * unchanged and skips the comparison; a changed peer, a different project
+ * or an unfrozen option is compared again.
+ */
+const comparedOptions = new WeakMap<
+  object,
+  Map<string, readonly { manifest: DialectManifest; mtimeMs?: number }[]>
+>();
+
+/**
+ * Checks an explicit `dialect` option the way the routed path checks a
+ * dialect: its marks against the other dialects its file's project installs
+ * (`discoverDialects` of the nearest `package.json`). The passed dialect is
+ * the project's own when it shares an installed dialect's id (a bare table
+ * when it equals an installed table), and is not compared with itself. A
+ * relative or virtual `filename`, or a file with no `package.json`, names no
+ * project: nothing is installed to compare with. The clash is an error at the
+ * start of `filename` (the option has no module), in the routed path's words.
+ * Core's own marks are checked with the option's validation (`explicitSyntax`
+ * and `overlayTable`: `validateSyntaxTable` and `findCoreMarkClash`), which
+ * the routed path shares.
+ */
+function checkOptionMarks(
+  option: SyntaxTable | Dialect,
+  table: Partial<SyntaxTable>,
+  filename: string,
+  cacheable: boolean,
+): void {
+  // A relative name would find whatever project the working directory is in.
+  if (!isAbsolute(filename)) return;
+  const found = findNearestPackageJson(dirname(filename));
+  if (!found) return;
+  const manifests = discoverDialects(found.file);
+  const peers = manifests.flatMap((manifest) => {
+    const dialect = peerDialect(manifest);
+    return dialect
+      ? [{ manifest, dialect, mtimeMs: mtimeOfPeer(manifest) }]
+      : [];
+  });
+  const stamp = peers.map(({ manifest, mtimeMs }) => ({ manifest, mtimeMs }));
+  const known = comparedOptions.get(option)?.get(found.file);
+  if (
+    known &&
+    known.length === stamp.length &&
+    known.every(
+      (each, i) =>
+        each.manifest === stamp[i]?.manifest &&
+        each.mtimeMs === stamp[i]?.mtimeMs,
+    )
+  ) {
+    return;
+  }
+  const own = isDialect(option) ? option : undefined;
+  const id = own?.id ?? "table";
+  const name = own?.name ?? id;
+  for (const { manifest, dialect } of peers) {
+    if (own ? manifest.id === own.id : sameTable(dialect.table, table))
+      continue;
+    const clash = findMarkOverlap(table, dialect.table);
+    if (!clash) continue;
+    throw codedError(
+      INVALID_DIALECT_MODULE_CODE,
+      markClashMessage(
+        { id, name, row: clash.first },
+        { id: manifest.id, name: dialect.name, row: clash.second },
+        clash.mark,
+        { bare: own === undefined },
+      ),
+      1,
+      0,
+      filename,
+    );
+  }
+  if (!cacheable) return;
+  const byProject = comparedOptions.get(option) ?? new Map();
+  byProject.set(found.file, stamp);
+  comparedOptions.set(option, byProject);
+}
+
+/** Do the tables hold the same trigger rows (the fields a mark comes from)? */
+const sameTable = (a: Partial<SyntaxTable>, b: Partial<SyntaxTable>): boolean =>
+  TRIGGER_LISTS.every(
+    (list) => canonical(a[list] ?? []) === canonical(b[list] ?? []),
+  );
+
+/** The mtime of the module a peer manifest loaded from. */
+function mtimeOfPeer(manifest: DialectManifest): number | undefined {
+  const known = byDialect.get(manifest);
+  return known?.mtimeMs;
 }
 
 /** Where a parse runs: the file and the fragment's base, for positions. */

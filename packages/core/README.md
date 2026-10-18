@@ -636,9 +636,17 @@ Across the dialects a project installs (its own declaration and its direct
 dependencies that declare one), marking characters are disjoint: no two rows of
 different dialects start with the same text, and none starts with text that is a
 prefix of another's (`%` against `%.`; `%.` against `%:` is fine). The check
-runs when a file's dialect is routed from a project; a caller that passes the
-`dialect` option is not checked. The first clash is an error in the module of the
-dialect being loaded, naming both dialects and both rows.
+runs when a file's dialect is routed from a project, and for a caller that
+passes the `dialect` option too: with an absolute file name inside a project,
+the option is compared with that project's installed dialects (an installed
+dialect with the option's `id` is the option itself); with a relative or
+virtual name, or no `package.json`, no project is known, and only the usual
+validation of the option's rows applies (a row may not start with a character
+the parser keeps, such as `<`, nor mark a spread `...` or a tag's parameters
+`|` in the attribute list, which core reads before any row; the routed path
+refuses the same rows). The first clash is an error naming both
+dialects and both rows: in the module of the dialect being loaded, or, for the
+option, at the start of the file.
 
 `print(parse(text))` gives the text back. `<sort to=~user.name>` lowers to a
 static attribute `to="user.name"` whose IR carries the node (`Attr.node`)

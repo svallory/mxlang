@@ -5360,9 +5360,23 @@ the others; a clash is one `MX_INVALID_DIALECT_MODULE` error in the loading
 dialect's module at 1:0 that names both dialects, both rows and the shared
 mark, and says to change one row's `chars` and `match` or to remove one
 dependency. A dialect whose own module does not load is skipped in the
-comparison; its files report why. The comparison happens when a file is routed
-to its dialect from its project; a caller that passes the `dialect` option
-directly is not compared with anything.
+comparison; its files report why. A caller that passes the `dialect` option
+(a dialect, or a bare table) is checked too, with what its call knows. A
+row, in any dialect or option, may not start with a character the parser keeps
+for its own syntax in that position (`<` in every position, and the
+separators, quotes and escapes of each), nor have a mark that equals, is a
+prefix of, or has as a prefix text the parser reads itself in the attribute
+list before any row is tried: a spread (`...`) and a tag's parameters (`|`).
+Core refuses such a row where the table is validated, as one
+`MX_INVALID_DIALECT_MODULE` error naming the row, its mark and the text core
+reads, since core's reading would win and the row would never fire. When the file name is
+absolute and its nearest `package.json` is found, the option is compared with
+the dialects that project installs, as an error at the start of the file that
+names the option, the installed dialect, both rows and the shared mark; an installed dialect with the option's `id` (or, for a bare table,
+the same rows) is the option itself and is not compared. A relative or virtual
+file name, or a file with no `package.json`, names no project, so there is
+nothing installed to compare with. Core compares an option once per project
+until the project's installed dialects or their modules change.
 
 **The claim.** Every row naming a node type goes through one process. At
 a trigger position the parser finds the row whose `match` matches and asks the

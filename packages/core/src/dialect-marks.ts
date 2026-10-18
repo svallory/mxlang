@@ -22,6 +22,7 @@ const ROW_LISTS = [
 interface Mark {
   readonly row: string;
   readonly list: string;
+  readonly index: number;
   readonly prefix: string;
   readonly ranges: readonly (readonly [number, number])[];
 }
@@ -126,7 +127,8 @@ function marksOf(table: Partial<SyntaxTable> | undefined): Mark[] {
   const marks: Mark[] = [];
   if (!table) return marks;
   for (const list of ROW_LISTS) {
-    for (const row of (table[list] ?? []) as readonly Trigger[]) {
+    const rows = (table[list] ?? []) as readonly Trigger[];
+    for (const [index, row] of rows.entries()) {
       if (typeof row?.chars !== "string" || typeof row.match !== "string") {
         continue;
       }
@@ -134,6 +136,7 @@ function marksOf(table: Partial<SyntaxTable> | undefined): Mark[] {
       marks.push({
         row: row.id,
         list,
+        index,
         prefix,
         ranges: prefix === "" ? rangesOf(row.chars) : [],
       });
@@ -184,6 +187,63 @@ export function findMarkOverlap(
           mark,
           first: { row: a.row, list: a.list },
           second: { row: b.row, list: b.list },
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * What the parser itself reads at the start of a name in the attribute list,
+ * before any row is tried: a spread (`...`) and a tag's parameters (`|`).
+ * (`<`, `>`, `/`, `=`, `,`, `;`, brackets and whitespace are refused as a
+ * row's first character already; `:=` binds only when `=` follows, so a row
+ * marked `:` still arms.) A row marked with one of these never fires.
+ */
+const CORE_MARKS: Readonly<
+  Record<string, readonly { mark: string; what: string }[]>
+> = {
+  attributeTriggers: [
+    { mark: "...", what: "a spread" },
+    { mark: "|", what: "a tag's parameters" },
+  ],
+};
+
+/** A row that starts with text the parser reads itself. */
+export interface CoreMarkClash {
+  readonly list: string;
+  readonly index: number;
+  readonly row: string;
+  readonly mark: string;
+  readonly coreMark: string;
+  readonly what: string;
+}
+
+/**
+ * The first row of `table` whose mark equals, is a prefix of, or has as a
+ * prefix a mark core claims in that position, or `undefined`.
+ */
+export function findCoreMarkClash(
+  table: Partial<SyntaxTable> | undefined,
+): CoreMarkClash | undefined {
+  for (const own of marksOf(table)) {
+    for (const core of CORE_MARKS[own.list] ?? []) {
+      const mark = overlap(own, {
+        row: "",
+        list: own.list,
+        index: -1,
+        prefix: core.mark,
+        ranges: [],
+      });
+      if (mark !== undefined) {
+        return {
+          list: own.list,
+          index: own.index,
+          row: own.row,
+          mark,
+          coreMark: core.mark,
+          what: core.what,
         };
       }
     }
