@@ -1,6 +1,6 @@
 # @mxlang/tsx-bridge changelog
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed (parser-split):** this package is what `@mxlang/parser` was before the split, minus the vendored Babel fork and the htmljs-parser template parser. The fork moved to `@mxlang/babel` (`packages/babel`) and the template parser stays in `@mxlang/parser`. The public surface (`parse`, `print`, `printAst`, `sourceBindings`, …) and `dist/index.d.ts` are unchanged apart from the module name, `@mxlang/tsx-bridge`; every in-repo importer moved with it. The bridge now injects the MX grammar into the fork through the `mxHooks` option (`bridge.ts`'s `mxHooks`) instead of the fork importing it. Solid-lowering tests moved to `@mxlang/solid` (`src/bridge/`), so the package depends on no host. Earlier entries below were written under the old package name.
 

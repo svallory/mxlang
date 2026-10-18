@@ -1,6 +1,6 @@
 # @mxlang/tree-sitter-mx
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
 

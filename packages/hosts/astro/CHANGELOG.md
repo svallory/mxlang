@@ -27,7 +27,7 @@
 
 - **Fix (marko-parity-trio, `:modifier`):** `<div :foo="y"/>` in a template body emits `value:foo={y}`, which the real Astro compiler renders as `value:foo="y"`; MX previously rejected the form.
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fix, behaviour change (unresolved-tags-dir-diagnostic):** a `.marko` file used as a tag, and a `tags/x/index.mx` directory tag, are one positioned error at the tag naming the file (core's check), not a silent native `<x>`.
 

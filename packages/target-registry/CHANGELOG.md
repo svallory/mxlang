@@ -1,6 +1,6 @@
 # @mxlang/target-registry
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fixed (data-check-keys-on-base-target):** `isDataProject` and `checkDataPackage` key on the resolved base target (the end of the descriptor's `builtOn` chain), not on the project's `mx.target` string: an `mx.host` project whose host declares `builtOn: "data"` gets data's strict `structural`/`unknownTags` defaults and the `mx.data.*` keys from `mx-tsc`, and a nested package is walked when its base target is data. The check adds to the host: its own `load()` compile runs on every file beside `parseData` (an error both report prints once). The base target's `mx.<base>.defaultTag` is a rung of the shared ladder (`resolveTargetPolicyDetailed` folds it into the policy when the target's own key is absent or rejected, and `defaultTagFor` reads it for a file kind), so Vite, the language server, the TypeScript plugin and `mx-tsc` compile with one answer; when both keys are set and differ the target's own wins and a `default-tag-overridden` warning at the base key names both. The staged lookup answers `allTargetNames()` with `data`, so an unknown `builtOn` lists it. **Added:** `baseTargetOfPolicy(policy)`.
 

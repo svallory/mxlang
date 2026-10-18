@@ -1,5 +1,0 @@
----
-packages: [angular, angular-checker]
-kind: Fixed
----
-Angular's own diagnostics name a `<const>` or `<define>` as the author wrote it again. Since element-body scoping every `<const>` written in a native element body was renamed, so a single-root `.ng.mx` template reported `@let __mxConst_a is declared but its value is never read` (NG8112) and `Cannot use non-signal @let declaration '__mxConst_a' in a two-way binding expression` instead of `@let a`. The emitter now renames such a declaration only when its name collides (another `<const>`, `<define>`, parameter or `/var` has it, or the name is read outside the declaration's own body); otherwise the output is what it was before the rename existed. When a name is renamed, `@mxlang/angular-checker` prints the authored name in the Angular diagnostic, using the new `NgMxRegion.authoredNames` map of the compiled `.ng.mx`, so `mx-tsc` shows `@let a` either way. `ng build` on the files `mx-angular build` wrote still prints the generated name for a collision.

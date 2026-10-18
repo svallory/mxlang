@@ -1,6 +1,6 @@
 # @mxlang/hono
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fix, visible emitted-code change (dynamic-tag-return-unit-object-object / dynamic-tag-var-silent-drop):** same as Preact (shared emitter and compiler): a compiled unit that declares `<return>` now exports the output only; callers that read the pair use `Unit.render(props).value`. No alias. The pair moved to a `.render(props)` render path, so a dynamic tag (`<${Counter}/>`, directly or through a `.ts` barrel) renders the body where Hono's string resolver failed on the pair object; `/var` reads the pair off `.render`, and a `/var` on a dynamic tag binds through `__mxDynamicPair` (core's `bindsDynamicTagVar` opt-in), refused inside `<for>`/`<if>`. Also Preact's r2 fix: a dynamic `/var` call with tag arguments renders its body, and the `/var` statement no longer emits `[object Object]`.
 - **Fix (dynamic-tag-var-silent-drop, core):** a tag variable a host cannot bind (`/n` on a `.ts` component anywhere) is reported at the `/var` itself, not at the whole tag. Position only; binding and message unchanged.

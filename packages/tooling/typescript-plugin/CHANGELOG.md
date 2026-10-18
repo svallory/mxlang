@@ -1,6 +1,6 @@
 # @mxlang/typescript-plugin
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed:** `.mx` compile errors: one diagnostic per entry of core's `TranslateError.errors` (so `mx-tsc` prints them all); `getSyntaxError` stays the first.
 

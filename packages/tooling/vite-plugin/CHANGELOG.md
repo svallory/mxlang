@@ -1,6 +1,6 @@
 # @mxlang/vite-plugin
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed:** a failing transform throws the first error and carries the file's other errors in its message.
 

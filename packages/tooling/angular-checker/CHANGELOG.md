@@ -1,6 +1,6 @@
 # @mxlang/angular-checker
 
-## Unreleased
+## 0.1.0-alpha.33 — 2026-10-18
 
 - **Clarification (hint-followups round 2):** the metadata cache speeds only repeated checks of the same entry with unchanged sources, compiler options and resolution evidence (CLI/batch rechecks or repeated tool calls). Editing a source or alternating entries rebuilds the single slot; this is not an editing-performance improvement. One extra full metadata Program is retained per checker until replacement or `dispose()` (approximately 65 MB additional heap in the reviewer's 150-component probe; workload-dependent). The cache is not widened.
 
@@ -25,3 +25,5 @@
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.
 
 - **Fixed (html-publish-prep):** Publish prep for `@mxlang/html` and the repository metadata: `@mxlang/html` ships its `LICENSE` and declares `publishConfig.access: public`; every `repository` URL points at `github.com/svallory/mxlang`; the README and docs example import the named `translator` and lead with `compile`; `@mxlang/core` writes `dist/THIRD-PARTY-NOTICES.md` with the licence text of the vendored `@babel/parser`, `@babel/helper-validator-identifier` and `charcodes` that `dist/index.js` bundles.
+
+- **Fixed (angular-generated-names):** Angular's own diagnostics name a `<const>` or `<define>` as the author wrote it again. Since element-body scoping every `<const>` written in a native element body was renamed, so a single-root `.ng.mx` template reported `@let __mxConst_a is declared but its value is never read` (NG8112) and `Cannot use non-signal @let declaration '__mxConst_a' in a two-way binding expression` instead of `@let a`. The emitter now renames such a declaration only when its name collides (another `<const>`, `<define>`, parameter or `/var` has it, or the name is read outside the declaration's own body); otherwise the output is what it was before the rename existed. When a name is renamed, `@mxlang/angular-checker` prints the authored name in the Angular diagnostic, using the new `NgMxRegion.authoredNames` map of the compiled `.ng.mx`, so `mx-tsc` shows `@let a` either way. `ng build` on the files `mx-angular build` wrote still prints the generated name for a collision.
