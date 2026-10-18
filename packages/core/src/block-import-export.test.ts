@@ -532,15 +532,6 @@ describe("an export list names a binding an earlier statement declares", () => {
     expect(lines).toEqual([]);
   });
 
-  it("compiles an `export default` of a name an earlier statement declares in the keyword-less form", () => {
-    const lines = consoleOutput(() => {
-      expect(
-        lower("static const foo = 1;\nexport default foo;\n<div/>").diagnostics,
-      ).toEqual([]);
-    });
-    expect(lines).toEqual([]);
-  });
-
   it("keeps the statement's own text", () => {
     const { ir } = lower("static const q = 1;\nstatic export { q };\n<div/>");
     expect((ir?.hoisted ?? []).map((statement) => statement.code)).toEqual([

@@ -290,6 +290,22 @@ by an earlier statement is not known to the check, so that form is refused. Name
 `export { x }` may name a binding that an earlier `static`, `server`,
 `client` or `import` statement declares.
 
+**The same holds for an `export` with no keyword before it.** A top-level
+`export default <value>`, `export default function`, `export default class`,
+`export { x as default }`, `export { default } from "…"` and `export * as default
+from "…"` are the same positioned error (`MX_INVALID_STATEMENT`, over the
+`export` statement): "A template is already its own default export, so a default
+export at the top of the file would give the module a second one and the module
+would not load. Use a named export instead (`export const x`, or `export { x }`)."
+Here a type-only default (`export default interface I {}`, `export type { T as
+default }`) is refused too, as Marko refuses it. `export { default as foo } from
+"…"` is a named export and is accepted.
+
+**A `static` alone on its line is an empty statement.** `static` followed by
+nothing, then a newline or the end of the file, declares and emits nothing, as in
+Marko. A `static` followed by a statement on the next line is not one statement:
+the next line is read as a tag, as in Marko.
+
 **CommonJS forms are refused.** `export = value` and `import x = require("…")`
 (also `import type x = require("…")` and `export import x = require("…")`)
 anywhere in a `static`, `server`, `client` or `export` statement, in a block or

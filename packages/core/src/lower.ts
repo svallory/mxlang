@@ -4565,12 +4565,13 @@ function rejectInvalidStatement(
     throw failure;
   }
   refuseCommonJs();
-  if (BLOCK_STATEMENT_KEYWORDS.has(keyword)) {
-    const second = secondDefaultExportIn(parsed);
+  const bare = keyword === "export";
+  if (BLOCK_STATEMENT_KEYWORDS.has(keyword) || bare) {
+    const second = secondDefaultExportIn(parsed, bare);
     if (second?.loc) {
       const failure = codedError(
         INVALID_STATEMENT_CODE,
-        SECOND_DEFAULT_EXPORT_MESSAGE,
+        bare ? BARE_DEFAULT_EXPORT_MESSAGE : SECOND_DEFAULT_EXPORT_MESSAGE,
         place(second.loc.start).line,
         place(second.loc.start).column,
       );
@@ -4612,6 +4613,13 @@ const BLOCK_STATEMENT_KEYWORDS = new Set(["static", "server", "client"]);
 const SECOND_DEFAULT_EXPORT_MESSAGE =
   "A template is already its own default export, so this default export would give the module a second one and the module would not load. Use a named export instead (`export const x`, or `export { x }`).";
 
+/**
+ * MX's text for a keyword-less `export` of `default` at the top of the file
+ * (stock refuses all of them at compile; so does MX, type-only forms too).
+ */
+const BARE_DEFAULT_EXPORT_MESSAGE =
+  "A template is already its own default export, so a default export at the top of the file would give the module a second one and the module would not load. Use a named export instead (`export const x`, or `export { x }`).";
+
 /** Is `name` (an `Identifier` or a string literal) the export name `default`? */
 function isDefaultExportName(name: Node): boolean {
   return (
@@ -4628,7 +4636,10 @@ function isDefaultExportName(name: Node): boolean {
  * default }`, `export { type T as default }`) is erased by the strip and
  * exports nothing, so it is not one.
  */
-function secondDefaultExportIn(program: Node | undefined): Node | undefined {
+function secondDefaultExportIn(
+  program: Node | undefined,
+  typeOnlyCounts = false,
+): Node | undefined {
   const body: Node[] = program?.program?.body ?? [];
   // Names this statement imports as types only: `export { T as default }` of
   // one is erased with the import. An import in an earlier statement is not
@@ -4637,6 +4648,7 @@ function secondDefaultExportIn(program: Node | undefined): Node | undefined {
   for (const statement of body) {
     if (statement.type !== "ImportDeclaration") continue;
     for (const specifier of statement.specifiers ?? []) {
+      if (typeOnlyCounts) continue;
       if (statement.importKind === "type" || specifier.importKind === "type")
         typeOnly.add(specifier.local?.name);
     }
@@ -4647,18 +4659,19 @@ function secondDefaultExportIn(program: Node | undefined): Node | undefined {
       if (
         (declaration?.type === "Identifier" &&
           typeOnly.has(declaration.name)) ||
-        declaration?.type === "TSInterfaceDeclaration" ||
-        (declaration?.type === "TSDeclareFunction" && !declaration.body)
+        (!typeOnlyCounts &&
+          (declaration?.type === "TSInterfaceDeclaration" ||
+            (declaration?.type === "TSDeclareFunction" && !declaration.body)))
       )
         continue;
       return statement;
     }
     if (
       statement.type === "ExportNamedDeclaration" &&
-      statement.exportKind !== "type" &&
+      (typeOnlyCounts || statement.exportKind !== "type") &&
       (statement.specifiers ?? []).some(
         (specifier: Node) =>
-          specifier.exportKind !== "type" &&
+          (typeOnlyCounts || specifier.exportKind !== "type") &&
           !(
             !statement.source &&
             specifier.local?.type === "Identifier" &&
@@ -4958,6 +4971,14 @@ function refuseUnsupportedImport(node: Node): void {
   }
 }
 
+/**
+ * The text after the `static` keyword. A `static` with nothing after it is an
+ * empty statement, as in Marko: it declares and runs nothing.
+ */
+function staticBody(line: string): string {
+  return line === "static" ? "" : line.replace(/^static\s+/, "");
+}
+
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   // A statement tag is parsed as a statement (Marko: its text is `rawValue`;
   // MX: an `MxModuleStatement`). One the parser read as
@@ -4979,7 +5000,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   rejectInvalidStatement(
     ctx,
     node,
-    name === "static" ? line.replace(/^static\s+/, "") : line,
+    name === "static" ? staticBody(line) : line,
     name === "static" ? (/^static\s+/.exec(line)?.[0].length ?? 0) : 0,
     name,
   );
@@ -5029,7 +5050,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   if (name === "static") {
     // `static { … }` is its statements at module scope, braces gone, as Marko
     // reads it (`static { let q = 1 }` declares `q` for the template).
-    const code = unwrapStatementBlock(line.replace(/^static\s+/, ""));
+    const code = unwrapStatementBlock(staticBody(line));
     // An empty block declares and runs nothing, but it is still a module
     // statement a host that has no module scope refuses: it stays in
     // `ir.hoisted` with empty code, which no host prints.
