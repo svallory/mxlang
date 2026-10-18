@@ -121,6 +121,8 @@ const EMPTY: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
  */
 let rebuilding = false;
 let deciding = false;
+/** File reads seen so far; a `-b` decision waits for it to stop moving. */
+let reads = 0;
 
 /**
  * Decides a missed rebuild synchronously, without waiting for the event-loop
@@ -140,25 +142,58 @@ export function reportMissedRebuildIfMarked(): void {
   process.stderr.write(MISSED_REBUILD);
 }
 
+/**
+ * How long a `tsc -b -w` rebuild must stay quiet, after its last file read,
+ * before it counts as missed. tsc's solution builder rebuilds a change that
+ * invalidates several projects across event-loop turns: after the first
+ * project it schedules the rest with a 100 ms timer, and writes the one summary
+ * only after the last. The wait therefore has to outlast that timer.
+ */
+export const BUILD_QUIET_MS = 400;
+
 export function rebuildActivity(
   host: { getSourceFile?: unknown } | undefined,
+  options: { build?: boolean } = {},
 ): void {
   const getSourceFile = host?.getSourceFile;
   if (typeof getSourceFile !== "function" || !host) return;
   host.getSourceFile = (...args: unknown[]) => {
     rebuilding = true;
+    reads += 1;
     if (!deciding) {
       deciding = true;
       setImmediate(() => {
         deciding = false;
         // A recognized summary cleared the mark: the pass ran for this rebuild.
         if (!rebuilding) return;
+        if (options.build) {
+          // A `-b` rebuild is not over at the end of this tick: its next
+          // project is built on tsc's own timer, and only the last project
+          // writes the summary. Quiet for `BUILD_QUIET_MS`, with no further
+          // read and no summary, is what a missed rebuild looks like.
+          decideAfterQuiet(reads);
+          return;
+        }
         rebuilding = false;
         process.stderr.write(MISSED_REBUILD);
       });
     }
     return (getSourceFile as (...a: unknown[]) => unknown)(...args);
   };
+}
+
+/**
+ * Reports a `-b` rebuild as missed once `BUILD_QUIET_MS` passed with no file
+ * read since `seen`. A read in between belongs to a later project of the same
+ * rebuild, and that read started a decision of its own.
+ */
+function decideAfterQuiet(seen: number): void {
+  const timer = setTimeout(() => {
+    if (!rebuilding || reads !== seen) return;
+    rebuilding = false;
+    process.stderr.write(MISSED_REBUILD);
+  }, BUILD_QUIET_MS);
+  timer.unref?.();
 }
 
 /**

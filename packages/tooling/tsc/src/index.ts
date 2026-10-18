@@ -506,7 +506,9 @@ function runPatchedTsc(
             }
             // Watch only: marks that a rebuild is reading files, so a rebuild
             // whose summary the pass cannot recognize is said out loud.
-            if (watchMode) rebuildActivity(options.host);
+            if (watchMode) {
+              rebuildActivity(options.host, { build: solutionBuild });
+            }
             fallBackToVolarResolution(
               typescript,
               options.host,

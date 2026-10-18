@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import {
   appendFileSync,
   cpSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -195,6 +196,10 @@ it(
       // Broken again: back, at the same position.
       writeFileSync(file, clean.replace("user.name", `user.${BROKEN}`));
       expectBroken(await watcher.untilSummary(file));
+
+      // Every rebuild above ran the pass, so none was missed.
+      await delay(500);
+      expect(watcher.output()).not.toContain(MISSED_REBUILD);
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });
@@ -284,6 +289,58 @@ it(
       expect(templateErrors(await watcher.untilSummary(lib)).sort()).toEqual(
         exact,
       );
+    } finally {
+      await watcher?.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  CASE_TIMEOUT_MS,
+);
+
+it(
+  "mx-tsc -b -w does not report a missed rebuild when one change rebuilds two projects",
+  async () => {
+    // Two independent projects that both include `shared/`: one edit there
+    // invalidates both, and tsc's solution builder builds them on separate
+    // event-loop turns (the second on a 100 ms timer) before the one summary.
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-ngmx-b-shared-"));
+    let watcher: Watcher | undefined;
+    try {
+      cpSync(refsFixture, dir, { recursive: true });
+      symlinkSync(join(here, "..", "node_modules"), join(dir, "node_modules"));
+      const component = readFileSync(template(dir, "lib"), "utf8");
+      mkdirSync(join(dir, "shared"));
+      writeFileSync(join(dir, "shared", "s.ts"), "export const s = 0;\n");
+      writeFileSync(join(dir, "shared", "c.component.ng.mx"), component);
+      const config = readFileSync(join(dir, "lib", "tsconfig.json"), "utf8")
+        .replace('"composite": true,', '"composite": true, "rootDir": "..",')
+        .replace('"include": ["src"]', '"include": ["src", "../shared"]');
+      // The Angular host is chosen by a `package.json` above each file.
+      const manifest = readFileSync(join(dir, "lib", "package.json"), "utf8");
+      writeFileSync(join(dir, "shared", "package.json"), manifest);
+      for (const project of ["p1", "p2"]) {
+        mkdirSync(join(dir, project));
+        writeFileSync(join(dir, project, "tsconfig.json"), config);
+        writeFileSync(join(dir, project, "package.json"), manifest);
+      }
+      const shared = join(dir, "shared", "s.ts");
+      const sharedTemplate = join(dir, "shared", "c.component.ng.mx");
+
+      watcher = watchIn(dir, ["-b", "-w", "p1", "p2"], englishSummary);
+      const cycles = [await watcher.untilSummary()];
+      for (const edited of [shared, sharedTemplate, shared]) {
+        appendFileSync(edited, "\n");
+        cycles.push(await watcher.untilSummary(edited));
+      }
+      // Give a late notice time to land: it is written on a timer.
+      await delay(1_000);
+      // Every rebuild ended in a recognized summary, so the pass ran in each
+      // of them: a notice that it missed one is false, and an agent reading
+      // it would distrust a clean result.
+      for (const cycle of cycles) {
+        expect(cycle).toContain("Found 0 errors. Watching for file changes.");
+      }
+      expect(watcher.output()).not.toContain(MISSED_REBUILD);
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });
