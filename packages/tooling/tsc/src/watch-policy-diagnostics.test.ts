@@ -1,18 +1,18 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import {
-  appendFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-import { describe, expect, it } from "vitest";
+import { dirname, join } from "node:path";
+import { setImmediate as realSetImmediateFromTimers } from "node:timers";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { reportWatchPass } from "./index.ts";
-import { armDirectoryWatch, mxTsc, repoRoot } from "./test-support.ts";
+import { repoRoot } from "./test-support.ts";
+import { type MemoryWatch, watchInMemory } from "./watch-memory.ts";
 
 /**
  * `mx-tsc -w` reports host-policy diagnostics (`TS80003`: a `package.json`
@@ -24,98 +24,30 @@ import { armDirectoryWatch, mxTsc, repoRoot } from "./test-support.ts";
  * count, and never again: a rebuild that still stood on a bad `package.json`
  * read as one error short, or as clean.
  *
- * Real watchers, each polled, killed and reaped in `finally`, with a hard
- * lifetime limit; run one at a time.
+ * The watcher runs in this process over a real project directory, with its
+ * rebuilds driven by virtual time (`watch-memory.ts`): tsc's own polling
+ * watchers run inside `vi.advanceTimersByTime`, so each rebuild is over
+ * the moment its summary is written. Each describe shares one watcher, so its
+ * tests run as one sequence of cycles on one project.
  */
-const WAIT_MS = 60_000;
-const LIFETIME_MS = 240_000;
-const CASE_MS = 300_000;
-
 const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 
-interface Watcher {
-  /** The output of the next rebuild cycle (after `edited` is written). */
-  untilSummary: (edited?: string) => Promise<string>;
-  /** Resolves once the watcher is watching `dir`; see armDirectoryWatch. */
-  armed: (dir: string) => Promise<void>;
-  stop: () => Promise<void>;
-}
-
-function watchIn(dir: string, args: string[]): Watcher {
-  const child: ChildProcess = spawn(
-    process.execPath,
-    [mxTsc, ...args, "--pretty", "false", "--preserveWatchOutput"],
-    {
-      cwd: dir,
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-        TSC_WATCHFILE: "DynamicPriorityPolling",
-        TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const closed = new Promise<void>((resolve) =>
-    child.once("close", () => resolve()),
-  );
-  const lifetime = setTimeout(() => child.kill("SIGKILL"), LIFETIME_MS);
-  let output = "";
-  let failure: Error | undefined;
-  child.on("error", (error) => {
-    failure = error;
-  });
-  for (const stream of [child.stdout, child.stderr]) {
-    stream?.on("data", (chunk) => {
-      output += chunk;
-    });
-  }
-  return {
-    untilSummary: async (edited) => {
-      const since = output.length;
-      const deadline = Date.now() + WAIT_MS;
-      let nextTouch = Date.now() + 2_500;
-      while (!SUMMARY.test(output.slice(since))) {
-        if (failure) throw failure;
-        if (
-          child.exitCode !== null ||
-          child.signalCode !== null ||
-          Date.now() > deadline
-        ) {
-          throw new Error(`watch did not finish a rebuild:\n${output}`);
-        }
-        // The watcher may not be armed yet: re-touch the edited file until a
-        // rebuild starts, never during one.
-        if (
-          edited &&
-          Date.now() >= nextTouch &&
-          !output.slice(since).includes("File change detected")
-        ) {
-          appendFileSync(edited, "\n");
-          nextTouch = Date.now() + 2_500;
-        }
-        await delay(100);
-      }
-      return output.slice(since);
-    },
-    armed: (dir) =>
-      armDirectoryWatch(
-        dir,
-        () => output,
-        () => {
-          if (failure) throw failure;
-          if (child.exitCode !== null || child.signalCode !== null) {
-            throw new Error(`watch exited before it was armed:\n${output}`);
-          }
-        },
-      ),
-    stop: async () => {
-      clearTimeout(lifetime);
-      child.kill("SIGKILL");
-      await closed;
-    },
-  };
-}
+/** The clock the watcher's polls, debounces and build turns run on. */
+/**
+ * The clock the watcher's polls, debounces and build turns run on. Each step
+ * hands the event loop a real macrotask (`scripts/vitest-yield.ts`'s medicine,
+ * here instead of a config the tests do not own): a synchronous advance would
+ * block the worker for a whole test and, on a loaded machine, delay vitest's
+ * own RPC past its fixed timeout.
+ */
+const realSetImmediate = realSetImmediateFromTimers;
+const clock = {
+  advance: (ms: number) => {
+    vi.advanceTimersByTime(ms);
+    return new Promise<void>((resolve) => realSetImmediate(resolve));
+  },
+  clear: () => vi.clearAllTimers(),
+};
 
 const pretty = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 const MISMATCH = pretty({
@@ -124,14 +56,27 @@ const MISMATCH = pretty({
 });
 const VALID = pretty({ private: true, mx: { host: "html" } });
 const UNKNOWN_HOST = pretty({ private: true, mx: { host: "vue" } });
+const BAD_DEFAULT_TAG = pretty({
+  private: true,
+  mx: { host: "html", html: { defaultTag: "input" } },
+});
 
 const MISMATCH_LINE =
   'package.json(5,15): error TS80003: mx.target "react-jsx" belongs to host "react", but mx.host is "solid".';
 
-/** A one-page project whose `package.json` is `packageJson`. */
+/**
+ * A one-page project whose `package.json` is `packageJson`, in a `project`
+ * directory of a temporary one (remove `dirname` of the result). TypeScript
+ * watches a `package.json` that is an affecting location of a file only when
+ * the path is deeper than the OS-root-like prefix it assumes: `/tmp/x/package.json`
+ * is not watched, `/tmp/x/project/package.json` is.
+ */
 function project(packageJson: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-policy-"));
-  mkdirSync(join(dir, "src"));
+  const dir = join(
+    mkdtempSync(join(tmpdir(), "mx-tsc-watch-policy-")),
+    "project",
+  );
+  mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(
     join(dir, "tsconfig.json"),
     JSON.stringify({
@@ -180,145 +125,149 @@ function expectPolicyError(cycle: string, line: string) {
 }
 
 describe("mx-tsc -w host-policy diagnostics", () => {
-  it(
-    "prints a policy error before the summary on the first build and every rebuild, counts it, and stops once fixed",
-    async () => {
-      const dir = project(MISMATCH);
-      let watcher: Watcher | undefined;
-      try {
-        const page = join(dir, "src", "page.mx");
-        const other = join(dir, "src", "other.ts");
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+  let dir: string;
+  let watcher: MemoryWatch;
 
-        expectPolicyError(await watcher.untilSummary(), MISMATCH_LINE);
+  beforeAll(() => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "setImmediate",
+        "clearImmediate",
+      ],
+    });
+    dir = project(MISMATCH);
+    watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
+  });
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dirname(dir), { recursive: true, force: true });
+  });
 
-        // No-op rebuilds of the page and of another file: still reported, once.
-        for (const edited of [page, other, page]) {
-          expectPolicyError(await watcher.untilSummary(edited), MISMATCH_LINE);
-        }
+  it("prints a policy error before the summary on the first build and every rebuild, counts it, and stops once fixed", async () => {
+    const page = join(dir, "src", "page.mx");
+    const other = join(dir, "src", "other.ts");
 
-        // Fixed: the page compiles again, resolves the host again, and the
-        // error is gone from the line and from the count.
-        // The `package.json` write itself starts a rebuild that compiles the
-        // page again (`watch-package-json.test.ts` pins that on its own); the
-        // loop below also takes the page's edit as a rebuild, so a rebuild the
-        // write races with does not fail this test.
-        writeFileSync(join(dir, "package.json"), VALID);
-        let fixed = await watcher.untilSummary(page);
-        for (let n = 0; n < 3 && policyLines(fixed).length > 0; n++) {
-          fixed = await watcher.untilSummary(page);
-        }
-        expect(policyLines(fixed)).toEqual([]);
-        expect(errorLines(fixed)).toEqual([]);
-        expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    expectPolicyError(watcher.start(), MISMATCH_LINE);
 
-        // Broken again: back, counted.
-        writeFileSync(join(dir, "package.json"), MISMATCH);
-        let broken = await watcher.untilSummary(page);
-        for (let n = 0; n < 3 && policyLines(broken).length === 0; n++) {
-          broken = await watcher.untilSummary(page);
-        }
-        expectPolicyError(broken, MISMATCH_LINE);
-      } finally {
-        await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-    CASE_MS,
-  );
+    // No-op rebuilds of the page and of another file: still reported, once.
+    for (const edited of [page, other, page]) {
+      expectPolicyError(
+        await watcher.cycle(() =>
+          writeFileSync(edited, readPlusNewline(edited)),
+        ),
+        MISMATCH_LINE,
+      );
+    }
 
-  it(
-    "prints a policy warning on every build without counting it",
-    async () => {
-      const dir = project(UNKNOWN_HOST);
-      let watcher: Watcher | undefined;
-      try {
-        const page = join(dir, "src", "page.mx");
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-        const warning = 'warning TS80003: unknown mx.host "vue"';
-        for (const edited of [undefined, page, page]) {
-          const cycle = await watcher.untilSummary(edited);
-          expect(occurrences(cycle, warning)).toBe(1);
-          expect(cycle.indexOf(warning)).toBeLessThan(cycle.search(SUMMARY));
-          expect(cycle).toContain("Found 0 errors. Watching for file changes.");
-          expect(errorLines(cycle)).toEqual([]);
-        }
-      } finally {
-        await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-    CASE_MS,
-  );
+    // Fixed: the page compiles again, resolves the host again, and the
+    // error is gone from the line and from the count.
+    const fixed = await watcher.cycle(() =>
+      writeFileSync(join(dir, "package.json"), VALID),
+    );
+    expect(policyLines(fixed)).toEqual([]);
+    expect(errorLines(fixed)).toEqual([]);
+    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+
+    // Broken again: back, counted.
+    const broken = await watcher.cycle(() =>
+      writeFileSync(join(dir, "package.json"), MISMATCH),
+    );
+    expectPolicyError(broken, MISMATCH_LINE);
+  }, 120_000);
+
+  it("prints a policy warning on every build without counting it", async () => {
+    const page = join(dir, "src", "page.mx");
+    const warning = 'warning TS80003: unknown mx.host "vue"';
+    const warned = await watcher.cycle(() =>
+      writeFileSync(join(dir, "package.json"), UNKNOWN_HOST),
+    );
+    expect(occurrences(warned, warning)).toBe(1);
+    expect(warned.indexOf(warning)).toBeLessThan(warned.search(SUMMARY));
+    expect(warned).toContain("Found 0 errors. Watching for file changes.");
+    expect(errorLines(warned)).toEqual([]);
+
+    for (const _ of [1, 2]) {
+      const cycle = await watcher.cycle(() =>
+        writeFileSync(page, readPlusNewline(page)),
+      );
+      expect(occurrences(cycle, warning)).toBe(1);
+      expect(cycle.indexOf(warning)).toBeLessThan(cycle.search(SUMMARY));
+      expect(cycle).toContain("Found 0 errors. Watching for file changes.");
+      expect(errorLines(cycle)).toEqual([]);
+    }
+  }, 120_000);
 });
 
 describe("mx-tsc -w host-policy diagnostics: more cases", () => {
-  it(
-    "stops reporting a nested package.json's error once the only file under it is deleted",
-    async () => {
-      const dir = project(VALID);
-      let watcher: Watcher | undefined;
-      try {
-        const sub = join(dir, "src", "sub");
-        mkdirSync(sub);
-        writeFileSync(join(sub, "package.json"), MISMATCH);
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-        expect(await watcher.untilSummary()).toContain("Found 0 errors.");
-        await watcher.armed(join(dir, "src"));
+  let dir: string;
+  let watcher: MemoryWatch;
 
-        const added = join(sub, "x.mx");
-        writeFileSync(added, "<p>ok</p>\n");
-        const broken = await watcher.untilSummary(added);
-        expect(policyLines(broken)).toHaveLength(1);
-        expect(policyLines(broken)[0]).toContain("src/sub/package.json");
-        expect(count(broken)).toBe(errorLines(broken).length);
+  beforeAll(() => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "setImmediate",
+        "clearImmediate",
+      ],
+    });
+    dir = project(VALID);
+    const sub = join(dir, "src", "sub");
+    mkdirSync(sub);
+    writeFileSync(join(sub, "package.json"), MISMATCH);
+    watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
+  });
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dirname(dir), { recursive: true, force: true });
+  });
 
-        // The rebuild that only removes a root file: tsc may write a TS6053
-        // summary first, then the settled one.
-        rmSync(added);
-        // Both summaries may arrive in one chunk: decide on the last cycle.
-        const lastCycle = (text: string) =>
-          text.slice(Math.max(text.lastIndexOf("File change detected"), 0));
-        let settled = lastCycle(await watcher.untilSummary());
-        if (policyLines(settled).length > 0 || count(settled) > 0) {
-          settled = lastCycle(await watcher.untilSummary());
-        }
-        expect(policyLines(settled)).toEqual([]);
-        expect(settled).toContain("Found 0 errors. Watching for file changes.");
-      } finally {
-        await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-    CASE_MS,
-  );
+  it("stops reporting a nested package.json's error once the only file under it is deleted", async () => {
+    expect(await watcher.start()).toContain("Found 0 errors.");
 
-  it(
-    "counts a policy error that has no TS80001 pointer (an invalid defaultTag) on every build",
-    async () => {
-      const dir = project(
-        pretty({
-          private: true,
-          mx: { host: "html", html: { defaultTag: "input" } },
-        }),
-      );
-      let watcher: Watcher | undefined;
-      try {
-        const page = join(dir, "src", "page.mx");
-        watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-        for (const edited of [undefined, page, page]) {
-          const cycle = await watcher.untilSummary(edited);
-          expect(policyLines(cycle)).toHaveLength(1);
-          expect(cycle.indexOf("TS80003")).toBeLessThan(cycle.search(SUMMARY));
-          expect(cycle).toContain("Found 1 error. Watching for file changes.");
-        }
-      } finally {
-        await watcher?.stop();
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-    CASE_MS,
-  );
+    const added = join(dir, "src", "sub", "x.mx");
+    const broken = await watcher.cycle(() =>
+      writeFileSync(added, "<p>ok</p>\n"),
+    );
+    expect(policyLines(broken)).toHaveLength(1);
+    expect(policyLines(broken)[0]).toContain("src/sub/package.json");
+    expect(count(broken)).toBe(errorLines(broken).length);
+
+    // The rebuild that only removes a root file: tsc may write a TS6053
+    // summary first, then the settled one. Both summaries may arrive in one
+    // advance: decide on the last cycle.
+    const lastCycle = (text: string) =>
+      text.slice(Math.max(text.lastIndexOf("File change detected"), 0));
+    rmSync(added);
+    let settled = lastCycle(await watcher.cycle());
+    if (policyLines(settled).length > 0 || count(settled) > 0) {
+      settled = lastCycle(await watcher.cycle());
+    }
+    expect(policyLines(settled)).toEqual([]);
+    expect(settled).toContain("Found 0 errors. Watching for file changes.");
+  }, 120_000);
+
+  it("counts a policy error that has no TS80001 pointer (an invalid defaultTag) on every build", async () => {
+    const page = join(dir, "src", "page.mx");
+    for (const edited of [undefined, page, page]) {
+      const act =
+        edited === undefined
+          ? () => writeFileSync(join(dir, "package.json"), BAD_DEFAULT_TAG)
+          : () => writeFileSync(edited, readPlusNewline(edited));
+      const cycle = await watcher.cycle(act);
+      expect(policyLines(cycle)).toHaveLength(1);
+      expect(cycle.indexOf("TS80003")).toBeLessThan(cycle.search(SUMMARY));
+      expect(cycle).toContain("Found 1 error. Watching for file changes.");
+    }
+  }, 120_000);
 });
 
 describe("reportWatchPass", () => {
@@ -335,3 +284,8 @@ describe("reportWatchPass", () => {
     }
   });
 });
+
+/** The file's text with one more newline: a no-op edit that changes the mtime. */
+function readPlusNewline(path: string): string {
+  return `${readFileSync(path, "utf8")}\n`;
+}

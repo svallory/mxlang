@@ -1,6 +1,4 @@
-import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
-  appendFileSync,
   cpSync,
   mkdirSync,
   mkdtempSync,
@@ -11,16 +9,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { chdir, cwd } from "node:process";
+import { setImmediate as realSetImmediateFromTimers } from "node:timers";
 import { stripVTControlCharacters } from "node:util";
-import { expect, it } from "vitest";
-import {
-  armDirectoryWatch,
-  fixtures,
-  here,
-  mxTsc,
-  repoRoot,
-} from "./test-support.ts";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { runInProcess } from "./in-process.ts";
+import { fixtures, here, repoRoot } from "./test-support.ts";
+import { type MemoryWatch, watchInMemory } from "./watch-memory.ts";
 
 /**
  * `mx-tsc -w` reports MX compile errors (a `.mx` file's parse and lowering
@@ -31,13 +26,11 @@ import {
  * while the watcher ran produced "Found 0 errors" and no MX line at all: the
  * silent pass an agent reading this output takes for a clean project.
  *
- * Real watchers, each polled, killed and reaped in `finally`, with a hard
- * lifetime limit; run one at a time.
+ * The watchers run in this process, their rebuilds driven by virtual time
+ * (`watch-memory.ts`): tsc's own polling watchers run inside
+ * `vi.advanceTimersByTime`, so a cycle is over the moment its summary is
+ * written. The tests that share a project share one watcher, in file order.
  */
-const WAIT_MS = 60_000;
-const LIFETIME_MS = 240_000;
-const CASE_MS = 300_000;
-
 const CLEAN = "<div>\n  <p>ok</p>\n</div>\n";
 const EFFECT = "<div>\n  <effect>go()</effect>\n</div>\n";
 const UNCLOSED = "<div>\n  <span>\n</div>\n";
@@ -52,89 +45,23 @@ const UNCLOSED_LINE = (file: string) =>
 
 const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 
-interface Watcher {
-  /** The output of the next rebuild cycle (after `edited` is written). */
-  untilSummary: (edited?: string) => Promise<string>;
-  /** Resolves once the watcher is watching `dir`; see armDirectoryWatch. */
-  armed: (dir: string) => Promise<void>;
-  stop: () => Promise<void>;
-}
+/**
+ * The clock the watcher's polls, debounces and build turns run on. Each step
+ * hands the event loop a real macrotask (`scripts/vitest-yield.ts`'s medicine,
+ * here instead of a config the tests do not own): a synchronous advance would
+ * block the worker for a whole test and, on a loaded machine, delay vitest's
+ * own RPC past its fixed timeout.
+ */
+const realSetImmediate = realSetImmediateFromTimers;
+const clock = {
+  advance: (ms: number) => {
+    vi.advanceTimersByTime(ms);
+    return new Promise<void>((resolve) => realSetImmediate(resolve));
+  },
+  clear: () => vi.clearAllTimers(),
+};
 
-function watchIn(dir: string, args: string[]): Watcher {
-  const child: ChildProcess = spawn(
-    process.execPath,
-    [mxTsc, ...args, "--pretty", "false", "--preserveWatchOutput"],
-    {
-      cwd: dir,
-      env: {
-        ...process.env,
-        NO_COLOR: "1",
-        TSC_WATCHFILE: "DynamicPriorityPolling",
-        TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
-  const closed = new Promise<void>((resolve) =>
-    child.once("close", () => resolve()),
-  );
-  const lifetime = setTimeout(() => child.kill("SIGKILL"), LIFETIME_MS);
-  let output = "";
-  let failure: Error | undefined;
-  child.on("error", (error) => {
-    failure = error;
-  });
-  for (const stream of [child.stdout, child.stderr]) {
-    stream?.on("data", (chunk) => {
-      output += chunk;
-    });
-  }
-  return {
-    untilSummary: async (edited) => {
-      const since = output.length;
-      const deadline = Date.now() + WAIT_MS;
-      let nextTouch = Date.now() + 2_500;
-      while (!SUMMARY.test(output.slice(since))) {
-        if (failure) throw failure;
-        if (
-          child.exitCode !== null ||
-          child.signalCode !== null ||
-          Date.now() > deadline
-        ) {
-          throw new Error(`watch did not finish a rebuild:\n${output}`);
-        }
-        // The watcher may not be armed yet: re-touch the edited file until a
-        // rebuild starts, never during one.
-        if (
-          edited &&
-          Date.now() >= nextTouch &&
-          !output.slice(since).includes("File change detected")
-        ) {
-          appendFileSync(edited, "\n");
-          nextTouch = Date.now() + 2_500;
-        }
-        await delay(100);
-      }
-      return output.slice(since);
-    },
-    armed: (dir) =>
-      armDirectoryWatch(
-        dir,
-        () => output,
-        () => {
-          if (failure) throw failure;
-          if (child.exitCode !== null || child.signalCode !== null) {
-            throw new Error(`watch exited before it was armed:\n${output}`);
-          }
-        },
-      ),
-    stop: async () => {
-      clearTimeout(lifetime);
-      child.kill("SIGKILL");
-      await closed;
-    },
-  };
-}
+const withNewline = (path: string) => `${readFileSync(path, "utf8")}\n`;
 
 /** An html project: `src/` holds the files, `include` picks them up. */
 function htmlProject(): string {
@@ -168,6 +95,19 @@ function htmlProject(): string {
   return dir;
 }
 
+const FAKE_TIMERS: {
+  toFake: NonNullable<Parameters<typeof vi.useFakeTimers>[0]>["toFake"];
+} = {
+  toFake: [
+    "setTimeout",
+    "clearTimeout",
+    "setInterval",
+    "clearInterval",
+    "setImmediate",
+    "clearImmediate",
+  ],
+};
+
 const occurrences = (text: string, part: string) => text.split(part).length - 1;
 
 /** Lines of `cycle` that are diagnostics (carry a position and `error`). */
@@ -186,229 +126,226 @@ function expectEffectOnly(cycle: string, file: string) {
   expect(cycle).toContain("Found 1 error. Watching for file changes.");
 }
 
-it(
-  "mx-tsc -w prints an MX error introduced by a rebuild, counts it, and clears it when fixed",
-  async () => {
-    const dir = htmlProject();
-    let watcher: Watcher | undefined;
-    try {
-      const page = join(dir, "src", "page.mx");
-      const other = join(dir, "src", "other.ts");
-      writeFileSync(page, CLEAN);
-      writeFileSync(other, "export const n = 1;\n");
-      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
+describe("mx-tsc -w MX compile diagnostics: one shared project", () => {
+  let dir: string;
+  let watcher: MemoryWatch;
 
-      const initial = await watcher.untilSummary();
-      expect(errorLines(initial)).toEqual([]);
-      expect(initial).toContain("Found 0 errors. Watching for file changes.");
+  beforeAll(() => {
+    vi.useFakeTimers(FAKE_TIMERS);
+    dir = htmlProject();
+    writeFileSync(join(dir, "src", "page.mx"), CLEAN);
+    writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
+    watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
+  });
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dir, { recursive: true, force: true });
+  });
 
-      // Introduced after the first build: the rebuild that sees it reports it.
-      writeFileSync(page, EFFECT);
-      expectEffectOnly(await watcher.untilSummary(page), "src/page.mx");
+  it("mx-tsc -w prints an MX error introduced by a rebuild, counts it, and clears it when fixed", async () => {
+    const page = join(dir, "src", "page.mx");
+    const other = join(dir, "src", "other.ts");
 
-      // No-op rebuilds, of the erroring file and of another: still reported,
-      // once per cycle, never twice and never dropped.
-      for (const edited of [other, page, other]) {
-        appendFileSync(edited, "\n");
-        expectEffectOnly(await watcher.untilSummary(edited), "src/page.mx");
-      }
+    const initial = watcher.start();
+    expect(errorLines(initial)).toEqual([]);
+    expect(initial).toContain("Found 0 errors. Watching for file changes.");
 
-      // An error of tsc's own beside it: both printed, both in the count.
-      writeFileSync(other, 'export const n: number = "x";\n');
-      const both = await watcher.untilSummary(other);
-      expect(errorLines(both)).toEqual([
-        "src/other.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
-        EFFECT_LINE("src/page.mx"),
-      ]);
-      expect(both).toContain("Found 2 errors. Watching for file changes.");
-      writeFileSync(other, "export const n = 1;\n");
-      expectEffectOnly(await watcher.untilSummary(other), "src/page.mx");
+    // Introduced after the first build: the rebuild that sees it reports it.
+    expectEffectOnly(
+      await watcher.cycle(() => writeFileSync(page, EFFECT)),
+      "src/page.mx",
+    );
 
-      // Fixed: no MX line, and the count says so.
-      writeFileSync(page, CLEAN);
-      const fixed = await watcher.untilSummary(page);
-      expect(errorLines(fixed)).toEqual([]);
-      expect(fixed).not.toContain("MX_");
-      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-
-      // A parse error, a different code, at its own position.
-      writeFileSync(page, UNCLOSED);
-      const unclosed = await watcher.untilSummary(page);
-      expect(errorLines(unclosed)).toEqual([UNCLOSED_LINE("src/page.mx")]);
-      expect(unclosed).toContain("Found 1 error. Watching for file changes.");
-
-      writeFileSync(page, CLEAN);
-      expect(await watcher.untilSummary(page)).toContain(
-        "Found 0 errors. Watching for file changes.",
-      );
-    } finally {
-      await watcher?.stop();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-  CASE_MS,
-);
-
-it(
-  "mx-tsc -w prints an MX error present at the first build before the summary, counted in it",
-  async () => {
-    const dir = htmlProject();
-    let watcher: Watcher | undefined;
-    try {
-      const page = join(dir, "src", "page.mx");
-      writeFileSync(page, EFFECT);
-      writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
-      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-
-      // The summary is the end of the cycle: nothing follows it that
-      // belongs to it, and the MX error is not printed a second time after.
-      const initial = await watcher.untilSummary();
-      expectEffectOnly(initial, "src/page.mx");
-      expect(initial.trimEnd().endsWith("Watching for file changes.")).toBe(
-        true,
-      );
-
-      writeFileSync(page, CLEAN);
-      expect(await watcher.untilSummary(page)).toContain(
-        "Found 0 errors. Watching for file changes.",
-      );
-    } finally {
-      await watcher?.stop();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-  CASE_MS,
-);
-
-it(
-  "mx-tsc -w keeps an MX error of an unchanged file across a rebuild that adds a file, and does not keep it once fixed",
-  async () => {
-    const dir = htmlProject();
-    let watcher: Watcher | undefined;
-    try {
-      const broken = join(dir, "src", "broken.mx");
-      writeFileSync(broken, EFFECT);
-      writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
-      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-      expectEffectOnly(await watcher.untilSummary(), "src/broken.mx");
-      await watcher.armed(join(dir, "src"));
-
-      // A new root file makes tsc create its program (and the MX language
-      // plugins) again; the older file is not read again, and its error stays.
-      writeFileSync(join(dir, "src", "added.mx"), CLEAN);
+    // No-op rebuilds, of the erroring file and of another: still reported,
+    // once per cycle, never twice and never dropped.
+    for (const edited of [other, page, other]) {
       expectEffectOnly(
-        await watcher.untilSummary(join(dir, "src", "added.mx")),
-        "src/broken.mx",
+        await watcher.cycle(() => writeFileSync(edited, withNewline(edited))),
+        "src/page.mx",
       );
-
-      // Fixed after that: the error of the earlier plugins must not outlive it.
-      writeFileSync(broken, CLEAN);
-      const fixed = await watcher.untilSummary(broken);
-      expect(errorLines(fixed)).toEqual([]);
-      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-    } finally {
-      await watcher?.stop();
-      rmSync(dir, { recursive: true, force: true });
     }
-  },
-  CASE_MS,
-);
 
-it(
-  "mx-tsc -w still reports MX errors after a rebuild that only removed a root file",
-  async () => {
-    const dir = htmlProject();
-    let watcher: Watcher | undefined;
-    try {
-      const page = join(dir, "src", "page.mx");
-      const removed = join(dir, "src", "b.ts");
-      writeFileSync(page, CLEAN);
-      writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
-      writeFileSync(removed, "export const b = 2;\n");
-      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-      expect(await watcher.untilSummary()).toContain("Found 0 errors.");
-      await watcher.armed(join(dir, "src"));
+    // An error of tsc's own beside it: both printed, both in the count.
+    const both = await watcher.cycle(() =>
+      writeFileSync(other, 'export const n: number = "x";\n'),
+    );
+    expect(errorLines(both)).toEqual([
+      "src/other.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.",
+      EFFECT_LINE("src/page.mx"),
+    ]);
+    expect(both).toContain("Found 2 errors. Watching for file changes.");
+    expectEffectOnly(
+      await watcher.cycle(() => writeFileSync(other, "export const n = 1;\n")),
+      "src/page.mx",
+    );
 
-      // The rebuild compiles nothing: only the root set shrinks. tsc may write
-      // a TS6053 summary first, then the settled one.
-      rmSync(removed);
-      let settled = await watcher.untilSummary();
-      if (!settled.includes("Found 0 errors.")) {
-        settled = await watcher.untilSummary();
-      }
-      expect(settled).toContain("Found 0 errors. Watching for file changes.");
+    // Fixed: no MX line, and the count says so.
+    const fixed = await watcher.cycle(() => writeFileSync(page, CLEAN));
+    expect(errorLines(fixed)).toEqual([]);
+    expect(fixed).not.toContain("MX_");
+    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
 
-      writeFileSync(page, EFFECT);
-      expectEffectOnly(await watcher.untilSummary(page), "src/page.mx");
+    // A parse error, a different code, at its own position.
+    const unclosed = await watcher.cycle(() => writeFileSync(page, UNCLOSED));
+    expect(errorLines(unclosed)).toEqual([UNCLOSED_LINE("src/page.mx")]);
+    expect(unclosed).toContain("Found 1 error. Watching for file changes.");
 
-      writeFileSync(page, CLEAN);
-      const fixed = await watcher.untilSummary(page);
-      expect(errorLines(fixed)).toEqual([]);
-      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-    } finally {
-      await watcher?.stop();
-      rmSync(dir, { recursive: true, force: true });
+    expect(await watcher.cycle(() => writeFileSync(page, CLEAN))).toContain(
+      "Found 0 errors. Watching for file changes.",
+    );
+  }, 120_000);
+
+  it("mx-tsc -w keeps an MX error of an unchanged file across a rebuild that adds a file, and does not keep it once fixed", async () => {
+    const broken = join(dir, "src", "broken.mx");
+    // A second file that holds the error while another is added.
+    expectEffectOnly(
+      await watcher.cycle(() => writeFileSync(broken, EFFECT)),
+      "src/broken.mx",
+    );
+
+    // A new root file makes tsc create its program (and the MX language
+    // plugins) again; the older file is not read again, and its error stays.
+    expectEffectOnly(
+      await watcher.cycle(() =>
+        writeFileSync(join(dir, "src", "added.mx"), CLEAN),
+      ),
+      "src/broken.mx",
+    );
+
+    // Fixed after that: the error of the earlier plugins must not outlive it.
+    const fixed = await watcher.cycle(() => writeFileSync(broken, CLEAN));
+    expect(errorLines(fixed)).toEqual([]);
+    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+  }, 120_000);
+
+  it("mx-tsc -w still reports MX errors after a rebuild that only removed a root file", async () => {
+    const page = join(dir, "src", "page.mx");
+    const removed = join(dir, "src", "b.ts");
+    writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
+    expect(
+      await watcher.cycle(() =>
+        writeFileSync(removed, "export const b = 2;\n"),
+      ),
+    ).toContain("Found 0 errors.");
+
+    // The rebuild compiles nothing: only the root set shrinks. tsc may write
+    // a TS6053 summary first, then the settled one.
+    rmSync(removed);
+    let settled = await watcher.cycle();
+    if (!settled.includes("Found 0 errors.")) {
+      settled = await watcher.cycle();
     }
-  },
-  CASE_MS,
-);
+    expect(settled).toContain("Found 0 errors. Watching for file changes.");
 
-it(
-  "mx-tsc -w reports an MX error introduced into a .ng.mx file by a rebuild",
-  async () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-mx-ng-"));
-    let watcher: Watcher | undefined;
-    try {
-      cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
-      symlinkSync(join(here, "..", "node_modules"), join(dir, "node_modules"));
-      const file = join(dir, "src", "x.component.ng.mx");
-      const clean = readFileSync(file, "utf8").replace(
-        "user.nmae",
-        "user.name",
-      );
-      writeFileSync(file, clean);
-      watcher = watchIn(dir, ["-w", "-p", "tsconfig.json"]);
-      expect(await watcher.untilSummary()).toContain(
-        "Found 0 errors. Watching for file changes.",
-      );
+    expectEffectOnly(
+      await watcher.cycle(() => writeFileSync(page, EFFECT)),
+      "src/page.mx",
+    );
 
-      writeFileSync(file, clean.replace("<p>", "<p><effect>go()</effect>"));
-      const broken = await watcher.untilSummary(file);
-      expect(errorLines(broken).map((line) => line.split(":")[0])).toEqual([
-        expect.stringContaining("src/x.component.ng.mx("),
-      ]);
-      expect(broken).toContain("error MX_UNSUPPORTED_CONSTRUCT");
-      expect(broken).toContain("Found 1 error. Watching for file changes.");
+    const fixed = await watcher.cycle(() => writeFileSync(page, CLEAN));
+    expect(errorLines(fixed)).toEqual([]);
+    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+  }, 120_000);
+});
 
-      writeFileSync(file, clean);
-      const fixed = await watcher.untilSummary(file);
-      expect(fixed).not.toContain("MX_");
-      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-    } finally {
-      await watcher?.stop();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-  CASE_MS,
-);
+describe("mx-tsc -w MX compile diagnostics: a first build that already holds the error", () => {
+  let dir: string;
+  let watcher: MemoryWatch;
 
-it(
-  "mx-tsc (one shot) puts an MX count beside tsc's own count line, and fails",
-  () => {
+  beforeAll(() => {
+    vi.useFakeTimers(FAKE_TIMERS);
+    dir = htmlProject();
+    writeFileSync(join(dir, "src", "page.mx"), EFFECT);
+    writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
+    watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
+  });
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("mx-tsc -w prints an MX error present at the first build before the summary, counted in it", async () => {
+    const page = join(dir, "src", "page.mx");
+    // The summary is the end of the cycle: nothing follows it that
+    // belongs to it, and the MX error is not printed a second time after.
+    const initial = watcher.start();
+    expectEffectOnly(initial, "src/page.mx");
+    expect(initial.trimEnd().endsWith("Watching for file changes.")).toBe(true);
+
+    expect(await watcher.cycle(() => writeFileSync(page, CLEAN))).toContain(
+      "Found 0 errors. Watching for file changes.",
+    );
+  }, 120_000);
+});
+
+describe("mx-tsc -w MX compile diagnostics: a .ng.mx project", () => {
+  let dir: string;
+  let watcher: MemoryWatch;
+
+  beforeAll(() => {
+    vi.useFakeTimers(FAKE_TIMERS);
+    dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-mx-ng-"));
+    cpSync(join(fixtures, "ng-diag-failing"), dir, { recursive: true });
+    symlinkSync(join(here, "..", "node_modules"), join(dir, "node_modules"));
+    const file = join(dir, "src", "x.component.ng.mx");
+    const clean = readFileSync(file, "utf8").replace("user.nmae", "user.name");
+    writeFileSync(file, clean);
+    watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
+  });
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("mx-tsc -w reports an MX error introduced into a .ng.mx file by a rebuild", async () => {
+    const file = join(dir, "src", "x.component.ng.mx");
+    const clean = readFileSync(file, "utf8");
+    expect(watcher.start()).toContain(
+      "Found 0 errors. Watching for file changes.",
+    );
+
+    const broken = await watcher.cycle(() =>
+      writeFileSync(file, clean.replace("<p>", "<p><effect>go()</effect>")),
+    );
+    expect(errorLines(broken).map((line) => line.split(":")[0])).toEqual([
+      expect.stringContaining("src/x.component.ng.mx("),
+    ]);
+    expect(broken).toContain("error MX_UNSUPPORTED_CONSTRUCT");
+    expect(broken).toContain("Found 1 error. Watching for file changes.");
+
+    const fixed = await watcher.cycle(() => writeFileSync(file, clean));
+    expect(fixed).not.toContain("MX_");
+    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+  }, 120_000);
+});
+
+describe("mx-tsc (one shot) puts an MX count beside tsc's own count line", () => {
+  it("and fails", () => {
     const dir = htmlProject();
     try {
       const page = join(dir, "src", "page.mx");
       const other = join(dir, "src", "other.ts");
-      const run = (pretty: "true" | "false") =>
-        spawnSync(
-          process.execPath,
-          [mxTsc, "-p", "tsconfig.json", "--pretty", pretty],
-          {
-            cwd: dir,
-            encoding: "utf8",
-            env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "" },
-          },
-        );
+      const before = cwd();
+      const run = (pretty: "true" | "false") => {
+        const noColor = process.env.NO_COLOR;
+        const forceColor = process.env.FORCE_COLOR;
+        process.env.NO_COLOR = "1";
+        process.env.FORCE_COLOR = "";
+        // One-shot paths print relative to the process's working directory.
+        chdir(dir);
+        try {
+          return runInProcess(["-p", "tsconfig.json", "--pretty", pretty], dir);
+        } finally {
+          chdir(before);
+          if (noColor === undefined) delete process.env.NO_COLOR;
+          else process.env.NO_COLOR = noColor;
+          if (forceColor === undefined) delete process.env.FORCE_COLOR;
+          else process.env.FORCE_COLOR = forceColor;
+        }
+      };
       const count = (n: number) =>
         `mx-tsc: Found ${n} MX ${n === 1 ? "error" : "errors"} (tsc's own error count does not include MX errors).\n`;
       const effect = `${EFFECT_LINE("src/page.mx")}\n${EFFECT_FIX}\n`;
@@ -447,6 +384,5 @@ it(
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  },
-  CASE_MS,
-);
+  }, 120_000);
+});
