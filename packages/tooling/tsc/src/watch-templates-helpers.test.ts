@@ -8,9 +8,9 @@ import {
 } from "./build-templates.ts";
 import { fixtures, here } from "./test-support.ts";
 import {
-  BUILD_QUIET_MS,
   installWatchTemplatePass,
   MISSED_REBUILD,
+  observeBuildTurns,
   rebuildActivity,
   recountWatchSummary,
 } from "./watch-templates.ts";
@@ -137,12 +137,22 @@ describe("the missed-rebuild notice", () => {
 });
 
 describe("the missed-rebuild notice under tsc -b -w", () => {
+  const TURN = "timerToBuildInvalidatedProject";
+  const SUMMARY =
+    "\n10:42:50 PM - Found 0 errors. Watching for file changes.\n\n";
+  const LOCALIZED =
+    "12:05:14 AM - 0 Fehler gefunden. Es wird auf Dateiänderungen überwacht.\n";
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  /** The pass over a stub stderr, with a host for the `-b` interception. */
+  /**
+   * The pass over a stub stderr, with the build-turn observer over fake
+   * timers: `turn` schedules what tsc's solution builder schedules.
+   */
   function installBuild() {
+    vi.useFakeTimers();
     const stdout = process.stdout.write;
     const stderr = process.stderr.write;
     let notices = "";
@@ -161,33 +171,27 @@ describe("the missed-rebuild notice under tsc -b -w", () => {
         return 0;
       },
     });
-    const host = { getSourceFile: (..._args: unknown[]) => ({}) };
-    rebuildActivity(host, { build: true });
+    const stop = observeBuildTurns();
     return {
-      host,
+      turn: (time: number, body: () => void) => setTimeout(body, time, TURN),
       notices: () => notices,
       passes: () => passes,
       restore: () => {
+        stop();
         process.stdout.write = stdout;
         process.stderr.write = stderr;
       },
     };
   }
 
-  const SUMMARY =
-    "\n10:42:50 PM - Found 0 errors. Watching for file changes.\n\n";
-
-  it("stays quiet when a second project is built on tsc's timer before the summary", async () => {
-    vi.useFakeTimers();
+  it("stays quiet when the next project is built on a later turn and the last one writes the summary", async () => {
     const stub = installBuild();
     try {
-      // Project one reads its files; the event loop turns; tsc's 100 ms timer
-      // builds project two; only then is the one summary written.
-      stub.host.getSourceFile("shared/s.ts");
-      await vi.advanceTimersByTimeAsync(100);
-      stub.host.getSourceFile("shared/s.ts");
-      process.stdout.write(SUMMARY);
-      await vi.advanceTimersByTimeAsync(BUILD_QUIET_MS * 2);
+      stub.turn(0, () => {
+        // Project one: its turn schedules the next, as tsc does (100 ms).
+        stub.turn(100, () => process.stdout.write(SUMMARY));
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(stub.passes()).toBe(1);
       expect(stub.notices()).toBe("");
     } finally {
@@ -195,38 +199,58 @@ describe("the missed-rebuild notice under tsc -b -w", () => {
     }
   });
 
-  it("stays quiet when project one's own work outlasts the quiet period", async () => {
-    vi.useFakeTimers();
+  it("says nothing between turns, however long a turn takes", async () => {
     const stub = installBuild();
     try {
-      stub.host.getSourceFile("shared/s.ts");
-      // A long type-check between two projects' reads: the first decision
-      // sees a later read and leaves the rebuild to the second one.
-      await vi.advanceTimersByTimeAsync(BUILD_QUIET_MS - 1);
-      stub.host.getSourceFile("shared/s.ts");
-      await vi.advanceTimersByTimeAsync(50);
-      process.stdout.write(SUMMARY);
-      await vi.advanceTimersByTimeAsync(BUILD_QUIET_MS * 2);
-      expect(stub.passes()).toBe(1);
+      stub.turn(0, () => {
+        stub.turn(100, () => process.stdout.write(LOCALIZED));
+      });
+      await vi.advanceTimersByTimeAsync(99);
+      // Project two is still pending: the rebuild is not over.
       expect(stub.notices()).toBe("");
-    } finally {
-      stub.restore();
-    }
-  });
-
-  it("still says so, once, when a -b rebuild ends quiet with no recognized summary", async () => {
-    vi.useFakeTimers();
-    const stub = installBuild();
-    try {
-      stub.host.getSourceFile("shared/s.ts");
-      await vi.advanceTimersByTimeAsync(100);
-      stub.host.getSourceFile("shared/s.ts");
-      process.stdout.write(
-        "12:05:14 AM - 0 Fehler gefunden. Es wird auf Dateiänderungen überwacht.\n",
-      );
-      await vi.advanceTimersByTimeAsync(BUILD_QUIET_MS * 3);
-      expect(stub.passes()).toBe(0);
+      await vi.advanceTimersByTimeAsync(1);
       expect(stub.notices()).toBe(MISSED_REBUILD);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("says so once per rebuild, for every rebuild of the same project", async () => {
+    const stub = installBuild();
+    try {
+      for (let rebuild = 1; rebuild <= 2; rebuild += 1) {
+        stub.turn(0, () => process.stdout.write(LOCALIZED));
+        await vi.advanceTimersByTimeAsync(10);
+        expect(stub.passes()).toBe(0);
+        expect(stub.notices()).toBe(MISSED_REBUILD.repeat(rebuild));
+      }
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("stays quiet for a rebuild whose recognized summary ends the last turn", async () => {
+    const stub = installBuild();
+    try {
+      stub.turn(0, () => process.stdout.write(SUMMARY));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(stub.passes()).toBe(1);
+      expect(stub.notices()).toBe("");
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it("does not see a timer that is not a build turn", async () => {
+    const stub = installBuild();
+    try {
+      let ran = false;
+      setTimeout(() => {
+        ran = true;
+      }, 0);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(ran).toBe(true);
+      expect(stub.notices()).toBe("");
     } finally {
       stub.restore();
     }

@@ -49,6 +49,7 @@ import {
 import { trackPackageJsonInputs } from "./watch-package-json.ts";
 import {
   installWatchTemplatePass,
+  observeBuildTurns,
   rebuildActivity,
   reportMissedRebuildIfMarked,
 } from "./watch-templates.ts";
@@ -735,6 +736,10 @@ function runMxTscChecks(): number {
   // and only when it has errors), which the MX count must sit beside.
   const tscCount = watchForCountLine();
   let tscExitCode: number;
+  // `-b -w`: tsc builds a rebuild's projects on its own timer turns; watching
+  // them is how a rebuild is known to be over (see `observeBuildTurns`).
+  const stopObservingTurns =
+    watchMode && build !== undefined ? observeBuildTurns() : undefined;
   try {
     tscExitCode = runPatchedTsc(
       astro,
@@ -745,6 +750,7 @@ function runMxTscChecks(): number {
       build !== undefined,
     );
   } finally {
+    stopObservingTurns?.();
     tscCount.stop();
   }
   // The first watch build is complete: its summary went out before

@@ -298,6 +298,38 @@ it(
 );
 
 it(
+  "mx-tsc -b -w says so on every rebuild of one project when a localized tsc's summary is not the one the pass reads",
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-tsc-watch-ngmx-b-locale-"));
+    let watcher: Watcher | undefined;
+    try {
+      cpSync(refsFixture, dir, { recursive: true });
+      symlinkSync(join(here, "..", "node_modules"), join(dir, "node_modules"));
+      const lib = template(dir, "lib");
+      // The same project is rebuilt each time: tsc restores the compiler host
+      // after a build, so a hook on the host sees only the first build.
+      watcher = watchIn(dir, ["-b", "-w", "lib", "--locale", "de"], (output) =>
+        /Fehler gefunden/.test(output),
+      );
+      const noticeCount = async (edited: string | undefined, count: number) => {
+        await watcher?.untilSummary(edited);
+        await delay(1_000);
+        expect(watcher?.output().split(MISSED_REBUILD)).toHaveLength(count + 1);
+      };
+      await noticeCount(undefined, 1);
+      appendFileSync(lib, "\n");
+      await noticeCount(lib, 2);
+      appendFileSync(lib, "\n");
+      await noticeCount(lib, 3);
+    } finally {
+      await watcher?.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  CASE_TIMEOUT_MS,
+);
+
+it(
   "mx-tsc -b -w does not report a missed rebuild when one change rebuilds two projects",
   async () => {
     // Two independent projects that both include `shared/`: one edit there
@@ -435,15 +467,17 @@ it(
       // The notice is decided in the tick *after* the rebuild (see
       // `rebuildActivity`), so it is read from the whole output, once the
       // watcher has had that tick.
-      const noticeShown = async () => {
+      // One notice per rebuild: counted, so the second rebuild cannot pass on
+      // the first one's.
+      const noticeShown = async (count: number) => {
         await watcher?.untilSummary();
         await delay(1_000);
-        expect(watcher?.output()).toContain(MISSED_REBUILD);
+        expect(watcher?.output().split(MISSED_REBUILD)).toHaveLength(count + 1);
       };
-      await noticeShown();
+      await noticeShown(1);
 
       writeFileSync(file, clean.replace("user.name", `user.${BROKEN}`));
-      await noticeShown();
+      await noticeShown(2);
     } finally {
       await watcher?.stop();
       rmSync(dir, { recursive: true, force: true });

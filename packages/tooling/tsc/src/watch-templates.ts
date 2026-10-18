@@ -25,13 +25,13 @@
  * de`) does not match it. The seam the rebuild offers is not reachable from
  * here: the watch compiler host that carries `afterProgramCreate` is not the
  * `CompilerHost` the language plugins are handed (`_tsc.js` builds the former
- * with `createCompilerHostFromProgramHost`, a separate object), and reaching it
- * would mean rewriting `_tsc.js` on disk. So a rebuild whose summary is not
+ * with `createCompilerHostFromProgramHost`, a separate object). So a rebuild whose summary is not
  * recognized is reported instead of skipped: {@link rebuildActivity} marks that
  * a rebuild read files, and a write after that with no recognized summary says
  * so out loud, once per rebuild. The first build is decided by
  * {@link reportMissedRebuildIfMarked}, synchronously, the moment it is known
- * complete; later rebuilds are decided one tick after their last file read.
+ * complete; later rebuilds are decided one tick after their last file read, and under
+ * `-b -w` at the end of the last of tsc's build turns ({@link observeBuildTurns}).
  * Never silently.
  */
 
@@ -121,8 +121,6 @@ const EMPTY: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
  */
 let rebuilding = false;
 let deciding = false;
-/** File reads seen so far; a `-b` decision waits for it to stop moving. */
-let reads = 0;
 
 /**
  * Decides a missed rebuild synchronously, without waiting for the event-loop
@@ -142,15 +140,6 @@ export function reportMissedRebuildIfMarked(): void {
   process.stderr.write(MISSED_REBUILD);
 }
 
-/**
- * How long a `tsc -b -w` rebuild must stay quiet, after its last file read,
- * before it counts as missed. tsc's solution builder rebuilds a change that
- * invalidates several projects across event-loop turns: after the first
- * project it schedules the rest with a 100 ms timer, and writes the one summary
- * only after the last. The wait therefore has to outlast that timer.
- */
-export const BUILD_QUIET_MS = 400;
-
 export function rebuildActivity(
   host: { getSourceFile?: unknown } | undefined,
   options: { build?: boolean } = {},
@@ -159,21 +148,14 @@ export function rebuildActivity(
   if (typeof getSourceFile !== "function" || !host) return;
   host.getSourceFile = (...args: unknown[]) => {
     rebuilding = true;
-    reads += 1;
-    if (!deciding) {
+    // A `-b` rebuild spans several of tsc's build turns, and is decided at the
+    // end of the last one (see `observeBuildTurns`), never by a tick here.
+    if (!options.build && !deciding) {
       deciding = true;
       setImmediate(() => {
         deciding = false;
         // A recognized summary cleared the mark: the pass ran for this rebuild.
         if (!rebuilding) return;
-        if (options.build) {
-          // A `-b` rebuild is not over at the end of this tick: its next
-          // project is built on tsc's own timer, and only the last project
-          // writes the summary. Quiet for `BUILD_QUIET_MS`, with no further
-          // read and no summary, is what a missed rebuild looks like.
-          decideAfterQuiet(reads);
-          return;
-        }
         rebuilding = false;
         process.stderr.write(MISSED_REBUILD);
       });
@@ -182,18 +164,70 @@ export function rebuildActivity(
   };
 }
 
+/** The tag tsc's solution builder gives the timer of each of its build turns. */
+const BUILD_TURN_TIMER = "timerToBuildInvalidatedProject";
+
 /**
- * Reports a `-b` rebuild as missed once `BUILD_QUIET_MS` passed with no file
- * read since `seen`. A read in between belongs to a later project of the same
- * rebuild, and that read started a decision of its own.
+ * Decides a `tsc -b -w` rebuild by tsc's own build turns, in any locale.
+ *
+ * The solution builder schedules every rebuild turn with `setTimeout(callback,
+ * time, "timerToBuildInvalidatedProject", ...)`, through the global
+ * `setTimeout` that `_tsc.js` reads when it is evaluated. Wrapping that global
+ * before `runTsc` evaluates it sees each turn: a change that invalidates
+ * several projects builds one per turn (the next on a 100 ms timer) and writes
+ * its one summary after the last. A turn marks the rebuild when it starts,
+ * because the compiler host's own hook is dropped when tsc restores the host
+ * after a build (so it may never see a rebuild of the same project again); when
+ * a turn returns with no further turn pending, the rebuild is over, and a mark
+ * a recognized summary did not clear is a missed rebuild.
+ *
+ * Call before the tsc entry point runs; the returned function puts the global
+ * back (tsc keeps the wrapper it already read).
  */
-function decideAfterQuiet(seen: number): void {
-  const timer = setTimeout(() => {
-    if (!rebuilding || reads !== seen) return;
-    rebuilding = false;
-    process.stderr.write(MISSED_REBUILD);
-  }, BUILD_QUIET_MS);
-  timer.unref?.();
+export function observeBuildTurns(): () => void {
+  const original = globalThis.setTimeout;
+  const clear = globalThis.clearTimeout;
+  const pending = new Set<unknown>();
+  globalThis.setTimeout = ((
+    callback: (...a: unknown[]) => unknown,
+    delay?: number,
+    ...rest: unknown[]
+  ) => {
+    if (rest[0] !== BUILD_TURN_TIMER) {
+      return (original as (...a: unknown[]) => unknown)(
+        callback,
+        delay,
+        ...rest,
+      );
+    }
+    const turn = (...args: unknown[]) => {
+      pending.delete(handle);
+      rebuilding = true;
+      try {
+        return callback(...args);
+      } finally {
+        if (pending.size === 0 && rebuilding) {
+          rebuilding = false;
+          process.stderr.write(MISSED_REBUILD);
+        }
+      }
+    };
+    const handle = (original as (...a: unknown[]) => unknown)(
+      turn,
+      delay,
+      ...rest,
+    );
+    pending.add(handle);
+    return handle;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((handle?: Parameters<typeof clear>[0]) => {
+    pending.delete(handle);
+    return clear(handle);
+  }) as typeof clearTimeout;
+  return () => {
+    globalThis.setTimeout = original;
+    globalThis.clearTimeout = clear;
+  };
 }
 
 /**
