@@ -72,7 +72,9 @@ function main(): number {
   const changed = changedFiles();
   const sources = changed.filter((f) => SOURCE.test(f));
   if (sources.length === 0) {
-    console.log("test:affected: no source files changed vs origin/main; nothing to run.");
+    console.log(
+      "test:affected: no source files changed vs origin/main; nothing to run.",
+    );
     return 0;
   }
   const wide = changed.filter(isWide);
@@ -83,7 +85,10 @@ function main(): number {
     );
   }
   const lane = laneFor(changed);
-  const env = { ...process.env, MX_TEST_LANE: process.env.MX_TEST_LANE ?? lane };
+  const env = {
+    ...process.env,
+    MX_TEST_LANE: process.env.MX_TEST_LANE ?? lane,
+  };
   if (env.MX_TEST_LANE === "fast") {
     console.log(
       "test:affected: fast lane (tsc/typescript-plugin unchanged); the slow lane runs in the gate and CI.",
@@ -92,7 +97,9 @@ function main(): number {
   const cmd = moon
     ? ["moon", "run", ":test", "--affected", ...extra]
     : ["bunx", "vitest", "related", ...sources, "--run", ...extra];
-  console.log(`test:affected: MX_TEST_LANE=${env.MX_TEST_LANE} ${cmd.join(" ").slice(0, 200)}`);
+  console.log(
+    `test:affected: MX_TEST_LANE=${env.MX_TEST_LANE} ${cmd.join(" ").slice(0, 200)}`,
+  );
   const r = spawnSync(cmd[0] as string, cmd.slice(1), {
     cwd: root,
     env,

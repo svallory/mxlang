@@ -38,7 +38,11 @@ describe("laneTest", () => {
     expect(cfg.exclude).toEqual(["x", "src/a.test.ts"]);
   });
   it("slow: includes only the slow globs and keeps the excludes", () => {
-    const cfg = laneTest(slow, { lane: "slow", include: ["src/**"], exclude: ["x"] });
+    const cfg = laneTest(slow, {
+      lane: "slow",
+      include: ["src/**"],
+      exclude: ["x"],
+    });
     expect(cfg).toEqual({ include: slow, exclude: ["x"] });
   });
   it("defaults to vitest's own excludes", () => {
@@ -57,7 +61,9 @@ describe("the declared slow lanes", () => {
   ];
   for (const [dir, globs, min] of lanes) {
     it(`${dir} slow globs match files`, () => {
-      const files = globs.flatMap((g) => globSync(g, { cwd: resolve(root, dir) }));
+      const files = globs.flatMap((g) =>
+        globSync(g, { cwd: resolve(root, dir) }),
+      );
       expect(files.length).toBeGreaterThanOrEqual(min);
     });
   }
