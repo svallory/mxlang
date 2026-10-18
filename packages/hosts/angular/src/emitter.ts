@@ -3072,8 +3072,8 @@ class AngularEmitter implements Emitter<string> {
    * lowered by what it names: a bare define renders through
    * `ngTemplateOutlet`, any other branch through `ngComponentOutlet`. A
    * conditional becomes `@if`/`@else`, so no value is tested at run time.
-   * A define read any other way (`D || Other`, `f(D)`) is refused: it
-   * would need the run-time type test.
+   * `c || D`, `c && D` and `c ?? D` lower the same way. A define read any
+   * other way (`f(D)`) is refused: it would need the run-time type test.
    *
    * Returns false, writing nothing, when the target reads no define.
    */
@@ -3094,12 +3094,91 @@ class AngularEmitter implements Emitter<string> {
     } catch {
       return false;
     }
-    const mentions = (value: unknown): boolean => {
+    // The names a pattern binds (`(a, { b }, [c], ...d) => …`).
+    const bound = (pattern: unknown, into: Set<string>): void => {
+      const node = pattern as BabelNode | null;
+      if (!node) return;
+      switch (node.type) {
+        case "Identifier":
+          into.add(node.name as string);
+          return;
+        case "ObjectPattern":
+          for (const property of node.properties as BabelNode[]) {
+            bound(
+              property.type === "RestElement" ? property : property.value,
+              into,
+            );
+          }
+          return;
+        case "ArrayPattern":
+          for (const element of node.elements as BabelNode[]) {
+            bound(element, into);
+          }
+          return;
+        case "AssignmentPattern":
+          bound(node.left, into);
+          return;
+        case "RestElement":
+          bound(node.argument, into);
+          return;
+        case "TSParameterProperty":
+          bound(node.parameter, into);
+          return;
+      }
+    };
+    // Every name a function's body declares (`var`, `let`, `const`, nested
+    // functions and classes), however deep: a name declared anywhere in the
+    // function shadows the define for the whole function, which over-shadows
+    // a block-scoped declaration but never reads a define as a local.
+    const declared = (value: unknown, into: Set<string>): void => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        for (const item of value) declared(item, into);
+        return;
+      }
+      const node = value as BabelNode;
+      if (node.type === "VariableDeclarator") bound(node.id, into);
+      if (
+        (node.type === "FunctionDeclaration" ||
+          node.type === "ClassDeclaration") &&
+        node.id
+      ) {
+        bound(node.id, into);
+      }
+      if (node.type === "CatchClause") bound(node.param, into);
+      for (const [key, child] of Object.entries(node)) {
+        if (key !== "loc" && key !== "extra") declared(child, into);
+      }
+    };
+    const mentions = (
+      value: unknown,
+      shadow: ReadonlySet<string> = new Set(),
+    ): boolean => {
       if (!value || typeof value !== "object") return false;
-      if (Array.isArray(value)) return value.some(mentions);
+      if (Array.isArray(value)) return value.some((v) => mentions(v, shadow));
       const record = value as BabelNode;
       if (record.type === "Identifier") {
-        return this.definedParams(record.name as string) !== undefined;
+        return (
+          !shadow.has(record.name as string) &&
+          this.definedParams(record.name as string) !== undefined
+        );
+      }
+      let inner = shadow;
+      if (
+        record.type === "ArrowFunctionExpression" ||
+        record.type === "FunctionExpression" ||
+        record.type === "ObjectMethod" ||
+        record.type === "ClassMethod"
+      ) {
+        const names = new Set(shadow);
+        for (const param of (record.params as unknown[]) ?? []) {
+          bound(param, names);
+        }
+        if (record.type === "FunctionExpression" && record.id) {
+          bound(record.id, names);
+        }
+        declared(record.body, names);
+        inner = names;
       }
       return Object.entries(record).some(([key, child]) => {
         if (key === "loc" || key === "extra" || key.endsWith("Comments")) {
@@ -3121,12 +3200,15 @@ class AngularEmitter implements Emitter<string> {
         ) {
           return false;
         }
-        return mentions(child);
+        return mentions(child, inner);
       });
     };
     if (!mentions(root)) return false;
     const text = (branch: BabelNode): string =>
       exprCode.slice(branch.start as number, branch.end as number);
+    // The @if tests and branch slices are written unmapped: a mapping is
+    // whole-to-whole, and `exprSpan` covers the whole tag name, so it can map
+    // only a branch that is the whole expression.
     const lower = (branch: BabelNode): void => {
       if (branch.type === "ConditionalExpression" && mentions(branch)) {
         this.out.write(`@if (${text(branch.test as BabelNode)}) { `);
@@ -3136,16 +3218,31 @@ class AngularEmitter implements Emitter<string> {
         this.out.write(" }");
         return;
       }
+      // `a || D`, `a && D` and `a ?? D` choose between their operands as a
+      // conditional does, so each operand is lowered by what it names and
+      // `a` is tested, not its type.
+      if (branch.type === "LogicalExpression" && mentions(branch)) {
+        const left = branch.left as BabelNode;
+        const right = branch.right as BabelNode;
+        const operator = branch.operator as string;
+        const test = operator === "??" ? `(${text(left)}) != null` : text(left);
+        this.out.write(`@if (${test}) { `);
+        lower(operator === "&&" ? right : left);
+        this.out.write(" } @else { ");
+        lower(operator === "&&" ? left : right);
+        this.out.write(" }");
+        return;
+      }
       if (branch.type === "Identifier") {
         const name = branch.name as string;
         const params = this.definedParams(name);
         if (params !== undefined) {
           const written = this.authored(name);
-          if (params > 0 || attrs.length > 0) {
+          // Attributes on the tag are dropped, as on `<D n=3/>` of a define
+          // without params; a define with params needs its arguments.
+          if (params > 0) {
             fail(
-              params > 0
-                ? `\`<\${${written}}/>\` renders \`<define/${written}>\`, which takes ${params} argument(s): a template reference is called with \`ngTemplateOutletContext\`, so call it as \`<${written}(...)/>\``
-                : `attributes on \`<\${${written}}/>\` aren't supported by @mxlang/host-angular: \`<define/${written}>\` is a template reference, and a template takes no inputs. Declare a parameter on the define and call it as \`<${written}(value)/>\``,
+              `\`<\${${written}}/>\` renders \`<define/${written}>\`, which takes ${params} argument(s): a template reference is called with \`ngTemplateOutletContext\`, so call it as \`<${written}(...)/>\``,
               node,
               "MX_UNSUPPORTED_CONSTRUCT",
             );
@@ -3158,12 +3255,18 @@ class AngularEmitter implements Emitter<string> {
       }
       if (mentions(branch)) {
         fail(
-          "a `<define>` read inside this dynamic tag's expression can't be rendered by @mxlang/host-angular: a define is a template reference, which only `<${D}/>` or `c ? D : Other` as the whole tag name can render. Write the choice as `<if=c><D/></if><else>…</else>`",
+          "a `<define>` read inside this dynamic tag's expression can't be rendered by @mxlang/host-angular: a define is a template reference, which only `<${D}/>`, `c ? D : Other`, `c || D`, `c && D` or `c ?? D` as the whole tag name can render. Write the choice as `<if=c><D/></if><else>…</else>`",
           node,
           "MX_UNSUPPORTED_CONSTRUCT",
         );
       }
-      this.emitComponentOutlet(text(branch), exprSpan, attrs, node);
+      const code = text(branch);
+      this.emitComponentOutlet(
+        code,
+        code === exprCode ? exprSpan : undefined,
+        attrs,
+        node,
+      );
     };
     lower(root);
     return true;

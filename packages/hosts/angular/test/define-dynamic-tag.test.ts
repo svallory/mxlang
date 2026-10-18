@@ -42,11 +42,11 @@ let counter = 0;
 class Other {}
 
 /** Renders an emitted template in a component whose `input` is `{ c }`. */
-function render(source: string, c = true): string {
+function render(source: string, c = true, pick: unknown = Other): string {
   const template = emit(source);
   assertAngularParses(template);
   class Probe {
-    input = { c, other: Other };
+    input = { c, other: Other, pick };
   }
   counter += 1;
   Component({
@@ -130,7 +130,7 @@ describe("angular: a dynamic tag reads a <define>", () => {
   });
 
   it("a define read any other way in the target is refused, naming the fix", () => {
-    for (const target of ["input.c || D", "String(D)", "[D][0]"]) {
+    for (const target of ["String(D)", "[D][0]", "input.f(() => D)"]) {
       const error = thrown(`${DEFINE}<\${${target}}/>`);
       expect(error?.message, target).toContain(
         "a `<define>` read inside this dynamic tag's expression can't be rendered by @mxlang/host-angular",
@@ -148,11 +148,52 @@ describe("angular: a dynamic tag reads a <define>", () => {
     expect(error?.message).toContain("call it as `<D(...)/>`");
   });
 
-  it("attributes on the dynamic tag are refused: a template takes no inputs", () => {
-    const error = thrown(`${DEFINE}<\${D} a=1/>`);
-    expect(error?.message).toContain(
-      "attributes on `<${D}/>` aren't supported by @mxlang/host-angular",
+  it("attributes on a define target are dropped, as on `<D n=3/>`; the other branch keeps them", () => {
+    expect(emit(`${DEFINE}<D n=3/>`)).toContain(
+      '[ngTemplateOutletContext]="{}"',
     );
+    const plain = emit(`${DEFINE}<\${D} n=3/>`);
+    expect(plain).toContain('[ngTemplateOutlet]="D"');
+    expect(plain).not.toContain("n:");
+    const mixed = emit(`${DEFINE}<\${input.c ? D : input.other} class="x"/>`);
+    expect(mixed).toContain(
+      '@else { <ng-container [ngComponentOutlet]="input.other" [ngComponentOutletInputs]="{ class: &quot;x&quot; }"></ng-container> }',
+    );
+    expect(mixed).toMatch(
+      /@if \(input\.c\) \{ <ng-container \[ngTemplateOutlet\]="D" \[ngTemplateOutletContext\]="\{\}"><\/ng-container> \}/,
+    );
+    expect(render(`${DEFINE}<\${D} n=3/>`)).toBe("<i>b</i>");
+  });
+
+  it("`||`, `&&` and `??` choose between their operands as a conditional does", () => {
+    const or = `${DEFINE}<\${input.pick || D}/>`;
+    expect(emit(or)).toContain(
+      '@if (input.pick) { <ng-container [ngComponentOutlet]="input.pick"></ng-container> } @else { <ng-container [ngTemplateOutlet]="D"',
+    );
+    expect(render(or, true, null)).toBe("<i>b</i>");
+    expect(render(or, true, Other)).toBe("<mx-other><u>o</u></mx-other>");
+
+    const and = `${DEFINE}<\${input.pick && D}/>`;
+    expect(emit(and)).toContain(
+      '@if (input.pick) { <ng-container [ngTemplateOutlet]="D"',
+    );
+    expect(render(and, true, Other)).toBe("<i>b</i>");
+    expect(render(and, true, null)).toBe("");
+
+    const nullish = `${DEFINE}<\${input.pick ?? D}/>`;
+    expect(emit(nullish)).toContain("@if ((input.pick) != null) {");
+    expect(render(nullish, true, null)).toBe("<i>b</i>");
+    expect(render(nullish, true, Other)).toBe("<mx-other><u>o</u></mx-other>");
+  });
+
+  it("a name bound inside the expression shadows the define", () => {
+    for (const target of ["input.f((D) => D)", "input.f(({ D }) => D)"]) {
+      expect(emit(`${DEFINE}<\${${target}}/>`), target).toBe(
+        `<ng-template #D> <i>b</i> </ng-template><ng-container [ngComponentOutlet]="${target
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")}"></ng-container>`,
+      );
+    }
   });
 
   it("a define declared after the read is unchanged: Angular's own error follows", () => {
@@ -166,7 +207,9 @@ describe("angular: the lowered target passes the strict template check", () => {
     "../../../tooling/angular-checker",
   );
   // Local stand-ins: `@angular/common` is not resolvable from the checker
-  // project. They carry the real inputs' types.
+  // project. They carry the real inputs' types as of writing; a type change
+  // in `@angular/common` will not show up here, only in the TestBed renders
+  // above and the angular oracle.
   const OUTLETS = `
 @Directive({ selector: "[ngTemplateOutlet]", standalone: true })
 export class NgTemplateOutlet {
@@ -203,6 +246,15 @@ export class Probe {${body}}
       check(
         emit(`${DEFINE}<\${input.c ? D : input.other}/>`),
         "input = { c: true, other: class Other {} };",
+      ),
+    ).toEqual([]);
+  });
+
+  it("a logical target type-checks", () => {
+    expect(
+      check(
+        emit(`${DEFINE}<\${input.pick || D}/>`),
+        "input = { pick: null as (new () => object) | null };",
       ),
     ).toEqual([]);
   });
