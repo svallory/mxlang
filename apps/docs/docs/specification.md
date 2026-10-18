@@ -5375,8 +5375,7 @@ identical when they are the same text; two character sets, when they share a
 character; a literal and a character set, when the literal is one character of
 the set. A prefix is not a clash: `%`, `%.` and `%:` may all be installed,
 since a file is read with the table of the one dialect it routes to, so the
-marks of different dialects never compete in one scanner. Within one table the
-scanner is unchanged: one first character arms at most one row per list, and
+marks of different dialects never compete in one scanner. Within one table, one first character arms at most one row per list, and
 a table with two rows on one first character is refused when it is validated.
 When a file's dialect loads, core compares it with
 the others; a clash is one `MX_INVALID_DIALECT_MODULE` error in the loading

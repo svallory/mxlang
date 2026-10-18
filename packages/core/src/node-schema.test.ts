@@ -760,7 +760,6 @@ describe("findMarkOverlap", () => {
     ["prefixes that differ", row("%", "%\\.a"), row("%", "%:a")],
     ["a prefix of another", row("%", "%"), row("%", "%\\.a")],
     ["a longer prefix first", row("%", "%\\.a"), row("%", "%")],
-    ["`%.` against `%:`", row("%", "%\\.a"), row("%", "%:a")],
     [
       "a longer literal against a class",
       row("%", "%\\.a"),
