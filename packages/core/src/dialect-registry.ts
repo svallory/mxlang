@@ -96,7 +96,10 @@ export interface DialectNodes {}
  * the same `ctx` constructors `lowerTrigger` gets. In expression position
  * (`ctx.position === "expression"`, `ctx.use` saying how the operand is
  * used) it returns a `ctx.expression` result, the node's forward:
- * `Expr.nodes` keeps the node beside it. In value position
+ * `Expr.nodes` keeps the node beside it. Core finds the node again by the
+ * forward's identity, so each call returns a fresh object: a forward shared
+ * by two nodes (a cached literal) is listed for the last of them only. In
+ * value position
  * (`ctx.position === "value"`) it returns the string every target emits or
  * a `ctx.expression` result; either way the node stays on the IR (`Attr.node`
  * for a string or a string literal, else `Expr.nodes`). @unstable

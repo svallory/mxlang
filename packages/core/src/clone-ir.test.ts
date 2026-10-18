@@ -31,6 +31,31 @@ describe("cloneIr", () => {
     expect(cloneIr(forNode).paramNodes).toBe(forNode.paramNodes);
   });
 
+  it("an `Expr.nodes` entry's forward stays the node `Expr.node` holds, by reference or copied", () => {
+    const payload = parseExpression('a + "on"');
+    const forward = (payload as unknown as { right: object }).right;
+    const span = { sourceStart: 4, sourceEnd: 7 };
+    const entry = {
+      type: "atom:Atom",
+      span,
+      node: { type: "atom:Atom", span },
+      forward,
+    };
+    // Both key orders: the entry's forward reached before and after `node`.
+    for (const expr of [
+      { code: 'a + "on"', node: payload, nodes: [entry] },
+      { nodes: [entry], code: 'a + "on"', node: payload },
+    ]) {
+      const shared = cloneIr(expr);
+      expect(shared.nodes[0]?.forward).toBe(forward);
+      expect(shared.node).toBe(payload);
+      const copied = cloneIr(expr, { nodes: true });
+      const right = (copied.node as unknown as { right: object }).right;
+      expect(right).not.toBe(forward);
+      expect(copied.nodes[0]?.forward).toBe(right);
+    }
+  });
+
   it("keeps sharing inside the original: one shared object stays one", () => {
     const shared = { code: "x", shape: "other", node: null };
     const copy = cloneIr({ a: shared, b: [shared] });
