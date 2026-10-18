@@ -465,9 +465,9 @@ describe("a named export never reads as a default one", () => {
     expect(ir).toBeDefined();
   });
 
-  it("does not refuse a top-level `export default` that has no keyword, as before", () => {
+  it("refuses a top-level `export default` that has no keyword, as Marko does", () => {
     const { diagnostics } = lower("export default foo;\n<div/>");
-    expect(diagnostics).toEqual([]);
+    expect(diagnostics.map((d) => d.code)).toEqual(["MX_INVALID_STATEMENT"]);
   });
 });
 

@@ -375,8 +375,8 @@ describe("a module name declared twice is refused at the second declaration", ()
     ["var + class", "static var C = 1\nstatic class C {}", "C", 2, 13],
     ["import + var", `${X}\nstatic var x = 1`, "x", 2, 11],
     [
-      "default export function + const",
-      "export default function f() {}\nstatic const f = 1",
+      "export function + const",
+      "export function f() {}\nstatic const f = 1",
       "f",
       2,
       13,
@@ -1306,10 +1306,7 @@ describe("an export list names a declared binding", () => {
       "a var in a block",
       "static { if (c) { var q = 1 } }\nstatic export { q }",
     ],
-    [
-      "a default export function",
-      "export default function f() {}\nstatic export { f }",
-    ],
+    ["a static function", "static function f() {}\nstatic export { f }"],
     // A re-export binds nothing locally.
     ["a re-export", 'export { q } from "./m"'],
     ["a static re-export", 'static export { q } from "./m"'],
@@ -1947,10 +1944,11 @@ describe("a name exported twice is refused at the second export", () => {
       "the same local under two aliases in one list",
       "static const q = 1\nstatic export { q as a, q as b }",
     ],
-    // `default` is the template's, with its own check.
+    // `default` is the template's: a keyword-less `export default` is refused
+    // outright (bare-top-level-statements.test.ts).
     [
-      "a default export function and a named list",
-      "export default function f() {}\nstatic export { f }",
+      "a static function and a named list",
+      "static function f() {}\nstatic export { f }",
     ],
   ];
   it.each(compiles)("%s compiles", (_label, source) => {
