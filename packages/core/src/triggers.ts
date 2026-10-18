@@ -71,6 +71,7 @@ import type { ExprNode } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { voiceOf } from "./message-vocabulary.ts";
+import { firstRowIn } from "./static-triggers.ts";
 import type {
   CallPosition,
   Dialect,
@@ -405,6 +406,7 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
       return;
     }
     if (isContainer(value)) {
+      refuseRowInModuleStatement(table.expressionTriggers, value, owner);
       lowerExpressionTriggers(ctx, run, value, owner);
       return;
     }
@@ -427,6 +429,42 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
   };
   visit(roots, null);
   return true;
+}
+
+/**
+ * A dialect expression row written in a module statement (`static`,
+ * `server`, `client`) is refused at its first character: the
+ * statement is module code the parser announces no trigger in, so the row
+ * would reach the module as the JavaScript it looks like (`~zz`, a bitwise
+ * NOT), and its lowering may read the render scope a module statement has
+ * not (spec §13.9.9).
+ */
+const MODULE_CODE_KEYWORDS = new Set(["static", "server", "client"]);
+
+function refuseRowInModuleStatement(
+  rows: readonly Trigger[],
+  container: Node,
+  owner: Node | null,
+): void {
+  if (
+    rows.length === 0 ||
+    container.type !== "MxStatements" ||
+    owner?.type !== "MxModuleStatement" ||
+    !MODULE_CODE_KEYWORDS.has(owner.keyword) ||
+    typeof container.source !== "string" ||
+    typeof container.start !== "number"
+  ) {
+    return;
+  }
+  const hit = firstRowIn(container.source, rows);
+  if (!hit) return;
+  const text = container.source.slice(hit.start, hit.end);
+  const at = container.start + hit.start;
+  raise(
+    INVALID_TRIGGER_USE_CODE,
+    `\`${text}\` (the \`${hit.row.id}\` trigger) cannot be written in a \`${owner.keyword}\` statement: the trigger lowers inside an expression of the template, and a module statement runs outside it. Move it into a \`<const>\` or write it in the template`,
+    { type: "MxTrigger", start: at, end: container.start + hit.end },
+  );
 }
 
 /** An MX expression container (`MxExpression`, `MxStatements`, …; ast §4.1). */

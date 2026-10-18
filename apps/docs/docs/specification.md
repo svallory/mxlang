@@ -5467,6 +5467,20 @@ values (`Expr.node`, `Expr.nodes[].forward`, a `LoweredUnit`'s expression, and
 a `cloneIr` copy): core reads no mark from it and sets none. A dialect finds its nodes in
 `Expr.nodes` and `Attr.node`.
 
+An expression row applies in the template's expressions, and not in a module
+statement. A `static`, `server` or `client` statement is module code: the
+parser announces no trigger in it, and a row's lowering may read the render
+scope (`self`), which a module statement has not. A row written there is one
+`MX_INVALID_TRIGGER_USE` error at the row's first character, naming the text
+and the trigger and saying to move it into a `<const>` or write it in the
+template. The match is the template scanner's: a first character arms one row,
+the row's `match` must match there in full, the text is not inside a word or
+right after the same character (`a &&b`), and it stands where an operand is
+expected. A comment, a string and the text of a template literal are not
+scanned; a `${…}` substitution is code. A file with no dialect, and a
+dialect whose rows do not match in the statement, keep the statement's text
+as written.
+
 **A node-type slot.** A contract attribute typed by a registered node type
 (`type: "atom:Atom"`, or `items: "atom:Atom"` under `type: "array"`) accepts a
 node of that type, written as the whole value or as an expression that is the
