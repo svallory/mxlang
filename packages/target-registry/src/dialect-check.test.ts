@@ -8,6 +8,7 @@ import {
   PROBE_DEPENDS_ON_HOOK_MODULE,
   PROBE_DIALECT_MODULE,
   PROBE_MANIFEST,
+  PROBE_OTHER_DIALECT_MODULE,
   PROBE_SOURCES,
   PROBE_TAG_DIALECT,
   PROBE_TAG_HOOK_END_MODULE,
@@ -583,7 +584,7 @@ describe("checkDialectFile", () => {
           },
         }),
       );
-      writeFileSync(join(other, "index.cjs"), PROBE_DIALECT_MODULE);
+      writeFileSync(join(other, "index.cjs"), PROBE_OTHER_DIALECT_MODULE);
       return project;
     };
 
@@ -664,7 +665,7 @@ function withOtherDialect(project: ReturnType<typeof probeProject>): void {
       },
     }),
   );
-  writeFileSync(join(other, "index.cjs"), PROBE_DIALECT_MODULE);
+  writeFileSync(join(other, "index.cjs"), PROBE_OTHER_DIALECT_MODULE);
   writeFileSync(
     project.path("package.json"),
     JSON.stringify({

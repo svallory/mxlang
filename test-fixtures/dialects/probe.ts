@@ -36,6 +36,15 @@ export const PROBE_DIALECT_MODULE = `module.exports.default = {
 `;
 
 /**
+ * {@link PROBE_DIALECT_MODULE} marking `?` instead of `!`: the second dialect
+ * of a project, whose marks must be disjoint from the first's.
+ */
+export const PROBE_OTHER_DIALECT_MODULE = PROBE_DIALECT_MODULE.replace(
+  '"!", match: "![a-z]+"',
+  '"?", match: "\\\\?[a-z]+"',
+).replace('text === "!bad"', 'text === "?bad"');
+
+/**
  * {@link PROBE_DIALECT_MODULE} plus a fixable error: `!fix` fails with
  * `PROBE_FIXABLE` and carries one quick fix, "Replace with `!ok`", whose edit
  * is the trigger's own text. A hook attaches `fixes` to the error it throws
