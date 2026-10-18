@@ -366,6 +366,10 @@ describe("a trigger's hooks", () => {
     nodeTypes: {
       Ref: {
         keys: [],
+        schema: {
+          fields: { path: "data" },
+          slot: ["expression", "value", "line", "attribute"],
+        },
         parse,
         print: () => "",
         lower: (_node, ctx) => ctx.attribute("ref", "x"),

@@ -583,6 +583,7 @@ interface Ref extends DialectNode {
 
 const Ref: NodeType<Ref> = {
   keys: [],
+  schema: { fields: { path: "data" }, slot: ["value"] },
   parse: (text, _span, ctx) => {
     if (text === "~skip") return undefined; // declined: `~skip` parses as it would with no row
     const path = text.slice(1).split(".");
@@ -611,6 +612,31 @@ export default {
   nodeTypes: { Ref },
 } satisfies Dialect;
 ```
+
+Every node type declares three things, and a type missing one is an error when
+the dialect loads (`MX_INVALID_DIALECT_MODULE`, naming the dialect, the type and
+the piece):
+
+- a **schema** (`schema: { fields, slot }`): `fields` names every field `parse`
+  returns besides `type` and `span`, each `"node"` (child nodes; exactly the
+  names in `keys`), `"expression"` (a host expression, a parsed expression node
+  or `null`) or `"data"`; `slot` is the non-empty list of positions the type
+  fills (`"expression"`, `"value"`, `"line"`, `"attribute"`). A row naming the
+  type at another position is refused at load, and a node lowered in one is
+  refused at the node. A `parse` that returns an undeclared field, or an
+  `"expression"` or `"node"` field of another shape, is refused at the node's
+  text;
+- a **forward**: in expression position, the expression `lower` returns
+  through `ctx.expression`. It is a new object for every node: a forward two
+  nodes share (a literal kept in a variable and returned twice) is refused at
+  the second node, so each node has its own forward;
+- a **printer** (`print`).
+
+Across the dialects a project installs (its own declaration and its direct
+dependencies that declare one), marking characters are disjoint: no two rows of
+different dialects start with the same character, and none starts with a prefix
+of another's (`%` against `%.`). The first clash is an error in the module of the
+dialect being loaded, naming both dialects and both rows.
 
 `print(parse(text))` gives the text back. `<sort to=~user.name>` lowers to a
 static attribute `to="user.name"` whose IR carries the node (`Attr.node`)

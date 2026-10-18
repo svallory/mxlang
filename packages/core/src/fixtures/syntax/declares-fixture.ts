@@ -96,6 +96,7 @@ const declaresFixture = {
   nodeTypes: {
     Atom: {
       keys: [],
+      schema: { fields: { name: "data" }, slot: ["expression", "value"] },
       parse: (text: string) => ({ name: text.slice(1) }),
       print: (node: { name: string }) => `~${node.name}`,
       lower: (node: { name: string }, ctx) =>

@@ -5308,9 +5308,15 @@ dialect registers its own under its `id`, in `nodeTypes`, keyed by a PascalCase
 ```ts
 interface NodeType<N extends DialectNode> {
   keys: readonly string[];                                  // child-node fields; [] for a leaf
+  schema: NodeSchema;                                       // required
   parse(text: string, span: SourceSpan, ctx: ClaimContext): Omit<N, "type" | "span"> | undefined;
   print(node: N): string;                                   // print(parse(text)) is text
   lower(node: N, ctx: TriggerContext): TriggerResult;
+}
+
+interface NodeSchema {
+  fields: Record<string, "node" | "expression" | "data">;  // every field parse returns besides type and span
+  slot: ("expression" | "value" | "line" | "attribute")[];  // the positions the type fills; non-empty
 }
 
 interface ClaimContext {
@@ -5323,6 +5329,38 @@ interface ClaimContext {
 
 A table row names one with `node: { type, dialect }`, in an expression,
 attribute, line or value list.
+
+**What a node type declares.** Every node type declares a **schema**, a
+**forward** and a **printer**; a type missing one is `MX_INVALID_DIALECT_MODULE`
+when its dialect loads, naming the dialect, the type and the piece.
+
+- The **schema** (`NodeType.schema`) has `fields` and `slot`. `fields` names
+  every field `parse` returns besides `type` and `span`: `"node"` for a field of
+  child nodes (the names are exactly `keys`), `"expression"` for a host
+  expression (a hole: a parsed expression node, or `null`), `"data"` for
+  anything else. `slot` is the non-empty list of positions the type fills. A
+  row naming the type at a position outside `slot` is an error at load, naming
+  the slot and the fix. A `parse` that returns a field `fields` does not
+  declare, or an `"expression"` or `"node"` field that is not an expression
+  node, a node, a list of nodes or `null`, is an error at the node's text. A
+  node lowered at a position outside `slot` (placed with `ctx.attribute`), or
+  carrying an undeclared field, is an error at the node's span.
+- The **forward** is the expression `lower` returns through `ctx.expression`
+  (see "The expression position" below). It is a new object for each node: a
+  forward that another node already stands for is an error at the later node.
+- The **printer** is `print`; `print(parse(text))` is `text`.
+
+**Disjoint marks.** The dialects a project installs are its own `mx.dialect`
+declaration, if any, and its direct dependencies that declare one. Their
+marking characters are disjoint: a row's mark is the literal text its `match`
+starts with, else the characters of its `chars`, and no mark of one dialect may
+equal, be a prefix of, or have as a prefix a mark of another (`%` against
+`%.`), whatever the position. When a file's dialect loads, core compares it with
+the others; a clash is one `MX_INVALID_DIALECT_MODULE` error in the loading
+dialect's module at 1:0 that names both dialects, both rows and the shared
+mark, and says to change one row's `chars` and `match` or to remove one
+dependency. A dialect whose own module does not load is skipped in the
+comparison; its files report why.
 
 **The claim.** Every row naming a node type goes through one process. At
 a trigger position the parser finds the row whose `match` matches and asks the

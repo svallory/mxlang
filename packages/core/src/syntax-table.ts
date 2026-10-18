@@ -47,9 +47,11 @@ import {
 } from "./dialect-contracts.ts";
 import {
   type DialectManifest,
+  discoverDialects,
   type RouteDialectOptions,
   routeDialect,
 } from "./dialect-discovery.ts";
+import { findMarkOverlap } from "./dialect-marks.ts";
 import {
   checkDialectNodeTypes,
   forgetNodeTypeRegistry,
@@ -1470,7 +1472,67 @@ export function fileTagRules(
   return dialect ? dialectTagRules(dialect) : undefined;
 }
 
+/**
+ * Loads the dialect `filename` routes to, then checks its marks against the
+ * other dialects its project installs (the project's own declaration and its
+ * direct dependencies that declare one, `discoverDialects`): two of them
+ * sharing a marking character or prefix is an error in the module of the
+ * dialect being loaded, naming both. Not cached, so editing either module
+ * clears it. A peer whose module does not load is skipped here; its own
+ * files report why.
+ */
 function resolveManifestSyntax(
+  filename: string,
+  options: RouteDialectOptions,
+): ResolvedSyntax {
+  const resolved = resolveRoutedSyntax(filename, options);
+  const dialect = resolved.dialect;
+  const loaded = dialect && loadedDialects.get(dialect);
+  if (!dialect || !loaded) return resolved;
+  const found = findNearestPackageJson(dirname(filename));
+  if (!found) return resolved;
+  const peers = discoverDialects(found.file).filter(
+    (each) => each !== loaded.manifest && each.id !== loaded.manifest.id,
+  );
+  for (const peer of peers) {
+    const other = peerDialect(peer);
+    const clash = other && findMarkOverlap(dialect.table, other.table);
+    if (!clash || !other) continue;
+    const named = (id: string, name: string) =>
+      id === name ? `\`${id}\`` : `\`${id}\` (${name})`;
+    throw codedError(
+      INVALID_DIALECT_MODULE_CODE,
+      `dialects ${named(loaded.manifest.id, dialect.name)} and ${named(peer.id, other.name)} are installed in one project and both mark ${JSON.stringify(clash.mark)}: the \`${clash.first.row}\` row of \`${loaded.manifest.id}\` (\`table.${clash.first.list}\`) and the \`${clash.second.row}\` row of \`${peer.id}\` (\`table.${clash.second.list}\`). A mark belongs to one dialect: change \`chars\` and \`match\` of one of those rows to a character or prefix the other does not use, or remove one of the two dependencies`,
+      1,
+      0,
+      loaded.file,
+    );
+  }
+  return resolved;
+}
+
+/** The dialect a peer manifest declares, loaded (and cached) on its own; `undefined` when its module fails. */
+function peerDialect(manifest: DialectManifest): Dialect | undefined {
+  const known = byDialect.get(manifest);
+  if (known && !("error" in known) && mtimeOf(known.file) === known.mtimeMs) {
+    return known.resolved.dialect;
+  }
+  try {
+    let module: { file: string; mtimeMs?: number } | undefined;
+    const { resolved, file } = loadDialect(manifest, (each) => {
+      module = { file: each, mtimeMs: mtimeOf(each) };
+    });
+    byDialect.set(manifest, { resolved, ...(module ?? { file }) });
+    if (resolved.dialect) {
+      loadedDialects.set(resolved.dialect, { file, manifest });
+    }
+    return resolved.dialect;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveRoutedSyntax(
   filename: string,
   options: RouteDialectOptions,
 ): ResolvedSyntax {

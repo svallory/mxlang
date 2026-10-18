@@ -189,6 +189,7 @@ export {
   type DialectNode,
   type DialectNodes,
   MX_DIALECT,
+  type NodeSchema,
   type NodeType,
   nodeTypeRegistry,
   parseMxString,

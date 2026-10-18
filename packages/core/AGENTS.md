@@ -578,7 +578,7 @@ Five facts worth knowing before editing it:
   **Node types (`src/dialect-registry.ts`).** One key space, `id:Type`: core is
   dialect zero (`mx`, its MX AST types without the `Mx` prefix, keys only,
   lowered directly), and a dialect's `nodeTypes`
-  (`{ keys, parse, print, lower }` per PascalCase type; the
+  (`{ keys, schema, parse, print, lower }` per PascalCase type, `schema` declaring its `fields` and `slot`; the
   dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
   (expression, attribute, line and value triggers) names a type core or the
   loading dialect registers with a `parse` for that position (`CORE_POSITIONS`, `claimsAt`: core registers one only

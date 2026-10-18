@@ -41,6 +41,10 @@ const REF: Trigger = {
 
 const RefType: NodeType<Ref> = {
   keys: [],
+  schema: {
+    fields: { path: "data" },
+    slot: ["expression", "value", "line", "attribute"],
+  },
   // `~skip…` declines: the value parses as if no row matched.
   parse: (text) =>
     text.startsWith("~skip") ? undefined : { path: text.slice(1).split(".") },
@@ -534,6 +538,7 @@ const SYM_VALUE: Trigger = {
 
 const SymType: NodeType<Sym> = {
   keys: [],
+  schema: { fields: { name: "data" }, slot: ["value"] },
   parse: (text) => ({ name: text.slice(1) }),
   print: (node) => `:${node.name}`,
   lower: (node) => node.name,
@@ -605,6 +610,7 @@ describe("a claimed default value ends at a terminating attribute row", () => {
       nodeTypes: {
         Sym: {
           keys: [],
+          schema: { fields: {}, slot: ["value"] },
           parse: () => undefined,
           print: () => "",
           lower: () => "",

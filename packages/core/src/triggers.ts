@@ -53,17 +53,20 @@ import {
   reservedHookCodeMessage,
 } from "./diagnostic-codes.ts";
 import {
+  type ClaimPosition,
   type DialectNode,
   isCallRow,
   isNodeTypeRow,
   isRegistryKey,
+  misfitField,
   nodeTypeRegistry,
   type RegisteredNode,
   rowKey,
   STRING_KEY,
   TRIGGER_KEY,
+  undeclaredFields,
 } from "./dialect-registry.ts";
-import { recordForward } from "./expr-nodes.ts";
+import { nodeOfForward, recordForward } from "./expr-nodes.ts";
 import type { ExprNode, Member, MxMemberMark } from "./ir.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
@@ -600,6 +603,7 @@ function nodeTypeHook(
   dialect: Dialect | undefined,
   trigger: Node,
   node: RegisteredNode,
+  position: ClaimPosition,
 ): TriggerHook {
   // Dispatch on the node's own type: the type that parsed it lowers it.
   const registered = nodeTypeRegistry(dialect).get(node.type);
@@ -607,7 +611,68 @@ function nodeTypeHook(
   if (!registered || !nodeType) return noLowering(trigger);
   const label = `\`lower\` (node type \`${registered.key}\`)`;
   hookLabels.set(trigger, label);
-  return { label, call: (context) => nodeType.lower(node, context) };
+  return {
+    label,
+    call: (context) => {
+      const at = nodeSpanOf(node, trigger);
+      const who = `dialect \`${registered.dialect}\`, node type \`${registered.type}\``;
+      const { schema } = nodeType;
+      if (!schema.slot.includes(position)) {
+        raise(
+          INVALID_DIALECT_MODULE_CODE,
+          `${who}: a node of this type was lowered in ${positionPhrase(position)}, but its \`schema.slot\` is ${JSON.stringify(schema.slot)}. Add "${position}" to \`schema.slot\`, or write the node where the type is declared to go`,
+          at,
+        );
+      }
+      const extra = undeclaredFields(schema, node, position);
+      if (extra.length > 0) {
+        raise(
+          INVALID_DIALECT_MODULE_CODE,
+          `${who}: the node has ${extra.map((field) => `\`${field}\``).join(", ")}, which \`schema.fields\` does not declare. Add ${extra.length === 1 ? "it" : "each"} to \`schema.fields\` (as "node", "expression" or "data"), or leave ${extra.length === 1 ? "it" : "them"} off the node`,
+          at,
+        );
+      }
+      const misfit = misfitField(
+        schema,
+        node as unknown as Record<string, unknown>,
+      );
+      if (misfit) {
+        raise(
+          INVALID_DIALECT_MODULE_CODE,
+          `${who}: the node's \`${misfit.field}\` is not ${misfit.want}, and \`schema.fields.${misfit.field}\` is "${misfit.kind}". Give it ${misfit.want}, or declare the field "data"`,
+          at,
+        );
+      }
+      const result = nodeType.lower(node, context);
+      const forward =
+        result && !Array.isArray(result) && typeof result === "object"
+          ? (result as { kind?: unknown; node?: unknown })
+          : undefined;
+      if (
+        forward?.kind === "expression" &&
+        forward.node &&
+        nodeOfForward(forward.node) !== undefined
+      ) {
+        raise(
+          INVALID_DIALECT_MODULE_CODE,
+          `${who}: \`lower\` returned a forward that another node already stands for. Build a new object on every call (a literal kept in a variable and returned twice is shared), so each node has its own forward`,
+          at,
+        );
+      }
+      return result;
+    },
+  };
+}
+
+/** The node's own span as a positioned part, else the trigger it was read from. */
+function nodeSpanOf(node: DialectNode, trigger: Node): Node {
+  const span = node.span;
+  return span &&
+    Number.isInteger(span.sourceStart) &&
+    Number.isInteger(span.sourceEnd) &&
+    span.sourceStart <= span.sourceEnd
+    ? { type: "MxTriggerPart", start: span.sourceStart, end: span.sourceEnd }
+    : trigger;
 }
 
 /**
@@ -621,7 +686,7 @@ function hookFor(
   row: unknown,
 ): TriggerHook | undefined {
   const node = trigger.claimed as RegisteredNode | undefined;
-  if (node) return nodeTypeHook(dialect, trigger, node);
+  if (node) return nodeTypeHook(dialect, trigger, node, trigger.position);
   if (isCallRow(row) || (isNodeTypeRow(row) && rowKey(row) === TRIGGER_KEY))
     return lowerTriggerHook(dialect, trigger);
   if (isNodeTypeRow(row)) return noLowering(trigger);
@@ -1262,7 +1327,12 @@ function lowerExpressionTriggers(
       const result = callHook(
         ctx,
         claimed
-          ? nodeTypeHook(dialect, trigger, claimed as RegisteredNode)
+          ? nodeTypeHook(
+              dialect,
+              trigger,
+              claimed as RegisteredNode,
+              "expression",
+            )
           : lowerTriggerHook(dialect, trigger),
         trigger,
         null,
@@ -1784,7 +1854,12 @@ function lowerValueNode(
   const { sourceStart: start, sourceEnd: end } = node.span;
   const result = callHook(
     ctx,
-    nodeTypeHook(ctx.dialect, trigger, node as unknown as RegisteredNode),
+    nodeTypeHook(
+      ctx.dialect,
+      trigger,
+      node as unknown as RegisteredNode,
+      "value",
+    ),
     trigger,
     null,
   );

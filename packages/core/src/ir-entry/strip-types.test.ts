@@ -130,6 +130,10 @@ describe("a dialect's hooks", () => {
       nodeTypes: {
         Tt: {
           keys: ["value"],
+          schema: {
+            fields: { name: "data", value: "node" },
+            slot: ["attribute"],
+          },
           parse: (text: string) => ({ name: text.slice(1) }),
           print: (node: { name: string }) => `~${node.name}`,
           lower: (

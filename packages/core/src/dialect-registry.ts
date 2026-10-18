@@ -90,6 +90,25 @@ export interface DialectNode {
 export interface DialectNodes {}
 
 /**
+ * What a node type declares about its nodes (`NodeType.schema`): the fields
+ * `parse` returns, and the positions the type fills. @unstable
+ *
+ * - `fields`: every field of the node besides `type` and `span`, by name.
+ *   `"node"` holds child nodes (the names are exactly the type's `keys`),
+ *   `"expression"` holds a host expression (a hole: a parsed expression, or
+ *   `null` when absent), `"data"` anything else.
+ * - `slot`: the positions the type fills, a non-empty list of `"expression"`
+ *   (an operand inside an expression; `lower` returns its forward),
+ *   `"value"` (an attribute's whole value, claimed by a value row or placed
+ *   by `ctx.attribute`), `"line"` and `"attribute"`. A row naming the type
+ *   at another position, and a node lowered there, are errors.
+ */
+export interface NodeSchema {
+  readonly fields: Readonly<Record<string, "node" | "expression" | "data">>;
+  readonly slot: readonly ClaimPosition[];
+}
+
+/**
  * One node type a dialect registers (`Dialect.nodeTypes`, keyed by `Type`).
  * `print(parse(text))` gives the text back. `lower` builds core's shapes with
  * the same `ctx` constructors `lowerTrigger` gets. In expression position
@@ -97,7 +116,7 @@ export interface DialectNodes {}
  * used) it returns a `ctx.expression` result, the node's forward:
  * `Expr.nodes` keeps the node beside it. Core finds the node again by the
  * forward's identity, so each call returns a fresh object: a forward shared
- * by two nodes (a cached literal) is listed for the last of them only. In
+ * by two nodes (a cached literal) is an error. In
  * value position
  * (`ctx.position === "value"`) it returns the string every target emits or
  * a `ctx.expression` result; either way the node stays on the IR (`Attr.node`
@@ -121,6 +140,8 @@ export interface NodeType<N extends DialectNode = DialectNode> {
   /** The text the node was parsed from. */
   print(node: N): string;
   lower(node: N, ctx: TriggerContext): TriggerResult;
+  /** The node's fields and the positions it fills (required). */
+  readonly schema: NodeSchema;
 }
 
 /** One entry of the registry. */
@@ -378,6 +399,8 @@ export function nodeTypeRegistry(
         ...CLAIMED_KEYS.filter((key) => !nodeType.keys.includes(key)),
       ],
       nodeType as NodeType,
+      undefined,
+      (nodeType as NodeType).schema.slot,
     );
     registry.set(registered.key, registered);
   }
@@ -504,6 +527,25 @@ export function claimNode(
       `the \`${row.id}\` trigger's ${label} returns the node's own fields: core sets ${owned.map((field) => `\`${field}\``).join(", ")}`,
     );
   }
+  if (registered.nodeType) {
+    const schema = registered.nodeType.schema;
+    const extra = undeclaredFields(schema, fields as object, ctx.position);
+    if (extra.length > 0) {
+      return failWith(
+        ctx,
+        INVALID_DIALECT_MODULE_CODE,
+        `dialect \`${registered.dialect}\`, node type \`${registered.type}\`: \`parse\` returned ${extra.map((field) => `\`${field}\``).join(", ")}, which \`schema.fields\` does not declare. Add ${extra.length === 1 ? "it" : "each"} to \`schema.fields\` (as "node", "expression" or "data"), or stop returning ${extra.length === 1 ? "it" : "them"}`,
+      );
+    }
+    const misfit = misfitField(schema, fields as Record<string, unknown>);
+    if (misfit) {
+      return failWith(
+        ctx,
+        INVALID_DIALECT_MODULE_CODE,
+        `dialect \`${registered.dialect}\`, node type \`${registered.type}\`: \`parse\` returned a \`${misfit.field}\` that is not ${misfit.want}, and \`schema.fields.${misfit.field}\` is "${misfit.kind}". Return ${misfit.want}, or declare the field "data"`,
+      );
+    }
+  }
   const node = {
     ...(fields as object),
     type: key === TRIGGER_KEY ? "MxTrigger" : key,
@@ -559,6 +601,11 @@ function notRegisteredMessage(
   const foreign = dialects.has(dialect)
     ? ""
     : `; a row names a type of core (\`${CORE_DIALECT}\`) or of its own dialect: naming another dialect's types is not supported yet`;
+  // A dialect's type whose `schema.slot` leaves the position out.
+  const typed = registry.get(key);
+  if (position !== undefined && typed?.nodeType && typed.positions) {
+    return `${at} names \`${key}\` in ${position} position, but dialect \`${typed.dialect}\`'s node type \`${typed.type}\` declares \`schema.slot\` ${JSON.stringify(typed.positions)}. Add "${position}" to its \`schema.slot\`, or move the row to a position the slot lists (${typed.positions.join(", ")})`;
+  }
   // A type registered for other positions only: say which position.
   const where =
     position !== undefined && registry.get(key)?.parse
@@ -627,7 +674,7 @@ export function checkDialectNodeTypes(
   if (nodeTypes === undefined) return;
   if (!isRecord(nodeTypes)) {
     fail(
-      `\`${path}nodeTypes\` must be an object of node types by name (\`{ Atom: { keys, parse, print, lower } }\`)`,
+      `\`${path}nodeTypes\` must be an object of node types by name (\`{ Atom: { keys, parse, print, lower, schema } }\`)`,
     );
   }
   const types = nodeTypes as Record<string, unknown>;
@@ -637,19 +684,23 @@ export function checkDialectNodeTypes(
       fail(`\`${at}\`: a node type name is PascalCase (\`Atom\`)`);
     }
     if (!isRecord(nodeType)) {
-      fail(`\`${at}\` must be an object (\`{ keys, parse, print, lower }\`)`);
+      fail(
+        `\`${at}\` must be an object (\`{ keys, parse, print, lower, schema }\`)`,
+      );
     }
     const shape = nodeType as Record<string, unknown>;
     for (const key of Object.keys(shape)) {
-      if (!["keys", "parse", "print", "lower"].includes(key)) {
+      if (!["keys", "parse", "print", "lower", "schema"].includes(key)) {
         fail(
-          `\`${at}.${key}\` is not a node type field (keys, parse, print, lower)`,
+          `\`${at}.${key}\` is not a node type field (keys, parse, print, lower, schema)`,
         );
       }
     }
     for (const hook of ["parse", "print", "lower"] as const) {
       if (typeof shape[hook] !== "function") {
-        fail(`\`${at}.${hook}\` must be a function`);
+        fail(
+          `dialect \`${id}\`, node type \`${type}\`: \`${at}.${hook}\` must be a function${hook === "print" ? " (the printer: it gives the text a node was parsed from)" : hook === "lower" ? " (it returns the node's forward in expression position)" : ""}`,
+        );
       }
     }
     if (
@@ -667,7 +718,142 @@ export function checkDialectNodeTypes(
         );
       }
     }
+    checkSchema(id, type, at, shape.schema, shape.keys as string[], fail);
   }
+}
+
+const SCHEMA_KINDS = ["node", "expression", "data"];
+const SLOT_POSITIONS: readonly ClaimPosition[] = [
+  "expression",
+  "value",
+  "line",
+  "attribute",
+];
+
+/** A node type's `schema`, checked when its dialect is loaded. */
+function checkSchema(
+  dialect: string,
+  type: string,
+  at: string,
+  schema: unknown,
+  keys: readonly string[],
+  fail: (message: string) => never,
+): void {
+  const who = `dialect \`${dialect}\`, node type \`${type}\``;
+  if (schema === undefined) {
+    fail(
+      `${who}: \`${at}.schema\` is required. Declare \`schema: { fields: { name: "data" }, slot: ["expression"] }\`: every field \`parse\` returns, as \`"node"\` (a child node, listed in \`keys\`), \`"expression"\` (a host expression) or \`"data"\`, and the positions the type fills`,
+    );
+  }
+  if (!isRecord(schema)) {
+    fail(`${who}: \`${at}.schema\` must be an object (\`{ fields, slot }\`)`);
+  }
+  const shape = schema as Record<string, unknown>;
+  for (const key of Object.keys(shape)) {
+    if (key !== "fields" && key !== "slot") {
+      fail(
+        `${who}: \`${at}.schema.${key}\` is not a schema field (fields, slot)`,
+      );
+    }
+  }
+  if (!isRecord(shape.fields)) {
+    fail(
+      `${who}: \`${at}.schema.fields\` is required: an object of the node's fields by name, each \`"node"\`, \`"expression"\` or \`"data"\` (\`{}\` for a node with none)`,
+    );
+  }
+  const fields = shape.fields as Record<string, unknown>;
+  for (const [name, kind] of Object.entries(fields)) {
+    if (name === "type" || name === "span") {
+      fail(
+        `${who}: \`${at}.schema.fields\` cannot name \`${name}\`: core sets it on every node`,
+      );
+    }
+    if (typeof kind !== "string" || !SCHEMA_KINDS.includes(kind)) {
+      fail(
+        `${who}: \`${at}.schema.fields.${name}\` must be "node", "expression" or "data"`,
+      );
+    }
+  }
+  const nodeFields = Object.keys(fields).filter(
+    (name) => fields[name] === "node",
+  );
+  for (const key of keys) {
+    if (fields[key] !== "node") {
+      fail(
+        `${who}: \`${at}.keys\` names \`${key}\`, so \`${at}.schema.fields.${key}\` must be "node" (it is ${fields[key] === undefined ? "not declared" : JSON.stringify(fields[key])})`,
+      );
+    }
+  }
+  for (const name of nodeFields) {
+    if (!keys.includes(name)) {
+      fail(
+        `${who}: \`${at}.schema.fields.${name}\` is "node", so \`${at}.keys\` must list \`${name}\` (the fields that hold child nodes); or declare it "expression" or "data"`,
+      );
+    }
+  }
+  const slot = shape.slot;
+  if (
+    !Array.isArray(slot) ||
+    slot.length === 0 ||
+    slot.some((each) => !SLOT_POSITIONS.includes(each as ClaimPosition)) ||
+    new Set(slot).size !== slot.length
+  ) {
+    fail(
+      `${who}: \`${at}.schema.slot\` must be a non-empty list of the positions the type fills, each of "expression", "value", "line", "attribute" once (\`["expression", "value"]\`)`,
+    );
+  }
+}
+
+/**
+ * The fields of `node` that its type's `schema` does not declare (besides
+ * the ones core sets), in order.
+ */
+export function undeclaredFields(
+  schema: NodeSchema,
+  node: object,
+  position: ClaimPosition,
+): string[] {
+  const set =
+    position === "value" || position === "expression"
+      ? CORE_SET_VALUE
+      : CORE_SET;
+  return Object.keys(node).filter(
+    (field) => !set.includes(field) && !(field in schema.fields),
+  );
+}
+
+/**
+ * The first field of `node` that does not fit its declared kind: an
+ * `"expression"` field holds a parsed expression (an object with a string
+ * `type`) or `null`; a `"node"` field a node, a list of nodes, or `null`.
+ * Fields a node does not carry are not checked.
+ */
+export function misfitField(
+  schema: NodeSchema,
+  node: Record<string, unknown>,
+): { field: string; kind: "node" | "expression"; want: string } | undefined {
+  for (const [field, kind] of Object.entries(schema.fields)) {
+    const value = node[field];
+    if (kind === "data" || value === undefined || value === null) continue;
+    const isNode = (each: unknown) =>
+      !!each &&
+      typeof each === "object" &&
+      typeof (each as { type?: unknown }).type === "string";
+    if (kind === "expression" && !isNode(value)) {
+      return {
+        field,
+        kind,
+        want: "a parsed host expression (a node with a `type`) or `null`",
+      };
+    }
+    if (
+      kind === "node" &&
+      !(Array.isArray(value) ? value.every(isNode) : isNode(value))
+    ) {
+      return { field, kind, want: "a node, a list of nodes or `null`" };
+    }
+  }
+  return undefined;
 }
 
 /** The trigger lists a table holds rows in, with the position each takes. */

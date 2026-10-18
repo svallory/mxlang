@@ -50,6 +50,10 @@ let parses = 0;
 
 const RefType: NodeType<Ref> = {
   keys: [],
+  schema: {
+    fields: { path: "data" },
+    slot: ["expression", "value", "line", "attribute"],
+  },
   parse(text, _span, ctx) {
     parses++;
     const path = text.slice(1).split(".");
@@ -341,6 +345,10 @@ describe("a claimed node's value is stripped of TypeScript, as a `{ call }` row'
     nodeTypes: {
       Name: {
         keys: [],
+        schema: {
+          fields: { name: "data" },
+          slot: ["expression", "value", "line", "attribute"],
+        },
         parse: (text: string) => ({ name: text.slice(1) }),
         print: (node: { name: string }) => `~${node.name}`,
         lower: (node: { name: string }, ctx: unknown) =>
@@ -518,7 +526,7 @@ describe("a dialect's node types are validated", () => {
         table: {},
         nodeTypes: { Ref: { ...RefType, lowerTrigger: () => {} } },
       },
-      "`dialect.nodeTypes.Ref.lowerTrigger` is not a node type field (keys, parse, print, lower)",
+      "`dialect.nodeTypes.Ref.lowerTrigger` is not a node type field (keys, parse, print, lower, schema)",
     ],
     [
       "no `print`",
@@ -528,7 +536,7 @@ describe("a dialect's node types are validated", () => {
         table: {},
         nodeTypes: { Ref: { ...RefType, print: undefined } },
       },
-      "`dialect.nodeTypes.Ref.print` must be a function",
+      "dialect `ref`, node type `Ref`: `dialect.nodeTypes.Ref.print` must be a function (the printer: it gives the text a node was parsed from)",
     ],
     [
       "`keys` naming `span`",
@@ -615,6 +623,7 @@ export default {
   nodeTypes: {
     Ref: {
       keys: [],
+      schema: { fields: { path: "data" }, slot: ["expression", "value", "line", "attribute"] },
       parse: (text) => ({ path: text.slice(1).split(".") }),
       print: (node) => "~" + node.path.join("."),
       lower(node, ctx) {
@@ -668,7 +677,7 @@ export default {
     expect(error.file).toBe(join(pkg, "index.mjs"));
     expect([error.line, error.column]).toEqual([1, 0]);
     expect(error.message).toBe(
-      "`nodeTypes.Ref.printed` is not a node type field (keys, parse, print, lower)",
+      "`nodeTypes.Ref.printed` is not a node type field (keys, parse, print, lower, schema)",
     );
   });
 });
@@ -799,6 +808,10 @@ describe("lowering dispatches on `node.type`", () => {
   }
   const UpType: NodeType<Up> = {
     keys: [],
+    schema: {
+      fields: { name: "data" },
+      slot: ["expression", "value", "line", "attribute"],
+    },
     parse: (text) => ({ name: text.slice(1) }),
     print: (node) => `!${node.name}`,
     lower: (node, ctx) =>

@@ -445,7 +445,18 @@ describe("a dialect option that is not deep-frozen is read afresh on every call"
       name: "Ref",
       table: {},
       nodeTypes: {
-        Ref: { keys, parse: () => null, print: () => "", lower: () => "" },
+        Ref: {
+          keys,
+          schema: {
+            get fields() {
+              return Object.fromEntries(keys.map((key) => [key, "node"]));
+            },
+            slot: ["attribute"],
+          },
+          parse: () => null,
+          print: () => "",
+          lower: () => "",
+        },
       },
     });
     const registryKeys = () => {
@@ -468,6 +479,7 @@ describe("a dialect option that is not deep-frozen is read afresh on every call"
       nodeTypes: {
         Ref: {
           keys: ["path"],
+          schema: { fields: { path: "node" }, slot: ["attribute"] },
           parse: () => null,
           print: () => "",
           lower: () => "",
