@@ -1,11 +1,11 @@
 /**
- * The MX front end as the compiler's parse (port PR 5, decision 158):
- * `compileSource` and `parseFragment` parse through `@mxlang/parser`'s front
+ * The MX front end as the compiler's parse (port PR 5): `compileSource` and
+ * `parseFragment` parse through `@mxlang/parser`'s front
  * end and hand `lower()` the `MxDocument` body.
  *
  * Three pieces of `@marko/compiler`'s `compileSync` survive here, so the
- * switch changes no output and no diagnostic (decision 166 addendum 1 item 4,
- * the PR 5 ruling "keep today's text byte for byte"):
+ * switch changes no output and no diagnostic (the PR 5 ruling "keep today's
+ * text byte for byte"):
  *
  * - the parse inputs: the front end's `tagShape` and statement keywords are
  *   read from the same taglib lookup Marko parsed with;
@@ -19,7 +19,7 @@
  *   plugin over the document's payloads.
  *
  * Types are `Node` (untyped) at this module's boundary: the published
- * `.d.ts` may not name `@mxlang/babel` (slice-6 addendum of decision 158).
+ * `.d.ts` may not name `@mxlang/babel`.
  */
 import { relative } from "node:path";
 import { parse as mxFrontEndParse } from "@mxlang/parser/frontend";
@@ -55,7 +55,7 @@ import type {
 import type { TagTable } from "./tag-table.ts";
 import { parseErrorEnd } from "./token-span.ts";
 
-/** The six statement keywords of the language (decision 168). */
+/** The six statement keywords of the language. */
 const STATEMENT_KEYWORDS = [
   "import",
   "export",
@@ -464,9 +464,9 @@ function isLoweringError(error: Node): boolean {
 /**
  * The first of the document's front-end errors (ast §3.13: the `MX_*` rules)
  * as the `TranslateError`
- * lowering raised for it on Marko's tree, at the same position (ruling of
- * decision 158 PR 4 slice 4: same text, same offset). `undefined` when there
- * is none. Positions are the file's: the document's base is applied.
+ * lowering raised for it on Marko's tree, at the same position (same text, same
+ * offset). `undefined` when there is none. Positions are the file's: the
+ * document's base is applied.
  */
 export function frontEndErrorOf(document: Node): TranslateError | undefined {
   const error = (document.errors ?? []).find(
@@ -557,8 +557,8 @@ export function pendingFrontEndError(
 }
 
 /**
- * `MX_INPUT_ENDS_IN_DELIMITER` (decision 161): input that ends inside a
- * concise open delimiter, where Marko's parser was silent. Lowering raises it
+ * `MX_INPUT_ENDS_IN_DELIMITER`: input that ends inside a concise open
+ * delimiter, where Marko's parser was silent. Lowering raises it
  * last (`endOfInputError`), so whatever main reported for such input (a
  * lowering error on the cut tag, `Tag does not support arguments.`) still
  * wins, and it fires only where nothing else would.

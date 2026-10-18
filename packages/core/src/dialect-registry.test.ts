@@ -1,7 +1,7 @@
 /**
- * The node-type registry (decision 202 item 3): core's MX AST types as
- * dialect zero (`mx:Tag`, keys only), a dialect's `nodeTypes` keyed
- * `id:Type`, a row naming `node: { type, dialect }` in attribute, line and
+ * The node-type registry: core's MX AST types as dialect zero (`mx:Tag`, keys
+ * only), a dialect's `nodeTypes` keyed `id:Type`, a row naming
+ * `node: { type, dialect }` in attribute, line and
  * value position (the row's `match` ends the node, the type's `parse` reads
  * it, its `lower` builds core's shapes), a claimed value's node riding on
  * the IR attribute,
@@ -607,7 +607,7 @@ describe("a dialect's node types are validated", () => {
   });
 });
 
-describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
+describe("a dialect package (`package.json#mx.dialect`)", () => {
   /** The fixture dialect as a published package: plain JS, default export. */
   const PACKAGE = `const REF = ${JSON.stringify(REF)};
 export default {

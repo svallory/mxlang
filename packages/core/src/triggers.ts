@@ -1,6 +1,6 @@
 /**
- * Layer-2 trigger lowering (decision 182 addendum 5): what a syntax table's
- * triggers become before anything reads the tree.
+ * Layer-2 trigger lowering: what a syntax table's triggers become before
+ * anything reads the tree.
  *
  * The parser already ran the claim process (`claimNode`): an attribute or
  * line trigger's node is in the tree at its position, typed by its
@@ -378,8 +378,8 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
       // Core's own errors on claimed keys, behind the dialect's hook.
       ctx.afterLower = [...(ctx.afterLower ?? []), raiseDeferredContractErrors];
     }
-    // The dialect names the language in core's diagnostics (decision 212
-    // item 10), unless the host set a product name itself.
+    // The dialect names the language in core's diagnostics, unless the host set
+    // a product name itself.
     if (ctx.productName === undefined) ctx.productName = dialect.name;
   }
   const seen = new WeakSet<object>();
@@ -1511,9 +1511,9 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     args: null,
     mxTrigger: { id: trigger.id, span: text },
     // Spelled by the trigger's text: diagnostics name it, and lowering
-    // copies it to `Attr.sugar` (decision 156 addendum 6).
-    // A default value the trigger's own value sets is named by it instead
-    // (`set by \`:n=…\``), as a contract's error on `value` says.
+    // copies it to `Attr.sugar`. A default value the trigger's own value sets
+    // is named by it instead (`set by \`:n=…\``), as a contract's error on
+    // `value` says.
     ...(authored && attr.name === null && ownValue
       ? {
           sugarValueOf: `${spelled}${ownValue.type === "MxMethod" ? "(…)" : "=…"}`,

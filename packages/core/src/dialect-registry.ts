@@ -1,14 +1,13 @@
 /**
- * The node-type registry (decision 202 item 3): one key space, `dialect:Type`,
- * for every node the MX AST can hold. Core is dialect zero (`mx`): its MX AST
+ * The node-type registry: one key space, `dialect:Type`, for every node the MX
+ * AST can hold. Core is dialect zero (`mx`): its MX AST
  * node types are registered here with their child keys, and lowered by core
  * directly. A dialect registers its own node types (`Dialect.nodeTypes`).
  *
- * One claim process for every row (decision 202 item 3, the claim ruling):
- * at a trigger position the parser finds the matching row and asks
- * {@link claimNode}, which calls the row's node type's `parse` with the
- * text the row matched, its span and a {@link ClaimContext}. `parse`
- * returns the node's fields, or `undefined` to decline: the text then
+ * One claim process for every row: at a trigger position the parser finds the
+ * matching row and asks {@link claimNode}, which calls the row's node type's
+ * `parse` with the text the row matched, its span and a {@link ClaimContext}.
+ * `parse` returns the node's fields, or `undefined` to decline: the text then
  * parses as if no row matched. A claimed node stays in the MX AST at its
  * position, and lowering hands it to its type's `lower`. A row naming a
  * type nothing registers is the one table error.
@@ -147,8 +146,8 @@ export interface RegisteredNodeType {
 export const CORE_DIALECT = "mx";
 
 /**
- * MX's own dialect declaration (decision 212): plain `.mx` files are its,
- * and where core's diagnostics name the language they name it, unless the
+ * MX's own dialect declaration: plain `.mx` files are its, and where core's
+ * diagnostics name the language they name it, unless the
  * file's dialect or the host names another.
  */
 export const MX_DIALECT: { readonly id: string; readonly name: string } =

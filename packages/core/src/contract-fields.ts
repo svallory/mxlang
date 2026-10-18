@@ -326,8 +326,8 @@ export function dialectModuleOf(
 
 /**
  * The keys `filePath`'s dialect claims (the dialect its extension routes
- * to, decision 212), for registration in a discovery scan. When
- * that module does not resolve, nothing is claimed and the resolution error
+ * to), for registration in a discovery scan. When that module does not resolve,
+ * nothing is claimed and the resolution error
  * rides along as `failure`: the scan raises it in place of refusing a
  * contract key the module might have claimed.
  */

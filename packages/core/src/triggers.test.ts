@@ -1,8 +1,7 @@
 /**
- * Dialects (decisions 182 addendum 5, 202, 212): a dialect package and the
- * `dialect` option, `lowerTrigger` dispatch in the three positions with the
- * built-in node kinds, the guards on a hook's result,
- * `lowerBlockTag`/`lowerFilter`, and the dialect's `afterLower` and
+ * Dialects: a dialect package and the `dialect` option, `lowerTrigger` dispatch
+ * in the three positions with the built-in node kinds, the guards on a hook's
+ * result, `lowerBlockTag`/`lowerFilter`, and the dialect's `afterLower` and
  * `name`. Discovery and routing are pinned in `dialect-discovery.test.ts`.
  * Node types (`node: { type, dialect }`) are pinned in
  * `dialect-registry.test.ts`. The `&` member shapes through `lowerSource`
@@ -252,7 +251,7 @@ describe("the member dialect through the `dialect` option", () => {
   });
 });
 
-describe("a dialect package (`package.json#mx.dialect`, decision 212)", () => {
+describe("a dialect package (`package.json#mx.dialect`)", () => {
   /**
    * The member dialect, declared by a dependency claiming `.mesh.mx`, whose
    * module (at `module`, inside the package) re-exports the fixture.

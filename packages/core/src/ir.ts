@@ -1,5 +1,5 @@
 /**
- * MX's host-independent intermediate representation (decision 79).
+ * MX's host-independent intermediate representation.
  *
  * The core parses a Marko template, validates it against a host's
  * declarations, and resolves the structural subset into the tree defined
@@ -14,9 +14,8 @@
  * plus "component call", where every user tag lowers the same way and
  * stateful tags are host hooks rather than user taglib hooks. Marko's own
  * taglibs let any tag define its own `analyze`/`translate`, so no fixed node
- * set could describe a Marko program. Decision 79's consequence for MX 2:
- * user-level compile hooks would need an opaque node every host must handle,
- * so that door stays shut.
+ * set could describe a Marko program. For MX 2, user-level compile hooks would
+ * need an opaque node every host must handle, so that door stays shut.
  *
  * ## Positions
  *
@@ -45,8 +44,8 @@ import type { SourceSpan } from "./mapping.ts";
 import type { TemplateMetadata } from "./template-tag.ts";
 
 /**
- * The version of the IR's shape (decision 204). A consumer that reads the
- * IR itself (a dialect, through `lowerSource`) asserts it to detect a core
+ * The version of the IR's shape. A consumer that reads the IR itself (a
+ * dialect, through `lowerSource`) asserts it to detect a core
  * whose IR it was not written against. It goes up by one with every change
  * a reader could observe: a node kind or field added, removed, renamed or
  * given a new meaning. A host that only emits through `Emitter` need not read
@@ -85,12 +84,12 @@ export interface Position {
  * An expression, as both the parsed node and its printed source.
  *
  * `code` is the authored source text, sliced rather than reprinted, and has
- * already been through the binding registry's reference rewriting (decision
- * 70's third hook), so a host emits it verbatim rather than re-deriving it.
+ * already been through the binding registry's reference rewriting (the third
+ * stateful-tag hook), so a host emits it verbatim rather than re-deriving it.
  * `node` is the original, for a host that must inspect the shape —
  * `class={a: true}` versus `class=someCall()` is an `ObjectExpression` test,
  * not a string test. It is `null` on a synthesized `Expr` (a custom tag's
- * `ctx.build.expr`, a decision-116 dynamic target), whose `shape` is
+ * `ctx.build.expr`, a dynamic target for a value import), whose `shape` is
  * `"other"` and which has no `span`.
  */
 export interface Expr {
@@ -196,12 +195,11 @@ export interface ExprNode {
 }
 
 /**
- * A member reference a layer-2 dialect produced (decision 182 addenda 4
- * and 5), for a value slot that names a member of the enclosing
- * declaration (Mesh's `&dueOn` after a kind). Its runtime value is the name
- * as a string literal on every target; the IR keeps it distinct so a
- * contract (`type: "member"`) or a data consumer can tell it from a string.
- * `span` covers the whole authored token, sigil included.
+ * A member reference a layer-2 dialect produced, for a value slot that names a
+ * member of the enclosing declaration (Mesh's `&dueOn` after a kind). Its
+ * runtime value is the name as a string literal on every target; the IR keeps
+ * it distinct so a contract (`type: "member"`) or a data consumer can tell it
+ * from a string. `span` covers the whole authored token, sigil included.
  */
 export interface Member {
   kind: "member";
@@ -210,12 +208,11 @@ export interface Member {
 }
 
 /**
- * `extra.mxMember` on a node a dialect built for a member reference
- * (decision 182 addendum 5): on the `StringLiteral` of a whole-value member
- * (core reads it into {@link Member}), and on whatever expression the module
- * hands `ctx.expression` inside an expression (`self.status` for Mesh's
- * `&status`). `name` is the member's name, `span` the authored token, sigil
- * included. Public API, as stable as the IR.
+ * `extra.mxMember` on a node a dialect built for a member reference: on the
+ * `StringLiteral` of a whole-value member (core reads it into {@link Member}),
+ * and on whatever expression the module hands `ctx.expression` inside an
+ * expression (`self.status` for Mesh's `&status`). `name` is the member's name,
+ * `span` the authored token, sigil included. Public API, as stable as the IR.
  *
  * Marks on a dialect's nodes (`extra.mxMember`, and a dialect's own
  * `extra.mxAtom`) reach every later reader unchanged: core never strips or
@@ -342,8 +339,7 @@ export type Attr =
       nameSpan: SourceSpan;
       /**
        * Set when the whole value is one member reference a dialect produced
-       * (decision 182 addendum 5). `value` is the member's name, which is
-       * what every target emits.
+       * `value` is the member's name, which is what every target emits.
        */
       member?: Member;
       /**
@@ -477,8 +473,8 @@ export interface Branch extends IrBase {
 /**
  * A tag the core does not own, handed to the host with its parts resolved.
  *
- * The escape hatch decision 79 keeps deliberately narrow: the *core's*
- * structural tags are real IR kinds, and everything a host defines for itself
+ * The escape hatch is deliberately narrow: the *core's* structural tags are
+ * real IR kinds, and everything a host defines for itself
  * (`<try>`, `<html-comment>`, a `server` block, a future `<signal>`) arrives
  * here with its name, attributes, children and attribute tags already
  * resolved, so the host emits rather than re-parses. The Marko node itself is
@@ -486,8 +482,8 @@ export interface Branch extends IrBase {
  * `data` from `resolveDelegatedTag`, while the node is still in hand.
  */
 /**
- * How a wildcard child was written (decision 147). The tag's `name` is the
- * canonical tag whose contract it matched (the authored name itself for an
+ * How a wildcard child was written. The tag's `name` is the canonical tag whose
+ * contract it matched (the authored name itself for an
  * inline contract); this records the spelling the author wrote. Present only
  * when a parent's `children["*"]` entry matched.
  */
@@ -526,7 +522,7 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
   definedIn?: string;
   /** Set only on a tag a dialect's `lowerTrigger` built with `ctx.child`. */
   trigger?: TagTrigger;
-  /** The authored spelling, when a wildcard child resolved to `name` (decision 147). */
+  /** The authored spelling, when a wildcard child resolved to `name`. */
   alias?: TagAlias;
   /**
    * File-absolute UTF-16 code-unit span of the tag name (`x` in `<x>`). `undefined` for a
@@ -558,8 +554,8 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
    * which is the thing the IR exists to stop. `undefined` when the host
    * supplies no hook.
    *
-   * This is also the seam decision 80's user-tag macros will need: a
-   * user-defined tag that carries compile-time meaning has to hand its
+   * This is also the seam user-tag macros will need: a user-defined tag that
+   * carries compile-time meaning has to hand its
    * resolved form to every host through exactly this channel, since the core
    * cannot know what the macro decided. The original Marko node is deliberately
    * absent: emission must consume the IR and `data`, never re-walk parser nodes.
@@ -656,8 +652,8 @@ export type ComponentTarget =
    * `<${expr}/>`, resolved at run time by the host.
    *
    * `valueImportBinding` is set only when this target was synthesized by
-   * decision 116's routing — a capitalized tag bound to a value import that
-   * isn't a `.marko`/`.mx` default import — never for an author's own
+   * the dynamic routing of a capitalized tag bound to a value import that isn't
+   * a `.marko`/`.mx` default import, never for an author's own
    * `<${expr}/>`. It names the local binding so `readCalleeInput` can still
    * resolve the callee's declared `Input` for typed attribute-tag checking,
    * exactly as it does for `kind: "name"`, even though the tag now lowers
@@ -793,7 +789,7 @@ export type IrNode =
        * name a binding the author never typed. Only set where they differ.
        */
       authoredName?: string;
-      /** The authored spelling, when a wildcard child resolved to this tag (decision 147). */
+      /** The authored spelling, when a wildcard child resolved to this tag. */
       alias?: TagAlias;
     } & IrBase)
   | ({
@@ -829,8 +825,8 @@ export type IrNode =
       /**
        * The `by=` expression, as resolved source. `null` when the author
        * omitted it. A string-emitting host ignores it (no reconciliation in a
-       * one-shot render, decision 65); a reactive host emits it as the
-       * `keyed` prop on `<For>`.
+       * one-shot render); a reactive host emits it as the `keyed` prop on
+       * `<For>`.
        */
       key: Expr | null;
       children: IrNode[];
@@ -943,9 +939,9 @@ export type IrNode =
       /**
        * The template's resolved absolute path, for a synthesized import.
        *
-       * This is what dedupe and authored-import reuse key on (decision 95
-       * ruling 3: "reused by resolved path"). Two specifiers can spell one
-       * file — `./tags/icon.mx` and `./tags/../tags/icon.mx` — and resolving
+       * This is what dedupe and authored-import reuse key on: a template is
+       * reused by resolved path. Two specifiers can spell one file —
+       * `./tags/icon.mx` and `./tags/../tags/icon.mx` — and resolving
        * is what collapses them to one entry. Set with `synthesized`, absent
        * otherwise.
        */
@@ -973,7 +969,7 @@ export type IrNode =
        */
       span?: SourceSpan;
     } & IrBase)
-  /** A statement lifted by decision 70's `hoist` hook. */
+  /** A statement lifted by the `hoist` hook. */
   | ({ kind: "Hoisted"; code: string; end: Position } & IrBase)
   | ({ kind: "DelegatedTag"; tag: DelegatedTag<unknown> } & IrBase)
   /** `<!doctype html>`; `value` has its delimiters stripped by Marko. */

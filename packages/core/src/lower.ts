@@ -1,5 +1,5 @@
 /**
- * The lowerer (decision 79): Marko's AST in, MX's host-independent IR out.
+ * The lowerer: Marko's AST in, MX's host-independent IR out.
  *
  * This is the core's whole node walk, with every `out +=` removed. It does all
  * the validation the emitting walk used to do — dispositions and inert shapes,
@@ -12,7 +12,7 @@
  * class both assert them, and a reworded message is a behaviour change even
  * when the construct is still rejected.
  *
- * ## The two decision-70 hooks, as IR annotations
+ * ## The `hoist` and binding hooks, as IR annotations
  *
  * `ctx.hoist(code)` and `ctx.bindings` still exist, and still run *here*
  * rather than at emit time: both are lower-time state. A hoisted statement
@@ -26,8 +26,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 // Type-only and erased from the emitted .d.ts: the internal signatures take
-// the MX AST; the published ones keep `Node` until PR 5 (decision 158 PR 4
-// slice 6 ruling B), since `@mxlang/babel` is private.
+// the MX AST; the published ones keep `Node` until PR 5, since `@mxlang/babel`
+// is private.
 import type { MxChild } from "@mxlang/babel/mx-ast";
 import { freeIdentifiersIn } from "./accessor-reads.ts";
 import {
@@ -2086,7 +2086,7 @@ function lowerAttrNamed(
     return { kind: "boolean", name, nameSpan, loc };
   }
   if (value?.type === "StringLiteral") {
-    // Decision 182 addendum 5: a whole-value member a dialect built
+    // A whole-value member a dialect built
     // (`ctx.attribute(name, { kind: "member", name })`), marked
     // `extra.mxMember`.
     const member = memberOf(value);
@@ -2212,9 +2212,9 @@ function withoutParserTwins(attrs: Node[]): Node[] {
 
 /**
  * A second member in one name slot (`sort asc &c &d`) is an error, not a
- * duplicate dropped with a warning (decision 182, lead ruling on PR 451):
- * a dialect's attribute name is a slot, and two members in it is a
- * mistake the author must see. Positioned at the second member.
+ * duplicate dropped with a warning: a dialect's attribute name is a slot, and
+ * two members in it is a mistake the author must see. Positioned at the second
+ * member.
  */
 function rejectSecondMember(attrs: readonly Attr[]): void {
   const first = new Map<string, Member>();
@@ -2238,8 +2238,8 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
 }
 
 /**
- * Resolves a repeated attribute name to its last occurrence (decision 135).
- * Stock Marko 6.4.4 is last-wins (`class` and `style` are not merged, and the
+ * Resolves a repeated attribute name to its last occurrence. Stock Marko 6.4.4
+ * is last-wins (`class` and `style` are not merged, and the
  * dropped value is never evaluated), and `<div class="a" id="x" class="b">`
  * compiles to `<div id=x class=b>`: the survivor keeps its own position. MX
  * does the same once, here, so the IR carries one attribute per resolved name
@@ -2254,8 +2254,8 @@ function rejectSecondMember(attrs: readonly Attr[]): void {
  * is already named `value`. A spread (`...attrs`) has no static name, so it
  * never counts.
  *
- * Each dropped occurrence gets one decision-133 warning, positioned at its
- * name and naming the survivor, so three occurrences warn twice. The text's
+ * Each dropped occurrence gets one warning, positioned at its name and naming
+ * the survivor, so three occurrences warn twice. The text's
  * `line:column` is 1-based, like `mx-tsc` and editors; the structured warning
  * position keeps core's 0-based column. Never an error, `mx.strict` included.
  * The warning's `code` is `MX_DUPLICATE_ATTRIBUTE`.
@@ -2352,11 +2352,11 @@ function hasParams(ctx: Ctx, node: Node): boolean {
  * Every name a tag's params bind, for shadowing.
  *
  * Also registers each into `ctx.unknownLocalValue`: a tag param's runtime
- * value can never be inspected at lowering time (local extension of decision
- * 116), so it is unconditionally "unknown" whenever used as a tag — unlike
- * `unknownLocalValue`'s other entries, a param name never needs removing on
- * unshadow, since outside its scope it is no longer `ctx.tagVarShadowed`
- * either and so never reaches `fileLocalBinding` at all.
+ * value can never be inspected at lowering time, so it is unconditionally
+ * "unknown" whenever used as a tag — unlike `unknownLocalValue`'s other
+ * entries, a param name never needs removing on unshadow, since outside its
+ * scope it is no longer `ctx.tagVarShadowed` either and so never reaches
+ * `fileLocalBinding` at all.
  */
 function paramBindings(ctx: Ctx, node: Node): string[] {
   rejectUnreadableParams(ctx, node);
@@ -2394,7 +2394,7 @@ interface AttrSchema {
   open: boolean;
   owner: string;
   collisionOwner?: Node;
-  /** Decision 138: a registered tag owns recursive bound-literal checks. */
+  /** A registered tag owns recursive bound-literal checks. */
   customTagContract?: boolean;
 }
 
@@ -2623,8 +2623,8 @@ function schemaFor(input: CalleeInput, owner: string): AttrSchema {
  * A position inside a file, for the `file:line:column` a message names.
  *
  * `column` is **1-based**, because every position MX prints is, like
- * `mx-tsc`'s `file(line,column)` and every editor's (ruling #227). The
- * structured warning/error positions consumers read stay 0-based (Babel's
+ * `mx-tsc`'s `file(line,column)` and every editor's. The structured
+ * warning/error positions consumers read stay 0-based (Babel's
  * base); only the text is converted, at the print site.
  */
 function spanPosition(
@@ -3566,9 +3566,9 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
  * All of `<for>`'s forms, normalized to the three a host emits.
  *
  * `by=` names which item a DOM node belongs to across re-renders. A one-shot
- * string host has no reconciliation, so it safely ignores the field (decision
- * 65). A reactive host (Solid) emits it as the `keyed` prop on `<For>`.
- * Carried in the IR so both paths work from the same tree.
+ * string host has no reconciliation, so it safely ignores the field. A reactive
+ * host (Solid) emits it as the `keyed` prop on `<For>`. Carried in the IR so
+ * both paths work from the same tree.
  */
 function lowerForHead(
   ctx: Ctx,
@@ -3794,11 +3794,11 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // afterwards, for the rest of the render scope.
   const valueNode = attrValueOf(ctx, value);
   const init = exprOf(ctx, valueNode);
-  // Local extension of decision 116: a `<const>` bound to a plain identifier
-  // whose value isn't statically a function/arrow/class is "unknown" and
-  // routes dynamic when later used as a tag — a destructuring pattern
-  // (`<const/{a,b}=...>`) never names a single PascalCase tag binding, so it
-  // is left out of this check entirely rather than guessed at.
+  // A `<const>` bound to a plain identifier whose value isn't statically a
+  // function/arrow/class is "unknown" and routes dynamic when later used as a
+  // tag — a destructuring pattern (`<const/{a,b}=...>`) never names a single
+  // PascalCase tag binding, so it is left out of this check entirely rather
+  // than guessed at.
   if (
     tagVarOf(node)?.type === "Identifier" &&
     !isFunctionLikeValue(valueNode)
@@ -3915,8 +3915,8 @@ function failUncalled(
 }
 
 /**
- * Decision 172: a binding imported from a `.marko` file and used as a tag, static
- * (`<X/>`) or dynamic with that binding directly (`<${X}/>`), is the one error.
+ * A binding imported from a `.marko` file and used as a tag, static (`<X/>`) or
+ * dynamic with that binding directly (`<${X}/>`), is the one error.
  * A binding that reaches a dynamic tag any other way is a value, left alone.
  */
 function rejectMarkoImportTag(
@@ -4011,8 +4011,8 @@ function isRegisteredTaglibTag(ctx: Ctx, name: string): boolean {
 
 /**
  * The module the host's `resolveDiscoveredTagModule` names for the tag
- * `name`, refused when it is a `.marko` file (decision 172: no `.marko` file
- * is MX input, however the tag was found).
+ * `name`, refused when it is a `.marko` file (no `.marko` file is MX input,
+ * however the tag was found).
  */
 function discoveredTagModuleOf(
   ctx: Ctx,
@@ -4041,7 +4041,7 @@ function discoveredTagModuleOf(
 /**
  * A tag a translator taglib registers that no module resolves: the bare call
  * would reference a binding nothing declares (or the import of the same
- * name, which addendum 1 says the tag is not).
+ * name, which is not this tag).
  */
 function failUncallableTaglibTag(ctx: Ctx, name: string, node: Node): never {
   const found = uncalledTagFileOf(ctx, name);
@@ -4117,8 +4117,8 @@ function isNativeElementName(ctx: Ctx, name: string): boolean {
 }
 
 /**
- * Decision 164's warning: a lowercase tag whose name an in-scope `import` or
- * `<define>` binds is the native element, and the binding is not called.
+ * The warning for a lowercase tag whose name an in-scope `import` or `<define>`
+ * binds: it is the native element, and the binding is not called.
  */
 function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
   const site = ctx.bindingSites.get(name);
@@ -4143,8 +4143,8 @@ function warnLowercaseBinding(ctx: Ctx, node: Node, name: string): void {
 /** `<define/name|params|>...</define>` — a reusable block. */
 /**
  * A `<define>` whose head failed still binds its name, so a later call to it
- * is not reported as a second error (decision 162: a consequence of an earlier
- * error is never its own error). Best effort: whatever cannot be read stays
+ * is not reported as a second error (a consequence of an earlier error is never
+ * its own error). Best effort: whatever cannot be read stays
  * unbound.
  */
 function bindFailedDefine(ctx: Ctx, node: Node): void {
@@ -4209,8 +4209,8 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // read the define's own params.
   //
   // `<define>`'s body is its own JS block, so a `<const>` written inside it
-  // must not leak past it either (decision 113 round 2 — the same leak
-  // `scopeBindings` closes for `<if>`/`<for>`): `shadowBindings` alone only
+  // must not leak past it either (the same leak `scopeBindings` closes for
+  // `<if>`/`<for>`): `shadowBindings` alone only
   // undoes the *params*, since a `<const>` never calls its own restore by
   // design (it shadows for the rest of *its* enclosing scope, which here is
   // the define body, not the caller's).
@@ -4296,18 +4296,17 @@ function dropContentAttrBesideBody(
  * `ctx.staticBindings`, which is what the lowercase-tag rule reads. With
  * `routesTags` (a `static` block), every *capitalized* plain-identifier name
  * also joins `ctx.imports`, classified by whether its value is statically
- * provable function/arrow/class (local extension of decision 116). Mirrors
- * `lowerStatement`'s `import` branch, which does the equivalent for an
- * `import` line, except `static` may declare several statements
- * (`static { const A = 1; function B(){} }` arrives here with its braces
- * already removed, and `static const A = 1, B = () => {}` and a bare
- * `static function Foo(){}` are one statement each), so every top-level
+ * provable function/arrow/class. Mirrors `lowerStatement`'s `import` branch,
+ * which does the equivalent for an `import` line, except `static` may declare
+ * several statements (`static { const A = 1; function B(){} }` arrives here
+ * with its braces already removed, and `static const A = 1, B = () => {}` and a
+ * bare `static function Foo(){}` are one statement each), so every top-level
  * statement in the parsed code is walked rather than assuming one
  * declaration.
  *
  * A lowercase name joins `staticBindings` only: it is never resolved as a
- * component tag (decision 116's own casing gate, `fileLocalBinding`'s
- * `/^[A-Z]/` test), so `imports` would be dead weight no caller reads - but
+ * component tag (the casing gate, `fileLocalBinding`'s `/^[A-Z]/` test), so
+ * `imports` would be dead weight no caller reads - but
  * the lowercase-tag rule needs it, because Marko raises its local-variable
  * error for a lowercase `static const layout` used as `<layout/>` (measured
  * on the stock parser, `@marko/compiler` 5.42.11 / `marko` 6.4.4). A
@@ -4427,8 +4426,8 @@ function statementSpan(ctx: Ctx, node: Node): SourceSpan | undefined {
  * error at the offending character; MX did not, so a statement whose text
  * does not parse (JSX, or a line ending in `>` that swallows the next template
  * line into one invalid expression) was emitted unchecked and the next line
- * vanished silently on html, Solid and Astro, and after decision 168 on the
- * JSX hosts too. Same check, same position: `prefix` is how many characters
+ * vanished silently on html, Solid and Astro, and on the JSX hosts too. Same
+ * check, same position: `prefix` is how many characters
  * of the authored statement come before `code` (`static `).
  */
 function rejectInvalidStatement(
@@ -4960,8 +4959,8 @@ function refuseUnsupportedImport(node: Node): void {
 }
 
 function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
-  // Decision 168: a statement tag is parsed as a statement (Marko: its text
-  // is `rawValue`; MX: an `MxModuleStatement`). One the parser read as
+  // A statement tag is parsed as a statement (Marko: its text is `rawValue`;
+  // MX: an `MxModuleStatement`). One the parser read as
   // attributes came from a translator that does not declare the statement
   // tags; recovering its text from the source would hide that, so it is
   // refused.
@@ -4991,7 +4990,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
     const authoredSpecifier = line.match(/\bfrom\s+["']([^"']+)["']/)?.[1];
     // `default`/`*`/named, per binding — only a `default` import from a
     // `.marko`/`.mx` source is Marko's own statically-resolved component
-    // case (decision 116); everything else lowers as a dynamic tag.
+    // case; everything else lowers as a dynamic tag.
     const parsedNames = importedNames(line)?.names ?? [];
     const importedAs = new Map(parsedNames.map((n) => [n.local, n.imported]));
     // Recorded *now*, not in `lower`'s post-pass: a component call later in
@@ -5003,8 +5002,8 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       ctx.bindingSites.set(binding, { kind: "imported", ...loc });
       // A type-only binding still occupies the name in the module
       // (`importedNames`), but is not a value a tag could resolve to
-      // (`imports` — decision 114/115): neither `import type { X }` nor
-      // `{ type X }` introduces a runtime value.
+      // (`imports`): neither `import type { X }` nor `{ type X }` introduces a
+      // runtime value.
       if (!typeOnly.has(binding)) ctx.imports.add(binding);
       if (authoredSpecifier) {
         ctx.importSpecifiers.set(binding, authoredSpecifier);
@@ -5326,8 +5325,8 @@ function validateCustomAttributeTagBodies(
 }
 
 /**
- * The wildcard match for this tag (decision 147), unless a file-local binding
- * of the same PascalCase name is in scope: that binding outranks a registered
+ * The wildcard match for this tag, unless a file-local binding of the same
+ * PascalCase name is in scope: that binding outranks a registered
  * custom tag (spec §4), so it outranks a wildcard too.
  */
 function activeWildcard(ctx: Ctx, node: Node): WildcardMatch | undefined {
@@ -5451,8 +5450,8 @@ function aliasOf(ctx: Ctx, node: Node, match: WildcardMatch): TagAlias {
 }
 
 /**
- * The did-you-mean guard (decision 147): a wildcard child whose name is one
- * typo from an explicit child of the same parent most likely meant that
+ * The did-you-mean guard: a wildcard child whose name is one typo from an
+ * explicit child of the same parent most likely meant that
  * child, so it is an error on every target and in every tool.
  */
 function rejectNearExplicitChild(
@@ -5611,8 +5610,8 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
  * Lowers one registered custom tag call and splices its ordinary IR roots.
  *
  * `content` is gated on `hasContent` for an ordinary (user-registered) tag.
- * Decision 141: retained Marko-normalized whitespace is content, not layout;
- * only comments and empty text mean "no children supplied". A core-owned
+ * Retained Marko-normalized whitespace is content, not layout; only comments
+ * and empty text mean "no children supplied". A core-owned
  * built-in like `<try>` is a structural pass-through wrapper, so `isBuiltin`
  * still bypasses the gate and always lowers the block, like `lowerDelegatedTag`.
  */
@@ -5851,7 +5850,7 @@ function lowerCustomTagBody(
     // gets an authored body exactly as an unregistered claimed tag would; a
     // call with no authored body keeps `content: null`, which `openTagOnly`
     // validation relies on. Ordinary tags keep every nonempty normalized text
-    // node, including a lone space (decision 141).
+    // node, including a lone space.
     content:
       isBuiltin || (handsToHost && children.length > 0) || hasContent(children)
         ? lowerBlock(ctx, node, children)
@@ -5933,8 +5932,8 @@ function lowerComponent(
     );
   }
   // A host whose dynamic dispatch reaches a returning unit's render path can
-  // bind `/var` on a dynamic tag at run time (decision 155); the callee's
-  // shape is unknown statically, so the IR carries the binding without
+  // bind `/var` on a dynamic tag at run time; the callee's shape is unknown
+  // statically, so the IR carries the binding without
   // `returnsValue`.
   const allowVar =
     returnShape === "returns" ||
@@ -5975,7 +5974,7 @@ function lowerComponent(
   // body cannot read the `/var` it declares (Marko `references.ts:556-560`),
   // and the emitted order assigns it from the call's own result.
   const attrs = lowerAttrs(ctx, node, targetName(target), "component");
-  // Same normalized-body presence rule as custom template tags (decision 141).
+  // Same normalized-body presence rule as custom template tags.
   const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
   if (callVar) {
@@ -6015,10 +6014,10 @@ function targetName(target: ComponentTarget): string {
   // An authored dynamic target has no name to report, so the diagnostic
   // names the construct instead. Spelled without a `$`-brace so it is not
   // mistaken for an unintended template placeholder in this file's own
-  // source. A decision-116-routed dynamic target carries the real binding
-  // name in `valueImportBinding` and reports that instead — its diagnostics
-  // (an unresolved/invalid callee Input) should still name the tag the
-  // author wrote, not the runtime lowering it now compiles to.
+  // source. A dynamic target routed from a value import carries the real
+  // binding name in `valueImportBinding` and reports that instead — its
+  // diagnostics (an unresolved/invalid callee Input) should still name the tag
+  // the author wrote, not the runtime lowering it now compiles to.
   if (target.kind === "dynamic")
     return target.valueImportBinding ?? DYNAMIC_OWNER;
   return target.name;
@@ -6228,8 +6227,8 @@ function lowerTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     return insideStructural(ctx, node, "for", () =>
       lowerAuthoredTag(ctx, node),
     );
-  // One identity per tag (decision 147): a wildcard child is its canonical
-  // tag to every `parents` check below it.
+  // One identity per tag: a wildcard child is its canonical tag to every
+  // `parents` check below it.
   const pop = pushAuthoredAncestor(
     ctx,
     activeWildcard(ctx, node)?.canonical ?? name,
@@ -6381,8 +6380,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   rejectEffectTag(ctx, node, name);
-  // A parent's `children["*"]` claimed this tag (decision 147): it is a call
-  // of the matched contract, under the canonical name, ahead of every
+  // A parent's `children["*"]` claimed this tag: it is a call of the matched
+  // contract, under the canonical name, ahead of every
   // host-specific reading of the authored name (disposition, claim, element).
   const wildcard = activeWildcard(ctx, node);
   if (wildcard) {
@@ -6398,8 +6397,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   const fileLocalBinding = bindingCallsTag(ctx, name);
 
   // Only a call actually routed through a registered custom-tag contract is
-  // exempt (decision 138, E1). Built-ins and shadowing local bindings are not.
-  // Attribute-tag contracts retain their separate bound-value checks too.
+  // exempt. Built-ins and shadowing local bindings are not. Attribute-tag
+  // contracts retain their separate bound-value checks too.
   if (
     fileLocalBinding ||
     !ctx.customTags ||
@@ -6484,8 +6483,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     case "export":
       return lowerStatement(ctx, node, name);
     case "class":
-      // Decision 168: `class` is a statement tag so the parser reads its
-      // text as code, but MX has no component class on any target. A lookup
+      // `class` is a statement tag so the parser reads its text as code, but MX
+      // has no component class on any target. A lookup
       // that makes `class` an ordinary tag (data) leaves it to the generic path.
       if (
         ctx.tagTable &&
@@ -6601,8 +6600,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // component rule), so it does not recognize a `ctx.tagVarShadowed` name —
   // but `fileLocalBinding` already proved it is a capitalized, in-scope local
   // binding, which is exactly what a component call needs to route on.
-  // Decision 164: a lowercase tag is a native element whatever `import` or
-  // `<define>` binding of that name is in scope (Marko 6.4.4: only a
+  // A lowercase tag is a native element whatever `import` or `<define>` binding
+  // of that name is in scope (Marko 6.4.4: only a
   // PascalCase name, or a dynamic tag `<${name}>`, calls a local binding).
   // Hosts' `isComponent` answers `imports.has || defines.has` with no casing
   // gate, so the lowercase case is cut off here, once, for every host.
@@ -6610,7 +6609,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Marko's own gate is "not `/^[A-Z]/`" (`fileLocalBinding`'s complement), so
   // `_x` and `$x` names are lowercase here too. A tag a host taglib registers
   // is not a lowercase *binding* call at all: it keeps the host's routing
-  // whatever is imported (addendum 1).
+  // whatever is imported.
   const registeredTag = isRegisteredTaglibTag(ctx, name);
   // A `tags/` file this host cannot call (`tags/x.marko`, `tags/x/index.*`)
   // would otherwise compile as the native element `<x>`, silently.
@@ -6655,8 +6654,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     raise(INVALID_TAG_NAME_CODE, localVariableTagMessage(name), node.name);
   }
   // A registered taglib tag called `row` is still `row` when a binding of that
-  // name is in scope (addendum 1): call the module the host names for the
-  // tag, not the import.
+  // name is in scope: call the module the host names for the tag, not the
+  // import.
   if (
     registeredTag &&
     !/^[A-Z]/.test(name) &&
@@ -6692,18 +6691,18 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       warnDefineExtraParams(ctx, node, name, params);
       return lowerComponent(ctx, node, { kind: "define", name, params });
     }
-    // decision 116: a capitalized tag bound to a value **import** that is
-    // not a `.marko`/`.mx` default import lowers as a dynamic tag, matching
+    // A capitalized tag bound to a value **import** that is not a
+    // `.marko`/`.mx` default import lowers as a dynamic tag, matching
     // Marko's own `_dynamic_tag` runtime dispatch — only a `.marko`/`.mx`
     // default import is Marko's statically-resolved component case. Gated
     // on `ctx.importSpecifiers`, not `ctx.imports`: the latter also holds
     // every other file-local value binding (a module-scope `const`/
     // `function`/`class`, a `<const>`, a tag param — on Solid, folded in via
-    // `moduleBindings`), and decision 116 is scoped to import bindings
-    // only. A locally declared component keeps today's direct call on every
+    // `moduleBindings`), and this rule is scoped to import bindings only. A
+    // locally declared component keeps today's direct call on every
     // host, unchanged — routing it through `<Dynamic>` too would silently
     // change the most common Solid authoring pattern (a module-scope
-    // function used as a tag) well beyond what decision 116 covers.
+    // function used as a tag) well beyond what this rule covers.
     // `valueImportBinding` carries the binding's own name (provenance,
     // never present on an authored `<${expr}/>`) so `readCalleeInput` can
     // still resolve the callee's declared `Input` for typed attribute-tag
@@ -6723,17 +6722,15 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         valueImportBinding: name,
       });
     }
-    // Local extension of decision 116 (firstmate's ruling under decision 116
-    // in `notes/decisions-2026-09-10.md`): a non-import local (a
-    // `static`/module-scope declaration, a `<const>`, a `<for>`/`<define>`
-    // tag param) whose value core could not statically prove is a
-    // function/arrow/class also lowers dynamic — a plain `function Foo(){}`/
-    // `class Foo{}`/`const Foo = () => {}` stays the direct call above,
-    // matching every host's pre-existing, most common authoring pattern;
-    // `const Foo = lazy(...)`, a conditional, a string, or a tag param (whose
-    // runtime value can never be inspected here) is "unknown" and routes
-    // here instead. Same `valueImportBinding` provenance channel decision
-    // 116 already built, so typed attribute-tag checking is unaffected.
+    // A non-import local (a `static`/module-scope declaration, a `<const>`, a
+    // `<for>`/`<define>` tag param) whose value core could not statically prove
+    // is a function/arrow/class also lowers dynamic — a plain
+    // `function Foo(){}`/`class Foo{}`/`const Foo = () => {}` stays the direct
+    // call above, matching every host's pre-existing, most common authoring
+    // pattern; `const Foo = lazy(...)`, a conditional, a string, or a tag param
+    // (whose runtime value can never be inspected here) is "unknown" and routes
+    // here instead. Same `valueImportBinding` provenance channel as above, so
+    // typed attribute-tag checking is unaffected.
     if (ctx.unknownLocalValue.has(name)) {
       // SAFETY: a named binding is synthetic expression code, not an authored Babel expression; consumers allow no node.
       return lowerComponent(ctx, node, {
@@ -6769,8 +6766,8 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // missing or misspelled binding, not an element that happens to be
   // capitalized. Emitting it literally would be a silent misroute.
   if (/^[A-Z]/.test(name)) {
-    // The host's own wording first (decision 114): a Marko-parity target
-    // reports Marko's own failure for an unresolved custom tag ("Unable to
+    // The host's own wording first: a Marko-parity target reports Marko's own
+    // failure for an unresolved custom tag ("Unable to
     // find entry point for custom tag `<Name>`"), which is what its users
     // see and what its fixtures assert. The message below is the fallback
     // for a host that supplies none.
@@ -6856,12 +6853,13 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
 }
 
 /**
- * Decision 139's two messages. Marko 6.3.51 rejects both constructs
- * ("CDATA sections are not supported in Marko." / "XML declarations sections
- * are not supported in Marko."); MX keeps Marko's meaning and adds the fix,
- * because a rejection that does not say what to write instead just moves the
- * question. Module-private: a host has no reason to match on them, and the
- * tests assert the literal rather than importing the thing under test.
+ * The messages for CDATA sections and XML declarations. Marko 6.3.51 rejects
+ * both constructs ("CDATA sections are not supported in Marko." / "XML
+ * declarations sections are not supported in Marko."); MX keeps Marko's meaning
+ * and adds the fix, because a rejection that does not say what to write instead
+ * just moves the question. Module-private: a host has no reason to match on
+ * them, and the tests assert the literal rather than importing the thing under
+ * test.
  */
 // biome-ignore-start lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
 const cdataMessage = (voice: Voice): string =>
@@ -6875,9 +6873,9 @@ const loweringDepth = new WeakMap<Ctx, number>();
 
 /**
  * Runs a lowering entry and, at the outermost one for `ctx` only, raises the
- * document's `MX_INPUT_ENDS_IN_DELIMITER` after a walk that raised nothing
- * (decision 161): main reported the cut tag's own lowering error first, and
- * this error stands only where nothing else fires.
+ * document's `MX_INPUT_ENDS_IN_DELIMITER` after a walk that raised nothing:
+ * main reported the cut tag's own lowering error first, and this error stands
+ * only where nothing else fires.
  */
 function lastly<T>(ctx: Ctx, body: readonly unknown[], run: () => T): T {
   const depth = loweringDepth.get(ctx) ?? 0;
@@ -6898,8 +6896,7 @@ export function lowerChildren(ctx: Ctx, children: readonly Node[]): IrNode[] {
     if (frontEndError) throw frontEndError;
     return lastly(ctx, children, () => lowerChildrenOf(ctx, children));
   } catch (error) {
-    // A lowering boundary (decision 158, PR 4 addendum): an error raised on
-    // an MX node leaves positioned.
+    // A lowering boundary: an error raised on an MX node leaves positioned.
     positionError(ctx, error);
     throw error;
   }
@@ -7072,13 +7069,13 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       // A hoist from this child belongs to the enclosing function, so the
       // prelude it appends is drained by whichever scope owns it — the template,
       // or the nearest `<define>`.
-      // Decision 162: one child's failure is recorded and the child skipped, with
-      // its subtree; the walk goes on to the next sibling.
+      // One child's failure is recorded and the child skipped, with its
+      // subtree; the walk goes on to the next sibling.
       recover(ctx, () => {
         switch (child.type) {
           case "MarkoText":
           case "MxText":
-            // Already decision 33: Marko's own `onText` dropped newline-bearing
+            // Already normalized: Marko's own `onText` dropped newline-bearing
             // whitespace runs and collapsed the rest before we saw them. `value`
             // carries that normalized text; `span` covers the authored range.
             out.push({
@@ -7119,8 +7116,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             // by the enclosing *function* — `lowerDefine`, or `lower` for the
             // render function — never here. Draining it at every child list would
             // trap a hoist from inside an `<if>` in that branch, which is the one
-            // thing decision 70's hoist hook exists to prevent: the declaration
-            // has to outlive the block it was written in.
+            // thing the `hoist` hook exists to prevent: the declaration has to
+            // outlive the block it was written in.
             // Before the tag's own lowering: a host with no runtime for the
             // handler refuses it there, and the stale read is the first thing
             // wrong with it.
@@ -7174,10 +7171,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
               child,
             );
             break;
-          // Decision 139. The IR has no node for either construct, so before this
-          // arm existed both fell off the end of this switch: wrong output and a
-          // green build, on every target. `fail` reports `node.loc.start`, which
-          // is the `<` — the same place Marko's code frame underlines.
+          // CDATA sections and XML declarations. The IR has no node for either
+          // construct, so before this arm existed both fell off the end of this
+          // switch: wrong output and a green build, on every target. `fail`
+          // reports `node.loc.start`, which is the `<` — the same place Marko's
+          // code frame underlines.
           //
           // A *raw-text* body (`<script>`, `<style>`, `<textarea>`, `<title>`)
           // never reaches here: Marko's parser reads those as one `MarkoText`, so
@@ -7195,10 +7193,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           case "MxDeclaration":
             raise(UNSUPPORTED_CONSTRUCT_CODE, DECLARATION_MESSAGE, child);
             break;
-          // Decision 182 seam: a line trigger the trigger pass did not lower
-          // (no registered syntax, or a `{ call }` with no `lowerTrigger`) is
+          // A line trigger the trigger pass did not lower (no registered
+          // syntax, or a `{ call }` with no `lowerTrigger`) is
           // refused in the table check's wording; a block tag or filter goes
-          // to the dialect's hook (addendum 5), or is refused likewise.
+          // to the dialect's hook, or is refused likewise.
           case "MxTrigger":
             raise(
               NO_LOWERING_CODE,
@@ -7264,10 +7262,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
 }
 
 /**
- * Runs a dialect's `lowerBlockTag`/`lowerFilter` (decision 182
- * addendum 5) with the IR builders a custom tag's `transform` gets, and
- * returns its IR as a list. Whatever the hook throws leaves positioned at the
- * construct: a `TranslateError` as is, anything else wrapped.
+ * Runs a dialect's `lowerBlockTag`/`lowerFilter` with the IR builders a custom
+ * tag's `transform` gets, and returns its IR as a list. Whatever the hook
+ * throws leaves positioned at the construct: a `TranslateError` as is, anything
+ * else wrapped.
  */
 function syntaxHookIr(
   ctx: Ctx,
@@ -7315,8 +7313,7 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
     if (frontEndError) throw frontEndError;
     return lastly(ctx, body, () => lowerRoot(ctx, body));
   } catch (error) {
-    // A lowering boundary (decision 158, PR 4 addendum): an error raised on
-    // an MX node leaves positioned.
+    // A lowering boundary: an error raised on an MX node leaves positioned.
     positionError(ctx, error);
     throw error;
   }
@@ -7326,8 +7323,8 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
   // Before anything reads a tag name: an unnamed tag has none yet. The flag
   // tells `lowerChildren` the whole tree is already resolved, so only a call
   // from outside this walk resolves (and never re-walks a subtree).
-  // Decision 182 addendum 5: a syntax table's triggers, before anything
-  // reads an expression, an attribute list or a body.
+  // A syntax table's triggers, before anything reads an expression, an
+  // attribute list or a body.
   lowerTriggers(ctx, authored);
   const body = childrenWithTriggers(authored);
   resolveUnnamedTags(ctx, body);
@@ -7427,8 +7424,8 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.moduleScope = scanModuleScope(ctx, body);
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
-  // Decision 162: the walk recorded errors instead of throwing the first. The
-  // checks below need a whole file, so none of them runs on a partial one.
+  // The walk recorded errors instead of throwing the first. The checks below
+  // need a whole file, so none of them runs on a partial one.
   if (ctx.errors?.length) throw collectedError(ctx.errors);
 
   const ir: Ir = {
@@ -7663,7 +7660,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
 
   lowerChildren(scratch, body);
   // `analyze` is a whole-file check: it never runs over a walk that failed, and
-  // the walk's errors, not the hook's, are the file's (decision 162).
+  // the walk's errors, not the hook's, are the file's.
   if (scratchErrors.length) throw collectedError(scratchErrors);
   runAnalyzeHooks(ctx, customTags, calls);
 }

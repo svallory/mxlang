@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import * as core from "../index.ts";
 
 /**
- * `IR_VERSION`'s contract (decision 204, lead ruling: +1 on every change a
- * reader of the IR can observe), checked (review 484 r4 B2). The pin is the
+ * `IR_VERSION`'s contract (+1 on every change a reader of the IR can observe),
+ * checked (review 484 r4 B2). The pin is the
  * version together with a hash of the IR's type declarations: `ir.ts`,
  * `ir-entry/spans.ts` (`Spanned`/`SpannedIr`), `SourceSpan` and
  * `TemplateMetadata` (`Ir.tagMetadata`, review 484 r5 L1), printed

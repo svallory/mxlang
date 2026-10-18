@@ -1,6 +1,6 @@
 /**
- * The IR the entry point hands out (decision 204): the lowered `Ir` with the
- * span guarantee in its type, and the copy `lowerSource` returns.
+ * The IR the entry point hands out: the lowered `Ir` with the span guarantee in
+ * its type, and the copy `lowerSource` returns.
  */
 
 import { cloneIr } from "../clone-ir.ts";

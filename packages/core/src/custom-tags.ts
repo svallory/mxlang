@@ -118,11 +118,11 @@ export interface CustomTagAttribute {
    * call, member or conditional has no knowable type and is accepted, as for
    * `string` and `number`.
    *
-   * `member` (decision 182 addendum 4) accepts exactly a member a syntax
-   * module produced, in either form: the static value after a kind
-   * (`asc &dueOn` in Mesh) or a dynamic value that is one marked member
-   * (`on:load=&visible`); nothing else. An `expression` slot accepts a
-   * member too, a node-type slot refuses both forms.
+   * `member` accepts exactly a member a syntax module produced, in either form:
+   * the static value after a kind (`asc &dueOn` in Mesh) or a dynamic value
+   * that is one marked member (`on:load=&visible`); nothing else. An
+   * `expression` slot accepts a member too, a node-type slot refuses both
+   * forms.
    *
    * A node type key (`dialect:Type`, one the file's dialect registers in
    * `Dialect.nodeTypes`) accepts a value written as one node of that type,
@@ -169,7 +169,7 @@ export interface CustomTagAttribute {
 export interface CustomTagAttributeTag {
   /**
    * What an unnamed tag (`<#id>`, `<.class>`) directly inside this attribute
-   * tag stands for (decision 145). The same key as on a tag's own contract.
+   * tag stands for. The same key as on a tag's own contract.
    */
   defaultTag?: string;
   repeatable?: boolean;
@@ -184,10 +184,9 @@ export interface CustomTagAttributeTag {
 
 /**
  * One `attributeTags["*"]` entry: a named attribute-tag declaration plus an
- * optional `pattern` (decision 147 for attribute tags, mirroring
- * `children["*"]`). There is no `contract` key: an entry is always an inline
- * contract. `repeatable` applies per matched name; `required` has no single
- * name to require and is rejected at registration.
+ * optional `pattern` (mirroring `children["*"]`). There is no `contract` key:
+ * an entry is always an inline contract. `repeatable` applies per matched name;
+ * `required` has no single name to require and is rejected at registration.
  */
 export interface WildcardAttributeTagEntry extends CustomTagAttributeTag {
   /**
@@ -205,8 +204,7 @@ export type WildcardAttributeTags =
 
 /**
  * A closed `attributeTags` record: explicit names, plus the optional `"*"`
- * entries for names no explicit entry (decision 147 for attribute tags).
- * Explicit entries win.
+ * entries for names no explicit entry claims. Explicit entries win.
  */
 export interface CustomTagAttributeTags {
   [name: string]: CustomTagAttributeTag | WildcardAttributeTags | undefined;
@@ -220,8 +218,8 @@ export interface CustomTagChild {
 }
 
 /**
- * One `children["*"]` entry (decision 147): an optional `pattern`, then either
- * a `contract` reference or an inline contract (never both).
+ * One `children["*"]` entry: an optional `pattern`, then either a `contract`
+ * reference or an inline contract (never both).
  */
 export interface WildcardChildEntry {
   /**
@@ -237,7 +235,7 @@ export interface WildcardChildEntry {
   attributeTags?: CustomTagAttributeTags;
   /** Inline contract: the child's own children. */
   children?: CustomTagChildren;
-  /** Inline contract: the unnamed tag inside the child (decision 145). */
+  /** Inline contract: the unnamed tag inside the child. */
   defaultTag?: string;
 }
 
@@ -249,7 +247,7 @@ export type WildcardChildren =
 /**
  * A closed `children` record (contract extension E2): explicit names (and
  * `#text`), plus the optional `"*"` entries for names no explicit entry, no
- * built-in and no custom tag claims (decision 147). Explicit entries win.
+ * built-in and no custom tag claims. Explicit entries win.
  */
 export interface CustomTagChildren {
   [name: string]: CustomTagChild | WildcardChildren | undefined;
@@ -264,7 +262,7 @@ export type ChildNode =
       name: string;
       loc: Position;
       hint?: string;
-      /** How a wildcard child was written (decision 147). */
+      /** How a wildcard child was written. */
       alias?: TagAlias;
       /** Why no wildcard entry may claim this name: a built-in or a registered tag, or a binding in the file. */
       known?: "built-in" | "registered" | "bound";
@@ -360,8 +358,8 @@ export interface TagCall {
   /** UTF-16 span of the tag name at the call site, when the call has source. */
   nameSpan?: SourceSpan;
   /**
-   * How the call was written, when a parent's `children["*"]` matched it
-   * (decision 147): `name` is then the canonical tag.
+   * How the call was written, when a parent's `children["*"]` matched it:
+   * `name` is then the canonical tag.
    */
   alias?: TagAlias;
   /** Set when a dialect's `lowerTrigger` built the call (`ctx.child`). */
@@ -628,8 +626,8 @@ export interface TransformContext {
 export interface CustomTag {
   /**
    * What an unnamed tag (`<#id>`, `<.class>`) directly inside this tag stands
-   * for (decision 145): the parent contract, the top rung of the ladder. A
-   * tag that is a reachable, plain-parsing tag of the target; the registry
+   * for: the parent contract, the top rung of the ladder. A tag that is a
+   * reachable, plain-parsing tag of the target; the registry
    * checks it, and a host that forbids per-tag default tags refuses it.
    */
   defaultTag?: string;
@@ -638,7 +636,7 @@ export interface CustomTag {
   attributeTags?: CustomTagAttributeTags;
   /**
    * Closed allowed authored children; `#text` permits non-whitespace text and
-   * interpolations, and `"*"` accepts undeclared names (decision 147).
+   * interpolations, and `"*"` accepts undeclared names.
    */
   children?: CustomTagChildren;
   /** Allowed authored direct parents; `#root` is a unit's top level and `@name` an attribute tag. */
@@ -654,7 +652,7 @@ export interface CustomTag {
   finalize?(ctx: FinalizeContext): IrNode[];
 }
 
-/** Default export of a package-level `mx.contracts` module (decision 142). */
+/** Default export of a package-level `mx.contracts` module. */
 export type ContractMap = Record<string, CustomTag>;
 
 /** Builders available to a transform. Module-level IR is deliberately absent. */
@@ -1788,10 +1786,9 @@ function checkNodeListAttr(
 }
 
 /**
- * A member value, in both forms the `"member"` type accepts (decision 182
- * addendum 4, lead ruling on Mesh's M5): the static value after a kind
- * (`asc &dueOn`), and a dynamic attribute whose value is exactly one marked
- * member (`on:load=&visible`).
+ * A member value, in both forms the `"member"` type accepts: the static value
+ * after a kind (`asc &dueOn`), and a dynamic attribute whose value is exactly
+ * one marked member (`on:load=&visible`).
  */
 function isMemberValue(attr: Attr): boolean {
   if (attr.kind === "static") return attr.member !== undefined;
@@ -1802,10 +1799,9 @@ function isMemberValue(attr: Attr): boolean {
 }
 
 /**
- * A `type: "member"` slot (decision 182 addendum 4) takes exactly a
- * member a dialect produced, in either form (`isMemberValue`); an
- * atom, a string, a bare attribute or any other expression is refused,
- * naming what was written.
+ * A `type: "member"` slot takes exactly a member a dialect produced, in either
+ * form (`isMemberValue`); an atom, a string, a bare attribute or any other
+ * expression is refused, naming what was written.
  */
 function checkMemberAttr(
   owner: Owner,
@@ -2022,8 +2018,8 @@ export function validateCustomTagChildren(
   // Spelled when a message needs it: a valid file spells nothing.
   const allowedNames = (): string =>
     explicit.map(([name]) => voice.tag(name)).join(", ") || "none";
-  // Check order (decision 147): an explicit entry, then the `"*"` entries in
-  // order (the lowerer already matched them, recorded on the child), then the
+  // Check order: an explicit entry, then the `"*"` entries in order (the
+  // lowerer already matched them, recorded on the child), then the
   // closed record's own error.
   const notAllowed = (
     node: Extract<ChildNode, { kind: "ChildTag" }>,
@@ -2427,8 +2423,8 @@ function validateAttributeTags(
       declaredTags && Object.hasOwn(declaredTags, tag.name)
         ? (declaredTags[tag.name] as CustomTagAttributeTag | undefined)
         : undefined;
-    // Check order (decision 147, for attribute tags): an explicit entry, then
-    // the `"*"` entries in order; no match leaves today's unknown-name error.
+    // Check order (for attribute tags): an explicit entry, then the `"*"`
+    // entries in order; no match leaves today's unknown-name error.
     const declaration =
       explicitDeclared ?? matchAttributeTagWildcard(declaredTags, tag.name);
     if (declaration && !explicitDeclared) {
@@ -2521,8 +2517,8 @@ function validateAttributeTags(
     }
   }
   // A `"*"` entry's cardinality is per matched name: two `<@row>` under one
-  // non-repeatable entry is one error naming `row` (decision 147, for
-  // attribute tags). `required` cannot apply: a wildcard has no single name
+  // non-repeatable entry is one error naming `row` (for attribute tags).
+  // `required` cannot apply: a wildcard has no single name
   // to require, and registration rejects the key.
   for (const [name, { entry, loc }] of wildcardMatches) {
     const range = attributeTagOccurrenceRange(tree, name);
@@ -3298,8 +3294,8 @@ function wildcardReferences(
 }
 
 /**
- * The merged-map checks of `children["*"]` (decision 147): every `contract`
- * names a tag this compile can reach, that tag's parse options do not need
+ * The merged-map checks of `children["*"]`: every `contract` names a tag this
+ * compile can reach, that tag's parse options do not need
  * the name it is written with, and its `parents` admit the parent. Runs on the
  * whole map a compile receives, never per sidecar or per module, where a
  * reference to another file's tag would look unreachable.
@@ -3971,9 +3967,10 @@ export function runAnalyzeHooks(
  * Two rules make the result reproducible on any machine: hooks run **sorted by
  * tag name**, and each may only contribute nodes — it is handed no other tag's
  * output and no way to reach the program, so ordering can never become
- * semantically load-bearing (decision 80's coupling, reintroduced through the
- * back door). The returned list is prepended to the program body as a whole,
- * so tag `a`'s nodes precede tag `b`'s whatever order the calls appeared in.
+ * semantically load-bearing (custom tags are compile-time hooks, IR in and IR
+ * out, and this would otherwise be a back door around that). The returned list
+ * is prepended to the program body as a whole, so tag `a`'s nodes precede tag
+ * `b`'s whatever order the calls appeared in.
  *
  * Only a tag actually *called in this file* is finalized. A package may
  * register dozens of tags a given file never uses, and a `finalize` that ran
@@ -4181,8 +4178,8 @@ export function transformCustomTag(
   call: TagCall,
   node: Node,
 ): IrNode[] {
-  // Decision 130: a contract-only tag (no `transform`, no template) is valid
-  // on a name the active host claims; anywhere else a call has nothing to
+  // A contract-only tag (no `transform`, no template) is valid on a name the
+  // active host claims; anywhere else a call has nothing to
   // expand to.
   const contractOnly = isContractOnlyDelegated(ctx, call.name, definition);
   const voice = voiceOfCtx(ctx);

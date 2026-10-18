@@ -1,9 +1,8 @@
 /**
- * Dialects (decisions 182, 202, 212): the dialect a file is parsed and
- * lowered with (its syntax table, hooks and node types), loaded from the
- * package that claims the file's extension (`dialect-discovery.ts`), and
- * the check that keeps a table core cannot lower yet from compiling
- * silently.
+ * Dialects: the dialect a file is parsed and lowered with (its syntax table,
+ * hooks and node types), loaded from the package that claims the file's
+ * extension (`dialect-discovery.ts`), and the check that keeps a table core
+ * cannot lower yet from compiling silently.
  *
  * The table is plain data (`@mxlang/parser`'s `SyntaxTable`); the types are
  * declared here because the published `.d.ts` may not name the private
@@ -101,9 +100,9 @@ export type StandIn = "number" | "identifier" | "keep";
  * text and `"identifier"` an identifier named by it; in an attribute list,
  * `"attribute"` is an attribute named by the text after its first
  * character, the sigil (bare, or with its `=value`). Any other pairing is a positioned error. `{ call }` hands the
- * trigger to the dialect's `lowerTrigger` (decision 182 addendum 5).
- * `{ type, dialect }` names a registered node type (decision 202 item 3):
- * one of the dialect's `nodeTypes`, or core's `mx:Trigger` (what `{ call }`
+ * trigger to the dialect's `lowerTrigger`. `{ type, dialect }` names a
+ * registered node type: one of the dialect's
+ * `nodeTypes`, or core's `mx:Trigger` (what `{ call }`
  * and `"attribute"` are, attribute and line rows only) or `mx:Expression`.
  * The row's `match` decides where the text ends; the parser asks the type's
  * `parse` to claim it, and a declined text parses as if no row matched. A
@@ -119,7 +118,7 @@ export type TriggerNode =
   | { readonly call: string }
   | { readonly type: string; readonly dialect: string };
 
-/** One row of a trigger list (decision 182). */
+/** One row of a trigger list. */
 export interface Trigger {
   readonly id: string;
   readonly chars: string;
@@ -130,12 +129,14 @@ export interface Trigger {
   /**
    * Attribute triggers: `"refuse"` makes a `=value`, `:=value` or
    * `(params) { body }` after the trigger a parser error at that character
-   * (decision 183: `tag #id=123` is refused). Absent, the trigger takes one.
+   * (`tag #id=123` is refused). Absent, the trigger takes one.
    */
   readonly value?: "refuse";
 }
 
-/** The syntax table: one plain-data object per parse (decision 182; `language-extensions/core.md`). */
+/** The syntax table: one plain-data object per parse
+ * (`language-extensions/core.md`).
+ */
 export interface SyntaxTable {
   readonly placeholder: {
     readonly open: string;
@@ -345,8 +346,8 @@ export type TriggerValueForm =
   | null;
 
 /**
- * What `lowerTrigger` is handed (decision 182 addendum 5): where the trigger
- * sits, its lowered `=value`, and the three constructors, the only way a
+ * What `lowerTrigger` is handed: where the trigger sits, its lowered `=value`,
+ * and the three constructors, the only way a
  * dialect builds anything. Each position takes the matching result:
  * `"expression"` an expression (a `{ call }` row's trigger, or a node an
  * expression row claimed), `"attribute"` an attribute, `"line"` a child,
@@ -535,8 +536,8 @@ export interface SyntaxBuildContext {
 }
 
 /**
- * A dialect (decisions 182 addendum 5, 202, 212): the default export of the
- * module its package's `package.json#mx.dialect` names, or the object a
+ * A dialect: the default export of the module its package's
+ * `package.json#mx.dialect` names, or the object a
  * consumer passes as the `dialect` option. A file is a dialect's when the
  * dialect claims its extension; a project may use several. `table`
  * overlays the `.mx` default row; the hooks are post-parse only
@@ -558,10 +559,10 @@ export interface Dialect {
   readonly name: string;
   readonly table: Partial<Omit<SyntaxTable, "tagTypes">>;
   /**
-   * The core tag rules the dialect's files parse with (decisions 204, 211,
-   * 212 item 8 and addendum item 1): the dialect's own, in every tool, and
-   * no project config changes them. Absent means `html`, the full strict
-   * rules; a dialect turns off what it does not want by naming a preset.
+   * The core tag rules the dialect's files parse with: the dialect's own, in
+   * every tool, and no project config changes them. Absent means `html`, the
+   * full strict rules; a dialect turns off what it does not want by naming a
+   * preset.
    */
   readonly tagRules?: TagRulesPreset;
   /**
@@ -872,7 +873,7 @@ const DEFAULT_RESOLVED: ResolvedSyntax = Object.freeze({
   isDefault: true,
 });
 
-/** The hooks and fields a dialect may export (decisions 182 addendum 5, 202). */
+/** The hooks and fields a dialect may export. */
 const MODULE_FIELDS = new Set([
   "id",
   "name",
@@ -983,9 +984,9 @@ function firstCallTrigger(
 
 /**
  * The tag rules a dialect's files parse with: the preset its module states,
- * else `html`, the full strict rules (decision 212 item 8 and addendum item
- * 1). A dialect never inherits a target's preset, and project config never
- * changes it. `lowerSource` reads it when its call states no `tagRules`.
+ * else `html`, the full strict rules. A dialect never inherits a target's
+ * preset, and project config never changes it. `lowerSource` reads it when its
+ * call states no `tagRules`.
  */
 export function dialectTagRules(dialect: Dialect): TagRulesPreset {
   return dialect.tagRules ?? "html";
@@ -1340,8 +1341,8 @@ function readPackageJsonText(file: string): string {
 }
 
 /**
- * The removed `mx.syntax`, in any MX config file (decision 212 item 2: no setting
- * selects a file's syntax): an error at its key.
+ * The removed `mx.syntax`, in any MX config file (no setting selects a file's
+ * syntax): an error at its key.
  */
 function rejectRemovedSyntax(source: MxConfigSource | undefined): void {
   const config = source?.config;
@@ -1602,9 +1603,8 @@ const explicitModules = new WeakMap<object, ResolvedSyntax>();
  * the start of `filename` naming `dialect.<field>`. A non-empty `tagTypes` is
  * refused (taglib-owned), as in a manifest. A dialect's `table` overlays the
  * default row. A `{ call }` trigger without `lowerTrigger` is accepted here:
- * lowering reports it at the trigger ("has no lowering yet"; decision 182
- * addendum 5 item 4). A row naming a node type the dialect does not register
- * is refused.
+ * lowering reports it at the trigger ("has no lowering yet"). A row naming a
+ * node type the dialect does not register is refused.
  */
 export function explicitSyntaxOf(
   value: SyntaxTable | Dialect,
@@ -1730,8 +1730,8 @@ function lowersTrigger(
 }
 
 /**
- * The error a table gives a file before lowering (decision 182), or
- * `undefined`: the first trigger, block tag or filter nothing lowers (a
+ * The error a table gives a file before lowering, or `undefined`: the first
+ * trigger, block tag or filter nothing lowers (a
  * `{ call }` trigger with no `lowerTrigger`, a block tag with no
  * `lowerBlockTag`, a filter with no `lowerFilter`), positioned, naming the
  * file, with `offset`, where it starts (the document's own offsets, less the

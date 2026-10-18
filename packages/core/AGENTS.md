@@ -2,13 +2,13 @@
 
 ## `@mxlang/core`: the MX AST consumer
 
-`packages/core` (`@mxlang/core`, decisions 70 to 72, 79) is the half every MX
-host shares: it parses with the MX front end (`@mxlang/parser/frontend`, port
+`packages/core` (`@mxlang/core`) is the half every MX host shares: it parses
+with the MX front end (`@mxlang/parser/frontend`, port
 PR 5) and lowers the MX AST, applies the
 structural lowerings (`<if>`/`<else>`, every `<for>` form, `<define>`,
 `<const>`, statement tags, the field and inert-shape guards) and **resolves
-them into a host-independent IR** (decision 79). A host then *emits* from that
-IR and never walks a Marko node. `packages/core/README.md` documents the IR
+them into a host-independent IR**. A host then *emits* from that IR and never
+walks a Marko node. `packages/core/README.md` documents the IR
 kinds, what a host implements in order, the hooks and the front doors — read it
 before adding either.
 
@@ -25,12 +25,12 @@ Both current hosts are on the driver. `@mxlang/target-html` uses
 `@mxlang/host-astro` uses `packages/hosts/astro/src/astro-template.ts` for `.astro.mx`'s
 expression-shaped Astro syntax. Neither emitter reads a Marko node; a
 host-specific resolve-time decision goes in `DelegatedTag.data` through
-`isDelegatedTag`/`resolveDelegatedTag` (decision 132 renamed these from `claimsTag`/`resolveHostTag`; `HostTag` is now `DelegatedTag`).
+`isDelegatedTag`/`resolveDelegatedTag`.
 
 Five facts worth knowing before editing it:
 
-- **Attribute-tag IR has three synchronized views (decisions 106–108).**
-  `Component` and a dynamic `DelegatedTag` keep `attributeTags`, the flat
+- **Attribute-tag IR has three synchronized views.** `Component` and a dynamic
+  `DelegatedTag` keep `attributeTags`, the flat
   source-order occurrence list used by existing emitters and tooling; add
   `attributeTagTree` to preserve nested `<if>`/`<for>` structure; and resolve
   `attrTagProps`, the cardinality/shape emission plan. `AttributeTag` carries
@@ -43,16 +43,16 @@ Five facts worth knowing before editing it:
   `renderable` when every occurrence of that property is body-only; one
   occurrence with attributes or nested tags makes the whole property `data`.
   Cardinality is still derived independently from paths and loops. A declared
-  `Input` remains authoritative and defaults to `data` (decision 108).
-  A claimed dynamic `DelegatedTag` also retains its tag arguments in `args`; an
+  `Input` remains authoritative and defaults to `data`. A claimed dynamic
+  `DelegatedTag` also retains its tag arguments in `args`; an
   emitter must forward them when it reconstructs a `Component` call. For a
   named custom tag, Marko's own call shapes are exclusive: arguments cannot
   also come with attributes, attribute tags, or body content
   (`assertAttributesOrSingleArg`), and core rejects that combination with
   Marko's positioned diagnostic before a host could silently discard the
   property/body side of the call. A dynamic `<${expr}>` tag and a `<define>`
-  call are different in real Marko, and MX now matches it (decision 109): both
-  compile through the lenient dynamic-tag visitor (`assertAttributesOrArgs`),
+  call are different in real Marko, and MX now matches it: both compile through
+  the lenient dynamic-tag visitor (`assertAttributesOrArgs`),
   which allows arguments together with a body or attribute tag (Marko's
   "dynamic tag fallback content") and only rejects arguments plus a plain
   attribute. `rejectArgsWithProps` takes this lenient rule for `target.kind`
@@ -73,27 +73,26 @@ Five facts worth knowing before editing it:
   object after the args (`|a, ...rest|` with `<D(1, 2)>x</D>` reads
   `rest = [2, { content }]`). The html and the shared preact/react/hono emitters and Solid's
   `#defineComponent` all emit exactly that (a no-args call still passes one
-  attribute object, decision 160).
-  Solid needed no emitter change for the dynamic-tag case — its design
-  already keeps attrs/attribute-tags/content orthogonal from args (args only
-  resolve the value handed to `<Dynamic component=…>`; attrs/tags/content
-  render on that element regardless), so core's relaxed guard alone was
-  sufficient. A `<define>`-bound call target is a separate, pre-existing gap
-  on Solid, unrelated to this decision: `<define>` itself unconditionally
-  errors inside a `.solid.mx` region ("cannot declare a function inside a
-  JSX expression"), so `ctx.defines` is never populated there and
+  attribute object). Solid needed no emitter change for the dynamic-tag case —
+  its design already keeps attrs/attribute-tags/content orthogonal from args
+  (args only resolve the value handed to `<Dynamic component=…>`;
+  attrs/tags/content render on that element regardless), so core's relaxed guard
+  alone was sufficient. A `<define>`-bound call target is a separate,
+  pre-existing gap on Solid, unrelated to this change: `<define>` itself
+  unconditionally errors inside a `.solid.mx` region ("cannot declare a function
+  inside a JSX expression"), so `ctx.defines` is never populated there and
   `target.kind === "define"` is unreachable on Solid regardless of args —
-  not something this decision's scope changes or could fix without first
-  making `<define>` itself work on this host.
-  Angular (`ngComponentOutlet` binds `@Input()`s only, not positional
-  constructor arguments) and Astro (no local component form at all) keep
-  their own positioned errors, unrelated to and unaffected by this change.
+  not something this change's scope changes or could fix without first making
+  `<define>` itself work on this host. Angular (`ngComponentOutlet` binds
+  `@Input()`s only, not positional constructor arguments) and Astro (no local
+  component form at all) keep their own positioned errors, unrelated to and
+  unaffected by this change.
 
 - **Marko's parse layer is loaded in one place, `src/marko-frontend.ts`, and
-  bundled into the dist (decision 159).** `markoCompiler()` (public) is the
-  only way core and the tools reach `@marko/compiler`: never
-  `require("@marko/compiler...")` elsewhere, or a second compiler instance
-  loads (separate taglib caches, compile state and Babel nodes). From source
+  bundled into the dist.** `markoCompiler()` (public) is the only way core and
+  the tools reach `@marko/compiler`: never `require("@marko/compiler...")`
+  elsewhere, or a second compiler instance loads (separate taglib caches,
+  compile state and Babel nodes). From source
   they resolve the workspace's `@marko/compiler` (patched npm `htmljs-parser`).
   In the dist, `build/frontend.ts` bundles `@marko/compiler` into
   `dist/marko-frontend.cjs` with `htmljs-parser` resolved to
@@ -114,9 +113,9 @@ Five facts worth knowing before editing it:
   `shorthand.ts`'s `isShorthandWord` probe import MX's template lexer,
   `@mxlang/parser/lexer` (typed by its `public.d.ts`), from source and in the
   dist alike (PR 6 slice S2). The public `parseFragmentNative` now delegates to `parseFragment`.
-  Deleted with the Marko readers (PR 6, decision 158).
+  Deleted with the Marko readers (PR 6).
 - **Its Babel is stock `@babel/*`, exact-pinned runtime dependencies, loaded
-  lazily by `src/babel.ts` (`coreBabel()`; decision 197, PR 6 slice S1).**
+  lazily by `src/babel.ts` (`coreBabel()`; PR 6 slice S1).**
   `parse`/`parseExpression` are `@babel/parser`; `traverse`, `types` and
   `File` come from `@babel/core` (one instance for the TS strip);
   `generator`, `codeFrameColumns` and `pluginTransformTypeScript` from their
@@ -131,8 +130,8 @@ Five facts worth knowing before editing it:
   `CompileError` text is byte-identical. `babel.test.ts` pins the stock
   generator and code frame against Marko's until S5 removes the bundle.
 - **`callee-input.ts` is the synchronous, syntactic cross-file reader for a
-  component's `Input`** (decisions 106 and 107). It resolves discovered and
-  imported callees, parses complete TS/TSX modules with `@babel/parser`'s
+  component's `Input`.** It resolves discovered and imported callees, parses
+  complete TS/TSX modules with `@babel/parser`'s
   `typescript` + `jsx` plugins, and reaches `.mx` declarations through the
   existing template-metadata compile/cache. It follows only bounded literal
   aliases, re-exports, and `import type` edges. Every followed file has its own
@@ -179,8 +178,8 @@ Five facts worth knowing before editing it:
   core's `drive`/`emit` owns the walk. A host that cannot express a kind throws;
   no optional callback may silently drop it.
 - **An element's `on<Name>`/`on-<exact>` is an `event` attr, and only on an
-  element** (decision 101). Core lowers an attribute matching `/^on[A-Z-]/` to
-  `Attr` kind `"event"`, carrying the source spelling (`name`), the resolved
+  element.** Core lowers an attribute matching `/^on[A-Z-]/` to `Attr` kind
+  `"event"`, carrying the source spelling (`name`), the resolved
   DOM event name (`event`), the handler `Expr` and a `nameSpan`: `on<Name>`
   lowercases everything after `on` (`onClick` → `click`), `on-<exact>` is
   verbatim (`on-my-event` → `my-event`). Marko's own rule, copied rather than
@@ -229,14 +228,14 @@ Five facts worth knowing before editing it:
   *string*-valued `onclick="…"` stays an
   ordinary static attribute verbatim — MX does not invent a policy against
   inline handler strings — and an `on*` on a component stays a plain prop.
-- **Three stateful-tag hooks** (decision 70), unit-tested through
-  `src/lower.test.ts`: `isDelegatedTag`/`resolveDelegatedTag` (the lower-time tag
+- **Three stateful-tag hooks**, unit-tested through `src/lower.test.ts`:
+  `isDelegatedTag`/`resolveDelegatedTag` (the lower-time tag
   handler), `ctx.hoist(code)` (lift a statement to the enclosing function's
   head — the render function, or the nearest `Define`), and
   `ctx.bindings.register(name, rewrite)` (rewrite identifier *references*, so a
   host whose state is a getter emits `count()` for `${count}`). Rewrites apply
   only to reference positions, and emitted-JS scopes restore shadowed names.
-- **Core's tag table (`src/tag-table.ts`, decision 197 slice S3a).**
+- **Core's tag table (`src/tag-table.ts`, slice S3a).**
   `tagTable(translator, nativeTags)` is what a tag name means to the parser
   and to lowering (`ctx.tagTable`): the target's native elements first (the
   `nativeTags` a target sets on its `HostDeclarations`, and on
@@ -285,9 +284,9 @@ Five facts worth knowing before editing it:
   `@marko/compiler` 5.42.10 `build-code-frame.js` + `merge-errors.js`), so the
   rewrite chain after it (`hintParseError`, `tagParamError`,
   `dropCompiledFilePrefix`) reads what it always
-  read; the aggregate's message is Node's form on every runtime (decision 151
-  addendum, PR 5). `stripTypes` is `stripMxTypes` (Marko's `transform-typescript`
-  visitor over each payload; tag type arguments/parameters dropped, a
+  read; the aggregate's message is Node's form on every runtime (PR 5).
+  `stripTypes` is `stripMxTypes` (Marko's `transform-typescript` visitor over
+  each payload; tag type arguments/parameters dropped, a
   method's recorded in `strippedMethodTypeParams`). `compileSource` runs the
   translator's `Program.exit` itself and decorates a translate-stage throw as
   Babel did (`asBabelTransformError`).
@@ -306,9 +305,9 @@ Five facts worth knowing before editing it:
   (`packages/tsx-bridge/src/mx/bridge.ts`) calls `parseFragment` for every MX
   region and retries a failed container as TSX (`repairEmbeddedTsx`); see
   `packages/hosts/solid/AGENTS.md`.
-- **Host hooks get a Marko-shaped view of the MX node (decision 163
-  addendum, PR 5).** `src/marko-view.ts` `markoViewOf(ctx, node)`: a lazy,
-  frozen, WeakMap-cached view (`MarkoTag` with `name`/`var`/`arguments`/
+- **Host hooks get a Marko-shaped view of the MX node (PR 5).**
+  `src/marko-view.ts` `markoViewOf(ctx, node)`: a lazy, frozen, WeakMap-cached
+  view (`MarkoTag` with `name`/`var`/`arguments`/
   `typeArguments`/`attributes`/`attributeTags`/`body.{body,params}`,
   `MarkoAttribute`/`MarkoSpreadAttribute`, text/placeholder/comment/scriptlet
   views; Marko-style `loc` from `ctx.lines`); records already Marko-shaped
@@ -358,8 +357,10 @@ Five facts worth knowing before editing it:
     `transform` in source order, then every `finalize`; both hook phases run
     sorted by tag name, and `finalize`'s nodes are prepended to `Ir.body` in
     that order. A `finalize` receives no other tag's output and no route to the
-    program, so ordering cannot become semantically load-bearing — decision
-    80's coupling, which this is the obvious back door for.
+    program, so ordering cannot become semantically load-bearing: custom tags
+    are compile-time hooks, IR in and IR out (see
+    `apps/docs/docs/custom-tags/index.md`), and this would be the obvious back
+    door around that.
   - **A store is per file *and* per tag, keyed on the `Ctx`.** A definition
     object is a module singleton the scan hands to every file in a package, so
     keying anywhere else leaks one file's collected state into the next. The
@@ -374,8 +375,8 @@ Five facts worth knowing before editing it:
     the identical `TagCall` its `transform` will get, while the walk's hoists
     and warnings are not emitted twice. Its suppressed-output IR is never
     cached. No registered `analyze` means one walk, exactly as before.
-  - **A unit boundary is a hook boundary** (decision 95). A call written inside
-    a tag template belongs to *that template's* compilation unit and is not
+  - **A unit boundary is a hook boundary.** A call written inside a tag template
+    belongs to *that template's* compilation unit and is not
     replayed into the caller, so a file-level `analyze` sees only the calls its
     own file wrote — measured: a caller whose template calls `<inner/>` reports
     an empty call list for `inner`. This is the reverse of the inlined model,
@@ -418,8 +419,8 @@ Five facts worth knowing before editing it:
   `ctx.build.delegatedTag("try", children, attributeTags)` (a fourth `attrs`
   argument carries attributes; omitted means none). `lowerCustomTag`
   passes an `isBuiltin` flag that skips the ordinary `hasContent` gate on a
-  custom tag's body. Decision 141: `hasContent` tests Marko-normalized text
-  for nonemptiness, never trims it again — same-line spaces/tabs are content,
+  custom tag's body. `hasContent` tests Marko-normalized text for nonemptiness,
+  never trims it again — same-line spaces/tabs are content,
   while newline indentation already removed by Marko is absent. `<try>` is
   a structural pass-through wrapper and reproduces the caller's body unchanged, matching what
   `lowerDelegatedTag` always did. Each host's `isDelegatedTag`/`resolveDelegatedTag` for
@@ -450,9 +451,9 @@ Five facts worth knowing before editing it:
   language plugin — because which tags a template may call follows from where
   the template lives. An explicitly passed `customTags` still wins over a
   discovered tag of the same name.
-- **A file reaches its dialect by its extension (decisions 182 PR C, 202,
-  212; `src/dialect-discovery.ts`, `src/syntax-table.ts`).** A dialect is a
-  package whose `package.json#mx.dialect` declares `{ id, name, extensions,
+- **A file reaches its dialect by its extension (`src/dialect-discovery.ts`,
+  `src/syntax-table.ts`).** A dialect is a package whose
+  `package.json#mx.dialect` declares { id, name, extensions,
   module }` (`DIALECT_MANIFEST_KEY`), validated eagerly with a positioned
   error at the field; `module` must stay inside the package (absolute, or
   out through `..`, is an error), so tests reach a fixture dialect
@@ -561,8 +562,8 @@ Five facts worth knowing before editing it:
   (`non-default-table-parse-error.test.ts`); the seams in
   `payloadOf`/`lowerChildList` are the backstop for callers that lower a
   document themselves.
-  **Dialect hooks (decision 182 addendum 5; `src/triggers.ts`).** `compileSource` and
-  `parseFragment` register the document's syntax by every body array
+  **Dialect hooks (`src/triggers.ts`).** `compileSource` and `parseFragment`
+  register the document's syntax by every body array
   (`registerSyntax`), and `lower`/`lowerChildren` run `lowerTriggers`
   first: hooks in source order (a tag's attributes before its
   body, a value's triggers before its owner), stand-ins replaced inside the
@@ -574,10 +575,10 @@ Five facts worth knowing before editing it:
   `childrenWithTriggers` expand a list by `node.type` for `tagAttributesOf`,
   `bodyChildren` and `lowerChildList`. `payloadOf`, `lowerChildList` and
   `tableParseError` refuse only what nothing lowered.
-  **Node types (decision 202 item 3; `src/dialect-registry.ts`).** One key
-  space, `id:Type`: core is dialect zero (`mx`, its MX AST types
-  without the `Mx` prefix, keys only, lowered directly), and a dialect's
-  `nodeTypes` (`{ keys, parse, print, lower }` per PascalCase type; the
+  **Node types (`src/dialect-registry.ts`).** One key space, `id:Type`: core is
+  dialect zero (`mx`, its MX AST types without the `Mx` prefix, keys only,
+  lowered directly), and a dialect's `nodeTypes`
+  (`{ keys, parse, print, lower }` per PascalCase type; the
   dialect's `id`, always required, never `mx`) follow. A row's `node: { type, dialect }`
   (expression, attribute, line and value triggers) names a type core or the
   loading dialect registers with a `parse` for that position (`CORE_POSITIONS`, `claimsAt`: core registers one only
@@ -794,7 +795,7 @@ Five facts worth knowing before editing it:
   to the dialect; tag files still apply. Tests: `src/dialect-contracts.test.ts`
   (R1-R9), tools in `packages/target-registry/src/dialect-contracts.test.ts`
   and `packages/tooling/language-server/src/dialect-contracts.test.ts`.
-- **Package-level contracts use `mx.contracts` (decision 142).** A string,
+- **Package-level contracts use `mx.contracts`.** A string,
   `{ module, hosts? }`, or array names modules default-exporting `ContractMap`
   (`Record<string, CustomTag>`): declarations plus `analyze`, no `transform`,
   `finalize`, template or prefix. Both walks share indexing after `tags/` and
@@ -852,17 +853,17 @@ Five facts worth knowing before editing it:
   deterministically. Accepts the same `host` filter. For tooling that needs
   the whole tag surface up front rather than per compiled file.
 - **Precedence order (spec §4; ref `custom-tags-import-precedence`,
-  `custom-tags-local-bindings`, decisions 93, 113):
-  core structural tags, then built-in custom tags (`try`, never shadowable),
-  then a *PascalCase* name the file itself binds — an `import`, a `<define>`
-  name, a `<const>` binding, or a `<for>`/`<define>` tag param, each scoped to
-  where the binding is in effect — then a registered custom tag, then a host
-  claim (`ctx.declarations.isDelegatedTag`), then components/elements.** `lower.ts`'s
-  tag-name switch checks `/^[A-Z]/.test(name) && (ctx.defines.has(name) ||
-  ctx.imports.has(name) || (ctx.tagVarShadowed?.has(name) ?? false))`
-  directly — a *core* rule inline in `lower.ts`, not a call into a host's own
-  `isComponent` (Solid's and Astro's `isComponent` are casing-only and never
-  consult `ctx.imports`/`ctx.defines`/`ctx.tagVarShadowed` at all, so there is
+  `custom-tags-local-bindings`): core structural tags, then built-in custom tags
+  (`try`, never shadowable), then a *PascalCase* name the file itself binds — an
+  `import`, a `<define>` name, a `<const>` binding, or a `<for>`/`<define>` tag
+  param, each scoped to where the binding is in effect — then a registered
+  custom tag, then a host claim (`ctx.declarations.isDelegatedTag`), then
+  components/elements.** `lower.ts`'s tag-name switch checks /^[A-Z]/.test(name)
+  && (ctx.defines.has(name) || ctx.imports.has(name) ||
+  (ctx.tagVarShadowed?.has(name) ?? false)) directly — a *core* rule inline in
+  `lower.ts`, not a call into a host's own `isComponent` (Solid's and Astro's
+  `isComponent` are casing-only and never consult
+  `ctx.imports`/`ctx.defines`/`ctx.tagVarShadowed` at all, so there is
   no shared "file-local half" of `isComponent` to call into) — before ever
   consulting `ctx.customTags` or `isDelegatedTag`, so `import Panel from
   "./panel.mx"` in a package that also has a `tags/Panel.mx` or a registered
@@ -881,16 +882,16 @@ Five facts worth knowing before editing it:
   (e.g. `<style>`) sharing a name with an unrelated lowercase import in the
   same file — the binding existed but was never meant to route as a
   component, so it must not shadow the custom tag or host claim either.
-  **`<const>`/tag-param bindings now shadow too (decision 113,
-  `custom-tags-local-bindings`), closing the gap this bullet used to
-  document.** `ctx.tagVarShadowed` — the scope-tracking set `shadowBindings`/
-  `scopeBindings` already maintained for binding-aware identifier rewriting
-  (see `expr()`'s doc comment in `core.ts`) around every `<const>`,
-  `<for|p|>`, and `<define|p|>` body — gives the file-local check correct
-  lexical scoping for free: a name bound inside an `<if>` branch or a `<for>`
-  body shadows only there, reverting to the registered custom tag immediately
-  outside it. Measured against Marko 6.3.51's own translator
-  (`normalizeTag`, `@marko/runtime-tags/dist/translator/index.js:5852-5860`):
+  **`<const>`/tag-param bindings now shadow too (`custom-tags-local-bindings`),
+  closing the gap this bullet used to document.** `ctx.tagVarShadowed` — the
+  scope-tracking set `shadowBindings`/`scopeBindings` already maintained for
+  binding-aware identifier rewriting (see `expr()`'s doc comment in `core.ts`)
+  around every `<const>`, `<for|p|>`, and `<define|p|>` body — gives the
+  file-local check correct lexical scoping for free: a name bound inside an
+  `<if>` branch or a `<for>` body shadows only there, reverting to the
+  registered custom tag immediately outside it. Measured against Marko 6.3.51's
+  own translator (`normalizeTag`,
+  `@marko/runtime-tags/dist/translator/index.js:5852-5860`):
   `tag.scope.getBinding(tagName)` is checked unconditionally before any
   taglib/custom-tag lookup, for `const`, `for`-params, and `define`-params
   alike, with no divergence between the three — one code path, so MX's fix
@@ -960,8 +961,8 @@ Five facts worth knowing before editing it:
   (TODO `sync-esm-reload-node`). A Vitest test therefore asserts that the directory is rescanned (add a tag
   file), not that a rebuilt sidecar's hooks changed.
 - **`children["*"]` is resolved in one top-down walk, never by renaming the
-  tree (decision 147).** `resolveUnnamedTags` (`default-tag.ts`) carries the
-  contract in force (`scopeForChildren`) and records each match per node
+  tree.** `resolveUnnamedTags` (`default-tag.ts`) carries the contract in force
+  (`scopeForChildren`) and records each match per node
   (`matchWildcardChild` in `wildcard-resolve.ts`); `lower.ts` reads the
   record (`activeWildcard`) and routes the child to `lowerCustomTag` with the
   canonical name, `alias` on the IR node. A name is claimable only when
@@ -975,15 +976,15 @@ Five facts worth knowing before editing it:
   (`src/ir-entry/authored-tags.ts`) reuses `matchWildcardChild`/`scopeForChildren`
   with no `lookup`. A guard hit (`rejectNearExplicitChild`) is a compile error, not a warning. Cycle rule: only an inline entry object reachable from
   itself is non-terminating; recursion by `contract` reference is fine.
-- **A contract-only tag is a `DelegatedTag` on a claimed name (decision 130).** A
-  definition with no `transform` and no template is contract-only whatever else
+- **A contract-only tag is a `DelegatedTag` on a claimed name.** A definition
+  with no `transform` and no template is contract-only whatever else
   it declares (`{}` and hooks-only included: an empty declaration is a contract
   with no attributes and no body rules); it fails with "neither a `transform` nor a template" unless
   `isDelegatedTag(name)` is true; then `transformCustomTag` validates the call, runs
   the `analyze` recording like any custom tag, and returns one `DelegatedTag` built
   from the call (`contractOnlyDelegatedTag`; whitespace-only body kept). Core asks
-  the host only `isDelegatedTag`, never a host name (decision 126). `lowerCustomTag`
-  lowers such a call's attributes as `"element"`, like `lowerDelegatedTag`, so a
+  the host only `isDelegatedTag`, never a host name. `lowerCustomTag` lowers
+  such a call's attributes as `"element"`, like `lowerDelegatedTag`, so a
   host's `resolveAttributeMethod`/`orderAttrs` see the same `on` either way.
   `/var` and attributes on attribute tags stay rejected (no template).
 - **A template-only tag is discovered with no hooks**; calling one routes to
@@ -1021,16 +1022,17 @@ Five facts worth knowing before editing it:
   tag name makes `@marko/compiler` throw `"tag.name" is required`, which fails
   *every* file in the package rather than only a caller. A host module file
   under `tags/` — `<name>.solid.mx` (the Solid host), `<name>.ng.mx` (the
-  Angular host) or `<name>.astro.mx` (the Astro host, decision 134) — is reported rather than ignored, naming the file: a
-  different file kind, not a tag template. The check is a closed allowlist of
-  host segments (`solid`, `ng`, `astro`), not "any second dotted segment before
-  `.mx`" — `TAG_NAME_RE` allows dots in an ordinary tag name, so
-  `tags/my.icon.mx` is the valid tag `<my.icon>` and stays indexed; only a
-  listed segment is rejected, `.astro.mx` included (it was `.amx`, with no `.mx`
-  suffix, and silently ignored here before decision 134). `scanCustomTags` and `discoverProjectTags` share the
-  rule through `indexDirectory`, so it cannot drift between the two. Note the
-  mtime cache assumes sub-second mtime granularity — true on every platform MX
-  targets, but two writes inside one tick can look like one.
+  Angular host) or `<name>.astro.mx` (the Astro host) — is reported rather than
+  ignored, naming the file: a different file kind, not a tag template. The check
+  is a closed allowlist of host segments (`solid`, `ng`, `astro`), not "any
+  second dotted segment before `.mx`" — `TAG_NAME_RE` allows dots in an ordinary
+  tag name, so `tags/my.icon.mx` is the valid tag `<my.icon>` and stays indexed;
+  only a listed segment is rejected, `.astro.mx` included (it was `.amx`, with
+  no `.mx` suffix, and silently ignored here). `scanCustomTags` and
+  `discoverProjectTags` share the rule through `indexDirectory`, so it cannot
+  drift between the two. Note the mtime cache assumes sub-second mtime
+  granularity — true on every platform MX targets, but two writes inside one
+  tick can look like one.
 - **A missing `mx.tags` directory is a diagnostic, not a throw.** It lands in
   `ScanResult.diagnostics` and the scan continues, so one typo in
   `package.json` does not break compilation of files that never used that
@@ -1077,8 +1079,8 @@ Five facts worth knowing before editing it:
   `<cwd>/file:/a/page.mx` — passing a raw URI discovered zero tags for every
   real document while a unit test using a plain path stayed green.
 - **A template custom tag is a compilation unit, and `input` is a real
-  parameter** (decision 95, `packages/core/src/template-tag.ts`). A `tags/x.mx`
-  template compiles through the **same per-file pipeline a page uses**, into a
+  parameter** (`packages/core/src/template-tag.ts`). A `tags/x.mx` template
+  compiles through the **same per-file pipeline a page uses**, into a
   module exporting the tag; the caller emits an injected `import` plus an
   ordinary `Component` call. Nothing is spliced into the caller. This is not
   new machinery but *less* of it: an explicitly imported tag already lowered and
@@ -1102,8 +1104,8 @@ Five facts worth knowing before editing it:
   the file-level counter against the caller's bindings *and* its source text.
   One import per module per tag, keyed by the template's resolved path; if the
   caller already imports that same path itself, its binding is reused and
-  nothing is injected (ruling 3). The specifier is the relative posix path with
-  `.mx` kept, since every loader resolves `.mx` per file.
+  nothing is injected. The specifier is the relative posix path with `.mx` kept,
+  since every loader resolves `.mx` per file.
 - **`static` in a tag now runs once per process, not once per calling module.**
   The tag's module-level statements are its own module's, evaluated at import
   time — Marko's model. This is an observable behavior change for any tag whose
@@ -1128,8 +1130,8 @@ Five facts worth knowing before editing it:
   each have a counterpart test in `lower.test.ts`. `<return>` in a *page* is
   legal and means the same thing.
   **The export shape is the host's business**: on html, `render(input, out)`
-  writes to the caller's sink and returns the value (decision 155, the Marko
-  render model; core still only records `returnsValue`); `{ value, output }` on
+  writes to the caller's sink and returns the value (the Marko render model;
+  core still only records `returnsValue`); `{ value, output }` on
   the three JSX hosts (where the call is emitted as an ordinary *function
   call*, not a JSX element — a JSX element is a description of a call the
   runtime makes later, so it could never hand the pair back); on Solid a
@@ -1215,8 +1217,8 @@ Five facts worth knowing before editing it:
   authored `class` attribute, or a class a dialect trigger placed
   (`ctx.shorthand`) and merged into one, stays spanless; `lowerSource`
   rejects those.
-- **Lowering reads both ASTs until PR 6 (parser port PR 4, decision 158).**
-  Node kinds are tested through `isTagNode`/`isTextNode`/`isCommentNode`/
+- **Lowering reads both ASTs until PR 6 (parser port PR 4).** Node kinds are
+  tested through `isTagNode`/`isTextNode`/`isCommentNode`/
   `isAttributeNode`/`isSpreadAttributeNode`/`isMxAttributeTag` (core.ts),
   never a bare `"Marko*"` string, and positions through `posOf(ctx, node)`,
   `nodeSpan`, `exprSpan` and `sliceNode`: a Marko or Babel node's `loc` first,
@@ -1229,8 +1231,8 @@ Five facts worth knowing before editing it:
   `file` is never positioned against this one. An `Mx*` kind `lowerChildList`
   has no arm for fails ("has no lowering yet") rather than dropping; a
   child-level `MxTrigger`/`MxBlockTag`/`MxFilter` fails in the syntax
-  pre-pass's wording (decision 182). An `MxModuleStatement` lowers on the tag
-  path by its keyword (`tagNameOf`), a statement by kind (`isStatementNode`),
+  pre-pass's wording. An `MxModuleStatement` lowers on the tag path by its
+  keyword (`tagNameOf`), a statement by kind (`isStatementNode`),
   its range to `untrimmedEnd` (`mxSpanOf`). The walk is typed
   `readonly MxChild[]` (a type-only import of the private `@mxlang/babel`,
   erased from the `.d.ts`); the published `lower`/`lowerChildren` keep
@@ -1301,8 +1303,8 @@ Five facts worth knowing before editing it:
   read the name back rather than pinning `render` — `@mxlang/target-html`'s
   `brandRender`/`finalizeModule`, `@mxlang/typescript-plugin`'s
   `createAstroTypeSurface`, and `@mxlang/host-astro`'s two `vite-pages` patterns.
-  Since decision 155 the module also carries `<Name>.render = __mxRender;`
-  after the default export; `vite-pages`' `wrapAsPage` renames that line along
+  The module also carries `<Name>.render = __mxRender;` after the default
+  export; `vite-pages`' `wrapAsPage` renames that line along
   with the function, so a fifth match lives there. The final statement is
   `export default <Name> as ((input: Input) => string) & { render: typeof
   __mxRender };` (the `as` keeps diagnostics printing the signature rather
@@ -1376,7 +1378,7 @@ Five facts worth knowing before editing it:
   file-absolute, so its fixes need no remapping. Pins:
   `diagnostic-fixes.test.ts`.
 
-## Target contract (unstable; decisions 129 and 132)
+## Target contract (unstable)
 
 `src/target-descriptor.ts` and `src/target-loader.ts` hold the contract a
 target registers with. **Nothing consumes it yet**: no tool, host or core path
@@ -1458,14 +1460,14 @@ stable version.
   process, with and without a miss first, error kinds included.
   `node:child_process` is loaded lazily; `setSpawnSyncLoaderForTesting` swaps
   it in tests.
-- **Caller-owned target lookup (decision 126 addendum).**
-  `TargetCompileOptions.targets` and `HostRegionInput.targets` are optional
-  generic `TargetLookup` fields. A descriptor forwards the supplied lookup
-  into its compile entry's `HostOptions`, defaulting to its own lookup only
+- **Caller-owned target lookup.** `TargetCompileOptions.targets` and
+  `HostRegionInput.targets` are optional generic `TargetLookup` fields. A
+  descriptor forwards the supplied lookup into its compile entry's
+  `HostOptions`, defaulting to its own lookup only
   when none was supplied. This preserves the caller's full cross-file
   resolution scope without naming any host or target in core.
-- **Type-check projections (decision 140).** `TargetCompileOptions.typeCheck`
-  is optional and generic. The editor passes it to request type-only checks;
+- **Type-check projections.** `TargetCompileOptions.typeCheck` is optional and
+  generic. The editor passes it to request type-only checks;
   descriptors forward it to compile entries that support them. Ordinary build
   callers leave it unset, so emitted runtime code is unchanged.
 - **`load(core)`** takes the **tool's** core (`typeof import("./index.ts")` in

@@ -143,8 +143,8 @@ export {
   type MxDiagnosticCodeEntry,
 } from "./diagnostic-codes.ts";
 /**
- * Dialect discovery (decision 212): a dialect package declares itself in
- * its `package.json#mx.dialect`; a project uses the dialects among its
+ * Dialect discovery: a dialect package declares itself in its
+ * `package.json#mx.dialect`; a project uses the dialects among its
  * direct dependencies, and a file goes to the one that claims its
  * extension. Tools read the extensions from here without loading a
  * dialect's code.
@@ -243,8 +243,8 @@ export type {
 } from "./ir.ts";
 export { IR_VERSION } from "./ir.ts";
 /**
- * The IR entry point (decision 204): parse, lower, check and return core's
- * IR, for a consumer that interprets the tree itself (a dialect).
+ * The IR entry point: parse, lower, check and return core's IR, for a consumer
+ * that interprets the tree itself (a dialect).
  *
  * @unstable
  */
@@ -288,10 +288,10 @@ export {
   type SourceSpan,
 } from "./mapping.ts";
 /**
- * Marko's taglib lookup, the one instance core builds it with (decision 159:
- * in core's dist, `@marko/compiler` bundled with MX's own template parser).
- * Every package that needs it asks here, so one compiler loads per process.
- * Removed with the lookup (decision 197, PR 6 slice S3b).
+ * Marko's taglib lookup, the one instance core builds it with (in core's dist,
+ * `@marko/compiler` bundled with MX's own template parser). Every package that
+ * needs it asks here, so one compiler loads per process. Removed with the
+ * lookup (PR 6 slice S3b).
  */
 export { type MarkoCompiler, markoCompiler } from "./marko-frontend.ts";
 export {
@@ -392,8 +392,8 @@ export {
  */
 export { RESERVED_NAMES } from "./tag-names.ts";
 /**
- * Tag rules presets (decision 204): `html`, `markup` and `none`, the
- * tag-table entries a dialect names instead of assembling taglibs.
+ * Tag rules presets: `html`, `markup` and `none`, the tag-table entries a
+ * dialect names instead of assembling taglibs.
  *
  * @unstable until the hosts read them (slice S3b-2).
  */
@@ -404,8 +404,8 @@ export {
   tagRulesPreset,
 } from "./tag-presets.ts";
 /**
- * Core's tag table (decision 197): a translator's taglibs over a target's
- * native elements, what `parseMx` and lowering read tag names through.
+ * Core's tag table: a translator's taglibs over a target's native elements,
+ * what `parseMx` and lowering read tag names through.
  *
  * @unstable for the tools that lower outside `compileSource` (the TS plugin's
  * mapping pass).

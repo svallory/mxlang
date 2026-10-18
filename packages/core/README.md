@@ -56,7 +56,7 @@ alias of that type only. Every member is a lower-time question:
 | `checkBinding?(target, what)` | Inspects a name a construct is about to bind at *render* scope; not called for tag params, which open a nested scope. |
 | `keepComments?` | Whether an HTML comment reaches the output. |
 
-The tag hooks and IR node are named `isDelegatedTag`, `resolveDelegatedTag` and `DelegatedTag` (decision 132; formerly `claimsTag`, `resolveHostTag`, `HostTag`).
+The tag hooks and IR node are named `isDelegatedTag`, `resolveDelegatedTag` and `DelegatedTag`.
 
 `DYNAMIC_TAG` is the sentinel name `isDelegatedTag` receives for `<${expr}/>`;
 match against the exported constant rather than retyping it. A bare
@@ -69,7 +69,7 @@ the `Interpolation` fallback. The argument is passed only alongside
 ignores the third argument keeps claiming both shapes, which is every
 current host's behavior — the parameter is opt-in, not a required change.
 
-## The three stateful-tag hooks (decision 70)
+## The three stateful-tag hooks
 
 `<let>`, `<lifecycle>`, `<script>` and `:=` are core language: core parses and
 checks them on every target, and each target lowers them to its own
@@ -126,8 +126,8 @@ tested:
 ## Which Babel the core uses
 
 Lowering parses, walks, prints and strips TypeScript with stock Babel
-packages (decision 197): `@babel/parser` for `parse`/`parseExpression`,
-`@babel/core`'s own `traverse`, `types` and `File`, `@babel/generator`,
+packages: `@babel/parser` for `parse`/`parseExpression`, `@babel/core`'s own
+`traverse`, `types` and `File`, `@babel/generator`,
 `@babel/code-frame` and `@babel/plugin-transform-typescript`. They are
 exact-pinned runtime dependencies (not bundled), loaded lazily in
 `src/babel.ts` (`coreBabel()`), so importing core loads no Babel. `traverse`,
@@ -157,8 +157,8 @@ parses with the MX front end (`@mxlang/parser/frontend`, inlined into the
 dist), reading each tag's shape and the statement keywords from core's tag
 table (`tagTable(translator, declarations.nativeTags)`: the host translator's
 taglibs over the target's native elements, core's own HTML elements when it
-declares none; decision 197), lowers the MX AST, and runs the host's
-`emitIr`. `host` is required and carries its `emitIr` function plus the
+declares none), lowers the MX AST, and runs the host's `emitIr`. `host` is
+required and carries its `emitIr` function plus the
 taglibs to register, the tag-discovery directories, and an optional `postEmit`
 pass over the emitted module text. `createTranslator(host)` is exported
 separately because the table is cached per translator object, so a caller
@@ -222,9 +222,9 @@ definition's `parseOptions` (`text`,
 `preserveWhitespace`, `openTagOnly`) into the injected taglib, from which the
 MX front end reads the tag's shape (its `tagTypes` entry) before parsing,
 then validates declared `attributes`, `attributeTags`, `children` and `parents` before `transform`.
-Attribute-tag declarations also accept recursive `attributes`, `attributeTags` and `children` maps. The shared attribute checker supports E1 types at every depth; defaults on attribute-tag attributes are not applied. E2's children check runs on each attribute tag's authored body before child lowering, including `#text` and path cardinality. Errors name the owner chain (`` `<card>`: `<@row>`: unknown attribute `bogus` ``) and stop at the first. A declaration with none of these maps keeps the prior no-template shape/control-flow rejection; template `Input` and host capability gates remain unchanged (decision 138 E4).
-`children` closes authored plain child names with `{ required?, repeatable? }` cardinality; the reserved `#text` key permits non-whitespace text and interpolations. Control flow is transparent, declarations and comments are ignored, and dynamic children are errors in a closed contract. The check runs before plain children lower, so transform output cannot change their counted names; `TagCall.childTree` exposes that authored shape to hooks. Children cannot be combined with raw-text or open-tag-only parse options (decision 138 E2).
-`parents?: string[]` restricts authored direct parents: control flow is transparent, any other authored tag breaks the chain, and an attribute-tag body has parent `@name`. The reserved `#root` key means a file/template unit's own top level, including recursion, not its caller's parent. Omitted parents are open; an empty list permits none. Registration cross-checks both directions for registered tags: a parent's closed `children` list and each child's declared `parents` must agree on their shared entry. Both contradiction messages end with the alternative list edits. `<define>` is not transparent, and a dynamic parent never matches a `parents` list. Core checks placement before lowering the call's body, equally for transform, template-sidecar and parents-only delegated contracts (decision 138 E3).
+Attribute-tag declarations also accept recursive `attributes`, `attributeTags` and `children` maps. The shared attribute checker supports E1 types at every depth; defaults on attribute-tag attributes are not applied. E2's children check runs on each attribute tag's authored body before child lowering, including `#text` and path cardinality. Errors name the owner chain (`` `<card>`: `<@row>`: unknown attribute `bogus` ``) and stop at the first. A declaration with none of these maps keeps the prior no-template shape/control-flow rejection; template `Input` and host capability gates remain unchanged.
+`children` closes authored plain child names with `{ required?, repeatable? }` cardinality; the reserved `#text` key permits non-whitespace text and interpolations. Control flow is transparent, declarations and comments are ignored, and dynamic children are errors in a closed contract. The check runs before plain children lower, so transform output cannot change their counted names; `TagCall.childTree` exposes that authored shape to hooks. Children cannot be combined with raw-text or open-tag-only parse options.
+`parents?: string[]` restricts authored direct parents: control flow is transparent, any other authored tag breaks the chain, and an attribute-tag body has parent `@name`. The reserved `#root` key means a file/template unit's own top level, including recursion, not its caller's parent. Omitted parents are open; an empty list permits none. Registration cross-checks both directions for registered tags: a parent's closed `children` list and each child's declared `parents` must agree on their shared entry. Both contradiction messages end with the alternative list edits. `<define>` is not transparent, and a dynamic parent never matches a `parents` list. Core checks placement before lowering the call's body, equally for transform, template-sidecar and parents-only delegated contracts.
 An unknown key in an `attributes`/`attributeTags`/`children` declaration (a typo, or a
 retired name such as `staticOnly`/`repeated`) is rejected at registration,
 before any file is parsed, recursively at every attribute-tag depth. An unknown key on the tag itself (`atributes`) is refused the same way from every contract source: a `customTags` entry, a sidecar, an `mx.contracts` entry and a dialect's `contracts` entry, each listing the keys that source accepts. Transforms receive resolved author material and return ordinary IR. Builder
@@ -233,8 +233,8 @@ the file, and `ctx.build.delegatedTag(name, children, attributeTags, attrs?)` is
 only route to a host primitive from a `transform`. A tag with only a contract
 (no `transform`, no template) on a name the host claims skips the transform
 altogether: core validates the call and lowers it to a `DelegatedTag` carrying the
-call's attributes (decision 130). On a host that does not claim the name it
-still fails with "neither a `transform` nor a template".
+call's attributes. On a host that does not claim the name it still fails with
+"neither a `transform` nor a template".
 
 Write failures as `throw ctx.fail(message, { at?, code? })` (a bare position is the same as `{ at }`); `code` reaches `IrDiagnostic.code`. TypeScript does not
 reliably narrow after a bare call through the parameter property `ctx.fail`,
@@ -261,7 +261,7 @@ collecting `tags/` directories; a tag's name is its file's basename. Nearest
 directory wins. `package.json#mx.tags` — a string, or entries of
 `{ dir, prefix?, hosts?, parseOptions? }` — extends the walk in array order
 with directory-level defaults a sidecar may override, after local directories.
-`mx.contracts` names a module (string, `{ module, hosts? }`, or array) default-exporting `ContractMap`: declarations plus `analyze`, no transforms or templates; it comes last, replaces whole entries, and warns on shadowing or duplicate names (decision 142, spec §9.2).
+`mx.contracts` names a module (string, `{ module, hosts? }`, or array) default-exporting `ContractMap`: declarations plus `analyze`, no transforms or templates; it comes last, replaces whole entries, and warns on shadowing or duplicate names (spec §9.2).
 
 Two properties make this usable from every integration:
 
@@ -350,10 +350,10 @@ const icon: CustomTag = {
 then every `finalize`. Both hook phases run **sorted by tag name**, and
 `finalize`'s nodes are prepended to the program body in that order. A
 `finalize` is handed no other tag's output and no route to the program, so
-ordering can never become semantically load-bearing — the coupling decision 80
-rules out, which would otherwise return through this door. The result is
-reproducible: the same file compiles to the same bytes on any machine, whatever
-order its calls appear in.
+ordering can never become semantically load-bearing: custom tags are
+compile-time hooks, IR in and IR out, and this would otherwise be a back door
+around that. The result is reproducible: the same file compiles to the same
+bytes on any machine, whatever order its calls appear in.
 
 **Scope.** A store belongs to one tag in one file. It is created with the
 file's `Ctx` and dies with it, so neither another file's compile nor another
@@ -817,7 +817,7 @@ Edge cases of the walk, each pinned by tests:
   an installed package with no `package.json` gets `html`, not the consumer's host.
 - An `mx.host` naming no host warns (valid hosts, nearest match) and is ignored.
 - Two or more host dependencies still mean `html`.
-- `peerDependencies` are never counted: a host listed only as a peer does not select that host (decision 124).
+- `peerDependencies` are never counted: a host listed only as a peer does not select that host.
 
 `resolveTargetPolicyDetailed(filePath)` returns `{ policy, diagnostics }`;
 `resolveTargetPolicy` is its `policy`. All diagnostics are warnings
@@ -836,7 +836,7 @@ nothing in the repo consumes them yet; see `AGENTS.md` for the rules the
 validator and the lookup enforce and for how a descriptor is loaded from a
 project.
 
-## The IR, and what a host implements (decision 79)
+## The IR, and what a host implements
 
 The core **lowers** an MX template into a small host-independent tree, and
 a host **emits** from that tree. No host walks a parser node.
@@ -853,7 +853,7 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 
 | Kind | The construct it comes from |
 | --- | --- |
-| `Text` | A literal run, already whitespace-normalized by the front end (decision 33) |
+| `Text` | A literal run, already whitespace-normalized by the front end |
 | `Interpolation` | `${expr}` and `$!{expr}`; `escaped` is false for the raw form |
 | `Element` | An HTML/SVG/MathML element, with `attrs`, `children` and a `void` flag |
 | `Component` | A component call: target is an import binding, a `<define>`, or `<${expr}/>` |
@@ -865,7 +865,7 @@ shape `TranslateError` reports, which is what an editor squiggle needs):
 | `Import` | An `import` statement, with the binding names it introduces |
 | `Export` | Any other top-level `export`, hoisted verbatim |
 | `InputInterface` | `export interface Input`, lifted so a host can place it |
-| `Hoisted` | A statement lifted by decision 70's `hoist` hook |
+| `Hoisted` | A statement lifted by the `hoist` hook |
 | `DelegatedTag` | A tag the host claimed, with attrs/children/attribute tags/params/var resolved, plus its own opaque `data` |
 | `DocumentType` | `<!doctype html>`, delimiters already stripped by the parser |
 | `Comment` | A comment; `html` distinguishes `<!-- -->` from `//`, which only the source can tell apart |
@@ -925,8 +925,7 @@ section).
    itself; `resolveDelegatedTag(name, node, ctx)` then records its decision into the
    node's `data` slot while the Marko node is still in hand. An emitter that
    had to re-inspect `tag.node` would be walking Marko nodes again — the thing
-   the IR exists to stop. This is also the seam decision 80's user-tag macros
-   will need.
+   the IR exists to stop. This is also the seam user-tag macros will need.
 3. **Emit.** Implement `Emitter<Out>` (`src/emit.ts`), one method per kind, and
    let `drive()`/`emit()` walk the tree. Every method is required: an emitter
    that silently ignored a kind would drop authored content from a successful

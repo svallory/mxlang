@@ -2,19 +2,18 @@
  * `@mxlang/core`: the Marko-node consumer every MX host is built on.
  *
  * Resolves Marko's AST to the host-independent IR, with everything
- * host-specific behind `HostDeclarations`. Decisions 70 to 72 and 79: MX is
- * the language, this package is the core, and each host supplies declarations
+ * host-specific behind `HostDeclarations`. MX is the language, this package is
+ * the core, and each host supplies declarations
  * plus an `Emitter`.
  *
  * This file previously served two dialects — `@mxlang/html`'s retired `.mx`
- * dialect, alongside `@mxlang/html`'s stock `.marko` — until decision
- * 68 retired `.mx` and deleted `@mxlang/html` entirely. Two things that were
- * true while both existed, kept here because they still explain choices this
- * core makes:
+ * dialect, alongside `@mxlang/html`'s stock `.marko` — until `.mx` was retired
+ * and `@mxlang/html` deleted entirely. Two things that were true while both
+ * existed, kept here because they still explain choices this core makes:
  *
- * - **Tag disposition.** Decision 65 replaced "what my code can't do" with
- *   "what this target can't do": a construct either contributes output bytes
- *   (lower), only configures behaviour after the first render (inert), or
+ * - **Tag disposition.** The capability test asks "what this target can't
+ *   do", not "what my code can't do": a construct either contributes output
+ *   bytes (lower), only configures behaviour after the first render (inert), or
  *   evaluates to an initial value. The policy declares its own table.
  * - **Element resolution** asks core's tag table (`tag-table.ts`), built from
  *   the host's taglibs and the target's native elements
@@ -24,7 +23,7 @@
  * Two shapes of Marko's AST drive nearly everything here, both measured
  * against 5.42.5 rather than assumed:
  *
- * - Whitespace is already decision 33. Marko's own `onText` drops a
+ * - Whitespace is already normalized. Marko's own `onText` drops a
  *   whitespace-only run containing a newline and collapses a newline-free run
  *   to one space, so `MarkoText.value` arrives normalized and this file does
  *   not re-normalize it.
@@ -91,8 +90,8 @@ export class TranslateError extends Error {
   readonly line: number;
   readonly column: number;
   /**
-   * The cross-copy brand (decisions 129/132 §4.4, mitigation 2). Set through
-   * `Symbol.for`, so two copies of `@mxlang/core` in one process — a bundled
+   * The cross-copy brand. Set through `Symbol.for`, so two copies of
+   * `@mxlang/core` in one process — a bundled
    * tool and a project-resolved host, or the published `dist` beside a
    * different core — agree on the same symbol and {@link isTranslateError}
    * recognises each other's errors, where `instanceof` silently would not.
@@ -109,7 +108,7 @@ export class TranslateError extends Error {
   readonly file?: string;
   /**
    * Further source spans the error is about, in file offsets: a duplicate
-   * declaration carries the first and the second (decision 156). The position
+   * declaration carries the first and the second. The position
    * (`line`/`column`) is the last one.
    */
   spans?: readonly SourceSpan[];
@@ -125,8 +124,8 @@ export class TranslateError extends Error {
    * compiled when unset), when it was raised on an MX AST node. Such a node
    * carries offsets, not lines, so `fail` records them here and the lowering
    * boundary (`recover`, `lower`, `lowerChildren`) fills `line`/`column`
-   * from the source before the error leaves it (decision 158, PR 4
-   * addendum). The span stays after that, for a reporter that wants exact
+   * from the source before the error leaves it (PR 4 addendum). The span stays
+   * after that, for a reporter that wants exact
    * offsets. Unset on an error raised on a Marko node.
    */
   span?: SourceSpan;
@@ -149,9 +148,9 @@ export class TranslateError extends Error {
   fixes?: readonly IrDiagnosticFix[];
   /**
    * Every callee file the failed compile's `readCalleeInput` had already
-   * resolved before the error was raised (decision 106/107). Set by
-   * `compileSource`'s catch, from the same-shaped `Ctx.dependencies` a
-   * successful compile drains into `CompileResult.dependencies`, and by the
+   * resolved before the error was raised. Set by `compileSource`'s catch, from
+   * the same-shaped `Ctx.dependencies` a successful compile drains into
+   * `CompileResult.dependencies`, and by the
    * discovery scans (`scanCustomTags`, `scanCached`), which attach the partial
    * scan inputs read before the failure — a
    * dependent-re-diagnosis integration (the language server) needs this on a
@@ -162,8 +161,8 @@ export class TranslateError extends Error {
   dependencies?: string[];
   /**
    * Every error the compile found, ordered by position, when this one came
-   * from the lowering's body walk (decision 162). The thrown error is
-   * `errors[0]`, exactly the error a single throw would have been, so a
+   * from the lowering's body walk. The thrown error is `errors[0]`, exactly the
+   * error a single throw would have been, so a
    * consumer that never reads this sees what it always saw. Unset on an error
    * raised outside the walk (a parse error, a failing scan).
    */
@@ -236,7 +235,7 @@ export const VOID_TAGS = new Set([
 ]);
 
 /**
- * How a dialect disposes of one tag name (decision 65).
+ * How a dialect disposes of one tag name.
  *
  * The test for every construct is whether it contributes to the emitted bytes
  * or only configures behaviour after the first render. "My code cannot lower
@@ -316,7 +315,7 @@ export function unsupportedTagMessage(
 }
 
 /**
- * A host's rewrite for references to one registered binding (decision 70).
+ * A host's rewrite for references to one registered binding.
  *
  * `register("count", ref => `${ref}()`)` makes `${count + 1}` emit
  * `count() + 1` in a host whose `<let>` is a Solid signal.
@@ -324,7 +323,7 @@ export function unsupportedTagMessage(
 export type BindingRewrite = (ref: string) => string;
 
 /**
- * The registry of reference rewrites in scope (decision 70's third hook).
+ * The registry of reference rewrites in scope (the third stateful-tag hook).
  *
  * Registration is flat rather than scoped: a name registered anywhere in the
  * template rewrites every later reference to it. That is enough for the
@@ -402,8 +401,8 @@ export interface Ctx {
   lines: string[];
   /**
    * Statements to place at the head of the function currently being emitted
-   * (decision 70's hoist hook). `hoist()` appends here; the lowerer drains it
-   * at the nearest function boundary.
+   * (the `hoist` hook). `hoist()` appends here; the lowerer drains it at the
+   * nearest function boundary.
    */
   prelude: Array<{ code: string; node: Node }>;
   /**
@@ -423,8 +422,8 @@ export interface Ctx {
    * Local *value* bindings introduced by the template's `import` statements
    * — never a type-only one (a whole `import type` or an inline
    * `{ type X }` specifier), since neither introduces a value a capitalized
-   * tag could resolve to (decision 114/115). Every host's own `isComponent`
-   * consults this set directly, so keeping it value-only here is what makes
+   * tag could resolve to. Every host's own `isComponent` consults this set
+   * directly, so keeping it value-only here is what makes
    * every host correct with no per-host change.
    */
   imports: Set<string>;
@@ -442,8 +441,8 @@ export interface Ctx {
   /**
    * Every binding that is a *default* import whose specifier ends in
    * `.marko` or `.mx` — Marko's own statically-resolved component case
-   * (`@marko/compiler` `tag-name-type.ts:174-196`; decision 116). A
-   * capitalized tag bound to any other value import (a named import of any
+   * (`@marko/compiler` `tag-name-type.ts:174-196`). A capitalized tag bound to
+   * any other value import (a named import of any
    * source, or a default import of a `.ts`/`.js` module) lowers as a dynamic
    * tag instead of a direct call, matching Marko's own `_dynamic_tag`
    * runtime dispatch for everything that isn't this one static case.
@@ -452,15 +451,15 @@ export interface Ctx {
   /**
    * A file-local, non-import PascalCase binding (a `static`/module-scope
    * `const`, a `<const>`) whose value core could not statically prove is a
-   * function, arrow function, or class — the local extension of decision 116
-   * (firstmate's ruling under decision 116 in
-   * `notes/decisions-2026-09-10.md`). A tag param is always a member of this
-   * set too (its runtime value can never be inspected at lowering time); see
-   * `lowerFor`/`lowerDefine`, which add every param name here alongside
+   * function, arrow function, or class (the dynamic routing of a non-`.mx`
+   * value import, extended to local bindings; see the spec,
+   * `apps/docs/docs/specification.md` §7). A tag param is always a member of
+   * this set too (its runtime value can never be inspected at lowering time);
+   * see `lowerFor`/`lowerDefine`, which add every param name here alongside
    * `tagVarShadowed` rather than trying to prove them one way or the other.
    * Checked only for a `fileLocalBinding` that is neither `ctx.defines` (a
    * `<define>` call, inherently function-like) nor `ctx.importSpecifiers` (an
-   * import, decision 116's own gate) — a name absent from this set kept its
+   * import, which has its own gate) — a name absent from this set kept its
    * pre-existing direct call.
    */
   unknownLocalValue: Set<string>;
@@ -473,22 +472,21 @@ export interface Ctx {
    * error for a lowercase `static const layout` or `export const layout` used
    * as `<layout/>` too, but the names must not join `ctx.imports` - that set
    * routes *component calls* (`isComponent`), which a lowercase name can never
-   * be (decision 116's casing gate), so only a `static` block's PascalCase
-   * plain names do.
+   * be (the casing gate), so only a `static` block's PascalCase plain names do.
    */
   staticBindings: Set<string>;
   /**
    * Where an `import` local or a `<define>` name was bound, by name — only
-   * for the warning a lowercase tag raises when it names one of them (decision
-   * 164). Absent for a name whose site core never saw (a host folding module
-   * bindings into `imports`, e.g. Solid's `moduleBindings`).
+   * for the warning a lowercase tag raises when it names one of them. Absent
+   * for a name whose site core never saw (a host folding module bindings into
+   * `imports`, e.g. Solid's `moduleBindings`).
    */
   bindingSites: Map<
     string,
     { kind: "imported" | "defined"; line: number; column: number }
   >;
   generate: (node: Node) => string;
-  /** What the host declares, as `lower()` consults it (decision 79). */
+  /** What the host declares, as `lower()` consults it. */
   declarations: HostDeclarations;
   /** Test/integration seam until the callee Input resolver is installed. */
   calleeInputFor?: (target: import("./ir.ts").ComponentTarget) => CalleeInput;
@@ -547,11 +545,10 @@ export interface Ctx {
    */
   unsupportedIn?: string;
   /**
-   * The product name diagnostics use where core's own wording says "MX"
-   * (decision 183). Set by the compile entry from the host options;
-   * unset means `MX`, so every existing message is byte-identical. Read
-   * through {@link productOf}, never bare, so the default lives in one
-   * place.
+   * The product name diagnostics use where core's own wording says "MX". Set by
+   * the compile entry from the host options; unset means `MX`, so every
+   * existing message is byte-identical. Read through {@link productOf}, never
+   * bare, so the default lives in one place.
    */
   productName?: string;
   /**
@@ -562,18 +559,17 @@ export interface Ctx {
    */
   voice?: Voice;
   /**
-   * Post-lowering hooks (decision 183): run once the file's body is fully
-   * lowered, in order, each receiving the file's own `Ctx` — the same
+   * Post-lowering hooks: run once the file's body is fully lowered, in order,
+   * each receiving the file's own `Ctx` — the same
    * context every lower ran under. The compile entry appends host hooks,
    * never replaces. Nothing may read a hook's return
    * value: a hook reports through `fail`/`warn` or mutates the `Ctx`.
    */
   afterLower?: ReadonlyArray<(ctx: Ctx) => void>;
   /**
-   * The dialect of the file being lowered (decisions 182 addendum 5, 202),
-   * set by the trigger pass (`lowerTriggers`) from the document's
-   * registered syntax; `lowerChildList` reads its `lowerBlockTag` and
-   * `lowerFilter`. Unset for a default-row file.
+   * The dialect of the file being lowered, set by the trigger pass
+   * (`lowerTriggers`) from the document's registered syntax; `lowerChildList`
+   * reads its `lowerBlockTag` and `lowerFilter`. Unset for a default-row file.
    */
   dialect?: Dialect;
   /**
@@ -720,8 +716,8 @@ export interface Ctx {
    */
   warnings?: MxWarning[];
   /**
-   * The recovery sink (decision 162). When set, an error raised while lowering
-   * one tag is recorded here, the tag and its subtree are skipped, and the walk
+   * The recovery sink. When set, an error raised while lowering one tag is
+   * recorded here, the tag and its subtree are skipped, and the walk
    * continues; `lowerTemplate` then throws them as one error. Unset (a tag
    * template's own lower, a fragment) means the first error throws at once.
    */
@@ -757,8 +753,8 @@ export interface Ctx {
    */
   customTagsUsed?: Set<string>;
   /**
-   * Every file the callee-`Input` resolver read while lowering this file
-   * (decision 106), including followed `import type` targets.
+   * Every file the callee-`Input` resolver read while lowering this file,
+   * including followed `import type` targets.
    *
    * Written by `callee-input.ts`'s `readCalleeInput` as it resolves callees;
    * drained into `CompileResult.dependencies` so an integration (the Vite
@@ -768,15 +764,15 @@ export interface Ctx {
    */
   dependencies?: Set<string>;
   /**
-   * A tool-supplied synchronous import resolver (decision 107), tried before
-   * the built-in relative/`require.resolve` resolution: tsconfig `paths`, Vite
+   * A tool-supplied synchronous import resolver, tried before the built-in
+   * relative/`require.resolve` resolution: tsconfig `paths`, Vite
    * `resolve.alias`. Passed through `TranslatorOptions.resolveImport`; unset
    * for every integration that has no aliases to contribute.
    */
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   /**
-   * The set of registered targets this compile runs under (decisions 129 and
-   * 132). Required, never defaulted: core names no target and no host, so the
+   * The set of registered targets this compile runs under. Required, never
+   * defaulted: core names no target and no host, so the
    * open-set questions lowering asks — which packages export the `AttrTag`
    * type, which file-kind segments exist — are answered by the caller's
    * lookup, and a missing one would silently skip a validation (accept a
@@ -856,8 +852,8 @@ const relatedErrors = new WeakMap<TranslateError, readonly TranslateError[]>();
 
 /**
  * Attaches `related` to `error`: a recovering walk records them right after
- * it, and a lone throw carries them in `errors` (decision 162's list), so
- * each becomes a diagnostic of its own, in its own `file`.
+ * it, and a lone throw carries them in `errors`, so each becomes a diagnostic
+ * of its own, in its own `file`.
  */
 export function attachRelatedErrors(
   error: TranslateError,
@@ -891,8 +887,8 @@ export function collectedError(
 
 /**
  * The text a tool that can show only one error appends to it so the others are
- * not lost: one line per further error of the file (decision 162), 1-based
- * `line:column` as every tool prints them, preceded by a count. Empty when the
+ * not lost: one line per further error of the file, 1-based `line:column` as
+ * every tool prints them, preceded by a count. Empty when the
  * file had no other error.
  */
 export function otherErrorsText(error: TranslateError): string {
@@ -1225,8 +1221,8 @@ export function positionError(ctx: Ctx, error: unknown): void {
 }
 
 /**
- * Throws an "MX bug" error (decision 161) for an error `fail` raised on an
- * MX node that left the lowering boundary unpositioned: reporting it at 0:0
+ * Throws an "MX bug" error for an error `fail` raised on an MX node that left
+ * the lowering boundary unpositioned: reporting it at 0:0
  * would point at the wrong place silently.
  */
 export function assertPositioned(error: unknown): void {
@@ -1240,8 +1236,8 @@ export function assertPositioned(error: unknown): void {
 /**
  * Marko's own failure for a tag name nothing resolves ("Unable to find
  * entry point for custom tag `<Name>`.", verified against
- * `@marko/compiler`/`marko` 5.42.5/6.3.51 — see decision 114). Every
- * Marko-parity host (`@mxlang/target-html`, `@mxlang/host-solid`, the shared preact/
+ * `@marko/compiler`/`marko` 5.42.5/6.3.51). Every Marko-parity host
+ * (`@mxlang/target-html`, `@mxlang/host-solid`, the shared preact/
  * react/hono emitter, `@mxlang/host-astro`) reports this exact wording through
  * its own `rejectUnknownTag` hook; exported once here so the literal string
  * lives in one place instead of being hand-copied at each call site
@@ -1281,8 +1277,8 @@ export function quote(text: string): string {
  * The source text an expression node came from, printed back to code.
  *
  * Identifier references to a name the host registered in `ctx.bindings` are
- * rewritten (decision 70's binding registry): with `count` registered to
- * `count()`, `count + 1` prints `count() + 1`.
+ * rewritten (the binding registry): with `count` registered to `count()`,
+ * `count + 1` prints `count() + 1`.
  *
  * Precision limits, all deliberate and all tested:
  *
@@ -1364,7 +1360,7 @@ type Splice = { start: number; end: number; text: string } & Partial<
 
 /** The lowered syntax-table triggers inside `[start, end)`, in source order. */
 function triggerSplicesIn(ctx: Ctx, start: number, end: number): Splice[] {
-  // Decision 182 addendum 5: a lowered trigger prints as its replacement.
+  // A lowered trigger prints as its replacement.
   return (ctx.triggerSplices ?? [])
     .filter((splice) => splice.start >= start && splice.end <= end)
     .sort((a, b) => a.start - b.start);
@@ -1436,15 +1432,15 @@ export function declName(ctx: Ctx, node: Node): string {
  * the registry has to be too: a name shadowed inside one branch is the host's
  * binding again after it.
  *
- * Also snapshots `ctx.tagVarShadowed` for the same reason (decision 113 round
- * 2): a `<const>` inside an `<if>` branch permanently *replaces*
- * `ctx.tagVarShadowed` (it never calls its own `shadowBindings` restore, by
- * design — a `<const>` shadows for the rest of the render), so without this a
- * `<const/Panel=…/>` written inside one `<if>` branch would shadow a
- * registered `Panel` custom tag for the rest of the file, past the branch it
- * was declared in. Every scope wrapper that calls `scopeBindings` (`<if>`
- * branches, `<for>`, `<define>`, attribute-tag blocks, `<try>`) gets this for
- * free, so the revert is structural rather than a per-construct fix.
+ * Also snapshots `ctx.tagVarShadowed` for the same reason: a `<const>` inside
+ * an `<if>` branch permanently *replaces* `ctx.tagVarShadowed` (it never calls
+ * its own `shadowBindings` restore, by design — a `<const>` shadows for the
+ * rest of the render), so without this a `<const/Panel=…/>` written inside one
+ * `<if>` branch would shadow a registered `Panel` custom tag for the rest of
+ * the file, past the branch it was declared in. Every scope wrapper that calls
+ * `scopeBindings` (`<if>` branches, `<for>`, `<define>`, attribute-tag blocks,
+ * `<try>`) gets this for free, so the revert is structural rather than a
+ * per-construct fix.
  */
 export function scopeBindings(
   ctx: Ctx,
@@ -1603,8 +1599,8 @@ function rewriteReferencesSource(
   // Set only when a reference that *would* be rewritten has no position to
   // splice at — never cleared, so one such reference anywhere in the tree
   // forces the AST-clone fallback below rather than a silent partial rewrite
-  // (decision 65's "no silent drop": a matched-but-unspliceable identifier
-  // must not just keep its original, un-rewritten name in the output).
+  // (no silent drop: a matched-but-unspliceable identifier must not just keep
+  // its original, un-rewritten name in the output).
   let unpositionedMatch = false;
 
   traverse(file, {
@@ -1725,7 +1721,7 @@ export function sliceLoc(ctx: Ctx, loc: Node): string {
  *
  * Parsed rather than regex-scraped: a tag name is only a component call when it
  * names one of these bindings, so an incomplete extraction here silently
- * misroutes exactly the tags this rule exists to route (decision 47).
+ * misroutes exactly the tags this rule exists to route.
  */
 export function importBindings(line: string): string[] {
   try {
@@ -1747,8 +1743,8 @@ export function importBindings(line: string): string[] {
  * runtime value.
  *
  * A tag name resolves to a component only through a *value* binding
- * (decision 114/115) — Marko's own rule, since a type is erased before the
- * module runs and a tag referencing one would be a `ReferenceError` at
+ * — Marko's own rule, since a type is erased before the module runs and a tag
+ * referencing one would be a `ReferenceError` at
  * render time, not a component call. `lowerStatement` uses this to split
  * `importBindings`'s names between `ctx.importedNames` (every name,
  * unfiltered — what `needsAttrTagImport`'s "is `AttrTag` already imported"
@@ -1845,7 +1841,7 @@ export function importedNames(
 /**
  * Whether a module specifier names a `.marko`/`.mx` template file.
  *
- * The one fact decision 116's routing turns on: a *default* import from a
+ * The one fact the routing of value imports turns on: a *default* import from a
  * `.marko`/`.mx` source is Marko's own statically-resolved component case
  * (`@marko/compiler` `tag-name-type.ts:174-196`); every other value import —
  * named, namespace, or a default from a `.ts`/`.js`/anything-else module —
@@ -1861,13 +1857,13 @@ export function isMarkoOrMxSpecifier(specifier: string): boolean {
 
 /**
  * Whether an expression node is one core can prove, at lowering time, always
- * evaluates to a function/class value — the local extension of decision 116
- * (firstmate's ruling: `function Foo(){}`/`class Foo{}` stay a direct call;
- * `const Foo = lazy(...)` or any other opaque expression is "unknown" and
+ * evaluates to a function/class value, extending that routing to local bindings
+ * (`function Foo(){}`/`class Foo{}` stay a direct call; `const Foo = lazy(...)`
+ * or any other opaque expression is "unknown" and
  * lowers dynamic). Deliberately narrow: no alias-chasing through another
  * identifier, no evaluating a call's return shape — those are exactly the
- * "unknown" cases the ruling calls out. `node` is a Babel expression/
- * declaration node (from `coreBabel()`'s parse of a `static` line, or a
+ * "unknown" cases. `node` is a Babel expression/declaration node (from
+ * `coreBabel()`'s parse of a `static` line, or a
  * `<const>`'s raw value node before `exprOf`), not core's own `Expr`.
  */
 export function isFunctionLikeValue(node: Node | null | undefined): boolean {
@@ -1884,8 +1880,8 @@ export function isFunctionLikeValue(node: Node | null | undefined): boolean {
 }
 
 /**
- * True when a child list holds anything that renders (decision 141).
- * Marko's parser has already normalized text: a retained space is content,
+ * True when a child list holds anything that renders. Marko's parser has
+ * already normalized text: a retained space is content,
  * while dropped newline indentation creates no node. Never trim it again.
  */
 export function hasContent(children: Node[]): boolean {
@@ -1905,8 +1901,8 @@ export function hasContent(children: Node[]): boolean {
  */
 /**
  * Marko 6.4.3's own tag-argument messages (probed against stock marko
- * 6.4.3 / @marko/compiler 5.42.10, decision 183), keyed by the tag name
- * where Marko's `assertNoArgs` knows a hint. Everything else — and any tag
+ * 6.4.3 / @marko/compiler 5.42.10), keyed by the tag name where Marko's
+ * `assertNoArgs` knows a hint. Everything else — and any tag
  * whose name is not statically known — gets Marko's plain sentence.
  */
 const TAG_ARGUMENTS_MESSAGES: Record<
@@ -2024,9 +2020,8 @@ function unsupportedIn(ctx: Ctx): string {
 }
 
 /**
- * The language name diagnostics use (decisions 183, 212 item 10): the
- * host's product name, else the file's dialect's `name`, else MX's own
- * dialect declaration's; see `Ctx.productName`.
+ * The language name diagnostics use: the host's product name, else the file's
+ * dialect's `name`, else MX's own dialect declaration's; see `Ctx.productName`.
  */
 export function productOf(ctx: Ctx): string {
   return ctx.productName ?? MX_DIALECT.name;
@@ -2045,7 +2040,7 @@ export function isTagNode(node: Node): boolean {
 /**
  * A module statement, by how it was parsed: an `MxModuleStatement`, or a
  * Marko tag its statement taglib read as a statement (its text is
- * `rawValue`, decision 168). A tag merely *named* `import` is neither.
+ * `rawValue`). A tag merely *named* `import` is neither.
  */
 export function isStatementNode(node: Node): boolean {
   if (node?.type === "MxModuleStatement") return true;
@@ -2100,7 +2095,7 @@ export function isMxAttributeTag(node: Node): boolean {
 export function bodyChildren(node: Node): Node[] {
   if (!node.body) return [];
   // MX AST: body is direct child list (no wrapper); its line triggers as
-  // lowered by the trigger pass (decision 182 addendum 5).
+  // lowered by the trigger pass.
   if (Array.isArray(node.body)) return childrenWithTriggers(node.body);
   // Marko AST: body.body is the child list
   return node.body.body ?? [];
@@ -2135,10 +2130,10 @@ export function firstAttributeTag(node: Node): Node | undefined {
  *
  * `allow` names the fields the calling path genuinely lowers — only a
  * component call reads `attributeTags`, and only `<define>`/`<const>` read
- * `var`. An *inert* field is declared here too rather than ignored: decision
- * 65 accepts a construct with no output effect, but the guard still has to
- * know it was considered, or the next silently-dropped field looks exactly
- * like an intentionally inert one.
+ * `var`. An *inert* field is declared here too rather than ignored: the
+ * capability test accepts a construct with no output effect, but the guard
+ * still has to know it was considered, or the next silently-dropped field looks
+ * exactly like an intentionally inert one.
  */
 export function rejectUnsupportedFields(
   ctx: Ctx,
@@ -2167,8 +2162,8 @@ export function rejectUnsupportedFields(
     // `args.at(-1).loc.end`) — `<button (click)="go()">` puts the caret under
     // `click`, not under `<button`. Reporting at the tag points at the tag name
     // for an error about the arguments next to it.
-    // Decision 183: the message is Marko 6.4.3's own, verbatim, so the two
-    // languages never diverge on the same construct; MX's event-handler hint
+    // The message is Marko 6.4.3's own, verbatim, so the two languages never
+    // diverge on the same construct; MX's event-handler hint
     // stays as a second sentence after it.
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
