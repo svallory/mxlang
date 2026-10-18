@@ -304,6 +304,56 @@ describe("core checks what a node type produces against its schema", () => {
     expect(at(error)).toEqual([1, 4]);
   });
 
+  it("a placed node whose `expression` field is not an expression is an error at its span", () => {
+    const dialect = {
+      id: "atom",
+      name: "Atoms",
+      table: {
+        attributeTriggers: [
+          { ...ROW("attribute"), node: { call: "place" } } as Trigger,
+        ],
+      },
+      lowerTrigger: (
+        _id: string,
+        text: string,
+        span: unknown,
+        ctx: { attribute(n: string, v: unknown): unknown },
+      ) =>
+        ctx.attribute("name", {
+          type: "atom:Atom",
+          name: text.slice(1),
+          span,
+        }),
+      nodeTypes: {
+        Atom: {
+          ...ATOM_TYPE,
+          schema: { fields: { name: "expression" }, slot: ["value"] },
+        },
+      },
+    } as unknown as Dialect;
+    const error = caught(() => irOf("div ~a\n", dialect, FILE()));
+    expect(error.diagnosticCode).toBe("MX_INVALID_DIALECT_MODULE");
+    expect(error.message).toBe(
+      'dialect `atom`, node type `Atom`: the node\'s `name` is not a parsed host expression (a node with a `type`) or `null`, and `schema.fields.name` is "expression". Give it a parsed host expression (a node with a `type`) or `null`, or declare the field "data"',
+    );
+    expect(at(error)).toEqual([1, 4]);
+  });
+
+  it("an `expression` field holding a parsed expression, and a `null` one, pass", () => {
+    const dialect = atomDialect({
+      schema: {
+        fields: { hole: "expression", empty: "expression", name: "data" },
+        slot: ["expression", "value"],
+      },
+      parse: (text: string) => ({
+        name: text.slice(1),
+        hole: { type: "Identifier", name: "x" },
+        empty: null,
+      }),
+    });
+    expect(irOf(SOURCE, dialect, FILE()).body).toHaveLength(1);
+  });
+
   it("a forward shared by two nodes is an error at the second node", () => {
     const shared = literal("same");
     const dialect = atomDialect({
