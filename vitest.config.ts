@@ -1,10 +1,17 @@
 import { defineConfig } from "vitest/config";
 import { currentLane } from "./scripts/vitest-lanes.ts";
+import { resolveWorkers, workersLogLine } from "./scripts/vitest-workers.ts";
 
-// Outside CI, cap the worker pool. A whole-suite run in this monorepo forks one
-// worker per core and each loads full TypeScript programs (1-4 GB), which has
-// filled a 16 GB laptop and crashed it twice. Override with VITEST_MAX_WORKERS=n.
-const localWorkers = Number(process.env.VITEST_MAX_WORKERS ?? 2);
+// Workers are capped by free memory (operator ruling 2026-10-19):
+// clamp(floor(MemAvailable / 1 GiB), 1, availableParallelism - 1), so a
+// memory-starved box cannot fork one TypeScript-loaded worker per core
+// (a 14-core / 9 GB WSL2 box did exactly that and was OOM-killed). An explicit
+// `--maxWorkers` (CLI, overrides config) or `VITEST_MAX_WORKERS` still wins.
+// Printed once at startup; MX_VITEST_QUIET=1 silences the line.
+const resolved = resolveWorkers();
+if (!process.env.MX_VITEST_QUIET) {
+  console.warn(workersLogLine(resolved));
+}
 
 const projects = [
   "scripts",
@@ -36,7 +43,7 @@ const slowProjects = [
 
 export default defineConfig({
   test: {
-    ...(process.env.CI ? {} : { maxWorkers: localWorkers }),
+    maxWorkers: resolved.workers,
     projects: currentLane() === "slow" ? slowProjects : projects,
   },
 });
