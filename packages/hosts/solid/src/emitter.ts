@@ -1817,6 +1817,22 @@ function literalAttrText(attr: Attr): string | null {
   return primitive ? `${JSON.stringify(attr.name)}: ${attr.value.code}` : null;
 }
 
+/**
+ * Stands in, until the emitter knows the hoisted name, for a read of an
+ * attribute-less `<define>`'s name in a dynamic tag's target (`<${D}/>`).
+ */
+const DEFINE_FN = "__mxDefineFn_";
+
+/** The text of `code` with each `DEFINE_FN` placeholder resolved by `resolve`. */
+function resolveDefineFns(
+  code: string,
+  resolve: (name: string) => string,
+): string {
+  return code.replace(/__mxDefineFn_([A-Za-z0-9_$]+)/g, (_, name: string) =>
+    resolve(name),
+  );
+}
+
 /** A define's scope: the siblings after it, rendered where `name` is its attributes. */
 type DefineScope = { name: string; attrs: Attr[]; rest: IrNode[] };
 
@@ -1869,7 +1885,7 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
       ([key, child]) => key !== "node" && hasAttributes(child),
     );
   };
-  if (!hasAttributes(body)) return body;
+  if (!hasAttributes(body) && !readsPlainDefine(body)) return body;
 
   const copy = cloneIr(body);
   let serial = 0;
@@ -1938,6 +1954,22 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
   const lowerList = (list: IrNode[]): void => {
     for (let index = 0; index < list.length; index++) {
       const item = list[index] as IrNode;
+      if (item?.kind === "Define" && item.attrs.length === 0) {
+        // A define without attributes is the function it is hoisted as, and a
+        // dynamic tag renders it (`<${D}/>`, `<${c ? D : "span"}/>`).
+        rewriteAccessorReads(
+          list.slice(index + 1),
+          new Map([
+            [
+              item.name,
+              {
+                read: `${DEFINE_FN}${item.name}`,
+                assignError: `\`${item.name}\` is a \`<define>\`'s value and cannot be assigned`,
+              },
+            ],
+          ]),
+        );
+      }
       if (item?.kind === "Define" && item.attrs.length > 0) {
         const later = list.slice(index + 1);
         const scope = lowerDefine(item, later);
@@ -1960,7 +1992,93 @@ function withDefineAttributeReads(body: IrNode[]): IrNode[] {
     }
   };
   lower(copy);
+  restoreStrayDefineFns(copy);
   return copy;
+}
+
+/** The dynamic tag targets under `root`. */
+function dynamicTargets(root: unknown): Set<Expr> {
+  const targets = new Set<Expr>();
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.kind === "Component") {
+      const target = record.target as { kind: string; expr?: Expr };
+      if (target.kind === "dynamic" && target.expr) targets.add(target.expr);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "node") visit(child);
+    }
+  };
+  visit(root);
+  return targets;
+}
+
+/**
+ * Whether a dynamic tag's target names an attribute-less `<define>`, so the
+ * IR needs the private copy that points the read at the hoisted function.
+ */
+function readsPlainDefine(body: IrNode[]): boolean {
+  const names = new Set<string>();
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (record.kind === "Define" && (record.attrs as Attr[]).length === 0) {
+      names.add(record.name as string);
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "node") visit(child);
+    }
+  };
+  visit(body);
+  if (names.size === 0) return false;
+  for (const target of dynamicTargets(body)) {
+    for (const name of names) {
+      if (target.code.includes(name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Puts the author's name back wherever a `DEFINE_FN` placeholder is not in a
+ * dynamic tag's target: only that read is lowered, and any other read of a
+ * define's name stays as written.
+ */
+function restoreStrayDefineFns(root: IrNode[]): void {
+  const targets = dynamicTargets(root);
+  const seen = new Set<object>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const record = value as Record<string, unknown>;
+    if (typeof record.code === "string" && "shape" in record) {
+      if (!targets.has(record as unknown as Expr)) {
+        record.code = resolveDefineFns(record.code, (name) => name);
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(record)) {
+      if (key !== "node") visit(child);
+    }
+  };
+  visit(root);
 }
 
 /**
@@ -2862,8 +2980,17 @@ export class SolidEmitter implements Emitter<string> {
    */
   #dynamicComponent(
     node: Extract<IrNode, { kind: "Component" }>,
-    expr: Expr,
+    target: Expr,
   ): void {
+    // An attribute-less `<define>` read by name is the function it was
+    // hoisted as; any other read of the name is left as written.
+    const expr: Expr = {
+      ...target,
+      code: resolveDefineFns(
+        target.code,
+        (name) => defineBindings?.get(name) ?? name,
+      ),
+    };
     const contentNodes = node.content?.children ?? [];
     const raw = node.content ? rawChild(contentNodes) : null;
     rejectMixedRaw(contentNodes);

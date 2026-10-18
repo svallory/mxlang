@@ -53,6 +53,9 @@ import {
   TemplateWriter,
 } from "./mapping.ts";
 
+/** A Babel node read structurally, by its `type` and its children. */
+type BabelNode = Record<string, unknown> & { type: string };
+
 type TryData = { kind: "try" };
 type HtmlCommentData = { kind: "html-comment" };
 export type DynamicComponentData = { kind: "dynamic-component"; expr: Expr };
@@ -2202,6 +2205,13 @@ class AngularEmitter implements Emitter<string> {
   private scopes: Map<string, string | undefined>[] = [new Map()];
 
   /**
+   * The `<define>`s declared in each of `scopes`' levels, by name, with the
+   * number of params each takes. A dynamic tag that reads one renders its
+   * template (`<${D}/>`).
+   */
+  private defineScopes: Map<string, number>[] = [new Map()];
+
+  /**
    * Run `body` with `names` in scope. `neverSignal` maps a name to what it is
    * (`` a `@for` index ``) when it can never hold a signal; the others might.
    */
@@ -2215,11 +2225,26 @@ class AngularEmitter implements Emitter<string> {
     for (const [name, what] of Object.entries(neverSignal))
       scope.set(name, what);
     this.scopes.push(scope);
+    this.defineScopes.push(new Map());
     try {
       body();
     } finally {
       this.scopes.pop();
+      this.defineScopes.pop();
     }
+  }
+
+  /**
+   * How many params the `<define>` called `name` takes, or `undefined` when
+   * `name` is not a define in scope here (another declaration may shadow it).
+   */
+  private definedParams(name: string): number | undefined {
+    for (let level = this.scopes.length - 1; level >= 0; level--) {
+      const params = this.defineScopes[level]?.get(name);
+      if (params !== undefined) return params;
+      if (this.scopes[level]?.has(name)) return undefined;
+    }
+    return undefined;
   }
 
   private classHelperContext(loc: Position): void {
@@ -3036,6 +3061,120 @@ class AngularEmitter implements Emitter<string> {
         node,
       );
     }
+    if (this.emitDefineTarget(exprCode, exprSpan, attrs, node)) return;
+    this.emitComponentOutlet(exprCode, exprSpan, attrs, node);
+  }
+
+  /**
+   * A dynamic tag whose target reads a `<define>` (`<${D}/>`,
+   * `<${c ? D : Other}/>`): a define is a template reference here, which
+   * `ngComponentOutlet` cannot render, so each branch the author wrote is
+   * lowered by what it names: a bare define renders through
+   * `ngTemplateOutlet`, any other branch through `ngComponentOutlet`. A
+   * conditional becomes `@if`/`@else`, so no value is tested at run time.
+   * A define read any other way (`D || Other`, `f(D)`) is refused: it
+   * would need the run-time type test.
+   *
+   * Returns false, writing nothing, when the target reads no define.
+   */
+  private emitDefineTarget(
+    exprCode: string,
+    exprSpan: SourceSpan | null | undefined,
+    attrs: Attr[],
+    node: { loc: Position },
+  ): boolean {
+    if (this.defineScopes.every((level) => level.size === 0)) return false;
+    let root: BabelNode;
+    try {
+      root = (
+        babelParser as unknown as {
+          parseExpression(code: string, options: object): BabelNode;
+        }
+      ).parseExpression(exprCode, { plugins: ["typescript"] });
+    } catch {
+      return false;
+    }
+    const mentions = (value: unknown): boolean => {
+      if (!value || typeof value !== "object") return false;
+      if (Array.isArray(value)) return value.some(mentions);
+      const record = value as BabelNode;
+      if (record.type === "Identifier") {
+        return this.definedParams(record.name as string) !== undefined;
+      }
+      return Object.entries(record).some(([key, child]) => {
+        if (key === "loc" || key === "extra" || key.endsWith("Comments")) {
+          return false;
+        }
+        if (
+          (record.type === "MemberExpression" ||
+            record.type === "OptionalMemberExpression") &&
+          key === "property" &&
+          !record.computed
+        ) {
+          return false;
+        }
+        if (
+          (record.type === "ObjectProperty" ||
+            record.type === "ObjectMethod") &&
+          key === "key" &&
+          !record.computed
+        ) {
+          return false;
+        }
+        return mentions(child);
+      });
+    };
+    if (!mentions(root)) return false;
+    const text = (branch: BabelNode): string =>
+      exprCode.slice(branch.start as number, branch.end as number);
+    const lower = (branch: BabelNode): void => {
+      if (branch.type === "ConditionalExpression" && mentions(branch)) {
+        this.out.write(`@if (${text(branch.test as BabelNode)}) { `);
+        lower(branch.consequent as BabelNode);
+        this.out.write(" } @else { ");
+        lower(branch.alternate as BabelNode);
+        this.out.write(" }");
+        return;
+      }
+      if (branch.type === "Identifier") {
+        const name = branch.name as string;
+        const params = this.definedParams(name);
+        if (params !== undefined) {
+          const written = this.authored(name);
+          if (params > 0 || attrs.length > 0) {
+            fail(
+              params > 0
+                ? `\`<\${${written}}/>\` renders \`<define/${written}>\`, which takes ${params} argument(s): a template reference is called with \`ngTemplateOutletContext\`, so call it as \`<${written}(...)/>\``
+                : `attributes on \`<\${${written}}/>\` aren't supported by @mxlang/host-angular: \`<define/${written}>\` is a template reference, and a template takes no inputs. Declare a parameter on the define and call it as \`<${written}(value)/>\``,
+              node,
+              "MX_UNSUPPORTED_CONSTRUCT",
+            );
+          }
+          this.out.write(
+            `<ng-container [ngTemplateOutlet]="${name}" [ngTemplateOutletContext]="{}"></ng-container>`,
+          );
+          return;
+        }
+      }
+      if (mentions(branch)) {
+        fail(
+          "a `<define>` read inside this dynamic tag's expression can't be rendered by @mxlang/host-angular: a define is a template reference, which only `<${D}/>` or `c ? D : Other` as the whole tag name can render. Write the choice as `<if=c><D/></if><else>…</else>`",
+          node,
+          "MX_UNSUPPORTED_CONSTRUCT",
+        );
+      }
+      this.emitComponentOutlet(text(branch), exprSpan, attrs, node);
+    };
+    lower(root);
+    return true;
+  }
+
+  private emitComponentOutlet(
+    exprCode: string,
+    exprSpan: SourceSpan | null | undefined,
+    attrs: Attr[],
+    node: { loc: Position },
+  ): void {
     this.warnOnce(
       "ngComponentOutlet",
       "this template uses [ngComponentOutlet]; add NgComponentOutlet to the component's imports.",
@@ -3259,6 +3398,7 @@ class AngularEmitter implements Emitter<string> {
     // attributes ride a `@let` of their own that every later read of `D` was
     // pointed at (`lowerDefineAttributes`).
     if (node.attrs.length > 0) this.defineAttributeLet(node);
+    this.defineScopes.at(-1)?.set(node.name, node.params.length);
     // A bare `let-x` binds `$implicit`, so emitting one per param gives every
     // param the *first* outlet argument — `${v}` reads the key, silently, with
     // `ng build` green because a `let-` variable is implicitly `any`. The
