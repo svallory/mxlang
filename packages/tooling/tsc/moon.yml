@@ -29,3 +29,8 @@ tasks:
       - "/packages/core/dist/**/*"
       - "/patches/htmljs-parser@5.18.0.patch"
       - "/vitest.config.ts"
+      # The lane config and MX_TEST_LANE (fast|slow|all) decide which files run,
+      # so a cached "fast" pass must not satisfy an "all" run.
+      - "vitest.config.ts"
+      - "/scripts/vitest-lanes.ts"
+      - "$MX_TEST_LANE"

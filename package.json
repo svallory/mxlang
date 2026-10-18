@@ -12,6 +12,10 @@
   "scripts": {
     "typecheck": "for d in packages/*/ packages/*/*/ examples/*/; do if [ -f \"$d/tsconfig.json\" ]; then (cd \"$d\" && echo \"[typecheck] $d\" && if [ -f package.json ] && grep -q '\"typecheck\"' package.json; then bun run typecheck; else bunx tsc --noEmit; fi) || exit 1; fi; done",
     "test": "vitest run --reporter=default --reporter=json --outputFile=vitest-results.json",
+    "test:affected": "bun run scripts/test-affected.ts",
+    "test:affected:moon": "bun run scripts/test-affected.ts --moon",
+    "test:fast": "MX_TEST_LANE=fast vitest run",
+    "test:slow": "MX_TEST_LANE=slow vitest run",
     "test:bun": "bun run --cwd packages/tsx-bridge test:bun && bun run --cwd packages/targets/html test:bun && bun run --cwd packages/hosts/hono test:bun",
     "test:grammar": "moon run tree-sitter-solid:test --force && moon run tree-sitter-amx:test --force && moon run tree-sitter-mx:test --force",
     "lint": "biome check .",
