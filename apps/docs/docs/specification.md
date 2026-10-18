@@ -1086,8 +1086,10 @@ value which represents itself (`mode=:strict` meaning `mode="strict"`) registers
 its own node type for it in core's node-type registry (§13.9.9), such as a
 value-position `mesh:Atom`, whose `lower` returns an ordinary string literal, so
 every target emits the string while the source text at `Expr.span` keeps the
-authored spelling. Telling an atom from a string is the dialect's own check,
-in its `checkContract` and `afterLower`. The dialect owns the rest too:
+authored spelling. A contract slot typed by the dialect's node type is checked
+by core (§13.9.9, a node-type slot); which atoms a slot allows is the
+dialect's own check, in its `checkContract` and `afterLower`. The dialect owns
+the rest too:
 `values`, `pattern`, `ref` and `declares` are not core
 keys, and a dialect may claim them (and any other key core does not
 know) through `contractFields`, check them in `checkContract` and `afterLower`,
@@ -5379,7 +5381,10 @@ identifier or a call has no knowable type and passes. A whole value a row
 claimed counts as its node type for every other slot too (``attribute `s` must
 be string, got atom:Atom``). A slot naming a type the file's dialect does not
 register is a registration error. Which values of the type are allowed
-(`values`, `pattern`, `ref`) is the dialect's own check.
+(`values`, `pattern`, `ref`) is the dialect's own check. A slot takes one node
+or a list of them, never either: a value that may be one node or several is
+declared as a list slot, and a single node there is written as a list
+(`modes=[~on]`, not `modes=~on`).
 
 **What `lower` returns.** A node type's `lower` returns IR nodes of the kinds
 core's IR already has, built with the `ctx` constructors. Core has no generic
