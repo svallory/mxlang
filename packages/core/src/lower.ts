@@ -799,16 +799,27 @@ function isBuiltinScript(ctx: Ctx, tag: Node): boolean {
   );
 }
 
+/** Does the host declare `<script>` unsupported? Its refusal is then the tag's only diagnostic. */
+function hostRefusesScript(ctx: Ctx): boolean {
+  return (
+    Object.hasOwn(ctx.declarations.tags, "script") &&
+    ctx.declarations.tags.script?.kind === "unsupported"
+  );
+}
+
 /**
  * Is `tag` the built-in `<script>` with a raw-text body? Only a raw-text body
  * is the authored text. Under the `none` preset a `<script>` is an ordinary
  * tag whose body is parsed as tags and text, and its text is
  * whitespace-normalized: it is not code to check, and the tag keeps the
- * attributes of any tag.
+ * attributes of any tag. Nor is it checked where the host declares `script`
+ * unsupported: the host's refusal is the only diagnostic for the tag, and a
+ * body that is refused whole is not parsed.
  */
 function isRawTextScript(ctx: Ctx, tag: Node): boolean {
   return (
     isBuiltinScript(ctx, tag) &&
+    !hostRefusesScript(ctx) &&
     (!ctx.tagTable ||
       ctx.tagTable.getTag("script")?.parseOptions?.text === true)
   );
@@ -1058,6 +1069,7 @@ function scriptTextOf(ctx: Ctx, runs: readonly Node[]): string {
 function scriptBodyOf(ctx: Ctx, tag: Node): ScriptBody | null {
   const cached = scriptBodies.get(tag);
   if (cached !== undefined) return cached;
+  if (hostRefusesScript(ctx)) return null;
   const children = bodyChildren(tag).filter((child) => !isCommentNode(child));
   const [first] = children;
   let body: ScriptBody | null = null;
