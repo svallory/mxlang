@@ -158,7 +158,7 @@ describe("a forward's `extra` passes through lowering unchanged", () => {
     const [entry] = value.nodes as ExprNode[];
     const forward = forwardOf(value);
     expect(entry?.forward).toBe(forward);
-    expect((entry as ExprNode).forward.extra).toBe(forward.extra);
+    expect((entry as ExprNode).forward.extra).toEqual(forward.extra);
     expect(forward.extra.mxNested).toEqual(MARKS().mxNested);
   });
 
@@ -178,7 +178,7 @@ describe("a forward's `extra` passes through lowering unchanged", () => {
     const seen = contract.nodes?.[0]?.forward as unknown as {
       extra: Record<string, unknown>;
     };
-    expect(seen.extra).toBe(forward.extra);
+    expect(seen.extra).toEqual(forward.extra);
     expect(seen.extra.mxTransaction).toBe("tx-7");
     expect(seen.extra.mxList).toEqual(MARKS().mxList);
   });
@@ -223,7 +223,7 @@ describe("a forward's `extra` passes through lowering unchanged", () => {
       const { ir, value } = lowered(SOURCE);
       const copy = cloneIr(ir);
       const copied = findExpr(copy);
-      expect(forwardOf(copied).extra).toBe(forwardOf(value).extra);
+      expect(forwardOf(copied).extra).toEqual(forwardOf(value).extra);
       expect(copied.nodes?.[0]?.forward).toBe(forwardOf(value));
     });
 
@@ -247,3 +247,103 @@ function findExpr(ir: unknown): Expr {
   };
   return (call.tag?.attrs ?? call.attrs ?? [])[0]?.value as Expr;
 }
+
+/**
+ * The other way a dialect sets a mark: a `{ call }` expression row whose
+ * `lowerTrigger` returns `ctx.expression(node)` with `extra` on it (no node
+ * type, so no entry in `Expr.nodes`). The row has Mesh's shape (`%.name`, an
+ * identifier stand-in, a marked `MemberExpression`), not Mesh's module.
+ */
+const TX = Object.freeze({
+  id: "tx",
+  chars: "%",
+  match: "%\\.[a-z]+",
+  standIn: "identifier",
+  node: Object.freeze({ call: "tx" }),
+});
+const TX_MARK = () => ({
+  mxTransaction: { span: { sourceStart: 0, sourceEnd: 1 }, name: "now" },
+  mxList: ["a", { b: [1] }],
+  mxFlag: false,
+});
+
+function callRowDialect(seen: { unit?: LoweredUnit }): Dialect {
+  return {
+    id: "txf",
+    name: "TxFixture",
+    table: Object.freeze({ expressionTriggers: [TX] }),
+    lowerTrigger: (
+      _id: string,
+      text: string,
+      _span: unknown,
+      ctx: { expression: (node: object) => unknown },
+    ) =>
+      ctx.expression({
+        type: "MemberExpression",
+        object: { type: "Identifier", name: "%" },
+        property: { type: "Identifier", name: text.slice(2) },
+        computed: false,
+        extra: TX_MARK(),
+      }),
+    afterLower: (unit: LoweredUnit) => {
+      seen.unit = unit;
+    },
+  } as unknown as Dialect;
+}
+
+function loweredCall(source: string) {
+  const seen: { unit?: LoweredUnit } = {};
+  const result = lowerSource(source, "/v/entity.mx", {
+    dialect: callRowDialect(seen),
+    customTags: PICK,
+  });
+  expect(result.diagnostics).toEqual([]);
+  const value = findExpr(result.ir);
+  const contract = seen.unit?.calls[0]?.attrs[0];
+  if (!contract || "spread" in contract) throw new Error("no contract attr");
+  return {
+    ir: result.ir,
+    value,
+    contract: contract.value as ContractExpression,
+  };
+}
+
+type Marked = { extra: Record<string, unknown> };
+const insideOf = (value: Expr) =>
+  (value.node as unknown as { left: Marked }).left;
+
+describe("the `extra` of a `ctx.expression` node from a `{ call }` row passes through", () => {
+  const INSIDE = "<pick n=(%.now + 1)/>\n";
+  const WHOLE = "<pick n=%.now/>\n";
+
+  it("inside an expression, the payload's node keeps every key", () => {
+    const { value } = loweredCall(INSIDE);
+    expect(value.code).toBe("%.now + 1");
+    expect(insideOf(value).extra).toEqual(TX_MARK());
+  });
+
+  it("as the whole value, `Expr.node` keeps every key", () => {
+    const { value } = loweredCall(WHOLE);
+    expect((value.node as unknown as Marked).extra).toEqual(TX_MARK());
+  });
+
+  it("the `LoweredUnit` node is the payload's node with the same marks", () => {
+    for (const source of [INSIDE, WHOLE]) {
+      const { value, contract } = loweredCall(source);
+      expect(contract.node).toBe(value.node);
+      const marked =
+        source === WHOLE
+          ? (contract.node as unknown as Marked)
+          : insideOf(contract as unknown as Expr);
+      expect(marked.extra).toEqual(TX_MARK());
+    }
+  });
+
+  it("`cloneIr` keeps the node by reference, and `{ nodes: true }` copies its marks", () => {
+    const { ir, value } = loweredCall(INSIDE);
+    expect(insideOf(findExpr(cloneIr(ir))).extra).toEqual(TX_MARK());
+    const copied = insideOf(findExpr(cloneIr(ir, { nodes: true })));
+    expect(copied).not.toBe(insideOf(value));
+    expect(copied.extra).toEqual(TX_MARK());
+  });
+});

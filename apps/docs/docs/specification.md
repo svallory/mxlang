@@ -5183,7 +5183,9 @@ UTF-16 range. `ctx` is frozen and offers exactly:
 - `ctx.valueForm`: how that value is written, read-only: `"="`, `":="`,
   `"method"`, `"async-method"`, `"arguments"` (`(args)` with no body) or `null`.
 - `ctx.expression(node)`: a Babel **expression** node. In an expression it
-  replaces the trigger's stand-in; as an attribute value it is that value.
+  replaces the trigger's stand-in; as an attribute value it is that value. Core does not strip,
+  rename or rewrite the keys of the node's `extra`, so a dialect may keep its
+  own marks there (for example `extra.mxTransaction`).
 - `ctx.attribute(name, value)`: a named attribute. `value` is `true` (a bare
   attribute), a string, a `ctx.expression` result, or a node of a type the dialect registers
   (`{ type: "atom:Atom", span, … }`, §13.9.9). Core lowers such a node through
@@ -5365,10 +5367,6 @@ when its dialect loads, naming the dialect, the type and the piece.
 - The **forward** is the expression `lower` returns through `ctx.expression`
   (see "The expression position" below). It is a new object for each node: a
   forward that another node already stands for is an error at the later node.
-  Core does not strip, rename or rewrite the keys of a forward's `extra`, and a
-  dialect may keep its own marks there (for example `extra.mxTransaction`):
-  every consumer read, `Expr.node`, `Expr.nodes[].forward` and a `LoweredUnit`'s
-  expression, sees the forward the dialect returned, with its `extra` intact.
 - The **printer** is `print`; `print(parse(text))` is `text`.
 - The **label** (`NodeType.label`) is optional: a non-empty string that core's
   messages to a file's author show for the type in place of its key
@@ -5463,8 +5461,10 @@ The IR lists each node in the expression's `Expr.nodes`, in source order: an
 expression finds a dialect node by identity) and `code`, the range of
 `Expr.code` the forward is printed at. A source map maps the text around a node
 one to one and each node to its printed range. A mark a dialect sets on its
-forward reaches every later reader, its own `afterLower` included, unchanged:
-core reads no mark from a forward and sets none. A dialect finds its nodes in
+forward, or on any node it returns through `ctx.expression`, reaches every
+later reader, its own `afterLower` included, with the same `extra` keys and
+values (`Expr.node`, `Expr.nodes[].forward`, a `LoweredUnit`'s expression, and
+a `cloneIr` copy): core reads no mark from it and sets none. A dialect finds its nodes in
 `Expr.nodes` and `Attr.node`.
 
 **A node-type slot.** A contract attribute typed by a registered node type
