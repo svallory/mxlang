@@ -1681,6 +1681,30 @@ function visitIrRecords(
 }
 
 /**
+ * The bodies an IR record opens in the caller's own Angular view: a native
+ * element's children, an MX tag call's content (`<Card>…</Card>`) and an
+ * attribute tag's body (`<@header>…</@header>`). Angular projects the last
+ * two into the callee's `<ng-content>`, but the nodes are written in the
+ * caller's template, so a `@let` there shares the caller's view like one in a
+ * native element does. A `<define>`, `<if>` and `<for>` body is a view of its
+ * own and is not listed.
+ */
+function bodiesOf(record: Record<string, unknown>): IrNode[][] {
+  switch (record.kind) {
+    case "Element":
+      return [record.children as IrNode[]];
+    case "Component": {
+      const content = record.content as { children: IrNode[] } | null;
+      return content ? [content.children] : [];
+    }
+    case "AttributeTag":
+      return [(record.tag as { block: { children: IrNode[] } }).block.children];
+    default:
+      return [];
+  }
+}
+
+/**
  * How many times each name is declared in `body`: a `<const>`, a `<define>`
  * and its parameters, a `<for>` parameter, a tag call's `/var`, an Angular
  * template reference or variable. A destructuring
@@ -1688,7 +1712,10 @@ function visitIrRecords(
  */
 function declaredNameCounts(body: IrNode[]): Map<string, number> {
   const counts = new Map<string, number>();
-  const declare = (text: unknown): void => {
+  // Not named `declare`: Bun 1.3.14's TypeScript transpiler erases a statement
+  // `declare(x);` as an ambient declaration (under `bun run`, `bun test` and
+  // `bun build`), so the call would vanish from `dist`.
+  const countName = (text: unknown): void => {
     if (typeof text !== "string") return;
     for (const token of text.match(TOKEN) ?? []) {
       counts.set(token, (counts.get(token) ?? 0) + 1);
@@ -1704,28 +1731,28 @@ function declaredNameCounts(body: IrNode[]): Map<string, number> {
         value?: unknown;
       }>) {
         const written = /^(?:#|ref-|let-)(.+)$/.exec(attr.name ?? "");
-        if (written) declare(written[1]);
-        if (attr.name?.startsWith("*")) declare(attr.value);
+        if (written) countName(written[1]);
+        if (attr.name?.startsWith("*")) countName(attr.value);
       }
     }
     switch (record.kind) {
       case "Const":
-        declare(record.name);
+        countName(record.name);
         break;
       case "Define":
-        declare(record.name);
-        for (const param of record.params as string[]) declare(param);
+        countName(record.name);
+        for (const param of record.params as string[]) countName(param);
         break;
       case "For":
-        for (const binding of record.bindings as string[]) declare(binding);
-        for (const param of record.params as string[]) declare(param);
+        for (const binding of record.bindings as string[]) countName(binding);
+        for (const param of record.params as string[]) countName(param);
         break;
       case "Component":
-        declare(record.var);
+        countName(record.var);
         for (const binding of (record.varBindings ?? []) as Array<{
           name: string;
         }>) {
-          declare(binding.name);
+          countName(binding.name);
         }
         break;
     }
@@ -3153,13 +3180,17 @@ class AngularEmitter implements Emitter<string> {
 
   /**
    * The IR the emitter walks, with each `<const>` and `<define>` written
-   * directly in a native element's body that shares its name with another
-   * declaration or read renamed to a name of its own, and every read of it in
-   * the rest of that body pointed at the new name.
+   * directly in the body of a native element, an MX tag call or an attribute
+   * tag (`bodiesOf`) that shares its name with another declaration or read
+   * renamed to a name of its own, and every read of it in the rest of that
+   * body pointed at the new name.
    *
    * Marko scopes a name a body declares to that body, an element's included
-   * (`<const/n=1/><div><const/n=2/>${n}</div>${n}` reads 2, then 1). Angular
-   * scopes a `@let` to a view, and an element does not open one, so the two
+   * (`<const/n=1/><div><const/n=2/>${n}</div>${n}` reads 2, then 1), and a tag
+   * call's (`<Card><const/n=2/>${n}</Card>`). Angular scopes a `@let` to a
+   * view, and neither an element nor the projected content of a tag call
+   * (written in the caller's template, placed by the callee's `<ng-content>`)
+   * opens one, so the two
    * `@let n` would share the view and every read would get the first. Opening
    * a view around the body (`@if (true) { … }`) would scope it, but Angular
    * projects a control-flow block into a component's `<ng-content select>` by
@@ -3198,9 +3229,7 @@ class AngularEmitter implements Emitter<string> {
       seen.add(value);
       if (Array.isArray(value)) return value.some(found);
       const record = value as Record<string, unknown>;
-      if (record.kind === "Element" && declaresConst(record.children)) {
-        return true;
-      }
+      if (bodiesOf(record).some(declaresConst)) return true;
       return Object.entries(record).some(
         ([key, child]) => key !== "node" && found(child),
       );
@@ -3218,8 +3247,7 @@ class AngularEmitter implements Emitter<string> {
         return;
       }
       const record = value as Record<string, unknown>;
-      if (record.kind === "Element") {
-        const children = record.children as IrNode[];
+      for (const children of bodiesOf(record)) {
         children.forEach((child, index) => {
           if (keep.has(child)) return;
           if (child.kind === "Define") {
@@ -3272,33 +3300,34 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
-   * The `<const>`s and `<define>`s written directly in a native element's body
-   * that can keep the name the author wrote: the name is declared nowhere
+   * The `<const>`s and `<define>`s written directly in the body of a native
+   * element, a tag call or an attribute tag that can keep the name the author
+   * wrote: the name is declared nowhere
    * else in the template and read nowhere outside the declaration's scope.
    */
   private declarationsWithoutCollision(body: IrNode[]): Set<IrNode> {
     const keep = new Set<IrNode>();
     const declared = declaredNameCounts(body);
     visitIrRecords(body, (record) => {
-      if (record.kind !== "Element") return false;
-      const children = record.children as IrNode[];
-      children.forEach((child, index) => {
-        if (child.kind !== "Const" && child.kind !== "Define") return;
-        if (child.kind === "Const" && !IDENTIFIER.test(child.name)) return;
-        const name = child.name;
-        if (declared.get(name) !== 1 || ANGULAR_IMPLICIT_NAMES.has(name)) {
-          return;
-        }
-        // The declaration's scope: the rest of its body, and a define's own
-        // body unless a parameter of that name shadows it.
-        const scope: IrNode[] = children.slice(index + 1);
-        if (child.kind === "Define" && !child.params.includes(name)) {
-          scope.push(...child.children);
-        }
-        if (!isReadOutside(body, name, new Set<object>(scope))) {
-          keep.add(child);
-        }
-      });
+      for (const children of bodiesOf(record)) {
+        children.forEach((child, index) => {
+          if (child.kind !== "Const" && child.kind !== "Define") return;
+          if (child.kind === "Const" && !IDENTIFIER.test(child.name)) return;
+          const name = child.name;
+          if (declared.get(name) !== 1 || ANGULAR_IMPLICIT_NAMES.has(name)) {
+            return;
+          }
+          // The declaration's scope: the rest of its body, and a define's own
+          // body unless a parameter of that name shadows it.
+          const scope: IrNode[] = children.slice(index + 1);
+          if (child.kind === "Define" && !child.params.includes(name)) {
+            scope.push(...child.children);
+          }
+          if (!isReadOutside(body, name, new Set<object>(scope))) {
+            keep.add(child);
+          }
+        });
+      }
       return false;
     });
     return keep;

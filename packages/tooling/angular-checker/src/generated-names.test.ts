@@ -1,10 +1,18 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: authored MX template source
 /**
  * Angular's own diagnostics quote a `@let` by name (NG8112, the two-way
- * binding error). The emitter gives a `<const>` in an element body a generated
- * name only when its name collides with another declaration or read; either
- * way the diagnostic an author reads names the `<const>` as written.
+ * binding error). The emitter gives a `<const>` in an element body, a tag call
+ * body or an attribute tag body a generated name only when its name collides
+ * with another declaration or read; either way the diagnostic an author reads
+ * names the `<const>` as written.
  */
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { compileNgMx } from "@mxlang/host-angular";
 import { describe, expect, it } from "vitest";
@@ -127,6 +135,116 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       expect(found[0]).not.toContain("__mx");
     });
   });
+});
+
+describe("a <const> in an MX tag call body", () => {
+  // A real project under this package, so compiler-cli and core resolve as they
+  // do for an Angular app. The tag is imported by the `.ng.mx` file, so it is a
+  // component the emitter calls by selector.
+  function inProject<T>(run: (dir: string) => T): T {
+    const dir = realpathSync(
+      mkdtempSync(path.join(import.meta.dirname, "tag-call-body-")),
+    );
+    try {
+      writeFileSync(
+        path.join(dir, "package.json"),
+        JSON.stringify({ mx: { host: "angular" } }),
+      );
+      mkdirSync(path.join(dir, "tags"));
+      writeFileSync(
+        path.join(dir, "tags", "card.mx"),
+        "<section>${input.content()}</section>\n",
+      );
+      return run(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  function inCard(dir: string, template: string, code: number) {
+    const source = [
+      'import { Component } from "@angular/core";',
+      'import Card from "./tags/card.mx";',
+      "",
+      "@Component({",
+      '  selector: "app-x",',
+      "  standalone: true,",
+      `  template: ${template},`,
+      "})",
+      "export class XComponent { title = 'a'; }",
+    ].join("\n");
+    const compiled = compileNgMx(source, path.join(dir, "x.component.ng.mx"));
+    const checker = createAngularChecker({ projectDir: dir });
+    try {
+      const found = diagnoseNgMx(
+        compiled,
+        checker,
+        path.join(dir, "x.component.ts"),
+      );
+      return {
+        code: compiled.code,
+        messages: found.filter((d) => d.code === code).map((d) => d.message),
+      };
+    } finally {
+      checker.dispose();
+    }
+  }
+
+  it("NG8112 on a renamed const names it as written", () => {
+    inProject((dir) => {
+      const { code, messages } = inCard(
+        dir,
+        "<main><const/a=1/>${a}<Card><const/a=2/></Card></main>",
+        UNUSED_LET,
+      );
+      expect(code).toMatch(/@let __mxConst_a\d* = 2;/);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(
+        "@let a is declared but its value is never read",
+      );
+      expect(messages[0]).not.toContain("__mx");
+    });
+  }, 60_000);
+
+  it("NG8112 on a renamed const in an attribute tag body names it as written", () => {
+    inProject((dir) => {
+      const { code, messages } = inCard(
+        dir,
+        "<main><const/a=1/>${a}<Card><@header><const/a=2/></@header></Card></main>",
+        UNUSED_LET,
+      );
+      expect(code).toMatch(/@let __mxConst_a\d* = 2;/);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain("@let a is declared");
+      expect(messages[0]).not.toContain("__mx");
+    });
+  }, 60_000);
+
+  it("a const nobody else uses keeps its name, and NG8112 quotes it", () => {
+    inProject((dir) => {
+      const { code, messages } = inCard(
+        dir,
+        "<main><Card><const/a=2/></Card></main>",
+        UNUSED_LET,
+      );
+      expect(code).toContain("@let a = 2;");
+      expect(code).not.toContain("__mx");
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain("@let a is declared");
+    });
+  }, 60_000);
+
+  it("two sibling tag calls declaring the same name raise no duplicate-declaration error", () => {
+    inProject((dir) => {
+      const { code, messages } = inCard(
+        dir,
+        "<main><Card><const/a=2/>${a}</Card><Card><const/a=3/>${a}</Card></main>",
+        DUPLICATE_LET,
+      );
+      expect(code).toContain("@let __mxConst_a1 = 3;");
+      expect(messages).toEqual([]);
+    });
+  }, 60_000);
 });
 
 describe("mapNgMxDiagnostics prints the authored name", () => {
