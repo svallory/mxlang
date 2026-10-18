@@ -5380,11 +5380,19 @@ string``, ``attribute `list` item 2 must be atom:Atom, got number``); an
 identifier or a call has no knowable type and passes. A whole value a row
 claimed counts as its node type for every other slot too (``attribute `s` must
 be string, got atom:Atom``). A slot naming a type the file's dialect does not
-register is a registration error. Which values of the type are allowed
+register is a registration error, and so is a `type` that is neither one of
+core's types nor a node type key (`type: "atom"`, removed, names the node type
+and the list form to declare instead). Which values of the type are allowed
 (`values`, `pattern`, `ref`) is the dialect's own check. A slot takes one node
 or a list of them, never either: a value that may be one node or several is
 declared as a list slot, and a single node there is written as a list
-(`modes=[~on]`, not `modes=~on`).
+(`modes=[~on]`, not `modes=~on`). A list slot reports a value that is not a
+list at the value, and a single node of the item type with the fix
+(``attribute `modes` must be array, got atom:Atom; write it as a list:
+`[~on]` ``). Its errors are worded as a one-node slot's: a plain string, whole
+or as an element, against a declaration using a key the dialect claims is
+raised after the dialect's `afterLower`, with the dialect's
+`describeAttribute` text.
 
 **What `lower` returns.** A node type's `lower` returns IR nodes of the kinds
 core's IR already has, built with the `ctx` constructors. Core has no generic

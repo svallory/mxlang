@@ -1686,6 +1686,108 @@ function checkNodeAttr(
 }
 
 /**
+ * Checks a list slot of a node type (`{ type: "array", items: "dialect:Type" }`)
+ * at the offending value, in `checkNodeAttr`'s words: a value that is not a
+ * list is refused at the value (one node of the item type with the fix, the
+ * same node written as a list), and each literal element of a literal list
+ * is checked as a node-type slot checks a whole value. A plain string, whole
+ * or as an element, against a declaration that uses a key the module
+ * claims is queued behind the module's `afterLower`, as in `checkNodeAttr`.
+ */
+function checkNodeListAttr(
+  owner: Owner,
+  attr: Exclude<Attr, { kind: "spread" }>,
+  declaration: CustomTagAttribute & { items: NodeTypeKey },
+  locate?: Locate,
+  claims?: ClaimContext,
+): void {
+  const items = declaration.items;
+  const expected = expectationOf(declaration, claims?.claimed);
+  const voice = claims?.voice ?? MX_VOICE;
+  const label = `${voice.attribute} ${attrLabel(attr)}`;
+  const deferring = !!claims && usesClaimedKey(declaration, claims.claimed);
+  const at = valueLoc(attr, locate);
+  const refuse = (message: string, where: Position): void => {
+    failForOwner(
+      INVALID_ATTRIBUTE_VALUE_CODE,
+      owner,
+      message,
+      where,
+      undefined,
+      attrEndOf(attr),
+    );
+  };
+  // One node of the item type, written where a list goes.
+  const single =
+    attr.kind === "static"
+      ? dialectTypeOf(attr.node) === items
+        ? attr.node
+        : undefined
+      : attr.kind === "dynamic" || attr.kind === "bound"
+        ? ((node) => (dialectTypeOf(node) === items ? node : undefined))(
+            nodeOfForward(withoutTsWrappers(attr.value.node)),
+          )
+        : undefined;
+  if (single) {
+    const text = claims?.source?.slice(
+      single.span.sourceStart,
+      single.span.sourceEnd,
+    );
+    refuse(
+      `${label} must be array, got ${items}; write it as a list: \`[${text || "…"}]\``,
+      at,
+    );
+  }
+  if (deferring && plainStringOf(attr) !== undefined) {
+    claims.defer(
+      codedError(
+        INVALID_ATTRIBUTE_VALUE_CODE,
+        `${ownerText(owner)}: ${label} must be array, got string${expected}`,
+        at.line,
+        at.column,
+        at.file,
+      ),
+    );
+    return;
+  }
+  const shape = attrShape(attr);
+  if (shape && shape !== "array") {
+    refuse(`${label} must be array, got ${shape}${expected}`, at);
+  }
+  if (
+    (attr.kind !== "dynamic" && attr.kind !== "bound") ||
+    withoutTsWrappers(attr.value.node)?.type !== "ArrayExpression"
+  ) {
+    return;
+  }
+  const elements = withoutTsWrappers(attr.value.node)
+    .elements as Array<Node | null>;
+  for (const [index, element] of elements.entries()) {
+    const got = nodeShape(element);
+    if (!element || !got || got === items) continue;
+    const start = element.loc?.start;
+    const where = start
+      ? { ...attr.loc, line: start.line, column: start.column }
+      : attr.loc;
+    const message = `${label} item ${index + 1} must be ${items}, got ${got}${expected}`;
+    const literal = withoutTsWrappers(element);
+    if (deferring && literal?.type === "StringLiteral") {
+      claims.defer(
+        codedError(
+          INVALID_ATTRIBUTE_VALUE_CODE,
+          `${ownerText(owner)}: ${message}`,
+          where.line,
+          where.column,
+          where.file,
+        ),
+      );
+      continue;
+    }
+    refuse(message, where);
+  }
+}
+
+/**
  * A member value, in both forms the `"member"` type accepts (decision 182
  * addendum 4, lead ruling on Mesh's M5): the static value after a kind
  * (`asc &dueOn`), and a dynamic attribute whose value is exactly one marked
@@ -2195,6 +2297,17 @@ function validateAttributes(
     } else if (declaration.type === "member") {
       checkMemberAttr(owner, attr, locate, voice);
     } else if (
+      declaration.type === "array" &&
+      isNodeTypeKey(declaration.items)
+    ) {
+      checkNodeListAttr(
+        owner,
+        attr,
+        declaration as CustomTagAttribute & { items: NodeTypeKey },
+        locate,
+        claims,
+      );
+    } else if (
       declaration.type === "array" ||
       declaration.type === "function"
     ) {
@@ -2440,6 +2553,8 @@ export interface ClaimContext {
   voice?: Voice;
   /** The file's `structural` mode, when it is decided. */
   structural?: "pass" | "reject";
+  /** The file's source, for an error that quotes what was written. */
+  source?: string;
 }
 
 /** Does the declaration use a key the file's dialect claims? */
@@ -2617,6 +2732,17 @@ const WILDCARD_ATTRIBUTE_TAG_KEYS = [
 
 const ITEM_TYPES = ["string", "number", "boolean"] as const;
 
+/** Core's own attribute types; any other `type` is a node type key. */
+const ATTRIBUTE_TYPES = [
+  "string",
+  "number",
+  "boolean",
+  "expression",
+  "array",
+  "function",
+  "member",
+] as const;
+
 /**
  * Rejects a declaration whose keys contradict each other, or that names a
  * node type the file's dialect does not register (`nodeTypes`, its
@@ -2636,6 +2762,22 @@ function rejectContradictoryAttribute(
       0,
     );
   };
+  const type = declaration.type as unknown;
+  if (
+    type !== undefined &&
+    !(ATTRIBUTE_TYPES as readonly unknown[]).includes(type) &&
+    !isNodeTypeKey(type)
+  ) {
+    // A dialect's own type is a node type it registers; name one, or the
+    // key's shape when it registers none.
+    const node = [...nodeTypes][0] ?? "dialect:Type";
+    reject(
+      INVALID_CONTRACT_CODE,
+      type === "atom"
+        ? `\`type: "atom"\` was removed; declare a node type the file's dialect registers (\`${node}\`), or \`{ type: "array", items: "${node}" }\` for a list`
+        : `\`type: ${JSON.stringify(type)}\` is not a type; use one of ${ATTRIBUTE_TYPES.join(", ")}, or a node type the file's dialect registers (\`${node}\`)`,
+    );
+  }
   if (declaration.items !== undefined) {
     if (declaration.type !== "array") {
       reject(INVALID_CONTRACT_CODE, '`items` requires `type: "array"`');
@@ -4066,6 +4208,7 @@ export function transformCustomTag(
     voice,
     claimed: claimedFields(ctx.dialect),
     structural: ctx.structural,
+    source: ctx.source,
     defer: (error) => {
       ctx.deferredContractErrors ??= [];
       ctx.deferredContractErrors.push(error);

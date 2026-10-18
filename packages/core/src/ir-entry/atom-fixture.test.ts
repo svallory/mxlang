@@ -459,6 +459,35 @@ describe("a contract `type` naming a node type key", () => {
     ).toContain('`items: "atom:Nope"` is not a node type');
   });
 
+  it("a `type` core does not have is a registration error; the removed `atom` names the fix", () => {
+    const old = tags({ pick: { attributes: { mode: { type: "atom" } } } });
+    const [problem] = lowerSource("<pick/>", "/v/entity.mx", {
+      dialect: atomSyntax,
+      customTags: old,
+    }).diagnostics;
+    expect(problem?.code).toBe("MX_INVALID_CONTRACT");
+    expect(problem?.message).toContain(
+      'Invalid "mode" attribute declaration of tag "pick": `type: "atom"` was removed; declare a node type the file\'s dialect registers (`atom:Atom`), or `{ type: "array", items: "atom:Atom" }` for a list',
+    );
+    expect(
+      messages(
+        "<pick/>",
+        tags({ pick: { attributes: { mode: { type: "atom" } } } }),
+        {},
+      )[0],
+    ).toContain(
+      '`type: "atom"` was removed; declare a node type the file\'s dialect registers (`dialect:Type`)',
+    );
+    expect(
+      messages(
+        "<pick/>",
+        tags({ pick: { attributes: { mode: { type: "object" } } } }),
+      )[0],
+    ).toContain(
+      '`type: "object"` is not a type; use one of string, number, boolean, expression, array, function, member, or a node type the file\'s dialect registers (`atom:Atom`)',
+    );
+  });
+
   it("`enum` beside a node type is a registration error", () => {
     const both = tags({
       pick: { attributes: { mode: { type: "atom:Atom", enum: ["on"] } } },
@@ -516,8 +545,51 @@ describe("where core's `type` check reports, and what it names", () => {
       '<pick><@row mode="x"/></pick>',
       "1:17 `<pick>`: `<@row>`: attribute `mode` must be atom:Atom, got string",
     ],
+    [
+      "<pick list=~a/>",
+      "1:11 `<pick>`: attribute `list` must be array, got atom:Atom; write it as a list: `[~a]`",
+    ],
+    [
+      "<pick list=(~a)/>",
+      "1:12 `<pick>`: attribute `list` must be array, got atom:Atom; write it as a list: `[~a]`",
+    ],
+    [
+      '<pick list="a"/>',
+      "1:11 `<pick>`: attribute `list` must be array, got string",
+    ],
+    [
+      "<pick list=1/>",
+      "1:11 `<pick>`: attribute `list` must be array, got number",
+    ],
   ])("%s is refused once, at the value: %s", (source, expected) => {
     expect(at(source, SLOTS)).toEqual([expected]);
+  });
+
+  it("a list slot whose declaration uses a claimed key words its errors like a one-node slot", () => {
+    const BOX = tags({
+      box: {
+        attributes: {
+          one: { type: "atom:Atom", values: ["a", "b"] },
+          list: { type: "array", items: "atom:Atom", values: ["a", "b"] },
+        },
+      },
+    });
+    expect(at('<box one="a"/>', BOX)).toEqual([
+      "1:9 `<box>`: attribute `one` must be atom:Atom, got string (one of ~a, ~b)",
+    ]);
+    expect(at('<box list="a"/>', BOX)).toEqual([
+      "1:10 `<box>`: attribute `list` must be array, got string (one of ~a, ~b)",
+    ]);
+    expect(at("<box list=1/>", BOX)).toEqual([
+      "1:10 `<box>`: attribute `list` must be array, got number (one of ~a, ~b)",
+    ]);
+    expect(at('<box list=[~a, "b"]/>', BOX)).toEqual([
+      "1:15 `<box>`: attribute `list` item 2 must be atom:Atom, got string (one of ~a, ~b)",
+    ]);
+    expect(at("<box list=~a/>", BOX)).toEqual([
+      "1:10 `<box>`: attribute `list` must be array, got atom:Atom; write it as a list: `[~a]`",
+    ]);
+    expect(at("<box list=[~a, ~b]/>", BOX)).toEqual([]);
   });
 });
 

@@ -714,7 +714,12 @@ Five facts worth knowing before editing it:
   whole value (`Attr.node`) or as an expression that is the node's forward
   (`nodeOfForward`), passes; a string, number, array, function, member or
   node of another type is a positioned error; an identifier or call has no
-  knowable type and passes. A claimed whole-value node counts as its node
+  knowable type and passes. A list slot is `checkNodeListAttr`: a value that
+  is not a list is refused at the value (one node of the item type names the
+  fix, `[~a]`), with `checkNodeAttr`'s suffix and deferral, per element too.
+  A `type` that is neither core's nor a `dialect:Type` key (the removed
+  `"atom"` included) is refused at registration
+  (`rejectContradictoryAttribute`). A claimed whole-value node counts as its node
   type for every other scalar slot too, so `type: "string"` refuses it.
   Its suffix comes from `expectationOf`, which reads no
   key itself: a declaration using a claimed key is worded by the module's
