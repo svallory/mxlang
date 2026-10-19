@@ -61,3 +61,78 @@ invalid-line-start-slash
 ---------------
 
 (document (ERROR))
+
+===============
+parsed-text-block-comment-eof
+:error
+===============
+<before/>
+<script>/* oops
+</script>
+<after/>
+---------------
+
+(document (element) (ERROR))
+
+===============
+html-content-block-comment-eof
+:error
+===============
+<before/>
+<div> /* oops
+</div>
+<after/>
+---------------
+
+(document (element) (ERROR))
+
+===============
+after-semicolon-html-comment-eof
+:error
+===============
+<before/>
+div; <!-- oops
+span
+---------------
+
+(document (element) (ERROR))
+
+===============
+after-semicolon-block-comment-eof
+:error
+===============
+<before/>
+div; /* oops
+span
+---------------
+
+(document (element) (ERROR))
+
+===============
+concise-block-comment-eof
+:error
+===============
+<before/>
+/* oops
+<after/>
+---------------
+
+(document (element) (ERROR))
+
+===============
+expression-block-comment-eof
+:error
+===============
+${/* oops
+---------------
+
+(document (ERROR (placeholder_start)))
+
+===============
+open-tag-block-comment-eof
+:error
+===============
+<div /* oops
+---------------
+
+(document (ERROR (open_tag_start) (tag_name_fragment)))

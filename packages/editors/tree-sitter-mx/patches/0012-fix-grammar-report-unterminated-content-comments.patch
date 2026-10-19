@@ -1,0 +1,78 @@
+From 819f799114bcd2d5e6a7ec4a8eeeb634c88ff7ec Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <me@saulo.engineer>
+Date: Mon, 19 Oct 2026 19:57:45 -0300
+Subject: [PATCH] fix(grammar): report unterminated content comments
+
+Emit ERROR_SENTINEL for EOF in parsed-text and HTML block comments, comments after tag;, and concise block comments. Keep internal expression and open-tag failures unchanged because their enclosing constructs already error.
+---
+ src/scanner.c | 29 ++++++++++++++++++++++-------
+ 1 file changed, 22 insertions(+), 7 deletions(-)
+
+diff --git a/src/scanner.c b/src/scanner.c
+index ded8557..59249e1 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -2493,7 +2493,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+             int32_t c2 = es_peek(&es, 0);
+             if (c2 < 0) {
+               es_free(&es);
+-              return false;  // MALFORMED_COMMENT
++              *result = ERROR_SENTINEL;  // MALFORMED_COMMENT
++              return true;
+             }
+             if (c2 == '*' && es_peek(&es, 1) == '/') {
+               es_next_mark(&es);
+@@ -2520,7 +2521,10 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+           }
+           bool comment_ok = es_consume_block_comment(&es);
+           es_free(&es);
+-          if (!comment_ok) return false;  // MALFORMED_COMMENT
++          if (!comment_ok) {
++            *result = ERROR_SENTINEL;  // MALFORMED_COMMENT
++            return true;
++          }
+           *result = BLOCK_COMMENT;
+           return valid[BLOCK_COMMENT];
+         });
+@@ -2614,7 +2618,8 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+           int32_t c2 = es_peek(&es, 0);
+           if (c2 < 0) {
+             es_free(&es);
+-            return false;  // MALFORMED_COMMENT
++            *result = ERROR_SENTINEL;  // MALFORMED_COMMENT
++            return true;
+           }
+           if (c2 == '-' && es_peek(&es, 1) == '>') {
+             es_next_mark(&es);
+@@ -2637,8 +2642,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+       *result = LINE_COMMENT;
+       ok = valid[LINE_COMMENT];
+     } else if (n1 == '*') {
+-      *result = BLOCK_COMMENT;
+-      ok = es_consume_block_comment(&es) && valid[BLOCK_COMMENT];
++      if (es_consume_block_comment(&es)) {
++        *result = BLOCK_COMMENT;
++        ok = valid[BLOCK_COMMENT];
++      } else {
++        *result = ERROR_SENTINEL;  // MALFORMED_COMMENT
++        ok = true;
++      }
+     }
+     es_free(&es);
+     return ok;
+@@ -2745,8 +2755,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+           k++;
+         }
+       }
+-      *result = BLOCK_COMMENT;
+-      ok = ok && valid[BLOCK_COMMENT];
++      if (ok) {
++        *result = BLOCK_COMMENT;
++        ok = valid[BLOCK_COMMENT];
++      } else {
++        *result = ERROR_SENTINEL;  // MALFORMED_COMMENT
++        ok = true;
++      }
+     }
+     else {
+       // INVALID_LINE_START: "/" that starts no comment. The line is an ERROR

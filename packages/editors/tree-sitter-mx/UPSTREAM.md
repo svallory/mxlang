@@ -195,9 +195,8 @@ open, as in patch 0004).
   nothing after the comment) is one too. New helper `es_error_line`.
 - Tests: `test/corpus/errors.txt` (tree-sitter `:error` cases; MX's own, not in
   the patch), `test/corpus.bun-test.mts`.
-- Not changed: the same EOF inside `<!--` after `tag;` and in a
-  `<!--` met in html content (`MALFORMED_COMMENT` at two other sites) is still a
-  silent `return false`; htmljs-parser has no fixture for either.
+- The remaining unterminated-comment paths are covered by patch 0012 below;
+  htmljs-parser's pinned fixture suite has no fixture for these paths.
 
 `patches/0011-docs-readme-a-beta-note-says-the-api-may-change-until-1-0-0.patch`
 is MX's own: `README.md` carries the beta note every published package README
@@ -205,6 +204,26 @@ now opens with (the package is at 0.x; its API may change in any release until
 1.0.0 — the npm beta publishes plain `0.1.0` on `latest`). It sits between the
 intro paragraph and the grammar description; this README had no earlier
 alpha warning to replace.
+
+`patches/0012-fix-grammar-report-unterminated-content-comments.patch`
+is MX's own:
+
+- `src/scanner.c`: EOF inside a JavaScript block comment in parsed text,
+  a whitespace-prefixed block comment in HTML content, either comment form
+  after `tag;`, or a concise block comment emits `ERROR_SENTINEL`, rather
+  than silently dropping the malformed tail. The expression scanner and
+  open-tag comment scanner keep their internal `false` returns: their
+  required enclosing constructs already produce an error.
+- Recovery follows the existing `<!--` EOF rule: the comment extends through
+  EOF, including apparent close tags and dedents. Completed preceding
+  siblings stay outside the ERROR; an unfinished enclosing element may join
+  it. Once the terminator is present, subsequent siblings parse normally.
+  The front end reports `MALFORMED_COMMENT` at a zero-width range on the
+  opener, whereas tree-sitter's ERROR spans the malformed construct. These
+  ranges intentionally differ; this patch does not change compiler parsing.
+- Tests: seven new `:error` cases in `test/corpus/errors.txt`, plus exact-span,
+  sibling-preservation and terminated-comment controls in
+  `test/corpus.bun-test.mts` (MX's own files, not vendored).
 
 ## Tests
 
