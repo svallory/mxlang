@@ -1,7 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { runInProcess } from "./in-process.ts";
 
@@ -130,55 +128,4 @@ export function runSplit(entry: string, args: string[]): RunSplit {
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
-}
-
-/**
- * Wait until a running `tsc -w` is watching its source directories.
- *
- * tsc prints its first summary from `afterProgramCreate` and only then, still
- * inside the same `synchronizeProgram`, registers the wildcard directory
- * watchers, recording each directory's modification time as it does. A file
- * added or deleted between the summary and that registration changes nothing
- * the poller can see afterwards: no rebuild starts, ever (the cause of the
- * "watch did not finish a rebuild" failures on loaded gates and CI). A test
- * that reacts to the first summary can land in that window, and re-touching a
- * file does not help, since only a directory entry change moves the directory's
- * time.
- *
- * So the first summary is not an "armed" signal. This adds a file under `dir`
- * (a directory the config includes) and, until a rebuild starts, adds another
- * one, since each addition changes the directory again. The rebuild it
- * provokes proves the poller is live; it is waited out so the test starts
- * from a settled watcher. The files stay: they are valid, empty modules.
- *
- * @param output everything the watcher printed so far
- * @param check throws when the watcher died or failed to start
- */
-export async function armDirectoryWatch(
-  dir: string,
-  output: () => string,
-  check: () => void,
-  budgetMs = 60_000,
-): Promise<void> {
-  const since = output().length;
-  const deadline = Date.now() + budgetMs;
-  const settled = /Found \d+ errors?\. Watching for file changes\./;
-  let added = 0;
-  let nextProbe = 0;
-  while (!settled.test(output().slice(since))) {
-    check();
-    if (Date.now() > deadline) {
-      throw new Error(
-        `watch never started watching ${dir} within ${budgetMs} ms:\n${output().slice(since) || "(nothing printed)"}`,
-      );
-    }
-    if (
-      Date.now() >= nextProbe &&
-      !output().slice(since).includes("File change detected")
-    ) {
-      writeFileSync(join(dir, `armed-${added++}.ts`), "export {};\n");
-      nextProbe = Date.now() + 2_500;
-    }
-    await delay(100);
-  }
 }

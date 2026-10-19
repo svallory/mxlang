@@ -32,7 +32,6 @@ import { type MemoryWatch, watchInMemory } from "./watch-memory.ts";
  */
 const SUMMARY = /Found \d+ errors?\. Watching for file changes\./;
 
-/** The clock the watcher's polls, debounces and build turns run on. */
 /**
  * The clock the watcher's polls, debounces and build turns run on. Each step
  * hands the event loop a real macrotask (`scripts/vitest-yield.ts`'s medicine,
@@ -127,6 +126,7 @@ function expectPolicyError(cycle: string, line: string) {
 describe("mx-tsc -w host-policy diagnostics", () => {
   let dir: string;
   let watcher: MemoryWatch;
+  let firstBuild: string;
 
   beforeAll(() => {
     vi.useFakeTimers({
@@ -141,7 +141,10 @@ describe("mx-tsc -w host-policy diagnostics", () => {
     });
     dir = project(MISMATCH);
     watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
-  });
+    // The first build runs here, not in the first test, so a later case
+    // selected with `-t` or `.only` finds the watcher started and settled.
+    firstBuild = watcher.start();
+  }, 120_000);
   afterAll(() => {
     watcher?.stop();
     vi.useRealTimers();
@@ -152,7 +155,7 @@ describe("mx-tsc -w host-policy diagnostics", () => {
     const page = join(dir, "src", "page.mx");
     const other = join(dir, "src", "other.ts");
 
-    expectPolicyError(watcher.start(), MISMATCH_LINE);
+    expectPolicyError(firstBuild, MISMATCH_LINE);
 
     // No-op rebuilds of the page and of another file: still reported, once.
     for (const edited of [page, other, page]) {
@@ -180,7 +183,12 @@ describe("mx-tsc -w host-policy diagnostics", () => {
     expectPolicyError(broken, MISMATCH_LINE);
   }, 120_000);
 
-  it("prints a policy warning on every build without counting it", async () => {
+  // The cases of this describe run in order: each settles the project into
+  // the state the next one assumes. The watcher's first build holds the
+  // MISMATCH error, so the cases below assert on *rebuilds*: a warning (or a
+  // pointer-less error) printed by the first build shares the interceptor
+  // path with the error test 1 covers on the first build.
+  it("prints a policy warning on every rebuild without counting it", async () => {
     const page = join(dir, "src", "page.mx");
     const warning = 'warning TS80003: unknown mx.host "vue"';
     const warned = await watcher.cycle(() =>
@@ -204,8 +212,10 @@ describe("mx-tsc -w host-policy diagnostics", () => {
 });
 
 describe("mx-tsc -w host-policy diagnostics: more cases", () => {
+  // The cases of this describe run in order on one watcher.
   let dir: string;
   let watcher: MemoryWatch;
+  let firstBuild: string;
 
   beforeAll(() => {
     vi.useFakeTimers({
@@ -223,7 +233,8 @@ describe("mx-tsc -w host-policy diagnostics: more cases", () => {
     mkdirSync(sub);
     writeFileSync(join(sub, "package.json"), MISMATCH);
     watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
-  });
+    firstBuild = watcher.start();
+  }, 120_000);
   afterAll(() => {
     watcher?.stop();
     vi.useRealTimers();
@@ -231,7 +242,7 @@ describe("mx-tsc -w host-policy diagnostics: more cases", () => {
   });
 
   it("stops reporting a nested package.json's error once the only file under it is deleted", async () => {
-    expect(await watcher.start()).toContain("Found 0 errors.");
+    expect(firstBuild).toContain("Found 0 errors.");
 
     const added = join(dir, "src", "sub", "x.mx");
     const broken = await watcher.cycle(() =>
@@ -255,7 +266,7 @@ describe("mx-tsc -w host-policy diagnostics: more cases", () => {
     expect(settled).toContain("Found 0 errors. Watching for file changes.");
   }, 120_000);
 
-  it("counts a policy error that has no TS80001 pointer (an invalid defaultTag) on every build", async () => {
+  it("counts a policy error that has no TS80001 pointer (an invalid defaultTag) on every rebuild", async () => {
     const page = join(dir, "src", "page.mx");
     for (const edited of [undefined, page, page]) {
       const act =

@@ -9,7 +9,7 @@ import { runMxTscArgs } from "./index.ts";
  * are no real file watchers at all — every watch is a `getModifiedTime` poll
  * scheduled on a `setTimeout` — so with fake timers installed
  * (`vi.useFakeTimers`) a whole write → poll → rebuild → summary round trip
- * runs inside `advanceTimersByTimeAsync`, deterministically, in milliseconds
+ * runs inside `advanceTimersByTime`, deterministically, in milliseconds
  * of wall time. No child process, no sleeps, no output polling: a cycle is
  * over when its summary is written, which the harness sees the moment tsc
  * writes it.
@@ -131,10 +131,16 @@ export function watchInMemory(
       process.stdout.write = writeOut;
       process.stderr.write = writeErr;
       process.exitCode = exitCode;
-      process.env.NO_COLOR = env.NO_COLOR;
-      process.env.TSC_WATCHFILE = env.TSC_WATCHFILE;
-      process.env.TSC_WATCHDIRECTORY = env.TSC_WATCHDIRECTORY;
+      // Restore each name with a delete when it was unset before: a plain
+      // `process.env.X = env.X` would store the *string* "undefined" when X
+      // did not exist, and a set NO_COLOR/FORCE_COLOR/TSC_WATCH* would then
+      // change every later run in this worker (colour off, pretty forced,
+      // the polling strategies named but bogus).
       for (const name of [
+        "NO_COLOR",
+        "FORCE_COLOR",
+        "TSC_WATCHFILE",
+        "TSC_WATCHDIRECTORY",
         "TSC_WATCH_POLLINGCHUNKSIZE_LOW",
         "TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM",
         "TSC_WATCH_POLLINGCHUNKSIZE_HIGH",
@@ -145,7 +151,6 @@ export function watchInMemory(
         if (env[name] === undefined) delete process.env[name];
         else process.env[name] = env[name];
       }
-      process.env.FORCE_COLOR = env.FORCE_COLOR;
       chdir(previousCwd);
     },
   };

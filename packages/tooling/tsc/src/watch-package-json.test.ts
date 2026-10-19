@@ -9,7 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { setImmediate as realSetImmediateFromTimers } from "node:timers";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { stripVTControlCharacters } from "node:util";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { runInProcess } from "./in-process.ts";
 import { repoRoot, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 import { type MemoryWatch, watchInMemory } from "./watch-memory.ts";
@@ -135,18 +136,17 @@ const policyLines = (cycle: string) =>
 const count = (cycle: string) =>
   Number(/Found (\d+) errors?\./.exec(cycle)?.[1]);
 
-/** The one watcher each mode gets, opened on first use and stopped at the end. */
-const shared = new Map<string, { dir: string; watcher: MemoryWatch }>();
-afterAll(() => {
-  for (const { dir, watcher } of shared.values()) {
-    watcher.stop();
-    rmSync(dirname(dir), { recursive: true, force: true });
-  }
-  shared.clear();
-  vi.useRealTimers();
-});
+/** The one watcher each mode gets, its first build run when it is opened. */
+const shared = new Map<
+  string,
+  { dir: string; watcher: MemoryWatch; firstBuild: string }
+>();
 
-function openMode(mode: "-w" | "-b"): { dir: string; watcher: MemoryWatch } {
+function openMode(mode: "-w" | "-b"): {
+  dir: string;
+  watcher: MemoryWatch;
+  firstBuild: string;
+} {
   const known = shared.get(mode);
   if (known) return known;
   // Only one watcher may run at a time: a second run's stream capture takes
@@ -166,213 +166,270 @@ function openMode(mode: "-w" | "-b"): { dir: string; watcher: MemoryWatch } {
       : ["-b", "-w", "tsconfig.json"],
     clock,
   );
-  const entry = { dir, watcher };
+  // The first build runs here, not in the first test, so a later case
+  // selected with `-t` or `.only` finds the watcher started and settled.
+  const firstBuild = watcher.start();
+  const entry = { dir, watcher, firstBuild };
   shared.set(mode, entry);
   return entry;
 }
 
-describe("mx-tsc -w -p: the manifest that decides the host", () => {
-  it("reports a break on the rebuild it causes, points into the new text, and clears on the fix", async () => {
-    const { dir, watcher } = openMode("-w");
-    const manifest = join(dir, "package.json");
-    expect(watcher.start()).toContain("Found 0 errors.");
-
-    // Broken: no `.mx` file is touched, the manifest alone rebuilds.
-    const broken = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
-    expect(broken).toContain(POINTER);
-    expect(policyLines(broken)).toEqual([
-      expect.stringContaining(MISMATCH_AT(5)),
-    ]);
-    expect(count(broken)).toBe(2);
-
-    // Edited so the same error sits three lines lower: the line follows.
-    const moved = await watcher.cycle(() =>
-      writeFileSync(manifest, MISMATCH_MOVED),
-    );
-    expect(policyLines(moved)).toEqual([
-      expect.stringContaining(MISMATCH_AT(8)),
-    ]);
-    expect(moved).not.toContain("package.json(5,");
-    expect(count(moved)).toBe(2);
-
-    // Fixed: both lines are gone on the rebuild the fix causes.
-    const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
-    expect(policyLines(fixed)).toEqual([]);
-    expect(fixed).not.toContain("TS80001");
-    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-  }, 120_000);
-});
-
-describe("mx-tsc -w: more manifest changes", () => {
-  it("reports a manifest that stops parsing, and stops once it parses again", async () => {
-    const { dir, watcher } = openMode("-w");
-    const manifest = join(dir, "package.json");
-
-    const broken = await watcher.cycle(() =>
-      writeFileSync(manifest, BROKEN_JSON),
-    );
-    expect(policyLines(broken)).toEqual([
-      expect.stringContaining(
-        "package.json(1,20): warning TS80003: could not be parsed as JSON",
-      ),
-    ]);
-
-    const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
-    expect(policyLines(fixed)).toEqual([]);
-    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-  }, 120_000);
-
-  it("reports a manifest created nearer to a file than the one that decided it", async () => {
-    const { dir, watcher } = openMode("-w");
-    const sub = join(dir, "src", "sub");
-    mkdirSync(sub);
-    writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
-
-    const created = await watcher.cycle(() =>
-      writeFileSync(join(sub, "package.json"), MISMATCH),
-    );
-    expect(policyLines(created)).toEqual([
-      expect.stringContaining("src/sub/package.json(5,15): error TS80003"),
-    ]);
-    expect(count(created)).toBe(2);
-  }, 120_000);
-
-  it("prints the same diagnostics after a rewrite that changes nothing, and none where there were none", async () => {
-    const { dir, watcher } = openMode("-w");
-    const manifest = join(dir, "package.json");
-    // The previous case's nearer manifest and its file go, so the project
-    // is the one-page shape this case's counts are taken over; then settle
-    // on a clean build (a deletion can take two summaries to land).
-    rmSync(join(dir, "src", "sub"), { recursive: true, force: true });
-    let settled = await watcher.cycle();
-    for (let n = 0; n < 3 && !settled.includes("Found 0 errors."); n++) {
-      settled = await watcher.cycle(() => writeFileSync(manifest, VALID));
+/**
+ * The watch cases. Each mode's watcher is opened (and its first build run)
+ * in the `beforeAll` of the first describe that needs it; its cases run in
+ * order, each settling the project into the state the next one assumes. The
+ * watchers stop in this describe's `afterAll`, so the one-shot and unit
+ * describes below run with the process's own cwd, stdio, timers and env.
+ */
+describe("mx-tsc watch: the manifest that decides the host", () => {
+  afterAll(() => {
+    for (const { dir, watcher } of shared.values()) {
+      watcher.stop();
+      rmSync(dirname(dir), { recursive: true, force: true });
     }
-    expect(settled).toContain("Found 0 errors.");
-    for (const [packageJson, errors] of [
-      [MISMATCH, 2],
-      [VALID, 0],
-    ] as const) {
-      const first = await watcher.cycle(() => {
-        writeFileSync(manifest, packageJson);
-        const later = new Date(Date.now() + 5_000);
-        utimesSync(manifest, later, later);
-      });
-      expect(count(first)).toBe(errors);
+    shared.clear();
+    vi.useRealTimers();
+  });
 
-      const again = await watcher.cycle(() => {
-        // Same bytes, a newer modification time.
-        writeFileSync(manifest, packageJson);
-        const later = new Date(Date.now() + 5_000);
-        utimesSync(manifest, later, later);
-      });
-      expect(count(again)).toBe(errors);
-      expect(policyLines(again)).toEqual(policyLines(first));
-      expect(again.match(/error TS\d+/g) ?? []).toEqual(
-        first.match(/error TS\d+/g) ?? [],
+  describe("mx-tsc -w -p: the manifest that decides the host", () => {
+    beforeAll(() => {
+      openMode("-w");
+    }, 120_000);
+
+    it("reports a break on the rebuild it causes, points into the new text, and clears on the fix", async () => {
+      const { dir, watcher, firstBuild } = openMode("-w");
+      const manifest = join(dir, "package.json");
+      expect(firstBuild).toContain("Found 0 errors.");
+
+      // Broken: no `.mx` file is touched, the manifest alone rebuilds.
+      const broken = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH),
       );
-    }
-  }, 120_000);
-});
+      expect(broken).toContain(POINTER);
+      expect(policyLines(broken)).toEqual([
+        expect.stringContaining(MISMATCH_AT(5)),
+      ]);
+      expect(count(broken)).toBe(2);
 
-describe("mx-tsc -b -w: the manifest that decides the host", () => {
-  it("reports a break on the rebuild it causes, points into the new text, and clears on the fix", async () => {
-    const { dir, watcher } = openMode("-b");
-    const manifest = join(dir, "package.json");
-    expect(watcher.start()).toContain("Found 0 errors.");
-
-    // Broken: no `.mx` file is touched, the manifest alone rebuilds.
-    const broken = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
-    expect(broken).toContain(POINTER);
-    expect(policyLines(broken)).toEqual([
-      expect.stringContaining(MISMATCH_AT(5)),
-    ]);
-    expect(count(broken)).toBe(2);
-
-    // Edited so the same error sits three lines lower: the line follows.
-    const moved = await watcher.cycle(() =>
-      writeFileSync(manifest, MISMATCH_MOVED),
-    );
-    expect(policyLines(moved)).toEqual([
-      expect.stringContaining(MISMATCH_AT(8)),
-    ]);
-    expect(moved).not.toContain("package.json(5,");
-    expect(count(moved)).toBe(2);
-
-    // Fixed: both lines are gone on the rebuild the fix causes.
-    const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
-    expect(policyLines(fixed)).toEqual([]);
-    expect(fixed).not.toContain("TS80001");
-    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-  }, 120_000);
-});
-
-// Each -b build cycle swaps the compiler host's getSourceFile; the watch has to survive that.
-// (Only -b -w runs these: they share its watcher, opened above.)
-describe("mx-tsc -b -w: the manifest watch across build cycles", () => {
-  it("keeps watching the manifest after source files were added", async () => {
-    const { dir, watcher } = openMode("-b");
-    const manifest = join(dir, "package.json");
-
-    // Each new file changes the root names, and the program is made anew.
-    for (const name of ["a.ts", "b.ts"]) {
-      const added = await watcher.cycle(() =>
-        writeFileSync(join(dir, "src", name), "export const x = 1;\n"),
+      // Edited so the same error sits three lines lower: the line follows.
+      const moved = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH_MOVED),
       );
+      expect(policyLines(moved)).toEqual([
+        expect.stringContaining(MISMATCH_AT(8)),
+      ]);
+      expect(moved).not.toContain("package.json(5,");
+      expect(count(moved)).toBe(2);
+
+      // Fixed: both lines are gone on the rebuild the fix causes.
+      const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      expect(policyLines(fixed)).toEqual([]);
+      expect(fixed).not.toContain("TS80001");
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    }, 120_000);
+  });
+
+  describe("mx-tsc -w: more manifest changes", () => {
+    beforeAll(() => {
+      openMode("-w");
+    }, 120_000);
+
+    it("reports a manifest that stops parsing, and stops once it parses again", async () => {
+      const { dir, watcher } = openMode("-w");
+      const manifest = join(dir, "package.json");
+
+      const broken = await watcher.cycle(() =>
+        writeFileSync(manifest, BROKEN_JSON),
+      );
+      expect(policyLines(broken)).toEqual([
+        expect.stringContaining(
+          "package.json(1,20): warning TS80003: could not be parsed as JSON",
+        ),
+      ]);
+
+      const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      expect(policyLines(fixed)).toEqual([]);
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    }, 120_000);
+
+    it("reports a manifest created nearer to a file than the one that decided it", async () => {
+      const { dir, watcher } = openMode("-w");
+      const sub = join(dir, "src", "sub");
+      // The file lands in its own cycle and is decided by the root manifest's
+      // host first: only then does a *nearer* manifest come to exist, so the
+      // case tests exactly the watch of a manifest location that does not
+      // exist yet (`packageJsonInputs` lists both kinds).
+      const added = await watcher.cycle(() => {
+        mkdirSync(sub);
+        writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
+      });
       expect(added).toContain("Found 0 errors.");
-    }
 
-    const broken = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
-    expect(policyLines(broken)).toEqual([
-      expect.stringContaining(MISMATCH_AT(5)),
-    ]);
-    expect(count(broken)).toBe(2);
+      const created = await watcher.cycle(() =>
+        writeFileSync(join(sub, "package.json"), MISMATCH),
+      );
+      expect(policyLines(created)).toEqual([
+        expect.stringContaining("src/sub/package.json(5,15): error TS80003"),
+      ]);
+      expect(count(created)).toBe(2);
+    }, 120_000);
 
-    const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
-    expect(policyLines(fixed)).toEqual([]);
-    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-  }, 120_000);
+    it("prints the same diagnostics after a rewrite that changes nothing, and none where there were none", async () => {
+      const { dir, watcher } = openMode("-w");
+      const manifest = join(dir, "package.json");
+      // The previous case's nearer manifest and its file go, so the project
+      // is the one-page shape this case's counts are taken over; then settle
+      // on a clean build (a deletion can take two summaries to land).
+      rmSync(join(dir, "src", "sub"), { recursive: true, force: true });
+      let settled = await watcher.cycle();
+      for (let n = 0; n < 3 && !settled.includes("Found 0 errors."); n++) {
+        settled = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      }
+      expect(settled).toContain("Found 0 errors.");
+      for (const [packageJson, errors] of [
+        [MISMATCH, 2],
+        [VALID, 0],
+      ] as const) {
+        const first = await watcher.cycle(() => {
+          writeFileSync(manifest, packageJson);
+          const later = new Date(Date.now() + 5_000);
+          utimesSync(manifest, later, later);
+        });
+        expect(count(first)).toBe(errors);
 
-  it("keeps watching the manifest after a nearer one was created and deleted, and after the project's own was deleted", async () => {
-    const { dir, watcher } = openMode("-b");
-    const manifest = join(dir, "package.json");
-    const sub = join(dir, "src", "sub");
-    mkdirSync(sub);
-    writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
+        const again = await watcher.cycle(() => {
+          // Same bytes, a newer modification time.
+          writeFileSync(manifest, packageJson);
+          const later = new Date(Date.now() + 5_000);
+          utimesSync(manifest, later, later);
+        });
+        expect(count(again)).toBe(errors);
+        expect(policyLines(again)).toEqual(policyLines(first));
+        expect(again.match(/error TS\d+/g) ?? []).toEqual(
+          first.match(/error TS\d+/g) ?? [],
+        );
+      }
+    }, 120_000);
+  });
 
-    const created = await watcher.cycle(() =>
-      writeFileSync(join(sub, "package.json"), MISMATCH),
-    );
-    expect(policyLines(created)).toEqual([
-      expect.stringContaining("src/sub/package.json(5,15): error TS80003"),
-    ]);
+  describe("mx-tsc -b -w: the manifest that decides the host", () => {
+    beforeAll(() => {
+      openMode("-b");
+    }, 120_000);
 
-    const deleted = await watcher.cycle(() =>
-      rmSync(join(sub, "package.json")),
-    );
-    expect(policyLines(deleted)).toEqual([]);
-    expect(deleted).toContain("Found 0 errors.");
+    it("reports a break on the rebuild it causes, points into the new text, and clears on the fix", async () => {
+      const { dir, watcher, firstBuild } = openMode("-b");
+      const manifest = join(dir, "package.json");
+      expect(firstBuild).toContain("Found 0 errors.");
 
-    // The project's own manifest still decides `src/page.mx`.
-    const broken = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
-    expect(policyLines(broken)).toEqual([
-      expect.stringContaining(MISMATCH_AT(5)),
-    ]);
+      // Broken: no `.mx` file is touched, the manifest alone rebuilds.
+      const broken = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH),
+      );
+      expect(broken).toContain(POINTER);
+      expect(policyLines(broken)).toEqual([
+        expect.stringContaining(MISMATCH_AT(5)),
+      ]);
+      expect(count(broken)).toBe(2);
 
-    const removed = await watcher.cycle(() => rmSync(manifest));
-    expect(policyLines(removed)).toEqual([]);
-    expect(removed).toContain("Found 0 errors.");
+      // Edited so the same error sits three lines lower: the line follows.
+      const moved = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH_MOVED),
+      );
+      expect(policyLines(moved)).toEqual([
+        expect.stringContaining(MISMATCH_AT(8)),
+      ]);
+      expect(moved).not.toContain("package.json(5,");
+      expect(count(moved)).toBe(2);
 
-    const back = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
-    expect(policyLines(back)).toEqual([
-      expect.stringContaining(MISMATCH_AT(5)),
-    ]);
+      // Fixed: both lines are gone on the rebuild the fix causes.
+      const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      expect(policyLines(fixed)).toEqual([]);
+      expect(fixed).not.toContain("TS80001");
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    }, 120_000);
+  });
 
-    const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
-    expect(policyLines(fixed)).toEqual([]);
-    expect(fixed).toContain("Found 0 errors. Watching for file changes.");
-  }, 120_000);
-});
+  // Each -b build cycle swaps the compiler host's getSourceFile; the watch has to survive that.
+  // (Only -b -w runs these: they share its watcher, opened above.)
+  describe("mx-tsc -b -w: the manifest watch across build cycles", () => {
+    beforeAll(() => {
+      openMode("-b");
+    }, 120_000);
+
+    it("keeps watching the manifest after source files were added", async () => {
+      const { dir, watcher } = openMode("-b");
+      const manifest = join(dir, "package.json");
+
+      // Each new file changes the root names, and the program is made anew.
+      for (const name of ["a.ts", "b.ts"]) {
+        const added = await watcher.cycle(() =>
+          writeFileSync(join(dir, "src", name), "export const x = 1;\n"),
+        );
+        expect(added).toContain("Found 0 errors.");
+      }
+
+      const broken = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH),
+      );
+      expect(policyLines(broken)).toEqual([
+        expect.stringContaining(MISMATCH_AT(5)),
+      ]);
+      expect(count(broken)).toBe(2);
+
+      const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      expect(policyLines(fixed)).toEqual([]);
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    }, 120_000);
+
+    it("keeps watching the manifest after a nearer one was created and deleted, and after the project's own was deleted", async () => {
+      const { dir, watcher } = openMode("-b");
+      const manifest = join(dir, "package.json");
+      const sub = join(dir, "src", "sub");
+      // As in the -w case: the file first compiles under the root manifest's
+      // host, in a cycle of its own, before the nearer manifest is created.
+      const added = await watcher.cycle(() => {
+        mkdirSync(sub);
+        writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
+      });
+      expect(added).toContain("Found 0 errors.");
+
+      const created = await watcher.cycle(() =>
+        writeFileSync(join(sub, "package.json"), MISMATCH),
+      );
+      expect(policyLines(created)).toEqual([
+        expect.stringContaining("src/sub/package.json(5,15): error TS80003"),
+      ]);
+
+      const deleted = await watcher.cycle(() =>
+        rmSync(join(sub, "package.json")),
+      );
+      expect(policyLines(deleted)).toEqual([]);
+      expect(deleted).toContain("Found 0 errors.");
+
+      // The project's own manifest still decides `src/page.mx`.
+      const broken = await watcher.cycle(() =>
+        writeFileSync(manifest, MISMATCH),
+      );
+      expect(policyLines(broken)).toEqual([
+        expect.stringContaining(MISMATCH_AT(5)),
+      ]);
+
+      const removed = await watcher.cycle(() => rmSync(manifest));
+      expect(policyLines(removed)).toEqual([]);
+      expect(removed).toContain("Found 0 errors.");
+
+      const back = await watcher.cycle(() => writeFileSync(manifest, MISMATCH));
+      expect(policyLines(back)).toEqual([
+        expect.stringContaining(MISMATCH_AT(5)),
+      ]);
+
+      const fixed = await watcher.cycle(() => writeFileSync(manifest, VALID));
+      expect(policyLines(fixed)).toEqual([]);
+      expect(fixed).toContain("Found 0 errors. Watching for file changes.");
+    }, 120_000);
+  });
+}); // mx-tsc watch: the manifest that decides the host
 
 describe("mx-tsc one-shot --pretty: the MX error count", () => {
   /** A tsc error in `other.ts` makes tsc print its own count line, so the MX one is printed beside it. */
@@ -387,7 +444,8 @@ describe("mx-tsc one-shot --pretty: the MX error count", () => {
         ["--noEmit", "--pretty", "-p", "tsconfig.json"],
         dir,
       );
-      return `${result.stdout}${result.stderr}`;
+      // ANSI stripped: this repo's rule for tests that check error text.
+      return stripVTControlCharacters(`${result.stdout}${result.stderr}`);
     } finally {
       rmSync(dirname(dir), { recursive: true, force: true });
     }

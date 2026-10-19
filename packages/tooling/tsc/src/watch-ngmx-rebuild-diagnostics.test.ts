@@ -33,8 +33,9 @@ import { MISSED_REBUILD } from "./watch-templates.ts";
  *
  * The watchers run in this process, their rebuilds driven by virtual time
  * (`watch-memory.ts`): a cycle is over the moment its summary (English or
- * localized, whichever the case reads) is written, deterministically. The two
- * English `-w` cases share one watcher, in file order.
+ * localized, whichever the case reads) is written, deterministically. The
+ * first describe's cases share one watcher and run in order; every other
+ * case owns its watcher and its project, so each runs alone.
  */
 /** The `.ng.mx` as the fixture ships it: a template that reads `user.nmae`. */
 const BROKEN = "nmae";
@@ -96,6 +97,7 @@ function oneNoticePerRebuild(output: string): void {
 describe("mx-tsc -w: the Angular template pass on every rebuild", () => {
   let dir: string;
   let watcher: MemoryWatch;
+  let firstBuild: string;
 
   beforeAll(() => {
     vi.useFakeTimers(FAKE_TIMERS);
@@ -116,7 +118,10 @@ describe("mx-tsc -w: the Angular template pass on every rebuild", () => {
       clock,
       englishSummary,
     );
-  });
+    // The first build runs here, not in the first test, so a later case
+    // selected with `-t` or `.only` finds the watcher started and settled.
+    firstBuild = watcher.start();
+  }, 120_000);
   afterAll(() => {
     watcher?.stop();
     vi.useRealTimers();
@@ -138,7 +143,7 @@ describe("mx-tsc -w: the Angular template pass on every rebuild", () => {
     };
 
     // The initial build is clean, and its summary says so.
-    expect(watcher.start()).not.toContain("error TS");
+    expect(firstBuild).not.toContain("error TS");
 
     // Broken after the watcher started: the rebuild that notices must
     // report it, at its exact position, counted in its own summary.
@@ -170,28 +175,66 @@ describe("mx-tsc -w: the Angular template pass on every rebuild", () => {
     // Every rebuild above ran the pass, so none was missed.
     await clock.advance(1_000);
     expect(watcher.output()).not.toContain(MISSED_REBUILD);
-
-    // Leave the template clean for the next case on this watcher.
-    await watcher.cycle(() => writeFileSync(file, clean));
   }, 120_000);
+});
+
+/**
+ * An ordinary TypeScript error present at the first build: the first build's
+ * missed-rebuild decision (`reportMissedRebuildIfMarked`, synchronous after
+ * the first build) is a separate path from the rebuild one
+ * (`setImmediate`), and this is exactly the input it must stay quiet on.
+ */
+describe("mx-tsc -w: an English run with ordinary TypeScript errors from the start", () => {
+  let dir: string;
+  let watcher: MemoryWatch;
+  let firstBuild: string;
+
+  beforeAll(() => {
+    vi.useFakeTimers(FAKE_TIMERS);
+    dir = scratchFixture(
+      "mx-tsc-watch-ngmx-ts-",
+      join(fixtures, "ng-diag-failing"),
+    );
+    const file = join(dir, "src", "x.component.ng.mx");
+    const clean = readFileSync(file, "utf8").replace(
+      `user.${BROKEN}`,
+      "user.name",
+    );
+    writeFileSync(file, clean);
+    // The TypeScript error is there before the watcher starts, as on main.
+    writeFileSync(
+      join(dir, "src", "other.ts"),
+      "export const n: string = 1;\n",
+    );
+    watcher = watchInMemory(
+      dir,
+      ["-w", "-p", "tsconfig.json"],
+      clock,
+      englishSummary,
+    );
+    firstBuild = watcher.start();
+  }, 120_000);
+  afterAll(() => {
+    watcher?.stop();
+    vi.useRealTimers();
+    rmSync(dir, { recursive: true, force: true });
+  });
 
   it("mx-tsc -w says nothing about missed rebuilds on an English run with ordinary TypeScript errors", async () => {
     const file = join(dir, "src", "x.component.ng.mx");
     const clean = readFileSync(file, "utf8");
     // An ordinary TypeScript error, present from the start: tsc writes it as
-    // its own write before the summary of every rebuild, which is what a
+    // its own write before the summary of every build, which is what a
     // notice decided on the first non-summary write would mistake for a
     // rebuild whose templates went unchecked.
-    const other = join(dir, "src", "other.ts");
-    const cycles: string[] = [];
-    // The build with the TypeScript error and a clean template.
-    const initial = await watcher.cycle(() =>
-      writeFileSync(other, "export const n: string = 1;\n"),
-    );
     const TS_ERROR = "src/other.ts(1,14): error TS2322";
-    expect(initial).toContain(TS_ERROR);
-    expect(initial).toContain("Found 1 error. Watching for file changes.");
-    cycles.push(initial);
+    const cycles: string[] = [];
+    // The first build itself: the TS error and a clean template.
+    expect(firstBuild).toContain(TS_ERROR);
+    expect(firstBuild).toContain("Found 1 error. Watching for file changes.");
+    cycles.push(firstBuild);
+    await clock.advance(1_000);
+    expect(watcher.output()).not.toContain(MISSED_REBUILD);
 
     // Broken template as well: both are reported, and the count carries both.
     const both = await watcher.cycle(() =>
@@ -210,7 +253,7 @@ describe("mx-tsc -w: the Angular template pass on every rebuild", () => {
     expect(fixed).toContain("Found 1 error. Watching for file changes.");
     cycles.push(fixed);
 
-    // Every one of those rebuilds checked the templates; the notice would be
+    // Every one of those builds checked the templates; the notice would be
     // wrong, and worse than noise to an agent reading the output.
     for (const cycle of cycles) expect(cycle).not.toContain(MISSED_REBUILD);
   }, 120_000);

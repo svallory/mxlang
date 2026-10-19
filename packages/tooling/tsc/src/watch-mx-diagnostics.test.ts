@@ -127,8 +127,11 @@ function expectEffectOnly(cycle: string, file: string) {
 }
 
 describe("mx-tsc -w MX compile diagnostics: one shared project", () => {
+  // The three cases below run in order: each settles the project into the
+  // state the next one assumes.
   let dir: string;
   let watcher: MemoryWatch;
+  let firstBuild: string;
 
   beforeAll(() => {
     vi.useFakeTimers(FAKE_TIMERS);
@@ -136,7 +139,10 @@ describe("mx-tsc -w MX compile diagnostics: one shared project", () => {
     writeFileSync(join(dir, "src", "page.mx"), CLEAN);
     writeFileSync(join(dir, "src", "other.ts"), "export const n = 1;\n");
     watcher = watchInMemory(dir, ["-w", "-p", "tsconfig.json"], clock);
-  });
+    // The first build runs here, not in the first test, so a later case
+    // selected with `-t` or `.only` finds the watcher started and settled.
+    firstBuild = watcher.start();
+  }, 120_000);
   afterAll(() => {
     watcher?.stop();
     vi.useRealTimers();
@@ -147,7 +153,7 @@ describe("mx-tsc -w MX compile diagnostics: one shared project", () => {
     const page = join(dir, "src", "page.mx");
     const other = join(dir, "src", "other.ts");
 
-    const initial = watcher.start();
+    const initial = firstBuild;
     expect(errorLines(initial)).toEqual([]);
     expect(initial).toContain("Found 0 errors. Watching for file changes.");
 
