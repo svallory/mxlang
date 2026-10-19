@@ -234,6 +234,7 @@ export function createJsxDeclarations(
     hostName: dialectName,
     nativeTags: WEB_ELEMENTS,
     attrTags: 2,
+    attributeArgs: "refuse",
     defineCallPassesAttrs: true,
     // The render-path model on this host: the compiled unit exposes `.render`,
     // and the dynamic dispatch (`__mxDynamicPair`) reaches it, so a `/var` on

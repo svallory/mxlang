@@ -193,6 +193,7 @@ export const angularDeclarations: HostDeclarations = {
   hostName: "Angular",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
+  attributeArgs: "refuse",
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:

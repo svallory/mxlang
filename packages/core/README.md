@@ -55,6 +55,7 @@ alias of that type only. Every member is a lower-time question:
 | `rejectElementAttributeTags?`, `rejectComponentTag?`, `rejectUnknownTag?` | Replace generic tag-routing diagnostics with the host's own wording. |
 | `checkBinding?(target, what)` | Inspects a name a construct is about to bind at *render* scope; not called for tag params, which open a nested scope. |
 | `keepComments?` | Whether an HTML comment reaches the output. |
+| `attributeArgs?` | `"refuse"` rejects ordinary element, component and attribute-tag argument lists where Marko refuses them, at the authored attribute. `<define>` and `<const>` retain Marko's acceptance and dropped arguments; builtin and host-tag errors keep precedence. Unset keeps arguments in `Attr.args` for IR consumers. Method shorthand parameters are unaffected. |
 
 The tag hooks and IR node are named `isDelegatedTag`, `resolveDelegatedTag` and `DelegatedTag`.
 

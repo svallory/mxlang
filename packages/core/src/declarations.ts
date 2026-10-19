@@ -130,6 +130,13 @@ export interface HostDeclarations {
    */
   acceptsForeignAttrNames?: boolean;
   /**
+   * Refuse ordinary call/element attribute argument lists where Marko does.
+   * Structural acceptance and builtin/host-tag errors retain precedence.
+   * Unset, arguments remain in `Attr.args` for IR consumers. Method shorthand
+   * parameters are not attribute arguments.
+   */
+  attributeArgs?: "refuse";
+  /**
    * Whether this host implements the `<define>` call rule: a `<define>` called
    * with attributes, spreads, attribute tags or a body passes ONE object of
    * them to the define's first param (Marko 6.4.4's shape), so `|p|` and `|{ n

@@ -1352,7 +1352,24 @@ Both errors point at the authored attribute name: `<div x:() {}/>` reports
 `The \`x:\` attribute cannot be a function.` and `<div x:foo()="y"/>` reports
 `Unsupported arguments on the \`x:foo\` attribute.`, both at printed 1:6
 (structured line 1, column 5). A function value takes precedence over arguments.
-Event attributes and component props retain their host's callable-prop policy.
+Method shorthand on event attributes and component props retains the host's
+callable-prop policy. Attribute argument lists are a separate form:
+`<button onClick(v)=fn/>`, `<button class(v)="a"/>` and `<C onClick(v)=fn/>`
+are refused on React, Preact, Hono, Solid and Angular, at the authored attribute,
+with `Unsupported arguments on the \`name\` attribute.` Write the handler as
+`onClick=fn` instead of attaching arguments to a value. Method shorthand,
+`onClick(v) { … }`, remains a function value on a host that accepts it;
+Angular still refuses function expressions with statement bodies and requires
+a handler reference. These hosts set the generic lower-time declaration
+`attributeArgs: "refuse"`; unset, core keeps argument lists in `Attr.args`,
+including dialect-claimed argument expressions, for IR consumers. Empty
+argument lists (`a()=value` or a bare `a()`) are argument lists too; method
+parameters (`a(v) { … }`) are not. The refusal follows Marko's tag rules,
+not a blanket ban: `<define/X a(v)=1/>` and `<const/x value(v)=1/>`
+retain Marko's acceptance and dropped arguments. Builtin tags such as
+`<try>` and host-owned tags such as
+`<html-comment>` retain their own shape checks and errors; an authored
+module statement in a region still gets the module-level refusal first.
 A binding (`:=`) is a different form and keeps the base name. On native
 elements, dynamic tags, ordinary component calls and built-in control tags,
 its target must be an identifier or a member expression (including optional

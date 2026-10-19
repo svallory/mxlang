@@ -769,6 +769,7 @@ export const solidDeclarations: HostDeclarations = {
   hostName: "Solid",
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
+  attributeArgs: "refuse",
   defineCallPassesAttrs: true,
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds

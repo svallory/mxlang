@@ -2188,10 +2188,30 @@ function lowerAttrs(
   name: string,
   on: "element" | "component" = "element",
   isElement = false,
+  refuseArgs = true,
 ): Attr[] {
   rejectBadRefinements(ctx, node);
-  const lowered = withoutParserTwins(tagAttributesOf(node)).map((attr: Node) =>
-    lowerAttr(ctx, attr, on, isElement, posOf(ctx, node)),
+  const lowered = withoutParserTwins(tagAttributesOf(node)).map(
+    (attr: Node) => {
+      const lowered = lowerAttr(ctx, attr, on, isElement, posOf(ctx, node));
+      // Structural/builtin tags keep their own rules. A region's authored
+      // module statements must reach the host's module-level refusal first.
+      if (
+        refuseArgs &&
+        ctx.declarations.attributeArgs === "refuse" &&
+        (ctx.emitsModule || !ctx.moduleScope) &&
+        attrArgsOf(attr) &&
+        !isMethodAttr(attr) &&
+        lowered.kind !== "spread"
+      ) {
+        raise(
+          INVALID_ATTRIBUTE_CODE,
+          `Unsupported arguments on the \`${lowered.name}\` ${voiceOfCtx(ctx).attribute}.`,
+          attr,
+        );
+      }
+      return lowered;
+    },
   );
   const attrs = resolveDuplicateAttrs(ctx, lowered);
   return ctx.declarations.orderAttrs?.(name, attrs, on, ctx) ?? attrs;
@@ -4188,7 +4208,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // `<define>` is written: the params are the body's, so they are lowered
   // before the params shadow anything (Marko: `<define/D|x| a=x>` reads the
   // `x` outside).
-  const attrs = lowerAttrs(ctx, node, "define", "component");
+  const attrs = lowerAttrs(ctx, node, "define", "component", false, false);
 
   // The params shadow the host's bindings inside the body only, and a
   // statement hoisted from inside belongs to *this* function's head — it may
@@ -5103,7 +5123,14 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       nameSpan:
         name === DYNAMIC_TAG ? undefined : exprSpan(ctx, tagNameSpanOf(node)),
       span: exprSpan(ctx, node),
-      attrs: lowerAttrs(ctx, node, name),
+      attrs: lowerAttrs(
+        ctx,
+        node,
+        name,
+        "element",
+        false,
+        name === DYNAMIC_TAG,
+      ),
       args: (tagArgsOf(node) ?? []).map((argument: Node) =>
         exprOf(ctx, argument),
       ),
@@ -5854,7 +5881,14 @@ function lowerCustomTagBody(
     loc: posOf(ctx, node),
     // A contract-only call on a claimed name becomes a DelegatedTag, so its
     // attributes lower as `lowerDelegatedTag` lowers them.
-    attrs: lowerAttrs(ctx, node, name, handsToHost ? "element" : "component"),
+    attrs: lowerAttrs(
+      ctx,
+      node,
+      name,
+      handsToHost ? "element" : "component",
+      false,
+      !isBuiltin && !handsToHost,
+    ),
     // `handsToHost` skips the `hasContent` gate like `isBuiltin`, so the host
     // gets an authored body exactly as an unregistered claimed tag would; a
     // call with no authored body keeps `content: null`, which `openTagOnly`
