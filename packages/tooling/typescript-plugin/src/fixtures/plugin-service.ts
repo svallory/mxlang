@@ -4,6 +4,7 @@ import ts from "typescript";
 import pluginFactory from "../index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
+let nextServiceId = 0;
 
 /**
  * A tsserver plugin-wrapped language service over in-memory files, for tests:
@@ -29,6 +30,8 @@ export function createMutablePluginService(
     isOpen?: (fileName: string) => boolean;
     /** The plugin's `compilerOptions.plugins` entry (`{ astro: true }`). */
     config?: object;
+    /** Optional file-local registry: reuse dependency declarations, not projects. */
+    documentRegistry?: ts.DocumentRegistry;
   } = {},
 ): {
   service: ts.LanguageService;
@@ -42,6 +45,20 @@ export function createMutablePluginService(
     ]),
   );
   const versions = new Map(Object.keys(files).map((fileName) => [fileName, 0]));
+  const serviceId = ++nextServiceId;
+  const scriptVersion = (fileName: string) => {
+    // Installed declarations are immutable for this invocation. Every other
+    // file (including Volar's generated files) has a service-specific identity:
+    // tests reuse paths with different buffers, hosts and compilation context.
+    if (
+      !snapshots.has(fileName) &&
+      fileName.includes("/node_modules/") &&
+      fileName.endsWith(".d.ts")
+    ) {
+      return "dependency";
+    }
+    return `${serviceId}:${versions.get(fileName) ?? 0}`;
+  };
   const repoRoot = join(here, "..", "..", "..", "..", "..");
   const options: ts.CompilerOptions = {
     strict: true,
@@ -75,7 +92,7 @@ export function createMutablePluginService(
   const host: ts.LanguageServiceHost = {
     getCompilationSettings: () => options,
     getScriptFileNames: () => rootFiles,
-    getScriptVersion: (fileName) => String(versions.get(fileName) ?? 0),
+    getScriptVersion: scriptVersion,
     getScriptKind: (fileName) =>
       fileName.endsWith(".solid.mx") ||
       fileName.endsWith(".react.mx") ||
@@ -120,14 +137,17 @@ export function createMutablePluginService(
       }));
     },
   };
-  const languageService = ts.createLanguageService(host);
+  const languageService = ts.createLanguageService(
+    host,
+    hooks.documentRegistry,
+  );
   const project = {
     projectKind: hooks.inferredProject
       ? ts.server.ProjectKind.Inferred
       : ts.server.ProjectKind.Configured,
     getProjectName: () => "/project/tsconfig.json",
     getCurrentDirectory: () => "/project",
-    getScriptVersion: (fileName: string) => String(versions.get(fileName) ?? 0),
+    getScriptVersion: scriptVersion,
     getScriptInfo: (fileName: string) => {
       const snapshot = snapshots.get(fileName);
       return snapshot
@@ -150,6 +170,8 @@ export function createMutablePluginService(
       logger: { info: (message: string) => hooks.log?.(message) },
     },
   };
+  // SAFETY: this harness supplies the fields the plugin reads; it does not
+  // construct tsserver's unrelated project-management and editor machinery.
   const info = {
     project,
     languageService,

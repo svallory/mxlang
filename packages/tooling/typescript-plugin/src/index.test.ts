@@ -1,4 +1,8 @@
-import { execFileSync } from "node:child_process";
+import childProcess, {
+  type ChildProcess,
+  execFileSync,
+} from "node:child_process";
+import { once } from "node:events";
 import {
   mkdirSync,
   mkdtempSync,
@@ -7,11 +11,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { convertToTSX } from "@astrojs/compiler/sync";
 import { decode } from "@jridgewell/sourcemap-codec";
+import { createAngularChecker } from "@mxlang/angular-checker";
 import {
   type CustomTag,
   clearScanCache,
@@ -42,10 +48,7 @@ import {
   createAmxLanguagePlugin,
 } from "./amx-language.ts";
 import { createAstroLanguagePlugin } from "./astro-language.ts";
-import {
-  createMutablePluginService,
-  createPluginService,
-} from "./fixtures/plugin-service.ts";
+import { createMutablePluginService as makePluginService } from "./fixtures/plugin-service.ts";
 import { createConfiguredLanguagePlugins } from "./index.ts";
 import {
   compileWithDependencies,
@@ -62,8 +65,58 @@ import {
   createMxLanguagePlugin,
   MX_LANGUAGE_ID,
 } from "./mx-language.ts";
+import * as ngDiagnostics from "./ng-diagnostics.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+// Share dependency declarations within this file, never plugin/project state.
+const serviceDocuments = ts.createDocumentRegistry(
+  ts.sys.useCaseSensitiveFileNames,
+);
+function createMutablePluginService(
+  ...[files, roots, hooks]: Parameters<typeof makePluginService>
+) {
+  return makePluginService(files, roots, {
+    ...hooks,
+    documentRegistry: serviceDocuments,
+  });
+}
+function createPluginService(files: Record<string, string>, roots: string[]) {
+  return createMutablePluginService(files, roots).service;
+}
+
+const compilerDocuments = ts.createDocumentRegistry(
+  ts.sys.useCaseSensitiveFileNames,
+);
+function createTestCompilerHost(options: ts.CompilerOptions) {
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersion, onError, fresh) => {
+    // Reuse only dependency declarations, never generated code or test files.
+    // The registry keys parse options (including implied module format); the
+    // text itself is a collision-free version, so a changed declaration cannot
+    // retrieve a stale tree. The cache lives only for this test-file invocation.
+    if (
+      !fresh &&
+      fileName.includes("/node_modules/") &&
+      fileName.endsWith(".d.ts")
+    ) {
+      const text = host.readFile(fileName);
+      if (text !== undefined) {
+        return compilerDocuments.acquireDocument(
+          fileName,
+          options,
+          ts.ScriptSnapshot.fromString(text),
+          text,
+          ts.ScriptKind.TS,
+          languageVersion,
+        );
+      }
+    }
+    return getSourceFile(fileName, languageVersion, onError, fresh);
+  };
+  return host;
+}
 
 // ts-plugin-tsserver-test-timeouts: the describe blocks that use this build a
 // TypeScript program (the plugin's language service) per test. Those tests take
@@ -361,6 +414,23 @@ describe("Solid language plugin", {
           start: expect.any(Number),
         }),
       ]),
+    );
+
+    // Services share declaration trees, not same-version virtual files. A
+    // second project reusing these paths must neither inherit the first
+    // project's error nor overwrite its still-live program.
+    const clean = createPluginService(
+      {
+        [component]:
+          "export function Counter(props: { start: number }) { return props.start; }",
+        [consumer]:
+          'import { Counter } from "./Counter.solid.mx"; Counter({ start: 1 });',
+      },
+      [consumer],
+    );
+    expect(clean.getSemanticDiagnostics(consumer)).toEqual([]);
+    expect(service.getSemanticDiagnostics(consumer).map((d) => d.code)).toEqual(
+      diagnostics.map((d) => d.code),
     );
   });
 
@@ -2943,7 +3013,7 @@ describe("MX language plugin", {
         "/project/stub.ts": stub ?? "",
         "/project/index.ts": consumer,
       };
-      const host = ts.createCompilerHost({});
+      const host = createTestCompilerHost({});
       const read = host.readFile.bind(host);
       host.readFile = (f) => files[f] ?? read(f);
       host.directoryExists = () => true;
@@ -3521,7 +3591,7 @@ describe("declared attribute-tag values in the emitted TypeScript", {
         target: ts.ScriptTarget.ES2022,
         types: [],
       };
-      const host = ts.createCompilerHost(options);
+      const host = createTestCompilerHost(options);
       const getSourceFile = host.getSourceFile.bind(host);
       host.getSourceFile = (name, languageVersion, ...rest) =>
         name === fileName
@@ -4392,7 +4462,7 @@ function emittedDiagnostics(
     },
     ignoreDeprecations: "6.0",
   };
-  const compilerHost = ts.createCompilerHost(options);
+  const compilerHost = createTestCompilerHost(options);
   const fileExists = compilerHost.fileExists.bind(compilerHost);
   const readFile = compilerHost.readFile.bind(compilerHost);
   const getSourceFile = compilerHost.getSourceFile.bind(compilerHost);
@@ -4462,8 +4532,8 @@ function emittedDiagnostics(
  * wrote (offset and length).
  */
 describe("expression values are mapped for a Solid whole-file page", () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
   const FIELD =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
     'export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }\n<p>${input.mode}</p>\n';
   const PAGE = [
     'import Field from "./field.mx"',
@@ -4868,33 +4938,90 @@ describe(".ng.mx language plugin", () => {
         return []; // pgrep exits 1 when nothing matches
       }
     };
-    const until = async (cond: () => boolean, ms = 30_000) => {
-      const end = Date.now() + ms;
-      while (!cond()) {
-        if (Date.now() > end) throw new Error("timed out");
-        await new Promise((r) => setTimeout(r, 50));
-      }
+    /**
+     * Fake only the timeout/interval APIs: `setImmediate`, `nextTick` and
+     * the IPC the real ng worker runs on must stay real, so a forked
+     * worker's answer still arrives while the clock is virtual.
+     */
+    const useIdleClock = () =>
+      vi.useFakeTimers({
+        toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
+      });
+    /**
+     * A promise that settles on the plugin's first `refreshDiagnostics` —
+     * the event the arrival of asynchronous Angular diagnostics already
+     * emits, replacing the old 50 ms `until(...)` polls.
+     */
+    const refreshSignal = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      return { promise, refreshDiagnostics: () => resolve() };
     };
+    const fireIdleTimer = () =>
+      vi.advanceTimersByTimeAsync(ngDiagnostics.IDLE_DELAY_MS);
+
+    // Keep the real checker, mappings and plugin wiring. Only the process
+    // transport is replaced; checker/worker IPC has its own tests, and the
+    // teardown case below exercises a real fork. Each service owns its checker.
+    function useInProcessChecker() {
+      const createService = ngDiagnostics.createNgDiagnosticsService;
+      const createWorker = vi.fn<
+        NonNullable<ngDiagnostics.NgDiagnosticsDeps["createWorker"]>
+      >((options) => {
+        const checker = createAngularChecker(options);
+        return {
+          check: async (file, code) => ({
+            kind: "ok",
+            diagnostics: checker.check(file, code),
+          }),
+          configDiagnostics: async () => ({
+            kind: "ok",
+            diagnostics: checker.configDiagnostics(),
+          }),
+          pid: () => undefined,
+          dispose: () => checker.dispose(),
+        };
+      });
+      vi.spyOn(ngDiagnostics, "createNgDiagnosticsService").mockImplementation(
+        (deps) => createService({ ...deps, createWorker }),
+      );
+      return createWorker;
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      syncBuiltinESMExports();
+      vi.useRealTimers();
+    });
 
     it("a known-bad .ng.mx yields source 'angular' TS2339 from getSemanticDiagnostics (silent-zero guard)", async () => {
+      useIdleClock();
+      const workers = useInProcessChecker();
       const file = `${ngDir}/x.component.ng.mx`;
       const consumer = `${ngDir}/consumer.ts`;
-      let refreshed = 0;
+      const signal = refreshSignal();
       const { service, project } = createMutablePluginService(
         { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
         [consumer],
         {
-          refreshDiagnostics: () => {
-            refreshed += 1;
-          },
+          refreshDiagnostics: () => signal.refreshDiagnostics(),
           inferredProject: true,
         },
       );
       try {
         // The first request compiles the file and arms the idle timer; it
         // carries no Angular diagnostics yet (they are asynchronous).
-        service.getSemanticDiagnostics(file);
-        await until(() => refreshed > 0);
+        expect(
+          service
+            .getSemanticDiagnostics(file)
+            .filter((d) => d.source === "angular"),
+        ).toEqual([]);
+        expect(workers).not.toHaveBeenCalled();
+        await fireIdleTimer();
+        expect(workers).toHaveBeenCalledTimes(1);
+        await signal.promise;
         const found = service
           .getSemanticDiagnostics(file)
           .filter((d) => d.source === "angular");
@@ -4903,10 +5030,13 @@ describe(".ng.mx language plugin", () => {
         expect(found[0]?.start).toBe(bad.indexOf("user.nmae"));
       } finally {
         project.close();
+        vi.useRealTimers();
       }
     }, 90_000);
 
     it("keeps positioned template errors when a .ng.mx calls a tags/ component", async () => {
+      useIdleClock();
+      const workers = useInProcessChecker();
       const fixture = join(
         here,
         "..",
@@ -4920,7 +5050,7 @@ describe(".ng.mx language plugin", () => {
       const tag = join(fixture, "tags", "user-card.mx");
       const consumer = join(fixture, "consumer.ts");
       const source = readFileSync(file, "utf8");
-      let refreshed = 0;
+      const signal = refreshSignal();
       const { service, project } = createMutablePluginService(
         {
           [file]: source,
@@ -4930,15 +5060,15 @@ describe(".ng.mx language plugin", () => {
         },
         [consumer],
         {
-          refreshDiagnostics: () => {
-            refreshed += 1;
-          },
+          refreshDiagnostics: () => signal.refreshDiagnostics(),
           inferredProject: true,
         },
       );
       try {
         service.getSemanticDiagnostics(file);
-        await until(() => refreshed > 0);
+        await fireIdleTimer();
+        expect(workers).toHaveBeenCalledTimes(1);
+        await signal.promise;
         const found = service.getSemanticDiagnostics(file);
         expect(
           found.map((d) => ({ code: d.code, message: d.messageText })),
@@ -4957,14 +5087,18 @@ describe(".ng.mx language plugin", () => {
         expect(service.getSyntacticDiagnostics(tag)).toEqual([]);
       } finally {
         project.close();
+        vi.useRealTimers();
       }
     }, 90_000);
 
     it("checks a .ng.mx that was compiled while closed once the editor asks about it", async () => {
+      useIdleClock();
+      const workers = useInProcessChecker();
       const file = `${ngDir}/x.component.ng.mx`;
       const consumer = `${ngDir}/consumer.ts`;
       let open = false;
       let refreshed = 0;
+      const signal = refreshSignal();
       const before = workerPids().length;
       const { service, project } = createMutablePluginService(
         { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
@@ -4972,6 +5106,7 @@ describe(".ng.mx language plugin", () => {
         {
           refreshDiagnostics: () => {
             refreshed += 1;
+            signal.refreshDiagnostics();
           },
           inferredProject: true,
           isOpen: (f) => open && f === file,
@@ -4979,46 +5114,84 @@ describe(".ng.mx language plugin", () => {
       );
       try {
         // Compiled while closed (the program holds every .ng.mx): no check.
+        // Nothing is scheduled for a closed file, so the whole quiet window
+        // passes on the virtual clock at no real cost.
         service.getSemanticDiagnostics(file);
-        await new Promise((r) => setTimeout(r, 2_000));
+        await vi.advanceTimersByTimeAsync(30_000);
         expect(refreshed).toBe(0);
+        expect(workers).not.toHaveBeenCalled();
         expect(workerPids().length).toBe(before);
         // The file opens; no recompile happens, only the editor's request.
         open = true;
         service.getSemanticDiagnostics(file);
-        await until(() => refreshed > 0);
+        await fireIdleTimer();
+        expect(workers).toHaveBeenCalledTimes(1);
+        await signal.promise;
         const found = service
           .getSemanticDiagnostics(file)
           .filter((d) => d.source === "angular");
         expect(found[0]?.code).toBe(2339);
       } finally {
         project.close();
+        vi.useRealTimers();
       }
     }, 90_000);
 
     it("project.close() kills the worker and leaves no exit listener behind", async () => {
+      useIdleClock();
       const file = `${ngDir}/x.component.ng.mx`;
       const consumer = `${ngDir}/consumer.ts`;
       const listeners = process.listenerCount("exit");
       const before = workerPids().length;
-      let refreshed = 0;
+      const signal = refreshSignal();
+      const fork = childProcess.fork;
+      let child: ChildProcess | undefined;
+      const forkSpy = vi
+        .spyOn(childProcess, "fork")
+        .mockImplementation((...args) => {
+          child = fork(...args);
+          return child;
+        });
+      // The checker uses Node's named ESM import of fork.
+      syncBuiltinESMExports();
       const { service, project } = createMutablePluginService(
         { [file]: bad, [consumer]: 'import "./x.component.ng.mx";\n' },
         [consumer],
         {
-          refreshDiagnostics: () => {
-            refreshed += 1;
-          },
+          refreshDiagnostics: signal.refreshDiagnostics,
           inferredProject: true,
         },
       );
-      service.getSemanticDiagnostics(file);
-      await until(() => refreshed > 0);
-      expect(workerPids().length).toBeGreaterThan(before);
-      expect(process.listenerCount("exit")).toBe(listeners);
-      project.close();
-      await until(() => workerPids().length === before, 10_000);
-      expect(process.listenerCount("exit")).toBe(listeners);
+      try {
+        service.getSemanticDiagnostics(file);
+        await fireIdleTimer();
+        await signal.promise;
+        expect(workerPids().length).toBeGreaterThan(before);
+        expect(process.listenerCount("exit")).toBe(listeners);
+        if (!child) throw new Error("Expected a real ng-worker fork");
+        // The worker client removes its exit listeners while killing the
+        // child; close follows exit and is not cleared by that teardown.
+        const exited = once(child, "close", {
+          signal: AbortSignal.timeout(10_000),
+        });
+        project.close();
+        await exited;
+        expect(workerPids().length).toBe(before);
+        expect(process.listenerCount("exit")).toBe(listeners);
+      } finally {
+        project.close();
+        // Also reap a worker when a failed assertion or mutation skips teardown.
+        if (child && child.exitCode === null && child.signalCode === null) {
+          const exited = once(child, "close", {
+            signal: AbortSignal.timeout(10_000),
+          });
+          child.kill("SIGKILL");
+          await exited;
+        }
+        forkSpy.mockRestore();
+        syncBuiltinESMExports();
+        vi.useRealTimers();
+      }
     }, 90_000);
   });
 
@@ -5521,8 +5694,8 @@ describe("TS80001 text carries one position base", () => {
 describe("expression values are mapped in the language service", {
   timeout: TSSERVER_DESCRIBE_TIMEOUT,
 }, () => {
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
   const FIELD =
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
     'export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }\n<p>${input.mode}</p>\n';
   const PAGE = [
     'import Field from "./field.mx"',
