@@ -1,5 +1,9 @@
 # @mxlang/hono
 
+## 0.1.0-alpha.36 — 2026-10-19
+
+- **Fixed (attribute-args-refusal):** React, Preact, Hono, Solid and Angular reject attribute argument lists such as `onClick(v)=fn` at the attribute where Marko refuses them, instead of silently dropping the arguments. `<define>` and `<const>` retain Marko's acceptance and dropped arguments; builtin, host-tag and region module-statement errors keep their existing precedence. Write `onClick=fn` instead; method shorthand remains subject to the host's existing callable-value policy. Hosts opt in through the generic `attributeArgs: "refuse"` declaration; core's default IR lowering still retains attribute arguments, including dialect expressions.
+
 ## 0.1.0-alpha.35 — 2026-10-19
 
 - **Fixed (jsx-duplicate-lifted-binding):** Whole-file JSX templates now reject collisions among `<const>`, lifted `<define>` and static or dynamic `/var` bindings, rather than emitting duplicate `const` declarations. Earlier markup errors remain visible before top-level duplicate checks, and separate define-body and parameter scopes remain legal. Rename one binding and its uses to keep each name unique in the component scope. Destructured `<const>` patterns claim every bound identifier, including nested, renamed, default and rest bindings. The existing dynamic-tag and try-body scope limitation is recorded in `divergences.md`.

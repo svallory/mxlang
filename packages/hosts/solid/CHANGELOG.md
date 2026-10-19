@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-alpha.36 — 2026-10-19
+
+- **Fixed (attribute-args-refusal):** React, Preact, Hono, Solid and Angular reject attribute argument lists such as `onClick(v)=fn` at the attribute where Marko refuses them, instead of silently dropping the arguments. `<define>` and `<const>` retain Marko's acceptance and dropped arguments; builtin, host-tag and region module-statement errors keep their existing precedence. Write `onClick=fn` instead; method shorthand remains subject to the host's existing callable-value policy. Hosts opt in through the generic `attributeArgs: "refuse"` declaration; core's default IR lowering still retains attribute arguments, including dialect expressions.
+
 ## 0.1.0-alpha.35 — 2026-10-19
 
 - **Fixed (define-dynamic-tag-read-solid-angular):** `<${D}/>` of a `<define>` now renders the define on Solid and Angular, as Marko 6.4.4 does, where it emitted a name nothing declares (Solid: `D` at module scope, while the define is hoisted under a generated name) or a template reference bound to `ngComponentOutlet` (Angular). Solid points the dynamic tag at the hoisted function, including inside a conditional target (`<${c ? D : "span"}/>`); a loop param or another declaration named like the define still shadows it. Angular renders a bare define through `ngTemplateOutlet` and lowers `c ? D : Other`, `c || D`, `c && D` and `c ?? D` to `@if`/`@else`, each operand by what it names; attributes on the tag reach only the component operands, as `<D n=3/>` drops them. A define read any other way in the tag name (`f(D)`) and a define with params are a positioned error that names the fix. A define declared after its read is unchanged on both hosts (Marko refuses it too).
