@@ -74,8 +74,12 @@ describe.runIf(bun !== undefined)("mx-tsc under bun", () => {
         mkdirSync(join(project, "src"));
         writeFileSync(
           join(project, "src", "page.mx"),
-          "export const count = 1;\n<h1>$" + "{count}</h1>\n",
+          "export const count = 1;\n<h1>$" + "{count.foo}</h1>\n",
         );
+        const paths: Record<string, string[]> = {};
+        paths["@mxlang/target-html"] = [
+          join(repoRoot, "packages", "targets", "html", "src", "index.ts"),
+        ];
         writeFileSync(
           join(project, "tsconfig.json"),
           JSON.stringify(
@@ -88,6 +92,8 @@ describe.runIf(bun !== undefined)("mx-tsc under bun", () => {
                 target: "esnext",
                 jsx: "preserve",
                 types: [],
+                allowImportingTsExtensions: true,
+                paths,
               },
               include: ["src"],
             },
@@ -105,8 +111,10 @@ describe.runIf(bun !== undefined)("mx-tsc under bun", () => {
         );
         const output = strip(`${result.stdout ?? ""}${result.stderr ?? ""}`);
         expect(output).not.toContain("TS18003");
-        // The plugin ran: the file's own line numbers are reported.
-        expect(output).toContain("page.mx");
+        // The plugin ran and the project resolved its imports: the template's
+        // own error is reported at its own line.
+        expect(output).toContain("page.mx(2,");
+        expect(output).toContain("TS2339");
         expect(result.status).not.toBe(0);
       } finally {
         rmSync(project, { recursive: true, force: true });
@@ -116,9 +124,11 @@ describe.runIf(bun !== undefined)("mx-tsc under bun", () => {
   );
 });
 
-describe.skipIf(bun !== undefined)("mx-tsc under bun", () => {
-  it.skip("bun is not on PATH; cannot prove mx-tsc runs under bun", () => {});
-});
+if (bun === undefined) {
+  describe("mx-tsc under bun", () => {
+    it.skip("bun is not on PATH; cannot prove mx-tsc runs under bun", () => {});
+  });
+}
 
 /**
  * The `discovered-tag` fixture copied into a temp directory, with its

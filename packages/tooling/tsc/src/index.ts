@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import vm from "node:vm";
 import {
   ambientTypeDiagnostics,
   ambientTypeFiles,
@@ -417,12 +418,6 @@ function approximateUnmappedInVolar(): void {
 }
 
 /**
- * One run of the real `tsc` entry point (`process.argv` as it stands), with the
- * MX language plugins spliced in. Every plugin it creates is pushed to the given
- * lists. `watchMode` tells the host patches that this run rebuilds on its own,
- * so a rebuild can be noticed (see `rebuildActivity`). Returns tsc's exit code.
- */
-/**
  * The language-plugin factory Volar's patched `tsc.js` asks for.
  */
 type GetLanguagePlugins = (
@@ -462,9 +457,7 @@ function runVolarTsc(
   getLanguagePlugins: GetLanguagePlugins,
 ): void {
   const require = createRequire(import.meta.url);
-  const runTscPath = require.resolve(
-    "@volar/typescript/lib/quickstart/runTsc",
-  );
+  const runTscPath = require.resolve("@volar/typescript/lib/quickstart/runTsc");
   const volar = require("@volar/typescript/lib/quickstart/runTsc") as {
     getLanguagePlugins: unknown;
     transformTscContent: (
@@ -483,7 +476,7 @@ function runVolarTsc(
     "@volar/typescript/lib/node/proxyCreateProgram",
   );
   let path = tscPath;
-  let source = readFileSync(path, "utf8");
+  const source = readFileSync(path, "utf8");
   let patched: string;
   try {
     patched = volar.transformTscContent(
@@ -494,14 +487,16 @@ function runVolarTsc(
       runTscPath,
       TYPESCRIPT_OBJECT,
     );
-  } catch {
+  } catch (cause) {
     // Support the tsc shim used in TypeScript v5.7 and up
     const requirePath =
       /module\.exports\s*=\s*require\((?:"|')(?<path>\.\/\w+\.js)(?:"|')/.exec(
         source,
       )?.groups?.path;
     if (requirePath === undefined) {
-      throw new Error("Failed to locate tsc module path from shim");
+      throw new Error("Failed to locate tsc module path from shim", {
+        cause,
+      });
     }
     path = join(dirname(path), requirePath);
     patched = volar.transformTscContent(
@@ -514,14 +509,22 @@ function runVolarTsc(
     );
   }
   const module = { exports: {} as unknown };
-  new Function(
-    "exports",
-    "require",
-    "module",
-    "__filename",
-    "__dirname",
+  // `vm.compileFunction` (not `new Function`) so stack traces inside the
+  // patched `tsc.js` carry its file name instead of `<anonymous>`.
+  const run = vm.compileFunction(
     patched,
-  )(
+    ["exports", "require", "module", "__filename", "__dirname"],
+    { filename: path },
+  ) as (
+    this: unknown,
+    exports: unknown,
+    require: NodeRequire,
+    module: { exports: unknown },
+    filename: string,
+    dirname: string,
+  ) => void;
+  run.call(
+    module.exports,
     module.exports,
     createRequire(path),
     module,
@@ -530,6 +533,12 @@ function runVolarTsc(
   );
 }
 
+/**
+ * One run of the real `tsc` entry point (`process.argv` as it stands), with the
+ * MX language plugins spliced in. Every plugin it creates is pushed to the given
+ * lists. `watchMode` tells the host patches that this run rebuilds on its own,
+ * so a rebuild can be noticed (see `rebuildActivity`). Returns tsc's exit code.
+ */
 function runPatchedTsc(
   astro: boolean,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
@@ -553,76 +562,76 @@ function runPatchedTsc(
   ];
   try {
     runVolarTsc(resolveTscPath(), extensions, (typescript, options) => {
-        addAmbientTypes(options);
-        // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
-        const dialect = createDialectLanguagePlugin(
-          typescript,
-          dialectExtensions,
-        );
-        const regionPlugins = createRegionLanguagePlugins(typescript);
-        // `retainCompiled`: Angular template diagnostics run over the very
-        // compiles the type-check used, not a second pass of them.
-        const ngMx = createNgMxLanguagePlugin(typescript, {
-          retainCompiled: true,
-        });
-        ngPlugins.push({
-          rootNames: options.rootNames,
-          getCompiledNgMx: () => ngMx.getCompiledNgMx(),
-        });
-        const mx = createMxLanguagePlugin(typescript);
-        diagnosticPlugins.push(dialect, ...regionPlugins, ngMx, mx);
-        const plugins: LanguagePlugin<string>[] = [
-          dialect,
-          ...regionPlugins,
-          ngMx,
-          mx,
-        ];
-        if (astro) {
-          const amx = createAmxLanguagePlugin(typescript);
-          diagnosticPlugins.push(amx);
-          plugins.push(amx, createAstroLanguagePlugin());
-        }
-        // Watch only: which plugins this program made, so a rebuild reports
-        // the newest answer per file (see `currentCompileDiagnostics`).
-        generations?.push(
-          trackGeneration(
-            plugins.filter(
-              (plugin): plugin is MxDiagnosticLanguagePlugin =>
-                "getCompileDiagnostics" in plugin,
-            ),
+      addAmbientTypes(options);
+      // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
+      const dialect = createDialectLanguagePlugin(
+        typescript,
+        dialectExtensions,
+      );
+      const regionPlugins = createRegionLanguagePlugins(typescript);
+      // `retainCompiled`: Angular template diagnostics run over the very
+      // compiles the type-check used, not a second pass of them.
+      const ngMx = createNgMxLanguagePlugin(typescript, {
+        retainCompiled: true,
+      });
+      ngPlugins.push({
+        rootNames: options.rootNames,
+        getCompiledNgMx: () => ngMx.getCompiledNgMx(),
+      });
+      const mx = createMxLanguagePlugin(typescript);
+      diagnosticPlugins.push(dialect, ...regionPlugins, ngMx, mx);
+      const plugins: LanguagePlugin<string>[] = [
+        dialect,
+        ...regionPlugins,
+        ngMx,
+        mx,
+      ];
+      if (astro) {
+        const amx = createAmxLanguagePlugin(typescript);
+        diagnosticPlugins.push(amx);
+        plugins.push(amx, createAstroLanguagePlugin());
+      }
+      // Watch only: which plugins this program made, so a rebuild reports
+      // the newest answer per file (see `currentCompileDiagnostics`).
+      generations?.push(
+        trackGeneration(
+          plugins.filter(
+            (plugin): plugin is MxDiagnosticLanguagePlugin =>
+              "getCompileDiagnostics" in plugin,
           ),
-        );
-        plugins.push(createCompoundExtensionResolver(typescript));
-        return {
-          languagePlugins: plugins,
-          setup: (language) => {
-            // Runs before Volar copies the host and patches `getSourceFile` on
-            // that copy, so every edit below lands on the host it copies from.
-            virtualFilesInWatchRebuilds(options.host);
-            // Watch only: the manifests that decide a file's host are inputs
-            // of that file (see `watch-package-json.ts`).
-            if (watchMode) {
-              trackPackageJsonInputs(
-                typescript,
-                options.host,
-                extensions,
-                solutionBuild,
-              );
-            }
-            // Watch only: marks that a rebuild is reading files, so a rebuild
-            // whose summary the pass cannot recognize is said out loud.
-            if (watchMode) {
-              rebuildActivity(options.host, { build: solutionBuild });
-            }
-            fallBackToVolarResolution(
+        ),
+      );
+      plugins.push(createCompoundExtensionResolver(typescript));
+      return {
+        languagePlugins: plugins,
+        setup: (language) => {
+          // Runs before Volar copies the host and patches `getSourceFile` on
+          // that copy, so every edit below lands on the host it copies from.
+          virtualFilesInWatchRebuilds(options.host);
+          // Watch only: the manifests that decide a file's host are inputs
+          // of that file (see `watch-package-json.ts`).
+          if (watchMode) {
+            trackPackageJsonInputs(
               typescript,
               options.host,
-              language,
-              astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
+              extensions,
+              solutionBuild,
             );
-          },
-        };
-      });
+          }
+          // Watch only: marks that a rebuild is reading files, so a rebuild
+          // whose summary the pass cannot recognize is said out loud.
+          if (watchMode) {
+            rebuildActivity(options.host, { build: solutionBuild });
+          }
+          fallBackToVolarResolution(
+            typescript,
+            options.host,
+            language,
+            astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
+          );
+        },
+      };
+    });
   } catch (cause) {
     if (cause !== stopped) throw cause;
   } finally {
