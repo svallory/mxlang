@@ -226,14 +226,19 @@ astro-mx-wrong.astro.mx(9,27): error TS2345: Argument of type 'string' is not as
 
 ## How it works
 
-`runMxTsc()` calls `runTsc` with `.solid.mx` and `.mx`; `--astro`
+`runMxTsc()` calls `runVolarTsc` with `.solid.mx` and `.mx`; `--astro`
 adds `.astro`, `.astro.mx`, Astro's language plugin, and the AstroMX language
 plugin:
 
 - **`tscPath`** is `typescript/lib/tsc.js`, resolved relative to this package.
-  `runTsc` does not spawn `tsc`; it reads that file, rewrites `createProgram`
-  to route through Volar, and evaluates the result. So it needs the real entry
-  point's path, not the `typescript` module's exports.
+  `runVolarTsc` does not spawn `tsc`; it reads that file, rewrites
+  `createProgram` to route through Volar, and evaluates the result itself. So
+  it needs the real entry point's path, not the `typescript` module's exports.
+  Volar's own `runTsc` does the reading and rewriting through a patched
+  `fs.readFileSync` around a `require` of `tsc.js`, a loader route Bun's
+  native CommonJS loader does not take, so `mx-tsc` would silently run the
+  stock `tsc.js` under Bun; `runVolarTsc` evaluates the transformed source
+  directly and works identically under Node and Bun.
 - **`getLanguagePlugins`** returns the Solid and whole-file MX plugins plus
   `createCompoundExtensionResolver(ts)`, and optionally Astro's plugin. The
   resolver is what makes
@@ -241,16 +246,18 @@ plugin:
   though each file compiles fine on its own.
 - **`tsObject`** is the string `"require('typescript')"`. This one is not
   optional, and is the subtlety worth knowing before editing `src/index.ts`:
-  `runTsc`'s default is a proxy that resolves property names by `eval` inside
-  `tsc.js`'s own scope, so it sees only that bundle's locals. `ScriptSnapshot`
+  the transform's default is a proxy that resolves property names by `eval`
+  inside `tsc.js`'s own scope, so it sees only that bundle's locals. `ScriptSnapshot`
   is not one of them — it is part of the public `typescript` module but not of
   the `tsc` entry point — so the language plugin's `ScriptSnapshot.fromString`
   call dies with `ReferenceError: ScriptSnapshot is not defined` before a
   single file is checked. Requiring the real module gives the same surface the
   tsserver plugin gets.
 
-The binary is CJS (`dist/bin.cjs`): `runTsc` uses `require`, `require.resolve`
-and `__filename`, none of which exist in an ES module.
+The binary is CJS (`dist/bin.cjs`): `runVolarTsc` hands the evaluated code an
+explicit `require`, `require.resolve` and `__filename`, so it no longer needs
+them from the module system — the CJS bin stays because every consumer
+(`node`, `bun`, the tests) spawns it as a script.
 
 ## Tests
 

@@ -1,6 +1,6 @@
 # @mxlang/tsc
 
-`mx-tsc`: real `tsc` with the MX language plugins spliced in through Volar's `runTsc`. Its internals are described in `../typescript-plugin/AGENTS.md`; this file covers only what is specific to this package's tests.
+`mx-tsc`: real `tsc` with the MX language plugins spliced in through Volar's tsc patches, applied by `runVolarTsc` in this package's `src/index.ts` (Volar's own `runTsc` route does not work under Bun: its native CJS loader bypasses the patched `fs.readFileSync`). Its internals are described in `../typescript-plugin/AGENTS.md`; this file covers only what is specific to this package's tests.
 
 ## Tests
 

@@ -78,7 +78,8 @@ entry.
   the mapping-coverage bullet below for what is mapped per expression and what
   whole-block. `{ astro: true }` lazily composes Astro's language plugin
   from the optional exact `@astrojs/language-server@2.16.16` peer.
-- **`@mxlang/tsc`** is the CI half — `mx-tsc`, Volar's `runTsc` handed the
+- **`@mxlang/tsc`** is the CI half — `mx-tsc`, Volar's tsc patches applied by
+  `runVolarTsc` (`packages/tooling/tsc/src/index.ts`), handed the
   *same* language plugin. It exists because `tsc` ignores
   `compilerOptions.plugins` entirely, so without it an editor would report
   errors a build silently missed. `--astro` adds Astro's plugin and extension,
@@ -146,8 +147,8 @@ entry.
   file takes effect when the `.ng.mx` is next edited or reopened.
 
 - **`mx-tsc` also runs Angular template diagnostics** (`packages/tooling/tsc/src/ng-diagnostics.ts`).
-  It creates the `.ng.mx` plugin with `retainCompiled`, and after `runTsc`
-  hands the retained compiles to `@mxlang/angular-checker`'s `diagnoseNgMx`,
+  It creates the `.ng.mx` plugin with `retainCompiled`, and after
+  `runVolarTsc` hands the retained compiles to `@mxlang/angular-checker`'s `diagnoseNgMx`,
   one checker per project (nearest `package.json`), disposed at the end. The
   module is presented to the checker as `<file>.ng.mx.ts` so its imports and
   `@angular/core` resolve from the project. `mx.angular.diagnostics` `"off"`
@@ -193,8 +194,8 @@ Four facts worth knowing before editing either:
   which maps categories to error|warning only). Do not re-map categories in
   `tsc/src/ng-diagnostics.ts`. Pinned by `tsc/src/ng-extended-diagnostics.test.ts`
   (fixture `ng-diag-ngif`, one tsconfig per case).
-- **`runTsc` needs `require('typescript')` passed as its fourth argument.**
-  Its default `typescriptObject` is a proxy resolving names by `eval` inside
+- **The tsc transform needs `require('typescript')` passed as its `typescriptObject`.**
+  The default is a proxy resolving names by `eval` inside
   `tsc.js`'s own scope, so it sees only that bundle's locals. `ScriptSnapshot`
   is not one — it is on the public `typescript` module but not the `tsc` entry
   point — and the language plugin dies with `ReferenceError: ScriptSnapshot is
@@ -206,8 +207,11 @@ Four facts worth knowing before editing either:
   advertises the terminal `mx` suffix; without it every `import
   "./X.solid.mx"` is `TS2307`. It lives in `language.ts` and is installed by
   both entry points, so an editor and CI resolve imports identically.
-- **`mx-tsc` must be CJS.** `runTsc` uses `require`, `require.resolve` and
-  `__filename`, none of which exist in an ES module — hence `dist/bin.cjs`.
+- **`mx-tsc` stays CJS** (`dist/bin.cjs`). `runVolarTsc` evaluates the
+  transformed `tsc.js` with an explicit `require`, `require.resolve` and
+  `__filename`, because Bun's native CommonJS loader does not read module
+  sources through the patched `fs.readFileSync` Volar's `runTsc` relies on.
+  The explicit evaluation works identically under Node and Bun.
 - **Column accuracy comes from the parser bridge, not from this package.**
   `print`'s map is line-based; the exact columns come from
   `packages/tsx-bridge/src/mx/bridge.ts` repositioning each Babel node onto the
