@@ -6513,6 +6513,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
         posOf(ctx, node),
         voiceOfCtx(ctx),
         blameEndOffset(node),
+        name,
       );
     }
     raiseDisposition(ctx, name, disposition, node);

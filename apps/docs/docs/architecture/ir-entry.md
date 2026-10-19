@@ -180,7 +180,7 @@ Always rejected, each with a positioned message: `<define>` and calls to it, `<r
 
 No dialect tag may be named `if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static` or `try`: core consumes those names first.
 
-The messages say "data file" (``Data files are static, so they do not evaluate `<if>` ``). A dialect states its own noun, singular and plural, with `messageVocabulary.file`; see [Your own words in core's messages](/custom-tags/dialects/).
+The messages say "data file" (``Data files are static, so they do not evaluate `<if>` ``). Under `structural: "reject"`, an orphan `<else>` or `<else-if>` is one `MX_STRUCTURAL_CONSTRUCT` error at the tag: it names the written tag as part of `if` (`` `<else>` is part of `<if>`, and data files are static, so they do not evaluate `<if>` ``), with no hint to add an `if`. A dialect states its own noun, singular and plural, with `messageVocabulary.file`, and spells each tag through `messageVocabulary.formatTag`; see [Your own words in core's messages](/custom-tags/dialects/).
 
 ## Dialects
 

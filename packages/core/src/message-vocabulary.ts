@@ -279,9 +279,16 @@ export function voiceOf(dialect: Dialect | undefined): Voice {
   return voice;
 }
 
-/** The fixed structural-reject message: `construct` is already spelled. */
-export function structuralMessage(construct: string, voice: Voice): string {
-  return `${voice.Files} are static, so they do not evaluate ${construct}`;
+/** The structural-reject message: `construct` and an optional orphan tag are already spelled. */
+export function structuralMessage(
+  construct: string,
+  voice: Voice,
+  orphan?: string,
+): string {
+  const subject = orphan
+    ? `${orphan} is part of ${construct}, and ${voice.files}`
+    : voice.Files;
+  return `${subject} are static, so they do not evaluate ${construct}`;
 }
 
 /** The voice of the file being lowered, as `productOf` reads its product. */

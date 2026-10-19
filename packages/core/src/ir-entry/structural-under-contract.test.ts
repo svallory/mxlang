@@ -775,6 +775,8 @@ describe("structural: reject, a for or if written with a head the construct woul
 });
 
 describe("structural: reject, an orphan else or else-if is the if construct", () => {
+  const orphanText = (name: string) =>
+    `\`<${name}>\` is part of \`<if>\`, and data files are static, so they do not evaluate \`<if>\``;
   const reservedText = (name: string) =>
     `\`<${name}>\` cannot name a data tag: it is reserved — core consumes the structural names (\`if\`, \`else\`, \`else-if\`, \`for\`, \`const\`, \`define\`, \`return\`, \`import\`, \`export\`, \`static\`) and \`<try>\` before a target sees them`;
   const eaters: Record<string, CustomTag> = {
@@ -837,26 +839,26 @@ describe("structural: reject, an orphan else or else-if is the if construct", ()
           .split("\n")
           .findIndex((l) => l.trimStart().startsWith(`<${name}`)) + 1;
       expect(run(wrapped, reject)).toEqual([
-        ["MX_STRUCTURAL_CONSTRUCT", line, col, IF],
+        ["MX_STRUCTURAL_CONSTRUCT", line, col, orphanText(name)],
       ]);
     });
   });
 
   it("reject: an else after a non-if sibling is the construct, at the else", () => {
     expect(run("<plain/>\n<else>\n  <box/>\n</else>\n", reject)).toEqual([
-      ["MX_STRUCTURAL_CONSTRUCT", 2, 0, IF],
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 0, orphanText("else")],
     ]);
     expect(run("<plain>\n  <box/>\n  <else/>\n</plain>\n", reject)).toEqual([
-      ["MX_STRUCTURAL_CONSTRUCT", 3, 2, IF],
+      ["MX_STRUCTURAL_CONSTRUCT", 3, 2, orphanText("else")],
     ]);
   });
 
   it("reject: concise orphan else and else-if", () => {
     expect(run("else\n  box\n", reject)).toEqual([
-      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, orphanText("else")],
     ]);
     expect(run("else-if=x\n  box\n", reject)).toEqual([
-      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, IF],
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 0, orphanText("else-if")],
     ]);
   });
 
@@ -872,7 +874,7 @@ describe("structural: reject, an orphan else or else-if is the if construct", ()
         "<if=a><box/></if>\n<else><box/></else>\n<else><box/></else>\n",
         reject,
       ),
-    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 3, 0, IF]]);
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 3, 0, orphanText("else")]]);
   });
 
   it("ends the message with the backticked if, as Mesh parses it", () => {

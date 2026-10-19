@@ -708,14 +708,56 @@ describe("a reserved structural name in a data file", () => {
   describe("under structural reject the construct is worded through the voice", () => {
     const REJECT: LowerSourceOptions = { structural: "reject" };
 
-    it.each(["else\n  entity\n", "else-if=x\n  entity\n"])(
-      "colon dialect: %j",
-      (source) => {
-        expect(messages(source, colonDialect, REJECT)).toEqual([
-          "Kit files are static, so they do not evaluate `:if`",
+    it.each([
+      ["else\n  entity\n", "else"],
+      ["else-if=x\n  entity\n", "else-if"],
+    ])("colon dialect: %j", (source, name) => {
+      expect(messages(source, colonDialect, REJECT)).toEqual([
+        `\`:${name}\` is part of \`:if\`, and Kit files are static, so they do not evaluate \`:if\``,
+      ]);
+    });
+
+    describe.each([
+      ["bare tag names", optionDialect, ""],
+      ["respelt tag names", colonDialect, ":"],
+    ] as const)("orphan vocabulary: %s", (_label, dialect, prefix) => {
+      it.each([
+        ["bare else", "else\n", "else", 1, 0],
+        ["entity else", 'entity name="e"\n  else\n', "else", 2, 2],
+        ["entity else(x)", 'entity name="e"\n  else(x)\n', "else", 2, 2],
+        ["entity else-if", 'entity name="e"\n  else-if\n', "else-if", 2, 2],
+        [
+          "entity else-if(x)",
+          'entity name="e"\n  else-if(x)\n',
+          "else-if",
+          2,
+          2,
+        ],
+        ["top-level else", 'else\n  entity name="e"\n', "else", 1, 0],
+      ] as const)("%s", (_case, source, name, line, column) => {
+        const result = lowerSource(source, "/v/a.mx", {
+          ...OPTIONS,
+          dialect,
+        });
+        expect(result.ir).toBeUndefined();
+        const offset = source.indexOf(name);
+        expect(result.diagnostics).toEqual([
+          expect.objectContaining({
+            code: "MX_STRUCTURAL_CONSTRUCT",
+            severity: "error",
+            line,
+            column,
+            offset,
+            end: {
+              line,
+              column: column + name.length,
+              offset: offset + name.length,
+            },
+            message: `\`${prefix}${name}\` is part of \`${prefix}if\`, and Kit files are static, so they do not evaluate \`${prefix}if\``,
+          }),
         ]);
-      },
-    );
+      });
+    });
 
     it("a bare dialect keeps the tail Mesh parses", () => {
       const bare = dialectWith({
@@ -739,6 +781,27 @@ describe("a reserved structural name in a data file", () => {
         [DIALECT_HOOK_ERROR_CODE, 1, 0],
       ]);
     });
+
+    it.each(["else", "else-if"])(
+      "a formatTag throwing for the written %s is the hook error at the tag",
+      (orphan) => {
+        const throwing = dialectWith({
+          formatTag: ({ name }: { name: string }) => {
+            if (name === orphan) throw new Error("no orphan spelling");
+            return name;
+          },
+        });
+        const found = diagnose(`${orphan}\n  entity\n`, throwing, REJECT);
+        expect(found).toEqual([
+          expect.objectContaining({
+            code: DIALECT_HOOK_ERROR_CODE,
+            line: 1,
+            column: 0,
+            message: `the dialect's \`messageVocabulary.formatTag\` threw while spelling \`<${orphan}>\`: no orphan spelling`,
+          }),
+        ]);
+      },
+    );
   });
 
   it("`try` says what a data file cannot do and what to write instead", () => {

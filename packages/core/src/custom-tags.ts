@@ -1915,12 +1915,17 @@ export function structuralConstructError(
   loc: Position,
   voice: Voice,
   end: number | undefined,
+  orphan?: "else" | "else-if",
 ): TranslateError {
   let error: TranslateError;
   try {
     error = codedError(
       STRUCTURAL_CONSTRUCT_CODE,
-      structuralMessage(voice.tag(keyword), voice),
+      structuralMessage(
+        voice.tag(keyword),
+        voice,
+        orphan === undefined ? undefined : voice.tag(orphan),
+      ),
       loc.line,
       loc.column,
       loc.file,
