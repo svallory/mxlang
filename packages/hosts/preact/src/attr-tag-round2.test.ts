@@ -1,6 +1,5 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX fixture source uses `${...}` placeholders.
 
-import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -18,6 +17,7 @@ import { render as renderPreact } from "preact-render-to-string";
 import { createElement as reactCreateElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { strictTsc } from "./fixtures/strict-tsc.ts";
 import { compilePreactMx } from "./index.ts";
 
 type Host = "preact" | "react" | "hono";
@@ -600,9 +600,9 @@ export default function Row(props: Input) { return <p>{props.head.content}|{prop
     });
   }
 
-  it.each(["preact", "react"] as const)(
+  it.concurrent.for(["preact", "react"] as const)(
     "%s: emitted looped parameter bodies pass strict tsc",
-    async (host) => {
+    async (host, { signal }) => {
       const scratch = mkdtempSync(join(tmpdir(), `mx-${host}-attr-tsc-r2-`));
       try {
         const compile = await compilerFor(host);
@@ -644,11 +644,7 @@ export default function Row(props: Input) { return <p>{props.items.map((x, i) =>
             include: ["*.tsx"],
           }),
         );
-        const proc = spawnSync(
-          join(repoNodeModules, ".bin", "tsc"),
-          ["-p", join(scratch, "tsconfig.json")],
-          { encoding: "utf8" },
-        );
+        const proc = await strictTsc(join(scratch, "tsconfig.json"), signal);
         expect(proc.stderr).toBe("");
         expect(proc.stdout).toBe("");
         expect(proc.status).toBe(0);

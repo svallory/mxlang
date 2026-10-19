@@ -6,7 +6,6 @@
  * MX diagnostic). A callee reads the body as its render-prop child, exactly as
  * the plain `<List>{(item, i) => …}</List>` form does.
  */
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -17,6 +16,7 @@ import { render as renderPreact } from "preact-render-to-string";
 import { createElement as reactCreateElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { strictTsc } from "./fixtures/strict-tsc.ts";
 import { compilePreactMx } from "./index.ts";
 
 type Host = "preact" | "react" | "hono";
@@ -244,9 +244,9 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
     },
   );
 
-  it.each(Object.entries(CASES))(
+  it.concurrent.for(Object.entries(CASES))(
     "%s: the params are bound and typed under strict tsc",
-    async (_name, testCase) => {
+    async ([_name, testCase], { signal }) => {
       const { scratch, compile } = scratchFor(host, testCase);
       try {
         await compile();
@@ -268,11 +268,7 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
             include: ["*.tsx"],
           }),
         );
-        const proc = spawnSync(
-          join(repoNodeModules, ".bin", "tsc"),
-          ["-p", join(scratch, "tsconfig.json")],
-          { encoding: "utf8" },
-        );
+        const proc = await strictTsc(join(scratch, "tsconfig.json"), signal);
         const errors = (proc.stdout + proc.stderr)
           .split("\n")
           .filter(Boolean)
