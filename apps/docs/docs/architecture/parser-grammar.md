@@ -346,10 +346,10 @@ content reads to the next `>`, and the text between is compared:
 | 4 | anything else | `The closing "x" tag does not match the corresponding opening "y" tag` | g0238 |
 | — | any, with no open tag | `The closing "x" tag was not expected` | g0237 |
 | — | a named close tag when the open tag never got its name (`,--/</e>`) | `The closing "x" tag was not expected`; `</>` still closes that tag (row 1) | g1683 |
-| — | a close tag on a line under a concise tag | closes the concise tag without error. TODO `concise-close-tag-closes-concise-tag` | g0690 |
+| — | a matching named close tag or `</>` on a line under a concise tag | closes the concise tag without error, as in stock Marko | g0690 |
 
-The literal `div` in row 2 is OQ 25. Spec §3 "Concise mode" describes the last
-row as a parse error (OQ 26).
+The literal `div` in row 2 is OQ 25. The last row follows stock Marko, as
+spec §3 "Concise mode" describes.
 
 ## Tags
 
@@ -1490,11 +1490,19 @@ of its own or after a concise open tag (row 4 of [The open tag](#the-parser-gram
 | --- | --- | --- |
 | the run of hyphens | is the delimiter (`--`, `---`, …) | g0915 |
 | the run is followed directly by a newline | a multi-line block | g0916 |
-| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line (OQ 27). TODO `delimiter-next-character-skipped` | g0181 g0917 g0918 g0777 |
+| otherwise | the one character after the run is skipped without being examined. When only whitespace remains on the line the block is multi-line (`--x\n  a`: the `x` is discarded); otherwise it is single-line, its content starts after the skipped character (`--abc` is the text `bc`) and it ends at the end of its line. This is stock Marko's behaviour; MX keeps it. | g0181 g0917 g0918 g0777 |
 | the content | HTML content: tags and placeholders are parsed | g0919 g0920 |
 | the content, under a text tag | text content | g0921 |
 | a multi-line block's `indent`, hyphens on a line of their own | that line's indentation | g0922 |
 | a multi-line block's `indent`, hyphens after an open tag | the next line's indentation when it is longer than the tag line's, otherwise the tag line's | g0515 g0923 |
+
+A separate known limitation is close-tag matching for an unnamed tag (`<.a>`
+or `<#id>`): even with a configured `defaultTag` other than `div`, the template
+parser still checks the close against the literal `div`, as in stock Marko
+(OQ 25, probe g0686). `<.a></div>` is accepted and `<.a></span>` is an error
+naming `div`, even though the tag renders as the configured default tag.
+Whether the close should compare against the resolved tag is an open language
+question for the operator.
 
 At each newline inside a multi-line block the following line is tested
 (`handleDelimitedBlockEOL`):
@@ -2040,13 +2048,12 @@ the normative one.
     resolves to. The htmljs fixture `shorthand-closing-html2` pins it.
     *Recommendation:* accept only `</>` for an
     unnamed tag, or compare against the resolved name in core.
-26. **A close tag in a concise region.** Spec §3 "Concise mode" says closing
-    tags are a parse error there; the parser reports one only when no tag is
-    open or the name differs, and `div\n  </div>` closes the concise `div`.
-    *Recommendation:* make it an error, as the spec says.
-27. **The character after a `--` run.** It is skipped unexamined (`--abc` is the
-    text `bc`). *Recommendation:* require whitespace or the end of the line
-    after the hyphens.
+26. **A close tag in a concise region.** *Settled*: `div\n  </div>` and
+    `div\n  </>` close the concise `div`, as in stock Marko. Spec §3 "Concise
+    mode" follows this behaviour; an unexpected or mismatched close tag is
+    still a parse error.
+27. **The character after a `--` run.** *Settled*: it is skipped unexamined
+    (`--abc` is the text `bc`). This is stock Marko's behaviour; MX keeps it.
 28. **The `:` condition of the former after-value rule.** *Settled*: core has
     no after-value rule, so a spaced `:` after a value continues it, as in
     stock. `x=(a) : T => a` stays one value ([E1](#the-parser-grammar-expression-boundaries-e1-attribute-value-html-mode)).
@@ -2083,8 +2090,8 @@ The inputs the open questions mention:
 | 23 | `x=a !b`, `x=a ++b` | g0668 g0669 |
 | 24 | concise `div x=a as T > b`; `<foo<() => void>/>`; `<div onClick<T extends () => void>(a) {x}/>`; `x=a + /* c */ b`; `$ const a = 1 + \n  2`; `<div ... [a]/>`, `<div ... "s"/>`; `<div x=/* c */ a/>`; `static const x = 1\n, y`. TODO `concise-as-type-gt-mismatched-group`, `type-list-arrow-cut`, `value-block-comment-after-operator`, `scriptlet-trailing-space-after-operator`, `spread-value-starting-with-bracket-or-string`, `statement-tag-comma-line-adds-attributes` | g0266 g0677 g0941 g0674 g0504 g0479 g0480 g0667 g0895 |
 | 25 | `<.a></div>`. TODO `unnamed-tag-close-compares-literal-div` | g0686 |
-| 26 | `div\n  </div>`. TODO `concise-close-tag-closes-concise-tag` | g0690 |
-| 27 | `--abc`. TODO `delimiter-next-character-skipped` | g0917 |
+| 26 | `div\n  </div>`. Settled: closes the concise tag, as in stock Marko | g0690 |
+| 27 | `--abc`. Settled: the text `bc`, as in stock Marko | g0917 |
 | 28 | `x=(a) : T => a` | g0611 |
 | 30 | `static const a = 1`, with `static` in the supplied statement set and without | g0758 g0759 |
 
@@ -2144,8 +2151,8 @@ corpus.
 | fixed in the look-behinds follow-up (TODO `template-parser-lookbehinds-followup`), kept here as regression probes | `x=(f(/*c*/ await :b))` and `x=(f( await :b))` are one value each; `<if=count\u00a0>= 10>` is the comparison, `<div x=(é)\u00a0/ 2/>` divides and `<div x=a +\u00a0 y=1/>` is one value, each as with a space | none | g1678 g1679 g1686 g1684 g1685 g1687 |
 | the type context at any group depth after `as`, `satisfies` or an annotation | `<div x=a as T ? (b < c) : d/>` is `Mismatched group`. A recorded limit: no action before MX2's TypeScript-aware expression boundary | `as-satisfies-type-context-any-depth` | g0360 |
 
-The behaviours of OQ 13 (no `\` escape in a text-body string), OQ 17, OQ 24,
-OQ 25 and OQ 27 look like defects as well and are not filed. An implementer
+The behaviours of OQ 13 (no `\` escape in a text-body string), OQ 17, OQ 24
+and OQ 25 look like defects as well and are not filed. An implementer
 **must not** treat a row of this table as intended grammar.
 
 ## Conformance

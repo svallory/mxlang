@@ -637,10 +637,11 @@ div
     -- Nested by indentation.
 ```
 
-**Closing tags are a parse error in a concise region** (`The closing "div" tag
-was not expected`), and a line in a concise region cannot start with a single
-hyphen — see **Text lines (`--`)** below for the `--` rule, and **A bare
-`${expr}` line** for that line's own trap.
+**A matching closing tag or `</>` can close a concise tag**: `div\n  </div>`
+and `div\n  </>` both close the concise `div`. A closing tag is a parse error
+when no tag is open or its name does not match. A line in a concise region
+cannot start with a single hyphen — see **Text lines (`--`)** below for the
+`--` rule, and **A bare `${expr}` line** for that line's own trap.
 
 Inherited from Marko under the governing rule: MX has no rule of its own here. Concise
 blocks are exercised in MX source by the landing page's example
