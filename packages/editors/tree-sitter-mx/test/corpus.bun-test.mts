@@ -39,10 +39,11 @@ describe("tree-sitter-mx corpus", () => {
 
 describe("unterminated comments", () => {
   // EOF belongs to the comment, even across a closing tag or a concise
-  // dedent, just as for the existing <!-- EOF case. With ONE error sentinel
-  // in a parse, completed siblings stay outside the ERROR; an unfinished
-  // enclosing element may join the ERROR. A second sentinel ends the parse
-  // (see "known shape" below).
+  // dedent, just as for the existing <!-- EOF case. When the sentinel is the
+  // only error in a parse, completed siblings stay outside the ERROR; an
+  // unfinished enclosing element may join the ERROR. A sentinel combined with
+  // any other error in the same parse ends the parse (see "known shape"
+  // below).
   const EOF_CASES = [
     "parsed-text-block-comment-eof",
     "html-content-block-comment-eof",
@@ -51,7 +52,7 @@ describe("unterminated comments", () => {
     "concise-block-comment-eof",
   ];
   for (const name of EOF_CASES) {
-    it(`covers the malformed tail with a single error sentinel and keeps the preceding sibling: ${name}`, () => {
+    it(`covers the malformed tail of a lone error and keeps the preceding sibling: ${name}`, () => {
       const c = CASES.find((c) => c.name === name);
       assert.ok(c, `missing corpus case ${name}`);
       const tree = parseMx(c.source);
@@ -92,10 +93,11 @@ describe("unterminated comments", () => {
     });
   }
 
-  // Known shape, bead mx-r6fj: a SECOND error sentinel in one parse ends the
-  // parse. Here the placeholder (or scriptlet) fails first and the new
-  // comment sentinel is the second one, so the root becomes an ERROR that
-  // starts at 0 and holds the completed `<before/>`. The front end reports
+  // Known shape, bead mx-r6fj: a sentinel combined with any other error in
+  // one parse, in either order, ends the parse. Here an ordinary placeholder
+  // (or scriptlet) error comes first and the new comment sentinel follows,
+  // so the root becomes an ERROR that starts at 0 and holds the completed
+  // `<before/>`; the ERROR stops before the comment. The front end reports
   // MALFORMED_COMMENT for both inputs. The same collapse already holds on
   // main for a concise `-` line and for `<!--`. Pinned as it is, not as it
   // should be: when mx-r6fj lands these rows change.

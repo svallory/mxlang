@@ -227,13 +227,19 @@ is MX's own:
   EOF, including apparent close tags and dedents. With one error sentinel in
   a parse, completed preceding siblings stay outside the ERROR (an unfinished
   enclosing element may join it), and once the terminator is present,
-  subsequent siblings parse normally. A second error sentinel in the same
-  parse ends the parse: the root becomes an `ERROR` and the earlier siblings
-  sit inside it. That already holds on main for a concise `-` line and for
-  `<!--` (`<before/>\n<p>${y <!-- oops` gives a root `ERROR` over
-  `0..15`), and this patch extends it to the new paths
-  (`<before/>\n<p>${y /* oops` and `<before/>\n$ /* oops` give a root
-  `ERROR` from offset 0). Bead mx-r6fj tracks it.
+  subsequent siblings parse normally. A sentinel combined with any other
+  error in the same parse, in either order, ends the parse: the root becomes
+  an `ERROR` and the earlier siblings sit inside it. Both orders occur:
+  `<before/>\n<p>${y /* oops` has an ordinary placeholder error and then
+  one sentinel, and `<a/>\n-\n<b/>\n<p>${x` has the sentinel first and then
+  a placeholder error (the root `ERROR` covers `0..6` and `<b/>` is lost).
+  That already holds on main for a concise `-` line and for `<!--`
+  (`<before/>\n<p>${y <!-- oops` gives a root `ERROR` over `0..15`), and this
+  patch extends it to the new paths (`<before/>\n<p>${y /* oops` and
+  `<before/>\n$ /* oops` give a root `ERROR` from offset 0). For
+  `<before/>\n<p>${y /* oops` the `ERROR` stops before the comment (it ends
+  at 15), so `/* oops` at `16..24` lies outside every node. Bead mx-r6fj
+  tracks it.
 - The front end reports `MALFORMED_COMMENT` at a zero-width range on the
   opener, whereas tree-sitter's ERROR spans the malformed construct. These
   ranges intentionally differ; this patch does not change compiler parsing.
