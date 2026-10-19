@@ -40,25 +40,31 @@ export interface ResolvedWorkers {
   reason: "cli" | "override" | "cap";
   /** The free-memory figure the decision was based on (always reported, even when overridden). */
   freeBytes: number;
+  /** The --maxWorkers token as written ("3", "75%"), when reason is "cli". */
+  cliRaw?: string;
 }
 
-/** The value of `--maxWorkers`/`--max-workers` ("N", "=N", "N%") in argv, or undefined. */
-export function cliMaxWorkers(argv: readonly string[]): number | undefined {
+/**
+ * The `--maxWorkers`/`--max-workers` value in argv ("N", "=N", "N%"), or
+ * undefined. A percentage has no count until vitest resolves it against the
+ * cores, so it is kept as written (`raw`) with `value` unset.
+ */
+export interface CliWorkers {
+  value?: number;
+  raw: string;
+}
+
+export function cliMaxWorkers(argv: readonly string[]): CliWorkers | undefined {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const m = /^--maxWorkers=(.+)$/.exec(a) ?? /^--max-workers=(.+)$/.exec(a);
-    if (m) return parseWorkers(m[1]);
-    if (a === "--maxWorkers" || a === "--max-workers") {
-      return parseWorkers(argv[i + 1]);
-    }
+    const token = m ? m[1] : undefined;
+    if (!token && a !== "--maxWorkers" && a !== "--max-workers") continue;
+    const v = token ?? argv[i + 1];
+    if (v === undefined || !/^\d+%?$/.test(v)) return undefined;
+    return v.endsWith("%") ? { raw: v } : { value: Number(v), raw: v };
   }
   return undefined;
-}
-
-function parseWorkers(v: string | undefined): number | undefined {
-  const m = v && /^(\d+)%?$/.exec(v);
-  if (!m) return undefined;
-  return Number(m[1]);
 }
 
 export function resolveWorkers(
@@ -70,8 +76,16 @@ export function resolveWorkers(
   // A --maxWorkers on the CLI overrides this config value at the vitest CLI
   // layer, above the config; report it, not the cap it defeated.
   const cli = cliMaxWorkers(argv);
-  if (cli !== undefined) {
-    return { workers: cli, reason: "cli", freeBytes };
+  if (cli) {
+    // For a percentage only vitest can resolve the count; report the token as
+    // written and keep the memory cap as the config value (the CLI value wins
+    // inside vitest either way).
+    return {
+      workers: cli.value ?? workerCap(freeBytes, parallelism),
+      reason: "cli",
+      freeBytes,
+      cliRaw: cli.raw,
+    };
   }
   const override = Number(env.VITEST_MAX_WORKERS);
   if (
@@ -93,9 +107,12 @@ export function workersLogLine(r: ResolvedWorkers): string {
   const gb = (r.freeBytes / GIB).toFixed(1);
   const why =
     r.reason === "cli"
-      ? ", --maxWorkers wins over the cap"
+      ? `, --maxWorkers ${r.cliRaw ?? String(r.workers)} wins over the cap`
       : r.reason === "override"
         ? ", VITEST_MAX_WORKERS override"
         : "";
-  return `vitest workers: ${r.workers} (${gb} GiB free${why})`;
+  const count = r.cliRaw?.endsWith("%")
+    ? `${r.cliRaw} of cores`
+    : String(r.workers);
+  return `vitest workers: ${count} (${gb} GiB free${why})`;
 }

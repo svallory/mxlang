@@ -70,11 +70,17 @@ describe("resolveWorkers (the override)", () => {
 });
 
 describe("cliMaxWorkers (the CLI override)", () => {
-  it("finds --maxWorkers N and =N, and --max-workers", () => {
-    expect(cliMaxWorkers(["vitest", "run", "--maxWorkers", "3"])).toBe(3);
-    expect(cliMaxWorkers(["--maxWorkers=4"])).toBe(4);
-    expect(cliMaxWorkers(["--max-workers", "2"])).toBe(2);
-    expect(cliMaxWorkers(["--max-workers=75%"])).toBe(75);
+  it("finds --maxWorkers N and =N, and --max-workers; a percentage is kept as written", () => {
+    expect(cliMaxWorkers(["vitest", "run", "--maxWorkers", "3"])).toEqual({
+      value: 3,
+      raw: "3",
+    });
+    expect(cliMaxWorkers(["--maxWorkers=4"])).toEqual({ value: 4, raw: "4" });
+    expect(cliMaxWorkers(["--max-workers", "2"])).toEqual({
+      value: 2,
+      raw: "2",
+    });
+    expect(cliMaxWorkers(["--max-workers=75%"])).toEqual({ raw: "75%" });
   });
   it("returns undefined when absent or unparsable", () => {
     expect(cliMaxWorkers(["vitest", "run"])).toBeUndefined();
@@ -84,6 +90,10 @@ describe("cliMaxWorkers (the CLI override)", () => {
   it("a --maxWorkers on the CLI is reported instead of the cap", () => {
     const r = resolveWorkers({}, 30 * GIB, 14, ["--maxWorkers", "3"]);
     expect(r).toMatchObject({ workers: 3, reason: "cli" });
+  });
+  it("a percentage --maxWorkers keeps the cap as the config value and reports the token", () => {
+    const r = resolveWorkers({}, 12 * GIB, 14, ["--maxWorkers=75%"]);
+    expect(r).toMatchObject({ workers: 12, reason: "cli", cliRaw: "75%" });
   });
   it("VITEST_MAX_WORKERS wins when there is no --maxWorkers", () => {
     expect(
@@ -105,10 +115,27 @@ describe("workersLogLine", () => {
     ).toBe("vitest workers: 6 (1.0 GiB free, VITEST_MAX_WORKERS override)");
   });
 
-  it("marks a CLI --maxWorkers", () => {
+  it("marks a CLI --maxWorkers, including a percentage as written", () => {
     expect(
-      workersLogLine({ workers: 3, reason: "cli", freeBytes: 12 * GIB }),
-    ).toBe("vitest workers: 3 (12.0 GiB free, --maxWorkers wins over the cap)");
+      workersLogLine({
+        workers: 3,
+        reason: "cli",
+        freeBytes: 12 * GIB,
+        cliRaw: "3",
+      }),
+    ).toBe(
+      "vitest workers: 3 (12.0 GiB free, --maxWorkers 3 wins over the cap)",
+    );
+    expect(
+      workersLogLine({
+        workers: 9,
+        reason: "cli",
+        freeBytes: 12 * GIB,
+        cliRaw: "75%",
+      }),
+    ).toBe(
+      "vitest workers: 75% of cores (12.0 GiB free, --maxWorkers 75% wins over the cap)",
+    );
   });
 });
 

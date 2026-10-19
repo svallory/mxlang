@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { currentLane } from "./scripts/vitest-lanes.ts";
+import { currentLane, PROJECT_GLOBS } from "./scripts/vitest-lanes.ts";
 import { resolveWorkers, workersLogLine } from "./scripts/vitest-workers.ts";
 
 // Workers are capped by free memory (operator ruling 2026-10-19):
@@ -13,23 +13,7 @@ if (!process.env.MX_VITEST_QUIET) {
   console.warn(workersLogLine(resolved));
 }
 
-const projects = [
-  "scripts",
-  "patches",
-  "packages/babel",
-  "packages/core",
-  "packages/oracle",
-  "packages/parser",
-  "packages/parse-differential",
-  "packages/stock-marko",
-  "packages/tsx-bridge",
-  "packages/target-registry",
-  "packages/web-elements",
-  "packages/hosts/*",
-  "packages/targets/*",
-  "packages/tooling/*",
-  "packages/editors/*",
-];
+const projects = [...PROJECT_GLOBS];
 
 // `MX_TEST_LANE=slow` must run only the slow files. Every project other than
 // the two that carry them (tsc, typescript-plugin) has no slow glob, so

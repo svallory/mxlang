@@ -2,9 +2,9 @@
 /**
  * Run only the tests the current change affects.
  *
- *   bun run test:affected            vitest related <source files changed vs origin/main>
- *                                    + vitest run --project <pkg> for changed non-source
- *                                      files (fixtures, expected.*, corpora, .json)
+ *   bun run test:affected            vitest related <non-fixture sources changed vs origin/main>
+ *                                    + vitest run --project <pkg> for every other changed
+ *                                      file (.mx, fixtures, expected.*, corpora, .json)
  *   bun run test:affected --moon     moon run :test --affected (task cache) — unverified,
  *                                    see AGENTS.md
  *   bun run test:affected -- <args>  extra args go to vitest (or moon with --moon)
@@ -12,14 +12,16 @@
  * "Changed" is the union of the branch's commits since its merge-base with
  * origin/main, staged and unstaged edits, and untracked files.
  *
- * `vitest related` follows the import graph, so a changed fixture no test
- * imports would be silently skipped — and vitest 3 defaults `related` to
- * `passWithNoTests: true`, which turns "0 tests" into a green exit. Both are
- * closed here: `--passWithNoTests=false` makes a zero-test `related` run fail,
- * and every changed non-source file under a workspace package runs that
- * package's whole vitest project as a second invocation. A changed file that
- * maps to no project at all (docs, scripts without tests) is named explicitly
- * before exiting 0.
+ * `vitest related` follows the import graph, so a changed file that no test
+ * imports — the dominant kind being `.mx` fixtures read through `fs` — would
+ * be silently skipped, and vitest 3 defaults `related` to `passWithNoTests:
+ * true`, which turns "0 tests" into a green exit. Both are closed here: only
+ * non-fixture JS/TS sources go to `vitest related`, with
+ * `--passWithNoTests=false` so a zero-test run fails; every other changed
+ * file under a workspace package (fixtures whatever their extension, `.mx`,
+ * `.json`, corpora) runs that package's whole vitest project as a second
+ * invocation. A changed file that maps to no project at all (docs, scripts
+ * without tests) is named explicitly before exiting 0.
  *
  * The lane is always `all`: `vitest related` already selects only the affected
  * tests, so a fast lane would hide slow-lane tests it selected (the watch-mode
@@ -29,6 +31,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PROJECT_GLOBS } from "./vitest-lanes.ts";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -63,39 +66,41 @@ export function isWide(file: string): boolean {
 }
 
 /**
- * The vitest projects of the root config, as workspace-relative dirs (the same
- * list vitest.config.ts passes to `projects`). Only dirs that exist are kept.
+ * The vitest projects of the root config (PROJECT_GLOBS in
+ * scripts/vitest-lanes.ts — the same single source the root
+ * vitest.config.ts uses), as workspace-relative dirs. Only dirs that exist
+ * are kept.
  */
 export function projectDirs(base = root): string[] {
-  const globs = [
-    "scripts",
-    "patches",
-    "packages/babel",
-    "packages/core",
-    "packages/oracle",
-    "packages/parser",
-    "packages/parse-differential",
-    "packages/stock-marko",
-    "packages/tsx-bridge",
-    "packages/target-registry",
-    "packages/web-elements",
-    "packages/hosts/*",
-    "packages/targets/*",
-    "packages/tooling/*",
-    "packages/editors/*",
-  ];
-  return globs
-    .flatMap((g) => globSync(g, { cwd: base, onlyFiles: false }))
+  return PROJECT_GLOBS.flatMap((g) =>
+    globSync(g, { cwd: base, onlyFiles: false }),
+  )
     .map((d) => `${d.replace(/\/+$/, "")}/`)
     .filter((d) => existsSync(resolve(base, d)))
     .sort();
 }
 
+/** A file under a fixtures-style directory: tests read it through `fs`, never an import. */
+const FIXTURE_DIR = /(?:^|\/)(?:fixtures[^/]*|test-fixtures)\//;
+
+const SOURCE_EXT = /\.[cm]?[jt]sx?$/;
+
+/**
+ * A file `vitest related` can see: a JS/TS source that is not under a
+ * fixtures-style directory. `.mx` files and fixtures of any extension map to
+ * their project instead — tests read them through the filesystem, so the
+ * import graph would silently drop them (and a mixed change would stay green).
+ */
+export function isRelatedSource(file: string): boolean {
+  return SOURCE_EXT.test(file) && !FIXTURE_DIR.test(file);
+}
+
 /**
  * The vitest project name owning a changed workspace-relative file: the
- * package.json name of the nearest enclosing project dir (vitest's own naming
- * rule for a config without `test.name`). `undefined` when the file is in no
- * project (docs, root scripts, apps/).
+ * `test.name` of the project's vitest config when it sets one, else the
+ * package.json name, else the dir name (vitest's own naming rules for a
+ * config without `test.name`). `undefined` when the file is in no project
+ * (docs, root scripts, apps/).
  */
 export function projectFor(
   file: string,
@@ -108,16 +113,30 @@ export function projectFor(
   for (const d of list) {
     if (f.startsWith(d) && d.length > bestLen) {
       bestLen = d.length;
-      const pkgPath = resolve(root, d, "package.json");
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
-        best = pkg.name ?? d.replace(/\/$/, "");
-      } catch {
-        best = d.replace(/\/$/, "");
-      }
+      best = projectName(d);
     }
   }
   return best;
+}
+
+function projectName(dir: string): string {
+  // An explicit test.name in the project's vitest config wins: vscode's
+  // package.json name ("vscode") differs from its vitest project name
+  // ("@mxlang/vscode"), so the package.json alone would name a project that
+  // does not exist.
+  const cfg = resolve(root, dir, "vitest.config.ts");
+  if (existsSync(cfg)) {
+    const m = /\bname:\s*["']([^"']+)["']/.exec(readFileSync(cfg, "utf8"));
+    if (m) return m[1];
+  }
+  try {
+    const pkg = JSON.parse(
+      readFileSync(resolve(root, dir, "package.json"), "utf8"),
+    );
+    return pkg.name ?? dir.replace(/\/+$/, "");
+  } catch {
+    return dir.replace(/\/+$/, "");
+  }
 }
 
 function git(args: string[]): string {
@@ -140,8 +159,6 @@ export function changedFiles(base = "origin/main"): string[] {
   return [...names].filter((f) => existsSync(resolve(root, f))).sort();
 }
 
-const SOURCE = /\.(?:[cm]?[jt]sx?|mx)$/;
-
 function run(cmd: string[], env: NodeJS.ProcessEnv): number {
   const r = spawnSync(cmd[0], cmd.slice(1), {
     cwd: root,
@@ -160,8 +177,8 @@ function main(): number {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
     return 0;
   }
-  const sources = changed.filter((f) => SOURCE.test(f));
-  const nonSources = changed.filter((f) => !SOURCE.test(f));
+  const sources = changed.filter(isRelatedSource);
+  const nonSources = changed.filter((f) => !isRelatedSource(f));
   const wide = changed.filter(isWide);
   if (wide.length > 0) {
     console.warn(
@@ -177,7 +194,7 @@ function main(): number {
   }
   const env = {
     ...process.env,
-    MX_TEST_LANE: process.env.MX_TEST_LANE ?? "all",
+    MX_TEST_LANE: "all",
   };
 
   if (moon) {
@@ -207,8 +224,9 @@ function main(): number {
     rc = run(cmd, env);
   }
 
-  // Changed files the import graph cannot see (fixtures, expected.*, corpora,
-  // .json): run the vitest project of the package that owns each one.
+  // Changed files the import graph cannot see (.mx files, fixtures of any
+  // extension, corpora, .json): run the vitest project of the package that
+  // owns each one.
   if (nonSources.length > 0) {
     const byProject = new Map<string, string[]>();
     const unmapped: string[] = [];

@@ -17,6 +17,31 @@ import { configDefaults } from "vitest/config";
  * true.
  */
 
+/**
+ * The root vitest config's `projects` globs, as the single source of truth:
+ * the root `vitest.config.ts` resolves its projects from this list, and
+ * `scripts/test-affected.ts` maps changed fixture files to their vitest
+ * project through it. Keep both consumers importing from here so they cannot
+ * drift apart.
+ */
+export const PROJECT_GLOBS: readonly string[] = [
+  "scripts",
+  "patches",
+  "packages/babel",
+  "packages/core",
+  "packages/oracle",
+  "packages/parser",
+  "packages/parse-differential",
+  "packages/stock-marko",
+  "packages/tsx-bridge",
+  "packages/target-registry",
+  "packages/web-elements",
+  "packages/hosts/*",
+  "packages/targets/*",
+  "packages/tooling/*",
+  "packages/editors/*",
+];
+
 /** Slow-lane test files per project dir, relative to the project root. */
 export const SLOW_LANE_FILES: Readonly<Record<string, readonly string[]>> = {
   "packages/tooling/tsc": [
