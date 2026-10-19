@@ -1293,7 +1293,9 @@ static void es_consume_line_comment(EStream *es) {
 
 // Consumes the rest of the line (to, not past, the newline) as the span of an
 // ERROR node: the caller emits it as ERROR_SENTINEL, which no state accepts
-// outside recovery (see the indentation case in scan_concise_line).
+// outside recovery (see the indentation case in scan_concise_line). With one
+// sentinel in a parse the preceding siblings stay; a second sentinel ends the
+// parse (root ERROR, earlier siblings inside it; bead mx-r6fj).
 static void es_error_line(EStream *es) {
   while (es_peek(es, 0) >= 0 && !is_line(es_peek(es, 0))) es_next_mark(es);
 }
@@ -2673,7 +2675,9 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
     // without an ERROR node (a column-0 line after a concise root tag, then
     // an indented line, parsed clean). Emit the offending line as
     // ERROR_SENTINEL instead: no state accepts it outside error recovery, so
-    // the parser wraps it in an ERROR node and goes on.
+    // the parser wraps it in an ERROR node. One sentinel per parse recovers
+    // locally; a second one ends the parse (root ERROR, earlier siblings
+    // inside it; bead mx-r6fj).
     while (!at_eof(lexer) && !is_line(lexer->lookahead)) {
       cursor_advance(&s->cur, lexer->lookahead);
       lexer->advance(lexer, false);

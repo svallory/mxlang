@@ -1,18 +1,29 @@
-From 819f799114bcd2d5e6a7ec4a8eeeb634c88ff7ec Mon Sep 17 00:00:00 2001
+From edd577f01162c84d7812472e1322b78746db28db Mon Sep 17 00:00:00 2001
 From: Saulo Vallory <me@saulo.engineer>
 Date: Mon, 19 Oct 2026 19:57:45 -0300
 Subject: [PATCH] fix(grammar): report unterminated content comments
 
-Emit ERROR_SENTINEL for EOF in parsed-text and HTML block comments, comments after tag;, and concise block comments. Keep internal expression and open-tag failures unchanged because their enclosing constructs already error.
+Emit ERROR_SENTINEL for EOF in parsed-text and HTML block comments, comments after tag;, and concise block comments. Keep the internal expression and open-tag comment failures unchanged: for a placeholder or an open tag the enclosing construct already errors, but a comment or template inside a template literal in parsed text still ends without an ERROR. One sentinel in a parse leaves the preceding siblings intact; a second sentinel ends the parse.
 ---
- src/scanner.c | 29 ++++++++++++++++++++++-------
- 1 file changed, 22 insertions(+), 7 deletions(-)
+ src/scanner.c | 37 ++++++++++++++++++++++++++++---------
+ 1 file changed, 28 insertions(+), 9 deletions(-)
 
 diff --git a/src/scanner.c b/src/scanner.c
-index ded8557..59249e1 100644
+index ded8557..57d507d 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -2493,7 +2493,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -1293,7 +1293,9 @@ static void es_consume_line_comment(EStream *es) {
+ 
+ // Consumes the rest of the line (to, not past, the newline) as the span of an
+ // ERROR node: the caller emits it as ERROR_SENTINEL, which no state accepts
+-// outside recovery (see the indentation case in scan_concise_line).
++// outside recovery (see the indentation case in scan_concise_line). With one
++// sentinel in a parse the preceding siblings stay; a second sentinel ends the
++// parse (root ERROR, earlier siblings inside it; bead mx-r6fj).
+ static void es_error_line(EStream *es) {
+   while (es_peek(es, 0) >= 0 && !is_line(es_peek(es, 0))) es_next_mark(es);
+ }
+@@ -2493,7 +2495,8 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
              int32_t c2 = es_peek(&es, 0);
              if (c2 < 0) {
                es_free(&es);
@@ -22,7 +33,7 @@ index ded8557..59249e1 100644
              }
              if (c2 == '*' && es_peek(&es, 1) == '/') {
                es_next_mark(&es);
-@@ -2520,7 +2521,10 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -2520,7 +2523,10 @@ static bool scan_frame_content(Scanner *s, TSLexer *lexer, const bool *valid,
            }
            bool comment_ok = es_consume_block_comment(&es);
            es_free(&es);
@@ -34,7 +45,7 @@ index ded8557..59249e1 100644
            *result = BLOCK_COMMENT;
            return valid[BLOCK_COMMENT];
          });
-@@ -2614,7 +2618,8 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -2614,7 +2620,8 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
            int32_t c2 = es_peek(&es, 0);
            if (c2 < 0) {
              es_free(&es);
@@ -44,7 +55,7 @@ index ded8557..59249e1 100644
            }
            if (c2 == '-' && es_peek(&es, 1) == '>') {
              es_next_mark(&es);
-@@ -2637,8 +2642,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -2637,8 +2644,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
        *result = LINE_COMMENT;
        ok = valid[LINE_COMMENT];
      } else if (n1 == '*') {
@@ -60,7 +71,18 @@ index ded8557..59249e1 100644
      }
      es_free(&es);
      return ok;
-@@ -2745,8 +2755,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+@@ -2663,7 +2675,9 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+     // without an ERROR node (a column-0 line after a concise root tag, then
+     // an indented line, parsed clean). Emit the offending line as
+     // ERROR_SENTINEL instead: no state accepts it outside error recovery, so
+-    // the parser wraps it in an ERROR node and goes on.
++    // the parser wraps it in an ERROR node. One sentinel per parse recovers
++    // locally; a second one ends the parse (root ERROR, earlier siblings
++    // inside it; bead mx-r6fj).
+     while (!at_eof(lexer) && !is_line(lexer->lookahead)) {
+       cursor_advance(&s->cur, lexer->lookahead);
+       lexer->advance(lexer, false);
+@@ -2745,8 +2759,13 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
            k++;
          }
        }
@@ -76,3 +98,6 @@ index ded8557..59249e1 100644
      }
      else {
        // INVALID_LINE_START: "/" that starts no comment. The line is an ERROR
+-- 
+2.43.0
+

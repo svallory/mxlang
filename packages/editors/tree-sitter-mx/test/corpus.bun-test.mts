@@ -39,8 +39,10 @@ describe("tree-sitter-mx corpus", () => {
 
 describe("unterminated comments", () => {
   // EOF belongs to the comment, even across a closing tag or a concise
-  // dedent, just as for the existing <!-- EOF case. Keep completed siblings
-  // outside the ERROR; an unfinished enclosing element may join the ERROR.
+  // dedent, just as for the existing <!-- EOF case. With ONE error sentinel
+  // in a parse, completed siblings stay outside the ERROR; an unfinished
+  // enclosing element may join the ERROR. A second sentinel ends the parse
+  // (see "known shape" below).
   const EOF_CASES = [
     "parsed-text-block-comment-eof",
     "html-content-block-comment-eof",
@@ -49,7 +51,7 @@ describe("unterminated comments", () => {
     "concise-block-comment-eof",
   ];
   for (const name of EOF_CASES) {
-    it(`covers the malformed tail without swallowing the preceding sibling: ${name}`, () => {
+    it(`covers the malformed tail with a single error sentinel and keeps the preceding sibling: ${name}`, () => {
       const c = CASES.find((c) => c.name === name);
       assert.ok(c, `missing corpus case ${name}`);
       const tree = parseMx(c.source);
@@ -86,6 +88,76 @@ describe("unterminated comments", () => {
         last?.namedChildren.find((c) => c.type === "tag_name")?.text,
         following,
       );
+      tree.delete();
+    });
+  }
+
+  // Known shape, bead mx-r6fj: a SECOND error sentinel in one parse ends the
+  // parse. Here the placeholder (or scriptlet) fails first and the new
+  // comment sentinel is the second one, so the root becomes an ERROR that
+  // starts at 0 and holds the completed `<before/>`. The front end reports
+  // MALFORMED_COMMENT for both inputs. The same collapse already holds on
+  // main for a concise `-` line and for `<!--`. Pinned as it is, not as it
+  // should be: when mx-r6fj lands these rows change.
+  for (const [source, end] of [
+    ["<before/>\n<p>${y /* oops", 15],
+    ["<before/>\n$ /* oops", 11],
+  ] as const) {
+    it(`known shape, bead mx-r6fj: ${JSON.stringify(source)}`, () => {
+      const tree = parseMx(source);
+      assert.ok(tree, "parse timed out");
+      const root = tree.rootNode;
+      assert.equal(root.type, "ERROR", root.toString());
+      assert.equal(root.startIndex, 0);
+      assert.equal(root.endIndex, end);
+      assert.equal(root.descendantsOfType("ERROR").length, 1, root.toString());
+      assert.equal(root.firstNamedChild?.text, "<before/>");
+      tree.delete();
+    });
+  }
+
+  // Terminator edges: `/*/` and `<!-->` are unterminated openers (the `/` or
+  // `>` that follows the opener does not close it), so each input is an
+  // error that spans to EOF. The front end reports MALFORMED_COMMENT for
+  // all four.
+  for (const source of [
+    "<div> /*/ x</div>\n<after/>",
+    "<script>/*/ x</script>",
+    "div; /*/",
+    "<div> <!--> x</div>",
+  ]) {
+    it(`reports the unterminated opener ${JSON.stringify(source)}`, () => {
+      const tree = parseMx(source);
+      assert.ok(tree, "parse timed out");
+      const root = tree.rootNode;
+      assert.ok(root.hasError, root.toString());
+      const errors = root.descendantsOfType("ERROR");
+      assert.equal(errors.length, 1, root.toString());
+      assert.equal(errors[0]?.startIndex, 0);
+      assert.equal(errors[0]?.endIndex, source.length);
+      tree.delete();
+    });
+  }
+
+  // Terminated or non-comment look-alikes parse clean.
+  for (const [name, source] of [
+    ["an empty block comment in HTML content", "<div> /**/ </div>\n<after/>"],
+    [
+      "a /* inside a string in script",
+      "<script>const a = '/* in string';</script>\n<after/>",
+    ],
+    [
+      "a /* inside a line comment in script",
+      "<script>const a = 1; // ... /*\n</script>\n<after/>",
+    ],
+  ] as const) {
+    it(`parses ${name} clean`, () => {
+      const tree = parseMx(source);
+      assert.ok(tree, "parse timed out");
+      const root = tree.rootNode;
+      assert.ok(!root.hasError, root.toString());
+      const last = root.namedChildren.at(-1);
+      assert.equal(last?.text, "<after/>", root.toString());
       tree.delete();
     });
   }

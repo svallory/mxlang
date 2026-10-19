@@ -195,8 +195,13 @@ open, as in patch 0004).
   nothing after the comment) is one too. New helper `es_error_line`.
 - Tests: `test/corpus/errors.txt` (tree-sitter `:error` cases; MX's own, not in
   the patch), `test/corpus.bun-test.mts`.
-- The remaining unterminated-comment paths are covered by patch 0012 below;
-  htmljs-parser's pinned fixture suite has no fixture for these paths.
+- Patch 0012 below covers the unterminated block comments in parsed text,
+  HTML content, after `tag;` and in concise mode; htmljs-parser's pinned
+  fixture suite has no fixture for these paths. It does not cover an
+  unterminated comment or template inside a template literal in parsed text
+  (``<script>`x${/* oops`` gives a `MISSING element_end` and no `ERROR`), nor
+  the fourth helper, `scan_line_attr_trivia`. Both are tracked in bead
+  mx-xtt1.
 
 `patches/0011-docs-readme-a-beta-note-says-the-api-may-change-until-1-0-0.patch`
 is MX's own: `README.md` carries the beta note every published package README
@@ -212,17 +217,34 @@ is MX's own:
   a whitespace-prefixed block comment in HTML content, either comment form
   after `tag;`, or a concise block comment emits `ERROR_SENTINEL`, rather
   than silently dropping the malformed tail. The expression scanner and
-  open-tag comment scanner keep their internal `false` returns: their
-  required enclosing constructs already produce an error.
+  open-tag comment scanner keep their internal `false` returns: for a
+  placeholder (`${/* oops`) and an open tag (`<div /* oops`) the required
+  enclosing construct already produces an `ERROR`. That does not hold for
+  every expression failure: an unterminated comment or template inside a
+  template literal in parsed text gives no `ERROR` (see the patch 0010
+  entry; bead mx-xtt1).
 - Recovery follows the existing `<!--` EOF rule: the comment extends through
-  EOF, including apparent close tags and dedents. Completed preceding
-  siblings stay outside the ERROR; an unfinished enclosing element may join
-  it. Once the terminator is present, subsequent siblings parse normally.
-  The front end reports `MALFORMED_COMMENT` at a zero-width range on the
+  EOF, including apparent close tags and dedents. With one error sentinel in
+  a parse, completed preceding siblings stay outside the ERROR (an unfinished
+  enclosing element may join it), and once the terminator is present,
+  subsequent siblings parse normally. A second error sentinel in the same
+  parse ends the parse: the root becomes an `ERROR` and the earlier siblings
+  sit inside it. That already holds on main for a concise `-` line and for
+  `<!--` (`<before/>\n<p>${y <!-- oops` gives a root `ERROR` over
+  `0..15`), and this patch extends it to the new paths
+  (`<before/>\n<p>${y /* oops` and `<before/>\n$ /* oops` give a root
+  `ERROR` from offset 0). Bead mx-r6fj tracks it.
+- The front end reports `MALFORMED_COMMENT` at a zero-width range on the
   opener, whereas tree-sitter's ERROR spans the malformed construct. These
   ranges intentionally differ; this patch does not change compiler parsing.
+  For the helper paths this patch leaves unchanged (`<div a=(/* oops`,
+  `div a=1,\n  /* oops` through `scan_line_attr_trivia`, and `$ /* oops`) the
+  tree-sitter ERROR ends before the comment, while the front end reports a
+  zero-width range at the comment's end (`[8,8)`, `[11,11)` and `[2,2)`
+  against ERRORs ending at 7, 7 and 1).
 - Tests: seven new `:error` cases in `test/corpus/errors.txt`, plus exact-span,
-  sibling-preservation and terminated-comment controls in
+  single-error sibling, known-shape (two sentinels, bead mx-r6fj),
+  terminator-edge and terminated-comment controls in
   `test/corpus.bun-test.mts` (MX's own files, not vendored).
 
 ## Tests
