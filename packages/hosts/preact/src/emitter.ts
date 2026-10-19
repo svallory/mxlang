@@ -40,6 +40,7 @@ import {
   mapped,
   mappedExpr,
   mappedMethod,
+  mappedRewrite,
   type Position,
   type SourceSpan,
   TranslateError,
@@ -427,12 +428,35 @@ const RAW_HTML_PROP_NAMES: ReadonlySet<string> = new Set([
  * value is emitted as written: a method shorthand (`onClick() { … }`) as the
  * `function` expression the compiler printed for it (`async function <T>(…)
  * { … }`), which keeps Marko's `this`, its type parameters and valid TSX, and
- * an authored `function` expression or arrow unchanged. A method's printed head
- * is generated text and stays unmapped; its body maps token by token against
- * the authored body (`mappedMethod`).
+ * an authored `function` expression or arrow unchanged. The body's mapped
+ * opening brace anchors the printed head, even with braces in a parameter.
+ * Diff the head separately: inserted `function` stays unmapped for a non-async
+ * method, but maps as a replaced run onto the attribute name for an async
+ * method. Keep the body's mappings (and diff budget) independent of the head.
  */
-function mappedValue(expr: Expr): MappedCode {
-  return mappedMethod(expr) ?? mappedExpr(expr);
+function mappedValue(expr: Expr, source: string | undefined): MappedCode {
+  const method = mappedMethod(expr);
+  if (method && expr.bodySpan && expr.span && source !== undefined) {
+    const bodyStart = method.mappings.find(
+      (m) => m.sourceStart === expr.bodySpan?.sourceStart,
+    )?.generatedStart;
+    if (bodyStart !== undefined) {
+      const span = {
+        sourceStart: expr.span.sourceStart,
+        sourceEnd: expr.bodySpan.sourceStart,
+      };
+      const head = mappedRewrite(
+        expr.code.slice(0, bodyStart),
+        source.slice(span.sourceStart, span.sourceEnd),
+        span,
+      );
+      return {
+        code: expr.code,
+        mappings: [...head.mappings, ...method.mappings],
+      };
+    }
+  }
+  return method ?? mappedExpr(expr);
 }
 
 /** The text of a template literal with no dynamic parts, or null. */
@@ -686,6 +710,7 @@ export class PreactEmitter implements Emitter<string> {
   /** Names emitted into one component body or region arrow, shared by children. */
   readonly #bindings: Map<string, Position>;
   readonly #positionAt: ((offset: number) => Position) | undefined;
+  readonly #source: string | undefined;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -700,7 +725,9 @@ export class PreactEmitter implements Emitter<string> {
     bare = false,
     bindings = new Map<string, Position>(),
     positionAt = region?.positionAt,
+    source?: string,
   ) {
+    this.#source = source;
     this.#bindings = bindings;
     this.#positionAt = positionAt;
     this.#dialect = dialect;
@@ -754,6 +781,7 @@ export class PreactEmitter implements Emitter<string> {
       bare,
       this.#bindings,
       this.#positionAt,
+      this.#source,
     );
   }
 
@@ -1077,8 +1105,9 @@ export class PreactEmitter implements Emitter<string> {
       // TypeScript then checks the value against the host's own handler type
       // (and contextually types its parameters), and the diagnostic lands on
       // the value — which is mapped — instead of on the unmapped prop name.
-      // `satisfies` is erased on emit, so `mx-tsc` output stays runnable. A shorthand handler has no source span, so its
-      // generated function maps to the attribute name.
+      // `satisfies` is erased on emit, so `mx-tsc` output stays runnable. A
+      // shorthand's wrapper mismatch maps to its attribute name; diagnostics
+      // inside its head and body keep their exact authored mappings.
       //
       // The `as any` after it ends the check there: `satisfies` keeps the
       // value's own type, so without it the JSX prop re-checks the same value
@@ -1093,8 +1122,8 @@ export class PreactEmitter implements Emitter<string> {
           // parentheses stay unmapped, and the value keeps the exact text
           // mapping it has without the wrapper (a coarse mapping over `(fn)`
           // would shift every position inside the body by the length of the
-          // `(`). A shorthand handler has no span of its own and maps to the
-          // attribute name.
+          // `(`). Only a shorthand's `satisfies` maps to the attribute name;
+          // its printed function retains the head and body mappings.
           const span = attr.value.bodySpan
             ? attr.nameSpan
             : (attr.value.span ?? null);
@@ -1102,7 +1131,7 @@ export class PreactEmitter implements Emitter<string> {
             " ",
             mapped(name, null),
             "={(",
-            mappedValue(attr.value),
+            mappedValue(attr.value, this.#source),
             ") ",
             mapped("satisfies", span),
             ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any}`,
@@ -1112,7 +1141,7 @@ export class PreactEmitter implements Emitter<string> {
           " ",
           mapped(name, null),
           "={",
-          mappedValue(attr.value),
+          mappedValue(attr.value, this.#source),
           "}",
         );
       }
@@ -1169,7 +1198,7 @@ export class PreactEmitter implements Emitter<string> {
                 JSON.stringify(tag ?? ""),
                 ")",
               )
-            : mappedValue(attr.value),
+            : mappedValue(attr.value, this.#source),
           "}",
         );
       }
@@ -1283,14 +1312,14 @@ export class PreactEmitter implements Emitter<string> {
         const renderedValue = typedEvent
           ? concatMapped(
               "(",
-              mappedValue(attr.value),
+              mappedValue(attr.value, this.#source),
               ") ",
               mapped("satisfies", shorthand ? attr.nameSpan : (span ?? null)),
               ` ${this.#typeCheck}<"${tag}", "${name.slice(2).toLowerCase()}"> as any`,
             )
           : (attr.kind === "dynamic" || attr.kind === "event") &&
               value === attr.value.code
-            ? mappedValue(attr.value)
+            ? mappedValue(attr.value, this.#source)
             : mapped(value, span ?? null);
         const nameSpan =
           mapNames &&
@@ -2701,6 +2730,7 @@ export function createEmitter(
     false,
     undefined,
     !source ? undefined : (offset) => sourcePosition(source, offset),
+    source,
   );
 }
 

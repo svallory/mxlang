@@ -25,6 +25,7 @@ import {
   mapped,
   mappedExpr,
   mappedMethod,
+  mappedRewrite,
   type Node,
   type Position,
   type ReadRewrite,
@@ -106,6 +107,9 @@ export const MX_RETURN_PROP = "$mxReturn";
  * one compile; nothing here is retained between compiles.
  */
 let returnVars: Set<string> | null = null;
+
+/** File-shaped source for mapping printed method heads during this emit. */
+let mappingSource: string | undefined;
 
 /** Whether the current module needs Solid's server-only HTML escape helper. */
 let escapeUse: { used: boolean } | null = null;
@@ -591,6 +595,7 @@ function inLazyScope<T>(emit: () => T): T {
 export function collectReturnVars(
   emit: () => string,
   allowHoist = true,
+  source?: string,
 ): {
   code: string;
   vars: string[];
@@ -606,6 +611,8 @@ export function collectReturnVars(
   hoistedDefines: HoistedSolidDefine[];
 } {
   const outer = returnVars;
+  const outerMappingSource = mappingSource;
+  mappingSource = source;
   const outerEscapeUse = escapeUse;
   const outerAttrGuardUse = attrGuardUse;
   const outerHoistedDefines = hoistedDefines;
@@ -636,6 +643,7 @@ export function collectReturnVars(
     };
   } finally {
     returnVars = outer;
+    mappingSource = outerMappingSource;
     escapeUse = outerEscapeUse;
     attrGuardUse = outerAttrGuardUse;
     hoistedDefines = outerHoistedDefines;
@@ -1059,13 +1067,37 @@ function guardValue(
  * is emitted as written: a method shorthand as the `function` expression the
  * compiler printed for it (`async function <T>(…) { … }`), which keeps
  * Marko's `this`, its name semantics and valid TSX, and an authored `function`
- * expression or arrow unchanged. A method's printed head is generated text
- * and stays unmapped; its body maps token by token against the authored body
- * (`Expr.bodySpan`/`bodySource`, core's `mappedMethod`), also when the printer
- * reformatted it or reads were rewritten.
+ * expression or arrow unchanged. The body's mapped opening brace anchors the
+ * printed head (never a textual search for `{`, which may occur in a param).
+ * Diff only that head against its existing authored span. For a non-async
+ * method, inserted `function` stays unmapped; for an async method, it maps as
+ * a replaced run onto the attribute name. A large/reformatted body cannot
+ * exhaust the head's diff budget or change its token alignment. Keep the
+ * body's original mappings.
  */
 function mappedValue(expr: Expr): MappedCode {
-  return mappedMethod(expr) ?? mappedExpr(expr);
+  const method = mappedMethod(expr);
+  if (method && expr.bodySpan && expr.span && mappingSource !== undefined) {
+    const bodyStart = method.mappings.find(
+      (m) => m.sourceStart === expr.bodySpan?.sourceStart,
+    )?.generatedStart;
+    if (bodyStart !== undefined) {
+      const span = {
+        sourceStart: expr.span.sourceStart,
+        sourceEnd: expr.bodySpan.sourceStart,
+      };
+      const head = mappedRewrite(
+        expr.code.slice(0, bodyStart),
+        mappingSource.slice(span.sourceStart, span.sourceEnd),
+        span,
+      );
+      return {
+        code: expr.code,
+        mappings: [...head.mappings, ...method.mappings],
+      };
+    }
+  }
+  return method ?? mappedExpr(expr);
 }
 
 /** Literal attribute names the spread view hides or renames on a string tag. */

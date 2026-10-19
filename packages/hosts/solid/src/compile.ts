@@ -672,10 +672,14 @@ export function compileSolidUnit(
   // One emit, with the `/var` names and mappings collected together, the
   // same reasoning `compileSolidMx` gives for its own single emit above.
   let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
-  const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(() => {
-    emittedBody = emitSolidWithMappings(ir);
-    return emittedBody.code;
-  }, false);
+  const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(
+    () => {
+      emittedBody = emitSolidWithMappings(ir);
+      return emittedBody.code;
+    },
+    false,
+    source,
+  );
   if (needsEscapeImport) {
     parts.unshift(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
