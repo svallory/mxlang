@@ -28,6 +28,7 @@ import {
   RESERVED_INPUT_CODE,
 } from "./diagnostic-codes.ts";
 import type { Ir, IrNode } from "./ir.ts";
+import { partialAnalyzeScope } from "./ir-entry/recovery.ts";
 import {
   type Voice,
   VoiceHookError,
@@ -214,7 +215,15 @@ export function metadataForTemplate(
   ctx: Ctx,
   tag: TemplateTag,
 ): TemplateMetadata {
-  const cached = templateCache.get(tag.filename);
+  const recoveryScope = partialAnalyzeScope(ctx);
+  // Recovery must derive completed facts with its own omissions, even when
+  // an independent compile has already warmed the shared cache. Only shared
+  // pending placeholders are scope-independent: they terminate recursion.
+  const cached =
+    recoveryScope?.analyzeMetadata?.get(tag.filename) ??
+    (recoveryScope && !templateCache.get(tag.filename)?.pending
+      ? undefined
+      : templateCache.get(tag.filename));
   if (
     cached &&
     cached.mtimeMs === tag.mtimeMs &&
@@ -245,15 +254,26 @@ export function metadataForTemplate(
   compileCount++;
   try {
     const metadata = compileMetadata(ctx, tag);
-    touchAndEvict(
-      templateCache,
-      tag.filename,
-      { mtimeMs: tag.mtimeMs, source: tag.source, metadata },
-      MAX_CACHED_TEMPLATES,
-    );
+    const entry: CacheEntry = {
+      mtimeMs: tag.mtimeMs,
+      source: tag.source,
+      metadata,
+    };
+    if (recoveryScope) {
+      // Only completed metadata can contain omitted calls. Keep it private;
+      // the shared pending placeholder carries no reduced facts and must stay
+      // visible across scopes so a reentrant compile terminates recursion.
+      recoveryScope.analyzeMetadata ??= new Map();
+      recoveryScope.analyzeMetadata.set(tag.filename, entry);
+      if (templateCache.get(tag.filename) === provisional)
+        templateCache.delete(tag.filename);
+    } else {
+      touchAndEvict(templateCache, tag.filename, entry, MAX_CACHED_TEMPLATES);
+    }
     return metadata;
   } catch (error) {
-    templateCache.delete(tag.filename);
+    if (templateCache.get(tag.filename) === provisional)
+      templateCache.delete(tag.filename);
     // Marko's parse-only front door raises CompileError(s) with positions in
     // this unit, not in the caller. Convert here before the custom-tag hook
     // catch can stamp it with the call site's coordinates. Keep every frame

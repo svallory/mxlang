@@ -6,7 +6,7 @@
  * text and position (the default `html` rules reject files `parseData`
  * accepted, such as `<input><child/></input>`).
  *
- * An error means `ir: undefined` (no partial IR) and every independent error
+ * By default an error means `ir: undefined` and every independent error
  * the source has, each positioned, earliest first: every parse error (the
  * parser recovers and reports several), and, once the source lowers, every
  * check reject, structural hit and unknown tag (`checks.ts`). A lowering
@@ -17,7 +17,9 @@
  * `lowerSource` throw: an error with no position (a bug in core) is reported
  * at 1:0 with an `internal error: ` prefix, and a user-facing one that has
  * none with `unpositioned error: `. Warnings are collected and returned
- * alongside the IR.
+ * alongside the IR. `partial: true` keeps the tree those failures left: the
+ * result is flagged `partial` and the failed subtrees are omitted
+ * (`LowerSourceOptions.partial`).
  *
  * @unstable
  */
@@ -83,6 +85,8 @@ import {
   mergeDiagnostics,
   toDiagnostic,
 } from "./diagnostics.ts";
+import { omitRejected } from "./partial.ts";
+import { withPartialIr } from "./recovery.ts";
 import { finishIr, type SpannedIr } from "./spans.ts";
 // Registers the dialect tag-file reader with the scan (side effect).
 import "../tag-file.ts";
@@ -207,17 +211,47 @@ export interface LowerSourceOptions {
    * codes of `diagnostics`, not the sink's entries.
    */
   warnings?: MxWarning[];
+  /**
+   * Keep a partial IR beside the errors. The default is unchanged: any
+   * error means `ir: undefined`. With `partial: true`,
+   * the lowering that recorded errors still finishes: every subtree that
+   * lowered cleanly keeps its node, spans and tags in `ir`, the smallest
+   * node that could not be completed is omitted whole: a failed child
+   * does not remove its parent, but a failed attribute removes its tag.
+   * A dialect hook failure removes its owning tag (or line trigger).
+   * Check-rejected nodes are omitted too. The result carries `partial: true`.
+   * A tag whose own `analyze` fails is omitted without running its transform
+   * or finalizer; other tags still lower. Other whole-file hook failures
+   * (`afterLower`, `finalize`) retain the tree; failed finalization adds no
+   * nodes. Hook-private stores are not rolled back: writes by an omitted
+   * transform remain visible to later calls and finalization of the same tag.
+   * `SpannedIr`'s guarantee holds for every node that is present;
+   * there are no placeholder nodes. A failure with no lowered tree to
+   * return (a parse error, a dialect that does not resolve), and reserved-name
+   * refusals still give `ir: undefined`, unflagged. Diagnostics include the
+   * default errors; errors the default stops before are also reported.
+   * A clean file returns exactly the default result, not flagged partial.
+   */
+  partial?: boolean;
 }
 
 /** @unstable */
 export interface LowerSourceResult {
   /**
-   * Absent when `diagnostics` holds an error: no partial IR. A private copy,
+   * Absent on error unless `partial: true` recovered a tree. A private copy,
    * spans guaranteed (`SpannedIr`); `DelegatedTag.args` is always present
    * (`[]` without arguments).
    */
   ir: SpannedIr | undefined;
   diagnostics: IrDiagnostic[];
+  /**
+   * Present (`true`) only on a call with `partial: true` whose source had
+   * errors and still produced an IR: the tree is the source's with the
+   * failed subtrees omitted (see {@link LowerSourceOptions.partial}), and
+   * `diagnostics` holds those errors. Absent on every result the default
+   * call shape returns, and on a clean file lowered with `partial: true`.
+   */
+  partial?: true;
 }
 
 const lookups = new WeakMap<HostDeclarations, TargetLookup>();
@@ -540,7 +574,7 @@ function lowerResolved(
     return {
       ir: undefined,
       diagnostics: mergeDiagnostics(
-        result.ir ? [] : result.diagnostics,
+        result.ir && !result.partial ? [] : result.diagnostics,
         reservedDiagnostics(
           refused,
           callsOfRefused(),
@@ -567,8 +601,93 @@ function lowerResolved(
       return !at.has(`${occurrence.offset}:${occurrence.name}`);
     });
   };
-  const failed = (errors: unknown[]): LowerSourceResult =>
-    refuse({
+  let ir: Ir | null = null;
+  const failed = (errors: unknown[]): LowerSourceResult => {
+    // `partial: true` and the compile still delivered a tree (the failed
+    // subtrees already omitted): the checks run on it as on a clean one, so
+    // every error is reported once, and the finished IR goes back flagged.
+    if (options.partial && ir) {
+      const lowered = ir as Ir;
+      const rejected = new Set<object>();
+      const explainer = explainerOf(
+        modes,
+        dialectOnce,
+        customTags,
+        filename,
+        source,
+        lineStarts,
+      );
+      const checkErrors = checkIr(
+        lowered,
+        source,
+        {
+          ...modes,
+          declaredTags: declared,
+          ...(dialectId !== undefined ? { dialectId } : {}),
+          exemptTags: refusedNames,
+          voice,
+          ...(explainer ? { explainer } : {}),
+        },
+        rejected,
+      );
+      omitRejected(lowered, rejected);
+      // Never assert SpannedIr over an invariant the recovery did not repair.
+      const remaining = checkIr(lowered, source, {
+        structural: "pass",
+        unknownTags: "allow",
+        declaredTags: declared,
+        voice,
+      });
+      if (remaining.length)
+        return refuse({
+          ir: undefined,
+          diagnostics: errorDiagnostics(
+            withoutRefusedOccurrences([
+              ...errors,
+              ...checkErrors,
+              ...remaining,
+            ]),
+            filename,
+            lineStarts,
+            source,
+          ),
+        });
+      let finished: SpannedIr;
+      try {
+        finished = finishIr(lowered, source);
+      } catch (finishError) {
+        return refuse({
+          ir: undefined,
+          diagnostics: mergeDiagnostics(
+            errorDiagnostics(
+              withoutRefusedOccurrences([
+                ...errors,
+                ...checkErrors,
+                finishError,
+              ]),
+              filename,
+              lineStarts,
+              source,
+            ),
+            [],
+          ),
+        });
+      }
+      return refuse({
+        ir: finished,
+        partial: true,
+        diagnostics: mergeDiagnostics(
+          errorDiagnostics(
+            withoutRefusedOccurrences(errors),
+            filename,
+            lineStarts,
+            source,
+          ),
+          errorDiagnostics(checkErrors, filename, lineStarts, source),
+        ),
+      });
+    }
+    return refuse({
       ir: undefined,
       diagnostics: errorDiagnostics(
         withoutRefusedOccurrences(errors),
@@ -577,6 +696,7 @@ function lowerResolved(
         source,
       ),
     });
+  };
   try {
     rules = tagRulesPreset(presetOf(options, dialectOnce), WEB_ELEMENTS);
   } catch (error) {
@@ -599,7 +719,6 @@ function lowerResolved(
   const declarations = entryDeclarations(rules.nativeTags, voice);
   const declared = declaredTagNames(customTags);
   const dialectId = dialectIdOf(dialectOnce);
-  let ir: Ir | null = null;
   try {
     const host: HostOptions = {
       targets: lookupFor(declarations),
@@ -623,7 +742,18 @@ function lowerResolved(
     // `tagRules` wins over the dialect's, so the compile must not re-pick.
     tagRulesDecided.set(host, presetOf(options, dialectOnce));
     structuralDecided.set(host, modes.structural);
-    compileSource(source, filename, declarations, host);
+    const compile = () => compileSource(source, filename, declarations, host);
+    if (options.partial) {
+      withPartialIr(
+        declarations,
+        (lowered) => {
+          ir = lowered;
+        },
+        compile,
+      );
+    } else {
+      compile();
+    }
   } catch (error) {
     const reject = modes.unknownTags === "reject";
     const explainer = explainerOf(

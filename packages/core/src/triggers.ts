@@ -39,6 +39,7 @@ import {
   isTranslateError,
   type Node,
   positionAtOffset,
+  positionError,
   raise,
 } from "./core.ts";
 import { raiseDeferredContractErrors } from "./custom-tags.ts";
@@ -68,6 +69,11 @@ import {
 } from "./dialect-registry.ts";
 import { nodeOfForward, recordForward } from "./expr-nodes.ts";
 import type { ExprNode } from "./ir.ts";
+import {
+  keepsPartialIr,
+  omitPartialChild,
+  partialFailedChildren,
+} from "./ir-entry/recovery.ts";
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { voiceOf } from "./message-vocabulary.ts";
@@ -311,6 +317,13 @@ export function attributesWithTriggers(tag: Node): Node[] {
  * internal error.
  */
 export function childrenWithTriggers<T>(children: readonly T[]): T[] {
+  const failedChildren = partialFailedChildren();
+  if (
+    failedChildren &&
+    children.some((child) => failedChildren.has(child as object))
+  ) {
+    children = children.filter((child) => !failedChildren.has(child as object));
+  }
   if (!children.some((child) => isTriggerNode(child as Node))) {
     return children as T[];
   }
@@ -391,8 +404,23 @@ export function lowerTriggers(ctx: Ctx, roots: readonly Node[]): boolean {
       // `mapAttributes`, never as a body.
       const body = owner?.attributes !== value;
       for (const item of value) {
-        visit(item, owner);
-        if (body) lowerChild(ctx, table, dialect, item);
+        if (
+          !(value === roots || owner?.body === value) ||
+          !keepsPartialIr(ctx)
+        ) {
+          visit(item, owner);
+          if (body) lowerChild(ctx, table, dialect, item);
+          continue;
+        }
+        try {
+          visit(item, owner);
+          if (body) lowerChild(ctx, table, dialect, item);
+        } catch (error) {
+          if (!isTranslateError(error)) throw error;
+          positionError(ctx, error);
+          ctx.errors?.push(error);
+          omitPartialChild(ctx, item);
+        }
       }
       return;
     }

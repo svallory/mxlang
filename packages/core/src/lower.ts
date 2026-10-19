@@ -73,6 +73,7 @@ import {
   expr,
   exprWithNodes,
   firstAttributeTag,
+  flattenErrors,
   hasContent,
   importBindings,
   importedNames,
@@ -209,6 +210,16 @@ import type {
   IrDiagnosticEdit,
   IrDiagnosticFix,
 } from "./ir-entry/diagnostics.ts";
+import {
+  beginPartialIr,
+  failPartialAnalyze,
+  hasPartialAnalyzeScope,
+  inheritPartialAnalyzeScope,
+  keepsPartialIr,
+  partialAnalyzeFailed,
+  publishPartialIr,
+  withPartialScratch,
+} from "./ir-entry/recovery.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
@@ -991,9 +1002,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     }
   }
   if (placeholder) {
-    const message =
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: the message quotes MX placeholder syntax, not a JS template
-      `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`;
+    const message = `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`;
     refuse(message, placeholder);
   }
 }
@@ -4446,7 +4455,7 @@ function rejectInvalidStatement(
         : at.column,
   });
   let parsed: Node | undefined;
-  const attempt = (opts: object): unknown => {
+  const attempt = (opts: Record<string, unknown>): unknown => {
     try {
       parsed = coreBabel().parse(code, opts);
     } catch (error) {
@@ -5712,6 +5721,9 @@ function lowerCustomTag(
   isBuiltin = false,
   wildcard?: WildcardMatch,
 ): IrNode[] {
+  // Analyze did not establish this tag's store. Omit its calls silently:
+  // the analyze error is already recorded, and no transform/finalize may run.
+  if (partialAnalyzeFailed(ctx, name)) return [];
   // A registered tag's transform may consume what is inside the tag, so under
   // `structural: "reject"` a `for` or `if` anywhere in it is reported where
   // it is lowered (see {@link insideStructural}).
@@ -7132,10 +7144,17 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             // Before the tag's own lowering: a host with no runtime for the
             // handler refuses it there, and the stale read is the first thing
             // wrong with it.
+            const errorsBefore = keepsPartialIr(ctx)
+              ? ctx.errors?.length
+              : undefined;
             checkScriptShape(ctx, child);
             checkScriptBodySyntax(ctx, child);
             checkStaleDerivedReads(ctx, child);
             checkScriptBodyWrites(ctx, child);
+            // These checks collect multiple diagnostics without throwing. Their
+            // owner still failed: omit it, not a parent with a failed child.
+            if (errorsBefore !== undefined && ctx.errors!.length > errorsBefore)
+              return;
             const lowered = voicedAt(child, () => lowerTag(ctx, child));
             if (Array.isArray(lowered)) out.push(...lowered);
             else out.push(lowered);
@@ -7316,6 +7335,7 @@ function syntaxHookIr(
  * filtering the tree for statement nodes.
  */
 export function lower(ctx: Ctx, body: readonly Node[]): Ir {
+  beginPartialIr(ctx);
   try {
     // Port PR 5: the errors the MX front end already refuses at token level
     // (its `MX_*` rules) are lowering's errors, as on Marko's tree, with the
@@ -7349,6 +7369,11 @@ function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {
 }
 
 function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
+  // An opt-in IR-entry call receives the completed tree beside these errors.
+  // The private handoff leaves every host's compile and Ctx contracts unchanged.
+  const partialFailures: unknown[] | undefined = keepsPartialIr(ctx)
+    ? []
+    : undefined;
   checkReservedTemplate(ctx, body);
   // Each file/template is its own authored root, including recursive units.
   ctx.authoredAncestors = [];
@@ -7391,7 +7416,17 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
     // reference: a tag called only from inside a tag template must still be
     // finalized in the file that called the template.
     ctx.customTagsUsed ??= new Set();
-    runCustomTagAnalyze(ctx, body);
+    if (partialFailures) {
+      // Analyze sees the scratch walk's surviving calls. A failed hook omits
+      // its own tag's calls; unrelated tags still lower in the real walk.
+      try {
+        runCustomTagAnalyze(ctx, body);
+      } catch (error) {
+        partialFailures.push(...flattenErrors(error));
+      }
+    } else {
+      runCustomTagAnalyze(ctx, body);
+    }
   }
 
   // Computed before the body walk, because a self-recursive call resolves to
@@ -7436,8 +7471,14 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
 
   const [nodes, prelude] = withPrelude(ctx, () => lowerChildren(ctx, body));
   // The walk recorded errors instead of throwing the first. The checks below
-  // need a whole file, so none of them runs on a partial one.
-  if (ctx.errors?.length) throw collectedError(ctx.errors);
+  // need a whole file, so none of them runs on a partial one. Partial mode
+  // runs them on the tree the walk did finish — the failed subtrees are
+  // already omitted from `nodes` — and the recorded errors travel with the
+  // IR at the end of this function.
+  if (ctx.errors?.length) {
+    if (!partialFailures) throw collectedError(ctx.errors);
+    partialFailures.push(...ctx.errors);
+  }
 
   const ir: Ir = {
     imports: [],
@@ -7495,20 +7536,39 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
     !ctx.importedNames.has("AttrTag");
 
   // The dialect's post-lowering hooks run once the whole body (and every
-  // `analyze`) has been seen.
-  for (const hook of ctx.afterLower ?? []) hook(ctx);
+  // `analyze`) has been seen. Partial mode: a hook that fails blames no
+  // subtree of the IR (a whole-file observation), so the finished IR is
+  // still handed back with the hook's error beside it.
+  const wholeFile = partialFailures
+    ? (run: () => void): void => {
+        try {
+          run();
+        } catch (error) {
+          partialFailures.push(...flattenErrors(error));
+        }
+      }
+    : undefined;
+  for (const hook of ctx.afterLower ?? []) {
+    if (wholeFile) wholeFile(() => hook(ctx));
+    else hook(ctx);
+  }
 
   if (isFileRoot && ctx.customTags) {
-    // Prepended as one block, after the body is assembled: a `finalize` node
-    // is program-level output (a sprite sheet, a collected style block), not
-    // something that belongs inside whatever construct the last call site
-    // happened to sit in.
-    const prepended = runFinalizeHooks(
-      ctx,
-      ctx.customTags,
-      ctx.customTagsUsed ?? new Set<string>(),
-    );
-    if (prepended.length > 0) ir.body.unshift(...prepended);
+    // Finalizers still run in tag-name order. In recovery mode a failed
+    // hook contributes no nodes, without losing successful hooks' output.
+    const tags = ctx.customTags;
+    const used = ctx.customTagsUsed ?? new Set<string>();
+    const prepended: IrNode[] = [];
+    if (wholeFile) {
+      for (const name of [...used].sort((a, b) => a.localeCompare(b))) {
+        wholeFile(() =>
+          prepended.push(...runFinalizeHooks(ctx, tags, new Set([name]))),
+        );
+      }
+    } else {
+      prepended.push(...runFinalizeHooks(ctx, tags, used));
+    }
+    ir.body.unshift(...prepended);
   }
 
   // Read off `Ctx` rather than returned from the walk: `lowerReturn` records
@@ -7516,6 +7576,15 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ir.returnValue = (ctx as Ctx).returnValue?.expr ?? null;
   ir.tagMetadata = metadataOfIr(ir);
 
+  if (partialFailures && partialFailures.length > 0) {
+    // Deliver privately to the IR entry before the normal error propagates.
+    publishPartialIr(ctx, ir);
+    const [first, ...rest] = partialFailures as [
+      TranslateError,
+      ...TranslateError[],
+    ];
+    throw collectedError([first, ...rest]);
+  }
   return ir;
 }
 
@@ -7669,11 +7738,34 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
   const calls = new Map<string, TagCall[]>();
   scratch.customTagAnalyzePass = { calls };
 
-  lowerChildren(scratch, body);
-  // `analyze` is a whole-file check: it never runs over a walk that failed, and
-  // the walk's errors, not the hook's, are the file's.
-  if (scratchErrors.length) throw collectedError(scratchErrors);
-  runAnalyzeHooks(ctx, customTags, calls);
+  if (keepsPartialIr(ctx)) {
+    withPartialScratch(ctx, scratch, () => lowerChildren(scratch, body));
+  } else {
+    lowerChildren(scratch, body);
+  }
+  // Default analyze still requires a complete walk. In partial mode it sees
+  // surviving calls, so transforms never run against an unanalyzed store.
+  // Partial diagnostics also retain scratch errors below analyze-failed tags
+  // the real walk omits. The IR entry deduplicates errors from both walks.
+  if (scratchErrors.length && !keepsPartialIr(ctx)) {
+    throw collectedError(scratchErrors);
+  }
+  if (keepsPartialIr(ctx)) {
+    ctx.errors?.push(...scratchErrors);
+    for (const name of [...calls.keys()].sort((a, b) => a.localeCompare(b))) {
+      const analyzed = recover(ctx, () => {
+        runAnalyzeHooks(
+          ctx,
+          customTags,
+          new Map([[name, calls.get(name) ?? []]]),
+        );
+        return true;
+      });
+      if (!analyzed) failPartialAnalyze(ctx, name);
+    }
+  } else {
+    runAnalyzeHooks(ctx, customTags, calls);
+  }
 }
 
 /** Compiles one tag unit only to produce its cached caller metadata. */
@@ -7716,6 +7808,7 @@ registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
   // of a caller asking only for metadata.
   templateCtx.warnings = [];
   templateCtx.customTagStores = new Map();
+  if (hasPartialAnalyzeScope(ctx)) inheritPartialAnalyzeScope(templateCtx);
   const ir = lower(templateCtx, body);
   return ir.tagMetadata;
 });

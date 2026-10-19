@@ -217,6 +217,9 @@ function dynamicTagEnd(expr: { span?: SourceSpan }): BlameEnd {
  * with its own prefix. Set per `checkIr` call, like the line tables.
  */
 let problems: unknown[] = [];
+/** Opt-in recovery: the smallest IR owner whose own check failed. */
+let rejected: Set<object> | undefined;
+let owner: object | undefined;
 
 /** `fn`'s result, or `undefined` after recording what it threw. */
 function attempt<T>(fn: () => T): T | undefined {
@@ -224,6 +227,7 @@ function attempt<T>(fn: () => T): T | undefined {
     return fn();
   } catch (error) {
     problems.push(error);
+    if (owner) rejected?.add(owner);
     return undefined;
   }
 }
@@ -629,6 +633,20 @@ function checkBranch(branch: Branch): void {
 }
 
 function checkNode(node: IrNode): void {
+  if (!rejected) {
+    checkNodeContent(node);
+    return;
+  }
+  const outer = owner;
+  owner = node;
+  try {
+    attempt(() => checkNodeContent(node));
+  } finally {
+    owner = outer;
+  }
+}
+
+function checkNodeContent(node: IrNode): void {
   switch (node.kind) {
     case "DelegatedTag":
       checkTag(node.tag);
@@ -845,6 +863,7 @@ function allUnknownTags(
   exemptTags: ReadonlySet<string> | undefined,
   explainer: Explainer | undefined,
   dialectId: string | undefined,
+  rejectUnknown: boolean,
 ): UnknownTagHit[] {
   const found: UnknownTagHit[] = [];
   const visitTag = (tag: DelegatedTag<unknown>, frame: ViewFrame) => {
@@ -863,6 +882,7 @@ function allUnknownTags(
         span: tag.span ?? tag.nameSpan,
         ancestors: frame.ancestors,
       });
+      if (rejectUnknown || explained) rejected?.add(tag);
       found.push({
         name: tag.name,
         ...(tag.trigger ? { trigger: tag.trigger } : {}),
@@ -960,12 +980,14 @@ function structuralInAttrTagNodes(
 ): void {
   for (const node of nodes) {
     if (node.kind === "AttributeTagIf") {
+      if (owner) rejected?.add(owner);
       out.push({
         keyword: "if",
         at: node.loc,
         blameEnd: keywordEnd(node.loc, "if"),
       });
     } else if (node.kind === "AttributeTagFor") {
+      if (owner) rejected?.add(owner);
       out.push({
         keyword: "for",
         at: node.loc,
@@ -988,6 +1010,14 @@ function structuralInAttrTagNodes(
  */
 function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
   for (const node of nodes) {
+    if (
+      node.kind === "Text" ||
+      node.kind === "Interpolation" ||
+      node.kind === "IfChain" ||
+      node.kind === "For" ||
+      node.kind === "Const"
+    )
+      rejected?.add(node);
     switch (node.kind) {
       case "Text":
         out.push({
@@ -1024,9 +1054,13 @@ function structuralInNodes(nodes: IrNode[], out: StructuralHit[]): void {
           blameEnd: keywordEnd(node.loc, "const"),
         });
         break;
-      case "DelegatedTag":
+      case "DelegatedTag": {
+        const outer = owner;
+        owner = node;
         structuralInParts(node.tag.attributeTagTree, node.tag.children, out);
+        owner = outer;
         break;
+      }
     }
   }
 }
@@ -1055,6 +1089,16 @@ function allStructural(
       if (importsMode(options) !== "reject") continue;
     } else if (options.structural !== "reject") {
       continue;
+    }
+    // Statements are removed by their authored span during recovery.
+    if (rejected) {
+      for (const node of [
+        ...ir.imports,
+        ...ir.hoisted,
+        ...(ir.inputInterface ? [ir.inputInterface] : []),
+      ]) {
+        if (node.span === stmt.span) rejected.add(node);
+      }
     }
     const at = positionOfOffset(stmt.span.sourceStart);
     hits.push({
@@ -1230,8 +1274,11 @@ export function checkIr(
   ir: Ir,
   source: string,
   options: CheckOptions,
+  omit?: Set<object>,
 ): unknown[] {
   problems = [];
+  rejected = omit;
+  owner = undefined;
   try {
     return checkAll(ir, source, options);
   } catch (error) {
@@ -1274,6 +1321,7 @@ function checkAll(ir: Ir, source: string, options: CheckOptions): unknown[] {
         options.exemptTags,
         options.explainer,
         options.dialectId,
+        options.unknownTags === "reject",
       );
       for (const hit of found) {
         if (hit.explained) {

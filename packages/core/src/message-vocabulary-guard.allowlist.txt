@@ -82,9 +82,9 @@ lower.ts :: lowerAuthoredTag :: `<${${…}}>` -- example: the suggested rewrite 
 
 ir-entry/checks.ts :: checkBranch :: ==`<if>` condition -- internal: span invariant label
 ir-entry/checks.ts :: checkBranch :: ==an `<if>` branch -- internal: span invariant label
-ir-entry/checks.ts :: checkNode :: ==`<if>` -- internal: span invariant label
-ir-entry/checks.ts :: checkNode :: ==`<for>` -- internal: span invariant label
-ir-entry/checks.ts :: checkNode :: ==`<const>` -- internal: span invariant label
+ir-entry/checks.ts :: checkNodeContent :: ==`<if>` -- internal: span invariant label (not a source diagnostic)
+ir-entry/checks.ts :: checkNodeContent :: ==`<for>` -- internal: span invariant label (not a source diagnostic)
+ir-entry/checks.ts :: checkNodeContent :: ==`<const>` -- internal: span invariant label (not a source diagnostic)
 
 core.ts :: else :: `<else if=condition>` -- example: the suggested rewrite is written in MX's syntax
 parse-error-hints.ts :: defaultReplacement :: `<${…}/${…}=…/>` -- example: the suggested rewrite is written in MX's syntax

@@ -1,0 +1,6 @@
+---
+packages: [core]
+kind: Added
+---
+
+Opt-in `partial: true` recovery for `lowerSource` and `lowerFile` returns a spanned IR beside diagnostics, omitting failed subtrees and flagging the result with `partial: true`. The default remains all-or-nothing, and clean opt-in calls keep the default result shape. Recovery analyzes surviving calls before transforms, omits a tag whose own analyze hook fails without running its transform or finalizer, and preserves unrelated tags. It also omits tags rejected by recording-only checks, rolls back omitted subtrees' hoists and hook eligibility, discards derived declarations from failed analyze hooks and omitted scratch-walk calls, and scopes failed trigger children to the active root. Hook-private stores are not rolled back. Completed template metadata compiled under a failed-analyze recovery scope stays private to that scope, so independent nested and later compiles never reuse metadata from omitted calls. Recovery ignores completed shared metadata and compiles each template with its own omissions even when an independent compile fills the cache first. Shared pending placeholders still terminate recursive compilation across recovery scopes. Partial diagnostics also include errors the default stops before; reserved-name refusals still return no tree.

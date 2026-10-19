@@ -42,7 +42,8 @@ resource="post" table="posts"
 
 | Field | Meaning |
 |---|---|
-| `ir` | a `SpannedIr`, or `undefined` when `diagnostics` holds an error |
+| `ir` | a `SpannedIr`, or `undefined` on error unless `partial: true` recovered a tree |
+| `partial` | present as `true` only when an opt-in call returned an IR beside errors; absent on a clean call |
 | `diagnostics` | `IrDiagnostic[]`: `{ severity, message, line, column, offset, end?, file?, code?, fixes? }`. On success it holds this call's warnings only |
 
 `lowerSource` never throws for anything in the source. A parse error, a rejected construct and a failed contract are each an error diagnostic, and every independent error of the file is reported once, in position order. A bug in core that surfaces with no position is reported at `1:0` with an `internal error: ` prefix, so a caller never has to wrap the call.
@@ -50,6 +51,26 @@ resource="post" table="posts"
 `offset` is the UTF-16 offset of `line`/`column`, so a consumer needs no line table (`-1` when `file` names another file, whose text `lowerSource` does not have). `code` is set on every error and every warning core raises, so a consumer matches the code, never the wording.
 
 `end` is where the diagnostic stops: `{ line, column, offset }`, exclusive, with `line` 1-based and `column` 0-based as the start. It is absent when core does not know a range, and a consumer then underlines from `line`/`column` as it did before. A diagnostic that blames a whole tag ends at the end of `<name`, so a tag with a long body is not underlined from top to bottom. An attribute ends after its value, an expression at its last character, and a parse error at the end of the range the parser gave, which for a point error is its start. A file-level diagnostic (a bad `customTags` registration, a warning with no source position) has no `end`. `end.offset` follows the start: it is a valid offset in the lowered file for every diagnostic located there, and `-1` only when `file` names another file. The range is never backwards: `end` is the start or later.
+
+### Partial recovery
+
+The default remains all-or-nothing. Pass `partial: true` to `lowerSource` or `lowerFile` to keep a partial IR beside error diagnostics:
+
+```ts
+const result = lowerSource(source, filename, { partial: true });
+if (result.ir) inspect(result.ir);
+if (result.partial) console.error("Some constructs were omitted");
+```
+
+Recovery omits the smallest enclosing node that cannot be completed, with no placeholders:
+
+- A failed child is omitted; its parent and valid siblings remain. A failure in an attribute, tag head or tag-local contract removes the whole owning tag, including its body. A failed `<if>` head removes its whole branch chain.
+- A dialect lowering hook's `ctx.fail` removes its owning tag, or its line trigger. Other hooks continue in source order, and surviving synthesized tags keep their trigger metadata.
+- An IR-entry check reject (an unknown tag, a structural construct, a dynamic tag or a spanless attribute) removes that construct. An invalid attribute tag removes its enclosing ordinary tag, keeping its synchronized attribute-tag views consistent.
+- A tag rejected by a script-shape, script-body syntax or stale-derived-read check is omitted even when the check collects diagnostics without throwing. Hoists, pending imports and finalization eligibility from an omitted subtree are rolled back. Derived declarations made by a failed `analyze` hook or by omitted scratch-walk calls are discarded. Declarations from a successful `analyze` stay even if that tag's transform later fails and its call is omitted. Hook-private stores are not rolled back: writes by an omitted transform remain visible to later calls and finalization of the same tag.
+- `analyze` runs over the scratch walk's surviving calls before transforms run. A tag whose own `analyze` fails is omitted without running its transform or finalizer; other tags still lower. A tag with no surviving call is not finalized. Other whole-file hook failures (`afterLower`, `finalize`) retain the already-lowered tree, with the error and `partial: true`; failed finalization contributes no nodes.
+
+Every returned node still meets `SpannedIr`'s span guarantee and retains its tag information. Diagnostics keep their codes, positions and messages; errors the default stops before are also reported. A parse or registration failure that leaves no usable tree still returns `ir: undefined`, without the flag; reserved-name refusals also return no tree, even after recovery. Recovery also refuses a tree whose span invariants cannot be repaired. A successful call with `partial: true` returns exactly the default result, without a `partial` field. This option changes no IR node shape and does not bump `IR_VERSION`.
 
 ### Diagnostic codes
 
@@ -121,6 +142,7 @@ lowerSource(source, filename, {
   imports: "pass", // optional; default: the dialect's, else whatever `structural` is
   unknownTags: "reject", // "allow" | "reject"; default: the dialect's, else "allow"
   stripTypes: false, // default: true
+  partial: true, // default: false; keep valid subtrees beside diagnostics
 });
 ```
 
@@ -133,6 +155,7 @@ lowerSource(source, filename, {
 - **`imports`**: `"pass"` or `"reject"`, defaulting to the effective `structural`. `"pass"` under `structural: "reject"` lets top-level `import` declarations through while `<if>`, `export` and the rest stay errors; they arrive in `ir.imports`. A tag-body `import` is body text, not an import, so `imports` does not apply to it.
 - **`unknownTags`**: `"allow"` accepts a tag with no contract (the open set). `"reject"` makes it an error naming the tag, with a nearest-name hint, for a dialect that declares every tag. [Closing the vocabulary](/custom-tags/contract-packages/#contract-packages-closing-the-vocabulary) has an example.
 - **`stripTypes`**: `true` (the default) erases TypeScript from the nodes before the source lowers: an arrow's parameter and return annotations are gone from its `node`, and a top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its operand (its `node`, `span` and `code` are the operand's, so `(y as string)` lowers as `y`). `Expr.code` is sliced from the source either way, so annotations inside an expression stay in it. `false` keeps the authored TypeScript in the nodes (`TSTypeAnnotation`, `TSAsExpression`, …), for a dialect whose `nodeType.lower`, contract hooks or `afterLower` read types. With `false`, an assertion stays around the value, so an attribute whose value is an assertion over a literal (`a=("s" as const)`) is `dynamic` with shape `other` rather than `static`, `boolean`, `object`, `array` or `string`, and a contract's `type: "expression"` check follows that kind (`a=("s" as const)` is refused by default and accepted with `false`). Every other check of core looks through TypeScript assertions (`as`, `satisfies`, `!`, `<T>x`, `x<T>`) and gives the default's diagnostics, positions included: the bound-attribute check (`v:=(y as any)`) and a contract's `string`, `number`, `boolean`, `enum`, `literalOnly`, `array`, `items`, `function` and `member` checks. An attribute's `span` ends where its written value ends either way (for `a=(1 as number)`, after the `)`), and a dynamic attribute's `valueSpan` is that written value, wrapper included, so by default a wrapped value is `valueSpan` differing from `value.span` (`1`), and with `false` the two differ only by the parentheses. `ctx.lower` in a tag-file hook takes the option but does not inherit the outer call's value.
+- **`partial`**: opt into partial recovery as described above. The default returns no IR on error.
 - **`warnings`**: a sink for core's warnings, pushed as they are raised, so those raised before a later error stay in the caller's array.
 
 ## Tag rules presets

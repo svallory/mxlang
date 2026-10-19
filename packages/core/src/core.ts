@@ -50,6 +50,7 @@ import { nodesInside } from "./expr-nodes.ts";
 import { handleNode } from "./host-handle.ts";
 import type { Attr, Expr, ExprNode, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
+import { partialRollback } from "./ir-entry/recovery.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
@@ -832,12 +833,14 @@ export function recover<T>(ctx: Ctx, run: () => T): T | undefined {
   // after it, so a name it binds stays bound (a `<define>` whose head failed
   // still names its define, and a later call to it is not a second error).
   const restore = scopeBindings(ctx, { defines: false });
+  const rollback = partialRollback(ctx);
   try {
     return run();
   } catch (error) {
     if (!isTranslateError(error)) throw error;
     positionError(ctx, error);
     restore();
+    rollback?.();
     ctx.errors.push(error, ...relatedErrorsOf(error));
     return undefined;
   }
