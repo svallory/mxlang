@@ -392,6 +392,10 @@ describe("mx-tsc watch: the manifest that decides the host", () => {
       const sub = join(dir, "src", "sub");
       // As in the -w case: the file first compiles under the root manifest's
       // host, in a cycle of its own, before the nearer manifest is created.
+      // Unlike -w, the solution builder reads the package-info cache rather
+      // than packageJsonInputs' listed locations, so this case does not catch
+      // an only-existing-manifests mutation (same as main). The -w case and
+      // the three packageJsonInputs unit tests catch that mutation.
       const added = await watcher.cycle(() => {
         mkdirSync(sub);
         writeFileSync(join(sub, "x.mx"), "<p>ok</p>\n");
