@@ -36,17 +36,43 @@ export function workerCap(freeBytes: number, parallelism: number): number {
 
 export interface ResolvedWorkers {
   workers: number;
-  /** "override" when VITEST_MAX_WORKERS decided, "cap" when the memory clamp did. */
-  reason: "override" | "cap";
+  /** "cli" when --maxWorkers won, "override" when VITEST_MAX_WORKERS decided, "cap" when the memory clamp did. */
+  reason: "cli" | "override" | "cap";
   /** The free-memory figure the decision was based on (always reported, even when overridden). */
   freeBytes: number;
+}
+
+/** The value of `--maxWorkers`/`--max-workers` ("N", "=N", "N%") in argv, or undefined. */
+export function cliMaxWorkers(argv: readonly string[]): number | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const m = /^--maxWorkers=(.+)$/.exec(a) ?? /^--max-workers=(.+)$/.exec(a);
+    if (m) return parseWorkers(m[1]);
+    if (a === "--maxWorkers" || a === "--max-workers") {
+      return parseWorkers(argv[i + 1]);
+    }
+  }
+  return undefined;
+}
+
+function parseWorkers(v: string | undefined): number | undefined {
+  const m = v && /^(\d+)%?$/.exec(v);
+  if (!m) return undefined;
+  return Number(m[1]);
 }
 
 export function resolveWorkers(
   env: NodeJS.ProcessEnv = process.env,
   freeBytes: number = memAvailableBytes(),
   parallelism: number = os.availableParallelism(),
+  argv: readonly string[] = process.argv,
 ): ResolvedWorkers {
+  // A --maxWorkers on the CLI overrides this config value at the vitest CLI
+  // layer, above the config; report it, not the cap it defeated.
+  const cli = cliMaxWorkers(argv);
+  if (cli !== undefined) {
+    return { workers: cli, reason: "cli", freeBytes };
+  }
   const override = Number(env.VITEST_MAX_WORKERS);
   if (
     env.VITEST_MAX_WORKERS !== undefined &&
@@ -62,8 +88,14 @@ export function resolveWorkers(
   };
 }
 
-/** The one startup line: `vitest workers: 6 (8.2 GB free)`. */
+/** The one startup line: `vitest workers: 6 (8.2 GiB free)`. */
 export function workersLogLine(r: ResolvedWorkers): string {
   const gb = (r.freeBytes / GIB).toFixed(1);
-  return `vitest workers: ${r.workers} (${gb} GB free${r.reason === "override" ? ", VITEST_MAX_WORKERS override" : ""})`;
+  const why =
+    r.reason === "cli"
+      ? ", --maxWorkers wins over the cap"
+      : r.reason === "override"
+        ? ", VITEST_MAX_WORKERS override"
+        : "";
+  return `vitest workers: ${r.workers} (${gb} GiB free${why})`;
 }

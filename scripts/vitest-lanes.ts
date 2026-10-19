@@ -9,11 +9,27 @@ import { configDefaults } from "vitest/config";
  *   `bun run test:affected` when no slow-lane package changed).
  * - `slow`: only the slow files run (`bun run test:slow`).
  *
- * A project opts in by passing its slow globs (relative to the project root)
- * to `laneTest(...)` and spreading the result into its `test` config. The fast
- * and slow lanes partition the files exactly: `scripts/vitest-lanes.test.ts`
- * checks the two sets add up to the whole project.
+ * A project opts in by passing its slow files (relative to the project root)
+ * to `laneTest(...)` and spreading the result into its `test` config. The slow
+ * lists live here (SLOW_LANE_FILES) so `scripts/vitest-lanes.test.ts` can
+ * assert every listed file still exists — a renamed slow file would otherwise
+ * silently leave the slow lane while "fast + slow == all" stays trivially
+ * true.
  */
+
+/** Slow-lane test files per project dir, relative to the project root. */
+export const SLOW_LANE_FILES: Readonly<Record<string, readonly string[]>> = {
+  "packages/tooling/tsc": [
+    "src/watch.test.ts",
+    "src/watch-ambient-types.test.ts",
+    "src/watch-mx-diagnostics.test.ts",
+    "src/watch-ngmx-rebuild-diagnostics.test.ts",
+    "src/watch-package-json.test.ts",
+    "src/watch-policy-diagnostics.test.ts",
+    "src/watch-rebuild-diagnostics.test.ts",
+  ],
+  "packages/tooling/typescript-plugin": ["src/index.test.ts"],
+};
 export type Lane = "all" | "fast" | "slow";
 
 export function currentLane(env: NodeJS.ProcessEnv = process.env): Lane {

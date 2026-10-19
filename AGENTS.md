@@ -33,11 +33,13 @@ bunx vitest run --root ../.. --project @mxlang/<name>
 Before pushing, agents run the affected set, not the whole suite (the full suite runs in `verify`, the gate and CI):
 
 ```
-bun run test:affected         # vitest related <files changed vs origin/main>
-bun run test:affected:moon    # moon run :test --affected (task cache)
+bun run test:affected         # vitest related <source files changed vs origin/main>
+                              # + the vitest project of each changed non-source file
 ```
 
-`scripts/test-affected.ts` collects the branch's commits since the merge-base with `origin/main`, staged/unstaged edits and untracked files, and hands the source ones to `vitest related`. It warns when a "wide" file changed (`vitest.config.ts`, `package.json`, `bun.lock`, `tsconfig.base.json`, `scripts/vitest-*`) — those can affect tests no import graph shows, so let the gate cover the rest — and it picks the fast lane unless something under `packages/tooling/tsc/` or `packages/tooling/typescript-plugin/` changed. Extra args pass through: `bun run test:affected -- -t "<name>"`.
+`bun run test:affected:moon` (moon `--affected`) is **unverified** — moon is not installed on every host (not on forge) and every nested package's moon `test` task passes a `--root` that fails for nested packages — do not rely on it; the lead owns fixing the `--root` wiring.
+
+`scripts/test-affected.ts` collects the branch's commits since the merge-base with `origin/main`, staged/unstaged edits and untracked files. Source files go to `vitest related` with `--passWithNoTests=false`, so a change no test imports is never green; changed non-source files (fixtures, `expected.*`, corpora, `.json`) run the vitest project of the package that owns them, since the import graph cannot see them. A changed file that maps to no project at all is named and covered by the gate instead. It warns when a "wide" file changed (`vitest.config.ts`, `package.json`, `bun.lock`, `tsconfig.base.json`, `scripts/vitest-*`) — those can affect tests no import graph shows, so let the gate cover the rest. The lane is always `all` (`vitest related` already selects only the affected tests; a fast lane would hide slow-lane tests it selected), with a printed note when tsc or typescript-plugin changed. Extra args pass through: `bun run test:affected -- -t "<name>"`.
 
 ### Fast and slow lanes
 
@@ -47,7 +49,11 @@ bun run test:affected:moon    # moon run :test --affected (task cache)
 - `bun run test:slow` — only the slow files.
 - Unset / `all` — every test; this is what CI, the gate, `bun run test` and a bare `vitest run` do, so nothing is ever dropped by default.
 
-Fast + slow partition the suite exactly (verified with `vitest list`: 31652 + 266 = 31918 tests). CI and the full gate always run `all`, so the lanes only save local dev time. A project joins the slow lane by spreading `laneTest([...slow globs])` into its `test` config (see `packages/tooling/tsc/vitest.config.ts`); its moon `test` task must hash `$MX_TEST_LANE` so a cached fast pass cannot satisfy an `all` run.
+Fast + slow partition the suite exactly (verified with `vitest list`: fast + slow = all; the totals drift with every PR, so no counts are pinned here). CI and the full gate always run `all`, so the lanes only save local dev time. A project joins the slow lane by listing its slow files in `SLOW_LANE_FILES` (`scripts/vitest-lanes.ts`) and spreading `laneTest(SLOW_LANE_FILES[<dir>])` into its `test` config; a listed file that stops existing fails `scripts/vitest-lanes.test.ts`, and the package's moon `test` task must hash `$MX_TEST_LANE` so a cached fast pass cannot satisfy an `all` run.
+
+### Worker cap
+
+Vitest workers are capped by free memory, not core count: `clamp(floor(MemAvailable / 1 GiB), 1, availableParallelism - 1)` in the root `vitest.config.ts` (`scripts/vitest-workers.ts`), so every run — affected, gate, CI — inherits it. An explicit `--maxWorkers` (or `--max-workers`) on the vitest CLI, or a `VITEST_MAX_WORKERS` env var, still overrides the cap. The chosen count is printed once at startup (`vitest workers: 6 (8.2 GiB free)`); `MX_VITEST_QUIET=1` silences that line. The old local 2-worker default (`VITEST_MAX_WORKERS ?? 2` outside CI) is gone.
 
 ## Build before downstream tests
 

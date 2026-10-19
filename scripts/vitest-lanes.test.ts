@@ -1,8 +1,8 @@
-import { globSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { currentLane, laneTest } from "./vitest-lanes.ts";
+import { currentLane, laneTest, SLOW_LANE_FILES } from "./vitest-lanes.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -52,19 +52,23 @@ describe("laneTest", () => {
   });
 });
 
-// A slow glob that matches nothing means the lane silently became empty (a
-// renamed file), and "fast + slow == all" is then only trivially true.
+// A slow-listed file that no longer exists means the lane silently changed
+// shape (a renamed file): the slow lane would drop it while "fast + slow ==
+// all" stays trivially true. The lists themselves live in vitest-lanes.ts so
+// this one module is the single source of truth.
 describe("the declared slow lanes", () => {
-  const lanes: Array<[string, string[], number]> = [
-    ["packages/tooling/tsc", ["src/watch*.test.ts"], 5],
-    ["packages/tooling/typescript-plugin", ["src/index.test.ts"], 1],
-  ];
-  for (const [dir, globs, min] of lanes) {
-    it(`${dir} slow globs match files`, () => {
-      const files = globs.flatMap((g) =>
-        globSync(g, { cwd: resolve(root, dir) }),
-      );
-      expect(files.length).toBeGreaterThanOrEqual(min);
+  for (const [dir, files] of Object.entries(SLOW_LANE_FILES)) {
+    it(`${dir}: every slow-lane file exists`, () => {
+      expect(files.length).toBeGreaterThan(0);
+      for (const f of files) {
+        expect(existsSync(resolve(root, dir, f)), `${dir}/${f}`).toBe(true);
+      }
+    });
+    it(`${dir}: slow files stay out of the fast lane`, () => {
+      const cfg = laneTest(files, { lane: "fast" });
+      for (const f of files) {
+        expect(cfg.exclude).toContain(f);
+      }
     });
   }
 });

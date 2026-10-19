@@ -39,7 +39,18 @@ type Mode =
   | { kind: "tsc"; project?: string }
   | { kind: "delegate"; script: string };
 
-function modeFor(dir: string): Mode {
+/**
+ * The tsc binary a package's own `typecheck` script would use: the package's
+ * local one when it has one (host-angular, mx-vite and mx-site pin 5.9.3
+ * while the root pins 6.0.3), else the root's.
+ */
+export function tscFor(dir: string): string {
+  const local = resolve(root, dir, "node_modules/.bin/tsc");
+  if (existsSync(local)) return local;
+  return resolve(root, "node_modules/.bin/tsc");
+}
+
+export function modeFor(dir: string): Mode {
   const pkgPath = resolve(root, dir, "package.json");
   if (!existsSync(pkgPath)) return { kind: "tsc" };
   let pkg: { scripts?: Record<string, string> };
@@ -77,8 +88,7 @@ function main(): number {
             ...(mode.project ? ["-p", mode.project] : []),
           ]
         : ["run", "typecheck"];
-    const cmd =
-      mode.kind === "tsc" ? resolve(root, "node_modules/.bin/tsc") : "bun";
+    const cmd = mode.kind === "tsc" ? tscFor(dir) : "bun";
     const r = spawnSync(cmd, args, {
       cwd: resolve(root, dir),
       stdio: "inherit",

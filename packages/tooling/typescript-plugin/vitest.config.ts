@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-import { laneTest } from "../../../scripts/vitest-lanes.ts";
+import { laneTest, SLOW_LANE_FILES } from "../../../scripts/vitest-lanes.ts";
 
 export default defineConfig({
   test: {
@@ -14,7 +14,7 @@ export default defineConfig({
     ],
     // index.test.ts (~176 language-service tests, ~90 s) is the slow lane
     // (scripts/vitest-lanes.ts); CI, the gate and a bare run still include it.
-    ...laneTest(["src/index.test.ts"], {
+    ...laneTest(SLOW_LANE_FILES["packages/tooling/typescript-plugin"], {
       include: ["src/**/*.test.ts"],
     }),
     server: {
