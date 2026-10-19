@@ -4839,7 +4839,7 @@ describe(".ng.mx language plugin", () => {
   function diagnosticsOf(source: string, fixtureDir = dir) {
     const file = `${fixtureDir}/x.component.ng.mx`;
     const consumer = `${fixtureDir}/consumer.ts`;
-    const service = createPluginService(
+    const { service, project } = createMutablePluginService(
       {
         [file]: source,
         [`${fixtureDir}/stub.ts`]: stub,
@@ -4847,14 +4847,20 @@ describe(".ng.mx language plugin", () => {
       },
       [consumer],
     );
-    service.getSemanticDiagnostics(consumer);
-    return {
-      file,
-      diagnostics: [
-        ...service.getSyntacticDiagnostics(file),
-        ...service.getSemanticDiagnostics(file),
-      ],
-    };
+    try {
+      service.getSemanticDiagnostics(consumer);
+      return {
+        file,
+        diagnostics: [
+          ...service.getSyntacticDiagnostics(file),
+          ...service.getSemanticDiagnostics(file),
+        ],
+      };
+    } finally {
+      // These checks only need synchronous TS diagnostics. Cancel the real
+      // Angular idle timer before it can fork a worker during another test.
+      project.close();
+    }
   }
 
   const lineCol = (diagnostic: ts.Diagnostic, source: string) => {
@@ -4961,6 +4967,20 @@ describe(".ng.mx language plugin", () => {
     };
     const fireIdleTimer = () =>
       vi.advanceTimersByTimeAsync(ngDiagnostics.IDLE_DELAY_MS);
+
+    function waitForRefresh(signal: ReturnType<typeof refreshSignal>) {
+      return new Promise<void>((resolve, reject) => {
+        // AbortSignal's deadline stays real while the idle clock is fake.
+        const deadline = AbortSignal.timeout(30_000);
+        const onTimeout = () =>
+          reject(new Error("Timed out waiting for Angular diagnostic refresh"));
+        deadline.addEventListener("abort", onTimeout, { once: true });
+        void signal.promise.then(() => {
+          deadline.removeEventListener("abort", onTimeout);
+          resolve();
+        });
+      });
+    }
 
     // Keep the real checker, mappings and plugin wiring. Only the process
     // transport is replaced; checker/worker IPC has its own tests, and the
@@ -5145,11 +5165,13 @@ describe(".ng.mx language plugin", () => {
       const before = workerPids().length;
       const signal = refreshSignal();
       const fork = childProcess.fork;
-      let child: ChildProcess | undefined;
+      const forks: ChildProcess[] = [];
+      let capturing = false;
       const forkSpy = vi
         .spyOn(childProcess, "fork")
         .mockImplementation((...args) => {
-          child = fork(...args);
+          const child = fork(...args);
+          if (capturing) forks.push(child);
           return child;
         });
       // The checker uses Node's named ESM import of fork.
@@ -5164,11 +5186,20 @@ describe(".ng.mx language plugin", () => {
       );
       try {
         service.getSemanticDiagnostics(file);
-        await fireIdleTimer();
-        await signal.promise;
+        // Only this idle callback's synchronous worker creation belongs to
+        // this test. A later, unrelated fork must not replace the captured one.
+        capturing = true;
+        try {
+          await fireIdleTimer();
+        } finally {
+          capturing = false;
+        }
+        expect(forks).toHaveLength(1);
+        const child = forks[0];
+        if (!child) throw new Error("Expected a real ng-worker fork");
+        await waitForRefresh(signal);
         expect(workerPids().length).toBeGreaterThan(before);
         expect(process.listenerCount("exit")).toBe(listeners);
-        if (!child) throw new Error("Expected a real ng-worker fork");
         // The worker client removes its exit listeners while killing the
         // child; close follows exit and is not cleared by that teardown.
         const exited = once(child, "close", {
@@ -5180,13 +5211,15 @@ describe(".ng.mx language plugin", () => {
         expect(process.listenerCount("exit")).toBe(listeners);
       } finally {
         project.close();
-        // Also reap a worker when a failed assertion or mutation skips teardown.
-        if (child && child.exitCode === null && child.signalCode === null) {
-          const exited = once(child, "close", {
-            signal: AbortSignal.timeout(10_000),
-          });
-          child.kill("SIGKILL");
-          await exited;
+        // Also reap captured workers when an assertion or mutation skips teardown.
+        for (const child of forks) {
+          if (child.exitCode === null && child.signalCode === null) {
+            const exited = once(child, "close", {
+              signal: AbortSignal.timeout(10_000),
+            });
+            child.kill("SIGKILL");
+            await exited;
+          }
         }
         forkSpy.mockRestore();
         syncBuiltinESMExports();
@@ -5423,7 +5456,9 @@ describe("host-policy diagnostics through tsserver", {
   timeout: TSSERVER_DESCRIBE_TIMEOUT,
 }, () => {
   const dirs: string[] = [];
+  const projects: Array<{ close(): void }> = [];
   afterEach(() => {
+    for (const project of projects.splice(0)) project.close();
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -5455,6 +5490,9 @@ describe("host-policy diagnostics through tsserver", {
       },
       [consumer],
     );
+    // These projects can also contain .ng.mx files; close them before deleting
+    // their fixture directories so their idle timers cannot outlive the test.
+    projects.push(mutable.project);
     return {
       file,
       /** Builds the project, then asks for the file's own diagnostics. */
