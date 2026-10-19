@@ -278,10 +278,14 @@ describe("mx-tsc watch: the manifest that decides the host", () => {
       const { dir, watcher } = openMode("-w");
       const manifest = join(dir, "package.json");
       // The previous case's nearer manifest and its file go, so the project
-      // is the one-page shape this case's counts are taken over; then settle
-      // on a clean build (a deletion can take two summaries to land).
-      rmSync(join(dir, "src", "sub"), { recursive: true, force: true });
-      let settled = await watcher.cycle();
+      // is the one-page shape this case's counts are taken over; the manifest
+      // write (same bytes, a new mtime) makes this cycle reach tsc even when
+      // the case runs alone with `-t` or `.only`, and a deletion can take two
+      // summaries to land.
+      let settled = await watcher.cycle(() => {
+        rmSync(join(dir, "src", "sub"), { recursive: true, force: true });
+        writeFileSync(manifest, VALID);
+      });
       for (let n = 0; n < 3 && !settled.includes("Found 0 errors."); n++) {
         settled = await watcher.cycle(() => writeFileSync(manifest, VALID));
       }
