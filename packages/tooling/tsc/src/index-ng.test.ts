@@ -279,17 +279,16 @@ describe("mx-tsc", () => {
     });
 
     it(
-      "still reports the not-wired guard for an angular .mx page",
+      "skips Angular .mx pages instead of reporting a not-wired guard",
       () => {
         const result = run(mxTsc, [
           "--noEmit",
           "-p",
           join(fixtures, "ng-mx-page-guard"),
         ]);
-        expect(result.status).not.toBe(0);
-        expect(result.output).toContain(
-          "the angular host is not wired into @mxlang/typescript-plugin yet",
-        );
+        expect(result.status).toBe(0);
+        expect(result.output).not.toContain("not wired");
+        expect(result.output).toBe("");
       },
       SPAWN_TIMEOUT_MS,
     );

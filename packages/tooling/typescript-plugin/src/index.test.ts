@@ -2825,21 +2825,21 @@ describe("MX language plugin", {
     expect(plugin.getSyntaxError(honoFile)).toBeUndefined();
   });
 
-  it("reports the angular host as not wired in yet, rather than falling through to html", () => {
+  it("skips Angular page compilation rather than falling through to html", () => {
     const angularFile = `${here}/fixtures/angular-policy/card.mx`;
     const plugin = createMxLanguagePlugin(ts);
     const source = ["<div>hi</div>"].join("\n");
-    plugin.createVirtualCode?.(
+    const virtual = plugin.createVirtualCode?.(
       angularFile,
       MX_LANGUAGE_ID,
       ts.ScriptSnapshot.fromString(source),
       { getAssociatedScript: () => undefined },
     );
 
+    expect(virtual?.snapshot.getLength()).toBe(0);
     const syntaxError = plugin.getSyntaxError(angularFile);
-    expect(syntaxError?.message).toContain(
-      "the angular host is not wired into @mxlang/typescript-plugin yet",
-    );
+    expect(syntaxError).toBeUndefined();
+    expect(plugin.getCompileDiagnostics(angularFile)).toEqual([]);
   });
 
   it("parses `<` comparisons and generic calls in the virtual TSX", () => {
@@ -5338,18 +5338,17 @@ describe(".ng.mx language plugin", () => {
     expect(text).toContain("mx.angular.tagSelectorPrefix");
   });
 
-  it("keeps the host-policy guard for angular .mx pages", () => {
+  it("skips Angular .mx pages in the language plugin", () => {
     const angularFile = `${here}/fixtures/angular-policy/card.mx`;
     const plugin = createMxLanguagePlugin(ts);
-    plugin.createVirtualCode?.(
+    const virtual = plugin.createVirtualCode?.(
       angularFile,
       MX_LANGUAGE_ID,
       ts.ScriptSnapshot.fromString("<div>hi</div>"),
       { getAssociatedScript: () => undefined },
     );
-    expect(plugin.getSyntaxError(angularFile)?.message).toContain(
-      "the angular host is not wired into @mxlang/typescript-plugin yet",
-    );
+    expect(virtual?.snapshot.getLength()).toBe(0);
+    expect(plugin.getSyntaxError(angularFile)).toBeUndefined();
   });
 });
 
