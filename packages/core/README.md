@@ -770,7 +770,7 @@ const checks: Partial<Dialect> = {
         const atom = attr.value as unknown as { name: string; span?: SourceSpan };
         const declared = call.contract.attributes?.[attr.name];
         if (declared?.unique) {
-          // A positioned error; `code` reaches `DataDiagnostic.code`.
+          // A positioned error; `code` reaches `IrDiagnostic.code`.
           unit.fail(`\`~${atom.name}\` must be unique`, {
             at: atom.span,
             code: "UNIQUE",
