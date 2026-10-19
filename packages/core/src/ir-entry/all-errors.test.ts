@@ -538,6 +538,22 @@ describe("checkIr lists the errors lowerSource reports", () => {
     expect((errors[0] as Error).message).toBe(first?.message);
   });
 
+  it.each([0, 1])("requires a span on Const varBindings entry %i", (index) => {
+    const source = "<const/{ a, b }=input/>";
+    const ir = lowered(source);
+    const node = ir.body[0];
+    if (node?.kind !== "Const") throw new Error("no const");
+    const binding = node.varBindings?.[index];
+    if (!binding) throw new Error("no const binding");
+    const check = () =>
+      checkIr(ir, source, { ...options, unknownTags: "allow" });
+    expect(check()).toEqual([]);
+    binding.span = undefined;
+    expect(check().map((error) => (error as Error).message)).toEqual([
+      `@mxlang/core: IR invariant broken — const binding \`${binding.name}\` carries no span`,
+    ]);
+  });
+
   it("keeps the problems already collected when a throw escapes every recovery point", () => {
     // An import with no span records one problem; a `body` that throws then
     // escapes `attempt`. Both must be returned, none lost behind the throw.

@@ -470,7 +470,7 @@ export function emitModuleWithMappings(
   source = "",
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
-  const emitter = createEmitter(dialect, names?.handler);
+  const emitter = createEmitter(dialect, names?.handler, source);
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -480,7 +480,7 @@ export function emitModuleWithMappings(
     if (node.kind === "Const") {
       statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
     } else if (node.kind === "Define") {
-      const body = createEmitter(dialect, names?.handler);
+      const body = createEmitter(dialect, names?.handler, source);
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {
@@ -493,6 +493,14 @@ export function emitModuleWithMappings(
   }
 
   drive(emitter, markup);
+  // Keep markup diagnostics ahead of duplicates discovered while assembling
+  // top-level statements. Defines render in fresh scopes; only their names
+  // (not their body bindings or parameters) belong to this component.
+  for (const node of ir.body) {
+    if (node.kind === "Const" || node.kind === "Define") {
+      emitter.claimBinding(node);
+    }
+  }
   const body = emitter.result();
   // Either dynamic helper inlines the whole MX_DYNAMIC block (`__mxDynamicPair`
   // calls `__mxDynamic` for any callee without a render path). Read after the

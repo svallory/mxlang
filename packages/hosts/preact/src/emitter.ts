@@ -48,6 +48,7 @@ import {
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
+import { sourcePosition } from "./source-position.ts";
 
 /**
  * The Marko tags this host refuses, each with a hint naming what to write
@@ -123,11 +124,6 @@ interface RegionSink {
   segment: string;
   /** Lifted `<define>` statements, in source order. */
   defines: MappedCode[];
-  /**
-   * Every name lifted into the region's one arrow (`<define>` names and the
-   * identifiers a `/var` pattern declares), to refuse a duplicate.
-   */
-  names: Set<string>;
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
 }
@@ -686,6 +682,10 @@ export class PreactEmitter implements Emitter<string> {
    */
   readonly #region: RegionSink | undefined;
 
+  /** Names emitted into one component body or region arrow, shared by children. */
+  readonly #bindings: Map<string, Position>;
+  readonly #positionAt: ((offset: number) => Position) | undefined;
+
   constructor(
     dialect: JsxDialect = preactDialect,
     runtimeImports?: Set<string>,
@@ -697,7 +697,11 @@ export class PreactEmitter implements Emitter<string> {
     decodeText = true,
     region?: RegionSink,
     bare = false,
+    bindings = new Map<string, Position>(),
+    positionAt = region?.positionAt,
   ) {
+    this.#bindings = bindings;
+    this.#positionAt = positionAt;
     this.#dialect = dialect;
     this.#region = region;
     this.#typeCheck = typeCheck;
@@ -747,6 +751,8 @@ export class PreactEmitter implements Emitter<string> {
       decodeText,
       this.#region,
       bare,
+      this.#bindings,
+      this.#positionAt,
     );
   }
 
@@ -761,25 +767,45 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
-   * Claims `name` in a region's shared arrow. A second claim would be a second
-   * `const` in the one IIFE, which Babel reports at a generated position, so it
-   * is refused here at the authored name, with Marko 6.4.4's text.
+   * Claims a lifted name in the shared JavaScript scope, refusing a second
+   * `const` at the authored name with the region path's diagnostic text.
+   * Dynamic-tag and try bodies still share this scope (mx-m682); do not
+   * silently emit duplicate declarations while their local scopes are missing.
    */
-  #claimRegionName(
-    region: RegionSink,
+  #claimName(
     name: string,
     span: SourceSpan | null | undefined,
     fallback: Position,
   ): void {
-    if (region.names.has(name)) {
-      const at = span ? region.positionAt(span.sourceStart) : fallback;
+    const at =
+      span && this.#positionAt ? this.#positionAt(span.sourceStart) : fallback;
+    const first = this.#bindings.get(name);
+    if (first) {
+      // Whole-file statements are claimed after markup is checked. Diagnose
+      // the later authored declaration regardless of the two passes' order.
+      const second =
+        first.line > at.line ||
+        (first.line === at.line && first.column > at.column)
+          ? first
+          : at;
       throw new TranslateError(
         `Duplicate declaration "${name}"`,
-        at.line,
-        at.column,
+        second.line,
+        second.column,
       );
     }
-    region.names.add(name);
+    this.#bindings.set(name, at);
+  }
+
+  /** Claim a top-level statement after the markup's own errors are checked. */
+  claimBinding(node: Extract<IrNode, { kind: "Const" | "Define" }>): void {
+    if (node.kind === "Const") {
+      for (const { name, span } of node.varBindings ?? [{ name: node.name }]) {
+        this.#claimName(name, span, node.loc);
+      }
+    } else {
+      this.#claimName(node.name, node.nameSpan, node.loc);
+    }
   }
 
   #render(
@@ -2060,11 +2086,8 @@ export class PreactEmitter implements Emitter<string> {
             node,
           );
         }
-        if (this.#region) {
-          const bindings = node.varBindings ?? [];
-          for (const { name: bound, span } of bindings) {
-            this.#claimRegionName(this.#region, bound, span, node.loc);
-          }
+        for (const { name: bound, span } of node.varBindings ?? []) {
+          this.#claimName(bound, span, node.loc);
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
@@ -2200,11 +2223,8 @@ export class PreactEmitter implements Emitter<string> {
             node,
           );
         }
-        if (this.#region) {
-          const bindings = node.varBindings ?? [];
-          for (const { name: bound, span } of bindings) {
-            this.#claimRegionName(this.#region, bound, span, node.loc);
-          }
+        for (const { name: bound, span } of node.varBindings ?? []) {
+          this.#claimName(bound, span, node.loc);
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         // The unit's render path: `.render` is the compiled unit's own
@@ -2506,10 +2526,7 @@ export class PreactEmitter implements Emitter<string> {
    */
   define(node: Extract<IrNode, { kind: "Define" }>): void {
     if (this.#region && !this.#callbackScope) {
-      // Every lifted define shares the region's one arrow with the region's
-      // `/var` bindings, so a second `<define/Row>` (or a `/var` of the same
-      // name) would be a second `const Row`; see `#claimRegionName`.
-      this.#claimRegionName(this.#region, node.name, node.nameSpan, node.loc);
+      this.#claimName(node.name, node.nameSpan, node.loc);
       // The whole-file statement text (`emitModuleWithMappings`). The body is
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
@@ -2661,13 +2678,14 @@ export function createRegionEmitter(
     false,
     undefined,
     true,
-    { segment, defines: [], names: new Set(), positionAt },
+    { segment, defines: [], positionAt },
   );
 }
 
 export function createEmitter(
   dialect: JsxDialect = preactDialect,
   typeCheck?: string,
+  source?: string,
 ): PreactEmitter {
   return new PreactEmitter(
     dialect,
@@ -2677,6 +2695,11 @@ export function createEmitter(
     undefined,
     false,
     typeCheck,
+    true,
+    undefined,
+    false,
+    undefined,
+    !source ? undefined : (offset) => sourcePosition(source, offset),
   );
 }
 

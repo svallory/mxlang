@@ -237,6 +237,28 @@ describe("pass-through constructs (the §3 table)", () => {
     expect(slice(source, node.span)).toBe(source.trimEnd());
   });
 
+  it.each([
+    ["object", "{ a, b }", ["a", "b"]],
+    ["array", "[a, b]", ["a", "b"]],
+    ["renamed", "{ x: y }", ["y"]],
+    ["nested", "{ outer: { a }, list: [b] }", ["a", "b"]],
+    ["default", "{ a = 1 }", ["a"]],
+    ["rest", "{ a, ...rest }", ["a", "rest"]],
+  ])(
+    "Const varBindings carries %s names and authored spans",
+    (_label, pattern, names) => {
+      const source = `\n<const/${pattern}=input/>`;
+      const node = as(ok(source).body[0], "Const");
+      expect(node.varBindings?.map(({ name }) => name)).toEqual(names);
+      expect(
+        node.varBindings?.map(({ span }) => {
+          expect(span).toBeDefined();
+          return span && source.slice(span.sourceStart, span.sourceEnd);
+        }),
+      ).toEqual(names);
+    },
+  );
+
   it("import, static, export and `export interface Input` arrive as statements, sorted by span", () => {
     const source = `import a from "b"\nstatic const s = 1\nexport const e = 2\nexport interface Input { a: string }\n<x/>\n`;
     const ir = ok(source);

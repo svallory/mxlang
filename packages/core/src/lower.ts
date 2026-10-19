@@ -3796,6 +3796,7 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   return {
     kind: "Const",
     name,
+    varBindings: varBindingsOf(ctx, tagVarOf(node)),
     init,
     span: exprSpan(ctx, node),
     loc: posOf(ctx, node),

@@ -23,6 +23,15 @@
     {
       "kind": "Const",
       "name": "count",
+      "varBindings": [
+        {
+          "name": "count",
+          "span": {
+            "sourceStart": 70,
+            "sourceEnd": 75
+          }
+        }
+      ],
       "init": {
         "code": "input.items.length",
         "shape": "other",

@@ -269,7 +269,7 @@ The params shadow host bindings inside `children` only; emitters must not re-sha
 
 ### 5.11 `Const`
 
-`{ kind: "Const", name, init: Expr, span? }`. `name` is the binding pattern as source text, printed through `declName` (never rewritten). The binding shadows a host binding of the same name for the rest of its scope, which a `<const>` inside a branch confines to that branch.
+`{ kind: "Const", name, varBindings?, init: Expr, span? }`. `name` is the binding pattern as source text, printed through `declName` (never rewritten). `varBindings` lists every identifier the pattern declares as `{ name, span? }`, using the same extraction as a component's `/var` pattern; each span points to its authored identifier, including renamed, nested, default and rest bindings. The list may be absent on synthesized or legacy IR nodes. The binding shadows a host binding of the same name for the rest of its scope, which a `<const>` inside a branch confines to that branch.
 
 ### 5.12 Statement kinds
 
@@ -529,6 +529,15 @@ Its IR, `greeting.ir.json`. `Expr.node` and `For.paramNodes` are elided (section
     {
       "kind": "Const",
       "name": "count",
+      "varBindings": [
+        {
+          "name": "count",
+          "span": {
+            "sourceStart": 70,
+            "sourceEnd": 75
+          }
+        }
+      ],
       "init": {
         "code": "input.items.length",
         "shape": "other",

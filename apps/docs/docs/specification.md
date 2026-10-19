@@ -3247,6 +3247,20 @@ keeps the unit a component.
 
 `/var` binds a returning tag's value at the call site.
 
+**Lifted names are unique on preact, react and hono.** In a whole-file
+component, the identifiers declared by `<const>` patterns, `<define>` names,
+and the identifiers declared by static or dynamic `/var` patterns share one
+JavaScript scope, including
+calls inside sibling native elements. A second declaration of a name is a
+positioned compile error: `Duplicate declaration "x"` (at the later authored
+name when its span is available, otherwise at the declaration). A region's
+arrow has the same uniqueness rule for `<define>` and `/var`; `<const>` is
+not allowed in regions. Rename one binding and its uses; a `<define>` body
+and its parameters, two regions, or two independent compilations have separate
+scopes. Dynamic-tag bodies and `<try>` placeholder/catch bodies currently
+hoist `/var` to the component scope instead of keeping Marko's local scope;
+see the **JSX body-scope lifted bindings** row in `divergences.md`.
+
 **`/var` is top-level-only on the JSX hosts and Solid.** Every structural kind
 lowers to an *expression* there — a ternary, a `.map` callback, a `<For>` render
 prop — so a callback scope has no statement position for the binding. Hoisting
@@ -4176,7 +4190,7 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   literal is `static`; nothing is evaluated.
 - **`IR_VERSION`**, exported from `@mxlang/core`, is the version of the IR's
   shape: it goes up by one with every change a reader can observe (a node kind
-  or field added, removed, renamed or given a new meaning). It is `7`: `2` added
+  or field added, removed, renamed or given a new meaning). It is `8`: `2` added
   a static `Attr`'s `node` (a dialect's node, §13.9.9), `3` added a
   `DelegatedTag`'s `tag.definedIn` (§9.2), `4` added a `Define`'s `attrs`
   (§5.4), and `5` added `valueSpan` to a dynamic, bound, event and spread
@@ -4185,7 +4199,8 @@ missing is an `internal error`, with no IR. Every span is core's `SourceSpan`
   `Expr`'s `atoms` and a static `Attr`'s `atom` with `Expr.nodes`, the dialect
   nodes written inside an expression (§13.9.9). `7` removed a static `Attr`'s
   `member` and the `Member` type: a member is a dialect node type like any
-  other (§13.9.6).
+  other (§13.9.6). `8` added `Const.varBindings`: each identifier a `<const>`
+  pattern declares, with its span.
 
 #### 13.7.3 Tag rules presets
 

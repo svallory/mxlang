@@ -48,6 +48,165 @@ function errorOf(source: string): string {
   throw new Error("expected a compile error, but the template compiled");
 }
 
+describe("whole-file duplicate lifted bindings", () => {
+  const counter = {
+    template: {
+      filename: "/fixtures/tags/counter.mx",
+      source: "<return value=1/>",
+    },
+  } as CustomTag;
+  const row = "<define/Row><b/></define>";
+
+  it.each([
+    [
+      "sibling calls",
+      "<section><counter/x/></section>\n<p><counter/x/></p>",
+      "x",
+      2,
+      12,
+    ],
+    ["top-level calls", "<counter/x/>\n<counter/x/>", "x", 2, 9],
+    ["define then call", `${row}\n<counter/Row/>`, "Row", 2, 9],
+    ["call then define", `<counter/Row/>\n${row}`, "Row", 2, 8],
+    ["two defines", `${row}\n${row}`, "Row", 2, 8],
+    ["const then call", "<const/x=1/>\n<counter/x/>", "x", 2, 9],
+    ["call then const", "<counter/x/>\n<const/x=1/>", "x", 2, 7],
+    ["const then define", `<const/Row=1/>\n${row}`, "Row", 2, 8],
+    [
+      "destructured const object",
+      "<const/{a}=input/>\n<counter/a/>",
+      "a",
+      2,
+      9,
+    ],
+    [
+      "destructured const after call",
+      "<counter/x/>\n<const/{ x }=input/>",
+      "x",
+      2,
+      9,
+    ],
+    [
+      "destructured const array",
+      "<const/[a, b]=input.list/>\n<counter/b/>",
+      "b",
+      2,
+      9,
+    ],
+    [
+      "destructured const renamed",
+      "<const/{ x: y }=input/>\n<define/y><b/></define>",
+      "y",
+      2,
+      8,
+    ],
+    [
+      "destructured const nested",
+      "<const/{ outer: { a } }=input/>\n<counter/a/>",
+      "a",
+      2,
+      9,
+    ],
+    [
+      "destructured const default",
+      "<const/{ a = 1 }=input/>\n<counter/a/>",
+      "a",
+      2,
+      9,
+    ],
+    [
+      "destructured const rest",
+      "<const/{ ...rest }=input/>\n<counter/rest/>",
+      "rest",
+      2,
+      9,
+    ],
+    [
+      "destructured const pair",
+      "<const/{ a }=input/>\n<const/[a]=input.list/>",
+      "a",
+      2,
+      8,
+    ],
+    [
+      "dynamic-tag body scope (mx-m682)",
+      "<${input.tag}><counter/x/></>\n<counter/x/>",
+      "x",
+      2,
+      9,
+    ],
+    [
+      "placeholder body scope (mx-m682)",
+      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
+      "x",
+      2,
+      9,
+    ],
+    [
+      "catch body scope (mx-m682)",
+      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
+      "x",
+      2,
+      9,
+    ],
+    ["destructured binding", `${row}\n<counter/{ Row, other }/>`, "Row", 2, 11],
+    ["dynamic calls", "<${input.tag}/x/>\n<${input.tag}/x/>", "x", 2, 14],
+  ])(
+    "refuses %s at the second authored name",
+    (_label, source, name, line, column) => {
+      expect(() =>
+        compilePreactMx(source, "/fixtures/page.mx", {
+          customTags: { counter },
+        }),
+      ).toThrowError(
+        expect.objectContaining({
+          message: expect.stringContaining(`Duplicate declaration "${name}"`),
+          line,
+          column,
+        }),
+      );
+    },
+  );
+
+  it("reports an earlier markup error before duplicate defines", () => {
+    expect(() =>
+      compile(`<div><const/z=1/></div>\n${row}\n${row}`),
+    ).toThrowError(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "`<const>` must appear at the top level",
+        ),
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
+
+  it.each([["define parameter", "<define/Row|x|>${x}</define><counter/x/>"]])(
+    "keeps %s names separate from the component scope",
+    (_label, source) => {
+      const code = compilePreactMx(source, "/fixtures/page.mx", {
+        customTags: { counter },
+      }).code;
+      expect(code).toContain("const Row = ");
+      expect(code).toContain("const x = __mxRet0.value;");
+    },
+  );
+
+  it("keeps distinct lifted names and fresh compilations legal", () => {
+    const source = `${row}<counter/a/><counter/b/><Row/>`;
+    const first = compilePreactMx(source, "/fixtures/page.mx", {
+      customTags: { counter },
+    }).code;
+    expect(first).toContain("const a = __mxRet0.value;");
+    expect(first).toContain("const b = __mxRet1.value;");
+    expect(
+      compilePreactMx(source, "/fixtures/page.mx", { customTags: { counter } })
+        .code,
+    ).toBe(first);
+  });
+});
+
 describe("module shape", () => {
   it("emits the JSX pragma, the props type and a default export", () => {
     const code = compile("<p>hi</p>");

@@ -655,6 +655,9 @@ function checkNode(node: IrNode): void {
     case "Const":
       checkExpr(node.init, "`<const>`");
       requiredSpan(node.span, "`<const>`");
+      each(node.varBindings ?? [], (binding) => {
+        requiredSpan(binding.span, `const binding \`${binding.name}\``);
+      });
       return;
     case "Component": {
       if (node.target.kind === "dynamic") {

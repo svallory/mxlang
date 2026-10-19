@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 7;
+export const IR_VERSION = 8;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -825,6 +825,13 @@ export type IrNode =
   | ({
       kind: "Const";
       name: string;
+      /**
+       * Each identifier `name` declares, with its authored span. Filled by
+       * `lower.ts` `varBindingsOf`. Lets an emitter that lifts bindings into
+       * one scope refuse a duplicate at the authored name. Optional: an
+       * emitter that ignores it needs no change.
+       */
+      varBindings?: Array<{ name: string; span?: SourceSpan }>;
       init: Expr;
       /** File-absolute UTF-16 code-unit span of the whole `<const/…/>` tag. */
       span?: SourceSpan;

@@ -54,6 +54,7 @@ import {
   componentAlias,
   createRegionEmitter,
 } from "./emitter.ts";
+import { sourcePosition } from "./source-position.ts";
 
 export interface CompileJsxRegionOptions {
   filename: string;
@@ -249,14 +250,9 @@ export function compileJsxRegion(
   // region emitter lifts those outside a callback into `liftedDefines`.
   // The padded source is file-shaped (offset = file offset), so a span's
   // offset maps straight to the file's line and column.
-  const emitter = createRegionEmitter(dialect, segment, (offset) => {
-    const before = padded.slice(0, offset);
-    const lastBreak = before.lastIndexOf("\n");
-    return {
-      line: before.split("\n").length,
-      column: offset - (lastBreak + 1),
-    };
-  });
+  const emitter = createRegionEmitter(dialect, segment, (offset) =>
+    sourcePosition(padded, offset),
+  );
   drive(emitter, ir.body);
   const markupCode = emitter.result();
   // Defines first, then the `/var` calls, as a whole-file module orders them.
