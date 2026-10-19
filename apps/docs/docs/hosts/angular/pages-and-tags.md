@@ -25,6 +25,8 @@ Keep `x.component.ts` as it is, point `templateUrl` at `./x.component.html`, wri
 
 With the class in one file and the template in another, `.ng.mx` is the simpler form for a new component; a page template suits a component whose class you do not want to move.
 
+The language server reports MX compile diagnostics for Angular pages. The TypeScript plugin skips them without a virtual module or TypeScript diagnostics: a page compiles to a template string, not a module. The Vite plugin refuses to import a page for the same reason; run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve` instead.
+
 ## MX tags
 
 ```mx "tags/badge.mx"

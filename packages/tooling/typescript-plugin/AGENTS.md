@@ -21,7 +21,11 @@ compilation and compiler services remain built-in tool glue, not page compilers.
 The compatibility `createAstroTypeSurface` export forwards to the descriptor.
 The Angular tag projection (`createVirtualTagModuleReader`, PR #264) runs
 before page dispatch when the selected target owns a `ng-template` pipeline.
-It never compares host names, and ordinary pages keep the pending diagnostic.
+It never compares host names. Ordinary pages on that template pipeline have no
+module to project: the plugin skips compilation and returns an empty inert
+TypeScript script, with no exports, mappings or MX compile diagnostics. Returning
+no virtual code would make Volar parse the raw template as TypeScript. The
+language server still reports their compile diagnostics.
 Data selection remains staged out by the registry's policy wrapper.
 
 Both published dist and VSIX inline the registry, descriptors and host glue;
@@ -96,7 +100,8 @@ entry.
   template expressions need Angular's compiler. `tagSelectorPrefix` comes from
   `readAngularConfig`, which throws on a bad config: the plugin reports that as
   an error diagnostic at offset 0 and emits empty virtual code, never defaults.
-  The host-policy "angular not wired" guard still covers Angular `.mx` pages.
+  Angular `.mx` pages are skipped: `mx-angular build` emits their template
+  strings for Angular rather than TypeScript modules.
   Discovered Angular tag templates bypass page dispatch and project the existing
   `compileTagModule` component as TS (not TSX). `createVirtualTagModuleReader`
   in the Angular host shares discovery and compilation with the checker's
@@ -179,8 +184,8 @@ entry.
 `packages/tooling/tsc/package.json` pins `"mx": { "host": "html" }` on purpose:
   it now depends on `@mxlang/host-angular`, and the many fixtures without their own
   `package.json` resolve their host from the nearest one above them, where a
-  single host dependency would otherwise make every one of them an angular
-  project (`the angular host is not wired ...`).
+  single host dependency would otherwise make every one of them an Angular
+  project whose pages the TypeScript plugin skips.
 
 Four facts worth knowing before editing either:
 

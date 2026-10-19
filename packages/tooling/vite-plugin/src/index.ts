@@ -220,7 +220,9 @@ async function compileMarko(
     targets: lookup,
     core,
     unwired: (identity, pending) =>
-      `the ${identity} is not wired into @mxlang/vite-plugin yet${pending ? ` (${pending})` : ""}`,
+      pending
+        ? `Pages for the ${identity} cannot be imported by @mxlang/vite-plugin: ${pending}`
+        : `the ${identity} is not wired into @mxlang/vite-plugin yet`,
     // D1: build strictness is caller-owned, even for an always-strict target.
     strict,
     customTags,

@@ -28,7 +28,7 @@ import {
   lookupFor,
   scanCached,
 } from "@mxlang/targets";
-import type { CodeMapping, VirtualCode } from "@volar/language-core";
+import type { CodeMapping } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { markoAuthoredSpans } from "./authored-spans.ts";
@@ -60,6 +60,9 @@ import type {
 
 /** Thrown inside the compile to skip it when the policy's target failed to load. */
 class TargetNotLoaded extends Error {}
+
+/** Angular pages are templates for the owning component, not TS modules. */
+class TemplatePage extends Error {}
 
 export const MX_LANGUAGE_ID = "mx";
 export const MX_EXTENSIONS = ["mx"] as const;
@@ -187,7 +190,7 @@ export function createMxLanguagePlugin(
             // Reuse discovery's policy resolution: resolving it again would
             // repeat deprecation warnings on unchanged non-Angular files.
             // Tag projection belongs to the target's registered template
-            // pipeline, not a host-name comparison. Pages still hit pending.
+            // pipeline, not a host-name comparison. Pages have no TS module.
             const descriptor = lookupFor(hostPolicy).target(hostPolicy.target);
             const hasTagPipeline = descriptor?.host?.fileKinds?.some((kind) =>
               builtinFileKinds.some(
@@ -199,6 +202,9 @@ export function createMxLanguagePlugin(
             const tag = hasTagPipeline
               ? compileAngularTagVirtual(fileName, source, customTags)
               : undefined;
+            if (!tag && hasTagPipeline && !descriptor?.load) {
+              throw new TemplatePage();
+            }
             return tag ?? compileMxVirtual(fileName, source, customTags);
           },
         );
@@ -219,6 +225,15 @@ export function createMxLanguagePlugin(
           () => markoAuthoredSpans(source, fileName, tagsUsed),
         );
       } catch (cause) {
+        if (cause instanceof TemplatePage) {
+          syntaxErrors.delete(fileName);
+          compileDiagnostics.delete(fileName);
+          dependencies.delete(fileName);
+          // Volar falls back to parsing the raw template if no virtual code
+          // is returned. An empty script keeps TypeScript inert without
+          // inventing a module or exports for a page owned by Angular.
+          return createVirtualCode(typescript, "", []);
+        }
         if (cause instanceof TargetNotLoaded) {
           // Only the `target not loaded` pointer (`getCompileDiagnostics`) and
           // an inert module remain.
@@ -328,7 +343,7 @@ export function createMxLanguagePlugin(
   };
 
   // Tag modules are already a build-supported output kind. Present only those
-  // as TypeScript; leave page dispatch (including Angular's pending guard) alone.
+  // as TypeScript; pages are skipped because they have no module to project.
   function compileAngularTagVirtual(
     fileName: string,
     source: string,

@@ -80,9 +80,16 @@ describe("target-table page dispatch", () => {
     expect(typeSurface).toHaveBeenCalledWith("export default 1;");
   });
 
-  it("keeps the absent-load pending text byte-identical", () => {
-    expect(compile("angular-template").diagnostics[0]?.message).toBe(
-      "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
+  it("keeps an absent module compiler diagnostic for a non-template target", () => {
+    const lookup = builtinLookup();
+    const original = lookup.target;
+    const descriptor = original("html");
+    if (!descriptor) throw new Error("missing html descriptor");
+    vi.spyOn(lookup, "target").mockImplementation((name) =>
+      name === "html" ? { ...descriptor, load: undefined } : original(name),
+    );
+    expect(compile("html").diagnostics[0]?.message).toBe(
+      "the html target is not wired into @mxlang/typescript-plugin yet",
     );
   });
 

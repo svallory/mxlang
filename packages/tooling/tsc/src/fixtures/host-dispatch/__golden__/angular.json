@@ -28,23 +28,16 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "",
         "mappings": [],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/angular/Card.mx",
-            "message": "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-            "offset": 0,
-            "category": "error"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+          "message": "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`."
         },
         "warnings": []
       }
@@ -81,23 +74,16 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "",
         "mappings": [],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/angular/broken.mx",
-            "message": "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-            "offset": 0,
-            "category": "error"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+          "message": "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`."
         },
         "warnings": []
       }
@@ -133,23 +119,16 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "",
         "mappings": [],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/angular/page.mx",
-            "message": "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-            "offset": 0,
-            "category": "error"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+          "message": "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`."
         },
         "warnings": []
       }
@@ -184,32 +163,20 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "declare const __mx$failed$: any;\nexport default __mx$failed$;\ntype __Mx$Any$ = { <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; new <_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any>(...a: any[]): any; [k: string]: any };\nexport declare const Input: any; export type Input<_0 = any, _1 = any, _2 = any, _3 = any, _4 = any, _5 = any, _6 = any, _7 = any> = any;\n",
+        "generated": "",
         "mappings": [],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/angular/plain.mx",
-            "message": "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-            "offset": 0,
-            "category": "error"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+          "message": "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`."
         },
         "warnings": []
       }
     }
   },
-  "mxTsc": [
-    "<root>/angular/Card.mx(1,1): error TS80001: the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-    "<root>/angular/broken.mx(1,1): error TS80001: the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-    "<root>/angular/page.mx(1,1): error TS80001: the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
-    "<root>/angular/plain.mx(1,1): error TS80001: the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)"
-  ]
+  "mxTsc": []
 }

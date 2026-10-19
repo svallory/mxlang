@@ -55,8 +55,8 @@ const goldens = join(root, "__golden__");
  *   in Vite only, so the `~/Card.mx` import resolves there and nowhere else.
  * - every row's TypeScript plugin `mappings`: D3. The mapping pass always
  *   looks tags up through html's translator, whatever the target.
- * - angular: D4. A page `.mx` is silent in the language server, throws in the
- *   TypeScript plugin and in Vite.
+ * - angular: D4. The language server diagnoses pages; the TypeScript plugin
+ *   skips them; Vite refuses them with `mx-angular build`/`watch` guidance.
  * - astro: D5. The language server has no branch of its own for it; it takes
  *   the html compile.
  * - astro-mx-html-host: D6. The `.astro.mx` scan filter is the literal "astro", so a

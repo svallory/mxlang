@@ -71,10 +71,11 @@ describe("target-table Vite dispatch", () => {
     },
   );
 
-  it("keeps the absent-load pending text byte-identical", async () => {
-    await expect(transform("angular-template")).rejects.toThrow(
-      "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)",
-    );
+  it("refuses Angular pages with exact, uncoloured Angular build guidance", async () => {
+    await expect(transform("angular-template")).rejects.toMatchObject({
+      message:
+        "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`.",
+    });
   });
 
   it("reports `tree` as an unknown target through the policy wrapper", async () => {

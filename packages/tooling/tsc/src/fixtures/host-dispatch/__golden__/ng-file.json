@@ -93,7 +93,7 @@
       "vite": {
         "threw": {
           "name": "Error",
-          "message": "the angular host is not wired into @mxlang/vite-plugin yet (phase 2)"
+          "message": "Pages for the angular host cannot be imported by @mxlang/vite-plugin: Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`."
         },
         "warnings": []
       }

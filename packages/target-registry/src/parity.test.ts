@@ -567,17 +567,12 @@ describe("mapping strategy (typescript-plugin/src/mx-language.ts:263 Solid merge
 });
 
 describe("pending page compilation (typescript-plugin/src/mx-language.ts:244, vite-plugin/src/index.ts:155)", () => {
-  it("only angular is unwired, with the text `phase 2`", () => {
+  it("only Angular has no page module compiler and explains its build path", () => {
     for (const t of builtinTargets) {
       expect(t.load === undefined, t.name).toBe(t.name === "angular-template");
     }
-    expect(target("angular-template").pending).toBe("phase 2");
-    // The sentence the tools print today, assembled from the descriptor.
-    const t = target("angular-template");
-    expect(
-      `the ${t.host?.name} host is not wired into @mxlang/typescript-plugin yet (${t.pending})`,
-    ).toBe(
-      "the angular host is not wired into @mxlang/typescript-plugin yet (phase 2)",
+    expect(target("angular-template").pending).toBe(
+      "Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`.",
     );
   });
 });

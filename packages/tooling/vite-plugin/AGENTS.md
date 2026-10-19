@@ -20,7 +20,10 @@ D1 stays caller-owned: `options.strict ?? false` reaches the descriptor even
 when its `strict` is `"always"`. D2 stays in descriptor option forwarding:
 HTML/Astro and Preact/React/Hono forward Vite's synchronous resolver, while
 Solid's descriptor retains its existing omission. D4 comes from absent
-`load`, `host.name` and `pending`, keeping Angular's message byte-identical.
+`load`, `host.name` and `pending`. Angular pages compile to template strings,
+not modules: Vite refuses the import with the descriptor's guidance to run
+`mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`,
+not a future-phase promise.
 Data remains staged out by the registry's policy wrapper. Whole-file output
 still returns `map: null`, so absent map/mappings are safe. There is no editor
 type-surface rewrite or `typeCheck` option on this build path.
@@ -378,7 +381,7 @@ function.
 
 ## Dialect files are refused, not built
 
-Every file the plugin builds goes through `askEmit` (`@mxlang/targets/dialect-check`'s `emitOf`, core's `emitFor`): MX's own files get core's emit, which `compileMarko` runs with the resolved target, the lookup, `core` and the `unwired` text (`the <identity> is not wired into @mxlang/vite-plugin yet`); region files (`.solid.mx`) pass the same gate and are printed through tsx-bridge, which core cannot host. A dialect's file (`isDialectFile`: its
+Every file the plugin builds goes through `askEmit` (`@mxlang/targets/dialect-check`'s `emitOf`, core's `emitFor`): MX's own files get core's emit, which `compileMarko` runs with the resolved target, the lookup, `core` and the `unwired` text. With `pending`, Vite reports `Pages for the <identity> cannot be imported by @mxlang/vite-plugin: <pending>`; without it, `the <identity> is not wired into @mxlang/vite-plugin yet`. The TypeScript plugin keeps `the <identity> is not wired into @mxlang/typescript-plugin yet (<pending>)` when `pending` is present. Region files (`.solid.mx`) pass the same gate and are printed through tsx-bridge, which core cannot host. A dialect's file (`isDialectFile`: its
 extension is claimed by a dialect the project uses, `.probe.mx` included) is
 never compiled here. Building a file calls its dialect's emit and no dialect
 registers one, so `dialectFileRefusal` throws `<dialect name> files cannot be

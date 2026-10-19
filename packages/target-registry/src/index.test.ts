@@ -152,10 +152,12 @@ describe("shape of each descriptor", () => {
     expect(kind?.completeTypecheckModule).toBeUndefined();
   });
 
-  it("angular-template: no load, pending phase 2, one `ng` file kind", () => {
+  it("angular-template: no module load, Angular build guidance, one `ng` file kind", () => {
     const ng = byName("angular-template");
     expect(ng.load).toBeUndefined();
-    expect(ng.pending).toBe("phase 2");
+    expect(ng.pending).toBe(
+      "Pages compile to template strings, not modules. Run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`.",
+    );
     expect(ng.host?.name).toBe("angular");
     expect(ng.host?.fileKinds).toEqual([
       { segment: "ng", languageIds: ["ngmx"], diagnosticSource: "ngmx" },

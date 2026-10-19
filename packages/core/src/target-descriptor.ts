@@ -301,7 +301,12 @@ export interface TargetDescriptor {
   readonly typeSurface?: (code: string) => string;
   /** `"merge-recorded"`: decode the map and recorded mappings. Default `"second-lowering"`. */
   readonly mappings?: "second-lowering" | "merge-recorded";
-  /** Why page compilation is absent; part of the diagnostic text. */
+  /**
+   * Why page compilation is absent; part of the diagnostic text. Vite uses
+   * `Pages for the <identity> cannot be imported by @mxlang/vite-plugin: <pending>`;
+   * the TypeScript plugin uses
+   * `the <identity> is not wired into @mxlang/typescript-plugin yet (<pending>)`.
+   */
   readonly pending?: string;
 
   /** Present iff the target belongs to a host. */
