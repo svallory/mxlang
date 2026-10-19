@@ -1,5 +1,11 @@
 # @mxlang/tsc
 
+## 0.1.0-alpha.35 — 2026-10-19
+
+- **Fixed (fix-tsc-bun-ts18003):** `mx-tsc` now runs under Bun as well as Node. Volar's `runTsc` installs its patches by monkey-patching `fs.readFileSync` around a `require` of TypeScript's `tsc.js`; Bun's CommonJS loader reads module sources natively, so the patch never fired and the stock `tsc.js` ran — a `.mx`-only project failed with `TS18003: No inputs were found in config file`, and a `.mx` beside a `.ts` was silently never loaded. `mx-tsc` now applies Volar's own `transformTscContent` to the source and evaluates the result itself, the same on both runtimes.
+
+- **Fixed (tsc-watch-angular-pass-false-missed):** `mx-tsc -b -w` no longer prints "the Angular template pass missed this rebuild" after a change that rebuilds more than one project (two projects that include the same file), and now prints it for every rebuild whose summary is not recognized, including each rebuild of a single project under a localized `tsc --locale`. tsc builds a rebuild's projects on separate build turns and writes the one summary after the last; the notice was decided between turns, before the summary, although the pass had run. A `-b -w` rebuild is now decided at the end of its last build turn, in any locale. `-w` without `-b` is unchanged.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fixed (data-check-keys-on-base-target):** `mx-tsc` runs data's check on a project whose resolved base target is data (a host declaring `builtOn: "data"`), not only on `mx.target: "data"`: strict `structural`/`unknownTags` defaults and the `mx.data.*` keys, with the host's own compile still running beside `parseData` and the host's `defaultTag` ladder intact.

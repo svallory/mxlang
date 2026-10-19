@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-alpha.35 — 2026-10-19
+
+- **Fixed (define-dynamic-tag-read-solid-angular):** `<${D}/>` of a `<define>` now renders the define on Solid and Angular, as Marko 6.4.4 does, where it emitted a name nothing declares (Solid: `D` at module scope, while the define is hoisted under a generated name) or a template reference bound to `ngComponentOutlet` (Angular). Solid points the dynamic tag at the hoisted function, including inside a conditional target (`<${c ? D : "span"}/>`); a loop param or another declaration named like the define still shadows it. Angular renders a bare define through `ngTemplateOutlet` and lowers `c ? D : Other`, `c || D`, `c && D` and `c ?? D` to `@if`/`@else`, each operand by what it names; attributes on the tag reach only the component operands, as `<D n=3/>` drops them. A define read any other way in the tag name (`f(D)`) and a define with params are a positioned error that names the fix. A define declared after its read is unchanged on both hosts (Marko refuses it too).
+
 - **Fix (dynamic-tag-var-silent-drop, core):** a tag variable a host cannot bind (`/n` on a dynamic tag — Solid does not set `bindsDynamicTagVar`) is reported at the `/var` itself, not at the whole tag: `<div>\n  <${C}/n/>\n</div>` fails at line 2, column 8 (the `/n`), where the refusal used to sit at the tag. Message and outcome unchanged (the refusal stands); position only.
 
 - **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. No emitted code changes, only the source map.
@@ -28,6 +32,8 @@
 - **Fix (jsx-text-entities):** verified at parity, no decode change. Solid's pipeline already applies Marko's own model to authored `&…`: `@solidjs/babel-plugin` passes JSX text through unaltered, and the SSR string (or the DOM template, which the browser parses with full HTML5 rules) carries the authored spelling to the browser, so legacy no-semicolon names (`&copy 2026`), HTML5-only names (`&check;`), unterminated numeric references (`&#123`), and surrogate references all render exactly as Marko 6.3.51's browser parse — unlike the Preact/React/Hono JSX transforms, which decode only `;`-terminated numeric references and the HTML4 named set and now compensate in the emitter. Probed case-by-case against Marko + parse5; the emitter comment now documents the deliberate passthrough (the stale TODO is removed).
 
 - **Fix (preact-html-comment-literal-element):** `<html-comment>` is now a positioned compile error — `an HTML comment (<html-comment>) cannot appear in a Solid component: JSX has no comment node…` — instead of silently emitting a literal `<html-comment>` element where Marko renders `<!--…-->`.
+
+- **Fixed (jsx-host-script-refusal-first):** On a host that does not support `<script>` (Preact, React, Hono, Solid, Angular, Astro), the host refusal is now the only error for the tag. A `<script>` body that does not parse, a head the tag has no use for or a `${...}` placeholder in the body was reported first, so the fix led to the refusal next. Hosts that support `<script>` report the same errors as before.
 
 ## 0.1.0-alpha.33 — 2026-10-18
 

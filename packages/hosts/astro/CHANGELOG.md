@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-alpha.35 — 2026-10-19
+
+- **Fixed (jsx-host-script-refusal-first):** On a host that does not support `<script>` (Preact, React, Hono, Solid, Angular, Astro), the host refusal is now the only error for the tag. A `<script>` body that does not parse, a head the tag has no use for or a `${...}` placeholder in the body was reported first, so the fix led to the refusal next. Hosts that support `<script>` report the same errors as before.
+
 - **Fix (dynamic-tag-var-silent-drop, core):** a tag variable a host cannot bind (`/n` on a call whose `/var` core refuses) is reported at the `/var` itself, not at the whole tag — on `.astro.mx`, a refusal at the line's start moved from column 0 to the `/var`'s column (e.g. `4:0` → `4:9`). Message and outcome unchanged (the refusal stands); position only.
 
 - **Fix (routed-template-call-namespan):** a discovered tag's call maps its name span, so a type error on it (a missing required prop) lands on the tag name, not at 1:1 marked MX's. No emitted code changes, only the source map.

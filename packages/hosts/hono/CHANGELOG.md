@@ -1,5 +1,11 @@
 # @mxlang/hono
 
+## 0.1.0-alpha.35 — 2026-10-19
+
+- **Fixed (jsx-duplicate-lifted-binding):** Whole-file JSX templates now reject collisions among `<const>`, lifted `<define>` and static or dynamic `/var` bindings, rather than emitting duplicate `const` declarations. Earlier markup errors remain visible before top-level duplicate checks, and separate define-body and parameter scopes remain legal. Rename one binding and its uses to keep each name unique in the component scope. Destructured `<const>` patterns claim every bound identifier, including nested, renamed, default and rest bindings. The existing dynamic-tag and try-body scope limitation is recorded in `divergences.md`.
+
+- **Fixed (jsx-host-script-refusal-first):** On a host that does not support `<script>` (Preact, React, Hono, Solid, Angular, Astro), the host refusal is now the only error for the tag. A `<script>` body that does not parse, a head the tag has no use for or a `${...}` placeholder in the body was reported first, so the fix led to the refusal next. Hosts that support `<script>` report the same errors as before.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fix, visible emitted-code change (dynamic-tag-return-unit-object-object / dynamic-tag-var-silent-drop):** same as Preact (shared emitter and compiler): a compiled unit that declares `<return>` now exports the output only; callers that read the pair use `Unit.render(props).value`. No alias. The pair moved to a `.render(props)` render path, so a dynamic tag (`<${Counter}/>`, directly or through a `.ts` barrel) renders the body where Hono's string resolver failed on the pair object; `/var` reads the pair off `.render`, and a `/var` on a dynamic tag binds through `__mxDynamicPair` (core's `bindsDynamicTagVar` opt-in), refused inside `<for>`/`<if>`. Also Preact's r2 fix: a dynamic `/var` call with tag arguments renders its body, and the `/var` statement no longer emits `[object Object]`.

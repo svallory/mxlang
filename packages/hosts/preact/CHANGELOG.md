@@ -1,5 +1,11 @@
 # @mxlang/preact
 
+## 0.1.0-alpha.35 — 2026-10-19
+
+- **Fixed (jsx-duplicate-lifted-binding):** Whole-file JSX templates now reject collisions among `<const>`, lifted `<define>` and static or dynamic `/var` bindings, rather than emitting duplicate `const` declarations. Earlier markup errors remain visible before top-level duplicate checks, and separate define-body and parameter scopes remain legal. Rename one binding and its uses to keep each name unique in the component scope. Destructured `<const>` patterns claim every bound identifier, including nested, renamed, default and rest bindings. The existing dynamic-tag and try-body scope limitation is recorded in `divergences.md`.
+
+- **Fixed (jsx-host-script-refusal-first):** On a host that does not support `<script>` (Preact, React, Hono, Solid, Angular, Astro), the host refusal is now the only error for the tag. A `<script>` body that does not parse, a head the tag has no use for or a `${...}` placeholder in the body was reported first, so the fix led to the refusal next. Hosts that support `<script>` report the same errors as before.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Fix, visible emitted-code change (dynamic-tag-return-unit-object-object / dynamic-tag-var-silent-drop):** a compiled unit that declares `<return>` now exports the output only; callers that read the pair use `Unit.render(props).value`. No alias. The pair travels through a **render path** — `.render(props)` — the html target's `.render` shape adapted to JSX. Before this shape the default export returned the pair itself, so any caller without static knowledge of the unit rendered or mounted the pair object: a dynamic tag (`<${Counter}/>` from the verifier's `tags/counter.mx` with `<return value=input.start + 1/>`, reached directly and through a `.ts` barrel) rendered empty on Preact. A `/var` call site now reads the pair off `.render(props)` (still an ordinary function call, never mounted), and a `/var` on a **dynamic tag** binds through the new `__mxDynamicPair` dispatch (the unit's `.render` when the callee has one, `undefined` and the ordinary render otherwise) — core lets it through via `HostDeclarations.bindsDynamicTagVar`; inside `<for>`/`<if>` it is refused, as for a static returning unit. Same JSX mount semantics for everyone else.
