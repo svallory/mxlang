@@ -36,8 +36,11 @@ export const honoApp = join(repoRoot, "examples", "hono-app");
  * command not found`, on a machine where the local link existed from an
  * earlier build). Running the file needs no linking at all.
  *
- * `node`, not bun: `runTsc` reads and re-evaluates TypeScript's own `tsc.js`
- * as CommonJS, which bun's loader does not reproduce faithfully.
+ * Runs in this process whatever runtime the suite runs under (bun in the
+ * gate): `src/index.ts` evaluates the transformed `tsc.js` itself, so it no
+ * longer depends on the loader route Node's `require` takes. The spawned
+ * runtimes (node below, `bun` in `bun-runtime.test.ts`) prove the built bin
+ * on both.
  */
 export const mxTsc = join(
   repoRoot,

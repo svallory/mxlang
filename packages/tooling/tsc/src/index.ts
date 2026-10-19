@@ -25,7 +25,6 @@ import {
   type TargetPolicyDiagnostic,
 } from "@mxlang/typescript-plugin";
 import type { Language, LanguagePlugin } from "@volar/language-core";
-import { runTsc } from "@volar/typescript/lib/quickstart/runTsc";
 import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName";
 import type ts from "typescript";
 import {
@@ -423,6 +422,114 @@ function approximateUnmappedInVolar(): void {
  * lists. `watchMode` tells the host patches that this run rebuilds on its own,
  * so a rebuild can be noticed (see `rebuildActivity`). Returns tsc's exit code.
  */
+/**
+ * The language-plugin factory Volar's patched `tsc.js` asks for.
+ */
+type GetLanguagePlugins = (
+  typescript: typeof ts,
+  options: ts.CreateProgramOptions,
+) => {
+  languagePlugins: LanguagePlugin<string>[];
+  setup: (language: Language<string>) => void;
+};
+
+/**
+ * Runs TypeScript's own `tsc` entry point with Volar's patches spliced in, in
+ * a way Node and Bun both execute.
+ *
+ * Volar's `runTsc` installs its patches by monkey-patching `fs.readFileSync`
+ * and then `require`-ing `tsc.js`: Node's CommonJS loader reads module sources
+ * through the module's `fs`, so the patched read hands the loader the
+ * rewritten source. Bun's loader reads module sources in its own native code,
+ * so the patch never fires: `bun mx-tsc` ran the stock `tsc.js`, knew none of
+ * MX's file extensions (a `.mx`-only project fails with `TS18003`, and a
+ * `.mx` beside a `.ts` is silently ignored). So this does what `runTsc`'s
+ * `require` would have, without the loader in between: transform the source
+ * with Volar's own `transformTscContent` (the same transform, exported), and
+ * evaluate it in a CommonJS wrapper. The `require` the evaluated code gets is
+ * anchored at `tsc.js` itself, so its `require("typescript")` (the
+ * `TYPESCRIPT_OBJECT` expression) and its node-builtin requires resolve to
+ * the same files they always did.
+ *
+ * TypeScript 5.7 up ships `lib/tsc.js` as a shim that defers to
+ * `lib/_tsc.js` (which the shim's own text names); the transform has nothing
+ * to patch in the shim, so on that failure the real file is transformed, the
+ * same fallback `runTsc` makes.
+ */
+function runVolarTsc(
+  tscPath: string,
+  extensions: readonly string[],
+  getLanguagePlugins: GetLanguagePlugins,
+): void {
+  const require = createRequire(import.meta.url);
+  const runTscPath = require.resolve(
+    "@volar/typescript/lib/quickstart/runTsc",
+  );
+  const volar = require("@volar/typescript/lib/quickstart/runTsc") as {
+    getLanguagePlugins: unknown;
+    transformTscContent: (
+      tsc: string,
+      proxyApiPath: string,
+      extraSupportedExtensions: string[],
+      extraExtensionsToRemove: string[],
+      getLanguagePluginsFile: string,
+      typescriptObject: string,
+    ) => string;
+  };
+  // What the patched `tsc.js` asks for its language plugins: the same module
+  // `runTsc` would have published them on.
+  volar.getLanguagePlugins = getLanguagePlugins;
+  const proxyApiPath = require.resolve(
+    "@volar/typescript/lib/node/proxyCreateProgram",
+  );
+  let path = tscPath;
+  let source = readFileSync(path, "utf8");
+  let patched: string;
+  try {
+    patched = volar.transformTscContent(
+      source,
+      proxyApiPath,
+      [...extensions],
+      [],
+      runTscPath,
+      TYPESCRIPT_OBJECT,
+    );
+  } catch {
+    // Support the tsc shim used in TypeScript v5.7 and up
+    const requirePath =
+      /module\.exports\s*=\s*require\((?:"|')(?<path>\.\/\w+\.js)(?:"|')/.exec(
+        source,
+      )?.groups?.path;
+    if (requirePath === undefined) {
+      throw new Error("Failed to locate tsc module path from shim");
+    }
+    path = join(dirname(path), requirePath);
+    patched = volar.transformTscContent(
+      readFileSync(path, "utf8"),
+      proxyApiPath,
+      [...extensions],
+      [],
+      runTscPath,
+      TYPESCRIPT_OBJECT,
+    );
+  }
+  const module = { exports: {} as unknown };
+  new Function(
+    "exports",
+    "require",
+    "module",
+    "__filename",
+    "__dirname",
+    patched,
+  )(
+    module.exports,
+    createRequire(path),
+    module,
+    path,
+    dirname(path),
+  );
+}
+
 function runPatchedTsc(
   astro: boolean,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
@@ -445,10 +552,7 @@ function runPatchedTsc(
     ...dialectExtensions.filter((extension) => extension !== ".mx"),
   ];
   try {
-    runTsc(
-      resolveTscPath(),
-      extensions,
-      (typescript, options) => {
+    runVolarTsc(resolveTscPath(), extensions, (typescript, options) => {
         addAmbientTypes(options);
         // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
         const dialect = createDialectLanguagePlugin(
@@ -518,9 +622,7 @@ function runPatchedTsc(
             );
           },
         };
-      },
-      TYPESCRIPT_OBJECT,
-    );
+      });
   } catch (cause) {
     if (cause !== stopped) throw cause;
   } finally {
