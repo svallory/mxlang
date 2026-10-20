@@ -3,7 +3,7 @@
  * output does, on preact, react, hono, solid and astro. Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 15 attributes x 4 forms x 4 base values,
- * plus branch-sensitive extra values (1,360 cells across the five hosts).
+ * plus branch-sensitive extra values (1,380 cells across the five hosts).
  * The probe still renders all seven values for every attribute and form:
  * the axis cut removes cheap assertions, not subprocess render work.
  *
@@ -15,9 +15,11 @@
  * `title=""`). Equal output does not imply equal emitter branches. Extras:
  *  - class/style false/empty: JSX's falsy filters (preact/src/attribute-normalize.ts:85,89)
  *    and Astro's structured-attribute filter (astro/src/astro-template.ts:75).
- *  - title false: Astro's plain-attribute false omission (astro-template.ts:77).
- *  - checked undefined: Astro's nullish exit (astro-template.ts:74) and JSX's
- *    undefined omission before input.checked becomes present (attribute-normalize.ts:92-96).
+ *  - title false/empty: Astro's plain-attribute false omission versus empty-string
+ *    presence (astro-template.ts:77); JSX pass-through (attribute-normalize.ts:97).
+ *  - checked undefined: Astro's nullish exit (astro-template.ts:74), JSX's
+ *    undefined omission before input.checked becomes present (attribute-normalize.ts:92-96),
+ *    and Solid's direct checked nullish-to-false fallback (solid/src/emitter.ts:1324).
  *  - checked false/empty: Astro's boolean-list false omission versus empty-string
  *    presence (astro-template.ts:76); false also reaches JSX's omission (:92).
  *
@@ -129,7 +131,7 @@ const attributes = [
 const forms = ["direct", "spread", "merged", "mergedBefore"];
 const values = ["null", "true", "zero", "x"];
 const extraValues: Record<string, string[]> = {
-  title: ["false"],
+  title: ["false", "empty"],
   class: ["false", "empty"],
   style: ["false", "empty"],
   checked: ["undefined", "false", "empty"],
