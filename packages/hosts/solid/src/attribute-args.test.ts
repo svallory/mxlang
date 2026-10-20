@@ -3,8 +3,10 @@ import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strip diagnostic colour
 const ANSI = /\x1b\[[0-9;]*m/g;
-// Core's attribute-args.test.ts owns the spelling/position matrix. Keep a
-// positioned refusal through each host entry, plus host-specific routing below.
+// packages/core/src/attribute-args.test.ts pins the compileSource door.
+// packages/hosts/preact/src/attribute-args.test.ts pins parseFragment's door,
+// used by both Solid entries. Keep those Preact spelling/position rows,
+// not just core's matrix. Keep a positioned refusal per entry and routing.
 const compilers = {
   file: (source: string) =>
     compileSolidUnit(source, { filename: "/v/test.mx" }),

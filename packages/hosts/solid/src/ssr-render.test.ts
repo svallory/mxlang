@@ -1047,8 +1047,8 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
   // parts first, then the explicit value, one space apart, and a falsy explicit
   // value adds nothing. Each row renders the three shorthand shapes at once.
   // Tag mode owns the value matrix; three concise smokes below prove the parser
-  // reaches the same emitter branches. The expected strings are what Marko 6.4.4 renders
-  // (and the html, preact, react and hono hosts) for the same templates.
+  // reaches the same emitter branches. The expected strings are what Marko
+  // 6.4.4 (and the html, preact, react and hono hosts) renders for these templates.
   const shapes = [".a", ".a.${x}", ".${x}"];
   const classesOf = (html: string) =>
     [...html.matchAll(/<div(?: class="([^"]*)")?\s*>/g)].map(
@@ -1144,11 +1144,14 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
 
   // Retain runtime-bound, object-literal and array-literal class paths. Use
   // the same rows, so concise wiring cannot drift from the tag-mode home.
-  it.each(
-    dynamicRows.filter(([name]) =>
-      ["a string in a binding", "an object", "an array"].includes(name),
-    ),
-  )(
+  const conciseRows = ["a string in a binding", "an object", "an array"].map(
+    (name) => {
+      const row = dynamicRows.find(([label]) => label === name);
+      if (!row) throw new Error(`Missing concise class smoke row: ${name}`);
+      return row;
+    },
+  );
+  it.each(conciseRows)(
     "merges the shorthand with a dynamic class, shorthand first, in concise mode: %s",
     (_name, value, extraSetup, expected) => {
       const setup = `const x = "xx"; ${extraSetup}`;
