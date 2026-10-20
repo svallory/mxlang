@@ -10,7 +10,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
-import markoPlugin, { mxFilter } from "./bun.ts";
+import type { BunPlugin } from "bun";
+import markoPlugin, {
+  createHtmlBunPlugin,
+  mxFilter,
+  strictFor,
+} from "./bun.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -493,6 +498,140 @@ function dialectProject(file: string, text: string): string {
   writeFileSync(join(dir, file), text);
   return dir;
 }
+
+/**
+ * Strictness follows the resolved policy, the same rule as the editor tools
+ * and `@mxlang/vite-plugin`'s `compileMarko`: `mx.strict: true` in the file's
+ * nearest package.json, or an always-strict target descriptor, makes the
+ * Bun loader refuse what those tools flag — so a Bun build and `vite build`
+ * agree on the same fixture.
+ */
+describe("@mxlang/target-html/bun compiles under the resolved strictness", () => {
+  async function importError(path: string): Promise<Error> {
+    return import(path).then(
+      () => {
+        throw new Error("expected the import to fail");
+      },
+      (caught: Error) => caught,
+    );
+  }
+
+  test("refuses <let> under mx.strict: true in the file's package.json", async () => {
+    Bun.plugin(markoPlugin);
+    const dir = mkdtempSync(join(import.meta.dirname, ".strict-"));
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "strict-fixture",
+        mx: { host: "html", strict: true },
+      }),
+    );
+    const path = join(dir, "stateful.mx");
+    writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+    try {
+      const error = await importError(path);
+      expect(error.message).toContain(
+        "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an always-strict descriptor refuses through the loader itself", () => {
+    // A lookup over a descriptor that declares `strict: "always"` (the html
+    // descriptor with the field added) makes every file it resolves strict,
+    // no package.json needed — and the refusal comes from the loader's own
+    // `onLoad`, not only from `strictFor`, so a loader that passed no
+    // `strict` option would fail this test. Bun's plugin registry keeps the
+    // module-level plugin's claim on `.mx` (same filter, registered first,
+    // `Bun.plugin` refuses a second registration of the same name), so the
+    // test drives `createHtmlBunPlugin`'s `onLoad` directly, the same path
+    // Bun calls it through.
+    const html = htmlTargets.target(htmlTargets.defaultTarget());
+    if (html === undefined) throw new Error("html descriptor is registered");
+    const alwaysStrict: TargetDescriptor = { ...html, strict: "always" };
+    let onLoad!: (args: { path: string }) => { contents: string };
+    createHtmlBunPlugin(createTargetLookup([alwaysStrict])).setup({
+      onLoad: (
+        _options: unknown,
+        callback: (args: { path: string }) => { contents: string },
+      ) => {
+        onLoad = callback;
+      },
+    } as unknown as Parameters<BunPlugin["setup"]>[0]);
+    const dir = mkdtempSync(join(import.meta.dirname, ".always-strict-"));
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "always-strict-fixture" }),
+    );
+    const path = join(dir, "stateful.mx");
+    writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+    try {
+      expect(() => onLoad({ path })).toThrow(
+        "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    // The package's own lookup declares no strictness: a bare project is
+    // non-strict, and only the policy's `mx.strict` turns it on (above).
+    expect(strictFor("/nowhere/page.mx", htmlTargets)).toBe(false);
+  });
+
+  test("a deprecated mx.host value warns at most once per loaded file", async () => {
+    Bun.plugin(markoPlugin);
+    const dir = mkdtempSync(join(import.meta.dirname, ".translator-"));
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "translator-fixture",
+        mx: { host: "translator" },
+      }),
+    );
+    linkRuntime(dir);
+    const first = join(dir, "page.mx");
+    const second = join(dir, "other.mx");
+    writeFileSync(first, "<p>hi</p>\n");
+    writeFileSync(second, "<p>there</p>\n");
+    const warn = spyOn(console, "warn");
+    // Read the calls before `mockRestore`, which clears them.
+    let deprecations: unknown[][] = [];
+    try {
+      const mod = await import(first);
+      expect((mod.default as (input: unknown) => string)({})).toBe("<p>hi</p>");
+      const other = await import(second);
+      expect((other.default as (input: unknown) => string)({})).toBe(
+        "<p>there</p>",
+      );
+      deprecations = warn.mock.calls.filter(([text]) =>
+        String(text).includes("'translator' mx.host alias is deprecated"),
+      );
+    } finally {
+      warn.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+    // One project, one warning at most — not once per loaded file.
+    expect(deprecations.length).toBeLessThanOrEqual(1);
+  });
+
+  test("a non-strict project still compiles the same <let> fixture", async () => {
+    Bun.plugin(markoPlugin);
+    const dir = mkdtempSync(join(import.meta.dirname, ".non-strict-"));
+    writeFileSync(join(dir, "package.json"), '{"name":"plain-fixture"}');
+    linkRuntime(dir);
+    const path = join(dir, "stateful.mx");
+    writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+    try {
+      const mod = await import(path);
+      expect((mod.default as (input: unknown) => string)({})).toBe(
+        "<span>hi</span>",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("@mxlang/target-html/bun asks the file's dialect for its emit", () => {
   afterEach(() => {

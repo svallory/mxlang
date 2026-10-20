@@ -128,7 +128,7 @@ Node-only caveats: `stripTypeScriptTypes` prints one `ExperimentalWarning` per p
 
 Two loaders make `import page from "./page.mx"` resolve, one per runtime. Neither compiles a `.marko` file: `.marko` is not an MX input.
 
-**Bun** — `@mxlang/target-html/bun` is a plugin that intercepts `.mx` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Register it once:
+**Bun** — `@mxlang/target-html/bun` is a plugin that intercepts `.mx` imports and compiles them on the fly (`.solid.mx`, `.react.mx`, `.preact.mx` and `.hono.mx` are excluded; each is a region file kind handled separately). Strictness follows the resolved policy like every other tool: a target descriptor declaring `strict: "always"`, or `mx.strict: true` in the file's nearest `package.json`, makes the loader refuse the strict policy's constructs with the same error the editor tools and `vite build` report; a non-strict project compiles unchanged. Register it once:
 
 ```toml
 # bunfig.toml

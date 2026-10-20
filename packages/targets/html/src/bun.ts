@@ -5,6 +5,7 @@ import {
   isTranslateError,
   otherErrorsText,
   reportScanDiagnostics,
+  resolveTargetPolicyDetailed,
   scanCached,
   type TargetLookup,
   TranslateError,
@@ -68,6 +69,26 @@ export function mxFilter(targets: TargetLookup): RegExp {
 }
 
 /**
+ * Whether `path` compiles strict here: the resolved target descriptor
+ * declares `strict: "always"`, or the resolved policy carries
+ * `mx.strict: true`. The same rule as the editor tools and
+ * `@mxlang/vite-plugin`'s `compileMarko` (which has a third leg, the
+ * caller's explicit `strict` option — this loader takes no options, so the
+ * policy is the whole rule). Resolved quietly: the resolver also prints the
+ * deprecation warning for a legacy `mx.host` value, and one resolution per
+ * loaded file would repeat it once per file — under Bun the loader printed
+ * nothing before this resolution existed, so it stays silent (the editor
+ * tools and `vite build` still print it). Exported for its tests.
+ */
+export function strictFor(path: string, targets: TargetLookup): boolean {
+  const { policy } = resolveTargetPolicyDetailed(path, targets, {
+    quiet: true,
+  });
+  const descriptor = policy.descriptor ?? targets.target(policy.target);
+  return descriptor?.strict === "always" || policy.strict === true;
+}
+
+/**
  * Builds the loader over `targets`: the registered targets it scans and
  * compiles under. It defaults to this package's own descriptor, which is what a
  * plain `import "@mxlang/target-html/bun"` wants; a caller that compiles for
@@ -117,6 +138,10 @@ export function createHtmlBunPlugin(
             target: "html",
             targets,
             core,
+            // Strictness follows the resolved policy, as in the editor tools
+            // and `@mxlang/vite-plugin`'s `compileMarko`, so a Bun build
+            // never compiles what the editor and `vite build` flag.
+            strict: strictFor(path, targets),
             unwired: (identity) =>
               `the ${identity} is not wired into @mxlang/target-html/bun yet`,
             customTags: scan.customTags,
