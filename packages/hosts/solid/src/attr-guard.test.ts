@@ -298,11 +298,18 @@ async function runAll(
   generate: "ssr" | "dom",
 ): Promise<Record<string, Outcome>> {
   if (generate === "dom") {
-    const out: Record<string, Outcome> = {};
-    for (const name of Object.keys(CASES)) {
-      Object.assign(out, await runNames(generate, [name]));
-    }
-    return out;
+    const pending = Object.keys(CASES).entries();
+    const results: Record<string, Outcome>[] = [];
+    // Each worker awaits its own process before claiming the next case. Keep
+    // results indexed by input order, not by process completion order.
+    await Promise.all(
+      Array.from({ length: 6 }, async () => {
+        for (const [index, name] of pending) {
+          results[index] = await runNames(generate, [name]);
+        }
+      }),
+    );
+    return Object.assign({}, ...results);
   }
   return runNames(generate, Object.keys(CASES));
 }
