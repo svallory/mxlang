@@ -9,17 +9,20 @@ import { compile } from "./index.ts";
 import { brandRender } from "./translate.ts";
 
 /**
- * Per-rule tests for the stock-Marko translator.
+ * The html target's end-to-end compile and render lane: emitted helpers and
+ * module shape, real renders of shared IR constructs (definitions, tag calls,
+ * attribute tags, dynamic tags, /var and try), and strict TypeScript checks of
+ * generated modules. Core owns the shared lowering and diagnostic contracts;
+ * these rows exercise their html emission and execution, not another host's.
  *
- * Two things are pinned here that the fixtures cannot pin. The fixtures assert
- * rendered HTML for constructs that *work*; these assert the policy table —
- * which constructs are accepted with no output (inert), which are errors
- * because the target genuinely cannot express them, and the conventions that
- * differ from `@mxlang/target-html`'s dialect.
+ * This file also pins the target's policy table: accepted-but-inert shapes,
+ * constructs a string render cannot express, strict-policy refusals, event
+ * attributes, void elements and comment emission. A construct that contributes
+ * output bytes must lower; "My code cannot do this" is never a policy row.
  *
- * The distinction the table turns on: a construct that only configures
- * behaviour after the first render is inert, and one that contributes output
- * bytes must lower. "My code cannot do this" is never a row.
+ * The fixtures-marko corpus and oracle:marko pin rendered parity with Marko.
+ * Focused sibling tests own individual regressions and emitted-call shapes;
+ * html-comment-render.test.ts covers placeholder values by real render.
  */
 
 const src = (body: string) => (body.endsWith("\n") ? body : `${body}\n`);
