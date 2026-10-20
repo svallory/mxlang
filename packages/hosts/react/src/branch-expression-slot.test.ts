@@ -8,9 +8,11 @@
  * `(e) => {Foo()}`, a block body that renders nothing. The slot now holds the
  * bare expression.
  *
- * `ts.createSourceFile` reports no parse diagnostic for the old output (it
- * reads `{Foo()}` as an object-literal method), so every case here also runs
- * through `@babel/parser` with the `jsx` and `typescript` plugins.
+ * The full emitted-shape matrices live in
+ * `packages/hosts/preact/src/branch-expression-slot.test.ts`, over the shared
+ * emitter. React keeps expression-slot wiring smokes, keyed shapes and every
+ * react-dom/server render below. Each retained emit smoke also goes through
+ * `@babel/parser`: TypeScript accepts the old object-literal method shape.
  */
 import { parse } from "@babel/parser";
 import { createElement, type FC } from "react";
@@ -47,59 +49,14 @@ const CASES: Array<[string, string, string]> = [
     "return (<>{input.a ? Foo() : null}</>);",
   ],
   [
-    "inside an element",
-    `${DEFINE}<div><if=input.a><Foo/></if></div>`,
-    "return (<><div>{input.a ? Foo() : null}</div></>);",
-  ],
-  [
-    "as the only child of an <else-if>",
-    `${DEFINE}<if=input.a><p>a</p></if><else-if=input.b><Foo/></else-if>`,
-    "return (<>{input.a ? <p>a</p> : input.b ? Foo() : null}</>);",
-  ],
-  [
-    "as the only child of an <else>",
-    `${DEFINE}<if=input.a><p>a</p></if><else><Foo/></else>`,
-    "return (<>{input.a ? <p>a</p> : Foo()}</>);",
-  ],
-  [
-    "in both the <if> and the <else>",
-    `${DEFINE}<if=input.a><Foo/></if><else><Foo/></else>`,
-    "return (<>{input.a ? Foo() : Foo()}</>);",
-  ],
-  [
-    "in an <if> nested in an <if>",
-    `${DEFINE}<if=input.a><if=input.b><Foo/></if></if>`,
-    "return (<>{input.a ? input.b ? Foo() : null : null}</>);",
-  ],
-  [
     "in an <if> inside a <for>",
     `${DEFINE}<for|i| of=input.l><if=i><Foo/></if></for>`,
     "return (<>{((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{i ? Foo() : null}</__mxFragment>)}</>);",
   ],
   [
-    "with attributes",
-    `${CALL_ROW}<if=input.a><Row n=1/></if>`,
-    'return (<>{input.a ? Row({ "n": 1 }) : null}</>);',
-  ],
-  [
-    "with tag arguments",
-    "<define/Row|a|><li>${a}</li></define>\n<if=input.a><Row(1)/></if>",
-    "return (<>{input.a ? Row(1) : null}</>);",
-  ],
-  [
-    "with a body",
-    "<define/Box|{ content }|><div><${content}/></div></define>\n<if=input.a><Box>hi</Box></if>",
-    "return (<>{input.a ? Box({ content: () => <><>hi</></> }) : null}</>);",
-  ],
-  [
     "a dynamic tag as the only child of an <if>",
     "<const/X=input.x/>\n<if=input.a><${X}/></if>",
     "return (<>{input.a ? __mxDynamic(X, {  }) : null}</>);",
-  ],
-  [
-    "a dynamic tag with a body",
-    "<const/X=input.x/>\n<if=input.a><${X}>hi</></if>",
-    "return (<>{input.a ? __mxDynamic(X, { content: () => <><>hi</></> }) : null}</>);",
   ],
   [
     "a <for> as the only child of an <if>",
@@ -137,26 +94,6 @@ const CASES: Array<[string, string, string]> = [
     "return (<><Bar item={Foo()} /></>);",
   ],
   [
-    "an <@item> body that is a dynamic tag",
-    `${IMP}<const/X=input.x/>\n<Bar><@item><${"$"}{X}/></@item></Bar>`,
-    "return (<><Bar item={__mxDynamic(X, {  })} /></>);",
-  ],
-  [
-    "an <@item> body that is a define call, inside an <if>",
-    `${DEFINE}${IMP}<Bar><if=input.a><@item><Foo/></@item></if></Bar>`,
-    "return (<><Bar item={input.a ? Foo() : undefined} /></>);",
-  ],
-  [
-    "an <@item> body that is a define call, passed to a define (an object property)",
-    `${DEFINE}<define/Box|{ item }|><${"$"}{item}/></define>\n<Box><@item><Foo/></@item></Box>`,
-    'return (<>{Box({ "item": Foo() })}</>);',
-  ],
-  [
-    "an <@item> body that is a define call, passed to a dynamic tag",
-    `${DEFINE}<const/X=input.x/>\n<${"$"}{X}><@item><Foo/></@item></>`,
-    'return (<>{__mxDynamic(X, { "item": Foo() })}</>);',
-  ],
-  [
     "an <@item|x|> body that is a define call (an arrow body, not a block)",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item></Bar>`,
     "return (<><Bar item={(x) => Foo()} /></>);",
@@ -172,19 +109,9 @@ const UNCHANGED: Array<[string, string, string]> = [
     "return (<>{input.a ? <>{Foo()} x</> : null}</>);",
   ],
   [
-    "a define call next to an element",
-    `${DEFINE}<if=input.a><Foo/><p>y</p></if>`,
-    "return (<>{input.a ? <>{Foo()}<p>y</p></> : null}</>);",
-  ],
-  [
     "a define call as the only child of a <for>",
     `${DEFINE}<for|i| of=input.l><Foo/></for>`,
     "return (<>{((mxList) => mxList ? [...mxList] : [])(input.l).map((i) => <__mxFragment key={i}>{Foo()}</__mxFragment>)}</>);",
-  ],
-  [
-    "an imported component as the only child of an <if>",
-    `import Bar from "./bar.mx"\n<if=input.a><Bar/></if>`,
-    "return (<>{input.a ? <Bar /> : null}</>);",
   ],
   [
     "a lone placeholder as the only child of an <if>",
@@ -200,11 +127,6 @@ const UNCHANGED: Array<[string, string, string]> = [
     "a repeated <@item|x|> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item><@item|x|><Foo/></@item></Bar>`,
     'return (<><Bar item={[(x) => <__mxFragment key={"0"}>{Foo()}</__mxFragment>, (x) => <__mxFragment key={"1"}>{Foo()}</__mxFragment>]} /></>);',
-  ],
-  [
-    "an <@item> body that is an imported component",
-    `${IMP}import Baz from "./baz.mx"\n<Bar><@item><Baz/></@item></Bar>`,
-    "return (<><Bar item={<Baz />} /></>);",
   ],
 ];
 

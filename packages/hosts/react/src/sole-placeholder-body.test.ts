@@ -12,8 +12,11 @@
  * The rendered strings below are what the html target renders for the same
  * source (the oracle fixtures `for-sole-placeholder` and
  * `define-call-sole-placeholder` hold the same shapes against Marko's
- * output). Every emitted module also goes through `@babel/parser` with the
- * `jsx` and `typescript` plugins.
+ * output). The full shared emit-shape matrices live in
+ * `packages/hosts/preact/src/sole-placeholder-body.test.ts`. React keeps
+ * JSX-child/empty-body and expression-slot wiring, keyed shapes, and every
+ * react-dom/server render. Every emitted smoke also goes through
+ * `@babel/parser` with the `jsx` and `typescript` plugins.
  */
 import { parse } from "@babel/parser";
 import { createElement, type FC } from "react";
@@ -124,44 +127,9 @@ const CASES: Array<[string, string, string]> = [
     "return (<>{Box({ content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
-    "a define call with a lone placeholder body and tag params",
-    `${DEF_ARGS}<Box|n|>${D}{n}</Box>`,
-    "return (<>{Box({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
-  ],
-  [
-    "a define call with tag params and a comment-only body (no content)",
-    `${DEF_ARGS}<Box|n|><!-- c --></Box>`,
-    "return (<>{Box({  })}</>);",
-  ],
-  [
-    "a define call with arguments and a lone placeholder body",
-    `<define/Row|n, { content }|><b><${D}{content}/></b></define>\n<Row(1)>${D}{input.y}</Row>`,
-    "return (<>{Row(1, { content: () => <>{input.y}{null}</> })}</>);",
-  ],
-  [
-    "a define call with a lone placeholder body in an <if>",
-    `${DEF}<if=input.a><Box>${D}{input.y}</Box></if>`,
-    "return (<>{input.a ? Box({ content: () => <>{input.y}{null}</> }) : null}</>);",
-  ],
-  [
     "a dynamic tag with a lone placeholder body",
     `<const/X="em"/>\n<${D}{X}>${D}{input.y}</>`,
     "return (<>{__mxDynamic(X, { content: () => <>{input.y}{null}</> })}</>);",
-  ],
-  [
-    "a dynamic tag with a lone placeholder body and tag params",
-    `<const/X=input.x/>\n<${D}{X}|n|>${D}{n}</>`,
-    "return (<>{__mxDynamic(X, { content: ((n) => <>{n}{null}</>) as (...args: any[]) => any }, undefined, true)}</>);",
-  ],
-  [
-    "a dynamic tag with arguments and a lone placeholder body",
-    `<const/X=input.x/>\n<${D}{X}(1)>${D}{input.y}</>`,
-    "return (<>{__mxDynamic(X, [1, { content: () => <>{input.y}{null}</> }], () => <>{input.y}{null}</>)}</>);",
-  ],
-  [
-    "a dynamic tag with a lone placeholder body in an <if>",
-    `<const/X=input.x/>\n<if=input.a><${D}{X}>${D}{input.y}</></if>`,
-    "return (<>{input.a ? __mxDynamic(X, { content: () => <>{input.y}{null}</> }) : null}</>);",
   ],
   [
     "a dynamic tag with an empty body (no content)",
@@ -191,19 +159,9 @@ const UNCHANGED: Array<[string, string, string]> = [
     `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "<>{i}{i}</>")})}</>);`,
   ],
   [
-    "a placeholder next to text in a define call body",
-    `${DEF}<Box>${D}{input.y} x</Box>`,
-    "return (<>{Box({ content: () => <><>{input.y} x</></> })}</>);",
-  ],
-  [
     "a lone placeholder as the only child of an <if> (an expression slot)",
     `<if=input.a>${D}{input.x}</if>`,
     "return (<>{input.a ? input.x : null}{null}</>);",
-  ],
-  [
-    "an empty <if> (an expression slot)",
-    "<if=input.a></if>",
-    "return (<>{input.a ? null : null}</>);",
   ],
   [
     "a lone placeholder in an imported component's children",

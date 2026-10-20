@@ -15,8 +15,10 @@
  * are exact; each rendered string is what the html target renders for the
  * same source (the oracle fixtures `if-sole-zero`, `for-sole-zero` and
  * `define-call-sole-zero` hold the same shapes against Marko's output). Every
- * emitted module also goes through `@babel/parser` with the `jsx` and
- * `typescript` plugins.
+ * emitted smoke also goes through `@babel/parser` with the `jsx` and
+ * `typescript` plugins. The full shared emit-shape matrices live in
+ * `packages/hosts/preact/src/sole-falsy-child.test.ts`; React keeps null-sibling
+ * wiring for each body concern, keyed shapes and every react-dom/server render.
  */
 import { parse } from "@babel/parser";
 import { createElement, type FC } from "react";
@@ -58,31 +60,6 @@ const CASES: Array<[string, string, string]> = [
     "return (<>{input.a ? input.x : null}{null}</>);",
   ],
   [
-    "an <if> with a lone placeholder, the file ending in a newline",
-    `<if=input.a>${D}{input.x}</if>\n`,
-    "return (<>{input.a ? input.x : null}{null}</>);",
-  ],
-  [
-    "an <if> and an <else> with lone placeholders",
-    `<if=input.a>${D}{input.x}</if><else>${D}{input.y}</else>`,
-    "return (<>{input.a ? input.x : input.y}{null}</>);",
-  ],
-  [
-    "an <if> and an <else-if> with lone placeholders",
-    `<if=input.a>${D}{input.x}</if><else-if=input.b>${D}{input.y}</else-if>`,
-    "return (<>{input.a ? input.x : input.b ? input.y : null}{null}</>);",
-  ],
-  [
-    "an <if> with a lone placeholder and an <else> with an element",
-    `<if=input.a>${D}{input.x}</if><else><b>y</b></else>`,
-    "return (<>{input.a ? input.x : <b>y</b>}{null}</>);",
-  ],
-  [
-    "an <if> whose only child is an <if> with a lone placeholder",
-    `<if=input.a><if=input.b>${D}{input.x}</if></if>`,
-    "return (<>{input.a ? input.b ? input.x : null : null}{null}</>);",
-  ],
-  [
     "<for of> with a lone placeholder",
     `<for|i| of=input.l>${D}{i}</for>`,
     `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "{i}{null}")})}</>);`,
@@ -113,39 +90,14 @@ const CASES: Array<[string, string, string]> = [
     "return (<>{Box({ content: () => <>{input.x}{null}</> })}</>);",
   ],
   [
-    "a define call with tag params and a lone placeholder body",
-    `${EACH}<Each|n|>${D}{n}</Each>`,
-    "return (<>{Each({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
-  ],
-  [
     "a dynamic tag with a lone placeholder body",
     `${X}<${D}{X}>${D}{input.x}</>`,
     "return (<>{__mxDynamic(X, { content: () => <>{input.x}{null}</> })}</>);",
   ],
   [
-    "a dynamic tag with arguments and a lone placeholder body",
-    `<const/X=input.t/>\n<${D}{X}(0)>${D}{input.x}</>`,
-    "return (<>{__mxDynamic(X, [0, { content: () => <>{input.x}{null}</> }], () => <>{input.x}{null}</>)}</>);",
-  ],
-  [
     "a <try> with a lone placeholder body",
     `<try>${D}{input.x}<@catch|e|>${D}{e.message}</@catch></try>`,
     "return (<><__mxErrorBoundary fallback={(e) => <>{e.message}{null}</>}>{() => (<>{input.x}{null}</>)}</__mxErrorBoundary></>);",
-  ],
-  [
-    "a <try> with a placeholder and a lone placeholder body",
-    `<try><@placeholder>wait</@placeholder>${D}{input.x}</try>`,
-    "return (<><__mxSuspense fallback={<>wait</>}>{input.x}{null}</__mxSuspense></>);",
-  ],
-  [
-    "a <try> whose <@catch> body is a lone placeholder",
-    `<try><div>ok</div><@catch|e|>${D}{input.x}</@catch></try>`,
-    "return (<><__mxErrorBoundary fallback={(e) => <>{input.x}{null}</>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
-  ],
-  [
-    "a <try> whose <@catch> body is an <if> with a lone placeholder",
-    `<try><div>ok</div><@catch|e|><if=input.a>${D}{input.x}</if></@catch></try>`,
-    "return (<><__mxErrorBoundary fallback={(e) => <>{input.a ? input.x : null}{null}</>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
   ],
 ];
 
@@ -158,44 +110,9 @@ const UNCHANGED: Array<[string, string, string]> = [
     "return (<>{input.a ? input.x : null}-</>);",
   ],
   [
-    "a lone <if> inside an element",
-    `<div><if=input.a>${D}{input.x}</if></div>`,
-    "return (<><div>{input.a ? input.x : null}</div></>);",
-  ],
-  [
-    "a lone placeholder inside an element",
-    `<div>${D}{input.x}</div>`,
-    "return (<><div>{input.x}</div></>);",
-  ],
-  [
-    "two placeholders in an <if>",
-    `<if=input.a>${D}{input.x}${D}{input.y}</if>`,
-    "return (<>{input.a ? <>{input.x}{input.y}</> : null}</>);",
-  ],
-  [
-    "an <if> whose branches are elements",
-    `<if=input.a><b>x</b></if><else><i>y</i></else>`,
-    "return (<>{input.a ? <b>x</b> : <i>y</i>}</>);",
-  ],
-  [
     "<for> rows that are elements",
     `<for|i| of=input.l><li>${D}{i}</li></for>`,
     `return (<>{${LIST}(input.l).map((i) => ${ROW("i", "<li>{i}</li>")})}</>);`,
-  ],
-  [
-    "a define call with an element body",
-    `${DEF}<Box><i>${D}{input.x}</i></Box>`,
-    "return (<>{Box({ content: () => <><i>{input.x}</i></> })}</>);",
-  ],
-  [
-    "an <if> with an empty body",
-    "<if=input.a></if>",
-    "return (<>{input.a ? null : null}</>);",
-  ],
-  [
-    "a <try> whose <@catch> body is an element",
-    `<try><div>ok</div><@catch|e|><b>${D}{input.x}</b></@catch></try>`,
-    "return (<><__mxErrorBoundary fallback={(e) => <b>{input.x}</b>}>{() => (<><div>ok</div></>)}</__mxErrorBoundary></>);",
   ],
 ];
 

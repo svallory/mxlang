@@ -19,10 +19,12 @@
  * positional call, an attribute-tag body) are not hand-written JSX and keep
  * the `{null}` sibling that `sole-falsy-child.test.ts` pins.
  *
- * The first half pins the emitted code (every module also goes through
- * `@babel/parser` with the `jsx` and `typescript` plugins). The second half
- * renders each MX source and the JSX written by hand on this host and checks
- * that the markup and what the component received are the same.
+ * The full emitted-shape matrices live in
+ * `packages/hosts/preact/src/host-component-body.test.ts`. The first half here
+ * keeps React's Fragment import, host-body wiring smokes and keyed shapes
+ * (also parsed by `@babel/parser` with `jsx` and `typescript`). The second
+ * half keeps every React render and children observation against hand-written
+ * JSX on this host.
  */
 import { parse } from "@babel/parser";
 import { createElement } from "react";
@@ -68,61 +70,16 @@ const EMITTED: Array<[string, string, string]> = [
     callOf("Box", "() => input.count"),
   ],
   [
-    "a host component with a lone placeholder and an attribute",
-    `${BOX}<Box a=1>${D}{input.count}</Box>`,
-    callOf("Box", "() => input.count", '"a": 1, '),
-  ],
-  [
-    "a lone placeholder padded with newlines",
-    `${BOX}<Box>\n  ${D}{input.count}\n</Box>`,
-    callOf("Box", "() => input.count"),
-  ],
-  [
-    "a lone placeholder beside a comment",
-    `${BOX}<Box><!-- c -->${D}{input.count}</Box>`,
-    callOf("Box", "() => input.count"),
-  ],
-  [
-    "a lone placeholder holding a ternary",
-    `${BOX}<Box>${D}{input.a ? 1 : 0}</Box>`,
-    callOf("Box", "() => input.a ? 1 : 0"),
-  ],
-  [
     "a lone placeholder holding an object literal",
     `${BOX}<Box>${D}{{ a: 1 }}</Box>`,
     callOf("Box", "() => ({ a: 1 })"),
-  ],
-  [
-    "a lone placeholder holding a sequence",
-    `${BOX}<Box>${D}{(1, input.count)}</Box>`,
-    callOf("Box", "() => (1, input.count)"),
   ],
   [
     "text",
     `${BOX}<Box>hi</Box>`,
     callOf("Box", "() => (<>hi</> as any).props.children"),
   ],
-  [
-    "text around a placeholder",
-    `${BOX}<Box>a ${D}{input.count} b</Box>`,
-    callOf("Box", "() => (<>a {input.count} b</> as any).props.children"),
-  ],
   ["an element", `${BOX}<Box><b>x</b></Box>`, callOf("Box", "() => <b>x</b>")],
-  [
-    "an element and a placeholder",
-    `${BOX}<Box><b>x</b>${D}{input.count}</Box>`,
-    callOf("Box", "() => (<><b>x</b>{input.count}</> as any).props.children"),
-  ],
-  [
-    "an <if> whose branch is a lone placeholder",
-    `${BOX}<Box><if=input.a>${D}{input.x}</if></Box>`,
-    callOf("Box", "() => input.a ? input.x : null"),
-  ],
-  [
-    "an <if> with an <else> element: the branch is MX's own",
-    `${BOX}<Box><if=input.a>${D}{input.x}</if><else><b>y</b></else></Box>`,
-    callOf("Box", "() => input.a ? input.x : <b>y</b>"),
-  ],
   [
     "a <for>: its rows are MX's own fragments and keep {null}",
     `${BOX}<Box><for|i| of=input.l>${D}{i}</for></Box>`,
@@ -132,34 +89,9 @@ const EMITTED: Array<[string, string, string]> = [
     ),
   ],
   [
-    "a host component inside a host component",
-    `${BOX}<Box><Box>${D}{input.count}</Box></Box>`,
-    callOf("Box", "() => __mxDynamic(Box, { content: () => input.count })"),
-  ],
-  [
-    "a host component with an attribute tag: the tag's body is MX's own",
-    `${BOX}<Box><@a>${D}{input.count}</@a>${D}{input.count}</Box>`,
-    callOf("Box", "() => input.count", '"a": <>{input.count}{null}</>, '),
-  ],
-  [
     "tag params with a lone placeholder: the render prop returns it bare",
     `${BOX}<Box|n|>${D}{n}</Box>`,
     callParams("((n) => n)"),
-  ],
-  [
-    "tag params with an object literal",
-    `${BOX}<Box|n|>${D}{{ a: n }}</Box>`,
-    callParams("((n) => ({ a: n }))"),
-  ],
-  [
-    "tag params with an element",
-    `${BOX}<Box|n|><b>${D}{n}</b></Box>`,
-    callParams("((n) => <b>{n}</b>)"),
-  ],
-  [
-    "tag params with text around a placeholder",
-    `${BOX}<Box|n|>a ${D}{n}</Box>`,
-    callParams("((n) => <>a {n}</>)"),
   ],
 ];
 
@@ -169,26 +101,6 @@ const MX_OWN: Array<[string, string, string]> = [
     "an authored dynamic tag",
     `<const/X=input.t/>\n<${D}{X}>${D}{input.count}</>`,
     "return (<>{__mxDynamic(X, { content: () => <>{input.count}{null}</> })}</>);",
-  ],
-  [
-    "a dynamic tag with arguments",
-    `<const/X=input.t/>\n<${D}{X}(0)>${D}{input.count}</>`,
-    "return (<>{__mxDynamic(X, [0, { content: () => <>{input.count}{null}</> }], () => <>{input.count}{null}</>)}</>);",
-  ],
-  [
-    "a positional call to a host component",
-    `${BOX}<Box(1)>${D}{input.count}</Box>`,
-    "return (<>{__mxDynamic(Box, [1, { content: () => <>{input.count}{null}</> }], () => <>{input.count}{null}</>)}</>);",
-  ],
-  [
-    "a define call",
-    `<define/D|{ content }|><${D}{content}/></define>\n<D>${D}{input.count}</D>`,
-    "return (<>{D({ content: () => <>{input.count}{null}</> })}</>);",
-  ],
-  [
-    "an authored dynamic tag with tag params",
-    `<const/X=input.t/>\n<${D}{X}|n|>${D}{n}</>`,
-    "return (<>{__mxDynamic(X, { content: ((n) => <>{n}{null}</>) as (...args: any[]) => any }, undefined, true)}</>);",
   ],
 ];
 
