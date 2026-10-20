@@ -17,8 +17,10 @@
  * `define-call-sole-zero` hold the same shapes against Marko's output). Every
  * emitted smoke also goes through `@babel/parser` with the `jsx` and
  * `typescript` plugins. The full shared emit-shape matrices live in
- * `packages/hosts/preact/src/sole-falsy-child.test.ts`; React keeps null-sibling
- * wiring for each body concern, keyed shapes and every react-dom/server render.
+ * `packages/hosts/preact/src/sole-falsy-child.test.ts`; React keeps representative
+ * null-sibling wiring, keyed shapes and every react-dom/server render. Preact
+ * owns the null-sibling emit assertion for a <try> body with <@placeholder>;
+ * React keeps only that shape's render check.
  */
 import { parse } from "@babel/parser";
 import { createElement, type FC } from "react";

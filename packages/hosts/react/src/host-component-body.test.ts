@@ -22,9 +22,10 @@
  * The full emitted-shape matrices live in
  * `packages/hosts/preact/src/host-component-body.test.ts`. The first half here
  * keeps React's Fragment import, host-body wiring smokes and keyed shapes.
- * React owns #arrowBody's sequence parentheses and the tag-params path's
- * object parentheses because it has no placeholder wrapper. Preact's guard
- * and unguard helper hide these distinct paths behind equal-looking strings.
+ * React owns #arrowBody's no-params sequence parentheses and its object
+ * parentheses on both the tag-params and no-params paths. React has no
+ * placeholder wrapper; Preact's guard and unguard helper hide these distinct
+ * paths behind equal-looking strings.
  * Every emit row is also parsed by `@babel/parser` with `jsx` and `typescript`.
  * The second half keeps every React render and children observation against
  * hand-written JSX on this host.
@@ -135,7 +136,7 @@ describe("react: a host component's body is emitted as hand-written JSX would pa
 
   it("writes no {null} sibling into a host component's body", () => {
     for (const [, source] of EMITTED) {
-      if (source.includes("<for") || source.includes("<@a>")) continue;
+      if (source.includes("<for")) continue;
       expect(compile(source)).not.toMatch(/content: [^\n]*\{null\}/);
     }
   });
