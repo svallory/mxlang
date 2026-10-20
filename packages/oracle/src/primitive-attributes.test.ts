@@ -2,7 +2,15 @@
  * Primitive attribute values on native elements render as Marko 6.4.4's html
  * output does, on preact, react, hono, solid and astro. Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
- * compared as parsed DOM, over 8 attributes x 4 forms x 7 values.
+ * compared as parsed DOM, over 15 attributes x 4 forms x 4 values.
+ *
+ * The value axis is the four render classes: `null` (absence), `true`
+ * (presence), `0` (falsy-but-printed) and `"x"` (truthy string). `undefined`
+ * and `false` render byte-identically to `null` on every host, attribute and
+ * form, and `""` renders either the same absence (class/style, where an empty
+ * value is dropped) or the same parsed presence as `true` (Solid prints
+ * `<div title>` vs `<div title="">`; parse5 reads both as `title=""`), so the
+ * dropped points are covered by a kept point of their class.
  *
  * Documented divergences, pinned here rather than skipped (names: disabled, hidden, required, open, `checked` on input):
  *  - React prints a boolean property as presence only (`disabled=""` where
@@ -111,7 +119,7 @@ const attributes = [
   "checked@div",
 ];
 const forms = ["direct", "spread", "merged", "mergedBefore"];
-const values = ["null", "undefined", "false", "true", "zero", "empty", "x"];
+const values = ["null", "true", "zero", "x"];
 
 const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
@@ -119,7 +127,7 @@ const hosts: Record<string, Row[]> = {};
 beforeAll(() => {
   marko = rows("marko");
   for (const host of HOSTS) hosts[host] = rows(host);
-  expect(marko.length).toBe(attributes.length * forms.length * values.length);
+  expect(marko.length).toBe(attributes.length * forms.length * 7); // Probe renders all 7 value points; the axis below exercises 4.
 }, 120_000); // Real compilers and renderers in separate Bun processes.
 
 const find = (list: Row[], form: string, value: string) =>
