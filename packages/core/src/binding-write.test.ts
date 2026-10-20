@@ -9,7 +9,13 @@
  * ones that must not.
  */
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -17,6 +23,7 @@ import { compileSource } from "./compile.ts";
 import type { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import { getCustomTags } from "./scan-cache.ts";
 import { lookup } from "./test-targets.ts";
 
 const READONLY = "MX_READONLY_BINDING_WRITE";
@@ -417,6 +424,16 @@ const REFUSED: Row[] = [
     CONST_BELOW,
     constBelowMessage("x"),
   ),
+  row(
+    // The inner `<const>` is the one a write below it reaches, past a sibling
+    // that declares nothing, so the write is to a const in scope, not to a
+    // declaration that has not happened yet.
+    "a write to an inner const past a sibling, with a const below the block",
+    "<div>\n  <const/x=1/>\n  <span/>\n  <button onClick() { x = 2 }/>\n</div>\n<const/x=3/>\n",
+    "x = 2",
+    READONLY,
+    constMessage("x"),
+  ),
   // --- a two-way binding above the declaration --------------------------
   row(
     "a two-way binding above a plain-name const",
@@ -672,6 +689,28 @@ const COMPILES: [name: string, source: string][] = [
   [
     "an inner let shadows a let declared below the block",
     "<div>\n  <let/x=1/>\n  <button onClick() { x = 2 }/>\n</div>\n<let/x=3/>\n",
+  ],
+  // The inner declaration stays the nearest one for every sibling after it,
+  // not just the next one.
+  [
+    "an inner let shadows a const below the block, past a non-declaring sibling",
+    "<div>\n  <let/x=1/>\n  <span/>\n  <button onClick() { x = 2 }/>\n</div>\n<const/x=3/>\n",
+  ],
+  [
+    "an inner let shadows a let below the block, past a non-declaring sibling",
+    "<div>\n  <let/x=1/>\n  <span/>\n  <button onClick() { x = 2 }/>\n</div>\n<let/x=3/>\n",
+  ],
+  [
+    "an inner let shadows a const below the block, for a write in a nested sibling",
+    "<div>\n  <let/x=1/>\n  <p>hi</p>\n  <p><button onClick() { x = 2 }/></p>\n</div>\n<const/x=3/>\n",
+  ],
+  [
+    "a two-way binding on an inner let, past a sibling, with a const below the block",
+    "<div>\n  <let/x=1/>\n  <span/>\n  <input value:=x/>\n</div>\n<const/x=3/>\n",
+  ],
+  [
+    "a two-way binding on an inner let, past a sibling, with a let below the block",
+    "<section>\n  <let/x=1/>\n  <hr/>\n  <input value:=x/>\n</section>\n<let/x=2/>\n",
   ],
   [
     "a let written in a handler below its declaration",
@@ -939,5 +978,104 @@ describe("scopes the lowerer opens for the template", () => {
     const source =
       "<const/year=1/>\n<widget>\n  <@footer|year|>\n    <button onClick() { year = 2 }/>\n  </@footer>\n</widget>\n";
     expect(attemptWidget(source)).toBeUndefined();
+  });
+});
+
+describe("a bind on a custom tag is checked before the tag is routed", () => {
+  const registered = {
+    "reg-tag": { transform: () => [] },
+  } as never;
+
+  function attemptWith(
+    source: string,
+    customTags: unknown,
+    filename = "/page.mx",
+  ): TranslateError | undefined {
+    try {
+      compileSource(source, filename, withLet, {
+        targets: lookup,
+        customTags,
+        tagDiscoveryDirs: [],
+        emitIr: () => "",
+      } as never);
+    } catch (error) {
+      return error as TranslateError;
+    }
+    return undefined;
+  }
+
+  it("a registered tag's bind above the const it targets is refused", () => {
+    const source = "<reg-tag value:=x/>\n<const/x=1/>\n";
+    const error = attemptWith(source, registered);
+    const at = span(source, "x", "value:=x");
+    expect(error?.diagnosticCode).toBe(CONST_BELOW);
+    expect(error?.message).toBe(constBelowMessage("x"));
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+  });
+
+  it("a registered tag's bind on a const above is refused as readonly", () => {
+    const source = "<const/x=1/>\n<reg-tag value:=x/>\n";
+    const error = attemptWith(source, registered);
+    const at = span(source, "x", "value:=x");
+    expect(error?.diagnosticCode).toBe(READONLY);
+    expect(error?.message).toBe(constMessage("x"));
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+  });
+
+  it("a registered tag's bind on a let still compiles", () => {
+    expect(
+      attemptWith("<let/x=1/>\n<reg-tag value:=x/>\n", registered),
+    ).toBeUndefined();
+  });
+
+  describe("a discovered tag", () => {
+    let dir: string;
+    beforeEach(() => {
+      dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-binding-write-tag-")));
+      mkdirSync(join(dir, "tags"));
+      writeFileSync(join(dir, "package.json"), '{"name":"binding-write-tag"}');
+      writeFileSync(join(dir, "tags/my-tag.mx"), "<p>hi</p>\n");
+    });
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+    });
+
+    const attemptDiscovered = (source: string) => {
+      const filename = join(dir, "page.mx");
+      return attemptWith(
+        source,
+        getCustomTags(filename, { targets: lookup }),
+        filename,
+      );
+    };
+
+    it("a bind on a const above is refused as readonly", () => {
+      const source = "<const/x=1/>\n<my-tag value:=x/>\n";
+      const error = attemptDiscovered(source);
+      const at = span(source, "x", "value:=x");
+      expect(error?.diagnosticCode).toBe(READONLY);
+      expect(error?.message).toBe(constMessage("x"));
+      expect([error?.line, error?.column]).toEqual([
+        at.start.line,
+        at.start.column,
+      ]);
+    });
+
+    it("a bind above the const it targets is refused", () => {
+      const error = attemptDiscovered("<my-tag value:=x/>\n<const/x=1/>\n");
+      expect(error?.diagnosticCode).toBe(CONST_BELOW);
+    });
+
+    it("a bind on a let still compiles", () => {
+      expect(
+        attemptDiscovered("<let/x=1/>\n<my-tag value:=x/>\n"),
+      ).toBeUndefined();
+    });
   });
 });

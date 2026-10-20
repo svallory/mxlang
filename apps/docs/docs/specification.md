@@ -1906,9 +1906,12 @@ the message and each positioned at the assignment or update with its end (for a
   through its object, so its message says to move the `<const>` above this
   code. A read above the declaration compiles (as it does in Marko), and the
   same block scoping applies as for a `<let>`. The nearer declaration
-  decides: a `<let>` or `<const>` declared below in the block the write sits
-  in (or a block inside it) wins over a declaration above, so the write is
-  reported against the declaration below. When the two declarations sit in
+  decides: a `<let>` or `<const>` declared below in the write's block or a
+  block enclosing it wins over a declaration above, so the write is reported
+  against the declaration below; a declaration in a block nested below the
+  write does not count. A `<let>` or `<const>` declared above the write in an
+  inner block is the declaration the write reaches, whatever sits between
+  them and whatever the enclosing blocks declare below. When the two declarations sit in
   the write's own block, the later one is a duplicate declaration, a separate
   rule this check does not state yet.
 - A `for...of` or `for...in` whose left side is a `<let>` is refused

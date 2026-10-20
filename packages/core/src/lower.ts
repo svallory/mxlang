@@ -7252,7 +7252,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
         new Set([...letNamesOf(ctx, child), ...constNamesOf(ctx, child)]),
       );
     }
-    return declaredBefore[at - 1] ?? new Set<string>();
+    // Every child above, not only the nearest: a declaration two siblings up
+    // still shadows the one below the block.
+    return new Set(declaredBefore.slice(0, at).flatMap((names) => [...names]));
   };
   const declaredBelow = (
     namesAt: Array<[number, string[]]>,

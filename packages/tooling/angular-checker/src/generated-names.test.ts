@@ -136,6 +136,13 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       // name shadows the outer `<const>` and its `@let` is the bound target.
       const source =
         "<main><const/a=title/><for|{a}| of=objs><input value:=a/></for></main>";
+      // The loop pattern's `@let` is never renamed, so the bound target is
+      // emitted under its authored name and no generated name can reach the
+      // message. (A `<const>` renamed for a collision is refused before
+      // emit, so it can no longer be a two-way target.)
+      const compiled = compileNgMx(ngMx(source), "/p/x.component.ng.mx");
+      expect(compiled.code).toContain('[(value)]="a"');
+      expect(compiled.code).not.toContain('[(value)]="__mx');
       const found = messages(source, TWO_WAY_LET);
       expect(found).toHaveLength(1);
       expect(found[0]).toContain("non-signal @let declaration 'a'");
