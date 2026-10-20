@@ -81,7 +81,8 @@ describe.each(["solid", "preact", "react", "hono"])(
           [4, 29, 2304, "MissingConstraint"],
           [5, 32, 2304, "MissingReturn"],
         ] as const) {
-          // Only the independently tracked region generic gap is checked below.
+          // The region generic gap lives in the plugin's host matrix, with
+          // one CLI print smoke below.
           if (region && message === "MissingConstraint") continue;
           const diagnostic = lines.find(
             (entry) =>
@@ -97,18 +98,23 @@ describe.each(["solid", "preact", "react", "hono"])(
       },
     );
 
-    it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
-      const lines = output
-        .split("\n")
-        .filter(
-          (line) =>
-            line.includes(`Region.${host}.mx(`) &&
-            line.includes("MissingConstraint"),
+    // The plugin's method-head-mappings.test.ts owns the same known gap for
+    // all four hosts. Keep one CLI smoke for its printed position and suffix;
+    // the exact whole-file/region rows above keep each host's door wired.
+    if (host === "solid") {
+      it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
+        const lines = output
+          .split("\n")
+          .filter(
+            (line) =>
+              line.includes(`Region.${host}.mx(`) &&
+              line.includes("MissingConstraint"),
+          );
+        expect(lines).toHaveLength(1);
+        expect(lines[0]).toContain(
+          `Region.${host}.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
         );
-      expect(lines).toHaveLength(1);
-      expect(lines[0]).toContain(
-        `Region.${host}.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:${host === "solid" ? 74 : 69})`,
-      );
-    });
+      });
+    }
   },
 );
