@@ -266,6 +266,34 @@ describe("template custom tags as compilation units", () => {
     });
   });
 
+  it("erases only tag type containers while deriving caller metadata", () => {
+    resetTemplateCache();
+    const filename = "/tmp/mx-template-test/tags/typed.mx";
+    const source = [
+      "export interface Input { a: string }",
+      "static function identity<T>(value: T): T { return value; }",
+      "<const<string>/value=input.a/>",
+      "<define/Foo<T>|value: T|><p<string>>${value}</p></define>",
+      "<Foo<string>(value)/>",
+      "<return value=(identity<string>(input.a) as string)/>",
+    ].join("\n");
+    const tag = template(filename, source);
+    const ir = lowerWithTags('<typed/result a="hi"/>\n<p>${result}</p>', {
+      typed: tag,
+    });
+    expect(components(ir.body)).toHaveLength(1);
+    expect(peekTemplateMetadata(filename)).toMatchObject({
+      readsContent: false,
+      attributeTags: ["a"],
+      returnsValue: true,
+      inputCode: "export interface Input { a: string }",
+      inputAuxCode: "function identity<T>(value: T): T { return value; }",
+    });
+    expect(peekTemplateMetadata(filename)?.returnValueCode).toContain(
+      "identity<string>(input.a) as string",
+    );
+  });
+
   it("reports openTagOnly content as a positioned MX error", () => {
     const leaf = template("/tmp/mx-template-test/tags/leaf.mx", "<i/>", {
       parseOptions: { openTagOnly: true },

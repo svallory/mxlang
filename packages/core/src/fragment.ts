@@ -228,9 +228,10 @@ export interface FragmentBase {
   customTags?: Record<string, CustomTag>;
   /**
    * Erase tag type arguments and parameters before returning the tree, for
-   * re-lowering a projection that already erased them. Expression and pattern
-   * types, method type parameters and all positions are preserved. Omitted
-   * or false, every type container remains as parsed.
+   * re-lowering a projection that already erased them and for the metadata
+   * reparse of a template unit, matching whole-file compilation. Expression
+   * and pattern types, method type parameters and all positions are
+   * preserved. Omitted or false, every type container remains as parsed.
    */
   stripTagTypes?: boolean;
   /**

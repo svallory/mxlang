@@ -8008,6 +8008,7 @@ function runCustomTagAnalyze(ctx: Ctx, body: readonly MxChild[]): void {
 registerTemplateMetadataCompiler((ctx: Ctx, tag: TemplateTag) => {
   const { body } = parseFragment(tag.source, {
     filename: tag.filename,
+    stripTagTypes: true,
     customTags: ctx.customTags as Record<string, CustomTag> | undefined,
     nativeTags: ctx.declarations.nativeTags,
     targets: ctx.targets,
