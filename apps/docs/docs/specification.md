@@ -1727,8 +1727,11 @@ one.
 <const/total=items.reduce((sum, i) => sum + i.price, 0)/>
 ```
 
-The initializer is lowered **before** shadowing applies, so `<const/count=count + 1/>`
-reads the outer binding.
+A tag cannot read a variable it declares in its own attributes, even when an
+outer binding has the same name (§5.5). To derive another value, give it a new
+name: `<const/nextCount=count + 1/>`. A plain-name `<const>` also cannot write
+itself from a function in its initializer (`<const/x=() => { x = 1 }/>`): it is
+readonly there just as it is below its declaration (§5.5).
 
 | Message | When |
 |---|---|
@@ -1754,6 +1757,16 @@ and nowhere after it, for the lookup of a tag name: Marko 6.4.4 resolves
 it calls an `import` of the same name, and with no such binding it is an
 unresolved tag. Inside the body the define wins over an import of the same
 name. A top-level `<define>` is visible in every body after it.
+
+**A `<define>` is not readable above its declaration.** A dynamic tag
+(`<${D}/>` or `<${D.content}/>`), placeholder (`${D}`), initializer
+(`<const/s=D/>`) or attribute (`<div attr=D/>`) that reads a later
+`<define/D>` in the same body is refused at the read with
+`MX_DEFINE_READ_BEFORE_DECLARATION`. Move the `<define>` above the first
+reference. This also holds inside a branch and when an outer binding has the
+same name. The define's own body may read its name, and reads below it remain
+legal, subject to each host's representation limits below. A bare `<D/>` above
+the declaration keeps its unresolved-component diagnostic.
 
 **A `<define>` tag's own attributes are properties of its value.**
 `<define/D a=1 b="s"/>` makes `${D.a}` read `1` and `${D.b}` read `"s"`, as
@@ -1848,6 +1861,17 @@ introduces (`|{ n }, i|` binds `n` and `i`).
 **Not core-owned.** There is no `let` case in the lowerer; it routes entirely
 through host declarations. See §11 and the per-host row in §13.3. Do not
 attribute a `<let>` message to `@mxlang/core`.
+
+**A tag's attributes cannot read its own tag variable.** `<const/x=x+1/>`,
+`<let/x=x/>`, `<const/{a,b}={a:1, b:a}/>` and a returning custom call whose
+attributes read its own `/var` are refused with `MX_TAG_VAR_SELF_READ`, at the
+read identifier. An outer binding of the same name does not help. Read the
+variable below the tag instead, or declare the derived value under another
+name. Function, arrow and object-method bodies may read it later
+(`<const/f=() => f()/>`, `<const/f={ g: () => f }/>`, a `<let>`'s own
+`valueChange`); class members are not this exception. Writes still obey the
+binding-write rules, including in the initializer. A render write in a
+`<let>`'s own attributes keeps `MX_LET_WRITE_IN_RENDER` first.
 
 Note that Angular rejects `<let>` only *incidentally*, through the generic
 `tag variable` field guard rather than a stateful-tag policy — so `<let x=1/>`
@@ -1992,8 +2016,13 @@ write rules of §5.5 follow the scope (a `<const/x>` written inside an element d
 not make a later write to the outer `<let/x>` an error, and an inner `<let/x>`
 does not make a later write to the outer `<const/x>` legal). On the html target a
 native element whose body declares a name is emitted with a block around its
-children. Declaring one name twice in the *same* body is not scoping, and is not
-covered by this rule. A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render.
+children. Declaring one name twice in the *same* body is refused with
+`MX_DUPLICATE_DECLARATION` at the second name, naming the first declaration:
+this includes `<const>`, `<let>`, `<define>`, a returning call's `/var`,
+destructured names and mixtures of those declarations. A declaration directly
+in a `<for>` or `<define>` body also cannot repeat one of that tag's params.
+A nested element or control body may shadow the param; a param itself named
+`input` remains legal (§5.6). A read after the body of a name declared only inside it (`<div><const/x=1/></div>${x}`) has no outer binding and is out of scope: Marko 6.4.4 hoists it into a getter, MX does not, and the template throws `x is not defined` at render.
 
 ### 5.6 A binding named `input`
 

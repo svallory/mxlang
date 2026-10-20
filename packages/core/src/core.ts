@@ -636,9 +636,14 @@ export interface Ctx {
    * walks, and clears that flag when the walk reaches the declaring call. A
    * read that finds a `pending` binding is therefore earlier in the block
    * than the call — Marko catches the same case by comparing sibling
-   * indices (`references.ts:597-602`).
+   * indices (`references.ts:597-602`). A body's `<define>` names are also
+   * pre-registered here with `define: true`, for their read-before-declaration
+   * rule; unlike a call's `/var`, their block escape is left to name lookup.
    */
-  tagVars?: Map<string, { block: number[]; pending: boolean }>;
+  tagVars?: Map<
+    string,
+    { block: number[]; pending: boolean; define?: boolean }
+  >;
   /**
    * The chain of block ids from the template body down to the block being
    * lowered, innermost last.
@@ -657,6 +662,15 @@ export interface Ctx {
    * `shadowBindings`, which already runs at every site that binds params.
    */
   tagVarShadowed?: ReadonlySet<string>;
+  /**
+   * The names the params of the *enclosing* `<for>` or `<define>` bind, with
+   * the kind of tag that binds them. A body declaration of the same spelling
+   * is a duplicate of the parameter (`<for|x| of=…><const/x=1/></for>`).
+   * Consumed by that immediate body's `lowerChildList`: a nested element or
+   * control body may redeclare the parameter legally. Unlike `tagVarShadowed`,
+   * this records declaration conflicts, not which binding a read resolves to.
+   */
+  enclosingTagParams?: ReadonlyMap<string, "for" | "define">;
   /**
    * The names of the `<let>` tags in scope at the point being lowered: the
    * bindings a write in render position is refused on (`checkLetWrites`).

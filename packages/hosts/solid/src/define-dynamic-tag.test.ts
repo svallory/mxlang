@@ -141,8 +141,13 @@ describe("solid: a dynamic tag reads a <define> without attributes", () => {
     expect(code).toContain("const __mxDyn = input.D;");
   });
 
-  it("a define declared after the read is unchanged: the name stays unbound", () => {
-    const { code } = emit(`<\${D}/>${DEFINE}`);
-    expect(code).toContain("const __mxDyn = D;");
+  it("a define declared after the read is refused by core", () => {
+    expect(() => emit(`<\${D}/>${DEFINE}`)).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_DEFINE_READ_BEFORE_DECLARATION",
+        line: 1,
+        column: 3,
+      }),
+    );
   });
 });

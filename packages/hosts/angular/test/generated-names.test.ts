@@ -115,21 +115,6 @@ const RENAMED: Array<[string, string, string]> = [
     "<p>{{ x }}</p><div>@let __mxConst_x = 1;{{ __mxConst_x }}</div>",
   ],
   [
-    "the name is read in the const's own value",
-    "<div><const/x=x+1/>${x}</div>",
-    "<div>@let __mxConst_x = x+1;{{ __mxConst_x }}</div>",
-  ],
-  [
-    "a <for> parameter has the name",
-    "<ul><for|a| of=items><li><const/a=a/>${a}</li></for></ul>",
-    "<ul>@for (a of items; track $index) { <li>@let __mxConst_a = a;{{ __mxConst_a }}</li> }</ul>",
-  ],
-  [
-    "a <define> parameter has the name",
-    "<define/D|a|><div><const/a=a/>${a}</div></define><D(1)/>",
-    '<ng-template #D let-a> <div>@let __mxConst_a = a;{{ __mxConst_a }}</div> </ng-template><ng-container [ngTemplateOutlet]="D" [ngTemplateOutletContext]="{ $implicit: 1 }"></ng-container>',
-  ],
-  [
     "the same name in the bodies of two <if> branches",
     "<if=x><div><const/a=1/>${a}</div></if><else><div><const/a=2/>${a}</div></else>",
     "@if (x) { <div>@let __mxConst_a = 1;{{ __mxConst_a }}</div> } @else { <div>@let __mxConst_a1 = 2;{{ __mxConst_a1 }}</div> }",
@@ -145,6 +130,25 @@ const RENAMED: Array<[string, string, string]> = [
     "",
   ],
 ];
+
+describe("a generated name cannot make a self-reading const legal", () => {
+  it.each([
+    [
+      "the name is read in the const's own value",
+      "<div><const/x=x+1/>${x}</div>",
+    ],
+    [
+      "a <for> parameter has the name",
+      "<ul><for|a| of=items><li><const/a=a/>${a}</li></for></ul>",
+    ],
+    [
+      "a <define> parameter has the name",
+      "<define/D|a|><div><const/a=a/>${a}</div></define><D(1)/>",
+    ],
+  ])("%s", (_label, source) => {
+    expect(() => emit(source)).toThrow(/own attributes cannot read it/);
+  });
+});
 
 describe("an element-body const or define keeps the name the author wrote", () => {
   it.each(AUTHORED)("%s", (_label, source, expected) => {

@@ -51,6 +51,12 @@ Three more writes fail wherever they are:
 - `MX_CONST_WRITE_BEFORE_DECLARATION`: a `<const>` is written only below its declaration, and a binding (`value:=x`) above a plain-name `<const>` is refused too. For a plain name the message is "`x` is a `<const>` declared below this write, and a tag variable can only be assigned below its declaration. A `<const>` is never written: declare `x` with a `<let>` and write that in an event handler or a `<script>` body, or derive a new value with another `<const>`."; for a name from an object pattern, whose fix is to move the declaring tag, it ends "Move the `<const>` above this code.". A read above the declaration compiles.
 - `MX_LET_LOOP_ASSIGNMENT`: a `for...of` or `for...in` cannot assign to a `<let>`. "`count` is a `<let>`, so a `for...of` cannot assign to it. Loop into a local variable and assign `count` from it instead." It is positioned at the loop's left side.
 
+## Tag-variable declarations and their reads
+
+- `MX_TAG_VAR_SELF_READ`: a tag's own attributes cannot read the variable it declares, even when an outer variable has that name. `<const/x=x+1/>` and `<let/x=x/>` are refused at the read. Give a derived value a different name, or read the variable below its tag. Function, arrow and object-method bodies may read it later (`<const/f=() => f()/>`), but a plain-name `<const>` still cannot write itself from its initializer's function.
+- `MX_DUPLICATE_DECLARATION`: one body cannot declare a tag-variable name twice, including mixtures of `<const>`, `<let>`, `<define>` and returning-call `/var` declarations. The diagnostic points at the second name and identifies the first. A declaration directly in a `<for>` or `<define>` body cannot repeat that tag's parameter either. Nested and sibling bodies may still shadow a name, and a tag parameter named `input` remains accepted.
+- `MX_DEFINE_READ_BEFORE_DECLARATION`: a `<define>` name is not readable above its declaration in that body. Move the `<define>` above the read. A read inside its own body or below the declaration is legal, subject to the host's representation limits. A bare `<D/>` above `<define/D>` keeps its unresolved-component error.
+
 ## Module level code that names a render-only name
 
 ```html

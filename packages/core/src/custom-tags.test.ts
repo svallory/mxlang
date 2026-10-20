@@ -11,7 +11,7 @@ import { parseFragment } from "./fragment.ts";
 import type { Attr, AttributeTag, Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import { lower } from "./lower.ts";
-import { resetTemplateCache } from "./template-tag.ts";
+import { resetTemplateCache, type TemplateBackedTag } from "./template-tag.ts";
 import { lookup } from "./test-targets.ts";
 
 function fakeDeclarations(overrides: Partial<Policy> = {}): Policy {
@@ -76,6 +76,46 @@ function tryFind<K extends IrNode["kind"]>(
     return null;
   }
 }
+
+describe("returning custom-call declaration rules", () => {
+  const returns: TemplateBackedTag = {
+    template: {
+      filename: "/tags/declaration-return.mx",
+      source: "export interface Input { a?: unknown }\n<return value=1/>\n",
+    },
+  };
+  const tags = { returns };
+
+  it.each(["<returns/x a=x/>", "<returns/{x} a=x/>"])(
+    "refuses a call reading its own variable: %s",
+    (source) => {
+      expect(() => lowerWithTags(source, tags)).toThrowError(
+        /own attributes cannot read it/,
+      );
+    },
+  );
+
+  it.each([
+    "<returns/x/><returns/x/>",
+    "<returns/x/><const/x=1/>",
+    "<const/x=1/><returns/x/>",
+    "<returns/{x}/><const/x=1/>",
+  ])("refuses duplicate names including a call: %s", (source) => {
+    expect(() => lowerWithTags(source, tags)).toThrowError(
+      /Duplicate declaration of `x`/,
+    );
+  });
+
+  it("allows sibling call-body scopes", () => {
+    expect(() =>
+      lowerWithTags("<div><returns/x/></div><div><returns/x/></div>", tags),
+    ).not.toThrow();
+  });
+
+  it("allows a deferred self-read in a call's attribute", () => {
+    expect(() => lowerWithTags("<returns/x a=() => x/>", tags)).not.toThrow();
+  });
+});
 
 const svgTag: CustomTag = {
   attributes: {

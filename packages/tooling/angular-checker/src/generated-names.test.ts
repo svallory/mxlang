@@ -62,6 +62,27 @@ const TWO_WAY_LET = -99998005;
 // which this package's project does not resolve, so the object-pattern `<for
 // of>` form — the other `@let`-producing binder — carries the coverage.
 
+describe("a self-reading const is refused before Angular checks generated names", () => {
+  it.each([
+    [
+      "the name is read in the const's own value",
+      "<div><const/x=x+1/>${x}</div>",
+    ],
+    [
+      "a <for> parameter has the name",
+      "<ul><for|a| of=items><li><const/a=a/>${a}</li></for></ul>",
+    ],
+    [
+      "a <define> parameter has the name",
+      "<main><define/D|a|><div><const/a=a/>${a}</div></define><D(1)/></main>",
+    ],
+  ])("%s", (_label, source) => {
+    expect(() => compileNgMx(ngMx(source), "/p/x.component.ng.mx")).toThrow(
+      /own attributes cannot read it/,
+    );
+  });
+});
+
 describe("an Angular diagnostic about a <const> names it as written", () => {
   describe("when nothing else shares the name (the emitter keeps it)", () => {
     it("NG8112 on an unused const in a single root", () => {

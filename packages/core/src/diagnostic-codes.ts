@@ -77,6 +77,11 @@ export const CONST_WRITE_BEFORE_DECLARATION_CODE =
   "MX_CONST_WRITE_BEFORE_DECLARATION";
 /** A `for…of` or `for…in` whose left side is a `<let>`. */
 export const LET_LOOP_ASSIGNMENT_CODE = "MX_LET_LOOP_ASSIGNMENT";
+/** A tag variable read in the attributes of the very tag that declares it (`<const/x=x+1/>`). */
+export const TAG_VAR_SELF_READ_CODE = "MX_TAG_VAR_SELF_READ";
+/** A `<define>` name read above the tag that declares it. */
+export const DEFINE_READ_BEFORE_DECLARATION_CODE =
+  "MX_DEFINE_READ_BEFORE_DECLARATION";
 /** A write to a `<const>`, a `<for>` parameter or a `<define>` parameter where it is never written. */
 export const READONLY_BINDING_WRITE_CODE = "MX_READONLY_BINDING_WRITE";
 /** A handler reads a derived `<const>` after writing a `<let>` it depends on. */
@@ -541,6 +546,14 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a `for…of` or `for…in` whose left side is a `<let>`",
         ],
         [
+          TAG_VAR_SELF_READ_CODE,
+          "a tag variable read in the attributes of the very tag that declares it",
+        ],
+        [
+          DEFINE_READ_BEFORE_DECLARATION_CODE,
+          "a `<define>` name read above the tag that declares it",
+        ],
+        [
           READONLY_BINDING_WRITE_CODE,
           "a write to a `<const>`, a `<for>` parameter or a `<define>` parameter where it is never written",
         ],
@@ -787,6 +800,8 @@ export type MxDiagnosticCode =
   | typeof LET_WRITE_BEFORE_DECLARATION_CODE
   | typeof CONST_WRITE_BEFORE_DECLARATION_CODE
   | typeof LET_LOOP_ASSIGNMENT_CODE
+  | typeof TAG_VAR_SELF_READ_CODE
+  | typeof DEFINE_READ_BEFORE_DECLARATION_CODE
   | typeof READONLY_BINDING_WRITE_CODE
   | typeof STALE_DERIVED_READ_CODE
   | typeof RENDER_ONLY_IN_MODULE_CODE

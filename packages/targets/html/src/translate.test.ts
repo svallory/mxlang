@@ -1216,9 +1216,10 @@ describe("an imported .mx tag that declares <return>", () => {
         error = caught as Error;
       }
       expect(error?.message).toMatch(
-        /`n` is read before the `\/var` that binds it/,
+        /`n` is the tag variable this tag declares/,
       );
       expect(error?.line).toBe(2);
+      expect(error?.column).toBe(17);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

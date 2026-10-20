@@ -160,7 +160,11 @@ describe("whole-file duplicate lifted bindings", () => {
         }),
       ).toThrowError(
         expect.objectContaining({
-          message: expect.stringContaining(`Duplicate declaration "${name}"`),
+          // Core catches same-authored-body repeats; the emitter still catches
+          // bindings in distinct bodies lifted into one generated JS scope.
+          message: expect.stringMatching(
+            new RegExp(`^Duplicate declaration (?:of \`${name}\`:|"${name}")`),
+          ),
           line,
           column,
         }),
@@ -168,16 +172,24 @@ describe("whole-file duplicate lifted bindings", () => {
     },
   );
 
-  it("reports an earlier markup error before duplicate defines", () => {
+  it("reports a core duplicate before emitter-only markup errors", () => {
     expect(() =>
       compile(`<div><const/z=1/></div>\n${row}\n${row}`),
     ).toThrowError(
       expect.objectContaining({
-        message: expect.stringContaining(
-          "`<const>` must appear at the top level",
-        ),
+        diagnosticCode: "MX_DUPLICATE_DECLARATION",
+        line: 3,
+        column: 8,
+      }),
+    );
+  });
+
+  it("reports an earlier core markup error before duplicate defines", () => {
+    expect(() => compile(`<if/>\n${row}\n${row}`)).toThrowError(
+      expect.objectContaining({
+        message: "`<if>` without a condition",
         line: 1,
-        column: 5,
+        column: 0,
       }),
     );
   });

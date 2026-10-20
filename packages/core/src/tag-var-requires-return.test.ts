@@ -38,6 +38,8 @@ const emptyTag: TemplateBackedTag = {
 
 const policy: Policy = {
   tags: {},
+  // Exercise declaration rules on hosts that implement dynamic return binding.
+  bindsDynamicTagVar: true,
   isElement: () => true,
   isComponent: (name) => /^[A-Z]/.test(name) || name === "plain",
 };
@@ -84,6 +86,35 @@ const DISCOVERED = (name: string, file: string) =>
   `\`<${name}>\` does not return a value; add \`<return value=…/>\` to ${file} to bind it with \`/var\``;
 const IMPORTED = (name: string) =>
   `\`<${name}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``;
+
+describe("returning imports and dynamic calls follow declaration rules", () => {
+  it.each([
+    "<returns/x a=x/>",
+    'import R from "./returns.mx"\n<R/x a=x/>',
+    'import R from "./returns.mx"\n<${R}/x a=x/>',
+  ])("refuses self-reads in %s", (source) => {
+    expect(compile(source, { returns: returnsTag })?.code).toBe(
+      "MX_TAG_VAR_SELF_READ",
+    );
+  });
+
+  it.each([
+    "<returns/x a=() => x/>",
+    'import R from "./returns.mx"\n<R/x a=() => x/>',
+    'import R from "./returns.mx"\n<${R}/x a=() => x/>',
+  ])("keeps deferred self-reads in %s", (source) => {
+    expect(compile(source, { returns: returnsTag })).toBeUndefined();
+  });
+
+  it.each([
+    'import R from "./returns.mx"\n<R/x/><R/x/>',
+    'import R from "./returns.mx"\n<R/x/><const/x=1/>',
+    'import R from "./returns.mx"\n<${R}/x/><${R}/x/>',
+    'import R from "./returns.mx"\n<${R}/x/><const/x=1/>',
+  ])("refuses repeated declarations in %s", (source) => {
+    expect(compile(source)?.code).toBe("MX_DUPLICATE_DECLARATION");
+  });
+});
 
 describe("/var on a discovered tag whose template declares no <return>", () => {
   it("is MX_INVALID_TAG_VAR, at the tag variable with its end", () => {

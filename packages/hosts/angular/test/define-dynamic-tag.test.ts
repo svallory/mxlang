@@ -196,8 +196,12 @@ describe("angular: a dynamic tag reads a <define>", () => {
     }
   });
 
-  it("a define declared after the read is unchanged: Angular's own error follows", () => {
-    expect(emit(`<\${D}/>${DEFINE}`)).toContain('[ngComponentOutlet]="D"');
+  it("a define declared after the read is refused by core", () => {
+    expect(thrown(`<\${D}/>${DEFINE}`)).toMatchObject({
+      diagnosticCode: "MX_DEFINE_READ_BEFORE_DECLARATION",
+      line: 1,
+      column: 3,
+    });
   });
 });
 

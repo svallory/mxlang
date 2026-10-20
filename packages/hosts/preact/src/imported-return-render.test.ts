@@ -160,7 +160,7 @@ describe("an imported tag that declares <return>, rendered on Preact", () => {
           'import Counter from "./counter.mx"\n<Counter/n start=n/>',
           join(scratch, "caller.mx"),
         ),
-      ).toThrow(/`n` is read before the `\/var` that binds it/);
+      ).toThrow(/`n` is the tag variable this tag declares/);
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }

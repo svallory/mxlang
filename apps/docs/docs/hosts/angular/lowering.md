@@ -36,7 +36,7 @@ MX's own messages print a renamed name as written, and the Angular diagnostics `
 
 When a name is renamed, the new name is part of the expression text Angular hashes into an `i18n` message id, so an `i18n` element that reads such a name has a different id than the same read written `n` had, and the id depends on declaration order: the suffix counts the renamed `<const>` and `<define>` of that name written in element, tag call and attribute tag bodies earlier in the file (`__mxConst_n`, `__mxConst_n1`), so adding one changes the ids of later messages that read a renamed `n`. A translation file keyed by message id needs re-extracting for such an element.
 
-An Angular `@let` cannot read an outer binding of the same name in its own value: `<const/a=a+1/>` inside an `<if>` or `<for>` body reads itself, not the outer `a`. Name the inner binding differently.
+MX refuses a tag whose own attributes read the tag variable it declares, on every host, before Angular emission. An outer binding of the same name does not help: use a different name for a derived value, such as `<const/nextA=a+1/>`. Two declarations of one name in the same body are also refused; separate nested or sibling bodies may still shadow a name.
 
 Give `<for>` a `by`: Angular requires `track`. A loop without one emits `track $index`, and MX warns once per file, since reordering such a list re-renders its rows.
 

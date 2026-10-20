@@ -516,7 +516,7 @@ describe("a name that is not the `<let>`", () => {
 
   it("a `<let>` declared again after a loop's shadow is the `<let>` again", () => {
     const source =
-      "<let/n=0/>\n<for|n| of=xs>\n  <let/n=0/>\n  <p>${n++}</p>\n</for>\n";
+      "<let/n=0/>\n<for|n| of=xs>\n  <div><let/n=0/>\n  <p>${n++}</p></div>\n</for>\n";
     expect(attempt(source)?.diagnosticCode).toBe(CODE);
   });
 
@@ -667,9 +667,14 @@ describe("a `<let>`'s own attributes", () => {
       "a `valueChange` function",
       "<let/count=0 valueChange=(function (v) { count = v })/>\n",
     ],
-    ["a read of the name", "<let/count=0 data-x=(count)/>\n"],
   ])("accepts %s", (_name, source) => {
     expect(attempt(source)).toBeUndefined();
+  });
+
+  it("refuses a read of the name in its own attributes", () => {
+    expect(attempt("<let/count=0 data-x=(count)/>\n")?.diagnosticCode).toBe(
+      "MX_TAG_VAR_SELF_READ",
+    );
   });
 
   it("lowerSource refuses the same write", () => {

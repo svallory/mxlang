@@ -437,7 +437,9 @@ describe("every way to write the `<let>`", () => {
   ];
 
   it.each(forms)("%s", (_name, write, derived, written) => {
-    const head = `<let/${written}=0/>\n<let/items=[]/>\n${derived}\n`;
+    // Keep an unrelated second binding without redeclaring `items` in the
+    // assignment row; the row tests a stale read, not duplicate declarations.
+    const head = `<let/${written}=${written === "items" ? "[]" : "0"}/>\n<let/${written === "items" ? "other" : "items"}=[]/>\n${derived}\n`;
     const source = `${head}<button onClick() {\n  ${write};\n  log(total);\n}>x</button>\n`;
     const error = attempt(source);
     const at = readAt(source, "log(total)", "total");

@@ -641,6 +641,13 @@ const ROWS: Row[] = [
 
   // The compile path: lowering rules `lowerSource` pre-empts with
   // MX_NOT_IN_DATA_FILE, and the host-declared rules.
+  compileRow("MX_TAG_VAR_SELF_READ", "<const/x=x+1/>\n", 1, 9),
+  compileRow(
+    "MX_DEFINE_READ_BEFORE_DECLARATION",
+    "${D}\n<define/D>x</define>\n",
+    1,
+    2,
+  ),
   compileRow("MX_INVALID_DEFINE", "<define/>\n", 1, 0),
   compileRow("MX_INVALID_RETURN", "<return value=1>\n  x\n</return>\n", 1, 0),
   compileRow("MX_INVALID_TRY", "<try>\n  x\n</try>\n", 1, 0),
