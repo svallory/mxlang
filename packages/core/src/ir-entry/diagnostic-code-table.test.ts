@@ -670,6 +670,13 @@ const ROWS: Row[] = [
     { tagRules: "html" },
   ),
   lowerRow(
+    "MX_CONST_WRITE_BEFORE_DECLARATION",
+    "<p>${x = 2}</p>\n<const/x=1/>\n",
+    1,
+    5,
+    { tagRules: "html" },
+  ),
+  lowerRow(
     "MX_LET_LOOP_ASSIGNMENT",
     "<let/n=0/>\n<p>${(() => { for (n of xs) {} })()}</p>\n",
     2,

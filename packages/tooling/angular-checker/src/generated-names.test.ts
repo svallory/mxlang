@@ -53,7 +53,6 @@ function messages(template: string, code: number): string[] {
 
 const UNUSED_LET = -998112;
 const DUPLICATE_LET = -998017;
-const TWO_WAY_LET = -99998005;
 
 describe("an Angular diagnostic about a <const> names it as written", () => {
   describe("when nothing else shares the name (the emitter keeps it)", () => {
@@ -63,16 +62,6 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       expect(found[0]).toContain(
         "@let a is declared but its value is never read",
       );
-      expect(found[0]).not.toContain("__mx");
-    });
-
-    it("the two-way binding error", () => {
-      const found = messages(
-        "<section><const/a=title/><input value:=a/></section>",
-        TWO_WAY_LET,
-      );
-      expect(found).toHaveLength(1);
-      expect(found[0]).toContain("non-signal @let declaration 'a'");
       expect(found[0]).not.toContain("__mx");
     });
   });
@@ -120,18 +109,6 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       );
       expect(found).toHaveLength(1);
       expect(found[0]).toContain("@let a is declared");
-      expect(found[0]).not.toContain("__mx");
-    });
-
-    it("the two-way binding error on a shadowing const", () => {
-      const source =
-        "<main><const/a=title/><div><const/a=title/><input value:=a/></div></main>";
-      expect(compileNgMx(ngMx(source), "/p/x.component.ng.mx").code).toContain(
-        '[(value)]="__mxConst_a1"',
-      );
-      const found = messages(source, TWO_WAY_LET);
-      expect(found).toHaveLength(1);
-      expect(found[0]).toContain("non-signal @let declaration 'a'");
       expect(found[0]).not.toContain("__mx");
     });
   });

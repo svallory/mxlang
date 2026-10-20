@@ -1376,7 +1376,11 @@ elements, dynamic tags, ordinary component calls and built-in control tags,
 its target must be an identifier or a member expression (including optional
 members, excluding private members); otherwise core reports Marko's
 `Attributes may only be bound to identifiers or member expressions` at the
-value. For example, `<div :="x"/>` errors at structured line 1, column 7
+value. A `<const>` bound as a plain name is never a valid target: a two-way
+binding writes back into its value on every change, which is a write
+(`MX_READONLY_BINDING_WRITE`), refused at the value with the `<const>` write
+message — a name from a `<const>`'s object pattern and a member of a const
+value stay writable, as does a `<let>`. For example, `<div :="x"/>` errors at structured line 1, column 7
 (printed 1:8), rather than silently rendering `value="x"`. A bound attribute may carry a refinement, `v:fn:=q`: Marko binds `v` and its
 change handler runs `q = fn(next)`. The refinement must be a valid JavaScript
 identifier, else core reports Marko's `Bound attribute refinement shorthand
@@ -1386,7 +1390,7 @@ target with an update path applies it: Angular writes
 `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`, where the two
 helper members read and write a `WritableSignal` (`()` and `.set()`) or a
 plain property exactly as Angular's own `[(v)]` does (a bare template
-variable, such as a `@for` item or a `<const>`, is written with `.set()`, as
+variable, such as a `@for` item, is written with `.set()`, as
 Angular accepts only a signal there; a `<for of>` index or a `<for>` range number, which is never a signal, is a positioned Angular error at the attribute, as Angular's own `[(v)]` rejects it), and `fn` maps to the
 modifier (a non-ASCII refinement name is a positioned Angular error, since its
 expression language reads ASCII identifiers only); html renders once and emits
@@ -1884,6 +1888,14 @@ the message and each positioned at the assignment or update with its end (for a
   `<let>` declared in a sibling block is not tracked: a handler in one `<div>`
   that writes a `<let>` declared in another `<div>` compiles (the probe line
   `let-sibling-block-handler / let-sibling-if ... compiles`).
+- A `<const>` written above its declaration is refused the same way
+  (`MX_CONST_WRITE_BEFORE_DECLARATION`): "`x` is a `<const>` declared below
+  this write, and a tag variable can only be assigned below its declaration.
+  Move the `<const>` above this code." A read above the declaration compiles
+  (as it does in Marko), and the same block scoping applies as for a `<let>`.
+  Where a `<const>` above and a `<const>` below share the spelling, the write
+  is refused against the one above (a plain `<const>` write), because that is
+  the binding in scope.
 - A `for...of` or `for...in` whose left side is a `<let>` is refused
   (`MX_LET_LOOP_ASSIGNMENT`), also inside a handler: "`count` is a `<let>`, so a
   `for...of` cannot assign to it. Loop into a local variable and assign `count`
@@ -1894,8 +1906,8 @@ it is declared (a handler parameter, a local `let`, `const` or `var`, a catch
 parameter, a function name, a `for (const x of …)` head), a `<for>`, `<define>`
 or `<let>` that declares the name again inside takes over from the outer
 binding, and writing a member (`o.a = 1`) is not a write to the binding. A
-`<const>` written above its declaration is skipped by this check (Marko refuses
-it; not guarded yet).
+`<const>` written above its declaration is refused with
+`MX_CONST_WRITE_BEFORE_DECLARATION`, the bullet above.
 
 **A handler, a `<script>` body or a `<lifecycle>` hook does not read a stale
 `<const>`.** Targets disagree on what a `<const>` shows inside the body that just

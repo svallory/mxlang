@@ -170,6 +170,7 @@ import {
   NO_LOWERING_CODE,
   NOT_A_DOM_EVENT_CODE,
   NOT_IN_DATA_FILE_CODE,
+  READONLY_BINDING_WRITE_CODE,
   REPEATED_ATTRIBUTE_TAG_CODE,
   RESERVED_EFFECT_TAG_CODE,
   RESERVED_TAG_CODE,
@@ -678,9 +679,14 @@ function methodBodySpan(
 
 /** The names a write is checked against: empty in a file with nothing to check. */
 function writeRulesOf(ctx: Ctx): WriteRules | undefined {
-  const { renderLets: lets, laterLets: later, writeGuards: guards } = ctx;
-  return lets?.size || later?.size || guards?.size
-    ? { lets, later, guards }
+  const {
+    renderLets: lets,
+    laterLets: later,
+    laterConsts,
+    writeGuards: guards,
+  } = ctx;
+  return lets?.size || later?.size || laterConsts?.size || guards?.size
+    ? { lets, later, laterConsts, guards }
     : undefined;
 }
 
@@ -710,6 +716,7 @@ function checkBindingWrites(
     const names = [
       ...(rules.lets ?? []),
       ...(rules.later ?? []),
+      ...(rules.laterConsts ?? []),
       ...(rules.guards?.keys() ?? []),
     ];
     if (!names.some((name) => code.includes(name))) return;
@@ -1277,6 +1284,22 @@ function letNamesOf(ctx: Ctx, child: Node): string[] {
 }
 
 /**
+ * The names a child declares as a `<const>`, on the same terms as
+ * `letNamesOf`: none under the `none` tag rules, none when a caller
+ * registered `const` as a custom tag. A write to one of these names before
+ * the tag is lowered sees no guard yet, so the name is tracked as
+ * declared-below instead (`ctx.laterConsts`).
+ */
+function constNamesOf(ctx: Ctx, child: Node): string[] {
+  if (ctx.tagRules === "none") return [];
+  if (!isTagNode(child) || tagNameOf(child) !== "const" || !tagVarOf(child)) {
+    return [];
+  }
+  if (ctx.customTags && Object.hasOwn(ctx.customTags, "const")) return [];
+  return bindingIdentifiers(tagVarOf(child));
+}
+
+/**
  * Records the `<let>` a lowered child tag declares, for the writes after it
  * in the same block and the blocks below. Under the `none` tag rules
  * `let` is an ordinary tag, and a name a caller registered as a custom tag
@@ -1672,6 +1695,23 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
         `${voiceOfCtx(ctx).Attributes} may only be bound to identifiers or member expressions`,
         value,
       );
+    }
+    // A two-way binding writes back into its value on every change, so the
+    // target must be writable: a `<const>` bound as a plain name never is
+    // (a destructured name is written through its object, and a `<let>` is
+    // writable). Refused at the value, the thing the author bound.
+    if (value?.type === "Identifier") {
+      const guard = ctx.writeGuards?.get(value.name);
+      if (guard?.kind === "const" && guard.inFunction) {
+        raise(
+          READONLY_BINDING_WRITE_CODE,
+          bindingWriteMessage(
+            { node: value, name: value.name, reason: "const" },
+            voiceOfCtx(ctx),
+          ),
+          value,
+        );
+      }
     }
   }
 }
@@ -7086,22 +7126,40 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
 
   // A `<let>` is written only below its declaration, so the ones declared
   // below the child being lowered (here and in the blocks around) are the
-  // names a write inside it is refused on.
+  // names a write inside it is refused on. A `<const>` is never written at
+  // all, and its guard is registered only when the declaring tag is lowered,
+  // so a const declared below is tracked the same way until then — with its
+  // own message, because the write is not to a const in scope but to a
+  // declaration that has not happened yet.
   const outerLater = ctx.laterLets;
+  const outerLaterConsts = ctx.laterConsts;
+  const declaredBelow = (
+    namesAt: Array<[number, string[]]>,
+    at: number,
+    outer: ReadonlySet<string> | undefined,
+  ): ReadonlySet<string> | undefined => {
+    const names = namesAt.filter(([i]) => i > at).flatMap(([, n]) => n);
+    if (names.length === 0) return outer;
+    return new Set([...(outer ?? []), ...names]);
+  };
   const declared = children.map((child, at): [number, string[]] => [
     at,
     letNamesOf(ctx, child),
   ]);
-  const letsBelow = (at: number): ReadonlySet<string> | undefined => {
-    const names = declared.filter(([i]) => i > at).flatMap(([, n]) => n);
-    if (names.length === 0) return outerLater;
-    return new Set([...(outerLater ?? []), ...names]);
-  };
-  const hasLets = declared.some(([, names]) => names.length > 0);
+  const constDeclared = children.map((child, at): [number, string[]] => [
+    at,
+    constNamesOf(ctx, child),
+  ]);
+  const hasLater =
+    declared.some(([, names]) => names.length > 0) ||
+    constDeclared.some(([, names]) => names.length > 0);
 
   try {
     while (index < children.length) {
-      if (hasLets) ctx.laterLets = letsBelow(index);
+      if (hasLater) {
+        ctx.laterLets = declaredBelow(declared, index, outerLater);
+        ctx.laterConsts = declaredBelow(constDeclared, index, outerLaterConsts);
+      }
       // Hybrid until PR 5: the arms below still name Marko's kinds, which the
       // MX type cannot hold.
       const child: Node = children[index];
@@ -7321,6 +7379,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     }
   } finally {
     ctx.laterLets = outerLater;
+    ctx.laterConsts = outerLaterConsts;
   }
 
   return out;
@@ -7501,6 +7560,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.renderLets = undefined;
   ctx.writeGuards = undefined;
   ctx.laterLets = undefined;
+  ctx.laterConsts = undefined;
   ctx.derivedConsts = undefined;
   ctx.moduleScope = scanModuleScope(ctx, body);
 
@@ -7684,6 +7744,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   renderLets: "fresh",
   writeGuards: "fresh",
   laterLets: "fresh",
+  laterConsts: "fresh",
   derivedConsts: "fresh",
   moduleScope: "fresh",
   tagVarBlockSeq: "fresh",

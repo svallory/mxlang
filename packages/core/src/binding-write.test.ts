@@ -21,6 +21,7 @@ import { lookup } from "./test-targets.ts";
 
 const READONLY = "MX_READONLY_BINDING_WRITE";
 const BELOW = "MX_LET_WRITE_BEFORE_DECLARATION";
+const CONST_BELOW = "MX_CONST_WRITE_BEFORE_DECLARATION";
 const LOOP = "MX_LET_LOOP_ASSIGNMENT";
 
 const constMessage = (name: string) =>
@@ -33,6 +34,8 @@ const definePlainMessage = (name: string) =>
   `\`${name}\` is a \`<define>\` parameter and cannot be written. Keep a value that changes in a \`<let>\`, or derive a new value with a \`<const>\`.`;
 const belowMessage = (name: string) =>
   `\`${name}\` is a \`<let>\` declared below this write, and a \`<let>\` can only be written below its declaration. Move the \`<let>\` above this code.`;
+const constBelowMessage = (name: string) =>
+  `\`${name}\` is a \`<const>\` declared below this write, and a tag variable can only be assigned below its declaration. Move the \`<const>\` above this code.`;
 const loopMessage = (name: string, loop: "of" | "in") =>
   `\`${name}\` is a \`<let>\`, so a \`for...${loop}\` cannot assign to it. Loop into a local variable and assign \`${name}\` from it instead.`;
 const letRenderMessage = (name: string) =>
@@ -340,6 +343,67 @@ const REFUSED: Row[] = [
     definePlainMessage("a"),
     { skipLower: true },
   ),
+  // --- a two-way binding on a const -------------------------------------
+  row(
+    "a two-way binding on a const",
+    "<const/x=1/>\n<input value:=x/>\n",
+    "x",
+    READONLY,
+    constMessage("x"),
+    { within: "value:=x" },
+  ),
+  row(
+    "a refined two-way binding on a const",
+    "<const/x=1/>\n<input value:x:=x/>\n",
+    "x",
+    READONLY,
+    constMessage("x"),
+    { within: ":=x" },
+  ),
+  row(
+    "a function refinement bound to a const",
+    "<const/x=1/>\n<div v:fn:=x/>\n",
+    "x",
+    READONLY,
+    constMessage("x"),
+    { within: "v:fn:=x" },
+  ),
+  // --- a <const> above its declaration ----------------------------------
+  row(
+    "const written in render above its declaration",
+    "${x = 2}\n<const/x=1/>\n",
+    "x = 2",
+    CONST_BELOW,
+    constBelowMessage("x"),
+  ),
+  row(
+    "const written in a handler above its declaration",
+    "<button onClick() { x = 2 }/>\n<const/x=1/>\n",
+    "x = 2",
+    CONST_BELOW,
+    constBelowMessage("x"),
+  ),
+  row(
+    "const written in a script above its declaration",
+    "<script>x = 1</script>\n<const/x=1/>\n",
+    "x = 1",
+    CONST_BELOW,
+    constBelowMessage("x"),
+  ),
+  row(
+    "const written in an attribute above its declaration",
+    "<div>\n  <p class=(x = 1)/>\n</div>\n<const/x=1/>\n",
+    "x = 1",
+    CONST_BELOW,
+    constBelowMessage("x"),
+  ),
+  row(
+    "a write between a const above and a const below sees the one above",
+    "<const/x=1/>\n<button onClick() { x = 2 }/>\n<const/x=3/>\n",
+    "x = 2",
+    READONLY,
+    constMessage("x"),
+  ),
   // --- a <let> above its declaration -------------------------------------
   row(
     "let written in render above its declaration",
@@ -548,6 +612,24 @@ const COMPILES: [name: string, source: string][] = [
     "a member of a const written in render",
     "<const/o={}/>\n<p>${o.a = 2}</p>\n",
   ],
+  ["a read above a const declaration", "${x}\n<const/x=1/>\n"],
+  [
+    "a const initializer reading a name a later const declares",
+    "<const/y=x+1/>\n<const/x=1/>\n",
+  ],
+  [
+    "a let initializer reading a name a later const declares",
+    "<let/y=x+1/>\n<const/x=1/>\n",
+  ],
+  [
+    "a two-way binding on a name from a const's object pattern",
+    "<const/{ a, b }={a:1,b:2}/>\n<input value:=a/>\n",
+  ],
+  [
+    "a two-way binding on a member of a const",
+    "<const/x={y:1}/>\n<input value:=x.y/>\n",
+  ],
+  ["a two-way binding on a let", "<let/x=1/>\n<input value:=x/>\n"],
   [
     "a let written in a handler below its declaration",
     `${LET}<button onClick() { count = 1 }/>\n`,

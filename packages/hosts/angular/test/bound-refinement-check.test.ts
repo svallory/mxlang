@@ -95,7 +95,6 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
       "<for|item| of=items><div appPick v:fn:=item/></for>",
       "item",
     ],
-    ["a @let from <const>", "<const/x=q/><div appPick v:fn:=x/>", "x"],
   ])(
     "reports a non-signal template variable target (%s) at the target",
     (_name, mx, at) => {

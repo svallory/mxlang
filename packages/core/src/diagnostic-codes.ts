@@ -72,6 +72,9 @@ export const LET_WRITE_IN_RENDER_CODE = "MX_LET_WRITE_IN_RENDER";
 /** A write to a `<let>` above the tag that declares it. */
 export const LET_WRITE_BEFORE_DECLARATION_CODE =
   "MX_LET_WRITE_BEFORE_DECLARATION";
+/** A write to a `<const>` above the tag that declares it. */
+export const CONST_WRITE_BEFORE_DECLARATION_CODE =
+  "MX_CONST_WRITE_BEFORE_DECLARATION";
 /** A `for…of` or `for…in` whose left side is a `<let>`. */
 export const LET_LOOP_ASSIGNMENT_CODE = "MX_LET_LOOP_ASSIGNMENT";
 /** A write to a `<const>`, a `<for>` parameter or a `<define>` parameter where it is never written. */
@@ -530,6 +533,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a write to a `<let>` above the tag that declares it",
         ],
         [
+          CONST_WRITE_BEFORE_DECLARATION_CODE,
+          "a write to a `<const>` above the tag that declares it",
+        ],
+        [
           LET_LOOP_ASSIGNMENT_CODE,
           "a `for…of` or `for…in` whose left side is a `<let>`",
         ],
@@ -778,6 +785,7 @@ export type MxDiagnosticCode =
   | typeof RESERVED_EFFECT_TAG_CODE
   | typeof LET_WRITE_IN_RENDER_CODE
   | typeof LET_WRITE_BEFORE_DECLARATION_CODE
+  | typeof CONST_WRITE_BEFORE_DECLARATION_CODE
   | typeof LET_LOOP_ASSIGNMENT_CODE
   | typeof READONLY_BINDING_WRITE_CODE
   | typeof STALE_DERIVED_READ_CODE

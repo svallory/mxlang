@@ -14,9 +14,11 @@
  *   parameter and a `<define>` parameter bound as a plain name, which are
  *   never written (a name bound through an object pattern is written there,
  *   through its object);
- * - anywhere: a `<let>` above its declaration, and a `for…of` or `for…in`
- *   whose left side is a `<let>` (a `<let>` is written by assignment, and a
- *   loop head is not a place a target can route one through).
+ * - anywhere: a `<let>` or a `<const>` written above its declaration, and a
+ *   `for…of` or `for…in` whose left side is a `<let>` (a `<let>` is written by
+ *   assignment, and a loop head is not a place a target can route one
+ *   through); a two-way binding (`:=`, `:fn:=`) whose value is a plain-name
+ *   `<const>` is a write the host would make, and is refused the same way.
  *
  * "While the template renders" is the code that runs as the template does,
  * read off the expression and not off how the file is used: a placeholder, an
@@ -46,6 +48,7 @@ import { coreBabel } from "./babel.ts";
 import type { Node, WriteGuard } from "./core.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
 import {
+  CONST_WRITE_BEFORE_DECLARATION_CODE,
   LET_LOOP_ASSIGNMENT_CODE,
   LET_WRITE_BEFORE_DECLARATION_CODE,
   LET_WRITE_IN_RENDER_CODE,
@@ -59,6 +62,8 @@ export type WriteReason =
   | "let-render"
   /** A `<let>` written above its declaration. */
   | "let-below"
+  /** A `<const>` written above its declaration. */
+  | "const-below"
   /** A `<let>` assigned by a `for…of` or `for…in` head. */
   | "let-loop"
   /** A `<define>` parameter bound as a plain name, written anywhere. */
@@ -82,6 +87,8 @@ export type WriteRules = {
   readonly lets?: ReadonlySet<string>;
   /** `<let>`s declared below: refused everywhere. */
   readonly later?: ReadonlySet<string>;
+  /** `<const>`s declared below: refused everywhere, like `later`. */
+  readonly laterConsts?: ReadonlySet<string>;
   /** `<const>` and parameters. */
   readonly guards?: ReadonlyMap<string, WriteGuard>;
 };
@@ -147,8 +154,11 @@ export function findBindingWrite(
   rules: WriteRules,
   inFunction = false,
 ): BindingWrite | undefined {
-  const { lets, later, guards } = rules;
-  if (!expression || !(lets?.size || later?.size || guards?.size)) {
+  const { lets, later, laterConsts, guards } = rules;
+  if (
+    !expression ||
+    !(lets?.size || later?.size || laterConsts?.size || guards?.size)
+  ) {
     return undefined;
   }
   const { traverse, types } = coreBabel();
@@ -179,6 +189,7 @@ export function findBindingWrite(
         : guard.kind;
     }
     if (later?.has(name)) return "let-below";
+    if (laterConsts?.has(name)) return "const-below";
     if (lets?.has(name)) {
       if (loop) return "let-loop";
       return runsLater ? undefined : "let-render";
@@ -239,6 +250,8 @@ export function bindingWriteCode(write: BindingWrite): MxDiagnosticCode {
       return LET_WRITE_IN_RENDER_CODE;
     case "let-below":
       return LET_WRITE_BEFORE_DECLARATION_CODE;
+    case "const-below":
+      return CONST_WRITE_BEFORE_DECLARATION_CODE;
     case "let-loop":
       return LET_LOOP_ASSIGNMENT_CODE;
     default:
@@ -264,6 +277,8 @@ export function bindingWriteMessage(write: BindingWrite, voice: Voice): string {
       return `${name} is a ${letTag} and cannot be written while the template renders. Write it in an event handler or a ${scriptTag} body, or derive a value with ${constTag}.`;
     case "let-below":
       return `${name} is a ${letTag} declared below this write, and a ${letTag} can only be written below its declaration. Move the ${letTag} above this code.`;
+    case "const-below":
+      return `${name} is a ${constTag} declared below this write, and a tag variable can only be assigned below its declaration. Move the ${constTag} above this code.`;
     case "let-loop":
       return `${name} is a ${letTag}, so a \`for...${write.loop}\` cannot assign to it. Loop into a local variable and assign ${name} from it instead.`;
     case "const":

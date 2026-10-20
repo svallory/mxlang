@@ -60,11 +60,6 @@ describe("a bound attribute's refinement (angular)", () => {
       "<for|k, val| in=obj><div appPick v:fn:=val/></for>",
       `@for (__mxEntry of (obj | keyvalue: null); track __mxEntry.key) { @let k = __mxEntry.key; @let val = __mxEntry.value; <div appPick [v]="__mxGet(val)" (vChange)="val.set(fn($event))"></div> }`,
     ],
-    [
-      "a <const> @let",
-      "<const/x=q/><div appPick v:fn:=x/>",
-      `@let x = q;<div appPick [v]="__mxGet(x)" (vChange)="x.set(fn($event))"></div>`,
-    ],
   ])("writes %s with .set(), not this.<name>", (_name, mx, out) => {
     expect(emit(mx)).toBe(out);
   });
@@ -114,10 +109,10 @@ describe("a bound attribute's refinement (angular)", () => {
       ).toContain(`(vChange)="__mxSet(this, 'i', fn($event))"`);
     });
 
-    it("lets the innermost declaration win: a @let that shadows the index may hold a signal", () => {
+    it("lets the innermost declaration win: a signal-holding variable that shadows the index", () => {
       expect(
         emit(
-          "<for|item, i| of=items><const/i=sig/><div appPick v:fn:=i/></for>",
+          "<for|item, i| of=items><for|i| of=sigs><div appPick v:fn:=i/></for></for>",
         ),
       ).toContain(`(vChange)="i.set(fn($event))"`);
     });
@@ -132,7 +127,6 @@ describe("a bound attribute's refinement (angular)", () => {
       for (const mx of [
         "<for|s| of=sigs><div appPick v:fn:=s/></for>",
         "<for|k, val| in=obj><div appPick v:fn:=val/></for>",
-        "<const/x=sig/><div appPick v:fn:=x/>",
       ]) {
         expect(emit(mx)).toContain(".set(fn($event))");
       }
