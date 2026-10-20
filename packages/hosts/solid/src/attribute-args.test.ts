@@ -3,6 +3,8 @@ import { compileSolidMx, compileSolidUnit } from "./index.ts";
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strip diagnostic colour
 const ANSI = /\x1b\[[0-9;]*m/g;
+// Core's attribute-args.test.ts owns the spelling/position matrix. Keep a
+// positioned refusal through each host entry, plus host-specific routing below.
 const compilers = {
   file: (source: string) =>
     compileSolidUnit(source, { filename: "/v/test.mx" }),
@@ -12,13 +14,7 @@ const compilers = {
 
 for (const [entry, compile] of Object.entries(compilers)) {
   describe(`attribute arguments (solid ${entry})`, () => {
-    it.each([
-      ["<button onClick(v)=() => {}/>", "onClick", 1, 8],
-      ['<button class(v)="a"/>', "class", 1, 8],
-      ["<button onClick()=fn/>", "onClick", 1, 8],
-      ["<button onClick(v)/>", "onClick", 1, 8],
-      ["<button\n  onClick(v)=fn/>", "onClick", 2, 2],
-    ])(
+    it.each([["<button onClick(v)=() => {}/>", "onClick", 1, 8]])(
       "refuses %s instead of dropping its arguments",
       (source, name, line, column) => {
         let failure:
