@@ -1022,12 +1022,6 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
       '<div.a${y}.b class="c"/>',
       "ayy b c",
     ],
-    [
-      "concise: a static word, a placeholder, a string",
-      'div.a.${y} class="c"',
-      "a yy c",
-    ],
-    ["concise: a placeholder alone, a string", 'div.${y} class="c"', "yy c"],
   ])(
     "merges the shorthand with a static string class: %s",
     (_name, markup, expected) => {
@@ -1041,11 +1035,6 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
       "<div.a.${y} class={k: true, m: false}/>",
       "a yy k",
     ],
-    [
-      "concise: a static word, a placeholder, an object",
-      "div.a.${y} class={k: true, m: false}",
-      "a yy k",
-    ],
     ["a static word, an object", "<div.a class={k: true, m: false}/>", "a k"],
   ])(
     "merges the shorthand with an object literal class: %s",
@@ -1056,8 +1045,9 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
 
   // A shorthand merges with any `class=` value, as Marko does: the shorthand
   // parts first, then the explicit value, one space apart, and a falsy explicit
-  // value adds nothing. Each row renders the three shorthand shapes at once, in
-  // tag and in concise mode. The expected strings are what Marko 6.4.4 renders
+  // value adds nothing. Each row renders the three shorthand shapes at once.
+  // Tag mode owns the value matrix; three concise smokes below prove the parser
+  // reaches the same emitter branches. The expected strings are what Marko 6.4.4 renders
   // (and the html, preact, react and hono hosts) for the same templates.
   const shapes = [".a", ".a.${x}", ".${x}"];
   const classesOf = (html: string) =>
@@ -1152,7 +1142,13 @@ describe("Solid SSR render: a shorthand class with a placeholder beside class=",
     },
   );
 
-  it.each(dynamicRows)(
+  // Retain runtime-bound, object-literal and array-literal class paths. Use
+  // the same rows, so concise wiring cannot drift from the tag-mode home.
+  it.each(
+    dynamicRows.filter(([name]) =>
+      ["a string in a binding", "an object", "an array"].includes(name),
+    ),
+  )(
     "merges the shorthand with a dynamic class, shorthand first, in concise mode: %s",
     (_name, value, extraSetup, expected) => {
       const setup = `const x = "xx"; ${extraSetup}`;
