@@ -494,12 +494,31 @@ describe("declarations (typescript-plugin/src/mx-language.ts:253-280, createHtml
     },
   );
 
-  it("html's translator is the one the mapping pass uses for every target (D3, mx-language.ts:21)", () => {
+  it("a target's own translator is the one its mapping pass uses; targets without one fall back to html's", () => {
     const fromDescriptor = target("html").translator as Record<string, unknown>;
     expectSame(
       Object.keys(fromDescriptor).sort(),
       Object.keys(translator).sort(),
     );
+    // The JSX hosts declare one of their own (mx-language.ts `compileMxVirtual`
+    // passes `descriptor.translator` to `createHtmlMappings`).
+    for (const name of ["preact-jsx", "react-jsx", "hono-jsx"]) {
+      expect(target(name).translator, name).toBeDefined();
+    }
+    // Every other built-in target has none, so its mapping pass falls back
+    // to the default target's inside `createHtmlMappings`.
+    for (const entry of builtinTargets) {
+      const name = entry.name;
+      if (
+        name === "html" ||
+        name === "preact-jsx" ||
+        name === "react-jsx" ||
+        name === "hono-jsx"
+      ) {
+        continue;
+      }
+      expect(target(name).translator, name).toBeUndefined();
+    }
   });
 });
 

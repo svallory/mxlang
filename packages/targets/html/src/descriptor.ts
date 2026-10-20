@@ -53,10 +53,10 @@ const descriptor: TargetDescriptor = {
     { value: "translator", deprecated: true },
   ],
   declarations: { default: policy, strict: strictPolicy },
-  // The mapping pass (`typescript-plugin/src/mx-language.ts`, `createHtmlMappings`)
-  // looks tags up in html's translator for every target (disagreement D3), so
-  // this is that same translator configuration, reached lazily over this
-  // descriptor's own table.
+  // The taglib the mapping pass (`typescript-plugin/src/mx-language.ts`,
+  // `createHtmlMappings`) looks tags up in for this target, and the one
+  // every target without a `translator` of its own falls back to, reached
+  // lazily over this descriptor's own table.
   get translator() {
     return (
       require("./compiler.ts") as typeof import("./compiler.ts")

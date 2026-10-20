@@ -12,6 +12,7 @@
  */
 import {
   createTargetLookup,
+  createTranslator,
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
@@ -38,12 +39,26 @@ function targets(): TargetLookup {
   return ownLookup;
 }
 
+/** This target's translator, memoized: one serves every read — core caches
+ * the tag table per translator, and a fresh object per read (the compile, the
+ * defaultTag scope and the mapping pass each read it) would miss that cache. */
+let ownTranslator: ReturnType<typeof createTranslator> | undefined;
+
 const descriptor: TargetDescriptor = {
   descriptorVersion: 0,
   name: "preact-jsx",
   packageName: "@mxlang/host-preact",
   defaultTag: DEFAULT_TAG,
   declarations: { default: preactDeclarations },
+  // The taglib the mapping pass (`typescript-plugin/src/mx-language.ts`,
+  // `createHtmlMappings`) looks tags up in for this target, so its second
+  // lowering sees the same tag map as compilation. Reached lazily over this
+  // descriptor's own table; a target without a `translator` falls back to
+  // the default target's.
+  get translator() {
+    ownTranslator ??= createTranslator({ targets: targets() });
+    return ownTranslator;
+  },
   load() {
     const { compilePreactMx } =
       require("./compile.ts") as typeof import("./compile.ts");

@@ -56,8 +56,9 @@ const goldens = join(root, "__golden__");
  *   like the editor tools.
  * - alias-html/-preact/-react/-hono: D2. `resolveImport` reaches the compile
  *   in Vite only, so the `~/Card.mx` import resolves there and nowhere else.
- * - every row's TypeScript plugin `mappings`: D3. The mapping pass always
- *   looks tags up through html's translator, whatever the target.
+ * - every row's TypeScript plugin `mappings`: D3. The mapping pass looks tags
+ *   up through the compile target's own translator when it defines one, and
+ *   the default target's otherwise.
  * - angular: D4. The language server diagnoses pages; the TypeScript plugin
  *   skips them; Vite refuses them with `mx-angular build`/`watch` guidance.
  * - astro: D5, decided: the language server stays silent on `.astro.mx` (it

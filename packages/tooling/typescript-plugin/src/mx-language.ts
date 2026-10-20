@@ -456,6 +456,10 @@ export function createMxLanguagePlugin(
           [],
           targets,
           defaultTag,
+          // The compile target's own translator, so this second lowering
+          // sees the same tag map as compilation; a target without one
+          // falls back to the default target's inside `createHtmlMappings`.
+          descriptor.translator,
         );
     // What the host's own compiler stage adds that the type-check cannot see
     // (Solid: imports for its auto-imported built-ins). Any file kind of the
@@ -525,6 +529,10 @@ function createVirtualCode(
  * `declarations` selects the host to lower under, because a construct one
  * host accepts another rejects — resolving a Preact template under the HTML
  * policy would throw on the first `<try>` and yield no mappings at all.
+ *
+ * `translator` is the taglib the mapping pass looks tags up in: the compile
+ * target's own, so the second lowering sees the same tag map as compilation.
+ * A target that defines none falls back to the default target's.
  */
 export function createHtmlMappings(
   source: string,
@@ -537,9 +545,8 @@ export function createHtmlMappings(
   warnings?: MxWarning[],
   targets: TargetLookup = builtinLookup(),
   defaultTag?: string,
+  translator?: unknown,
 ): CodeMapping[] {
-  // D3: the mapping pass still uses the default HTML target's translator,
-  // even when the compile target is JSX. Do not change this disagreement.
   const fallback = builtinLookup().target(builtinLookup().defaultTarget());
   const mappingDeclarations =
     declarations ??
@@ -556,7 +563,10 @@ export function createHtmlMappings(
     source,
     printExpression,
     mappingDeclarations,
-    core.tagTable(fallback?.translator, mappingDeclarations.nativeTags),
+    core.tagTable(
+      translator ?? fallback?.translator,
+      mappingDeclarations.nativeTags,
+    ),
     fileName,
     targets,
   );
