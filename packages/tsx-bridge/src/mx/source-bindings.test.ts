@@ -113,6 +113,32 @@ describe("sourceBindings", () => {
   });
 });
 
+describe("unknownSourceBindings", () => {
+  it.each(["() => null", "class {}"])(
+    "recognizes unwrapped callable values: %s",
+    (value) => {
+      expect(unknownSourceBindings(`const Foo = ${value};`)).toEqual(new Set());
+    },
+  );
+
+  it.each([
+    "(() => null) as FC",
+    "(() => null) satisfies FC",
+    "(() => null)!",
+    "(class {}) as FC",
+  ])("keeps runtime wrapper routing unchanged: %s", (value) => {
+    expect(unknownSourceBindings(`const Foo = ${value};`)).toEqual(
+      new Set(["Foo"]),
+    );
+  });
+
+  it("does not infer a callable from a type assertion on an unknown value", () => {
+    expect(unknownSourceBindings("const Foo = lazy() as FC;")).toEqual(
+      new Set(["Foo"]),
+    );
+  });
+});
+
 describe("programBindings", () => {
   it("matches sourceBindings when given the same parsed program", () => {
     const source =

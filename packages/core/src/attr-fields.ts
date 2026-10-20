@@ -11,6 +11,7 @@
  * only the MX AST.
  */
 import { type Ctx, type Node, positionAtOffset } from "./core.ts";
+import { projectedAngles } from "./mapping.ts";
 import { payloadOf } from "./payload.ts";
 
 /** Is `attr` an MX AST attribute (`MxAttribute`, `MxSpreadAttribute`)? */
@@ -114,7 +115,7 @@ export function methodFunctionOf(ctx: Ctx, method: Node): Node {
     end: positionAtOffset(ctx, end),
   });
   const innerComments: Node[] = method.body.innerComments ?? [];
-  return {
+  const fn = {
     type: "FunctionExpression",
     params,
     generator: false,
@@ -134,6 +135,12 @@ export function methodFunctionOf(ctx: Ctx, method: Node): Node {
     },
     loc: locOf(method.start, method.end),
   };
+  const angles = [
+    ...(projectedAngles.get(params) ?? []),
+    ...(projectedAngles.get(statements) ?? []),
+  ];
+  if (angles.length > 0) projectedAngles.set(fn, angles);
+  return fn;
 }
 
 /**

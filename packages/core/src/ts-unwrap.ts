@@ -1,9 +1,13 @@
+import { projectedAngles } from "./mapping.ts";
+
 /**
  * The expression under any TypeScript wrappers (`x as T`, `x satisfies T`,
  * `x!`, `<T>x`, `x<T>`), however deeply nested. The default lowering erases them
  * before core's checks read a value; with `stripTypes: false` they stay, and
  * a check that reads a value's node type looks through them so the result
- * does not depend on the option. Internal: not exported from the package.
+ * does not depend on the option. Parentheses are transparent only when the
+ * angle-rewrite pass recorded them; a dialect's authored/synthetic parentheses
+ * retain their runtime classification. Internal: not exported from the package.
  */
 export function withoutTsWrappers<
   N extends { type?: string } | null | undefined,
@@ -18,6 +22,8 @@ export function withoutTsWrappers<
       current.type === "TSSatisfiesExpression" ||
       current.type === "TSNonNullExpression" ||
       current.type === "TSTypeAssertion" ||
+      (current.type === "ParenthesizedExpression" &&
+        projectedAngles.has(current)) ||
       current.type === "TSInstantiationExpression") &&
     current.expression
   ) {

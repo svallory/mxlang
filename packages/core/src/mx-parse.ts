@@ -46,7 +46,7 @@ import {
   nodeTypeRegistry,
   rowKey,
 } from "./dialect-registry.ts";
-import type { SourceSpan } from "./mapping.ts";
+import { projectedAngles, type SourceSpan } from "./mapping.ts";
 import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
 import type {
   Dialect,
@@ -1312,53 +1312,88 @@ export function stripMxTypes(document: Node): void {
   visit(document.body);
 }
 
-/** Whether a payload contains an angle-bracket assertion (`<T>x`). */
-function holdsAngleAssertion(value: Node): boolean {
-  if (value === null || typeof value !== "object") return false;
-  if (Array.isArray(value)) return value.some(holdsAngleAssertion);
-  if (value.type === "TSTypeAssertion") return true;
-  return Object.entries(value).some(
-    ([key, field]) => !NON_CHILD_FIELDS.has(key) && holdsAngleAssertion(field),
+/** The IR preserve-types path retains its historical container erasure. */
+export function stripAngleAssertions(document: Node): void {
+  const holdsAngle = (value: Node): boolean => {
+    if (value === null || typeof value !== "object") return false;
+    if (Array.isArray(value)) return value.some(holdsAngle);
+    if (value.type === "TSTypeAssertion") return true;
+    return Object.entries(value).some(
+      ([key, field]) => !NON_CHILD_FIELDS.has(key) && holdsAngle(field),
+    );
+  };
+  const containers = new Set(["MxExpression", "MxArguments", "MxPattern"]);
+  stripTagTypes(
+    document,
+    (field: Node) => {
+      if (field && containers.has(field.type) && holdsAngle(field.node)) {
+        stripContainer(field, coreBabel().types);
+      }
+    },
+    false,
   );
 }
 
 /**
- * Under `stripTypes: false`, keep TypeScript wrappers for tools to check,
- * except in expression, argument and pattern containers holding `<T>x`:
- * hosts checking the output as TSX would parse `<T>` as a JSX tag and break
- * the whole file. Run the full strip on those containers, as for a build,
- * including surrounding wrappers and chained casts. Other containers keep
- * their `as`, `satisfies` and `!` wrappers. Tag type-argument and
- * type-parameter containers are still dropped: they have no representation
- * in the projection, even when expression types are retained. A method's
- * type parameters remain representable on its emitted function.
- *
- * This has the default strip's source-slice fidelity: a cast nested inside
- * a non-wrapper expression can still remain in the printed source slice.
+ * Keep every assertion checked in a projection that may be parsed as TSX.
+ * Every payload kind participates, including parameter defaults, methods and
+ * statements. The source printer uses the original assertion spans to move
+ * only the type text; operands and all other wrappers keep their own spans.
+ * The runtime strip is deliberately independent of this opt-in transform.
  */
-export function stripAngleAssertions(document: Node): void {
-  const t = coreBabel().types;
-  const containers = new Set(["MxExpression", "MxArguments", "MxPattern"]);
-  const stripIfAngle = (field: Node): void => {
+export function rewriteAngleAssertions(document: Node): void {
+  const keys = coreBabel().types.VISITOR_KEYS;
+  const rewrite = (value: Node): Node => {
+    if (!value || typeof value !== "object") return value;
+    const angles: Node[] = [];
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        value[i] = rewrite(value[i]);
+        angles.push(...(projectedAngles.get(value[i]) ?? []));
+      }
+    } else {
+      for (const key of keys[value.type] ?? []) {
+        value[key] = rewrite(value[key]);
+        if (value[key] && typeof value[key] === "object") {
+          angles.push(...(projectedAngles.get(value[key]) ?? []));
+        }
+      }
+      if (value.type === "TSTypeAssertion") {
+        const original = value;
+        value = {
+          type: "ParenthesizedExpression",
+          expression: { ...original, type: "TSAsExpression" },
+          start: original.start,
+          end: original.end,
+          loc: original.loc,
+        };
+        angles.push(original);
+      }
+    }
+    if (angles.length > 0) projectedAngles.set(value, angles);
+    return value;
+  };
+  stripTagTypes(document, (field: Node) => {
     if (
       field &&
-      containers.has(field.type) &&
-      holdsAngleAssertion(field.node)
+      typeof field === "object" &&
+      "node" in field &&
+      "outer" in field
     ) {
-      stripContainer(field, t);
+      field.node = rewrite(field.node);
     }
-  };
-  stripTagTypes(document, stripIfAngle);
+  });
 }
 
 /**
  * Clears tag type containers without touching expression payloads. The
- * type-check compile also uses this walk, with its angle-assertion strip.
+ * type-check compile also uses this walk, with its angle-assertion rewrite.
  * Method type parameters belong to their emitted functions and stay intact.
  */
 export function stripTagTypes(
   document: Node,
   stripExpression?: (field: Node) => void,
+  dynamicNames = true,
 ): void {
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
@@ -1384,6 +1419,13 @@ export function stripTagTypes(
     } else if (isRegistryKey(value.type)) {
       for (const key of ["value", "args"]) {
         const field = value[key] as Node | undefined;
+        stripExpression?.(field);
+        visit(field);
+      }
+    } else if (dynamicNames && value.type === undefined) {
+      // Tag-name records (`{ kind: "dynamic", expression }`) are not MX
+      // nodes themselves, but their expression is a payload container too.
+      for (const field of Object.values(value)) {
         stripExpression?.(field);
         visit(field);
       }

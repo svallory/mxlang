@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
 import * as core from "@mxlang/core";
 import {
+  type AttributeTagNode,
   type CustomTag,
   dropOwnParserPosition,
   type Expr,
@@ -574,9 +575,8 @@ export function createHtmlMappings(
     customTags,
     nativeTags: mappingDeclarations.nativeTags,
     targets,
-    // Compilation erases these tag-only containers even under typeCheck.
-    // Keep expression types intact so printed code and mappings still agree.
-    stripTagTypes: true,
+    // Apply the same TSX-safe, type-preserving projection as compilation.
+    rewriteAngleAssertions: true,
   });
   const ctx = newCtx(
     source,
@@ -589,13 +589,20 @@ export function createHtmlMappings(
     fileName,
     targets,
   );
+  ctx.typeCheckProjection = true;
   // This is the second lowering of the same source. It must see the same tag
   // map as compilation or a custom tag can make the entire mapping pass fail.
   ctx.customTags = customTags;
   if (defaultTag !== undefined) ctx.defaultTag = defaultTag;
   ctx.warnings = warnings;
   const ir = lower(ctx, body);
-  const mappedCode = collectMappedCode(ir);
+  const projectedBindings = collectProjectedBindings(ctx, body);
+  const bindingItems = new Set<PositionedCode>(projectedBindings);
+  const repeatedRangeValues: Expr[] = [];
+  const mappedCode = [
+    ...collectMappedCode(ir, repeatedRangeValues),
+    ...projectedBindings,
+  ];
   const sourceLines = lineOffsets(source);
   const mappings: CodeMapping[] = recordedMappings(emittedMappings);
   let generatedCursor = 0;
@@ -606,30 +613,88 @@ export function createHtmlMappings(
     if (!sourceRange || item.code.length === 0) continue;
 
     const searchFrom = Math.max(
-      generatedCursor,
+      bindingItems.has(item) ? 0 : generatedCursor,
       generatedCodeCursors.get(item.code) ?? 0,
     );
     const generatedOffset = generated.indexOf(item.code, searchFrom);
     if (generatedOffset < 0) continue;
-    generatedCursor = generatedOffset + item.code.length;
-    generatedCodeCursors.set(item.code, generatedCursor);
-    mappings.push({
-      sourceOffsets: [sourceRange.offset],
-      generatedOffsets: [generatedOffset],
-      lengths: [sourceRange.length],
-      ...(sourceRange.length === item.code.length
-        ? {}
-        : { generatedLengths: [item.code.length] }),
-      data: codeInformation,
-    });
+    const generatedEnd = generatedOffset + item.code.length;
+    if (!bindingItems.has(item)) generatedCursor = generatedEnd;
+    generatedCodeCursors.set(item.code, generatedEnd);
+    const pieces =
+      isExpression(item) && hasProjectedAngle(item.node)
+        ? core.mappedExpr(item).mappings
+        : [];
+    if (pieces.length > 0) {
+      mappings.push(
+        ...withoutOverlaps(
+          recordedMappings(
+            pieces.map((mapping) => ({
+              ...mapping,
+              generatedStart: mapping.generatedStart + generatedOffset,
+              generatedEnd: mapping.generatedEnd + generatedOffset,
+            })),
+          ),
+          mappings,
+        ),
+      );
+    } else {
+      mappings.push({
+        sourceOffsets: [sourceRange.offset],
+        generatedOffsets: [generatedOffset],
+        lengths: [sourceRange.length],
+        ...(sourceRange.length === item.code.length
+          ? {}
+          : { generatedLengths: [item.code.length] }),
+        data: codeInformation,
+      });
+    }
   }
 
-  return mergeMappings(
-    mappings.sort(
-      (left, right) =>
-        (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
+  return deduplicateMappings(
+    mergeMappings(
+      mappings.sort(
+        (left, right) =>
+          (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0) ||
+          (left.generatedLengths?.[0] ?? left.lengths[0] ?? 0) -
+            (right.generatedLengths?.[0] ?? right.lengths[0] ?? 0),
+      ),
     ),
+    repeatedRangeValues,
   );
+}
+
+/** Suppress repeated range evaluations, never unrelated tag/name mappings. */
+function deduplicateMappings(
+  mappings: CodeMapping[],
+  repeatedRangeValues: Expr[],
+): CodeMapping[] {
+  const seen = new Map<string, number>();
+  return mappings.map((mapping) => {
+    const withinRepeatedRange = repeatedRangeValues.some((expr) => {
+      const span = expr.span;
+      return (
+        span &&
+        mapping.sourceOffsets.every(
+          (offset, index) =>
+            offset >= span.sourceStart &&
+            offset + (mapping.lengths[index] ?? 0) <= span.sourceEnd,
+        )
+      );
+    });
+    if (!withinRepeatedRange) return mapping;
+    const first = mapping.generatedOffsets[0] ?? 0;
+    const key = JSON.stringify([
+      mapping.sourceOffsets,
+      mapping.lengths,
+      mapping.generatedLengths,
+      mapping.generatedOffsets.map((offset) => offset - first),
+    ]);
+    if (seen.has(key) && seen.get(key) !== first)
+      return { ...mapping, data: {} };
+    seen.set(key, first);
+    return mapping;
+  });
 }
 
 /**
@@ -687,6 +752,47 @@ function recordedMappings(
     .map((mapping) => {
       const sourceLength = mapping.sourceEnd - mapping.sourceStart;
       const generatedLength = mapping.generatedEnd - mapping.generatedStart;
+      // A reordered assertion also carries a whole-cast range for TS2352.
+      // Represent it by its two endpoints in ONE mapping: Volar can map the
+      // diagnostic's complete range through that object, but an interior type
+      // or operand token must use its precise mapping, not this fallback.
+      const pieces = mappings
+        .filter(
+          (piece) =>
+            piece !== mapping &&
+            piece.generatedEnd > mapping.generatedStart &&
+            piece.generatedStart < mapping.generatedEnd &&
+            piece.sourceStart >= mapping.sourceStart &&
+            piece.sourceEnd <= mapping.sourceEnd &&
+            piece.generatedEnd - piece.generatedStart ===
+              piece.sourceEnd - piece.sourceStart,
+        )
+        .map((piece) => ({
+          generatedStart: Math.max(
+            piece.generatedStart,
+            mapping.generatedStart,
+          ),
+          sourceStart:
+            piece.sourceStart +
+            Math.max(0, mapping.generatedStart - piece.generatedStart),
+        }))
+        .sort((a, b) => a.generatedStart - b.generatedStart);
+      if (
+        pieces.some(
+          (piece, index) =>
+            index > 0 &&
+            piece.sourceStart < (pieces[index - 1]?.sourceStart ?? 0),
+        )
+      ) {
+        return {
+          sourceOffsets: [mapping.sourceStart, mapping.sourceEnd],
+          generatedOffsets: [mapping.generatedStart, mapping.generatedEnd],
+          lengths: [0, 0],
+          // Synthetic endpoints must not redirect hover/completion at an
+          // operand's end to the relocated type's end.
+          data: { verification: true },
+        };
+      }
       return {
         sourceOffsets: [mapping.sourceStart],
         generatedOffsets: [mapping.generatedStart],
@@ -699,6 +805,63 @@ function recordedMappings(
     });
 }
 
+/** Only the projection inserts ParenthesizedExpression nodes in core's tree. */
+function hasProjectedAngle(node: core.Node): boolean {
+  if (!node || typeof node !== "object") return false;
+  if (
+    node.type === "ParenthesizedExpression" &&
+    node.expression?.type === "TSAsExpression"
+  )
+    return true;
+  if (Array.isArray(node)) return node.some(hasProjectedAngle);
+  return Object.entries(node).some(
+    ([key, child]) =>
+      !["loc", "extra", "outer"].includes(key) && hasProjectedAngle(child),
+  );
+}
+
+/** Binding/parameter strings are not Expr IR nodes, but their casts are checked too. */
+function collectProjectedBindings(ctx: core.Ctx, body: core.Node[]): Expr[] {
+  const result: Expr[] = [];
+  const seen = new Set<object>();
+  const visit = (value: core.Node): void => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (["MxPattern", "MxParameterList", "MxStatements"].includes(value.type)) {
+      const roots = Array.isArray(value.node) ? value.node : [value.node];
+      for (const node of roots.flatMap((root: core.Node) =>
+        root?.type === "BlockStatement" ? root.body : [root],
+      )) {
+        if (
+          !hasProjectedAngle(node) ||
+          typeof node.start !== "number" ||
+          typeof node.end !== "number"
+        )
+          continue;
+        const code = core.declName(ctx, node);
+        result.push({
+          code,
+          node,
+          shape: "other",
+          span: {
+            sourceStart: node.start,
+            sourceEnd: node.end,
+          },
+        });
+      }
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (!["node", "loc", "outer", "extra"].includes(key)) visit(child);
+    }
+  };
+  visit(body);
+  return result;
+}
+
 type PositionedCode =
   | Expr
   | Extract<
@@ -708,13 +871,38 @@ type PositionedCode =
       }
     >;
 
-function collectMappedCode(ir: Ir): PositionedCode[] {
+function collectMappedCode(
+  ir: Ir,
+  repeatedRangeValues: Expr[],
+): PositionedCode[] {
   const mapped: PositionedCode[] = [];
   const seen = new Set<object>();
 
   function visit(value: unknown): void {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
+    const loop = value as Partial<Extract<IrNode, { kind: "For" }>>;
+    if (loop.kind === "For" && loop.source?.kind === "range") {
+      if (loop.source.from) repeatedRangeValues.push(loop.source.from);
+      if (loop.source.step) repeatedRangeValues.push(loop.source.step);
+    }
+    const attributeLoop = value as Partial<
+      Extract<AttributeTagNode, { kind: "AttributeTagFor" }>
+    >;
+    if (
+      attributeLoop.kind === "AttributeTagFor" &&
+      attributeLoop.loop?.source.kind === "range"
+    ) {
+      for (const expr of [
+        attributeLoop.loop.source.from,
+        attributeLoop.loop.source.step,
+      ]) {
+        // Only projected angles gain repeated occurrence mappings; keep
+        // plain attribute-tag loops byte-for-byte identical to main.
+        if (expr && hasProjectedAngle(expr.node))
+          repeatedRangeValues.push(expr);
+      }
+    }
     if (isExpression(value)) {
       mapped.push(value);
       return;
@@ -811,11 +999,18 @@ function locateSourceCode(
   if (isForeignFile(item)) return undefined;
   if (isExpression(item)) {
     const loc = item.node?.loc;
-    if (!loc?.start || !loc.end) return undefined;
+    if (!loc?.start || !loc.end) {
+      const pieces = core.mappedExpr(item).mappings;
+      if (pieces.length <= 1) return undefined;
+      const offset = Math.min(...pieces.map((piece) => piece.sourceStart));
+      const end = Math.max(...pieces.map((piece) => piece.sourceEnd));
+      return { offset, length: end - offset };
+    }
     const offset = offsetAt(sourceLines, source.length, loc.start);
     const end = offsetAt(sourceLines, source.length, loc.end);
-    return source.slice(offset, end) === item.code
-      ? { offset, length: item.code.length }
+    return source.slice(offset, end) === item.code ||
+      core.mappedExpr(item).mappings.length > 1
+      ? { offset, length: end - offset }
       : undefined;
   }
 

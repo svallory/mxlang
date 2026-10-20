@@ -1437,10 +1437,10 @@ export function mergeMappings(mappings: CodeMapping[]): CodeMapping[] {
 
   for (const curr of mappings) {
     const prev = merged[merged.length - 1];
-    // Every mapping this function is given has exactly one span, but the
-    // `CodeMapping` type allows many, so read the first defensively rather
-    // than asserting: a malformed entry should be passed through untouched,
-    // not merged on a guessed offset.
+    // Whole-cast diagnostic mappings have two zero-width endpoints. They
+    // are indivisible: merging one into an adjacent token would drop its
+    // second endpoint. Only single-span mappings with identical capabilities
+    // can be coalesced.
     const prevGen = prev?.generatedOffsets[0];
     const prevSrc = prev?.sourceOffsets[0];
     const prevLen = prev?.lengths[0];
@@ -1456,6 +1456,9 @@ export function mergeMappings(mappings: CodeMapping[]): CodeMapping[] {
       currGen === undefined ||
       currSrc === undefined ||
       currLen === undefined ||
+      prev.lengths.length !== 1 ||
+      curr.lengths.length !== 1 ||
+      prev.data !== curr.data ||
       prev.generatedLengths !== undefined ||
       curr.generatedLengths !== undefined ||
       currGen !== prevGen + prevLen ||

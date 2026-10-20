@@ -551,6 +551,33 @@ there before any host runs. Host handling of `$!{}` in content position varies
 (§13): the Solid host lowers a lone `$!{html}` child to `innerHTML` and errors on
 a mixed body or a body with tag params (`<Row|item|>$!{item}</Row>`, `<for|item|>`: Marko renders it in the callback, Solid has no wrapper-free raw form; wrap in `<div>$!{item}</div>`); the Angular host emits `[innerHTML]` with a warning.
 
+Embedded TypeScript accepts angle assertions (`<T>x`), including nested
+assertions and `<const>` assertions. A type-check projection represents each
+as the parenthesized equivalent `(x as T)` so it remains valid TSX and the
+assertion is checked. This applies in expressions, arguments, binding defaults,
+tag and method parameters, method bodies, statements and dynamic tag names.
+Other `as`, `satisfies` and non-null wrappers remain checked. The inert html `<id=...>`
+value is not emitted or checked. Diagnostics retain the authored operand and
+type positions. In a host's type-check projection, `Expr.node` represents a
+`TSTypeAssertion` as `ParenthesizedExpression(TSAsExpression)`. The IR entry's
+`lowerSource({ stripTypes: false })` is not a type-check projection: it retains
+its container-level angle erasure, including its authored source slices for
+nested casts, and does not enable projection-only validation or routing.
+Refusal checks for callable values, object styles and string loop keys see
+through wrappers only when the compile explicitly requests the type-check projection. Keeping
+TypeScript wrappers in a runtime AST does not enable projection behavior: this
+also holds for region, Solid unit and Astro template compilation. The public
+callable predicate and runtime module scans retain their syntactic
+classification: a wrapped module initializer remains dynamically routed, while
+a stripped `<const>` initializer exposes its callable operand.
+Emission retains checked wrappers: an asserted string is a dynamic attribute,
+and renderability guards follow the checked expression, not its literal operand.
+A wrapped string `by=` key checks the assertion without changing the selected
+row field's type. If dialect or binding rewrites overlap a projected assertion,
+the container erases angle wrappers instead of retaining invalid TSX.
+Runtime compiles retain their existing type stripping, validation and callable
+routing.
+
 Core raises no dedicated interpolation diagnostic — a `MarkoPlaceholder` lowers
 unconditionally with `escaped` taken from the node, so `$!{}` is simply
 `escaped: false`.

@@ -459,6 +459,38 @@ function mappedValue(expr: Expr, source: string | undefined): MappedCode {
   return method ?? mappedExpr(expr);
 }
 
+/** Checked wrappers do not change the value's kind for host validation. */
+function unwrappedValue(node: Expr["node"], projection: boolean): Expr["node"] {
+  if (!projection) return node;
+  while (
+    node &&
+    [
+      "ParenthesizedExpression",
+      "TSAsExpression",
+      "TSTypeAssertion",
+      "TSSatisfiesExpression",
+      "TSNonNullExpression",
+    ].includes(node.type)
+  )
+    node = node.expression;
+  return node;
+}
+
+/** Only the projection inserts parenthesized-as nodes in core's tree. */
+function hasProjectedAngle(node: Expr["node"]): boolean {
+  if (!node || typeof node !== "object") return false;
+  if (
+    node.type === "ParenthesizedExpression" &&
+    node.expression?.type === "TSAsExpression"
+  )
+    return true;
+  if (Array.isArray(node)) return node.some(hasProjectedAngle);
+  return Object.entries(node).some(
+    ([key, child]) =>
+      !["loc", "extra", "outer"].includes(key) && hasProjectedAngle(child),
+  );
+}
+
 /** The text of a template literal with no dynamic parts, or null. */
 function staticTemplateValue(expr: Expr): string | null {
   const node = expr.node;
@@ -742,6 +774,16 @@ export class PreactEmitter implements Emitter<string> {
     this.#bare = bare;
   }
 
+  /** The compile mode, never the wrapper shape, enables projection behavior. */
+  #hasProjectedAngle(node: Expr["node"]): boolean {
+    return this.#typeCheck !== undefined && hasProjectedAngle(node);
+  }
+
+  /** Only projected angles need repeated moved-token mappings. */
+  #mappedRangeOccurrence(value: Expr): string | MappedCode {
+    return this.#hasProjectedAngle(value.node) ? mappedExpr(value) : value.code;
+  }
+
   /** Statements a `/var` call site needs above the component's `return`. */
   get varStatements(): string[] {
     return this.#varStatements;
@@ -943,7 +985,12 @@ export class PreactEmitter implements Emitter<string> {
             return `__mxClass(${attr.value.code})`;
           }
         }
-        if (attr.name === "style" && attr.value.shape !== "object") {
+        // Refusal sees through wrappers; the emitted value retains them.
+        if (
+          attr.name === "style" &&
+          unwrappedValue(attr.value.node, this.#typeCheck !== undefined)
+            ?.type !== "ObjectExpression"
+        ) {
           return fail(
             "`style=` takes an object literal (`style={color: c}`); a non-object value is not supported",
             attr,
@@ -965,7 +1012,10 @@ export class PreactEmitter implements Emitter<string> {
     // SAFETY: the spread's parsed node comes from the vendored Babel parse of
     // the attribute expression, so when it parsed it is an AST node; the
     // cast only narrows the fields this guard reads, all checked before use.
-    const node = attr.value.node as unknown as {
+    const node = unwrappedValue(
+      attr.value.node,
+      this.#typeCheck !== undefined,
+    ) as unknown as {
       type?: string;
       properties?: {
         type: string;
@@ -980,11 +1030,12 @@ export class PreactEmitter implements Emitter<string> {
       const key =
         prop.key?.type === "Identifier" ? prop.key.name : prop.key?.value;
       if (key !== "style") continue;
-      const type = prop.value?.type;
+      const value = unwrappedValue(prop.value, this.#typeCheck !== undefined);
+      const type = value?.type;
       if (
         type === "StringLiteral" ||
         type === "TemplateLiteral" ||
-        (type === "BooleanLiteral" && prop.value?.value === true)
+        (type === "BooleanLiteral" && value?.value === true)
       )
         fail(
           "`style` in a spread must be an object on React (`...{style: {color: c}}`); React cannot render a string style",
@@ -1171,7 +1222,12 @@ export class PreactEmitter implements Emitter<string> {
             );
           }
         }
-        if (attr.name === "style" && attr.value.shape !== "object") {
+        // Refusal sees through wrappers; the emitted value retains them.
+        if (
+          attr.name === "style" &&
+          unwrappedValue(attr.value.node, this.#typeCheck !== undefined)
+            ?.type !== "ObjectExpression"
+        ) {
           // Preact's `style` prop takes an object or a string; anything else
           // (an identifier, a call) could be either at run time and Marko's own
           // rule is object-only, so the mismatch is refused rather than guessed.
@@ -1520,12 +1576,16 @@ export class PreactEmitter implements Emitter<string> {
         parts.push(
           mapped(JSON.stringify(attr.name), attr.nameSpan),
           ": ",
-          mapped(
-            this.#attrValue(attr),
-            "value" in attr && typeof attr.value === "object"
-              ? (attr.value.span ?? attr.nameSpan)
-              : attr.nameSpan,
-          ),
+          attr.kind === "dynamic" &&
+            this.#hasProjectedAngle(attr.value.node) &&
+            this.#attrValue(attr) === attr.value.code
+            ? mappedExpr(attr.value)
+            : mapped(
+                this.#attrValue(attr),
+                "value" in attr && typeof attr.value === "object"
+                  ? (attr.value.span ?? attr.nameSpan)
+                  : attr.nameSpan,
+              ),
         );
       }
     }
@@ -1543,6 +1603,44 @@ export class PreactEmitter implements Emitter<string> {
       valueType,
       tag.nameSpan,
     );
+  }
+
+  /** Keep projected expressions when a called prop was historically plain text. */
+  #attributeRangeMappings(
+    value: MappedCode,
+    nodes: AttributeTagNode[],
+  ): MappedCode {
+    const spans: SourceSpan[] = [];
+    const seen = new Set<object>();
+    const visit = (value: unknown): void => {
+      if (!value || typeof value !== "object" || seen.has(value)) return;
+      seen.add(value);
+      const expr = value as Partial<Expr>;
+      if (
+        typeof expr.code === "string" &&
+        typeof expr.shape === "string" &&
+        expr.span &&
+        expr.node &&
+        this.#hasProjectedAngle(expr.node)
+      ) {
+        spans.push(expr.span);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key !== "node") visit(child);
+      }
+    };
+    visit(nodes);
+    return {
+      code: value.code,
+      mappings: value.mappings.filter((mapping) =>
+        spans.some(
+          (span) =>
+            mapping.sourceStart >= span.sourceStart &&
+            mapping.sourceEnd <= span.sourceEnd,
+        ),
+      ),
+    };
   }
 
   /** First concrete occurrence, used only to map the emitted prop name. */
@@ -1686,9 +1784,12 @@ export class PreactEmitter implements Emitter<string> {
       arrayType,
       `${key} + ":" + ${itemIndex} + ":"`,
     );
-    const result = (iterable: string, params: string): MappedCode => {
+    const result = (
+      iterable: string | MappedCode,
+      params: string,
+    ): MappedCode => {
       if (!arrayType) {
-        return concatMapped(`${iterable}.flatMap((${params}) => `, body, ")");
+        return concatMapped(iterable, `.flatMap((${params}) => `, body, ")");
       }
       const accumulator = hygienicName(
         "mxAttrTags",
@@ -1698,7 +1799,8 @@ export class PreactEmitter implements Emitter<string> {
       // The explicit accumulator type contextually types object literals in
       // the body, including `(n) =>` content callbacks nested under a loop.
       return concatMapped(
-        `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
+        iterable,
+        `.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
         body,
         `) satisfies ${arrayType}) as any), [])`,
       );
@@ -1726,17 +1828,41 @@ export class PreactEmitter implements Emitter<string> {
     }
 
     const from = source.from?.code ?? "0";
-    const bound = source.bound.code;
     const step = source.step;
     const counter = rangeCounter(loop.params, body.code);
+    // Attribute-tag plans are not ordinary For nodes in the mapping walk.
+    // Map projected angles at both evaluations, including the row count.
     const span = step
-      ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
-      : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
-    const value = step
-      ? `(${from}) + ${counter} * (${step.code})`
-      : `(${from}) + ${counter}`;
+      ? concatMapped(
+          `${source.inclusive ? "Math.floor" : "Math.ceil"}(((`,
+          this.#mappedRangeOccurrence(source.bound),
+          ") - (",
+          source.from ? this.#mappedRangeOccurrence(source.from) : from,
+          ")) / (",
+          this.#mappedRangeOccurrence(step),
+          `))${source.inclusive ? " + 1" : ""}`,
+        )
+      : concatMapped(
+          "(",
+          this.#mappedRangeOccurrence(source.bound),
+          ") - (",
+          source.from ? this.#mappedRangeOccurrence(source.from) : from,
+          `)${source.inclusive ? " + 1" : ""}`,
+        );
+    const value = concatMapped(
+      "(",
+      source.from ? this.#mappedRangeOccurrence(source.from) : "0",
+      `) + ${counter}`,
+      ...(step ? [" * (", this.#mappedRangeOccurrence(step), ")"] : []),
+    );
     return result(
-      `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value})`,
+      concatMapped(
+        "Array.from({ length: Math.max(0, ",
+        span,
+        `) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => `,
+        value,
+        ")",
+      ),
       `${first}, ${itemIndex}`,
     );
   }
@@ -1832,8 +1958,8 @@ export class PreactEmitter implements Emitter<string> {
    * `#attrValue`, so a structured `class`, a rejected `:=`, and the `style`
    * object rule cannot drift between a called unit and a described one.
    */
-  #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
-    const parts: string[] = [];
+  #propsObject(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+    const parts: Array<string | MappedCode> = [];
     // A dynamic target routed from a value import (`valueImportBinding` set) still
     // names a real, in-scope import — the emitted call is
     // `mxDynamic(Row, ...)`, with `Row` imported verbatim — so `owner` can
@@ -1851,8 +1977,14 @@ export class PreactEmitter implements Emitter<string> {
     parts.push(...this.#propParts(node.attrs));
 
     for (const prop of node.attrTagProps) {
+      const value = this.#attributeTagProp(prop, owner);
       parts.push(
-        `${JSON.stringify(prop.name)}: ${this.#attributeTagProp(prop, owner).code}`,
+        concatMapped(
+          `${JSON.stringify(prop.name)}: `,
+          // Keep projected occurrence mappings through called <define>s as
+          // well as JSX props. Plain props retain their historical mappings.
+          this.#attributeRangeMappings(value, prop.source),
+        ),
       );
     }
 
@@ -1863,7 +1995,11 @@ export class PreactEmitter implements Emitter<string> {
       parts.push(`content: ${this.#contentFn(node).code}`);
     }
 
-    return `{ ${parts.join(", ")} }`;
+    return concatMapped(
+      "{ ",
+      ...parts.flatMap((part, index) => [index ? ", " : "", part]),
+      " }",
+    );
   }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
@@ -1886,6 +2022,8 @@ export class PreactEmitter implements Emitter<string> {
       : this.#dialect.textDataGuard
         ? "__mxRenderable"
         : undefined;
+    // Emission must consider the checked type, not the unwrapped literal:
+    // e.g. `(`t` as unknown)` still needs the renderability guard.
     const primitive =
       helper === undefined ||
       node.expr.shape === "string" ||
@@ -2121,11 +2259,8 @@ export class PreactEmitter implements Emitter<string> {
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
-        // `varStatements` is plain strings, while `payload` and `content` are
-        // `MappedCode` whenever tag arguments are present (the no-args shape
-        // is a plain props-object string from `#propsObject`). Interpolating
-        // the mapped form emitted "[object Object]" — a syntax error in the
-        // generated module — so their code text is taken explicitly.
+        // `varStatements` is plain strings, while `payload` and `content`
+        // may carry mappings. Take their code explicitly, not [object Object].
         const payloadCode =
           typeof payload === "string" ? payload : payload.code;
         const contentCode =
@@ -2174,7 +2309,9 @@ export class PreactEmitter implements Emitter<string> {
       // attribute tags and `content` travel as ONE object bound to the first
       // param, `{}` when the call carries none (measured on 6.4.4; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
-      const argList = node.args.map((arg: Expr) => arg.code);
+      const argList: Array<string | MappedCode> = node.args.map(
+        (arg: Expr) => arg.code,
+      );
       // A rest param is never padded: Marko leaves it `[]` when nothing
       // fills it, and an `undefined` here would make it `[undefined]`.
       const fixedParamCount = node.target.params.filter(
@@ -2199,12 +2336,12 @@ export class PreactEmitter implements Emitter<string> {
       }
       const args =
         node.args.length > 0
-          ? argList.join(", ")
+          ? concatMapped(...argList.flatMap((arg, i) => [i ? ", " : "", arg]))
           : node.target.params.length > 0
             ? this.#propsObject(node)
             : "";
       this.#out.push(
-        this.#slot(mapped(node.target.name, node.nameSpan), `(${args})`),
+        this.#slot(mapped(node.target.name, node.nameSpan), "(", args, ")"),
       );
       return;
     }
@@ -2260,14 +2397,16 @@ export class PreactEmitter implements Emitter<string> {
         // The unit's render path: `.render` is the compiled unit's own
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
-        this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);
+        this.#varStatements.push(
+          `const ${temp} = ${name}.render(${props.code});`,
+        );
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
       // No `/var`: only the output is wanted, and the default export already
       // returns it, so the call stays an expression.
-      this.#out.push(this.#slot(`${name}(${props})`));
+      this.#out.push(this.#slot(`${name}(`, props, ")"));
       return;
     }
     const rawHtml = raw
@@ -2463,13 +2602,27 @@ export class PreactEmitter implements Emitter<string> {
     const source = node.source;
 
     /** `by=` as a key expression over the row's own binding names. */
-    const keyFrom = (fallback: string): string => {
+    const keyFrom = (fallback: string): string | MappedCode => {
       if (!node.key) return fallback;
+      // A wrapped string still selects its literal field, not an index of
+      // the asserted type (which may be any/string). Check the complete cast
+      // separately and keep the same typed field access as the runtime.
+      const value = unwrappedValue(
+        node.key.node,
+        this.#typeCheck !== undefined,
+      );
+      if (value?.type === "StringLiteral" && value !== node.key.node) {
+        return concatMapped(
+          "(void (",
+          mappedExpr(node.key),
+          `), ${first}.${value.value})`,
+        );
+      }
       if (node.key.shape === "string") {
         // `by="id"` names a field of the row, exactly as Marko reads it.
         const field =
-          node.key.node?.type === "StringLiteral"
-            ? node.key.node.value
+          value?.type === "StringLiteral"
+            ? value.value
             : node.key.code.replace(/^['"]|['"]$/g, "");
         return `${first}.${field}`;
       }
@@ -2486,7 +2639,9 @@ export class PreactEmitter implements Emitter<string> {
       const listVar = hygienicName("mxList", node.params, source.list.code);
       this.#out.push(
         this.#slot(
-          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
+          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={`,
+          key,
+          "}>",
           closeFragmentBody(body),
           "</__mxFragment>)",
         ),
@@ -2506,7 +2661,9 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       this.#out.push(
         this.#slot(
-          `Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
+          `Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={`,
+          key,
+          "}>",
           closeFragmentBody(body),
           "</__mxFragment>)",
         ),
@@ -2525,9 +2682,14 @@ export class PreactEmitter implements Emitter<string> {
     const span = step
       ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
       : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
-    const value = step
-      ? `(${from}) + ${counter} * (${step.code})`
-      : `(${from}) + ${counter}`;
+    // Only a projected angle needs callback mappings as well as row-count
+    // mappings; plain range expressions retain their historical mapping set.
+    const value = concatMapped(
+      "(",
+      source.from ? this.#mappedRangeOccurrence(source.from) : "0",
+      `) + ${counter}`,
+      ...(step ? [" * (", this.#mappedRangeOccurrence(step), ")"] : []),
+    );
     // One `.map` over the index array, binding the loop value inside the
     // callback rather than in a first pass. Building the values first and
     // mapping them second (the shape this replaced) put the counter out of
@@ -2537,7 +2699,11 @@ export class PreactEmitter implements Emitter<string> {
     const key = keyFrom(first);
     this.#out.push(
       this.#slot(
-        `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
+        `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => `,
+        value,
+        `).map((${first}) => <__mxFragment key={`,
+        key,
+        "}>",
         closeFragmentBody(body),
         "</__mxFragment>)",
       ),

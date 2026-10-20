@@ -62,6 +62,7 @@ import {
   firstErrorAt,
   parseMx,
   registerDocument,
+  rewriteAngleAssertions,
   stripTagTypes,
 } from "./mx-parse.ts";
 import { bareCommaMessage, tagParamError } from "./stock-parser.ts";
@@ -235,6 +236,13 @@ export interface FragmentBase {
    */
   stripTagTypes?: boolean;
   /**
+   * Rewrite angle assertions to parenthesized `as` expressions for a
+   * TypeScript-preserving projection. Operands and types retain their authored
+   * positions. Also erases tag-only type containers, as compileSource does
+   * with `stripTypes: false`. Omitted, payloads remain as parsed.
+   */
+  rewriteAngleAssertions?: boolean;
+  /**
    * The host's native elements (`HostDeclarations.nativeTags`), whose parse
    * rules (void, raw text, preserved whitespace) shape the fragment. Omitted,
    * no element has any: `<br>` waits for its close tag and `<textarea>` parses
@@ -267,6 +275,7 @@ type ResolvedFragmentBase = Required<
     | "productName"
     | "targets"
     | "stripTagTypes"
+    | "rewriteAngleAssertions"
   >
 > & { productName?: string };
 
@@ -582,7 +591,8 @@ export function parseFragment(
     }
     throw error;
   }
-  if (base.stripTagTypes) stripTagTypes(document);
+  if (base.rewriteAngleAssertions) rewriteAngleAssertions(document);
+  else if (base.stripTagTypes) stripTagTypes(document);
   registerDocument(document);
   registerSyntax(document, resolvedSyntax);
   return { ast: document, body: document.body };
