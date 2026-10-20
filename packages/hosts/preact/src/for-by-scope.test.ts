@@ -7,6 +7,8 @@ import { compilePreactMx } from "./index.ts";
  * are not in scope there ("The `by=` attribute is evaluated before the loop
  * runs, so `x` is not in scope", `runtime-tags/.../core/for.ts`). The error is
  * reported at the offending name, for every form of `<for>`.
+ * Hono compiles through the same emitter; this is also its loop-param scope
+ * matrix home. Hono keeps a positioned-refusal smoke and valid forms locally.
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour
 const ANSI = /\x1b\[[0-9;]*m/g;

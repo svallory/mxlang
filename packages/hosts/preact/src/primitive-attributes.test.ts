@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
-/** Native elements normalize primitive attribute values; component props stay raw. */
+/**
+ * Native elements normalize primitive attribute values; component props stay raw.
+ * Hono compiles through the same emitter; this is also its primitive-attribute
+ * matrix home. Hono keeps native dynamic-attribute helper routing locally.
+ */
 describe("preact primitive attribute normalization", () => {
   const compile = (source: string) =>
     compilePreactMx(source, "/virtual/page.mx").code;

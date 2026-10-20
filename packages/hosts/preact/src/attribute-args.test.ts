@@ -1,3 +1,5 @@
+// Hono compiles through the same emitter; this is also its attribute-argument matrix home.
+// Hono keeps both-door refusal smokes and valid method shorthand locally.
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, compilePreactRegion } from "./index.ts";
 

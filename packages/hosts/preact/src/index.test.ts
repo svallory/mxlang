@@ -9,6 +9,9 @@
  * these pin is the shape an author reads back out of the generated file —
  * which `key` lands on a row, which prop raw HTML goes through, which import
  * a `<try>` pulls in.
+ * Hono compiles through the same emitter; this is also its lifted-binding
+ * duplicate, type-only import and unresolved-tag matrix home. Hono keeps
+ * positioned duplicate-declaration and unresolved-tag hint smokes locally.
  */
 
 import type { CustomTag } from "@mxlang/core";

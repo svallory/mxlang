@@ -12,6 +12,9 @@ import { compilePreactMx } from "./index.ts";
 // an error.
 // Only a host's own taglib registers a tag: a `marko.json` is not read,
 // so the `marko.json` tag below is no longer row 4.
+// Hono compiles through the same emitter; this is also its lowercase-binding
+// matrix home. Hono keeps native/define warning and output, and lowercase-import
+// rejection smokes.
 const LOCAL_VARIABLE = (name: string) =>
   `Local variables must be in a [dynamic tag](https://markojs.com/docs/reference/language#dynamic-tags) unless they are PascalCase. Use \`<\${${name}}/>\` or rename to \`${name[0]?.toUpperCase()}${name.slice(1)}\`.`;
 

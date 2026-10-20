@@ -10,7 +10,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
 import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
-/** The fix: always the name without the colon, and the `mx.tags` prefix when some prefix can produce the name. */
+/**
+ * The fix: always the name without the colon, and the `mx.tags` prefix when some prefix can produce the name.
+ * Hono compiles through the same emitter; this is also its colon-tag matrix
+ * home. Hono keeps positioned rejection and declared-tag transform smokes
+ * through both doors.
+ */
 const FIX = (prefix: string | null) =>
   prefix === null
     ? " A colon belongs to the tag name: write the name without the colon."

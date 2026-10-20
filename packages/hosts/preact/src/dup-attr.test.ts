@@ -7,6 +7,8 @@ import { compilePreactMx } from "./index.ts";
  * output and gets a positioned warning naming the survivor. Never an error.
  * The structured position is core's 0-based column; the message text is
  * 1-based.
+ * Hono compiles through the same emitter; this is also its duplicate-attribute
+ * matrix home. Hono keeps a positioned-warning and last-wins output smoke locally.
  */
 interface Warning {
   message: string;

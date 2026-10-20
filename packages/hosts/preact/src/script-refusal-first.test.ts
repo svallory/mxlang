@@ -3,6 +3,8 @@
  * diagnostic for the tag: a body that does not parse, a head the tag has no
  * use for and a `${…}` placeholder are not reported ahead of it. Message,
  * code and position are pinned, whole file and region alike.
+ * Hono compiles through the same emitter; this is also its first-diagnostic
+ * matrix home. Hono keeps both-door refusal spot-checks with its dialect name locally.
  */
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
 import { createTargetLookup } from "@mxlang/core";

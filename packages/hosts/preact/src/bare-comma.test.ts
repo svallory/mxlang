@@ -4,6 +4,8 @@ import { compilePreactMx } from "./index.ts";
 /**
  * A top-level concise line holding only `,` has no tag to continue; core's
  * positioned error replaces Marko's `TypeError` (`tag.name.value`).
+ * Hono compiles through the same emitter; this is also its bare-comma matrix
+ * home. Hono keeps a positioned-refusal smoke and a valid continuation locally.
  */
 const MESSAGE =
   "a `,` continues the attributes of the tag above; there is no tag here";

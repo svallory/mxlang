@@ -1,6 +1,8 @@
 // The statement tags are declared to the parser on every
 // target, so a statement whose text the attribute grammar cannot read (a typed
 // return, `<T,>`) compiles as the statement it is.
+// Hono compiles through the same emitter; this is also its statement-tag matrix
+// home. Hono keeps typed-function acceptance and positioned client-refusal smokes locally.
 import { describe, expect, it } from "vitest";
 import { compilePreactMx, compilePreactRegion } from "./index.ts";
 
