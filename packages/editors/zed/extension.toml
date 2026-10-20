@@ -21,7 +21,7 @@ repository = "https://github.com/svallory/mxlang"
 # scripts/check-grammar-revs.sh then fails on main.
 # AT PUBLISH TIME: swap to the split-off grammar repo's real URL and drop `path`.
 repository = "file:///Users/svallory/work/mx"
-rev = "9af503de452699c33dc0ac9588be8183c4c14fc6"
+rev = "27cb64b9fcd563bb39441a854e1bb6a61d516640"
 path = "packages/editors/tree-sitter-mx"
 
 # @mxlang/language-server registration (task
