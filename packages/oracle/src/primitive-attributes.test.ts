@@ -4,8 +4,9 @@
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 15 attributes x 4 forms x 4 base values,
  * plus branch-sensitive extra values (1,380 cells across the five hosts).
- * The probe still renders all seven values for every attribute and form:
- * the axis cut removes cheap assertions, not subprocess render work.
+ * The probe renders only the base values plus each attribute's extras for
+ * every form, cutting subprocess render work without changing the cells.
+ * Compiling the 60 templates dominates, so file time is unchanged.
  *
  * The base values are `null` (absence), `true` (presence), `0`
  * (falsy-but-printed) and `"x"` (truthy string). `undefined` and `false`
@@ -60,6 +61,12 @@ function rows(host: string): Row[] {
         ),
         host,
         "--parity",
+        "--values",
+        JSON.stringify(
+          Object.fromEntries(
+            attributes.map((attribute) => [attribute, asked(attribute)]),
+          ),
+        ),
       ],
       { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
     ),
@@ -137,20 +144,24 @@ const extraValues: Record<string, string[]> = {
   checked: ["undefined", "false", "empty"],
 };
 
+function asked(attribute: string): string[] {
+  return [...values, ...(extraValues[attribute] ?? [])];
+}
+
 const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
 const hosts: Record<string, Row[]> = {};
 beforeAll(() => {
   marko = rows("marko");
   for (const host of HOSTS) hosts[host] = rows(host);
-  const probeValues = new Set([
-    ...values,
-    ...Object.values(extraValues).flat(),
-  ]);
   expect(marko).toHaveLength(
-    attributes.length * forms.length * probeValues.size,
+    attributes.reduce(
+      (count, attribute) => count + new Set(asked(attribute)).size,
+      0,
+    ) * forms.length,
   );
-  for (const attribute of attributes)
+  for (const attribute of attributes) {
+    const probeValues = new Set(asked(attribute));
     for (const form of forms) {
       const emitted = marko.filter(
         (row) => row.form === `${attribute}/${form}`,
@@ -158,6 +169,7 @@ beforeAll(() => {
       expect(emitted).toHaveLength(probeValues.size);
       expect(new Set(emitted.map((row) => row.value))).toEqual(probeValues);
     }
+  }
 }, 120_000); // Real compilers and renderers in separate Bun processes.
 
 function find(list: Row[], form: string, value: string): Row {
@@ -171,39 +183,32 @@ describe.each(HOSTS)(
   (host) => {
     for (const attribute of attributes)
       for (const form of forms)
-        it.each([...values, ...(extraValues[attribute] ?? [])])(
-          `${attribute} ${form} %s`,
-          (value) => {
-            const key = `${attribute}/${form}`;
-            const actual = find(hosts[host] ?? [], key, value);
-            if (
-              host !== "astro" &&
-              attribute === "style" &&
-              form !== "spread"
-            ) {
-              // The object-literal rule: refused at compile time, unchanged.
-              expect(actual.error).toContain(
-                host === "solid"
-                  ? "`style=` with a non-object value"
-                  : "`style=` takes an object literal",
-              );
-              return;
-            }
-            if (
-              host === "react" &&
-              attribute === "style" &&
-              (value === "true" || value === "x")
-            ) {
-              expect(actual.error).toContain(
-                "The `style` prop expects a mapping from style properties to values, not a string",
-              );
-              return;
-            }
-            const presence = host === "react" || host === "astro";
-            expect(dom(actual, presence, host)).toBe(
-              dom(find(marko, key, value), presence, host),
+        it.each(asked(attribute))(`${attribute} ${form} %s`, (value) => {
+          const key = `${attribute}/${form}`;
+          const actual = find(hosts[host] ?? [], key, value);
+          if (host !== "astro" && attribute === "style" && form !== "spread") {
+            // The object-literal rule: refused at compile time, unchanged.
+            expect(actual.error).toContain(
+              host === "solid"
+                ? "`style=` with a non-object value"
+                : "`style=` takes an object literal",
             );
-          },
-        );
+            return;
+          }
+          if (
+            host === "react" &&
+            attribute === "style" &&
+            (value === "true" || value === "x")
+          ) {
+            expect(actual.error).toContain(
+              "The `style` prop expects a mapping from style properties to values, not a string",
+            );
+            return;
+          }
+          const presence = host === "react" || host === "astro";
+          expect(dom(actual, presence, host)).toBe(
+            dom(find(marko, key, value), presence, host),
+          );
+        });
   },
 );

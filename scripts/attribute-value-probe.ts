@@ -254,7 +254,7 @@ try {
       empty: "",
       x: "x",
     };
-    for (const name of [
+    const parityAttributes = [
       "title",
       "data-x",
       "aria-x",
@@ -272,14 +272,53 @@ try {
       "open",
       "allowfullscreen",
       "checked@div",
-    ]) {
+    ];
+    // Opt-in per-attribute value names; without it, retain all seven points.
+    if (process.argv[4] !== undefined && process.argv[4] !== "--values") {
+      throw new Error(
+        `Unknown parity option: ${process.argv[4]}; use --values`,
+      );
+    }
+    const valueSpec: Record<string, string[]> | undefined =
+      process.argv[4] === "--values"
+        ? JSON.parse(process.argv[5] ?? "")
+        : undefined;
+    if (valueSpec !== undefined) {
+      if (
+        valueSpec === null ||
+        typeof valueSpec !== "object" ||
+        Array.isArray(valueSpec)
+      ) {
+        throw new Error("Parity --values must be a non-null plain object");
+      }
+      for (const name of Object.keys(valueSpec)) {
+        if (!parityAttributes.includes(name)) {
+          throw new Error(`Unknown parity attribute: ${name}`);
+        }
+      }
+    }
+    for (const name of parityAttributes) {
       const attribute = name.replace("@div", "");
       const tag = name === "checked" || name === "value" ? "input" : "div";
+      const requested =
+        valueSpec !== undefined ? valueSpec[name] : Object.keys(parityValues);
+      if (
+        !Array.isArray(requested) ||
+        requested.length === 0 ||
+        requested.some(
+          (value) =>
+            typeof value !== "string" || !Object.hasOwn(parityValues, value),
+        )
+      ) {
+        throw new Error(`Invalid parity values for attribute: ${name}`);
+      }
       const inputs = Object.fromEntries(
-        Object.entries(parityValues).map(([value, v]) => [
-          value,
-          { v, attrs: { [attribute]: v }, other: {} },
-        ]),
+        Object.entries(parityValues)
+          .filter(([value]) => requested.includes(value))
+          .map(([value, v]) => [
+            value,
+            { v, attrs: { [attribute]: v }, other: {} },
+          ]),
       );
       const forms: Record<string, string> = {
         direct: `<${tag} ${attribute}=input.v/>`,
@@ -291,7 +330,7 @@ try {
         try {
           await probe(`${name}/${form}`, source, inputs);
         } catch (error) {
-          for (const value of Object.keys(parityValues))
+          for (const value of Object.keys(inputs))
             results.push({
               form: `${name}/${form}`,
               value,
