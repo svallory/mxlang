@@ -8,13 +8,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, it } from "vitest";
 import { compileNgMx } from "../../../hosts/angular/src/ng-mx.ts";
 import {
   mxAngular,
   mxTsc,
   repoRoot,
   run,
+  runAsync,
   SPAWN_TIMEOUT_MS,
 } from "./test-support.ts";
 
@@ -196,9 +197,17 @@ function moduleFor(template: string, body?: string): string {
 
 describe("mx-tsc Angular fix hints", () => {
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
-  it.each(cases)(
+  // Each case owns its temp project through cleanup. Vitest's default
+  // maxConcurrency of 5 bounds active cases, each awaiting at most one child.
+  // The two non-build cases stay synchronous inside the same bounded queue;
+  // all in-process mx-tsc calls finish before another case can start one.
+  it.concurrent.for(cases)(
     "$name is one positioned error and any concrete fix is clean",
-    ({ template, body, needle, code, message, fixed, build, track }) => {
+    { timeout: SPAWN_TIMEOUT_MS },
+    async (
+      { template, body, needle, code, message, fixed, build, track },
+      { expect },
+    ) => {
       const dir = mkdtempSync(join(tmpdir(), "mx-tsc-angular-hints-"));
       try {
         mkdirSync(join(dir, "src"));
@@ -248,7 +257,7 @@ describe("mx-tsc Angular fix hints", () => {
         if (build) {
           // The same authored error on `mx-angular build`, as one error, no
           // NG cascade. Its position prints as `:line:column`.
-          const built = run(mxAngular, ["build", "--project", dir]);
+          const built = await runAsync(mxAngular, ["build", "--project", dir]);
           expect(built.status).not.toBe(0);
           const buildText = strip(built.output).trim();
           const [line, column] = position.split(",");
@@ -269,7 +278,9 @@ describe("mx-tsc Angular fix hints", () => {
           output: "",
         });
         if (build) {
-          expect(run(mxAngular, ["build", "--project", dir])).toEqual({
+          expect(
+            await runAsync(mxAngular, ["build", "--project", dir]),
+          ).toEqual({
             status: 0,
             output: "",
           });
@@ -278,6 +289,5 @@ describe("mx-tsc Angular fix hints", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    SPAWN_TIMEOUT_MS,
   );
 });

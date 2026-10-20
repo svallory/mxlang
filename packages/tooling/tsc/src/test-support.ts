@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runInProcess } from "./in-process.ts";
@@ -101,6 +101,28 @@ export function run(entry: string, args: string[]): Run {
       output: `${error.stdout ?? ""}${error.stderr ?? ""}`,
     };
   }
+}
+
+/**
+ * Spawn a CLI without blocking the worker. Like the spawned leg of `run`,
+ * inherit the environment, use `here` as cwd, and leave the child timeout
+ * unset. Successful runs return stdout only; failed runs include stderr.
+ * Keep `mx-tsc` calls on synchronous `run`: its in-process capture is global.
+ */
+export function runAsync(entry: string, args: string[]): Promise<Run> {
+  return new Promise((resolve) => {
+    execFile(
+      process.execPath,
+      [entry, ...args],
+      { cwd: here, encoding: "utf8" },
+      (error, stdout, stderr) => {
+        resolve({
+          status: error ? (typeof error.code === "number" ? error.code : 1) : 0,
+          output: error ? `${stdout}${stderr}` : stdout,
+        });
+      },
+    );
+  });
 }
 
 export interface RunSplit {
