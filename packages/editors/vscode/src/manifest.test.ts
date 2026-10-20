@@ -34,101 +34,45 @@ describe("Manifest", () => {
     expect(solidMxIndex).toBeLessThan(mxIndex);
   });
 
-  it("orders reactmx before mx in language contributions", () => {
-    // Same reasoning as solidmx: .react.mx must not be mistakenly matched as .mx
-    const mxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "mx",
-    );
-    const reactMxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "reactmx",
-    );
-    expect(reactMxIndex).toBeGreaterThanOrEqual(0);
-    expect(reactMxIndex).toBeLessThan(mxIndex);
-  });
+  // These three rows also pin presence; solidmx and ngmx keep their
+  // order-only assertions separately. Only these three have TSX-stub pins.
+  it.each(["reactmx", "preactmx", "honomx"])(
+    "orders %s before mx in language contributions",
+    (language) => {
+      // A host suffix must not be mistakenly matched as plain .mx.
+      const mxIndex = pkg.contributes.languages.findIndex(
+        (l: { id: string }) => l.id === "mx",
+      );
+      const hostIndex = pkg.contributes.languages.findIndex(
+        (l: { id: string }) => l.id === language,
+      );
+      expect(hostIndex).toBeGreaterThanOrEqual(0);
+      expect(hostIndex).toBeLessThan(mxIndex);
+    },
+  );
 
-  it("gives reactmx a TSX grammar, activation and the language server", () => {
-    const grammar = pkg.contributes.grammars.find(
-      (g: { language: string }) => g.language === "reactmx",
-    );
-    const stub = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
-    );
-    expect(stub.scopeName).toBe("source.reactmx");
-    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
-    expect(pkg.activationEvents).toContain("onLanguage:reactmx");
-    const source = fs.readFileSync(
-      path.join(__dirname, "extension.ts"),
-      "utf-8",
-    );
-    const selector = source.slice(source.indexOf("documentSelector"));
-    expect(selector.slice(0, selector.indexOf("]"))).toContain(
-      'language: "reactmx"',
-    );
-  });
-
-  it("orders preactmx before mx in language contributions", () => {
-    // Same reasoning as solidmx: .preact.mx must not be mistakenly matched as .mx
-    const mxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "mx",
-    );
-    const preactMxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "preactmx",
-    );
-    expect(preactMxIndex).toBeGreaterThanOrEqual(0);
-    expect(preactMxIndex).toBeLessThan(mxIndex);
-  });
-
-  it("gives preactmx a TSX grammar, activation and the language server", () => {
-    const grammar = pkg.contributes.grammars.find(
-      (g: { language: string }) => g.language === "preactmx",
-    );
-    const stub = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
-    );
-    expect(stub.scopeName).toBe("source.preactmx");
-    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
-    expect(pkg.activationEvents).toContain("onLanguage:preactmx");
-    const source = fs.readFileSync(
-      path.join(__dirname, "extension.ts"),
-      "utf-8",
-    );
-    const selector = source.slice(source.indexOf("documentSelector"));
-    expect(selector.slice(0, selector.indexOf("]"))).toContain(
-      'language: "preactmx"',
-    );
-  });
-
-  it("orders honomx before mx in language contributions", () => {
-    // Same reasoning as solidmx: .hono.mx must not be mistakenly matched as .mx
-    const mxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "mx",
-    );
-    const honoMxIndex = pkg.contributes.languages.findIndex(
-      (l: { id: string }) => l.id === "honomx",
-    );
-    expect(honoMxIndex).toBeGreaterThanOrEqual(0);
-    expect(honoMxIndex).toBeLessThan(mxIndex);
-  });
-
-  it("gives honomx a TSX grammar, activation and the language server", () => {
-    const grammar = pkg.contributes.grammars.find(
-      (g: { language: string }) => g.language === "honomx",
-    );
-    const stub = JSON.parse(
-      fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
-    );
-    expect(stub.scopeName).toBe("source.honomx");
-    expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
-    expect(pkg.activationEvents).toContain("onLanguage:honomx");
-    const source = fs.readFileSync(
-      path.join(__dirname, "extension.ts"),
-      "utf-8",
-    );
-    const selector = source.slice(source.indexOf("documentSelector"));
-    expect(selector.slice(0, selector.indexOf("]"))).toContain(
-      'language: "honomx"',
-    );
-  });
+  it.each(["reactmx", "preactmx", "honomx"])(
+    "gives %s a TSX grammar, activation and the language server",
+    (language) => {
+      const grammar = pkg.contributes.grammars.find(
+        (g: { language: string }) => g.language === language,
+      );
+      const stub = JSON.parse(
+        fs.readFileSync(path.join(__dirname, "..", grammar.path), "utf-8"),
+      );
+      expect(stub.scopeName).toBe(`source.${language}`);
+      expect(stub.patterns).toEqual([{ include: "source.tsx" }]);
+      expect(pkg.activationEvents).toContain(`onLanguage:${language}`);
+      const source = fs.readFileSync(
+        path.join(__dirname, "extension.ts"),
+        "utf-8",
+      );
+      const selector = source.slice(source.indexOf("documentSelector"));
+      expect(selector.slice(0, selector.indexOf("]"))).toContain(
+        `language: "${language}"`,
+      );
+    },
+  );
 
   it("orders ngmx before mx in language contributions", () => {
     // Same reasoning as solidmx: .ng.mx must not be mistakenly matched as .mx
