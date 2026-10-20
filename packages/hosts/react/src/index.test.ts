@@ -39,13 +39,6 @@ describe("whole-file duplicate lifted bindings", () => {
   const row = "<define/Row><b/></define>";
 
   it.each([
-    [
-      "sibling calls",
-      "<section><counter/x/></section>\n<p><counter/x/></p>",
-      "x",
-      2,
-      12,
-    ],
     ["top-level calls", "<counter/x/>\n<counter/x/>", "x", 2, 9],
     ["define then call", `${row}\n<counter/Row/>`, "Row", 2, 9],
     ["call then define", `<counter/Row/>\n${row}`, "Row", 2, 8],
@@ -109,28 +102,6 @@ describe("whole-file duplicate lifted bindings", () => {
       2,
       8,
     ],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX dynamic tag expression.
-    [
-      "dynamic-tag body scope (mx-m682)",
-      "<${input.tag}><counter/x/></>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "placeholder body scope (mx-m682)",
-      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "catch body scope (mx-m682)",
-      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
     ["destructured binding", `${row}\n<counter/{ Row, other }/>`, "Row", 2, 11],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX dynamic tag expressions.
     ["dynamic calls", "<${input.tag}/x/>\n<${input.tag}/x/>", "x", 2, 14],
@@ -143,7 +114,10 @@ describe("whole-file duplicate lifted bindings", () => {
         }),
       ).toThrowError(
         expect.objectContaining({
-          message: expect.stringContaining(`Duplicate declaration "${name}"`),
+          diagnosticCode: "MX_DUPLICATE_DECLARATION",
+          message: expect.stringContaining(
+            `Duplicate declaration of \`${name}\`:`,
+          ),
           line,
           column,
         }),
@@ -151,16 +125,61 @@ describe("whole-file duplicate lifted bindings", () => {
     },
   );
 
-  it("reports an earlier markup error before duplicate defines", () => {
+  it.each([
+    [
+      "sibling calls",
+      "<section><counter/x/></section>\n<p><counter/x/></p>",
+      2,
+      12,
+    ],
+    [
+      "dynamic-tag body scope (mx-m682)",
+      "<${input.tag}><counter/x/></>\n<counter/x/>",
+      2,
+      9,
+    ],
+    [
+      "placeholder body scope (mx-m682)",
+      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
+      2,
+      9,
+    ],
+    [
+      "catch body scope (mx-m682)",
+      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
+      2,
+      9,
+    ],
+  ])("the emitter refuses lifted %s", (_label, source, line, column) => {
+    expect(() =>
+      compileReactMx(source, "/fixtures/page.mx", { customTags: { counter } }),
+    ).toThrowError(
+      expect.objectContaining({
+        message: 'Duplicate declaration "x"',
+        line,
+        column,
+      }),
+    );
+  });
+
+  it("reports a core duplicate before emitter-only markup errors", () => {
     expect(() =>
       compile(`<div><const/z=1/></div>\n${row}\n${row}`),
     ).toThrowError(
       expect.objectContaining({
-        message: expect.stringContaining(
-          "`<const>` must appear at the top level",
-        ),
+        diagnosticCode: "MX_DUPLICATE_DECLARATION",
+        line: 3,
+        column: 8,
+      }),
+    );
+  });
+
+  it("reports an earlier core markup error before duplicate defines", () => {
+    expect(() => compile(`<if/>\n${row}\n${row}`)).toThrowError(
+      expect.objectContaining({
+        message: "`<if>` without a condition",
         line: 1,
-        column: 5,
+        column: 0,
       }),
     );
   });

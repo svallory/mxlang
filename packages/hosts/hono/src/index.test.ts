@@ -50,7 +50,8 @@ describe("whole-file duplicate lifted bindings (hono wiring smoke)", () => {
       }),
     ).toThrowError(
       expect.objectContaining({
-        message: expect.stringContaining('Duplicate declaration "x"'),
+        diagnosticCode: "MX_DUPLICATE_DECLARATION",
+        message: expect.stringContaining("Duplicate declaration of `x`:"),
         line: 2,
         column: 9,
       }),

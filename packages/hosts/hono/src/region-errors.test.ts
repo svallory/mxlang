@@ -238,7 +238,8 @@ describe("region rule", () => {
     it("refuses a /var after a <define> of the same name, at the var", () => {
       const body = `${row}<Counter/Row start=1/>`;
       expect(errorOf(withCounter(body), file)).toEqual({
-        message: dup("Row"),
+        message:
+          "Duplicate declaration of `Row`: it is already declared in this body at 5:15. A body declares each tag variable once; rename one of them.",
         line: 5,
         column: 44,
       });
@@ -247,7 +248,8 @@ describe("region rule", () => {
     it("refuses a <define> after a /var of the same name, at the define", () => {
       const body = `<Counter/Row start=1/>${row}`;
       expect(errorOf(withCounter(body), file)).toEqual({
-        message: dup("Row"),
+        message:
+          "Duplicate declaration of `Row`: it is already declared in this body at 5:16. A body declares each tag variable once; rename one of them.",
         line: 5,
         column: 36,
       });
@@ -256,7 +258,8 @@ describe("region rule", () => {
     it("refuses a destructured /var that collides with a <define>", () => {
       const body = `${row}<Counter/{ Row, other } start=1/>`;
       expect(errorOf(withCounter(body), file)).toEqual({
-        message: dup("Row"),
+        message:
+          "Duplicate declaration of `Row`: it is already declared in this body at 5:15. A body declares each tag variable once; rename one of them.",
         line: 5,
         column: 46,
       });
