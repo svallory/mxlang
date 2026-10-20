@@ -3,15 +3,23 @@
  * output does, on preact, react, hono, solid and astro. Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
  * compared as parsed DOM, over 15 attributes x 4 forms x 4 base values,
- * plus branch-sensitive extra values (1,300 cells across the five hosts).
+ * plus branch-sensitive extra values (1,360 cells across the five hosts).
+ * The probe still renders all seven values for every attribute and form:
+ * the axis cut removes cheap assertions, not subprocess render work.
  *
  * The base values are `null` (absence), `true` (presence), `0`
  * (falsy-but-printed) and `"x"` (truthy string). `undefined` and `false`
  * render byte-identically to `null` today, and `""` renders the same absence
  * for class/style or the same parsed presence as `true` (Solid prints
  * `<div title>` for `true`, `<div title="">` for `""`; parse5 reads both as
- * `title=""`). Equal output does not imply equal emitter branches: retain
- * `false`/`""` for class/style and `false` for title to pin their normalizers.
+ * `title=""`). Equal output does not imply equal emitter branches. Extras:
+ *  - class/style false/empty: JSX's falsy filters (preact/src/attribute-normalize.ts:85,89)
+ *    and Astro's structured-attribute filter (astro/src/astro-template.ts:75).
+ *  - title false: Astro's plain-attribute false omission (astro-template.ts:77).
+ *  - checked undefined: Astro's nullish exit (astro-template.ts:74) and JSX's
+ *    undefined omission before input.checked becomes present (attribute-normalize.ts:92-96).
+ *  - checked false/empty: Astro's boolean-list false omission versus empty-string
+ *    presence (astro-template.ts:76); false also reaches JSX's omission (:92).
  *
  * Documented divergences, pinned here rather than skipped (names: disabled, hidden, required, open, `checked` on input):
  *  - React prints a boolean property as presence only (`disabled=""` where
@@ -124,9 +132,8 @@ const extraValues: Record<string, string[]> = {
   title: ["false"],
   class: ["false", "empty"],
   style: ["false", "empty"],
+  checked: ["undefined", "false", "empty"],
 };
-// The probe emits this value too, but no attribute asserts it as a parity cell.
-const PROBE_ONLY = ["undefined"];
 
 const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
@@ -137,7 +144,6 @@ beforeAll(() => {
   const probeValues = new Set([
     ...values,
     ...Object.values(extraValues).flat(),
-    ...PROBE_ONLY,
   ]);
   expect(marko).toHaveLength(
     attributes.length * forms.length * probeValues.size,
@@ -174,7 +180,7 @@ describe.each(HOSTS)(
               form !== "spread"
             ) {
               // The object-literal rule: refused at compile time, unchanged.
-              expect(actual?.error).toContain(
+              expect(actual.error).toContain(
                 host === "solid"
                   ? "`style=` with a non-object value"
                   : "`style=` takes an object literal",
@@ -186,7 +192,7 @@ describe.each(HOSTS)(
               attribute === "style" &&
               (value === "true" || value === "x")
             ) {
-              expect(actual?.error).toContain(
+              expect(actual.error).toContain(
                 "The `style` prop expects a mapping from style properties to values, not a string",
               );
               return;
