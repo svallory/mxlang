@@ -11,7 +11,11 @@ import { repoRoot } from "./test-support.ts";
  * A `client` name is `undefined` on the server: the module that renders has
  * `var q;` and no export. `mx-tsc` types the server view of a page that way
  * (the template read, the importers of the page), and keeps the client scope
- * typed by its declarations.
+ * typed by its declarations. The matching one-line read, top-level return
+ * and TDZ projections live in the plugin's `client-server-view.test.ts`;
+ * the block/function/class reads here smoke-test the printed CLI positions.
+ * Keep the other source shapes, import/export matrices and known limits:
+ * they have no equally strict, same-source plugin home.
  *
  * Before: `${q.toFixed(2)}` of `client let q = 1` checked clean and threw on
  * the server render, and `import { x }` of a `client export const x` reported
@@ -68,6 +72,7 @@ function runProject(
     .map((line) => /[^/\\]+\.(?:mx|ts)\(\d+,\d+\): .*$/.exec(line)?.[0] ?? "")
     .filter(Boolean);
   return {
+    status: run.status,
     linesOf: (file: string) => output.filter((l) => l.startsWith(`${file}(`)),
     dispose: () => rmSync(dir, { recursive: true }),
   };
@@ -98,7 +103,6 @@ describe("mx-tsc types a client name as undefined for the server view", {
 }, () => {
   const pages: Record<string, string> = {
     // (d) the template read.
-    "read-let.mx": "client let q = 1;\n<div>${q.toFixed(2)}</div>\n",
     "read-function.mx": "client function f() { return 1 }\n<div>${f()}</div>\n",
     "read-class.mx":
       "client class C { m() { return 1 } }\n<div>${new C().m()}</div>\n",
@@ -127,8 +131,6 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "client enum E { A, B }\nclient const e: E = E.A;\n<div/>\n",
     "edge-two-statements.mx":
       "client let q = 1;\n<div/>\nclient const g = () => q.toFixed(1);\n",
-    // A client module cannot load with a top-level `return`.
-    "edge-return.mx": "client { return; }\n<div/>\n",
     "edge-return-nested.mx":
       "client { const f = () => { return 1 }; const n: number = f(); }\n<div/>\n",
     // Known limit: a `client import` of another page's client export reports
@@ -182,8 +184,6 @@ describe("mx-tsc types a client name as undefined for the server view", {
       'import type { P, K } from "./ct.mx";\nexport const v: [P?, K?] = [];\n',
     "imp-types.mx":
       'import type { P, K } from "./ct.mx";\nserver const v: [P?, K?] = [];\n<div/>\n',
-    // Client code runs in the order the author wrote the module.
-    "tdz-static.mx": "client const z = st + 1;\nstatic const st = 1;\n<div/>\n",
     // Known limit: a client statement reading a `static` name declared after it
     // but before a later client statement is not reported.
     "limit-tdz-between.mx":
@@ -217,18 +217,19 @@ describe("mx-tsc types a client name as undefined for the server view", {
     return found;
   };
 
-  it.each([
-    ["read-let.mx", "(2,8)"],
-    ["read-block.mx", "(2,8)"],
-  ])("%s: a template read of a client let is undefined", (file, position) => {
-    const found = lines(file);
-    expect(found).toHaveLength(1);
-    expect(found[0]).toMatch(
-      new RegExp(
-        `${at(file, position)}: error TS18048: 'q' is possibly 'undefined'\\.$`,
-      ),
-    );
-  });
+  it.each([["read-block.mx", "(2,8)"]])(
+    "%s: a template read of a client let is undefined",
+    (file, position) => {
+      const found = lines(file);
+      expect(project?.status).toBeGreaterThan(0);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatch(
+        new RegExp(
+          `${at(file, position)}: error TS18048: 'q' is possibly 'undefined'\\.$`,
+        ),
+      );
+    },
+  );
 
   it("read-function.mx: a client function is not callable in the template", () => {
     const found = lines("read-function.mx");
@@ -315,21 +316,6 @@ describe("mx-tsc types a client name as undefined for the server view", {
     expect(found).toHaveLength(2);
     expect(found[0]).toMatch(/^imp-ts\.ts\(1,10\): error TS2614: .*'x'/);
     expect(found[1]).toMatch(/^imp-ts\.ts\(1,13\): error TS2614: .*'fx'/);
-  });
-
-  it("edge-return.mx: a top-level return in a client block is still TS1108, at the return", () => {
-    const found = lines("edge-return.mx");
-    expect(found).toHaveLength(1);
-    expect(found[0]).toMatch(
-      /^edge-return\.mx\(1,10\): error TS1108: A 'return' statement can only be used within a function body\.$/,
-    );
-  });
-
-  it("tdz-static.mx: a client statement reading a later static is used before its declaration", () => {
-    const found = lines("tdz-static.mx");
-    expect(found[0]).toMatch(
-      /^tdz-static\.mx\(1,18\): error TS2448: Block-scoped variable 'st' used before its declaration\.$/,
-    );
   });
 
   it("reexport-name.mx and reexport-module.mx: an unknown name or module is reported at the author's token", () => {

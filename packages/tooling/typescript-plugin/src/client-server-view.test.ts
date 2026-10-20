@@ -7,8 +7,10 @@ import { createPluginService } from "./fixtures/plugin-service.ts";
  * A `client` name is `undefined` in the server view: the module that renders
  * has `var q;` and no export. The editor path types it that way (the template
  * read, the importers of the page) and keeps the client scope typed by its
- * declarations. `mx-tsc` pins the same rules in
- * `packages/tooling/tsc/src/client-server-view.test.ts`.
+ * declarations. This suite owns the matching projection semantics;
+ * `mx-tsc` smoke-tests the printed diagnostic door in
+ * `packages/tooling/tsc/src/client-server-view.test.ts`, retaining source
+ * shapes and CLI-specific checks with no equally strict home here.
  */
 
 const FILE = "/project/page.mx";
