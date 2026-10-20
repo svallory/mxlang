@@ -258,7 +258,7 @@ describe("satisfies in the type-check module", () => {
     expect(check(service, file).codes).toContain(2352);
   });
 
-  it("strips an angle-bracket cast so the TSX projection still parses", () => {
+  it("checks an angle-bracket cast while the TSX projection still parses", () => {
     const source = [
       "export interface Input { count: number }",
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax in template source
@@ -270,12 +270,13 @@ describe("satisfies in the type-check module", () => {
 
     // The projection is checked as TSX, where a kept `<T>` parses as a JSX
     // tag and used to break the whole file (TS1002/TS1005/TS17002 with no
-    // semantic diagnostics at all). The cast is stripped (unchecked) and
-    // the rest of the file still reports a real type error placed after it.
+    // semantic diagnostics at all). The cast is now checked as `as string`,
+    // and the rest of the file still reports its own type error.
     expect(service.getSyntacticDiagnostics(file)).toEqual([]);
     const diagnostics = service.getSemanticDiagnostics(file);
     const missing = diagnostics.find((diagnostic) => diagnostic.code === 2339);
-    // TS 2339 lands on the property name, placed after the stripped cast.
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(2352);
+    // TS 2339 lands on the property name, after the checked cast.
     expect(missing?.start).toBe(source.indexOf("missing"));
     expect(missing?.length).toBe("missing".length);
   });

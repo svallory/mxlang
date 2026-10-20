@@ -69,6 +69,21 @@ import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
 
 const INDENT = "  ";
 
+/** Only projected angles need moved-token mappings at repeated source text. */
+function hasProjectedAngle(node: Expr["node"]): boolean {
+  if (!node || typeof node !== "object") return false;
+  if (
+    node.type === "ParenthesizedExpression" &&
+    node.expression?.type === "TSAsExpression"
+  )
+    return true;
+  if (Array.isArray(node)) return node.some(hasProjectedAngle);
+  return Object.entries(node).some(
+    ([key, child]) =>
+      !["loc", "extra", "outer"].includes(key) && hasProjectedAngle(child),
+  );
+}
+
 /**
  * A well-formed HTML attribute name, as source text for the emitted module.
  *
@@ -473,7 +488,15 @@ export function createEmitter(
     const bound = `__mxAttrTagBound${serial}`;
     const compare = source.inclusive ? "<=" : "<";
     return concatMapped(
-      `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
+      `(() => { const ${result} = []; const ${start} = `,
+      options.typeCheck && source.from && hasProjectedAngle(source.from.node)
+        ? mappedExpr(source.from)
+        : (source.from?.code ?? "0"),
+      `; const ${bound} = `,
+      options.typeCheck && hasProjectedAngle(source.bound.node)
+        ? mappedExpr(source.bound)
+        : source.bound.code,
+      `; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
       body,
       `)); } return ${result}; })()`,
     );

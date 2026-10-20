@@ -52,6 +52,7 @@ import {
   firstErrorAt,
   parseMx,
   registerDocument,
+  rewriteAngleAssertions,
   stripAngleAssertions,
   stripMxTypes,
 } from "./mx-parse.ts";
@@ -220,6 +221,7 @@ let current: {
   source: string;
   filename: string;
   code: string | null;
+  typeCheckProjection: boolean;
   policy: Policy;
   tagTable?: TagTable;
   tagRules?: TagRulesPreset;
@@ -308,6 +310,7 @@ function translatorClaiming(
             state.filename,
             state.targets,
           );
+          ctx.typeCheckProjection = state.typeCheckProjection;
           ctx.customTags = state.customTags;
           ctx.tagRules = state.tagRules;
           ctx.structural = state.structural;
@@ -552,6 +555,11 @@ export function compileSource(
     source,
     filename,
     code: null as string | null,
+    // Internal host-to-core signal, deliberately absent from HostOptions and
+    // the IR entry. Preserving authored types alone is not a projection.
+    typeCheckProjection:
+      (host as HostOptions & { typeCheckProjection?: boolean })
+        .typeCheckProjection === true,
     policy: filePolicy,
     postEmit: host.postEmit,
     emitIr: host.emitIr,
@@ -599,12 +607,11 @@ export function compileSource(
       throw tableError.error;
     }
     if (parseError) throw parseError;
-    // Hosts checking their output as TSX cannot keep angle-bracket casts
-    // (`<T>x`): a kept `<T>` parses as a JSX tag and breaks the whole file.
-    // Strip their containers even when other wrappers stay.
-    // See `stripAngleAssertions`.
-    if (host.stripTypes !== false) stripMxTypes(document);
-    else stripAngleAssertions(document);
+    // A TSX projection checks angle assertions as their equivalent `as`
+    // expressions. Runtime builds keep the existing TypeScript strip.
+    if (state.typeCheckProjection) rewriteAngleAssertions(document);
+    else if (host.stripTypes === false) stripAngleAssertions(document);
+    else stripMxTypes(document);
     registerDocument(document);
     registerSyntax(document, resolvedSyntax);
     try {

@@ -109,8 +109,7 @@ The docs highlight every ```` ```mx ```` fence, and the landing example, with th
 - `useNamingConvention` remains enabled only in
   `packages/core/src/compile.ts` and `packages/core/src/core.ts`, keeping their
   existing visitor-key suppressions active; `noExplicitAny` is disabled only
-  there for the compiler adapter's intentional `Node = any`. These two files
-  are owned by the parallel core-ir refactor and must not be edited here.
+  there for the compiler adapter's intentional `Node = any`.
 
 ## Exact-pin policy
 

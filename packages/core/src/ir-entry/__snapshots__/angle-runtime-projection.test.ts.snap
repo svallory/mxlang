@@ -1,0 +1,398 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for const as 1`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 34,
+      "line": 1,
+      "message": "\`<Foo>\` calls a template tag; a data file cannot call a template tag",
+      "offset": 34,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for const as 2`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 34,
+      "end": {
+        "column": 34,
+        "line": 1,
+        "offset": 34,
+      },
+      "line": 1,
+      "message": "\`<Foo>\` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, \`import { Foo as FooRef }\`)",
+      "offset": 34,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for in key 1`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_INVALID_FOR",
+      "column": 25,
+      "end": {
+        "column": 29,
+        "line": 1,
+        "offset": 29,
+      },
+      "line": 1,
+      "message": "The \`<for>\` tag only supports a string \`by\` key with \`of\`; use a \`by=(key, value) => ...\` function for \`<for in>\`.",
+      "offset": 25,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for in key 2`] = `
+{
+  "diagnostics": [],
+  "ir": {
+    "body": [
+      {
+        "bindings": [
+          "k",
+        ],
+        "children": [
+          {
+            "escaped": true,
+            "expr": {
+              "code": "k",
+              "node": {
+                "end": 41,
+                "loc": {
+                  "end": {
+                    "column": 41,
+                    "index": 41,
+                    "line": 1,
+                  },
+                  "filename": undefined,
+                  "identifierName": "k",
+                  "start": {
+                    "column": 40,
+                    "index": 40,
+                    "line": 1,
+                  },
+                },
+                "name": "k",
+                "start": 40,
+                "type": "Identifier",
+              },
+              "shape": "other",
+              "span": {
+                "sourceEnd": 41,
+                "sourceStart": 40,
+              },
+            },
+            "kind": "Interpolation",
+            "loc": {
+              "column": 38,
+              "line": 1,
+            },
+            "span": {
+              "sourceEnd": 42,
+              "sourceStart": 38,
+            },
+          },
+        ],
+        "key": {
+          "code": ""id" as any",
+          "node": {
+            "end": 36,
+            "expression": {
+              "end": 29,
+              "extra": {
+                "raw": ""id"",
+                "rawValue": "id",
+              },
+              "loc": {
+                "end": {
+                  "column": 29,
+                  "index": 29,
+                  "line": 1,
+                },
+                "filename": undefined,
+                "identifierName": undefined,
+                "start": {
+                  "column": 25,
+                  "index": 25,
+                  "line": 1,
+                },
+              },
+              "start": 25,
+              "type": "StringLiteral",
+              "value": "id",
+            },
+            "extra": {
+              "parenStart": 24,
+              "parenthesized": true,
+            },
+            "loc": {
+              "end": {
+                "column": 36,
+                "index": 36,
+                "line": 1,
+              },
+              "filename": undefined,
+              "identifierName": undefined,
+              "start": {
+                "column": 25,
+                "index": 25,
+                "line": 1,
+              },
+            },
+            "start": 25,
+            "type": "TSAsExpression",
+            "typeAnnotation": {
+              "end": 36,
+              "loc": {
+                "end": {
+                  "column": 36,
+                  "index": 36,
+                  "line": 1,
+                },
+                "filename": undefined,
+                "identifierName": undefined,
+                "start": {
+                  "column": 33,
+                  "index": 33,
+                  "line": 1,
+                },
+              },
+              "start": 33,
+              "type": "TSAnyKeyword",
+            },
+          },
+          "shape": "other",
+          "span": {
+            "sourceEnd": 36,
+            "sourceStart": 25,
+          },
+        },
+        "kind": "For",
+        "loc": {
+          "column": 0,
+          "line": 1,
+        },
+        "paramNodes": [
+          {
+            "end": 6,
+            "loc": {
+              "end": {
+                "column": 6,
+                "index": 6,
+                "line": 1,
+              },
+              "filename": undefined,
+              "identifierName": "k",
+              "start": {
+                "column": 5,
+                "index": 5,
+                "line": 1,
+              },
+            },
+            "name": "k",
+            "start": 5,
+            "type": "Identifier",
+          },
+        ],
+        "paramSpans": [
+          {
+            "sourceEnd": 6,
+            "sourceStart": 5,
+          },
+        ],
+        "params": [
+          "k",
+        ],
+        "source": {
+          "kind": "in",
+          "object": {
+            "code": "input.obj",
+            "node": {
+              "computed": false,
+              "end": 20,
+              "loc": {
+                "end": {
+                  "column": 20,
+                  "index": 20,
+                  "line": 1,
+                },
+                "filename": undefined,
+                "identifierName": undefined,
+                "start": {
+                  "column": 11,
+                  "index": 11,
+                  "line": 1,
+                },
+              },
+              "object": {
+                "end": 16,
+                "loc": {
+                  "end": {
+                    "column": 16,
+                    "index": 16,
+                    "line": 1,
+                  },
+                  "filename": undefined,
+                  "identifierName": "input",
+                  "start": {
+                    "column": 11,
+                    "index": 11,
+                    "line": 1,
+                  },
+                },
+                "name": "input",
+                "start": 11,
+                "type": "Identifier",
+              },
+              "property": {
+                "end": 20,
+                "loc": {
+                  "end": {
+                    "column": 20,
+                    "index": 20,
+                    "line": 1,
+                  },
+                  "filename": undefined,
+                  "identifierName": "obj",
+                  "start": {
+                    "column": 17,
+                    "index": 17,
+                    "line": 1,
+                  },
+                },
+                "name": "obj",
+                "start": 17,
+                "type": "Identifier",
+              },
+              "start": 11,
+              "type": "MemberExpression",
+            },
+            "shape": "other",
+            "span": {
+              "sourceEnd": 20,
+              "sourceStart": 11,
+            },
+          },
+        },
+        "span": {
+          "sourceEnd": 48,
+          "sourceStart": 0,
+        },
+      },
+    ],
+    "exportName": "X",
+    "hoisted": [],
+    "imports": [],
+    "inputInterface": null,
+    "needsAttrTagImport": false,
+    "prelude": [],
+    "returnValue": null,
+    "tagMetadata": {
+      "attributeTags": [
+        "obj",
+      ],
+      "readsContent": false,
+    },
+  },
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for static as 1`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 0,
+      "end": {
+        "column": 0,
+        "line": 2,
+        "offset": 40,
+      },
+      "line": 2,
+      "message": "\`<Foo>\` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, \`import { Foo as FooRef }\`)",
+      "offset": 40,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for static as 2`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 0,
+      "end": {
+        "column": 0,
+        "line": 2,
+        "offset": 40,
+      },
+      "line": 2,
+      "message": "\`<Foo>\` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, \`import { Foo as FooRef }\`)",
+      "offset": 40,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for static non-null 1`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 0,
+      "end": {
+        "column": 0,
+        "line": 2,
+        "offset": 34,
+      },
+      "line": 2,
+      "message": "\`<Foo>\` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, \`import { Foo as FooRef }\`)",
+      "offset": 34,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;
+
+exports[`IR preserve-types is not a host type-check projection > preserves main's diagnostics and complete IR for static non-null 2`] = `
+{
+  "diagnostics": [
+    {
+      "code": "MX_NOT_IN_DATA_FILE",
+      "column": 0,
+      "end": {
+        "column": 0,
+        "line": 2,
+        "offset": 34,
+      },
+      "line": 2,
+      "message": "\`<Foo>\` is bound in this file, so it is a dynamic tag; data files are static, so they need a name. Rename the binding (for an import, \`import { Foo as FooRef }\`)",
+      "offset": 34,
+      "severity": "error",
+    },
+  ],
+  "ir": undefined,
+}
+`;

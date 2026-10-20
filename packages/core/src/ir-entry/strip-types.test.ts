@@ -542,10 +542,9 @@ describe("`stripTypes: false` and core's own checks", () => {
     },
   );
 
-  it("contract `expression` follows the attribute kind: the one check that differs", () => {
-    // `a="s"` is refused (a string is not an expression). `a=("s" as const)`
-    // is `static` by default, so the same error; with `false` it is
-    // `dynamic`, so it passes.
+  it("contract `expression` retains checked strings but refuses stripped static strings", () => {
+    // Runtime stripping exposes the static literal; preserving types must keep
+    // the expression so its assertion is checked.
     const customTags: Record<string, CustomTag> = {
       x: { attributes: { a: { type: "expression" } } },
     };

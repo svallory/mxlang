@@ -992,7 +992,9 @@ function resolveDelegatedTag(
 
   if (name === "server") {
     // `server { … }` hoists its statements, braces gone, like `static`.
-    const text = sliceLoc(ctx, node.loc);
+    const text = ctx.typeCheckProjection
+      ? expr(ctx, node)
+      : sliceLoc(ctx, node.loc);
     const code = unwrapStatementBlock(text.trim().replace(/^server\s+/, ""));
     return {
       kind: "statement",
@@ -1007,7 +1009,9 @@ function resolveDelegatedTag(
     // names it declares there (`var q;`, no initializer), so a template that
     // reads one sees `undefined` instead of a ReferenceError. Probed against
     // stock Marko 6.4.4: only the block's own top-level declarations count.
-    const text = sliceLoc(ctx, node.loc);
+    const text = ctx.typeCheckProjection
+      ? expr(ctx, node)
+      : sliceLoc(ctx, node.loc);
     const own = unwrapStatementBlock(text.trim().replace(/^client\s*/, ""));
     const statements = parseClientStatements(own, node);
     const names = clientDeclaredNames(statements);

@@ -51,8 +51,16 @@ import { handleNode } from "./host-handle.ts";
 import type { Attr, Expr, ExprNode, IrNode, Position } from "./ir.ts";
 import type { IrDiagnosticFix } from "./ir-entry/diagnostics.ts";
 import { partialRollback } from "./ir-entry/recovery.ts";
-import type { SourceSpan } from "./mapping.ts";
-import { markoViewOf } from "./marko-view.ts";
+import {
+  angleSplices,
+  type GeneratedMapping,
+  type ProjectionSplice,
+  projectedAngles,
+  recordProjectedCode,
+  reprintProjectedCode,
+  type SourceSpan,
+} from "./mapping.ts";
+import { markoViewOf, mxNodeOf } from "./marko-view.ts";
 import {
   lazyOwner,
   MX_VOICE,
@@ -362,6 +370,8 @@ export interface WriteGuard {
 }
 
 export interface Ctx {
+  /** Internal compile mode: preserve/check types in the tooling projection only. */
+  typeCheckProjection?: boolean;
   /**
    * The file's `structural` mode, when the caller decided one (the IR entry
    * point). Under `"reject"` a `for` or `if` is itself an error, so a check
@@ -1350,36 +1360,77 @@ export function exprWithNodes(
   ctx: Ctx,
   node: Node,
 ): { code: string; nodes: ExprNode[] } {
+  const mx = mxNodeOf(node);
+  const rewritten = projectedAngles.has(mx.code?.node ?? mx);
+  // Only rewritten assertions need the MX handle and its untrimmed end.
+  // Ordinary runtime/dialect expressions keep their original reader path.
+  if (rewritten) node = mx;
   const start = node.start ?? node.loc?.start.index;
-  const end = node.end ?? node.loc?.end.index;
+  const end =
+    (rewritten ? mxSpanOf(node)?.sourceEnd : undefined) ??
+    node.end ??
+    node.loc?.end.index;
+  const payload = node.code?.node ?? node;
+  if (
+    isStatementNode(node) &&
+    (!ctx.typeCheckProjection || !projectedAngles.has(payload))
+  ) {
+    return { code: sliceNode(ctx, node), nodes: [] };
+  }
 
   if (typeof start !== "number" || typeof end !== "number") {
     // If we have no position, we must fall back to generation (e.g. synthetic
     // nodes such as a method value's function). No splice carries the
     // dialect nodes here, so they are found by walking the payload; they
     // have no printed range.
-    return {
-      code: ctx.generate(
-        ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
-      ),
-      nodes: nodesInside(node),
-    };
+    const code = ctx.generate(
+      ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
+    );
+    const projection = angleSplices(node, ctx.source);
+    if (projection.length > 0) {
+      const at = (position: Position) =>
+        ctx.lines
+          .slice(0, position.line - 1)
+          .reduce((offset, line) => offset + line.length + 1, position.column);
+      // Mixed dynamic names are rebuilt template literals without root
+      // positions. Their asserted children still have exact authored spans.
+      const angles = projectedAngles.get(node) ?? [];
+      const from = node.loc?.start
+        ? at(node.loc.start)
+        : Math.min(...angles.map((angle) => angle.start));
+      const to = node.loc?.end
+        ? at(node.loc.end)
+        : Math.max(...angles.map((angle) => angle.end));
+      const printed = new Map<Splice, { start: number; end: number }>();
+      const before = spliceSource(ctx, from, to, projection, printed);
+      recordSpliceMappings(node, from, to, before, printed);
+      reprintProjectedCode(node, code);
+    }
+    return { code, nodes: nodesInside(node) };
   }
 
   // Each lowered trigger inside the span becomes its printed replacement.
   // The slice is the authored text, so the replaced node alone would leave
   // the authored trigger (`&status`, `:a`) in the output; the splice is
   // what makes `code` carry `self.status` or `"a"`.
-  const splices = triggerSplicesIn(ctx, start, end);
+  const projection = angleSplices(payload, ctx.source);
+  const splices: Splice[] = [
+    ...triggerSplicesIn(ctx, start, end),
+    ...projection,
+  ];
   const printed = new Map<Splice, { start: number; end: number }>();
   let code: string;
-  if (ctx.bindings.size === 0) {
+  if (ctx.bindings.size === 0 || (rewritten && payload !== node)) {
+    // Module statements declare their own scope; render bindings never rewrite it.
     code =
       splices.length === 0
         ? ctx.source.slice(start, end)
         : spliceSource(ctx, start, end, splices, printed);
   } else {
     code = rewriteReferencesSource(ctx, node, start, end, splices, printed);
+  }
+  if (projection.length > 0) {
+    recordSpliceMappings(payload, start, end, code, printed);
   }
   const nodes: ExprNode[] = [];
   for (const splice of splices) {
@@ -1390,9 +1441,94 @@ export function exprWithNodes(
   return { code, nodes };
 }
 
-type Splice = { start: number; end: number; text: string } & Partial<
-  Pick<TriggerSplice, "node">
->;
+type Splice = ProjectionSplice & Partial<Pick<TriggerSplice, "node">>;
+
+/** Exact kept/moved runs first; a whole assertion covers cross-run diagnostics. */
+function recordSpliceMappings(
+  node: Node,
+  start: number,
+  end: number,
+  code: string,
+  printed: Map<Splice, { start: number; end: number }>,
+): void {
+  const mappings: GeneratedMapping[] = [];
+  let source = start;
+  let generated = 0;
+  const angles = new Map<
+    Node,
+    { start: number; end?: number; outerStart: number; outerEnd?: number }
+  >();
+  for (const [splice, at] of [...printed].sort(
+    (a, b) => a[1].start - b[1].start,
+  )) {
+    if (splice.start > source) {
+      mappings.push({
+        sourceStart: source,
+        sourceEnd: splice.start,
+        generatedStart: generated,
+        generatedEnd: at.start,
+      });
+    }
+    if (splice.mappings) {
+      mappings.push(
+        ...splice.mappings.map((mapping) => ({
+          ...mapping,
+          generatedStart: mapping.generatedStart + at.start,
+          generatedEnd: mapping.generatedEnd + at.start,
+        })),
+      );
+    } else if (splice.end > splice.start) {
+      mappings.push({
+        sourceStart: splice.start,
+        sourceEnd: splice.end,
+        generatedStart: at.start,
+        generatedEnd: at.end,
+      });
+    }
+    if (splice.angle) {
+      if (splice.end > splice.start)
+        angles.set(splice.angle, {
+          start: at.end + (splice.rangeOffset ?? 0),
+          outerStart: at.start,
+        });
+      else {
+        const range = angles.get(splice.angle);
+        if (range) {
+          range.end = at.start + (splice.rangeOffset ?? splice.text.length - 1);
+          range.outerEnd = at.end;
+        }
+      }
+    }
+    source = splice.end;
+    generated = at.end;
+  }
+  if (end > source) {
+    mappings.push({
+      sourceStart: source,
+      sourceEnd: end,
+      generatedStart: generated,
+      generatedEnd: code.length,
+    });
+  }
+  for (const [angle, range] of angles) {
+    if (range.end !== undefined)
+      mappings.push({
+        sourceStart: angle.start,
+        sourceEnd: angle.end,
+        generatedStart: range.start,
+        generatedEnd: range.end,
+      });
+    // Operator diagnostics include the synthetic parentheses, unlike TS2352.
+    if (range.outerEnd !== undefined)
+      mappings.push({
+        sourceStart: angle.start,
+        sourceEnd: angle.end,
+        generatedStart: range.outerStart,
+        generatedEnd: range.outerEnd,
+      });
+  }
+  recordProjectedCode(node, { code, mappings });
+}
 
 /** The lowered syntax-table triggers inside `[start, end)`, in source order. */
 function triggerSplicesIn(ctx: Ctx, start: number, end: number): Splice[] {
@@ -1414,8 +1550,28 @@ function spliceSource(
   printed?: Map<Splice, { start: number; end: number }>,
 ): string {
   const sorted = [...splices].sort((a, b) => a.start - b.start);
-  let result = "";
   let lastEnd = start;
+  for (const r of sorted) {
+    if (
+      sorted.some((splice) => splice.angle) &&
+      (r.start < lastEnd || r.end < r.start || r.end > end)
+    ) {
+      // Independent dialect/binding edits may overlap a projected type.
+      // Fall back to erasing angle wrappers, as the old container strip did:
+      // authored <T>x is not safe in TSX. Discard incompatible edits and map
+      // only the kept operand/sibling runs, never a partially applied cast.
+      printed?.clear();
+      const erased = sorted
+        .filter((splice) => splice.angle && splice.end > splice.start)
+        .map(({ start, end }) => ({ start, end, text: "", mappings: [] }));
+      return erased.length > 0
+        ? spliceSource(ctx, start, end, erased, printed)
+        : ctx.source.slice(start, end);
+    }
+    lastEnd = r.end;
+  }
+  let result = "";
+  lastEnd = start;
   for (const r of sorted) {
     result += ctx.source.slice(lastEnd, r.start);
     printed?.set(r, {
@@ -1447,6 +1603,21 @@ function spliceSource(
  * host's" — instead of one rule for expressions and another for templates.
  */
 export function declName(ctx: Ctx, node: Node): string {
+  const projection = angleSplices(node, ctx.source);
+  if (projection.length > 0) {
+    const start = node.start ?? node.loc?.start.index;
+    const end = node.end ?? node.loc?.end.index;
+    const printed = new Map<Splice, { start: number; end: number }>();
+    const code = spliceSource(
+      ctx,
+      start,
+      end,
+      [...triggerSplicesIn(ctx, start, end), ...projection],
+      printed,
+    );
+    recordSpliceMappings(node, start, end, code, printed);
+    return code;
+  }
   return ctx.generate(node);
 }
 
@@ -1749,7 +1920,8 @@ function rewriteReferences(ctx: Ctx, node: Node): Node {
 export function sliceNode(ctx: Ctx, node: Node): string {
   const span = node?.loc ? undefined : mxSpanOf(node);
   if (span) return ctx.source.slice(span.sourceStart, span.sourceEnd);
-  return sliceLoc(ctx, node.loc);
+  if (node?.loc) return sliceLoc(ctx, node.loc);
+  return "";
 }
 
 export function sliceLoc(ctx: Ctx, loc: Node): string {
@@ -1925,6 +2097,8 @@ export function isMarkoOrMxSpecifier(specifier: string): boolean {
  * `<const>`'s raw value node before `exprOf`), not core's own `Expr`.
  */
 export function isFunctionLikeValue(node: Node | null | undefined): boolean {
+  // Public runtime predicate: module scans retain TypeScript wrappers even
+  // in runtime builds. Preserved-type lowering unwraps explicitly instead.
   switch (node?.type) {
     case "FunctionExpression":
     case "ArrowFunctionExpression":
@@ -2450,6 +2624,7 @@ export function newCtx(
   }
   const rewrites = new Map<string, BindingRewrite>();
   const ctx: Ctx = {
+    typeCheckProjection: false,
     source,
     filename,
     lines: source.split("\n"),

@@ -230,7 +230,7 @@ import {
   publishPartialIr,
   withPartialScratch,
 } from "./ir-entry/recovery.ts";
-import type { SourceSpan } from "./mapping.ts";
+import { projectedAngles, type SourceSpan } from "./mapping.ts";
 import { markoViewOf } from "./marko-view.ts";
 import {
   lazyOwner,
@@ -601,6 +601,8 @@ function isOrdinaryColonName(attr: Node, isElement: boolean): boolean {
 
 /** Classifies an expression once, while its parsed node is still available. */
 export function expressionShape(node: Node): ExprShape {
+  // Emission uses this shape to elide guards; a checked wrapper may change
+  // the type, so only the written value (already stripped at runtime) counts.
   switch (node?.type) {
     case "ObjectExpression":
       return "object";
@@ -2337,7 +2339,12 @@ function lowerAttrNamed(
     isOrdinaryColonName(attr, isElement) &&
     !EVENT_ATTR.test(String(name))
   ) {
-    const value = readValue();
+    // Refusal only: wrappers cannot make a function a valid colon attribute.
+    // Emission below still receives the complete checked expression.
+    const written = readValue();
+    const value = ctx.typeCheckProjection
+      ? withoutTsWrappers(written)
+      : written;
     if (
       value?.type === "FunctionExpression" ||
       value?.type === "ArrowFunctionExpression"
@@ -2441,6 +2448,8 @@ function lowerAttrNamed(
   if (value?.type === "BooleanLiteral" && value.value === true) {
     return { kind: "boolean", name, nameSpan, loc };
   }
+  // Static emission discards the expression. Never unwrap a checked cast here;
+  // runtime values have already had their TypeScript wrappers stripped.
   if (value?.type === "StringLiteral") {
     // A whole value that is one registered node (`mx:String`, or a
     // dialect's type whose `lower` gave this string or string literal,
@@ -2660,6 +2669,8 @@ function paramsOf(ctx: Ctx, node: Node): string[] {
     // printed outside its parameter-list context. The Marko node's location
     // covers the complete authored pattern, so use that exact source text for
     // params and preserve annotations as well as destructuring.
+    if (ctx.typeCheckProjection && projectedAngles.has(p))
+      return declName(ctx, p);
     const source = p.loc ? sliceLoc(ctx, p.loc) : "";
     return source || declName(ctx, p);
   });
@@ -4080,7 +4091,12 @@ function lowerForHead(
   // quoted key it refuses, rather than letting the failure surface on first
   // paint. `of` keeps the shorthand, so this cannot be "no string `by`".
   const byValue = by ? attrValueOf(ctx, by) : undefined;
-  if (!of && byValue?.type === "StringLiteral") {
+  // Refusal only: a cast cannot make a string key callable. The IR retains
+  // byValue, including its checked wrapper, for emission.
+  const checkedKey = ctx.typeCheckProjection
+    ? withoutTsWrappers(byValue)
+    : byValue;
+  if (!of && checkedKey?.type === "StringLiteral") {
     raise(
       INVALID_FOR_CODE,
       `The ${tagText(ctx, "for", node)} tag only supports a string \`by\` key with \`of\`; ${
@@ -4090,7 +4106,7 @@ function lowerForHead(
             }) => ...\` function for \`<for ${inAttr ? "in" : to ? "to" : "until"}>\`.`
           : "the other forms call `by` as a function."
       }`,
-      byValue,
+      checkedKey,
     );
   }
 
@@ -4207,7 +4223,9 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   // than guessed at.
   if (
     tagVarOf(node)?.type === "Identifier" &&
-    !isFunctionLikeValue(valueNode)
+    !isFunctionLikeValue(
+      ctx.typeCheckProjection ? withoutTsWrappers(valueNode) : valueNode,
+    )
   ) {
     ctx.unknownLocalValue.add(name);
   }
@@ -4765,7 +4783,13 @@ function registerStaticBindings(
         const bound = declarator.id.name as string;
         if (!/^[A-Z]/.test(bound)) continue;
         ctx.imports.add(bound);
-        if (!isFunctionLikeValue(declarator.init)) {
+        if (
+          !isFunctionLikeValue(
+            ctx.typeCheckProjection
+              ? withoutTsWrappers(declarator.init)
+              : declarator.init,
+          )
+        ) {
           ctx.unknownLocalValue.add(bound);
         }
       }
@@ -5402,7 +5426,8 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
       node,
     );
   }
-  const line = sliceNode(ctx, node).trim();
+  const authored = sliceNode(ctx, node).trim();
+  const line = ctx.typeCheckProjection ? expr(ctx, node).trim() : authored;
   const loc = posOf(ctx, node);
   const end = endPosOf(ctx, node);
   const span = statementSpan(ctx, node);
@@ -5410,8 +5435,8 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   rejectInvalidStatement(
     ctx,
     node,
-    name === "static" ? staticBody(line) : line,
-    name === "static" ? (/^static\s*/.exec(line)?.[0].length ?? 0) : 0,
+    name === "static" ? staticBody(authored) : authored,
+    name === "static" ? (/^static\s*/.exec(authored)?.[0].length ?? 0) : 0,
     name,
   );
 
@@ -8306,6 +8331,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   ownInput: "inherit",
   tagRules: "inherit",
   structural: "inherit",
+  typeCheckProjection: "inherit",
   customTags: "inherit",
   customTagGensym: "inherit",
   customTagStores: "inherit",

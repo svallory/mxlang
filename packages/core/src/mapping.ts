@@ -1,4 +1,5 @@
-import { type Babel, coreParser } from "./babel.ts";
+import { type Babel, coreBabel, coreParser } from "./babel.ts";
+import type { Node } from "./core.ts";
 import type { Expr } from "./ir.ts";
 
 /**
@@ -60,12 +61,130 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
   };
 }
 
+/** Original angle assertions under a rewritten Babel payload, in postorder. */
+export const projectedAngles = new WeakMap<object, readonly Node[]>();
+
+/** Source-printer edits, with exact mappings for text moved from elsewhere. */
+export interface ProjectionSplice {
+  start: number;
+  end: number;
+  text: string;
+  mappings?: GeneratedMapping[];
+  angle?: Node;
+  /** The cast's diagnostic endpoint relative to this insertion. */
+  rangeOffset?: number;
+}
+
+/** The source printer's mappings, kept beside the tree rather than in the IR. */
+const projectedCode = new WeakMap<object, MappedCode>();
+
+export function recordProjectedCode(node: Node, code: MappedCode): void {
+  projectedCode.set(node, code);
+}
+
+/** A generated method/name keeps the projected source's exact token mappings. */
+export function reprintProjectedCode(node: Node, code: string): void {
+  const base = projectedCode.get(node);
+  if (!base || base.code === code) return;
+  // Whole-cast ranges are fallbacks, not token mappings. Diff only the exact
+  // pieces, then recover each canonical generated cast's complete range.
+  const result = mapTokenDiff(
+    {
+      code: base.code,
+      mappings: base.mappings.filter(
+        (piece) =>
+          piece.generatedEnd - piece.generatedStart ===
+          piece.sourceEnd - piece.sourceStart,
+      ),
+    },
+    code,
+  );
+  const cursors = new Map<string, number>();
+  for (const angle of projectedAngles.get(node) ?? []) {
+    const printed = coreBabel().generator(
+      { ...angle, type: "TSAsExpression" },
+      { concise: true },
+    ).code;
+    const at = code.indexOf(printed, cursors.get(printed) ?? 0);
+    if (at >= 0) {
+      cursors.set(printed, at + printed.length);
+      result.mappings.push({
+        sourceStart: angle.start,
+        sourceEnd: angle.end,
+        generatedStart: at,
+        generatedEnd: at + printed.length,
+      });
+      if (code[at - 1] === "(" && code[at + printed.length] === ")") {
+        result.mappings.push({
+          sourceStart: angle.start,
+          sourceEnd: angle.end,
+          generatedStart: at - 1,
+          generatedEnd: at + printed.length + 1,
+        });
+      }
+    }
+  }
+  projectedCode.set(node, result);
+}
+
+/** `<T>x` becomes `(x as T)` without reprinting the operand or its siblings. */
+export function angleSplices(node: Node, source: string): ProjectionSplice[] {
+  const edits: ProjectionSplice[] = [];
+  for (const angle of projectedAngles.get(node) ?? []) {
+    const typeEnd = angle.typeAnnotation.end;
+    // The type's end precedes the assertion's own `>`, not a generic type's
+    // inner `>`. Skip comments too: a comment can itself contain `>`.
+    const closing = /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*)*>/.exec(
+      source.slice(typeEnd),
+    );
+    if (!closing) throw new Error("internal: angle assertion has no closing >");
+    const close = typeEnd + closing[0].length - 1;
+    const typeStart = angle.start + 1;
+    const type = source.slice(typeStart, close);
+    edits.push({
+      start: angle.start,
+      end: close + 1,
+      text: "(",
+      mappings: [],
+      angle,
+      rangeOffset:
+        /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*(?:\r?\n|$))*/.exec(
+          source.slice(close + 1, angle.expression.start),
+        )?.[0].length ?? 0,
+    });
+    edits.push({
+      start: angle.end,
+      end: angle.end,
+      text: ` as ${type})`,
+      angle,
+      rangeOffset: 4 + typeEnd - typeStart,
+      mappings: [
+        {
+          sourceStart: typeStart,
+          sourceEnd: close,
+          generatedStart: 4,
+          generatedEnd: 4 + type.length,
+        },
+      ],
+    });
+  }
+  // Stable sorting keeps inner assertions' suffixes before outer ones when
+  // they share an operand end (`<A><B>x` -> `((x as B) as A)`).
+  return edits.sort((a, b) => a.start - b.start);
+}
+
 /**
  * The sibling of `mapped(name, nameSpan)` for the other half of the mapped
  * population. Unmapped when the expression has no authored source (a
  * synthesized `Expr`, or a fabricated literal default).
  */
 export function mappedExpr(expr: Expr): MappedCode {
+  const projection = expr.node && projectedCode.get(expr.node);
+  if (projection) {
+    return projection.code === expr.code
+      ? projection
+      : mapTokenDiff(projection, expr.code);
+  }
   return (
     (expr.unrewrittenCode === undefined ? nodeMappings(expr) : undefined) ??
     rewrittenMappings(expr) ??
@@ -141,6 +260,7 @@ function printedBodyStart(code: string): number | null {
 export function mappedMethod(expr: Expr): MappedCode | undefined {
   const { bodySpan, bodySource } = expr;
   if (!bodySpan || bodySource === undefined) return undefined;
+  if (expr.node && projectedCode.has(expr.node)) return mappedExpr(expr);
   const at = printedBodyStart(expr.code);
   if (at === null) return { code: expr.code, mappings: [] };
   return concatMapped(

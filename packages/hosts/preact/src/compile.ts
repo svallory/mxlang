@@ -761,7 +761,9 @@ export function compilePreactMx(
       defaultTag: options.defaultTag,
       resolveImport: options.resolveImport,
       warnings: options.warnings,
-      ...(options.typeCheck ? { stripTypes: false } : {}),
+      ...(options.typeCheck
+        ? { stripTypes: false, typeCheckProjection: true }
+        : {}),
       targets: options.targets,
       emitIr: (ir) => {
         const emitted = emitModuleWithMappings(

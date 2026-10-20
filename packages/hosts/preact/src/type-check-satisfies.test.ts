@@ -6,9 +6,8 @@ import { compilePreactMx } from "./index.ts";
  * `typeCheck` projection (`stripTypes: false`), the same retention html's
  * tooling projection has, so the tools that type-check the module report a
  * failing `satisfies`; the runtime compile still strips it, byte for byte
- * as before. Angle-bearing expression, argument and pattern containers
- * are fully stripped in both paths: the projection is TSX, where a kept
- * `<T>` parses as a JSX tag and breaks the whole file.
+ * as before. Angle assertions become parenthesized `as` expressions in
+ * the projection, where they are checked without being parsed as JSX.
  */
 const compile = (source: string, typeCheck?: boolean) =>
   compilePreactMx(source, "/fixtures/satisfies.preact.mx", { typeCheck });
@@ -38,8 +37,9 @@ describe("preact keeps satisfies in the type-check module (parity with html)", (
     expect(compile(CONST_TAG).code).not.toContain("satisfies");
   });
 
-  it("strips the angle-bracket cast from the type-check module (TSX)", () => {
+  it("checks the angle-bracket cast as an equivalent as assertion (TSX)", () => {
     const checked = compile(ANGLE, true).code;
+    expect(checked).toContain("(1 as number)");
     expect(checked).not.toContain("<number>");
     expect(compile(ANGLE).code).not.toContain("<number>");
   });
