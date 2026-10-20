@@ -59,6 +59,13 @@ function exportedNames(): Set<string> {
 describe("@mxlang/host-astro/typecheck", () => {
   const exported = exportedNames();
 
+  it("forwards typeCheck and keeps the authored `satisfies` (parity with html)", () => {
+    const code = compiled(
+      "export interface Input { count: number }\n<span>${input.count satisfies string}</span>",
+    );
+    expect(code).toContain("input.count satisfies string");
+  });
+
   for (const [name, source] of Object.entries(TEMPLATES)) {
     it(`exports every name the emitter imports for a ${name} template`, () => {
       const code = compiled(source);

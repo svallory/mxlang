@@ -147,6 +147,12 @@ export function compileHtml(
       warnings: options.warnings,
       resolveImport: options.resolveImport,
       targets: options.targets,
+      // Under `typeCheck`, keep authored `as`, `satisfies` and `!` wrappers
+      // so tsc checks them. Containers holding `<T>x` still lose their
+      // wrappers: angle assertions are not valid TSX. Runtime builds keep
+      // the full strip (preact's `compile.ts` does the same for its JSX
+      // hosts).
+      ...(options.typeCheck ? { stripTypes: false } : {}),
       // This host emits from the core's IR. `postEmit` still appends the
       // helpers a template actually calls and brands the default export,
       // both of which are properties of this target rather than of the core.

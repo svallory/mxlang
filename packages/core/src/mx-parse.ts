@@ -1151,6 +1151,74 @@ export function stripMxTypes(document: Node): void {
   visit(document.body);
 }
 
+/** Whether a payload contains an angle-bracket assertion (`<T>x`). */
+function holdsAngleAssertion(value: Node): boolean {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(holdsAngleAssertion);
+  if (value.type === "TSTypeAssertion") return true;
+  return Object.entries(value).some(
+    ([key, field]) => !NON_CHILD_FIELDS.has(key) && holdsAngleAssertion(field),
+  );
+}
+
+/**
+ * Under `stripTypes: false`, keep TypeScript wrappers for tools to check,
+ * except in expression, argument and pattern containers holding `<T>x`:
+ * hosts checking the output as TSX would parse `<T>` as a JSX tag and break
+ * the whole file. Run the full strip on those containers, as for a build,
+ * including surrounding wrappers and chained casts. Other containers keep
+ * their `as`, `satisfies` and `!` wrappers. Tag type-argument and
+ * type-parameter containers are still dropped: they have no representation
+ * in the projection, even when expression types are retained. A method's
+ * type parameters remain representable on its emitted function.
+ *
+ * This has the default strip's source-slice fidelity: a cast nested inside
+ * a non-wrapper expression can still remain in the printed source slice.
+ */
+export function stripAngleAssertions(document: Node): void {
+  const t = coreBabel().types;
+  const containers = new Set(["MxExpression", "MxArguments", "MxPattern"]);
+  const stripIfAngle = (field: Node): void => {
+    if (
+      field &&
+      containers.has(field.type) &&
+      holdsAngleAssertion(field.node)
+    ) {
+      stripContainer(field, t);
+    }
+  };
+  const seen = new Set<unknown>();
+  const visit = (value: Node): void => {
+    if (value === null || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value.type === "string" && value.type.startsWith("Mx")) {
+      for (const [key, field] of Object.entries(value) as [string, Node][]) {
+        if (
+          field &&
+          TYPE_CONTAINERS.has(field.type) &&
+          value.type !== "MxMethod"
+        ) {
+          value[key] = null;
+          continue;
+        }
+        stripIfAngle(field);
+        visit(field);
+      }
+    } else if (isRegistryKey(value.type)) {
+      for (const key of ["value", "args"]) {
+        const field = value[key] as Node | undefined;
+        stripIfAngle(field);
+        visit(field);
+      }
+    }
+  };
+  visit(document.body);
+}
+
 /** The module statements whose text may be one block of module statements. */
 const BLOCK_STATEMENT_KEYWORDS = new Set(["static", "server", "client"]);
 

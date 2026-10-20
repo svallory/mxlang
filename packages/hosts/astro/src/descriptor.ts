@@ -71,6 +71,10 @@ const descriptor: TargetDescriptor = {
           // `@mxlang/host-astro` but not `@mxlang/target-html`, so the bare name does
           // not resolve there. Compiled output for the build is unchanged.
           runtimeFrom: options.typeCheck ? ASTRO_TYPECHECK_MODULE : undefined,
+          // The tooling projection also keeps the authored TypeScript
+          // wrappers (`x satisfies T`) and checks a bound attribute's
+          // refinement, as html's own type-check module does.
+          typeCheck: options.typeCheck,
           targets: options.targets ?? targets(),
         }),
     };

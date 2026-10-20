@@ -52,6 +52,7 @@ import {
   firstErrorAt,
   parseMx,
   registerDocument,
+  stripAngleAssertions,
   stripMxTypes,
 } from "./mx-parse.ts";
 import { hintParseError } from "./parse-error-hints.ts";
@@ -598,7 +599,12 @@ export function compileSource(
       throw tableError.error;
     }
     if (parseError) throw parseError;
+    // Hosts checking their output as TSX cannot keep angle-bracket casts
+    // (`<T>x`): a kept `<T>` parses as a JSX tag and breaks the whole file.
+    // Strip their containers even when other wrappers stay.
+    // See `stripAngleAssertions`.
     if (host.stripTypes !== false) stripMxTypes(document);
+    else stripAngleAssertions(document);
     registerDocument(document);
     registerSyntax(document, resolvedSyntax);
     try {
