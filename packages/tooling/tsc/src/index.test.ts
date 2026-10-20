@@ -300,9 +300,9 @@ describe("mx-tsc", () => {
 
       expect(result.status).toBe(0);
       expect(result.stderr).toContain(
-        "Page.mx(3,2): warning MX_UNREADABLE_CALLEE_INPUT",
+        "Page.mx(2,3): warning MX_DUPLICATE_ATTRIBUTE",
       );
-      expect(result.stderr).toContain("attribute-tag shape inferred");
+      expect(result.stderr).toContain("the later one at 3:3 wins");
     },
     SPAWN_TIMEOUT_MS,
   );

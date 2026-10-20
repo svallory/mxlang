@@ -166,6 +166,22 @@ exported types with whatever the shim asserts. `examples/counter-app` and
 
 The same rule applies to `*.mx`: do not add a wildcard shim.
 
+### Callee import aliases
+
+For whole-file `.mx` callers, the editor plugin and `mx-tsc` use the project's
+parsed `compilerOptions.paths` and `baseUrl` when reading a callee's `Input`.
+Star patterns, exact aliases, and inherited tsconfig settings are supported;
+no separate MX alias setting is needed. Region, `.astro.mx`, and `.ng.mx`
+callers do not yet pass those settings to their callee Input readers. The
+standalone language server has no TypeScript project and does not use them.
+
+After a tsconfig edit, `mx-tsc --watch` recompiles with the new settings.
+In tsserver, reloading the project updates the settings but Volar retains an
+unchanged caller's compiled virtual code and compile diagnostics. Edit the
+caller (even a whitespace edit) or restart the TypeScript server to refresh
+those diagnostics. This is the same virtual-code invalidation limitation as
+other callee/config changes, not a cache of the old alias settings.
+
 ### Astro projects
 
 Astro and MX both use Volar. Two separate Volar tsserver plugins cannot

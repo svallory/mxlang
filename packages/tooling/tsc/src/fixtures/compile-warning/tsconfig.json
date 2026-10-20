@@ -9,7 +9,6 @@
     "types": [],
     "baseUrl": ".",
     "paths": {
-      "@card": ["src/Card.mx"],
       "@mxlang/target-html": ["../../../../../targets/html/src/index.ts"]
     },
     "ignoreDeprecations": "6.0",

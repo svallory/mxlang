@@ -1,6 +1,6 @@
 {
   "files": {
-    "Card.mx": {
+    "Card-html.mx": {
       "languageServer": {
         "policy": {
           "host": "html"
@@ -12,7 +12,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction CardHtml(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCardHtml.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(CardHtml, Symbol.for(\"mx.component\"), { value: true });\n\nexport default CardHtml as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -37,7 +37,7 @@
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction Card(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCard.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(Card, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Card as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nexport interface Input { [key: string]: unknown }\n\nfunction CardHtml(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nCardHtml.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxOut.write(\"<div></div>\");\n}\nexport { __mxRender as render };\nObject.defineProperty(CardHtml, Symbol.for(\"mx.component\"), { value: true });\n\nexport default CardHtml as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "map": null,
         "warnings": []
       }
@@ -52,7 +52,7 @@
             "severity": 2,
             "source": "mxlang",
             "code": "MX_UNREADABLE_CALLEE_INPUT",
-            "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
+            "message": "couldn't read `<Card>`'s Input (`~/Card-html.mx` not resolvable); attribute-tag shape inferred from this call",
             "range": {
               "start": {
                 "line": 2,
@@ -71,7 +71,7 @@
       },
       "tsPlugin": {
         "languageId": "typescript",
-        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"~/Card.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "generated": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"~/Card-html.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "mappings": [
           {
             "sourceOffsets": [
@@ -81,7 +81,7 @@
               110
             ],
             "lengths": [
-              28
+              33
             ],
             "data": {
               "verification": true,
@@ -92,10 +92,10 @@
           },
           {
             "sourceOffsets": [
-              31
+              36
             ],
             "generatedOffsets": [
-              995
+              1000
             ],
             "lengths": [
               4
@@ -109,10 +109,10 @@
           },
           {
             "sourceOffsets": [
-              31
+              36
             ],
             "generatedOffsets": [
-              1001
+              1006
             ],
             "lengths": [
               4
@@ -129,10 +129,10 @@
           },
           {
             "sourceOffsets": [
-              38
+              43
             ],
             "generatedOffsets": [
-              1003
+              1008
             ],
             "lengths": [
               3
@@ -146,10 +146,10 @@
           },
           {
             "sourceOffsets": [
-              31
+              36
             ],
             "generatedOffsets": [
-              1088
+              1093
             ],
             "lengths": [
               4
@@ -165,28 +165,16 @@
             }
           }
         ],
-        "compileDiagnostics": [
-          {
-            "fileName": "<root>/alias-html/page.mx",
-            "message": "couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call",
-            "offset": 31,
-            "category": "warning",
-            "length": 4,
-            "diagnosticCode": "MX_UNREADABLE_CALLEE_INPUT"
-          }
-        ],
+        "compileDiagnostics": [],
         "hostPolicyDiagnostics": [],
         "logged": []
       },
       "vite": {
-        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"~/Card.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
+        "code": "import { escape as __mxEscape, createOut as __mxCreateOut, type Out as __MxOut } from \"@mxlang/target-html\";\n\nimport Card from \"~/Card-html.mx\"\n\nexport interface Input {}\n\ntype __MxRenderCall<F> = [F] extends [{ render: (input: infer I, out: never) => unknown }] ? (input: I) => void : F;\n\nfunction __mxRenderTag<F extends (input: never) => unknown>(__mxSink: __MxOut, __mxTag: F): __MxRenderCall<F> {\n  const __mxCallee = __mxTag as unknown as ((input: unknown) => unknown) & { render?: (input: unknown, out: __MxOut) => unknown };\n  return ((__mxInput: unknown) => {\n    if (typeof __mxCallee.render === \"function\") return __mxCallee.render(__mxInput, __mxSink);\n    __mxSink.write(\"\" + __mxCallee(__mxInput));\n  }) as unknown as __MxRenderCall<F>;\n}\n\nfunction Page(input: Input): string {\n  const __mxOut = __mxCreateOut();\n  __mxRender(input, __mxOut);\n  return __mxOut.toString();\n}\nPage.render = __mxRender;\n\nfunction __mxRender(input: Input, __mxOut: __MxOut): void {\n  __mxRenderTag(__mxOut, Card)({ tab: () => {\n    const __mxOut = __mxCreateOut();\n    return __mxOut.toString();\n  } });\n}\nexport { __mxRender as render };\nObject.defineProperty(Page, Symbol.for(\"mx.component\"), { value: true });\n\nexport default Page as ((input: Input) => string) & { render: typeof __mxRender };\n",
         "map": null,
         "warnings": []
       }
     }
   },
-  "mxTsc": [
-    "<root>/alias-html/page.mx(1,18): error TS2307: Cannot find module '~/Card.mx' or its corresponding type declarations.",
-    "<root>/alias-html/page.mx(3,2): warning MX_UNREADABLE_CALLEE_INPUT: couldn't read `<Card>`'s Input (`~/Card.mx` not resolvable); attribute-tag shape inferred from this call"
-  ]
+  "mxTsc": []
 }

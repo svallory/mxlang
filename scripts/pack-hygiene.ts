@@ -162,6 +162,9 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/mx-language.d.ts",
       "dist/ng-worker.cjs",
       "dist/own-location-header.d.ts",
+      // mx-language.d.ts types MxLanguagePluginOptions.resolveImport with it;
+      // it references only the declared typescript peer.
+      "dist/tsconfig-paths.d.ts",
       "dist/unmapped-diagnostics.d.ts",
     ],
     declarations: true,

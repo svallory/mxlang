@@ -28,6 +28,7 @@ import {
 import type { Language, LanguagePlugin } from "@volar/language-core";
 import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName";
 import type ts from "typescript";
+import { createTsconfigPathsResolver } from "../../typescript-plugin/src/tsconfig-paths.ts";
 import {
   isWatchMode,
   parseBuildMode,
@@ -561,8 +562,8 @@ function runPatchedTsc(
     ...dialectExtensions.filter((extension) => extension !== ".mx"),
   ];
   try {
-    runVolarTsc(resolveTscPath(), extensions, (typescript, options) => {
-      addAmbientTypes(options);
+    runVolarTsc(resolveTscPath(), extensions, (typescript, programOptions) => {
+      addAmbientTypes(programOptions);
       // First: a dialect's `.probe.mx` is the dialect's file, not an MX one.
       const dialect = createDialectLanguagePlugin(
         typescript,
@@ -575,10 +576,19 @@ function runPatchedTsc(
         retainCompiled: true,
       });
       ngPlugins.push({
-        rootNames: options.rootNames,
+        rootNames: programOptions.rootNames,
         getCompiledNgMx: () => ngMx.getCompiledNgMx(),
       });
-      const mx = createMxLanguagePlugin(typescript);
+      const mx = createMxLanguagePlugin(typescript, {
+        // The program's parsed compiler options carry the tsconfig this run
+        // was invoked with (`-p`), `extends` chains included, so `paths` and
+        // `baseUrl` reach `.mx` callee imports the way they reach every
+        // other module the program resolves.
+        resolveImport: createTsconfigPathsResolver(
+          typescript,
+          () => programOptions.options,
+        ),
+      });
       diagnosticPlugins.push(dialect, ...regionPlugins, ngMx, mx);
       const plugins: LanguagePlugin<string>[] = [
         dialect,
@@ -607,13 +617,13 @@ function runPatchedTsc(
         setup: (language) => {
           // Runs before Volar copies the host and patches `getSourceFile` on
           // that copy, so every edit below lands on the host it copies from.
-          virtualFilesInWatchRebuilds(options.host);
+          virtualFilesInWatchRebuilds(programOptions.host);
           // Watch only: the manifests that decide a file's host are inputs
           // of that file (see `watch-package-json.ts`).
           if (watchMode) {
             trackPackageJsonInputs(
               typescript,
-              options.host,
+              programOptions.host,
               extensions,
               solutionBuild,
             );
@@ -621,11 +631,11 @@ function runPatchedTsc(
           // Watch only: marks that a rebuild is reading files, so a rebuild
           // whose summary the pass cannot recognize is said out loud.
           if (watchMode) {
-            rebuildActivity(options.host, { build: solutionBuild });
+            rebuildActivity(programOptions.host, { build: solutionBuild });
           }
           fallBackToVolarResolution(
             typescript,
-            options.host,
+            programOptions.host,
             language,
             astro ? ASTRO_SUPPORTED_EXTENSIONS : EXTRA_SUPPORTED_EXTENSIONS,
           );

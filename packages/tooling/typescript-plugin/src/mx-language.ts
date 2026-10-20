@@ -54,6 +54,7 @@ import {
   warningDiagnostic,
 } from "./language.ts";
 import { dropOwnLocationHeader } from "./own-location-header.ts";
+import type { TsPathsImportResolver } from "./tsconfig-paths.ts";
 import type {
   AuthoredSpan,
   SpannedVirtualCode,
@@ -90,6 +91,15 @@ export interface MxLanguagePlugin extends MxDiagnosticLanguagePlugin {
 
 export interface MxLanguagePluginOptions
   extends DependencyLanguagePluginOptions {
+  /**
+   * A tool-supplied import resolver for callee imports, tried before core's
+   * own probing — the `resolveImport` hook of `TranslatorOptions`. The
+   * tsserver plugin and `mx-tsc` pass tsconfig-paths resolution built from
+   * the program's compiler options (`createTsconfigPathsResolver`), so an
+   * aliased `.mx` callee import resolves to the same file the program's own
+   * module resolution sees.
+   */
+  resolveImport?: TsPathsImportResolver;
   /**
    * Custom tags supplied directly, merged over whatever the scan discovers
    * for each file.
@@ -415,6 +425,9 @@ export function createMxLanguagePlugin(
       warnings,
       typeCheck: true,
       targets,
+      ...(options.resolveImport
+        ? { resolveImport: options.resolveImport }
+        : undefined),
     });
     const generated = descriptor.typeSurface?.(compiled.code) ?? compiled.code;
     // A loaded descriptor with no `declarations` has no lowering policy of its

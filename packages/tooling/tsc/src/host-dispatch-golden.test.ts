@@ -16,6 +16,7 @@ import {
   diagnoseDocument,
   type RelatedDiagnostics,
 } from "../../language-server/src/diagnose.ts";
+import { createTsconfigPathsResolver } from "../../typescript-plugin/src/tsconfig-paths.ts";
 import mxVite, { MX_SUFFIX } from "../../vite-plugin/dist/index.js";
 import { runInProcess } from "./in-process.ts";
 
@@ -40,6 +41,22 @@ import { runInProcess } from "./in-process.ts";
 
 const here = import.meta.dirname;
 const root = realpathSync(join(here, "fixtures", "host-dispatch"));
+/** The fixture tsconfig's parsed compiler options (`paths`, `baseUrl`). */
+const parsedFixtureConfig = ts.getParsedCommandLineOfConfigFile(
+  join(root, "tsconfig.json"),
+  {},
+  {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+      throw new Error(
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      );
+    },
+  },
+);
+const fixtureOptions: ts.CompilerOptions = parsedFixtureConfig
+  ? parsedFixtureConfig.options
+  : {};
 const repo = realpathSync(join(here, "..", "..", "..", ".."));
 const goldens = join(root, "__golden__");
 
@@ -54,8 +71,10 @@ const goldens = join(root, "__golden__");
  *   always did; an explicit `options.strict` can only add strictness. The
  *   Vite leg of both rows' page.mx now throws `MX_UNSUPPORTED_CONSTRUCT`
  *   like the editor tools.
- * - alias-html/-preact/-react/-hono: D2. `resolveImport` reaches the compile
- *   in Vite only, so the `~/Card.mx` import resolves there and nowhere else.
+ * - alias-html/-preact/-react/-hono: D2, resolved: the TypeScript plugin
+ *   and `mx-tsc` honour tsconfig `paths` for `.mx` callee imports
+ *   (mx-c1cu), so the `~/Card-<host>.mx` import resolves everywhere the
+ *   Vite alias does; a `mx.config` alias setting stays out of scope.
  * - every row's TypeScript plugin `mappings`: D3. The mapping pass looks tags
  *   up through the compile target's own translator when it defines one, and
  *   the default target's otherwise.
@@ -258,7 +277,12 @@ function pluginFor(file: string): { plugin: Plugin; languageId: string } {
     };
   }
   return {
-    plugin: createMxLanguagePlugin(ts) as Plugin,
+    plugin: createMxLanguagePlugin(ts, {
+      // What the editor supplies from the project: the fixture tsconfig's
+      // compiler options, so its `paths` reach `.mx` callee imports here as
+      // they now do in tsserver and `mx-tsc`.
+      resolveImport: createTsconfigPathsResolver(ts, () => fixtureOptions),
+    }) as Plugin,
     languageId: "mx",
   };
 }

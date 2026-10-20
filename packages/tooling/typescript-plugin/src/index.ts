@@ -4,6 +4,7 @@ import { isDialectFile } from "@mxlang/targets/dialect-check";
 import type { Language } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import { createLanguageServicePlugin } from "@volar/typescript/lib/quickstart/createLanguageServicePlugin";
+import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName";
 import type * as ts from "typescript";
 import { ambientTypeDiagnostics, withAmbientTypes } from "./ambient-types.ts";
 import {
@@ -37,6 +38,7 @@ import {
 } from "./language.ts";
 import {
   createMxLanguagePlugin,
+  MX_LANGUAGE_ID,
   type MxLanguagePlugin,
 } from "./mx-language.ts";
 import {
@@ -44,6 +46,7 @@ import {
   createNgDiagnosticsService,
   type NgDiagnosticsService,
 } from "./ng-diagnostics.ts";
+import { createTsconfigPathsResolver } from "./tsconfig-paths.ts";
 import {
   approximateUnmappedDiagnostics,
   LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
@@ -54,6 +57,7 @@ function createBuiltinLanguagePlugins(
   readSource?: DependencySourceReader,
   onCompiled?: import("./language.ts").NgMxLanguagePluginOptions["onCompiled"],
   projectDir?: string,
+  resolveImport?: import("./tsconfig-paths.ts").TsPathsImportResolver,
 ): Array<AnyMxLanguagePlugin> {
   // First, so a dialect's `.probe.mx` is the dialect's file; it answers
   // nothing for any other file.
@@ -80,7 +84,9 @@ function createBuiltinLanguagePlugins(
         break;
     }
   }
-  plugins.push(createMxLanguagePlugin(typescript, { readSource }));
+  plugins.push(
+    createMxLanguagePlugin(typescript, { readSource, resolveImport }),
+  );
   return plugins;
 }
 
@@ -131,6 +137,12 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       readSource,
       (entry) => ngDiagnostics?.notifyCompiled(entry),
       projectDirectory(typescript, info),
+      // The project's own compiler options decide alias resolution, so a
+      // tsconfig `paths` entry reaches `.mx` callee imports exactly as it
+      // reaches every other import the program resolves.
+      createTsconfigPathsResolver(typescript, () =>
+        info.languageServiceHost.getCompilationSettings(),
+      ),
     );
     if (info.config?.astro === true) {
       languagePlugins.push(createAmxLanguagePlugin(typescript, { readSource }));
@@ -144,6 +156,11 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       ),
       setup: (volarLanguage) => {
         language = volarLanguage;
+        resolveWholeFileAliases(
+          typescript,
+          info.languageServiceHost,
+          volarLanguage,
+        );
       },
     };
   });
@@ -173,6 +190,102 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
     },
   };
 };
+
+/**
+ * Volar delegates extensionless specifiers to tsserver's stock resolver.
+ * Retry unresolved imports from whole-file MX callers with Volar's own
+ * resolver, so exact aliases and extension-omitted paths find the same
+ * virtual module as an explicit `.mx` specifier. Keep successful ordinary
+ * answers and failed-lookup information untouched. Eligibility uses the
+ * resolution call's options, including project-reference redirects.
+ */
+function resolveWholeFileAliases(
+  typescript: typeof ts,
+  host: ts.LanguageServiceHost,
+  language: Language<string>,
+): void {
+  let optionsForResolution: ts.CompilerOptions | undefined;
+  const resolveImport = createTsconfigPathsResolver(
+    typescript,
+    () => optionsForResolution,
+  );
+  const resolve = createResolveModuleName(
+    typescript,
+    typescript.sys.getFileSize,
+    host,
+    language.plugins,
+    (file) => language.scripts.get(file),
+  );
+  const eligible = (
+    name: string,
+    file: string,
+    options: ts.CompilerOptions,
+  ) => {
+    optionsForResolution = options;
+    return (
+      language.scripts.get(file)?.languageId === MX_LANGUAGE_ID &&
+      resolveImport(name, file)?.endsWith(".mx")
+    );
+  };
+  const literals = host.resolveModuleNameLiterals;
+  if (literals) {
+    host.resolveModuleNameLiterals = (
+      imports,
+      file,
+      redirected,
+      options,
+      source,
+      ...rest
+    ) =>
+      literals
+        .call(host, imports, file, redirected, options, source, ...rest)
+        .map((result, index) => {
+          const literal = imports[index];
+          if (
+            result.resolvedModule ||
+            !literal ||
+            !eligible(literal.text, file, options)
+          )
+            return result;
+          const retried = resolve(
+            literal.text,
+            file,
+            options,
+            undefined,
+            redirected,
+            typescript.getModeForUsageLocation(source, literal, options),
+          );
+          return retried.resolvedModule ? retried : result;
+        });
+  }
+  const names = host.resolveModuleNames;
+  if (names) {
+    host.resolveModuleNames = (
+      imports,
+      file,
+      reused,
+      redirected,
+      options,
+      source,
+    ) =>
+      names
+        .call(host, imports, file, reused, redirected, options, source)
+        .map((result, index) => {
+          const name = imports[index];
+          if (result || !name || !eligible(name, file, options)) return result;
+          return (
+            resolve(
+              name,
+              file,
+              options,
+              undefined,
+              redirected,
+              source?.impliedNodeFormat,
+            ).resolvedModule ?? result
+          );
+        });
+  }
+}
 
 /** The directory a tsserver project's files are resolved from. */
 function projectDirectory(

@@ -16,6 +16,12 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
+      "~/*": [
+        "alias-html/*",
+        "alias-preact/*",
+        "alias-react/*",
+        "alias-hono/*"
+      ],
       "@mxlang/target-html": ["../../../../../targets/html/src/index.ts"],
       "@mxlang/host-astro": ["../../../../../hosts/astro/src/index.ts"],
       "@mxlang/host-astro/typecheck": [
