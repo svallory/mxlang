@@ -2,15 +2,16 @@
  * Primitive attribute values on native elements render as Marko 6.4.4's html
  * output does, on preact, react, hono, solid and astro. Real renders of every
  * side in separate Bun processes (scripts/attribute-value-probe.ts --parity),
- * compared as parsed DOM, over 15 attributes x 4 forms x 4 values.
+ * compared as parsed DOM, over 15 attributes x 4 forms x 4 base values,
+ * plus branch-sensitive extra values (1,300 cells across the five hosts).
  *
- * The value axis is the four render classes: `null` (absence), `true`
- * (presence), `0` (falsy-but-printed) and `"x"` (truthy string). `undefined`
- * and `false` render byte-identically to `null` on every host, attribute and
- * form, and `""` renders either the same absence (class/style, where an empty
- * value is dropped) or the same parsed presence as `true` (Solid prints
- * `<div title>` vs `<div title="">`; parse5 reads both as `title=""`), so the
- * dropped points are covered by a kept point of their class.
+ * The base values are `null` (absence), `true` (presence), `0`
+ * (falsy-but-printed) and `"x"` (truthy string). `undefined` and `false`
+ * render byte-identically to `null` today, and `""` renders the same absence
+ * for class/style or the same parsed presence as `true` (Solid prints
+ * `<div title>` for `true`, `<div title="">` for `""`; parse5 reads both as
+ * `title=""`). Equal output does not imply equal emitter branches: retain
+ * `false`/`""` for class/style and `false` for title to pin their normalizers.
  *
  * Documented divergences, pinned here rather than skipped (names: disabled, hidden, required, open, `checked` on input):
  *  - React prints a boolean property as presence only (`disabled=""` where
@@ -71,8 +72,7 @@ const ASTRO_BOOLEAN = new Set([
 ]);
 
 /** The rendered elements as canonical JSON; `presence` drops boolean values. */
-function dom(row: Row | undefined, presence: boolean, host = "react"): string {
-  if (!row) return "MISSING";
+function dom(row: Row, presence: boolean, host = "react"): string {
   if (row.error !== undefined) return `ERROR:${row.error}`;
   const out: string[] = [];
   const walk = (node: Node5): void => {
@@ -120,6 +120,13 @@ const attributes = [
 ];
 const forms = ["direct", "spread", "merged", "mergedBefore"];
 const values = ["null", "true", "zero", "x"];
+const extraValues: Record<string, string[]> = {
+  title: ["false"],
+  class: ["false", "empty"],
+  style: ["false", "empty"],
+};
+// The probe emits this value too, but no attribute asserts it as a parity cell.
+const PROBE_ONLY = ["undefined"];
 
 const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
@@ -127,43 +134,68 @@ const hosts: Record<string, Row[]> = {};
 beforeAll(() => {
   marko = rows("marko");
   for (const host of HOSTS) hosts[host] = rows(host);
-  expect(marko.length).toBe(attributes.length * forms.length * 7); // Probe renders all 7 value points; the axis below exercises 4.
+  const probeValues = new Set([
+    ...values,
+    ...Object.values(extraValues).flat(),
+    ...PROBE_ONLY,
+  ]);
+  expect(marko).toHaveLength(
+    attributes.length * forms.length * probeValues.size,
+  );
+  for (const attribute of attributes)
+    for (const form of forms) {
+      const emitted = marko.filter(
+        (row) => row.form === `${attribute}/${form}`,
+      );
+      expect(emitted).toHaveLength(probeValues.size);
+      expect(new Set(emitted.map((row) => row.value))).toEqual(probeValues);
+    }
 }, 120_000); // Real compilers and renderers in separate Bun processes.
 
-const find = (list: Row[], form: string, value: string) =>
-  list.find((row) => row.form === form && row.value === value);
+function find(list: Row[], form: string, value: string): Row {
+  const row = list.find((row) => row.form === form && row.value === value);
+  if (!row) throw new Error(`Missing probe row: ${form} ${value}`);
+  return row;
+}
 
 describe.each(HOSTS)(
   "%s primitive attribute values (real renders, Marko 6.4.4)",
   (host) => {
     for (const attribute of attributes)
       for (const form of forms)
-        it.each(values)(`${attribute} ${form} %s`, (value) => {
-          const key = `${attribute}/${form}`;
-          const actual = find(hosts[host] ?? [], key, value);
-          if (host !== "astro" && attribute === "style" && form !== "spread") {
-            // The object-literal rule: refused at compile time, unchanged.
-            expect(actual?.error).toContain(
-              host === "solid"
-                ? "`style=` with a non-object value"
-                : "`style=` takes an object literal",
+        it.each([...values, ...(extraValues[attribute] ?? [])])(
+          `${attribute} ${form} %s`,
+          (value) => {
+            const key = `${attribute}/${form}`;
+            const actual = find(hosts[host] ?? [], key, value);
+            if (
+              host !== "astro" &&
+              attribute === "style" &&
+              form !== "spread"
+            ) {
+              // The object-literal rule: refused at compile time, unchanged.
+              expect(actual?.error).toContain(
+                host === "solid"
+                  ? "`style=` with a non-object value"
+                  : "`style=` takes an object literal",
+              );
+              return;
+            }
+            if (
+              host === "react" &&
+              attribute === "style" &&
+              (value === "true" || value === "x")
+            ) {
+              expect(actual?.error).toContain(
+                "The `style` prop expects a mapping from style properties to values, not a string",
+              );
+              return;
+            }
+            const presence = host === "react" || host === "astro";
+            expect(dom(actual, presence, host)).toBe(
+              dom(find(marko, key, value), presence, host),
             );
-            return;
-          }
-          if (
-            host === "react" &&
-            attribute === "style" &&
-            (value === "true" || value === "x")
-          ) {
-            expect(actual?.error).toContain(
-              "The `style` prop expects a mapping from style properties to values, not a string",
-            );
-            return;
-          }
-          const presence = host === "react" || host === "astro";
-          expect(dom(actual, presence, host)).toBe(
-            dom(find(marko, key, value), presence, host),
-          );
-        });
+          },
+        );
   },
 );
