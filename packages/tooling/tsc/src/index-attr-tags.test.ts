@@ -15,8 +15,9 @@ function runFixture(fixture: string) {
 }
 
 describe("mx-tsc", () => {
-  // Every spawn below blocks this worker's thread, and consecutive
-  // synchronous tests never return to the event loop. Past a minute of that
+  // mx-tsc runs in-process through runInProcess, blocking this worker's
+  // thread. Consecutive synchronous tests never return to the event loop.
+  // Past a minute of that
   // vitest's own worker RPC times out (`Timeout calling "onTaskUpdate"`) and
   // fails a run whose tests all passed, so each test hands the loop back.
   afterEach(() => new Promise<void>((resolve) => setImmediate(resolve)));
