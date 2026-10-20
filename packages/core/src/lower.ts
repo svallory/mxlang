@@ -1491,7 +1491,11 @@ function checkDefineReads(
   if (!binding.pending) return;
   const { traverse, types } = coreBabel();
   let read: Node | undefined;
-  traverse(types.file(types.program([types.expressionStatement(node)])), {
+  const program =
+    node.type === "Program"
+      ? node
+      : types.program([types.expressionStatement(node)]);
+  traverse(types.file(program), {
     Identifier(path: Node) {
       if (
         !read &&
@@ -1502,6 +1506,7 @@ function checkDefineReads(
         read = path.node;
     },
   });
+  if (!read) return;
   raise(
     DEFINE_READ_BEFORE_DECLARATION_CODE,
     `\`${name}\` is read before the ${tagText(ctx, "define")} that declares it; a ${tagText(ctx, "define")} is not hoisted. Move the ${tagText(ctx, "define")} above this read.`,
@@ -1515,8 +1520,9 @@ function checkDefineReads(
  * The binding starts at the tag, so the read used to compile to a reference
  * the emitted JS leaves in the temporal dead zone — a crash at render. Stock
  * 6.4.4 refuses it ("`x` is the tag variable this tag declares, so its own
- * attributes cannot read it."). A read inside a function is fine: it runs
- * after the binding exists (`<const/f=() => f()/>`, a `<let>`'s own
+ * attributes cannot read it."). A read inside a deferred function is fine:
+ * no call or construction may enclose it up to the attribute value root
+ * (`<const/f=() => f()/>`, a `<let>`'s own
  * `valueChange`), and Babel's scope analysis leaves a name an inner scope
  * rebinds alone. This also applies to a custom call's `/var`: its own
  * attributes follow the same rule rather than the generic pending-read error.
@@ -1550,17 +1556,28 @@ function rejectTagVarSelfRead(ctx: Ctx, node: Node): void {
         if (path.parentPath.isUpdateExpression()) return;
         // A name an inner scope rebinds is that binding's, not the tag's.
         if (path.scope.getBinding(path.node.name)) return;
-        // A function runs after the binding exists, so a read inside one is
-        // the outer binding the author meant (`<const/f=() => f()/>`).
-        if (
-          path.findParent(
-            (parent: Node) =>
-              parent.isFunctionDeclaration() ||
-              parent.isFunctionExpression() ||
-              parent.isArrowFunctionExpression() ||
-              parent.isObjectMethod(),
-          )
-        ) {
+        // Marko's getFnRoot: the outermost function defers the read, but
+        // a surrounding call/new can execute it in this attribute. An outer
+        // function above that call defers the whole expression again.
+        let deferredFunction = false;
+        for (let parent = path; parent; parent = parent.parentPath) {
+          if (
+            (parent.isFunctionDeclaration() && !parent.node.declare) ||
+            parent.isFunctionExpression() ||
+            parent.isArrowFunctionExpression() ||
+            parent.isObjectMethod()
+          ) {
+            deferredFunction = true;
+          } else if (
+            parent.isCallExpression() ||
+            parent.isOptionalCallExpression() ||
+            parent.isNewExpression()
+          ) {
+            deferredFunction = false;
+          }
+          if (parent.node === value) break;
+        }
+        if (deferredFunction) {
           deferred.add(path.node.name);
           return;
         }
@@ -4110,10 +4127,12 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
   const valueNode = attrValueOf(ctx, value);
   const constNames = bindingIdentifiers(tagVarOf(node));
   const outerGuards = ctx.writeGuards;
-  ctx.writeGuards = new Map([
-    ...(outerGuards ?? []),
-    ...constGuards(node, constNames),
-  ]);
+  if (ctx.tagRules !== "none") {
+    ctx.writeGuards = new Map([
+      ...(outerGuards ?? []),
+      ...constGuards(node, constNames),
+    ]);
+  }
   let init: Expr;
   try {
     init = exprOf(ctx, valueNode);
@@ -5416,6 +5435,7 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 
 /** A tag this host claims, with every part lowered for its emitter. */
 function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
+  if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   const loc = posOf(ctx, node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
@@ -6146,6 +6166,7 @@ function lowerCustomTagBody(
       tagVarOf(node),
     );
   }
+  if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   validateCustomAttributeTagBodies(
     ctx,
     label,
@@ -6320,6 +6341,7 @@ function lowerComponent(
     },
   );
 
+  if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   const input =
     ctx.calleeInputFor?.(target) ?? readCalleeInput(target, ctx).input;
   const owner = targetName(target);
@@ -6338,9 +6360,8 @@ function lowerComponent(
   raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
   const callVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null;
-  // Lowered before the binding is registered: the call's own attributes and
-  // body cannot read the `/var` it declares (Marko `references.ts:556-560`),
-  // and the emitted order assigns it from the call's own result.
+  // Attributes lower before the call's result binds `/var`. Stock permits a
+  // body read, but that separate, pre-existing body-scope gap remains tracked.
   const attrs = lowerAttrs(ctx, node, targetName(target), "component");
   // Same normalized-body presence rule as custom template tags.
   const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
@@ -6719,7 +6740,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // or "tagged", as before); otherwise core lowers a `Component` with a
   // dynamic target, resolved at run time like any other host.
   if (node.name && !hasStaticName(node)) {
-    rejectTagVarSelfRead(ctx, node);
     validateBoundAttributes(ctx, node);
     rejectArgsWithProps(ctx, node);
     const isBare =
@@ -6775,7 +6795,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // host-specific reading of the authored name (disposition, claim, element).
   const wildcard = activeWildcard(ctx, node);
   if (wildcard) {
-    rejectTagVarSelfRead(ctx, node);
     return lowerCustomTag(
       ctx,
       node,
@@ -6824,11 +6843,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (!fileLocalBinding && compilerValueTag)
     validateBuiltinValueAttributes(ctx, node, name);
 
-  // Every tag-variable declaration owns this rule, including returning calls.
-  // A malformed builtin value shape keeps its existing diagnostic first, as
-  // stock does for `<let/c=1 value:=c/>`. Function bodies may read the variable
-  // later; their writes are checked by the ordinary binding-write machinery.
-  rejectTagVarSelfRead(ctx, node);
+  // Builtin values keep their shape check first. Calls run this guard after
+  // their own support checks, so an unsupported `/var` is still blamed first.
+  // Under `none`, none of the new declaration rules applies.
+  if (ctx.tagRules !== "none" && (compilerValueTag || name === "define"))
+    rejectTagVarSelfRead(ctx, node);
 
   // A `server`/`client` statement's text is checked like any statement
   // (#395 r3), before a host runs it (html's `server`), drops it (html's
@@ -7392,9 +7411,20 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // element or control body nested inside it is a new declaration scope.
   const enclosingParams = ctx.enclosingTagParams;
   ctx.enclosingTagParams = undefined;
-  const outerTagVars = new Map(ctx.tagVars);
+  // Save only names this body overwrites, not every enclosing tag variable.
+  const savedTagVars = new Map<
+    string,
+    NonNullable<Ctx["tagVars"]> extends Map<string, infer T>
+      ? T | undefined
+      : never
+  >();
+  const saveTagVar = (name: string, localDefine = false): void => {
+    const outer = ctx.tagVars?.get(name);
+    if ((localDefine || outer?.define) && !savedTagVars.has(name))
+      savedTagVars.set(name, outer);
+  };
   const outerShadowed = ctx.tagVarShadowed;
-  const localDefines = new Set<string>();
+  let defineShadowed: Set<string> | undefined;
   // Every `/var` this block declares is registered *before* the walk, at the
   // sibling index it is declared at. A read earlier in the same block then
   // finds a binding whose sequence is greater than its own and reports
@@ -7417,6 +7447,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   };
   for (const child of children) {
     if (!isTagNode(child) || !tagVarOf(child)) continue;
+    for (const name of bindingIdentifiers(tagVarOf(child))) saveTagVar(name);
     // A `<define>` binds its name the same way for reads *above* it: the
     // binding does not exist yet, so it is pre-registered pending until its
     // own lowering clears the flag, and `checkDefineReads` refuses a read
@@ -7426,10 +7457,12 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       const defineName = declName(ctx, tagVarOf(child));
       ctx.tagVars ??= new Map();
       // An outer ordinary binding cannot hide this body's pending define.
-      localDefines.add(defineName);
-      ctx.tagVarShadowed = new Set(
-        [...(ctx.tagVarShadowed ?? [])].filter((name) => name !== defineName),
-      );
+      saveTagVar(defineName, true);
+      if (ctx.tagVarShadowed?.has(defineName)) {
+        defineShadowed ??= new Set(outerShadowed);
+        defineShadowed.delete(defineName);
+        ctx.tagVarShadowed = defineShadowed;
+      }
       ctx.tagVars.set(defineName, {
         block: [...(ctx.tagVarBlock ?? [])],
         pending: true,
@@ -7455,6 +7488,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       continue;
     }
     const name = declName(ctx, tagVarOf(child));
+    saveTagVar(name);
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(name, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -7470,22 +7504,27 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // body is its own scope (`<div><const/x/></div>` beside another), the arms
   // of an `<if>` are separate bodies, and a `<script>`'s own `const` is
   // JavaScript's, not a tag variable.
-  const declaredNames = children.map((child) => {
-    if (!isTagNode(child) || !tagVarOf(child)) return [];
-    const name = tagNameOf(child);
-    const builtin =
-      ctx.tagRules !== "none" &&
-      (name === "const" || name === "let" || name === "define");
-    const call =
-      typeof name === "string" &&
-      (Object.hasOwn(ctx.customTags ?? {}, name) ||
-        ctx.importSpecifiers.has(name) ||
-        importsName(name));
-    const dynamic = !hasStaticName(child);
-    return builtin || call || dynamic
-      ? bindingIdentifierNodes(tagVarOf(child))
-      : [];
-  });
+  const declaredNames =
+    ctx.tagRules === "none"
+      ? []
+      : children.map((child) => {
+          if (!isTagNode(child) || !tagVarOf(child)) return [];
+          const name = tagNameOf(child);
+          const builtin =
+            name === "const" ||
+            name === "let" ||
+            name === "define" ||
+            name === "id";
+          const call =
+            typeof name === "string" &&
+            (Object.hasOwn(ctx.customTags ?? {}, name) ||
+              ctx.importSpecifiers.has(name) ||
+              importsName(name));
+          const dynamic = !hasStaticName(child);
+          return builtin || call || dynamic
+            ? bindingIdentifierNodes(tagVarOf(child))
+            : [];
+        });
   const firstDeclaredIndex = new Map<string, number>();
   declaredNames.forEach((names, at) => {
     for (const binding of names) {
@@ -7541,17 +7580,15 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // below" anymore. The prefix of the names declared so far filters the
   // outer sets per child (a nested block inherits the filtered set, and the
   // `finally` restores the outer value on the way out).
-  const declaredBefore: ReadonlySet<string>[] = [];
+  const declaredBefore = new Set<string>();
+  let prefixEnd = 0;
   const shadowPrefix = (at: number): ReadonlySet<string> => {
-    while (declaredBefore.length < at) {
-      const child = children[declaredBefore.length];
-      declaredBefore.push(
-        new Set([...letNamesOf(ctx, child), ...constNamesOf(ctx, child)]),
-      );
+    while (prefixEnd < at) {
+      const child = children[prefixEnd++];
+      for (const name of letNamesOf(ctx, child)) declaredBefore.add(name);
+      for (const name of constNamesOf(ctx, child)) declaredBefore.add(name);
     }
-    // Every child above, not only the nearest: a declaration two siblings up
-    // still shadows the one below the block.
-    return new Set(declaredBefore.slice(0, at).flatMap((names) => [...names]));
+    return declaredBefore;
   };
   const declaredBelow = (
     namesAt: Array<[number, string[]]>,
@@ -7676,6 +7713,25 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
               : undefined;
             checkScriptShape(ctx, child);
             checkScriptBodySyntax(ctx, child);
+            if (ctx.tagRules !== "none" && isBuiltinScript(ctx, child)) {
+              const program = scriptProgramOf(ctx, child);
+              if (program) {
+                for (const [name, binding] of ctx.tagVars ?? []) {
+                  if (
+                    binding.define &&
+                    binding.pending &&
+                    !ctx.tagVarShadowed?.has(name)
+                  )
+                    checkDefineReads(
+                      ctx,
+                      name,
+                      binding,
+                      ctx.tagVarBlock ?? [],
+                      program,
+                    );
+                }
+              }
+            }
             checkStaleDerivedReads(ctx, child);
             checkScriptBodyWrites(ctx, child);
             // These checks collect multiple diagnostics without throwing. Their
@@ -7819,11 +7875,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     ctx.tagVarShadowed = outerShadowed;
     // Restore define entries shadowed by this body, including a still-pending
     // outer define. Custom `/var` escape tracking keeps its existing lifetime.
-    for (const [name, outer] of outerTagVars) {
-      if (outer.define) ctx.tagVars?.set(name, outer);
-    }
-    for (const name of localDefines) {
-      const outer = outerTagVars.get(name);
+    for (const [name, outer] of savedTagVars) {
       if (outer) ctx.tagVars?.set(name, outer);
       else ctx.tagVars?.delete(name);
     }

@@ -91,6 +91,8 @@ describe("returning imports and dynamic calls follow declaration rules", () => {
   it.each([
     "<returns/x a=x/>",
     'import R from "./returns.mx"\n<R/x a=x/>',
+    'import R from "./returns.mx"\n<R/x a=(() => x)()/>',
+    "<returns/x a=input.wrap(() => x)/>",
     'import R from "./returns.mx"\n<${R}/x a=x/>',
   ])("refuses self-reads in %s", (source) => {
     expect(compile(source, { returns: returnsTag })?.code).toBe(
@@ -101,6 +103,7 @@ describe("returning imports and dynamic calls follow declaration rules", () => {
   it.each([
     "<returns/x a=() => x/>",
     'import R from "./returns.mx"\n<R/x a=() => x/>',
+    'import R from "./returns.mx"\n<R/x a=() => [1].map(() => x)/>',
     'import R from "./returns.mx"\n<${R}/x a=() => x/>',
   ])("keeps deferred self-reads in %s", (source) => {
     expect(compile(source, { returns: returnsTag })).toBeUndefined();
@@ -113,6 +116,12 @@ describe("returning imports and dynamic calls follow declaration rules", () => {
     'import R from "./returns.mx"\n<${R}/x/><const/x=1/>',
   ])("refuses repeated declarations in %s", (source) => {
     expect(compile(source)?.code).toBe("MX_DUPLICATE_DECLARATION");
+  });
+
+  it("restores an outer pending define after a nested dynamic /var", () => {
+    expect(
+      compile("<div><${input.tag}/D/></div>${D}<define/D>x</define>")?.code,
+    ).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
   });
 });
 

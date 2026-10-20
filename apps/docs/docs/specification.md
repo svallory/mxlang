@@ -1869,7 +1869,11 @@ read identifier. An outer binding of the same name does not help. Read the
 variable below the tag instead, or declare the derived value under another
 name. Function, arrow and object-method bodies may read it later
 (`<const/f=() => f()/>`, `<const/f={ g: () => f }/>`, a `<let>`'s own
-`valueChange`); class members are not this exception. Writes still obey the
+`valueChange`) only when they are deferred: a call, optional call or `new`
+between the function and the attribute's value root makes the read eager.
+Thus `<const/x=(() => x)()/>` and `<const/x=[1].map(() => x)/>` are refused;
+`<const/x=() => [1].map(() => x)/>` remains deferred by its outer arrow.
+Class members are not this exception. Writes still obey the
 binding-write rules, including in the initializer. A render write in a
 `<let>`'s own attributes keeps `MX_LET_WRITE_IN_RENDER` first.
 
@@ -1949,10 +1953,12 @@ the message and each positioned at the assignment or update with its end (for a
   block enclosing it wins over a declaration above, so the write is reported
   against the declaration below; a declaration in a block nested below the
   write does not count. A `<let>` or `<const>` declared above the write in an
-  inner block is the declaration the write reaches, whatever sits between
-  them and whatever the enclosing blocks declare below. When the two declarations sit in
-  the write's own block, the later one is a duplicate declaration, a separate
-  rule this check does not state yet.
+  inner block enclosing the write is the declaration the write reaches,
+  whatever sits between them and whatever the enclosing blocks declare below.
+  A declaration inside a nested sibling body above the write does not shadow
+  a declaration in the write's own block or its ancestors. When both declarations
+  sit in the write's own block, the later one is refused by the same-body
+  declaration rule below.
 - A `for...of` or `for...in` whose left side is a `<let>` is refused
   (`MX_LET_LOOP_ASSIGNMENT`), also inside a handler: "`count` is a `<let>`, so a
   `for...of` cannot assign to it. Loop into a local variable and assign `count`
@@ -2018,7 +2024,7 @@ does not make a later write to the outer `<const/x>` legal). On the html target 
 native element whose body declares a name is emitted with a block around its
 children. Declaring one name twice in the *same* body is refused with
 `MX_DUPLICATE_DECLARATION` at the second name, naming the first declaration:
-this includes `<const>`, `<let>`, `<define>`, a returning call's `/var`,
+this includes `<const>`, `<let>`, `<define>`, `<id>`, a returning call's `/var`,
 destructured names and mixtures of those declarations. A declaration directly
 in a `<for>` or `<define>` body also cannot repeat one of that tag's params.
 A nested element or control body may shadow the param; a param itself named
@@ -4457,7 +4463,7 @@ host, a target or a dialect.
 | `MX_INVALID_RETURN` | error | the shape rules of `<return>` |
 | `MX_INVALID_TRY` | error | the shape rules of `<try>` |
 | `MX_INVALID_STATEMENT` | error | an `import`, `export` or `static` statement core cannot take, or a `<script>` body that does not parse |
-| `MX_DUPLICATE_DECLARATION` | error | a module name declared twice across the `import`, `static`, `server`, `client` and `export` statements |
+| `MX_DUPLICATE_DECLARATION` | error | a module name declared twice (except permitted `var`/TypeScript merges), or a body tag variable repeating a declaration or its enclosing tag's parameter |
 | `MX_UNDECLARED_EXPORT` | error | an export list names a binding no module statement declares |
 | `MX_INVALID_TAG_NAME` | error | a tag name the language refuses |
 | `MX_UNBOUND_COMPONENT` | error | a capitalized tag with no import or `<define>` in scope |

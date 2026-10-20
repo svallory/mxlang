@@ -58,13 +58,6 @@ describe("whole-file duplicate lifted bindings", () => {
   const row = "<define/Row><b/></define>";
 
   it.each([
-    [
-      "sibling calls",
-      "<section><counter/x/></section>\n<p><counter/x/></p>",
-      "x",
-      2,
-      12,
-    ],
     ["top-level calls", "<counter/x/>\n<counter/x/>", "x", 2, 9],
     ["define then call", `${row}\n<counter/Row/>`, "Row", 2, 9],
     ["call then define", `<counter/Row/>\n${row}`, "Row", 2, 8],
@@ -128,27 +121,6 @@ describe("whole-file duplicate lifted bindings", () => {
       2,
       8,
     ],
-    [
-      "dynamic-tag body scope (mx-m682)",
-      "<${input.tag}><counter/x/></>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "placeholder body scope (mx-m682)",
-      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "catch body scope (mx-m682)",
-      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
     ["destructured binding", `${row}\n<counter/{ Row, other }/>`, "Row", 2, 11],
     ["dynamic calls", "<${input.tag}/x/>\n<${input.tag}/x/>", "x", 2, 14],
   ])(
@@ -160,10 +132,9 @@ describe("whole-file duplicate lifted bindings", () => {
         }),
       ).toThrowError(
         expect.objectContaining({
-          // Core catches same-authored-body repeats; the emitter still catches
-          // bindings in distinct bodies lifted into one generated JS scope.
-          message: expect.stringMatching(
-            new RegExp(`^Duplicate declaration (?:of \`${name}\`:|"${name}")`),
+          diagnosticCode: "MX_DUPLICATE_DECLARATION",
+          message: expect.stringContaining(
+            `Duplicate declaration of \`${name}\`:`,
           ),
           line,
           column,
@@ -171,6 +142,43 @@ describe("whole-file duplicate lifted bindings", () => {
       );
     },
   );
+
+  it.each([
+    [
+      "sibling calls",
+      "<section><counter/x/></section>\n<p><counter/x/></p>",
+      2,
+      12,
+    ],
+    [
+      "dynamic-tag body scope (mx-m682)",
+      "<${input.tag}><counter/x/></>\n<counter/x/>",
+      2,
+      9,
+    ],
+    [
+      "placeholder body scope (mx-m682)",
+      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
+      2,
+      9,
+    ],
+    [
+      "catch body scope (mx-m682)",
+      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
+      2,
+      9,
+    ],
+  ])("the emitter refuses lifted %s", (_label, source, line, column) => {
+    expect(() =>
+      compilePreactMx(source, "/fixtures/page.mx", { customTags: { counter } }),
+    ).toThrowError(
+      expect.objectContaining({
+        message: 'Duplicate declaration "x"',
+        line,
+        column,
+      }),
+    );
+  });
 
   it("reports a core duplicate before emitter-only markup errors", () => {
     expect(() =>

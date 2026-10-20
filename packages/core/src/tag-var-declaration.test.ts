@@ -11,8 +11,9 @@ const host: HostDeclarations = {
   tags: {},
   isElement: (name) => name !== "foo",
   isComponent: (name) => name === "foo",
-  isBuiltinTag: (name) => name === "let",
-  isDelegatedTag: (name) => name === "let" || name === "script",
+  isBuiltinTag: (name) => name === "let" || name === "id",
+  isDelegatedTag: (name) =>
+    name === "let" || name === "id" || name === "script",
   resolveDelegatedTag: () => ({}),
   resolveAttributeMethod: () => true,
 };
@@ -59,6 +60,14 @@ describe("tag variable self-read", () => {
     ["<define/D a=D/>", "D/>"],
     ["<const/x=class { method() { return x } }/>", "x }"],
     ["<const/x={ [x]: 1 }/>", "x]:"],
+    ["<const/x=(() => x)()/>", "x)"],
+    ["<const/x=(function () { return x })()/>", "x }"],
+    ["<const/x=[1].map(() => x)/>", "x)"],
+    ["<const/x=(() => x).call()/>", "x)"],
+    ["<let/x=(() => x)()/>", "x)"],
+    ["<const/fn=input.wrap(() => fn)/>", "fn)"],
+    ["<const/x=input.wrap?.(() => x)/>", "x)"],
+    ["<const/x=new (function () { return x })()/>", "x }"],
   ])("refuses %s at its read", (source, read) => {
     refusal(
       source,
@@ -69,6 +78,9 @@ describe("tag variable self-read", () => {
   });
   it.each([
     "<const/f=() => f()/>",
+    "<const/x=() => [1].map(() => x)/>",
+    "<const/x=async () => x/>",
+    "<const/x=() => new (function () { return x })()/>",
     "<const/f={ g: () => f }/>",
     "<const/f={ g() { return f } }/>",
     "<let/x=1 valueChange(v) { x = v }/>",
@@ -98,6 +110,8 @@ describe("same-body tag variable declarations", () => {
     "<const/{x}=input/>\n<const/{x}=input/>",
     "<const/{x}=input/>\n<const/x=1/>",
     "<const/x=1/>\n<const/{a,x}=input/>",
+    "<const/x=1/><id/x/>",
+    "<id/x/><id/x/>",
   ])("refuses %s at the second name", (source) => {
     const second = source.lastIndexOf("x");
     // A define's closing tag contains no variable name.
@@ -142,6 +156,7 @@ describe("define reads before declaration", () => {
     "<div>${D}</div><define/D>x</define>",
     "<const/D=1/><div>${D}<define/D>x</define></div>",
     "<div><define/D>x</define></div>${D}<define/D>y</define>",
+    "<script>console.log(D)</script><define/D>x</define>",
   ])("refuses %s at D", (source) => {
     const placeholder = source.indexOf("${D}");
     const read = placeholder >= 0 ? placeholder + 2 : source.indexOf("D");
@@ -157,7 +172,11 @@ describe("define reads before declaration", () => {
     "<define/D>x</define><${D}/>",
     "<define/D>x</define><div>${D}</div>",
     "<define/D>x</define><div><define/D>y</define>${D}</div>${D}",
-    "<div><define/D>x</define></div><define/D>y</define>${D}",
+    "<div><define/D>x</define></div><define/D>y</define>",
+    "<script>const D = 1; console.log(D)</script><define/D>x</define>",
+    "<define/D>x</define><script>console.log(D)</script>",
+    "<for|D| of=[1]><script>console.log(D)</script></for><define/D>x</define>",
+    "<div><const/D=1/><script>console.log(D)</script></div><define/D>x</define>",
   ])("accepts %s", (source) => expect(() => compile(source)).not.toThrow());
   it("keeps bare component lookup refusal", () =>
     refusal("<D/><define/D>x</define>", "MX_UNBOUND_COMPONENT"));

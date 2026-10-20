@@ -88,7 +88,7 @@ export const READONLY_BINDING_WRITE_CODE = "MX_READONLY_BINDING_WRITE";
 export const STALE_DERIVED_READ_CODE = "MX_STALE_DERIVED_READ";
 /** Module level code (`static`, `server`, `client`, `export`) names something that exists only while the template renders. */
 export const RENDER_ONLY_IN_MODULE_CODE = "MX_RENDER_ONLY_IN_MODULE";
-/** A module level name declared twice across the module statements (`import x` and `static const x`), other than `var` with `var` and TypeScript's merges. */
+/** A module name declared twice (except permitted `var`/TypeScript merges), or a body tag variable repeating a declaration or its enclosing tag's parameter. */
 export const DUPLICATE_DECLARATION_CODE = "MX_DUPLICATE_DECLARATION";
 /** An export list names (`static export { q }`) a binding no module statement declares: the module cannot load. */
 export const UNDECLARED_EXPORT_CODE = "MX_UNDECLARED_EXPORT";
@@ -567,7 +567,7 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         ],
         [
           DUPLICATE_DECLARATION_CODE,
-          "a module level name declared twice across the module statements",
+          "a module name declared twice (except permitted var/TypeScript merges), or a body tag variable repeating a declaration or its enclosing tag's parameter",
         ],
         [
           UNDECLARED_EXPORT_CODE,

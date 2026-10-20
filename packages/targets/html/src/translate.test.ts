@@ -1199,8 +1199,9 @@ describe("an imported .mx tag that declares <return>", () => {
     }
   });
 
-  // Marko `references.ts:556-560`: a call's own attributes and body cannot
-  // read the `/var` it declares. Same positioned error as a discovered tag;
+  // A call's own eager attributes cannot read the `/var` it declares.
+  // Stock permits the read in the call's body (tracked separately).
+  // Same positioned attribute error as a discovered tag;
   // before, the imported form compiled to a TDZ crash at render.
   it("rejects a read of the /var in the call's own attribute, positioned", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-attr-"));
@@ -3096,6 +3097,31 @@ describe("a unit that returns a value", () => {
     );
     expect(code).toMatch(
       /const b = \$mx_\w+\.render\(\{ start: 2 \}, __mxOut\);/,
+    );
+  });
+
+  it("checks dynamic self-reads where this host supports dynamic /var", () => {
+    expect(() => compile(src("<${input.t}/x a=x/>"), pageFile)).toThrowError(
+      expect.objectContaining({ diagnosticCode: "MX_TAG_VAR_SELF_READ" }),
+    );
+  });
+
+  it("keeps a contract-only /var support error before self-read errors", () => {
+    expect(() =>
+      compile(src("<sort/x a=x/>"), pageFile, {
+        customTags: {
+          sort: {
+            attributes: { a: { type: "expression" } },
+            transform: () => [],
+          },
+        },
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_INVALID_TAG_VAR",
+        message:
+          "`/var` on `<sort>` is not supported: it has no template, so it has no `<return>` to bind",
+      }),
     );
   });
 
