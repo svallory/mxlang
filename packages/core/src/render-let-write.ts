@@ -77,6 +77,8 @@ export type BindingWrite = {
   /** The binding it writes. */
   readonly name: string;
   readonly reason: WriteReason;
+  /** A `"const-below"` whose declaring tag binds a plain name (no pattern). */
+  readonly plain?: boolean;
   /** `of` or `in` for a `"let-loop"`. */
   readonly loop?: "of" | "in";
 };
@@ -89,6 +91,9 @@ export type WriteRules = {
   readonly later?: ReadonlySet<string>;
   /** `<const>`s declared below: refused everywhere, like `later`. */
   readonly laterConsts?: ReadonlySet<string>;
+  /** The plain-name `<const>`s among `laterConsts`: a two-way binding to one
+   * is refused too, while a pattern name is writable where a binding writes. */
+  readonly laterPlainConsts?: ReadonlySet<string>;
   /** `<const>` and parameters. */
   readonly guards?: ReadonlyMap<string, WriteGuard>;
 };
@@ -154,7 +159,7 @@ export function findBindingWrite(
   rules: WriteRules,
   inFunction = false,
 ): BindingWrite | undefined {
-  const { lets, later, laterConsts, guards } = rules;
+  const { lets, later, laterConsts, laterPlainConsts, guards } = rules;
   if (
     !expression ||
     !(lets?.size || later?.size || laterConsts?.size || guards?.size)
@@ -177,22 +182,37 @@ export function findBindingWrite(
     path: Node,
     name: string,
     loop: boolean,
-  ): WriteReason | undefined => {
+  ):
+    | { reason: WriteReason; plain?: boolean; loop?: "of" | "in" }
+    | undefined => {
     // A name the expression declares itself is not the template's.
     if (path.scope.getBinding(name)) return undefined;
     const runsLater = inFunction || insideFunction(path);
+    // A declaration below in this (or an inner) block is the nearer one, so
+    // it decides over a guard a declaration above left (stock reports the
+    // declaration below); a two-way binding writes in handler position,
+    // where a pattern name is writable, so only a plain name is refused
+    // there (checked at the binding site, not here).
+    if (later?.has(name)) return { reason: "let-below" };
+    if (laterConsts?.has(name)) {
+      return {
+        reason: "const-below",
+        plain: laterPlainConsts?.has(name) || undefined,
+      };
+    }
     const guard = guards?.get(name);
     if (guard) {
       if (runsLater && !guard.inFunction) return undefined;
-      return guard.kind === "define" && guard.inFunction
-        ? "define-plain"
-        : guard.kind;
+      return {
+        reason:
+          guard.kind === "define" && guard.inFunction
+            ? "define-plain"
+            : guard.kind,
+      };
     }
-    if (later?.has(name)) return "let-below";
-    if (laterConsts?.has(name)) return "const-below";
     if (lets?.has(name)) {
-      if (loop) return "let-loop";
-      return runsLater ? undefined : "let-render";
+      if (loop) return { reason: "let-loop" };
+      return runsLater ? undefined : { reason: "let-render" };
     }
     return undefined;
   };
@@ -207,13 +227,13 @@ export function findBindingWrite(
     const names: string[] = [];
     assignedNames(target, names);
     for (const name of names) {
-      const reason = reasonFor(path, name, loop !== undefined);
-      if (!reason) continue;
+      const found0 = reasonFor(path, name, loop !== undefined);
+      if (!found0) continue;
       found = {
         node: report,
         name,
-        reason,
-        ...(reason === "let-loop" ? { loop } : {}),
+        ...found0,
+        ...(found0.reason === "let-loop" && loop ? { loop } : {}),
       };
       path.stop();
       return;
@@ -278,7 +298,13 @@ export function bindingWriteMessage(write: BindingWrite, voice: Voice): string {
     case "let-below":
       return `${name} is a ${letTag} declared below this write, and a ${letTag} can only be written below its declaration. Move the ${letTag} above this code.`;
     case "const-below":
-      return `${name} is a ${constTag} declared below this write, and a tag variable can only be assigned below its declaration. Move the ${constTag} above this code.`;
+      // The advice depends on the declaring tag: a plain-name `<const>` is
+      // never written at all (moving it above the write trades one refusal
+      // for another), while a pattern name is written through its object, so
+      // moving the declaration above the write is the fix there.
+      return write.plain
+        ? `${name} is a ${constTag} declared below this write, and a tag variable can only be assigned below its declaration. A ${constTag} is never written: declare ${name} with a ${letTag} and write that in an event handler or a ${scriptTag} body, or derive a new value with another ${constTag}.`
+        : `${name} is a ${constTag} declared below this write, and a tag variable can only be assigned below its declaration. Move the ${constTag} above this code.`;
     case "let-loop":
       return `${name} is a ${letTag}, so a \`for...${write.loop}\` cannot assign to it. Loop into a local variable and assign ${name} from it instead.`;
     case "const":

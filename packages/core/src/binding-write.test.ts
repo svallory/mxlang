@@ -35,6 +35,8 @@ const definePlainMessage = (name: string) =>
 const belowMessage = (name: string) =>
   `\`${name}\` is a \`<let>\` declared below this write, and a \`<let>\` can only be written below its declaration. Move the \`<let>\` above this code.`;
 const constBelowMessage = (name: string) =>
+  `\`${name}\` is a \`<const>\` declared below this write, and a tag variable can only be assigned below its declaration. A \`<const>\` is never written: declare \`${name}\` with a \`<let>\` and write that in an event handler or a \`<script>\` body, or derive a new value with another \`<const>\`.`;
+const constPatternBelowMessage = (name: string) =>
   `\`${name}\` is a \`<const>\` declared below this write, and a tag variable can only be assigned below its declaration. Move the \`<const>\` above this code.`;
 const loopMessage = (name: string, loop: "of" | "in") =>
   `\`${name}\` is a \`<let>\`, so a \`for...${loop}\` cannot assign to it. Loop into a local variable and assign \`${name}\` from it instead.`;
@@ -398,11 +400,39 @@ const REFUSED: Row[] = [
     constBelowMessage("x"),
   ),
   row(
-    "a write between a const above and a const below sees the one above",
-    "<const/x=1/>\n<button onClick() { x = 2 }/>\n<const/x=3/>\n",
+    "a name from a const's object pattern written above its declaration",
+    "<button onClick() { a = 2 }/>\n<const/{a}=o/>\n",
+    "a = 2",
+    CONST_BELOW,
+    constPatternBelowMessage("a"),
+  ),
+  row(
+    // Stock reports the same refusal at the inner `<const>` (3:23); the
+    // nearer declaration decides, so the later one in the innermost body wins
+    // over a declaration above. The same-block twin is a duplicate declaration
+    // in stock, a separate rule MX does not state yet.
+    "a write between a const above and a const below in a nested block sees the one below",
+    "<const/x=1/>\n<div>\n  <button onClick() { x = 2 }/>\n  <const/x=3/>\n</div>\n",
     "x = 2",
-    READONLY,
-    constMessage("x"),
+    CONST_BELOW,
+    constBelowMessage("x"),
+  ),
+  // --- a two-way binding above the declaration --------------------------
+  row(
+    "a two-way binding above a plain-name const",
+    "<input value:=x/>\n<const/x=1/>\n",
+    "x",
+    CONST_BELOW,
+    constBelowMessage("x"),
+    { within: "value:=x" },
+  ),
+  row(
+    "a two-way binding above a let",
+    "<input value:=x/>\n<let/x=1/>\n",
+    "x",
+    BELOW,
+    belowMessage("x"),
+    { within: "value:=x" },
   ),
   // --- a <let> above its declaration -------------------------------------
   row(
@@ -630,6 +660,19 @@ const COMPILES: [name: string, source: string][] = [
     "<const/x={y:1}/>\n<input value:=x.y/>\n",
   ],
   ["a two-way binding on a let", "<let/x=1/>\n<input value:=x/>\n"],
+  [
+    "a two-way binding above a name from a const's object pattern",
+    "<input value:=a/>\n<const/{a}=o/>\n",
+  ],
+  // --- an inner declaration shadows an outer one below --------------------
+  [
+    "an inner let shadows a const declared below the block",
+    "<div>\n  <let/x=1/>\n  <button onClick() { x = 2 }/>\n</div>\n<const/x=3/>\n",
+  ],
+  [
+    "an inner let shadows a let declared below the block",
+    "<div>\n  <let/x=1/>\n  <button onClick() { x = 2 }/>\n</div>\n<let/x=3/>\n",
+  ],
   [
     "a let written in a handler below its declaration",
     `${LET}<button onClick() { count = 1 }/>\n`,

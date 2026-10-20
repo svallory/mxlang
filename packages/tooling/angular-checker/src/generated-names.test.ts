@@ -53,6 +53,14 @@ function messages(template: string, code: number): string[] {
 
 const UNUSED_LET = -998112;
 const DUPLICATE_LET = -998017;
+const TWO_WAY_LET = -99998005;
+
+// `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
+// `<for|i|>` or `<define|p|>` parameter", P3); until it is, the two-way
+// binding on a `@let` stays reachable through one. The `<for in>` form
+// cannot be checked here: its emitted `keyvalue` pipe needs `@angular/common`,
+// which this package's project does not resolve, so the object-pattern `<for
+// of>` form — the other `@let`-producing binder — carries the coverage.
 
 describe("an Angular diagnostic about a <const> names it as written", () => {
   describe("when nothing else shares the name (the emitter keeps it)", () => {
@@ -62,6 +70,16 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       expect(found[0]).toContain(
         "@let a is declared but its value is never read",
       );
+      expect(found[0]).not.toContain("__mx");
+    });
+
+    it("the two-way binding error", () => {
+      const found = messages(
+        "<for|{val}| of=objs><input value:=val/></for>",
+        TWO_WAY_LET,
+      );
+      expect(found).toHaveLength(1);
+      expect(found[0]).toContain("non-signal @let declaration 'val'");
       expect(found[0]).not.toContain("__mx");
     });
   });
@@ -109,6 +127,18 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
       );
       expect(found).toHaveLength(1);
       expect(found[0]).toContain("@let a is declared");
+      expect(found[0]).not.toContain("__mx");
+    });
+
+    it("the two-way binding error on a shadowing binder", () => {
+      // `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
+      // `<for|i|>` or `<define|p|>` parameter", P3): the loop's object-pattern
+      // name shadows the outer `<const>` and its `@let` is the bound target.
+      const source =
+        "<main><const/a=title/><for|{a}| of=objs><input value:=a/></for></main>";
+      const found = messages(source, TWO_WAY_LET);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toContain("non-signal @let declaration 'a'");
       expect(found[0]).not.toContain("__mx");
     });
   });

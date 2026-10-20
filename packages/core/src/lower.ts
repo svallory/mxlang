@@ -141,6 +141,7 @@ import {
 } from "./default-tag.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
 import {
+  CONST_WRITE_BEFORE_DECLARATION_CODE,
   DEFINE_CONTENT_DROPPED_CODE,
   DEFINE_EXTRA_PARAMS_CODE,
   DIALECT_HOOK_ERROR_CODE,
@@ -164,6 +165,7 @@ import {
   INVALID_TAG_CALL_CODE,
   INVALID_TAG_NAME_CODE,
   INVALID_TAG_VAR_CODE,
+  LET_WRITE_BEFORE_DECLARATION_CODE,
   LOWERCASE_BINDING_NOT_CALLED_CODE,
   MISSING_ATTRIBUTE_TAG_CODE,
   NEAR_EXPLICIT_CHILD_CODE,
@@ -683,10 +685,11 @@ function writeRulesOf(ctx: Ctx): WriteRules | undefined {
     renderLets: lets,
     laterLets: later,
     laterConsts,
+    laterPlainConsts,
     writeGuards: guards,
   } = ctx;
   return lets?.size || later?.size || laterConsts?.size || guards?.size
-    ? { lets, later, laterConsts, guards }
+    ? { lets, later, laterConsts, laterPlainConsts, guards }
     : undefined;
 }
 
@@ -1300,6 +1303,19 @@ function constNamesOf(ctx: Ctx, child: Node): string[] {
 }
 
 /**
+ * The names a child declares as a plain-name `<const>` (an `Identifier` tag
+ * variable), the subset of `constNamesOf` that is never written anywhere —
+ * not even where a two-way binding writes, which a pattern name is.
+ */
+function constPlainNamesOf(ctx: Ctx, child: Node): string[] {
+  if (ctx.tagRules === "none") return [];
+  if (!isTagNode(child) || tagNameOf(child) !== "const") return [];
+  if (ctx.customTags && Object.hasOwn(ctx.customTags, "const")) return [];
+  const tagVar = tagVarOf(child);
+  return tagVar?.type === "Identifier" ? [tagVar.name] : [];
+}
+
+/**
  * Records the `<let>` a lowered child tag declares, for the writes after it
  * in the same block and the blocks below. Under the `none` tag rules
  * `let` is an ordinary tag, and a name a caller registered as a custom tag
@@ -1314,6 +1330,29 @@ function declareRenderLet(ctx: Ctx, child: Node): void {
   if (guards && names.some((name) => guards.has(name))) {
     ctx.writeGuards = new Map(
       [...guards].filter(([name]) => !names.includes(name)),
+    );
+  }
+  // The `<let>` shadows a declaration below of the same spelling, in this
+  // block or an enclosing one, the way `shadowBindings` drops them for a
+  // parameter: from here to the end of the block, a write to the name is a
+  // write to this `<let>`, not to the outer declaration.
+  const outerLater = ctx.laterLets;
+  if (outerLater && names.some((name) => outerLater.has(name))) {
+    ctx.laterLets = new Set([...outerLater].filter((n) => !names.includes(n)));
+  }
+  const outerLaterConsts = ctx.laterConsts;
+  if (outerLaterConsts && names.some((name) => outerLaterConsts.has(name))) {
+    ctx.laterConsts = new Set(
+      [...outerLaterConsts].filter((n) => !names.includes(n)),
+    );
+  }
+  const outerLaterPlainConsts = ctx.laterPlainConsts;
+  if (
+    outerLaterPlainConsts &&
+    names.some((name) => outerLaterPlainConsts.has(name))
+  ) {
+    ctx.laterPlainConsts = new Set(
+      [...outerLaterPlainConsts].filter((n) => !names.includes(n)),
     );
   }
   // A `<const>` that depended on an outer `<let>` of this spelling does not
@@ -1700,18 +1739,62 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
     // target must be writable: a `<const>` bound as a plain name never is
     // (a destructured name is written through its object, and a `<let>` is
     // writable). Refused at the value, the thing the author bound.
-    if (value?.type === "Identifier") {
-      const guard = ctx.writeGuards?.get(value.name);
-      if (guard?.kind === "const" && guard.inFunction) {
-        raise(
-          READONLY_BINDING_WRITE_CODE,
-          bindingWriteMessage(
-            { node: value, name: value.name, reason: "const" },
-            voiceOfCtx(ctx),
-          ),
-          value,
-        );
-      }
+    rejectUnwritableBoundTargets(ctx, node);
+  }
+}
+
+/**
+ * Refuses a two-way binding (`:=`, `:x:=`, `:fn:=`) whose target cannot be
+ * written: a plain-name `<const>` in scope, and a `<let>` or a plain-name
+ * `<const>` still below its declaration (a binding writes in handler
+ * position, where a name from an object pattern stays writable). Runs both
+ * from `validateBoundAttributes` and ahead of every tag routing — an
+ * element, a built-in, a registered custom-tag contract, a wildcard claim —
+ * so no path exempts the check.
+ */
+function rejectUnwritableBoundTargets(ctx: Ctx, node: Node): void {
+  for (const attr of tagAttributesOf(node)) {
+    if (!isBoundAttr(attr)) continue;
+    // A value that failed to parse is refused by the shape check first.
+    if (attr.type === "MxAttribute" && attr.value?.error) continue;
+    const value = withoutTsWrappers(attrValueOf(ctx, attr));
+    if (value?.type !== "Identifier") continue;
+    const name = value.name;
+    if (ctx.laterPlainConsts?.has(name)) {
+      raise(
+        CONST_WRITE_BEFORE_DECLARATION_CODE,
+        bindingWriteMessage(
+          {
+            node: value,
+            name,
+            reason: "const-below",
+            plain: true,
+          },
+          voiceOfCtx(ctx),
+        ),
+        value,
+      );
+    }
+    if (ctx.laterLets?.has(name)) {
+      raise(
+        LET_WRITE_BEFORE_DECLARATION_CODE,
+        bindingWriteMessage(
+          { node: value, name, reason: "let-below" },
+          voiceOfCtx(ctx),
+        ),
+        value,
+      );
+    }
+    const guard = ctx.writeGuards?.get(name);
+    if (guard?.kind === "const" && guard.inFunction) {
+      raise(
+        READONLY_BINDING_WRITE_CODE,
+        bindingWriteMessage(
+          { node: value, name, reason: "const" },
+          voiceOfCtx(ctx),
+        ),
+        value,
+      );
     }
   }
 }
@@ -6106,8 +6189,63 @@ function targetName(target: ComponentTarget): string {
   return target.name;
 }
 
+/** Does this unit declare `AttrTag` itself (so it needs no import)? */
+function declaresAttrTagLocally(file: Node): boolean {
+  const { traverse } = coreBabel();
+  let declared = false;
+  traverse(file, {
+    ImportDeclaration(path: Node) {
+      if (
+        path.node.specifiers?.some(
+          (specifier: Node) => specifier.local?.name === "AttrTag",
+        )
+      ) {
+        declared = true;
+      }
+    },
+    ClassDeclaration(path: Node) {
+      if (path.node.id?.name === "AttrTag") declared = true;
+    },
+    TSEnumDeclaration(path: Node) {
+      if (path.node.id?.name === "AttrTag") declared = true;
+    },
+    TSTypeAliasDeclaration(path: Node) {
+      if (path.node.id?.name === "AttrTag") declared = true;
+    },
+    TSInterfaceDeclaration(path: Node) {
+      if (path.node.id?.name === "AttrTag") declared = true;
+    },
+  });
+  return declared;
+}
+
+/** Does this unit reference `AttrTag` as a type (so it needs the import)? */
+function referencesAttrTagType(file: Node): boolean {
+  const { traverse } = coreBabel();
+  let referenced = false;
+  traverse(file, {
+    TSTypeReference(path: Node) {
+      if (
+        path.node.typeName?.type === "Identifier" &&
+        path.node.typeName.name === "AttrTag"
+      ) {
+        referenced = true;
+      }
+    },
+    TSExpressionWithTypeArguments(path: Node) {
+      if (
+        path.node.expression?.type === "Identifier" &&
+        path.node.expression.name === "AttrTag"
+      ) {
+        referenced = true;
+      }
+    },
+  });
+  return referenced;
+}
+
 function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
-  const { parse, traverse } = coreBabel();
+  const { parse } = coreBabel();
   let declaredLocally = false;
   let referenced = false;
   for (const typeText of typeUnits) {
@@ -6118,45 +6256,8 @@ function referencesUnboundAttrTagType(typeUnits: string[]): boolean {
         plugins: ["typescript"],
         errorRecovery: true,
       });
-      traverse(file, {
-        ImportDeclaration(path: Node) {
-          if (
-            path.node.specifiers?.some(
-              (specifier: Node) => specifier.local?.name === "AttrTag",
-            )
-          ) {
-            declaredLocally = true;
-          }
-        },
-        ClassDeclaration(path: Node) {
-          if (path.node.id?.name === "AttrTag") declaredLocally = true;
-        },
-        TSEnumDeclaration(path: Node) {
-          if (path.node.id?.name === "AttrTag") declaredLocally = true;
-        },
-        TSTypeAliasDeclaration(path: Node) {
-          if (path.node.id?.name === "AttrTag") declaredLocally = true;
-        },
-        TSInterfaceDeclaration(path: Node) {
-          if (path.node.id?.name === "AttrTag") declaredLocally = true;
-        },
-        TSTypeReference(path: Node) {
-          if (
-            path.node.typeName?.type === "Identifier" &&
-            path.node.typeName.name === "AttrTag"
-          ) {
-            referenced = true;
-          }
-        },
-        TSExpressionWithTypeArguments(path: Node) {
-          if (
-            path.node.expression?.type === "Identifier" &&
-            path.node.expression.name === "AttrTag"
-          ) {
-            referenced = true;
-          }
-        },
-      });
+      declaredLocally ||= declaresAttrTagLocally(file);
+      referenced ||= referencesAttrTagType(file);
     } catch {
       // Type syntax in an independent static unit must not suppress a valid
       // Input reference. If Babel cannot recover, conservatively request the
@@ -6463,6 +6564,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     );
   }
   rejectEffectTag(ctx, node, name);
+  // Ahead of every routing, so a registered custom-tag contract or a
+  // wildcard claim cannot carry a binding to a target no path may write.
+  rejectUnwritableBoundTargets(ctx, node);
   // A parent's `children["*"]` claimed this tag: it is a call of the matched
   // contract, under the canonical name, ahead of every
   // host-specific reading of the authored name (disposition, claim, element).
@@ -7133,14 +7237,36 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // declaration that has not happened yet.
   const outerLater = ctx.laterLets;
   const outerLaterConsts = ctx.laterConsts;
+  const outerLaterPlainConsts = ctx.laterPlainConsts;
+  // A declaration earlier in this block shadows a declaration below in an
+  // enclosing one: a `<let>`/`<const>` declared above, in this block, is the
+  // binding a write below it reaches, so its spelling is not "declared
+  // below" anymore. The prefix of the names declared so far filters the
+  // outer sets per child (a nested block inherits the filtered set, and the
+  // `finally` restores the outer value on the way out).
+  const declaredBefore: ReadonlySet<string>[] = [];
+  const shadowPrefix = (at: number): ReadonlySet<string> => {
+    while (declaredBefore.length < at) {
+      const child = children[declaredBefore.length];
+      declaredBefore.push(
+        new Set([...letNamesOf(ctx, child), ...constNamesOf(ctx, child)]),
+      );
+    }
+    return declaredBefore[at - 1] ?? new Set<string>();
+  };
   const declaredBelow = (
     namesAt: Array<[number, string[]]>,
     at: number,
     outer: ReadonlySet<string> | undefined,
   ): ReadonlySet<string> | undefined => {
-    const names = namesAt.filter(([i]) => i > at).flatMap(([, n]) => n);
-    if (names.length === 0) return outer;
-    return new Set([...(outer ?? []), ...names]);
+    const shadowed = shadowPrefix(at);
+    const below = namesAt.filter(([i]) => i > at).flatMap(([, n]) => n);
+    const outerLeft = [...(outer ?? [])].filter((n) => !shadowed.has(n));
+    if (below.length === 0) {
+      if (outerLeft.length === (outer?.size ?? 0)) return outer;
+      return outerLeft.length > 0 ? new Set(outerLeft) : undefined;
+    }
+    return new Set([...outerLeft, ...below]);
   };
   const declared = children.map((child, at): [number, string[]] => [
     at,
@@ -7149,6 +7275,10 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   const constDeclared = children.map((child, at): [number, string[]] => [
     at,
     constNamesOf(ctx, child),
+  ]);
+  const plainConstDeclared = children.map((child, at): [number, string[]] => [
+    at,
+    constPlainNamesOf(ctx, child),
   ]);
   const hasLater =
     declared.some(([, names]) => names.length > 0) ||
@@ -7159,6 +7289,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       if (hasLater) {
         ctx.laterLets = declaredBelow(declared, index, outerLater);
         ctx.laterConsts = declaredBelow(constDeclared, index, outerLaterConsts);
+        ctx.laterPlainConsts = declaredBelow(
+          plainConstDeclared,
+          index,
+          outerLaterPlainConsts,
+        );
       }
       // Hybrid until PR 5: the arms below still name Marko's kinds, which the
       // MX type cannot hold.
@@ -7380,6 +7515,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   } finally {
     ctx.laterLets = outerLater;
     ctx.laterConsts = outerLaterConsts;
+    ctx.laterPlainConsts = outerLaterPlainConsts;
   }
 
   return out;
@@ -7561,6 +7697,7 @@ function lowerTemplate(ctx: Ctx, body: readonly MxChild[]): Ir {
   ctx.writeGuards = undefined;
   ctx.laterLets = undefined;
   ctx.laterConsts = undefined;
+  ctx.laterPlainConsts = undefined;
   ctx.derivedConsts = undefined;
   ctx.moduleScope = scanModuleScope(ctx, body);
 
@@ -7745,6 +7882,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   writeGuards: "fresh",
   laterLets: "fresh",
   laterConsts: "fresh",
+  laterPlainConsts: "fresh",
   derivedConsts: "fresh",
   moduleScope: "fresh",
   tagVarBlockSeq: "fresh",

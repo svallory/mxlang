@@ -30,6 +30,28 @@ describe("a bound attribute's refinement (angular)", () => {
     );
   });
 
+  it("refuses a two-way binding on a plain-name <const>", () => {
+    let error:
+      | {
+          message: string;
+          diagnosticCode: string;
+          line: number;
+          column: number;
+        }
+      | undefined;
+    try {
+      emit("<section><const/a=title/><input value:=a/></section>");
+    } catch (e) {
+      error = e as typeof error;
+    }
+    expect(error).toMatchObject({
+      diagnosticCode: "MX_READONLY_BINDING_WRITE",
+      line: 1,
+      column: 39,
+    });
+    expect(error?.message).toContain("`a` is a `<const>`");
+  });
+
   it("writes a refinement as its two halves, so the handler runs `q = fn(next)`", () => {
     expect(emit("<div appPick v:fn:=q/>")).toBe(
       `<div appPick [v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"></div>`,
@@ -110,6 +132,10 @@ describe("a bound attribute's refinement (angular)", () => {
     });
 
     it("lets the innermost declaration win: a signal-holding variable that shadows the index", () => {
+      // `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
+      // `<for|i|>` or `<define|p|>` parameter", P3); when it is, this row is
+      // rebuilt on a binder stock allows to be bound (a nested `<let>` that
+      // shadows an outer one).
       expect(
         emit(
           "<for|item, i| of=items><for|i| of=sigs><div appPick v:fn:=i/></for></for>",

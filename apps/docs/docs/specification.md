@@ -1379,8 +1379,15 @@ members, excluding private members); otherwise core reports Marko's
 value. A `<const>` bound as a plain name is never a valid target: a two-way
 binding writes back into its value on every change, which is a write
 (`MX_READONLY_BINDING_WRITE`), refused at the value with the `<const>` write
-message — a name from a `<const>`'s object pattern and a member of a const
-value stay writable, as does a `<let>`. For example, `<div :="x"/>` errors at structured line 1, column 7
+message — a plain property name of a `<const>`'s object pattern (not one with
+a default `{ a = 1 }`, not a rest `{ ...r }`, and not an array pattern's
+name, which Marko refuses) and a member of a const value stay writable, as
+does a `<let>`. A binding above the declaration is a write above it, on the
+same terms: a `<let>` or a plain-name `<const>` declared below the binding is
+refused (`MX_LET_WRITE_BEFORE_DECLARATION`,
+`MX_CONST_WRITE_BEFORE_DECLARATION`) with the write-above-declaration
+message, while an object-pattern name of a `<const>` declared below stays
+writable where a binding writes. For example, `<div :="x"/>` errors at structured line 1, column 7
 (printed 1:8), rather than silently rendering `value="x"`. A bound attribute may carry a refinement, `v:fn:=q`: Marko binds `v` and its
 change handler runs `q = fn(next)`. The refinement must be a valid JavaScript
 identifier, else core reports Marko's `Bound attribute refinement shorthand
@@ -1890,12 +1897,20 @@ the message and each positioned at the assignment or update with its end (for a
   `let-sibling-block-handler / let-sibling-if ... compiles`).
 - A `<const>` written above its declaration is refused the same way
   (`MX_CONST_WRITE_BEFORE_DECLARATION`): "`x` is a `<const>` declared below
-  this write, and a tag variable can only be assigned below its declaration.
-  Move the `<const>` above this code." A read above the declaration compiles
-  (as it does in Marko), and the same block scoping applies as for a `<let>`.
-  Where a `<const>` above and a `<const>` below share the spelling, the write
-  is refused against the one above (a plain `<const>` write), because that is
-  the binding in scope.
+  this write, and a tag variable can only be assigned below its declaration."
+  The fix in the message depends on the declaring tag: a plain-name `<const>`
+  is never written at all, so the message says to keep a value that changes in
+  a `<let>` ("A `<const>` is never written: declare `x` with a `<let>` and
+  write that in an event handler or a `<script>` body, or derive a new value
+  with another `<const>`."), while a name from an object pattern is written
+  through its object, so its message says to move the `<const>` above this
+  code. A read above the declaration compiles (as it does in Marko), and the
+  same block scoping applies as for a `<let>`. The nearer declaration
+  decides: a `<let>` or `<const>` declared below in the block the write sits
+  in (or a block inside it) wins over a declaration above, so the write is
+  reported against the declaration below. When the two declarations sit in
+  the write's own block, the later one is a duplicate declaration, a separate
+  rule this check does not state yet.
 - A `for...of` or `for...in` whose left side is a `<let>` is refused
   (`MX_LET_LOOP_ASSIGNMENT`), also inside a handler: "`count` is a `<let>`, so a
   `for...of` cannot assign to it. Loop into a local variable and assign `count`

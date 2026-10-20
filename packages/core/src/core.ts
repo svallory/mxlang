@@ -697,6 +697,14 @@ export interface Ctx {
    */
   laterConsts?: ReadonlySet<string>;
   /**
+   * The names among `laterConsts` declared by a `<const>` bound as a plain
+   * name (an `Identifier` tag variable): a plain-name `<const>` is never
+   * written anywhere, so a two-way binding to it is refused even though a
+   * name from an object pattern is writable where a binding writes. Managed
+   * with `laterConsts` by the same sites.
+   */
+  laterPlainConsts?: ReadonlySet<string>;
+  /**
    * The `<const>`s in scope whose value depends on a `<let>`, each with the
    * `<let>`s it depends on (resolved through other derived `<const>`s when it
    * is declared): what a handler that writes one of them may not read
@@ -1466,6 +1474,7 @@ export function scopeBindings(
   const savedGuards = ctx.writeGuards;
   const savedLater = ctx.laterLets;
   const savedLaterConsts = ctx.laterConsts;
+  const savedLaterPlainConsts = ctx.laterPlainConsts;
   const savedDerived = ctx.derivedConsts;
   const savedSites = new Map(ctx.bindingSites);
   const unscopeDefines = defines ? scopeDefines(ctx) : () => {};
@@ -1476,6 +1485,7 @@ export function scopeBindings(
     ctx.writeGuards = savedGuards;
     ctx.laterLets = savedLater;
     ctx.laterConsts = savedLaterConsts;
+    ctx.laterPlainConsts = savedLaterPlainConsts;
     ctx.derivedConsts = savedDerived;
     // The positions the lowercase-binding diagnostic reads revert with the
     // block too.
@@ -1555,12 +1565,21 @@ export function shadowBindings(
   const outerGuards = ctx.writeGuards;
   const outerLater = ctx.laterLets;
   const outerLaterConsts = ctx.laterConsts;
+  const outerLaterPlainConsts = ctx.laterPlainConsts;
   if (outerLater && names.some((name) => outerLater.has(name))) {
     ctx.laterLets = new Set([...outerLater].filter((n) => !names.includes(n)));
   }
   if (outerLaterConsts && names.some((name) => outerLaterConsts.has(name))) {
     ctx.laterConsts = new Set(
       [...outerLaterConsts].filter((n) => !names.includes(n)),
+    );
+  }
+  if (
+    outerLaterPlainConsts &&
+    names.some((name) => outerLaterPlainConsts.has(name))
+  ) {
+    ctx.laterPlainConsts = new Set(
+      [...outerLaterPlainConsts].filter((n) => !names.includes(n)),
     );
   }
   if (outerGuards?.size || guards?.size) {
@@ -1583,6 +1602,7 @@ export function shadowBindings(
     ctx.writeGuards = outerGuards;
     ctx.laterLets = outerLater;
     ctx.laterConsts = outerLaterConsts;
+    ctx.laterPlainConsts = outerLaterPlainConsts;
     ctx.derivedConsts = outerDerived;
   };
 }
