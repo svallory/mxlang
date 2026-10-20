@@ -574,6 +574,9 @@ export function createHtmlMappings(
     customTags,
     nativeTags: mappingDeclarations.nativeTags,
     targets,
+    // Compilation erases these tag-only containers even under typeCheck.
+    // Keep expression types intact so printed code and mappings still agree.
+    stripTagTypes: true,
   });
   const ctx = newCtx(
     source,

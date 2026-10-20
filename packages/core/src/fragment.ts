@@ -62,6 +62,7 @@ import {
   firstErrorAt,
   parseMx,
   registerDocument,
+  stripTagTypes,
 } from "./mx-parse.ts";
 import { bareCommaMessage, tagParamError } from "./stock-parser.ts";
 import {
@@ -226,6 +227,13 @@ export interface FragmentBase {
   /** Registered custom tags whose parse options affect this fragment. */
   customTags?: Record<string, CustomTag>;
   /**
+   * Erase tag type arguments and parameters before returning the tree, for
+   * re-lowering a projection that already erased them. Expression and pattern
+   * types, method type parameters and all positions are preserved. Omitted
+   * or false, every type container remains as parsed.
+   */
+  stripTagTypes?: boolean;
+  /**
    * The host's native elements (`HostDeclarations.nativeTags`), whose parse
    * rules (void, raw text, preserved whitespace) shape the fragment. Omitted,
    * no element has any: `<br>` waits for its close tag and `<textarea>` parses
@@ -252,7 +260,12 @@ export interface FragmentBase {
 type ResolvedFragmentBase = Required<
   Omit<
     FragmentBase,
-    "customTags" | "dialect" | "nativeTags" | "productName" | "targets"
+    | "customTags"
+    | "dialect"
+    | "nativeTags"
+    | "productName"
+    | "targets"
+    | "stripTagTypes"
   >
 > & { productName?: string };
 
@@ -568,6 +581,7 @@ export function parseFragment(
     }
     throw error;
   }
+  if (base.stripTagTypes) stripTagTypes(document);
   registerDocument(document);
   registerSyntax(document, resolvedSyntax);
   return { ast: document, body: document.body };

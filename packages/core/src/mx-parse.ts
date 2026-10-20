@@ -1187,6 +1187,18 @@ export function stripAngleAssertions(document: Node): void {
       stripContainer(field, t);
     }
   };
+  stripTagTypes(document, stripIfAngle);
+}
+
+/**
+ * Clears tag type containers without touching expression payloads. The
+ * type-check compile also uses this walk, with its angle-assertion strip.
+ * Method type parameters belong to their emitted functions and stay intact.
+ */
+export function stripTagTypes(
+  document: Node,
+  stripExpression?: (field: Node) => void,
+): void {
   const seen = new Set<unknown>();
   const visit = (value: Node): void => {
     if (value === null || typeof value !== "object" || seen.has(value)) return;
@@ -1205,13 +1217,13 @@ export function stripAngleAssertions(document: Node): void {
           value[key] = null;
           continue;
         }
-        stripIfAngle(field);
+        stripExpression?.(field);
         visit(field);
       }
     } else if (isRegistryKey(value.type)) {
       for (const key of ["value", "args"]) {
         const field = value[key] as Node | undefined;
-        stripIfAngle(field);
+        stripExpression?.(field);
         visit(field);
       }
     }

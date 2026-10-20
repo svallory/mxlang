@@ -186,6 +186,11 @@ for the bridge's own side of that hand-off. Documented limits:
   is lowered; `parseFragment` itself throws for a template error, a bare `,`
   line, and any expression error when a method's type parameters fail.
 - Comments are `MxComment` nodes in the body and shift like any other node.
+- `stripTagTypes: true` removes only tag type-argument and type-parameter
+  containers, for a tool re-lowering a type-check projection that already
+  erased them. Expression and pattern types (`as`, `satisfies`, `!`, and
+  angle-bracket assertions), method type parameters, text and positions stay
+  unchanged. Omitted or `false`, the parsed tree keeps all type containers.
 
 ## Programmatic custom tags
 
