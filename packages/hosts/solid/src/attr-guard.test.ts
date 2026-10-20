@@ -292,6 +292,9 @@ function compileCase(
   return { code: out.code, source };
 }
 
+// Six workers beat four on forge: median file time 5.65 s vs 6.82 s.
+const DOM_CONCURRENCY = 6;
+
 // A render that throws leaves Solid's global scheduler half-flushed, so every
 // DOM case gets its own process; SSR cases share one.
 async function runAll(
@@ -300,15 +303,25 @@ async function runAll(
   if (generate === "dom") {
     const pending = Object.keys(CASES).entries();
     const results: Record<string, Outcome>[] = [];
+    let failure: Error | undefined;
     // Each worker awaits its own process before claiming the next case. Keep
     // results indexed by input order, not by process completion order.
     await Promise.all(
-      Array.from({ length: 6 }, async () => {
-        for (const [index, name] of pending) {
-          results[index] = await runNames(generate, [name]);
+      Array.from({ length: DOM_CONCURRENCY }, async () => {
+        while (failure === undefined) {
+          const next = pending.next();
+          if (next.done) return;
+          const [index, name] = next.value;
+          try {
+            results[index] = await runNames(generate, [name]);
+          } catch (error) {
+            failure ??= new Error(`DOM case ${name} failed`, { cause: error });
+          }
         }
       }),
     );
+    // Let every started process keep its timeout and cleanup before failing.
+    if (failure !== undefined) throw failure;
     return Object.assign({}, ...results);
   }
   return runNames(generate, Object.keys(CASES));
@@ -381,10 +394,8 @@ async function runNames(
   }
 }
 
-// Measured in 27 full-gate runs since 2026-10-15 (82 tests): attr-guard.test.ts
-// takes 67-162 s, nearly all of it this hook. At 37-74 tests the old 60 s limit
-// failed 5 of 143 gate runs that include this file. 240 s is 1.5x the worst
-// measured file time; a hang still fails.
+// Budget 2 x the 120 s child timeout: after a case fails, the other in-flight
+// cases must settle with their own timeouts and cleanup before the hook fails.
 beforeAll(async () => {
   outcomes.ssr = await runAll("ssr");
   outcomes.dom = await runAll("dom");
