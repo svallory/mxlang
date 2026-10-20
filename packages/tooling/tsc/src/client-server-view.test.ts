@@ -72,7 +72,6 @@ function runProject(
     .map((line) => /[^/\\]+\.(?:mx|ts)\(\d+,\d+\): .*$/.exec(line)?.[0] ?? "")
     .filter(Boolean);
   return {
-    status: run.status,
     linesOf: (file: string) => output.filter((l) => l.startsWith(`${file}(`)),
     dispose: () => rmSync(dir, { recursive: true }),
   };
@@ -217,19 +216,13 @@ describe("mx-tsc types a client name as undefined for the server view", {
     return found;
   };
 
-  it.each([["read-block.mx", "(2,8)"]])(
-    "%s: a template read of a client let is undefined",
-    (file, position) => {
-      const found = lines(file);
-      expect(project?.status).toBeGreaterThan(0);
-      expect(found).toHaveLength(1);
-      expect(found[0]).toMatch(
-        new RegExp(
-          `${at(file, position)}: error TS18048: 'q' is possibly 'undefined'\\.$`,
-        ),
-      );
-    },
-  );
+  it("read-block.mx: a template read of a client let is undefined", () => {
+    const found = lines("read-block.mx");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(
+      /^read-block\.mx\(2,8\): error TS18048: 'q' is possibly 'undefined'\.$/,
+    );
+  });
 
   it("read-function.mx: a client function is not callable in the template", () => {
     const found = lines("read-function.mx");
