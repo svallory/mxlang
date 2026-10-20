@@ -16,8 +16,11 @@ parser `print()`. The default `extensions` are the registry's region kinds then
 `.mx` (`defaultExtensions()`), resolved by the async hooks; until then the sync
 hooks match `.mx` alone, which is all `load`/`handleHotUpdate` need.
 
-D1 stays caller-owned: `options.strict ?? false` reaches the descriptor even
-when its `strict` is `"always"`. D2 stays in descriptor option forwarding:
+D1 follows the resolved policy: build strictness is `descriptor.strict ===
+"always" || policy.strict === true || options.strict === true` (an astro
+page is `strict: "always"`, so `mx.strict: false` cannot turn its strictness
+off there; an explicit `options.strict: false` never removes policy
+strictness). D2 stays in descriptor option forwarding:
 HTML/Astro and Preact/React/Hono forward Vite's synchronous resolver, while
 Solid's descriptor retains its existing omission. D4 comes from absent
 `load`, `host.name` and `pending`. Angular pages compile to template strings,

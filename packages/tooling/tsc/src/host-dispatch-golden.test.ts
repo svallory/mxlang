@@ -48,16 +48,21 @@ const goldens = join(root, "__golden__");
  * disagreements that PR 0 pins as they are today. Rows not listed here must
  * stay byte-identical through every refactor PR.
  *
- * - html-strict, astro: D1. Vite compiles with `options.strict ?? false`,
- *   while the language server and the TypeScript plugin force `astro` strict.
- *   Pinned as is; the Vite leg of both rows shows it.
+ * - html-strict, astro: D1, resolved: the Vite plugin now resolves strict
+ *   from the descriptor (`strict === "always"`) and the file's package
+ *   (`mx.strict: true`), as the language server and the TypeScript plugin
+ *   always did; an explicit `options.strict` can only add strictness. The
+ *   Vite leg of both rows' page.mx now throws `MX_UNSUPPORTED_CONSTRUCT`
+ *   like the editor tools.
  * - alias-html/-preact/-react/-hono: D2. `resolveImport` reaches the compile
  *   in Vite only, so the `~/Card.mx` import resolves there and nowhere else.
  * - every row's TypeScript plugin `mappings`: D3. The mapping pass always
  *   looks tags up through html's translator, whatever the target.
  * - angular: D4. The language server diagnoses pages; the TypeScript plugin
  *   skips them; Vite refuses them with `mx-angular build`/`watch` guidance.
- * - astro: D5. The language server has no branch of its own for it; it takes
+ * - astro: D5, decided: the language server stays silent on `.astro.mx` (it
+ *   is watched, not diagnosed); the TypeScript plugin and `mx-tsc` diagnose
+ *   it. The language server's `.mx` leg under the astro target still takes
  *   the html compile.
  * - astro-mx-html-host: D6. The `.astro.mx` scan filter is the literal "astro", so a
  *   tag restricted to `hosts: ["astro"]` stays visible to an `.astro.mx` page in a

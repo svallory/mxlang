@@ -204,7 +204,7 @@ async function compileMarko(
   emit: DialectEmit,
   source: string,
   filename: string,
-  strict: boolean,
+  callerStrict: boolean | undefined,
   customTags: Record<string, CustomTag> | undefined,
   resolveImport:
     | ((specifier: string, importer: string) => string | undefined)
@@ -215,6 +215,7 @@ async function compileMarko(
   const policy = resolveTargetPolicy(filename);
   // The project's lookup: a target loaded from a package specifier included.
   const lookup = lookupFor(policy);
+  const descriptor = lookup.target(policy.target);
   return emit(source, filename, {
     target: policy.target,
     targets: lookup,
@@ -223,8 +224,14 @@ async function compileMarko(
       pending
         ? `Pages for the ${identity} cannot be imported by @mxlang/vite-plugin: ${pending}`
         : `the ${identity} is not wired into @mxlang/vite-plugin yet`,
-    // D1: build strictness is caller-owned, even for an always-strict target.
-    strict,
+    // Strictness follows the resolved policy, as in the editor tools: an
+    // always-strict target (astro) or `mx.strict: true` in the file's nearest
+    // package.json compiles strict here too. An explicit `options.strict`
+    // can only add strictness, never remove what the policy demands.
+    strict:
+      descriptor?.strict === "always" ||
+      policy.strict === true ||
+      callerStrict === true,
     customTags,
     defaultTag: defaultTagFor(filename, policy),
     // D2: descriptors decide which compile leaves receive the Vite resolver.
@@ -244,12 +251,13 @@ export interface MxPluginOptions {
    * `client` blocks, `<id>`) become compile errors naming the construct
    * instead of rendering their initial value or compiling away as inert.
    *
-   * A passthrough rather than a policy of this plugin's own: a host that has
-   * no reactive target (`@mxlang/host-astro` renders MX to static markup at build
-   * time) wants an author's `<let>` to fail the build with a
-   * loc-bearing error rather than silently render once. The flag reaches
-   * `compile()` unchanged; `.solid.mx` is unaffected, since it never goes
-   * through the translator at all.
+   * Strictness resolves like the editor tools resolve it: an always-strict
+   * target (`@mxlang/host-astro` renders MX to static markup at build time)
+   * or `mx.strict: true` in the file's nearest package.json compiles strict
+   * in `vite build` as well, so a build never compiles what the editor
+   * flags. This flag can only add strictness on top of the resolved policy;
+   * `strict: false` does not turn it off. `.solid.mx` is unaffected, since
+   * it never goes through the translator at all.
    */
   strict?: boolean;
   /**
@@ -1576,7 +1584,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
             asked.emit,
             code,
             source,
-            options.strict ?? false,
+            options.strict,
             await tagsFor(source, warn, policyError),
             resolveImport,
           );

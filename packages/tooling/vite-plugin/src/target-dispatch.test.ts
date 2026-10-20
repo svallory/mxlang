@@ -15,10 +15,43 @@ afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
 });
 
-async function transform(target: string, strict?: boolean) {
+/**
+ * Installs a fake html descriptor whose compile records its options, and
+ * returns the recorder plus a restore. `strict` chooses the descriptor's
+ * own strictness so the "none" case is pinned without depending on the
+ * built-in html descriptor.
+ */
+function fakeDescriptor(strict?: "always") {
+  const compileModule = vi.fn<TargetCompiler["compileModule"]>(() => ({
+    code: "export default 1;",
+    dependencies: [],
+  }));
+  const load = vi.fn(() => ({ compileModule }));
+  const fake: TargetDescriptor = {
+    descriptorVersion: 0,
+    name: "html",
+    packageName: "@test/fake",
+    defaultTag: "node",
+    host: { name: "not-a-built-in-host" },
+    ...(strict ? { strict } : {}),
+    mappings: "merge-recorded",
+    load,
+  };
+  const lookup = builtinLookup();
+  const original = lookup.target;
+  vi.spyOn(lookup, "target").mockImplementation((name) =>
+    name === "html" ? fake : original(name),
+  );
+  return { compileModule, load, restore: () => vi.restoreAllMocks() };
+}
+
+async function transform(target: string, strict?: boolean, mxExtra?: object) {
   const dir = mkdtempSync(join(tmpdir(), "mx-vite-dispatch-"));
   dirs.push(dir);
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ mx: { target } }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ mx: { target, ...mxExtra } }),
+  );
   const plugin = mx({ strict }) as unknown as {
     transform: (this: unknown, source: string, id: string) => Promise<unknown>;
     configResolved: (config: unknown) => void;
@@ -30,46 +63,71 @@ async function transform(target: string, strict?: boolean) {
 }
 
 describe("target-table Vite dispatch", () => {
-  it.each([undefined, false, true])(
-    "passes caller strict=%s, core and the full lookup to a fake descriptor without map or mappings",
-    async (strict) => {
-      const compileModule = vi.fn<TargetCompiler["compileModule"]>(() => ({
-        code: "export default 1;",
-        dependencies: [],
-      }));
-      const load = vi.fn(() => ({ compileModule }));
-      const fake: TargetDescriptor = {
-        descriptorVersion: 0,
-        name: "html",
-        packageName: "@test/fake",
-        defaultTag: "node",
-        host: { name: "not-a-built-in-host" },
-        strict: "always",
-        mappings: "merge-recorded",
-        load,
-      };
-      const lookup = builtinLookup();
-      const original = lookup.target;
-      vi.spyOn(lookup, "target").mockImplementation((name) =>
-        name === "html" ? fake : original(name),
-      );
-      expect(await transform("html", strict)).toEqual({
-        code: "export default 1;",
-        map: null,
-      });
-      expect(load).toHaveBeenCalledWith(core);
-      expect(compileModule).toHaveBeenCalledWith(
-        "<p/>\n",
-        expect.any(String),
-        expect.objectContaining({
-          strict: strict ?? false,
-          targets: lookup,
-          resolveImport: expect.any(Function),
-        }),
-      );
-      expect(compileModule.mock.calls[0]?.[2]).not.toHaveProperty("typeCheck");
-    },
-  );
+  it("compiles strict when the descriptor declares strict: always", async () => {
+    const { compileModule, load } = fakeDescriptor("always");
+    await transform("html");
+    expect(load).toHaveBeenCalledWith(core);
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({
+        strict: true,
+        targets: builtinLookup(),
+        resolveImport: expect.any(Function),
+      }),
+    );
+    expect(compileModule.mock.calls[0]?.[2]).not.toHaveProperty("typeCheck");
+  });
+
+  it("compiles strict when the file's package.json sets mx.strict", async () => {
+    const { compileModule } = fakeDescriptor();
+    await transform("html", undefined, { strict: true });
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({ strict: true }),
+    );
+  });
+
+  it("compiles strict when the caller passes options.strict", async () => {
+    const { compileModule } = fakeDescriptor();
+    await transform("html", true);
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({ strict: true }),
+    );
+  });
+
+  it("compiles non-strict when neither descriptor, policy nor options ask for it", async () => {
+    const { compileModule } = fakeDescriptor();
+    await transform("html");
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({ strict: false }),
+    );
+  });
+
+  it("an explicit strict: false does not turn off policy strictness", async () => {
+    const { compileModule } = fakeDescriptor();
+    await transform("html", false, { strict: true });
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({ strict: true }),
+    );
+  });
+
+  it("an explicit strict: false does not turn off descriptor strictness (astro)", async () => {
+    const { compileModule } = fakeDescriptor("always");
+    await transform("html", false);
+    expect(compileModule).toHaveBeenCalledWith(
+      "<p/>\n",
+      expect.any(String),
+      expect.objectContaining({ strict: true }),
+    );
+  });
 
   it("refuses Angular pages with exact, uncoloured Angular build guidance", async () => {
     await expect(transform("angular-template")).rejects.toMatchObject({

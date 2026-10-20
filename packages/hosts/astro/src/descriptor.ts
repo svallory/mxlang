@@ -45,8 +45,9 @@ const descriptor: TargetDescriptor = {
   name: "astro-html",
   packageName: "@mxlang/host-astro",
   defaultTag: htmlDescriptor.defaultTag,
-  // `typescript-plugin/src/mx-language.ts` (`hostPolicy.host === "astro" || …`)
-  // and `language-server/src/diagnose.ts` (`resolveStrict`) force strict for astro.
+  // Every tool reads this field: strictness resolves from the descriptor
+  // (`strict === "always"`), not per-tool branches, so astro compiles strict
+  // in the editor tools and in `vite build` alike.
   strict: "always",
   // The mapping pass lowers astro under html's tables (`strict ? strictPolicy : policy`).
   declarations: htmlDescriptor.declarations,
