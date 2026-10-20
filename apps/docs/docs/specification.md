@@ -328,9 +328,24 @@ scope, so a name they declare twice is a compile error on every host,
 source order: "Duplicate declaration "x": it is already declared at 1:8. …".
 The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
 merges, and so do the merges TypeScript accepts: an enum with an enum (of the
-same constness) or after a namespace, overload signatures followed by one more
-function, a namespace after a function, class, enum or namespace, and the same
-with `declare`. A `type`, an `interface`
+same constness), an enum after a namespace without values or across separate
+module statements, overload signatures followed by one more function, a namespace
+after a function, class, enum or namespace, and the same with `declare`. A namespace
+with values followed by an enum of its name in one block, when reported as a duplicate
+binding by the TypeScript strip, is a positioned `MX_DUPLICATE_DECLARATION` at the
+colliding declaration's name, including inside a function or `if` body. At module
+or namespace top level, declare the enum first, or put the namespace's values in a
+namespace after an earlier enum of that name. Inside a function, `if` or other
+nested statement body, move the namespace to the top level of the module or of
+another namespace: reordering alone does not make it loadable under Bun and
+esbuild. Forms the strip accepts compile:
+for example, an enum, a namespace of its name and another enum in the same
+block merge without a second binding. This check runs wherever TypeScript
+is stripped, including under `tagRules: "none"`; it does not run when
+`stripTypes: false` keeps the module's TypeScript intact. An `import x = A.B` alias and
+another declaration of its name in separate module statements is refused in
+either order: stock Marko loads the `var` pairs, but MX's own strips refuse
+the module (`divergences.md`). A `type`, an `interface`
 and a namespace holding only types occupy no value, so they never collide. A
 type-only import (`import type x`, `import type { x }`, `import { type x }`,
 `import type * as x`) follows stock Marko's order-dependent answers: it is

@@ -794,3 +794,84 @@ describe("a `static { … }` block unwrapped to module scope", () => {
     },
   );
 });
+
+/**
+ * An export list naming a type-only namespace beside an enum of its name
+ * stays refused in every order: stock 6.4.4 loads the namespace→list→enum
+ * form, but MX's own strips (Bun.Transpiler, esbuild) refuse the module
+ * with a duplicate export, so MX keeps the baseline refusal
+ * (divergences.md). An `import x = A.B` beside any other declaration of its
+ * name stays refused the same way: stock loads the var pairs, MX's strips
+ * do not (divergences.md).
+ */
+describe("a list of a type-only namespace beside an enum of its name", () => {
+  const errors = (source: string) =>
+    lowerSource(`${source}\n<div/>\n`, join(dir, "page.mx"), {
+      tagRules: "html",
+    }).diagnostics.filter((d) => d.severity === "error");
+
+  it.each([
+    [
+      "the namespace before the list and the enum after it, one block",
+      "static { namespace q {}; export { q }; export enum q {A} }",
+    ],
+    [
+      "the namespace before the list and the enum after it",
+      "static namespace q {}\nstatic export { q }\nstatic export enum q {A}",
+    ],
+    [
+      "the enum before the list, one block",
+      "static { namespace q {}; export enum q {A}; export { q } }",
+    ],
+    [
+      "the namespace after the list",
+      "static { export { q }; namespace q {}; export enum q {A} }",
+    ],
+    [
+      "the enum first and the namespace last",
+      "static { export enum q {A}; export { q }; namespace q {} }",
+    ],
+    [
+      "a var after the list",
+      "static namespace q {}\nstatic export { q }\nstatic export var q = 1",
+    ],
+    [
+      "a const after the list",
+      "static namespace q { export type T = 1 }\nstatic export { q }\nstatic export const q = 1",
+    ],
+  ])(
+    "stays refused in every other order or with another value: %s",
+    (_name, source) => {
+      expect(errors(source).map((d) => d.code)).toEqual([
+        "MX_DUPLICATE_DECLARATION",
+      ]);
+    },
+  );
+});
+
+describe("an import equals beside another declaration", () => {
+  const errors = (source: string) =>
+    lowerSource(`${source}\n<div/>\n`, join(dir, "page.mx"), {
+      tagRules: "html",
+    }).diagnostics.filter((d) => d.severity === "error");
+
+  it.each([
+    ["a var after it", "static import x = A.B\nstatic var x = 1"],
+    ["a var before it", "static var x = 1\nstatic import x = A.B"],
+    ["a const", "static import x = A.B\nstatic const x = 1"],
+    ["a let", "static import x = A.B\nstatic let x = 1"],
+    ["a function", "static import x = A.B\nstatic function x() {}"],
+    ["a value import", 'static import x = A.B\nstatic import x from "./m"'],
+    [
+      "another import equals",
+      'static import A from "./m"\nstatic import x = A.B\nstatic import x = A.C',
+    ],
+  ])(
+    "stays refused beside %s: the module does not load under MX's strips",
+    (_name, source) => {
+      expect(errors(source).map((d) => d.code)).toEqual([
+        "MX_DUPLICATE_DECLARATION",
+      ]);
+    },
+  );
+});

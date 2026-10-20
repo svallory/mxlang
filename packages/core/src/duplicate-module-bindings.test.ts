@@ -374,6 +374,78 @@ describe("a module name declared twice is refused at the second declaration", ()
     ["var + let", "static var q = 1\nstatic let q = 2", "q", 2, 11],
     ["var + class", "static var C = 1\nstatic class C {}", "C", 2, 13],
     ["import + var", `${X}\nstatic var x = 1`, "x", 2, 11],
+    // A namespace with values and an enum of its name in one block: the
+    // strip runs the block as one program, and the pair would leave two
+    // bindings of one name (stock 6.4.4 refuses all three at compile too;
+    // the plain `enum` for its own reason, an enum in a block). The refusal
+    // is positioned at the enum's name when the strip reports the collision.
+    [
+      "a namespace with values, then an exported enum, in one block",
+      "static { namespace q { export const b = 1 }; export enum q {A} }",
+      "q",
+      1,
+      57,
+    ],
+    [
+      "a namespace with values, then a plain enum, in one block",
+      "static { namespace q { export const b = 1 }; enum q {A} }",
+      "q",
+      1,
+      50,
+    ],
+    [
+      "a namespace with values, its list, then an exported enum, in one block",
+      "static { namespace q { export const b = 1 }; export { q }; export enum q {A} }",
+      "q",
+      1,
+      71,
+    ],
+    // An `import x = A.B` beside another declaration of `x`: stock 6.4.4
+    // loads the var pairs, but MX's own strips refuse the module (Bun:
+    // `"x" has already been declared`; esbuild the same), so every pair
+    // stays refused at the second name (divergences.md).
+    [
+      "import equals + const",
+      "static import x = A.B\nstatic const x = 1",
+      "x",
+      2,
+      13,
+    ],
+    [
+      "import equals + let",
+      "static import x = A.B\nstatic let x = 1",
+      "x",
+      2,
+      11,
+    ],
+    [
+      "import equals + function",
+      "static import x = A.B\nstatic function x() {}",
+      "x",
+      2,
+      16,
+    ],
+    [
+      "import equals + class",
+      "static import x = A.B\nstatic class x {}",
+      "x",
+      2,
+      13,
+    ],
+    [
+      "import equals + import",
+      'static import x = A.B\nstatic import x from "./m"',
+      "x",
+      2,
+      14,
+    ],
+    [
+      "const + import equals",
+      "static const x = 1\nstatic import x = A.B",
+      "x",
+      2,
+      14,
+    ],
   ];
 
   it.each(rows)("%s", (_label, source, name, line, column) => {
@@ -452,6 +524,134 @@ describe("a module name declared twice is refused at the second declaration", ()
   });
 });
 
+describe.each(["html", "none"] as const)(
+  "strip duplicate source sites under %s",
+  (tagRules) => {
+    it.each([
+      [
+        "Z1: alias before an exported enum",
+        "static { import q = Math; export enum q {A} }",
+      ],
+      [
+        "Z2: exported enum before an alias",
+        "static { export enum q {A}; import q = Math }",
+      ],
+      [
+        "Z9: alias and enum in a function",
+        "static function f() { import q = Math; enum q {A} }",
+      ],
+      [
+        "Y11: alias before a plain enum",
+        "static { import q = Math; enum q {A} }",
+      ],
+      [
+        "Y12: plain enum before an alias",
+        "static { enum q {A}; import q = Math }",
+      ],
+      [
+        "K25: alias before an enum, namespace after",
+        "static { import q = Math; export enum q {A}; export namespace q { export const b = 1 } }",
+      ],
+      [
+        "K26: enum, alias, namespace after",
+        "static { export enum q {A}; import q = Math; export namespace q { export const b = 1 } }",
+      ],
+      [
+        "K29: enum, namespace, alias last",
+        "static { export enum q {A}; export namespace q { export const b = 1 }; import q = Math }",
+      ],
+    ])("keeps %s as the unchanged raw internal error", (_label, source) => {
+      // The strip's code frame is coloured when the run has a colour mode
+      // (CI, the gate), and plain under NO_COLOR: compare without escapes.
+      expect(
+        diagnostics(source, tagRules).map((d) => ({
+          ...d,
+          // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
+          message: d.message.replace(/\u001b\[[0-9;]*m/g, ""),
+        })),
+      ).toEqual([
+        {
+          severity: "error",
+          code: "MX_INTERNAL_ERROR",
+          message: 'internal error: Duplicate declaration "q"\n> 1 |\n    | ^',
+          line: 1,
+          column: 0,
+          offset: 0,
+        },
+      ]);
+    });
+
+    it.each([
+      [
+        "a trailing namespace",
+        "static { namespace q { export const b = 1 }; export enum q {A}; namespace q { export const c = 2 } }",
+        1,
+        57,
+        "1:20",
+      ],
+      [
+        "a trailing enum",
+        "static { namespace q { export const b = 1 }; export enum q {A}; export enum q {B = 2} }",
+        1,
+        57,
+        "1:20",
+      ],
+      [
+        "a trailing namespace in a function",
+        "static function f() { namespace q { export const b = 1 }; enum q {A}; namespace q { export const c = 2 } }",
+        1,
+        63,
+        "1:33",
+        "A namespace is only allowed at the top level of a module or of another namespace. Move the namespace there.",
+      ],
+      [
+        "a trailing enum on another line",
+        "static {\n  namespace q { export const b = 1 }\n  export enum q {A}\n  export enum q {B = 2}\n}",
+        3,
+        14,
+        "2:13",
+      ],
+      [
+        "an erased ambient declaration before the namespace",
+        "static { declare enum q {A}; namespace q { export const b = 1 }; export enum q {B} }",
+        1,
+        77,
+        "1:40",
+      ],
+      [
+        "a nested ambient namespace partner",
+        "static { namespace o { declare namespace q { const b: number }; enum q {A} } }",
+        1,
+        69,
+        "1:42",
+      ],
+      [
+        "an if body",
+        "static if (true) { namespace q { export const b = 1 }; enum q {A} }",
+        1,
+        60,
+        "1:30",
+        "A namespace is only allowed at the top level of a module or of another namespace. Move the namespace there.",
+      ],
+    ])(
+      "blames the colliding enum despite %s",
+      (_label, source, line, column, first, advice = "Declare the enum first, or put the namespace's values in a namespace after an earlier enum of that name.") => {
+        const errors = diagnostics(source, tagRules).filter(
+          (d) => d.severity === "error",
+        );
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatchObject({
+          code: DUPLICATE,
+          line,
+          column,
+          end: { line, column: column + 1 },
+          message: `Duplicate declaration "q": it is already declared at ${first}. A namespace with values followed by an enum of its name in one block creates two bindings. ${advice}`,
+        });
+      },
+    );
+  },
+);
+
 describe("what compiles", () => {
   const cases: [string, string][] = [
     ["static var twice", "static var v = 1\nstatic var v = 2"],
@@ -505,6 +705,48 @@ describe("what compiles", () => {
     // Out of scope: stock compiles these and the module then throws at load.
     ["an assignment + a const", "static count = 1\nstatic const count = 2"],
     ["an assignment twice", "static count = 1\nstatic count = 2"],
+    // A namespace with values and a `const` or `declare` enum of its name,
+    // or a `declare` namespace with values beside a real enum, bind one
+    // runtime value (the strip erases the ambient or const-enum side):
+    // stock 6.4.4 loads each form, html and dom, and the module loads under
+    // MX's own strips, so they compile.
+    [
+      "a namespace with values, then a const enum",
+      "static { namespace q { export const b = 1 }; export const enum q {A} }",
+    ],
+    [
+      "a namespace with values, then a declare enum",
+      "static { namespace q { export const b = 1 }; export declare enum q {A} }",
+    ],
+    [
+      "a declare namespace with values, then an exported enum",
+      "static { declare namespace q { const b: number }; export enum q {A} }",
+    ],
+    // These exported ambient members, overload signatures and aliases leave
+    // the strip nothing (non-exported ambient members can behave differently),
+    // so an enum after it is the one binding of the name: stock 6.4.4
+    // compiles and loads each form (html and dom) and the module loads
+    // under MX's own strips.
+    [
+      "a namespace of declare members, then an exported enum",
+      "static { namespace q { export declare const b: number }; export enum q {A} }",
+    ],
+    [
+      "a namespace of only an overload signature, then an exported enum",
+      "static { namespace q { export function f(): void; }; export enum q {A} }",
+    ],
+    [
+      "a namespace of only an alias, then an exported enum",
+      "static { namespace q { import y = Math; }; export enum q {A} }",
+    ],
+    [
+      "an enum–namespace–enum merge in one block",
+      "static { export enum q {A}; namespace q { export const b = 1 }; export enum q {B = 2} }",
+    ],
+    [
+      "an enum–exported namespace–enum merge in one block",
+      "static { export enum q {A}; export namespace q { export const b = 1 }; export enum q {B = 2} }",
+    ],
     // A tag variable is not a module binding: the render-only check owns it.
   ];
   it.each(cases)("%s", (_label, source) => {
@@ -530,6 +772,30 @@ describe("what compiles", () => {
   it("refuses nothing under the `none` tag rules, where a dialect owns its statements", () => {
     expect(ours("static const q = 1\nstatic const q = 2", "none")).toEqual([]);
     expect(ours("static export { q }", "none")).toEqual([]);
+  });
+
+  it("positions the strip's duplicate even under the none tag rules", () => {
+    const found = diagnostics(
+      "static { namespace q { export const b = 1 }; export enum q {A} }",
+      "none",
+    );
+    expect(found.filter((d) => d.severity === "error")).toMatchObject([
+      {
+        code: DUPLICATE,
+        line: 1,
+        column: 57,
+        end: { line: 1, column: 58 },
+      },
+    ]);
+  });
+
+  it("accepts the strip's alias-only namespace under the none tag rules", () => {
+    expect(
+      diagnostics(
+        "static { namespace q { import y = Math; }; enum q {A} }",
+        "none",
+      ).filter((d) => d.severity === "error"),
+    ).toEqual([]);
   });
 
   it("leaves a tag variable to the render-only check", () => {
@@ -1633,6 +1899,42 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "an exported enum, its list, then a namespace of its name, in one block",
       "static { export enum ‹q› { A }; export { «q» }; namespace q {} }",
+    ],
+    // Only the order `namespace, list, enum` loads in stock: the list
+    // specifier is dropped when it names a type-only namespace declared
+    // before it and the name's only values are enums declared after it. Any
+    // other order keeps the list, and stock's output fails to load (probed
+    // on stock 6.4.4, html and dom outputs), so these stay refused.
+    [
+      "a list, then a type-only namespace and an exported enum, in one block",
+      "static { export { ‹q› }; namespace q {}; export enum «q» { A } }",
+    ],
+    [
+      "a type-only namespace, an exported enum, then its list, in one block",
+      "static { namespace q {}; export enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "a type-only namespace, an exported enum, then its list",
+      "static namespace q {}\nstatic export enum ‹q› { A }\nstatic export { «q» }",
+    ],
+    [
+      "an exported enum, its list, then a type-only namespace",
+      "static export enum ‹q› { A }\nstatic export { «q» }\nstatic namespace q {}",
+    ],
+    [
+      "an empty namespace, its list, then an exported var of its name",
+      "static namespace q {}\nstatic export { ‹q› }\nstatic export var «q» = 1",
+    ],
+    // The client enum-and-list form without a namespace: stock's html output
+    // loads but its dom output does not (a duplicate export), so it stays
+    // refused rather than diverging between outputs.
+    [
+      "a client exported enum, then its list, in one block",
+      "client { export enum ‹q› { A }; export { «q» } }",
+    ],
+    [
+      "a client exported enum, then its list",
+      "client export enum ‹q› { A }\nclient export { «q» }",
     ],
     [
       "an exported enum, then its list, over several lines of one block",

@@ -29,6 +29,7 @@ import { codedError, type Node, type TranslateError } from "./core.ts";
 import {
   DIALECT_ERROR_CODE,
   DIALECT_HOOK_ERROR_CODE,
+  DUPLICATE_DECLARATION_CODE,
   INTERNAL_ERROR_CODE,
   INVALID_SHORTHAND_CODE,
   isReservedHookCode,
@@ -880,8 +881,144 @@ function typeScriptVisitor(): Node {
   return stripVisitor;
 }
 
+interface StripDeclaration {
+  name: string;
+  kind: string;
+  loc?: Loc;
+  declare: boolean;
+}
+
+interface StripDeclarationGroup {
+  sites: StripDeclaration[];
+  namespaceAllowed: boolean;
+}
+
+/**
+ * Declaration kinds and source sites, not a model of TypeScript bindings. Keep
+ * each statement list's names before the strip replaces them with generated
+ * nodes, retaining kinds even without a location. The strip alone decides
+ * whether they collide (including namespace/enum merges).
+ */
+function stripDeclarationSites(
+  program: Node,
+  t: Node,
+  moduleBlock: boolean,
+): StripDeclarationGroup[] {
+  const groups: StripDeclarationGroup[] = [];
+  // A static/server/client block is emitted as module statements even when
+  // the strip sees a BlockStatement. A function/if/nested block is not.
+  const moduleBody =
+    moduleBlock &&
+    program.body.length === 1 &&
+    program.body[0].type === "BlockStatement"
+      ? program.body[0]
+      : program;
+  t.traverseFast(program, (node: Node) => {
+    if (!Array.isArray(node.body)) return;
+    const group: StripDeclaration[] = [];
+    for (const statement of node.body as Node[]) {
+      const declaration = isModuleDeclaration(statement)
+        ? statement.declaration
+        : statement;
+      if (!declaration) continue;
+      const ids: Node[] =
+        declaration.type === "TSModuleDeclaration" ||
+        declaration.type === "TSEnumDeclaration"
+          ? [declaration.id]
+          : Object.values(t.getOuterBindingIdentifiers(declaration));
+      for (const id of ids) {
+        if (id?.type === "Identifier") {
+          group.push({
+            name: id.name,
+            kind: declaration.type,
+            loc: id.loc,
+            declare: !!declaration.declare,
+          });
+        }
+      }
+    }
+    if (group.length > 0) {
+      groups.push({
+        sites: group,
+        namespaceAllowed:
+          node === program ||
+          node === moduleBody ||
+          node.type === "TSModuleBlock",
+      });
+    }
+  });
+  return groups;
+}
+
+/**
+ * Babel reports a strip-generated duplicate through the file's error hub,
+ * but its TypeError carries no position. Use the offending identifier's source
+ * location to select the colliding declaration and its original source end.
+ * Convert only a same-name namespace/enum group; other duplicate families or
+ * errors with no matching source site stay raw. For a known namespace/enum
+ * collision, prefer an earlier non-ambient partner, fall back to an ambient
+ * one, or omit the earlier-site clause. Missing partner locations do not lose
+ * the collision's position.
+ */
+function stripDuplicateError(
+  error: unknown,
+  at: Node | undefined,
+  groups: StripDeclarationGroup[],
+): TranslateError | undefined {
+  if (!(error instanceof TypeError)) return undefined;
+  const name = /^Duplicate declaration "([^"\r\n]+)"$/.exec(
+    error.message.split("\n", 1)[0] ?? "",
+  )?.[1];
+  if (!name || at?.name !== name || !at.loc) return undefined;
+  const group = groups.find(({ sites }) =>
+    sites.some(
+      (site) =>
+        site.name === name &&
+        site.loc?.start.line === at.loc.start.line &&
+        site.loc?.start.column === at.loc.start.column,
+    ),
+  );
+  if (!group) return undefined;
+  const sites = group.sites.filter((site) => site.name === name);
+  const collisionIndex = sites.findIndex(
+    (site) =>
+      site.loc?.start.line === at.loc.start.line &&
+      site.loc?.start.column === at.loc.start.column,
+  );
+  const collision = sites[collisionIndex];
+  if (!collision?.loc) return undefined;
+  // Convert only the collision this text describes: an enum that follows a
+  // namespace of its name. A group that merely holds both kinds can collide
+  // elsewhere (an `import q = ...` alias beside the enum), and that stays raw.
+  const namespaces = sites
+    .slice(0, collisionIndex)
+    .filter((site) => site.kind === "TSModuleDeclaration");
+  if (collision.kind !== "TSEnumDeclaration" || namespaces.length === 0) {
+    return undefined;
+  }
+  // A namespace without a source position still proves the collision; it
+  // only loses the "already declared at" clause.
+  const placed = namespaces.filter((site) => site.loc);
+  const first = (placed.find((site) => !site.declare) ?? placed[0])?.loc?.start;
+  const previous = first
+    ? `: it is already declared at ${first.line}:${first.column + 1}.`
+    : ".";
+  const advice = group.namespaceAllowed
+    ? "Declare the enum first, or put the namespace's values in a namespace after an earlier enum of that name."
+    : "A namespace is only allowed at the top level of a module or of another namespace. Move the namespace there.";
+  const loc = collision.loc;
+  const result = codedError(
+    DUPLICATE_DECLARATION_CODE,
+    `Duplicate declaration "${name}"${previous} A namespace with values followed by an enum of its name in one block creates two bindings. ${advice}`,
+    loc.start.line,
+    loc.start.column,
+  );
+  result.end = { line: loc.end.line, column: loc.end.column };
+  return result;
+}
+
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
-function stripProgram(body: Node[]): Node[] {
+function stripProgram(body: Node[], moduleBlock = false): Node[] {
   // The plugin runs for every payload, TypeScript or not: it is not a no-op
   // on TS-free programs (it rebuilds nodes, and lowering reads the result),
   // so there is no skip-if-no-TS fast path — only the module itself loads
@@ -889,21 +1026,45 @@ function stripProgram(body: Node[]): Node[] {
   const babel = coreBabel();
   const t = babel.types;
   const program = t.program(body, [], "module");
+  const sites = stripDeclarationSites(program, t, moduleBlock);
   const file = new babel.File(
     { filename: "mx-strip.ts" },
     { code: "", ast: t.file(program) },
   );
   const path = file.path;
   path.state = { file };
-  const declared = declareExportedNames(path, t);
-  babel.traverse(
-    path.node,
-    babel.traverse.visitors.explode({ ...typeScriptVisitor() }),
-    path.scope,
-    path.state,
-    path,
-    true,
-  );
+  // Retain Babel's offending identifier without changing the raw error. The
+  // generated declaration still has its authored id's loc, unlike the error.
+  const buildError = file.hub.buildError;
+  let failure: { error: unknown; at: Node } | undefined;
+  file.hub.buildError = (...args: Node[]) => {
+    const error = buildError(...args);
+    failure = { error, at: args[0] };
+    return error;
+  };
+  let declared: Set<Node>;
+  try {
+    declared = declareExportedNames(path, t);
+    babel.traverse(
+      path.node,
+      babel.traverse.visitors.explode({ ...typeScriptVisitor() }),
+      path.scope,
+      path.state,
+      path,
+      true,
+    );
+  } catch (error) {
+    // Only the strip's exact duplicate-declaration TypeError for a same-name
+    // namespace/enum group is translated. Other failures or a duplicate with no
+    // identifiable source site pass through untouched, even under tagRules none.
+    throw (
+      stripDuplicateError(
+        error,
+        failure && failure.error === error ? failure.at : undefined,
+        sites,
+      ) ?? error
+    );
+  }
   // Marko drops the empty `export {}` the plugin adds to a module.
   return path.node.body.filter(
     (statement: Node) =>
@@ -1276,7 +1437,7 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
     }
     case "MxStatements":
       if (moduleBlock && stripModuleBlock(container)) return;
-      container.node = stripProgram([...node]);
+      container.node = stripProgram([...node], moduleBlock);
       return;
     case "MxPattern": {
       const [declaration] = stripProgram([
