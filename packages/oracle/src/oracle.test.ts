@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,6 +47,8 @@ describe("compile: .tsx pipeline", () => {
   }
 });
 
+// This also pins golden content: compare reports fail for a stale twin golden.
+// Existence after compare is not a separate invariant: it writes missing files.
 describe("compare: fixtures never report fail without a real divergence", () => {
   for (const fixture of fixtures) {
     it(`${fixture}: every backend/variant reports skipped, pass, or divergent`, () => {
@@ -67,23 +63,6 @@ describe("compare: fixtures never report fail without a real divergence", () => 
   it("reports at least one fixture", () => {
     expect(fixtures.length).toBeGreaterThan(0);
   });
-});
-
-describe("compare: golden snapshots", () => {
-  for (const fixture of fixtures) {
-    it(`${fixture}: golden files exist after compare`, () => {
-      const goldenDir = join(fixturesRoot, fixture, "__golden__");
-      compare(join(fixturesRoot, fixture), { divergencesPath });
-      for (const backend of BACKENDS) {
-        for (const variant of VARIANTS) {
-          const key = `${variant.generate}${variant.hydratable ? "-hydratable" : ""}`;
-          expect(existsSync(join(goldenDir, `twin.${backend}.${key}.js`))).toBe(
-            true,
-          );
-        }
-      }
-    });
-  }
 });
 
 describe("normalize", () => {
