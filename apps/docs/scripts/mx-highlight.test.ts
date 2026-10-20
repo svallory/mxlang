@@ -6,7 +6,8 @@
  * fence render the same spans (they share `renderMx`, and this keeps it so);
  * that every ```mx fence on the site parses clean and round-trips; that the
  * docmd plugin hooks in once and only for `mx`; and that the marker node
- * assertions actually fail when a range drifts off its construct.
+ * assertions actually fail when a range drifts off its construct. The unchanged
+ * markers' successful node validation lives in `home-example.test.ts`.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -407,10 +408,6 @@ describe("the docmd plugin", () => {
 describe("the marker node assertions", () => {
   const { source } = readExample();
   const markers = readMarkers();
-
-  it("hold for every marker", () => {
-    expect(validateNodes(source, markers)).toEqual([]);
-  });
 
   it("require node, startsIn and endsIn on every marker", () => {
     const bare = markers.map(
