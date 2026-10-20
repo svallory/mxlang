@@ -6,7 +6,8 @@
  * plus branch-sensitive extra values (1,380 cells across the five hosts).
  * The probe renders only the base values plus each attribute's extras for
  * every form, cutting subprocess render work without changing the cells.
- * Compiling the 60 templates dominates, so file time is unchanged.
+ * Compiling the 60 templates dominates, so restricting values alone does not
+ * change file time; concurrent probes cut it.
  *
  * The base values are `null` (absence), `true` (presence), `0`
  * (falsy-but-printed) and `"x"` (truthy string). `undefined` and `false`
@@ -34,8 +35,9 @@
  *    (`disabled=""` where Marko prints `disabled="0"`), so those cells compare
  *    presence. Solid matches Marko exactly (SSR).
  */
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { parseFragment } from "parse5";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -51,26 +53,28 @@ interface Node5 {
   childNodes?: Node5[];
 }
 
-function rows(host: string): Row[] {
-  return JSON.parse(
-    execFileSync(
-      "bun",
-      [
-        fileURLToPath(
-          new URL("../../../scripts/attribute-value-probe.ts", import.meta.url),
+const execFileAsync = promisify(execFile);
+
+async function rows(host: string): Promise<Row[]> {
+  const { stdout, stderr } = await execFileAsync(
+    "bun",
+    [
+      fileURLToPath(
+        new URL("../../../scripts/attribute-value-probe.ts", import.meta.url),
+      ),
+      host,
+      "--parity",
+      "--values",
+      JSON.stringify(
+        Object.fromEntries(
+          attributes.map((attribute) => [attribute, asked(attribute)]),
         ),
-        host,
-        "--parity",
-        "--values",
-        JSON.stringify(
-          Object.fromEntries(
-            attributes.map((attribute) => [attribute, asked(attribute)]),
-          ),
-        ),
-      ],
-      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
-    ),
+      ),
+    ],
+    { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
+  if (stderr) process.stderr.write(stderr);
+  return JSON.parse(stdout);
 }
 
 /** Names React renders as boolean presence under the name MX emits (value text is not printable). */
@@ -151,9 +155,14 @@ function asked(attribute: string): string[] {
 const HOSTS = ["preact", "react", "hono", "solid", "astro"];
 let marko: Row[] = [];
 const hosts: Record<string, Row[]> = {};
-beforeAll(() => {
-  marko = rows("marko");
-  for (const host of HOSTS) hosts[host] = rows(host);
+beforeAll(async () => {
+  await Promise.all(
+    ["marko", ...HOSTS].map(async (host) => {
+      const result = await rows(host);
+      if (host === "marko") marko = result;
+      else hosts[host] = result;
+    }),
+  );
   expect(marko).toHaveLength(
     attributes.reduce(
       (count, attribute) => count + new Set(asked(attribute)).size,
