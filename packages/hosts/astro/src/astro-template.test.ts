@@ -703,6 +703,8 @@ describe("AttrTag type import", () => {
   });
 });
 
+// unsupported-tag-message.test.ts owns the full refusal shape. Keep this
+// front-door table as wiring and the constructs/sources unique to this file.
 describe("unsupported constructs", () => {
   it.each([
     [
@@ -732,23 +734,6 @@ describe("unsupported constructs", () => {
     ],
   ])("rejects <%s>", (_name, template, message) => {
     expect(errorFor(template).message).toBe(message);
-  });
-
-  it.each(["<effect() { go() }/>", "<effect/>", "<effect>go()</effect>"])(
-    "<effect> keeps this host's own error, never a target's: %s",
-    (template) => {
-      const { message } = errorFor(template);
-      expect(message).toBe(
-        "`<effect>` is not supported in embedded MX on Astro.",
-      );
-      expect(message).not.toContain("Use `<script>`");
-    },
-  );
-
-  it("rejects <const>, which a template expression cannot declare", () => {
-    expect(errorFor("<const/n=1/>").message).toBe(
-      "`<const>` is not supported in embedded MX on Astro. Declare it in the `---` fence instead: an Astro template expression cannot declare a binding.",
-    );
   });
 
   it("rejects <define>, pointing at a separate file", () => {

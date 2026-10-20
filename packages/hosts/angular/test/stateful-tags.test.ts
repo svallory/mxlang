@@ -6,16 +6,12 @@ import { emit } from "./helpers.ts";
 // became a literal lowercase element (the S8 silent-wrong-render class).
 // Each of these is now a positioned error, same wording family as
 // `@mxlang/host-preact`'s `statefulErrors`/`@mxlang/host-solid`'s `STATEFUL_ERRORS`,
-// adapted to name an Angular equivalent.
+// adapted to name an Angular equivalent. unsupported-tag-message.test.ts owns
+// the complete refusal shape through page and tag-module doors; keep the
+// distinct sources and wiring here.
 describe("stateful tags: positioned errors, not literal elements", () => {
   it("rejects <let> even with no /var", () => {
     expect(() => emit("<let x=1/>")).toThrow(
-      "`<let>` is not supported in embedded MX on Angular. Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.",
-    );
-  });
-
-  it("rejects <let> with a /var", () => {
-    expect(() => emit("<let/x=1/>")).toThrow(
       "`<let>` is not supported in embedded MX on Angular. Use Angular's `signal`/`WritableSignal` in the component class, or a `@Input()`.",
     );
   });
@@ -24,15 +20,6 @@ describe("stateful tags: positioned errors, not literal elements", () => {
     expect(() => emit("<effect><div>x</div></effect>")).toThrow(
       "`<effect>` is not supported in embedded MX on Angular.",
     );
-  });
-
-  it("keeps its own <effect> error, never a target's", () => {
-    for (const source of ["<effect/>", "<effect() { go() }/>"]) {
-      expect(() => emit(source)).toThrow(
-        "`<effect>` is not supported in embedded MX on Angular.",
-      );
-      expect(() => emit(source)).not.toThrow(/Use `<script>`/);
-    }
   });
 
   it("rejects <lifecycle>", () => {
@@ -76,12 +63,6 @@ describe("stateful tags: positioned errors, not literal elements", () => {
       "`<id>` is not supported in embedded MX on Angular. Use Angular's own `inject(...)`-based id generation or a static string.",
     );
   });
-
-  it("rejects <await>", () => {
-    expect(() => emit("<await>y</await>")).toThrow(
-      "`<await>` is not supported in embedded MX on Angular. Use `@defer` with an `@placeholder`/`@loading` block instead.",
-    );
-  });
 });
 
 // Spec §13.3 bug 8: `<return>` used to compile clean and emit nothing at the
@@ -91,14 +72,5 @@ describe("<return> in a page template", () => {
     expect(() => emit("<return value=42/>\n<span>hi</span>\n")).toThrow(
       "`<return>` is not supported in embedded MX on Angular. Declare the value as a `@Input()`/class member, or expose it as a `static`/`export`.",
     );
-  });
-
-  it("positions the error at the <return> tag, not the file start", () => {
-    try {
-      emit("<span>hi</span>\n<return value=42/>\n");
-      throw new Error("expected compile() to throw");
-    } catch (err) {
-      expect((err as { line?: number }).line).toBe(2);
-    }
   });
 });
