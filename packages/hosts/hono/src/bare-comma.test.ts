@@ -2,35 +2,30 @@ import { describe, expect, it } from "vitest";
 import { compileHonoMx } from "./index.ts";
 
 /**
- * A top-level concise line holding only `,` has no tag to continue; core's
- * positioned error replaces Marko's `TypeError` (`tag.name.value`).
+ * Wiring smoke only: Hono compiles through `@mxlang/host-preact`'s shared
+ * emitter, so the bare-`,` matrix (every top-level shape, positions) is pinned
+ * once in `packages/hosts/preact/src/bare-comma.test.ts`. This file proves
+ * core's positioned error (not Marko's `TypeError`) reaches `compileHonoMx`
+ * callers.
  */
-const MESSAGE =
-  "a `,` continues the attributes of the tag above; there is no tag here";
-
-function run(source: string): unknown {
-  try {
-    compileHonoMx(source, "a.mx");
-  } catch (error) {
-    return error;
-  }
-  return undefined;
-}
-
-describe("a bare `,` line", () => {
-  it.each([
-    [",", 1, 0],
-    [", --x", 1, 0],
-    ["-- hi\n,", 2, 0],
-    ["<div/>\n,", 2, 0],
-    ["div\n  -- t\n  ,", 3, 2],
-  ])("%j is a positioned error, not a throw", (source, line, column) => {
-    const error = run(source);
+describe("a bare `,` line (hono)", () => {
+  it("is a positioned error, not a throw", () => {
+    let error: unknown;
+    try {
+      compileHonoMx(",", "a.mx");
+    } catch (thrown) {
+      error = thrown;
+    }
     expect(error).not.toBeInstanceOf(TypeError);
-    expect(error).toMatchObject({ message: MESSAGE, line, column });
+    expect(error).toMatchObject({
+      message:
+        "a `,` continues the attributes of the tag above; there is no tag here",
+      line: 1,
+      column: 0,
+    });
   });
 
   it("a `,` that continues a tag above still compiles", () => {
-    expect(run('div\n  , class="a"')).toBeUndefined();
+    expect(() => compileHonoMx('div\n  , class="a"', "a.mx")).not.toThrow();
   });
 });

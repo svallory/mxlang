@@ -28,162 +28,33 @@ function errorOf(source: string): string {
   throw new Error("expected a compile error, but the template compiled");
 }
 
-describe("whole-file duplicate lifted bindings", () => {
+/**
+ * Wiring smoke only: Hono compiles through `@mxlang/host-preact`'s shared
+ * emitter, so the lifted-bindings duplicate matrix (every row, earlier-error
+ * precedence, fresh-compilation identity) is pinned once in
+ * `packages/hosts/preact/src/index.test.ts`. This one row proves the duplicate
+ * declaration error carries its position through `compileHonoMx`.
+ */
+describe("whole-file duplicate lifted bindings (hono wiring smoke)", () => {
   const counter = {
     template: {
       filename: "/fixtures/tags/counter.mx",
       source: "<return value=1/>",
     },
   } as CustomTag;
-  const row = "<define/Row><b/></define>";
 
-  it.each([
-    [
-      "sibling calls",
-      "<section><counter/x/></section>\n<p><counter/x/></p>",
-      "x",
-      2,
-      12,
-    ],
-    ["top-level calls", "<counter/x/>\n<counter/x/>", "x", 2, 9],
-    ["define then call", `${row}\n<counter/Row/>`, "Row", 2, 9],
-    ["call then define", `<counter/Row/>\n${row}`, "Row", 2, 8],
-    ["two defines", `${row}\n${row}`, "Row", 2, 8],
-    ["const then call", "<const/x=1/>\n<counter/x/>", "x", 2, 9],
-    ["call then const", "<counter/x/>\n<const/x=1/>", "x", 2, 7],
-    ["const then define", `<const/Row=1/>\n${row}`, "Row", 2, 8],
-    [
-      "destructured const object",
-      "<const/{a}=input/>\n<counter/a/>",
-      "a",
-      2,
-      9,
-    ],
-    [
-      "destructured const after call",
-      "<counter/x/>\n<const/{ x }=input/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "destructured const array",
-      "<const/[a, b]=input.list/>\n<counter/b/>",
-      "b",
-      2,
-      9,
-    ],
-    [
-      "destructured const renamed",
-      "<const/{ x: y }=input/>\n<define/y><b/></define>",
-      "y",
-      2,
-      8,
-    ],
-    [
-      "destructured const nested",
-      "<const/{ outer: { a } }=input/>\n<counter/a/>",
-      "a",
-      2,
-      9,
-    ],
-    [
-      "destructured const default",
-      "<const/{ a = 1 }=input/>\n<counter/a/>",
-      "a",
-      2,
-      9,
-    ],
-    [
-      "destructured const rest",
-      "<const/{ ...rest }=input/>\n<counter/rest/>",
-      "rest",
-      2,
-      9,
-    ],
-    [
-      "destructured const pair",
-      "<const/{ a }=input/>\n<const/[a]=input.list/>",
-      "a",
-      2,
-      8,
-    ],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX dynamic tag expression.
-    [
-      "dynamic-tag body scope (mx-m682)",
-      "<${input.tag}><counter/x/></>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "placeholder body scope (mx-m682)",
-      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    [
-      "catch body scope (mx-m682)",
-      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
-      "x",
-      2,
-      9,
-    ],
-    ["destructured binding", `${row}\n<counter/{ Row, other }/>`, "Row", 2, 11],
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX dynamic tag expressions.
-    ["dynamic calls", "<${input.tag}/x/>\n<${input.tag}/x/>", "x", 2, 14],
-  ])(
-    "refuses %s at the second authored name",
-    (_label, source, name, line, column) => {
-      expect(() =>
-        compileHonoMx(source, "/fixtures/page.mx", { customTags: { counter } }),
-      ).toThrowError(
-        expect.objectContaining({
-          message: expect.stringContaining(`Duplicate declaration "${name}"`),
-          line,
-          column,
-        }),
-      );
-    },
-  );
-
-  it("reports an earlier markup error before duplicate defines", () => {
+  it("refuses a duplicated authored name at the second occurrence", () => {
     expect(() =>
-      compile(`<div><const/z=1/></div>\n${row}\n${row}`),
+      compileHonoMx("<counter/x/>\n<counter/x/>", "/fixtures/page.mx", {
+        customTags: { counter },
+      }),
     ).toThrowError(
       expect.objectContaining({
-        message: expect.stringContaining(
-          "`<const>` must appear at the top level",
-        ),
-        line: 1,
-        column: 5,
+        message: expect.stringContaining('Duplicate declaration "x"'),
+        line: 2,
+        column: 9,
       }),
     );
-  });
-
-  it.each([
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: authored MX placeholders.
-    ["define parameter", "<define/Row|x|>${x}</define><counter/x/>"],
-  ])("keeps %s names separate from the component scope", (_label, source) => {
-    const code = compileHonoMx(source, "/fixtures/page.mx", {
-      customTags: { counter },
-    }).code;
-    expect(code).toContain("const Row = ");
-    expect(code).toContain("const x = __mxRet0.value;");
-  });
-
-  it("keeps distinct lifted names and fresh compilations legal", () => {
-    const source = `${row}<counter/a/><counter/b/><Row/>`;
-    const first = compileHonoMx(source, "/fixtures/page.mx", {
-      customTags: { counter },
-    }).code;
-    expect(first).toContain("const a = __mxRet0.value;");
-    expect(first).toContain("const b = __mxRet1.value;");
-    expect(
-      compileHonoMx(source, "/fixtures/page.mx", { customTags: { counter } })
-        .code,
-    ).toBe(first);
   });
 });
 
@@ -194,33 +65,11 @@ describe("Hono dialect", () => {
     expect(code).toContain('<label class="field" for="name">Name</label>');
   });
 
-  it("a type-only import does not resolve a capitalized tag", () => {
-    // A type-only import binds no runtime value, so `<Widget/>` has nothing
-    // to call -- the same rule `@mxlang/target-html`/`@mxlang/host-solid` already
-    // enforce (`import type` excluded from `ctx.imports`).
-    expect(
-      errorOf('import type Widget from "./widget.mx"\n<Widget/>'),
-    ).toContain("Unable to find entry point for custom tag `<Widget>`.");
-  });
-
   it("tells an unresolved capitalized tag how to resolve it (shared emitter)", () => {
     expect(errorOf('<Card title="x"/>')).toContain(
       'Unable to find entry point for custom tag `<Card>`. Import it (`import Card from "./Card.mx"`) or add `tags/Card.mx`.',
     );
   });
-
-  it.each([
-    ["self-closing", "<TotallyUndefined/>"],
-    ["with a body", "<TotallyUndefined>body</TotallyUndefined>"],
-    ["with an attribute", "<TotallyUndefined a=1/>"],
-  ])(
-    "rejects a capitalized tag with no import, binding, or taglib entry, %s",
-    (_label, source) => {
-      expect(errorOf(source)).toContain(
-        "Unable to find entry point for custom tag `<TotallyUndefined>`.",
-      );
-    },
-  );
 
   it("imports Hono's specialised AttrTag type", () => {
     expect(
