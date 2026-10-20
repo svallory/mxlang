@@ -2661,7 +2661,12 @@ function lowerBlock(ctx: Ctx, node: Node, body = bodyChildren(node)): Block {
   // `<const>` inside it unregisters are confined to it.
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(ctx, node));
-  const children = lowerChildren(ctx, body);
+  const children = withTagParams(
+    ctx,
+    node,
+    tagNameOf(node) ?? DYNAMIC_TAG,
+    () => lowerChildren(ctx, body),
+  );
   restore();
   unscope();
   return {
@@ -3346,7 +3351,9 @@ function lowerAuthoredAttributeTag(
   const block: Block = {
     hasParams: hasParamsAtCall,
     params: paramsOf(ctx, node),
-    children: lowerChildren(ctx, nested.contentChildren),
+    children: withTagParams(ctx, node, `@${name}`, () =>
+      lowerChildren(ctx, nested.contentChildren),
+    ),
     loc: posOf(ctx, node),
   };
   restore();
@@ -4041,16 +4048,13 @@ function lowerForHead(
   };
 }
 
-function withTagParams<T>(
-  ctx: Ctx,
-  node: Node,
-  kind: "for" | "define",
-  run: () => T,
-): T {
+function withTagParams<T>(ctx: Ctx, node: Node, kind: string, run: () => T): T {
   const outer = ctx.enclosingTagParams;
   ctx.enclosingTagParams = new Map(
     tagParamsOf(node).flatMap((param: Node) =>
-      bindingIdentifiers(param).map((name) => [name, kind] as const),
+      bindingIdentifiers(param).map(
+        (name) => [name, kind === DYNAMIC_TAG ? DYNAMIC_OWNER : kind] as const,
+      ),
     ),
   );
   try {
@@ -5456,7 +5460,9 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   );
   const unscope = scopeBindings(ctx);
   const restore = shadowBindings(ctx, paramBindings(ctx, node));
-  const children = lowerChildren(ctx, loweredTags.contentChildren);
+  const children = withTagParams(ctx, node, name, () =>
+    lowerChildren(ctx, loweredTags.contentChildren),
+  );
   restore();
   unscope();
 

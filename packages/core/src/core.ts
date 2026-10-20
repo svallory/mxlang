@@ -663,14 +663,14 @@ export interface Ctx {
    */
   tagVarShadowed?: ReadonlySet<string>;
   /**
-   * The names the params of the *enclosing* `<for>` or `<define>` bind, with
+   * The names the params of the *enclosing* tag bind, with
    * the kind of tag that binds them. A body declaration of the same spelling
    * is a duplicate of the parameter (`<for|x| of=…><const/x=1/></for>`).
    * Consumed by that immediate body's `lowerChildList`: a nested element or
    * control body may redeclare the parameter legally. Unlike `tagVarShadowed`,
    * this records declaration conflicts, not which binding a read resolves to.
    */
-  enclosingTagParams?: ReadonlyMap<string, "for" | "define">;
+  enclosingTagParams?: ReadonlyMap<string, string>;
   /**
    * The names of the `<let>` tags in scope at the point being lowered: the
    * bindings a write in render position is refused on (`checkLetWrites`).
