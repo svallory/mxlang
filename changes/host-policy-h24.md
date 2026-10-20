@@ -1,0 +1,5 @@
+---
+packages: [core, language-server, typescript-plugin, vite-plugin, tsc]
+kind: Changed
+---
+A `package.json` that fails to parse is now reported once instead of twice by the language server, Vite plugin, and the TypeScript plugin / `mx-tsc` for `.mx`, JSX region and `.astro.mx` files. The `.ng.mx` config-error path is unchanged. The host policy's `malformed-package-json` diagnostic carries the tag scan's consequence (whether the previous valid `mx.tags`/`mx.contracts` stay in force, or none are loaded until the manifest parses), and the language server, the TypeScript plugin and the Vite plugin drop the scan's duplicate `MX_IGNORED_CONFIG` diagnostic for that file through the new core helper `scanDiagnosticsNotSaidByPolicy`; `mx-tsc` therefore prints one TS80003 with the consequence, not the policy warning plus its stderr twin. In Vite serve mode, the warning is reported again when the manifest is fixed and broken again. Scan diagnostics with no policy twin — any other problem in the same `package.json`, or a broken manifest the policy never read — are still reported.

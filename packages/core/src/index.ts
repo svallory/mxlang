@@ -214,6 +214,7 @@ export {
   readTargetDefaultTag,
   resolveTargetPolicy,
   resolveTargetPolicyDetailed,
+  scanDiagnosticsNotSaidByPolicy,
   type TargetPolicy,
   type TargetPolicyDiagnostic,
   type TargetPolicyDiagnosticCode,

@@ -103,6 +103,10 @@ import {
 } from "./dialect-discovery.ts";
 import { CORE_DIALECT } from "./dialect-registry.ts";
 import {
+  MANIFEST_PARSE_PREFIX,
+  manifestParseConsequence,
+} from "./manifest-parse-text.ts";
+import {
   findMxConfig,
   mxConfigKeyPosition,
   mxConfigSearchPaths,
@@ -1488,7 +1492,7 @@ function readManifest(
     if (!diagnostic) {
       diagnostic = {
         file: packageJson,
-        message: `\`package.json\` could not be parsed as JSON: ${error.message}; ${read.manifest === undefined ? "no `mx.tags` or `mx.contracts` are loaded until the manifest parses" : "the previous valid `mx.tags` and `mx.contracts` stay in force"}`,
+        message: `${MANIFEST_PARSE_PREFIX}: ${error.message}; ${manifestParseConsequence(read.manifest)}`,
         line: 1,
         column: 0,
         code: IGNORED_CONFIG_CODE,

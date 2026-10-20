@@ -14,6 +14,7 @@ import {
   newCtx,
   parseFragment,
   printExpression,
+  scanDiagnosticsNotSaidByPolicy,
   type TargetLookup,
   type TargetPolicy,
   type TargetPolicyDiagnostic,
@@ -141,8 +142,10 @@ export function createMxLanguagePlugin(
     // third-party host's name is a valid filter value here too.
     const targets = lookupFor(policy);
     const host = targets.hostFilterKey(policy.target) ?? null;
-    for (const diagnostic of scanCached(fileName, { host, targets })
-      .diagnostics) {
+    for (const diagnostic of scanDiagnosticsNotSaidByPolicy(
+      hostPolicies.get(fileName),
+      scanCached(fileName, { host, targets }).diagnostics,
+    )) {
       const key = `${diagnostic.file}\u0000${diagnostic.message}`;
       if (reported.has(key)) continue;
       reported.add(key);

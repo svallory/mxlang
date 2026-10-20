@@ -60,7 +60,12 @@
  */
 
 import { basename, dirname, join } from "node:path";
+import { IGNORED_CONFIG_CODE } from "./diagnostic-codes.ts";
 import { discoverDialects } from "./dialect-discovery.ts";
+import {
+  MANIFEST_PARSE_PREFIX,
+  manifestParseConsequence,
+} from "./manifest-parse-text.ts";
 import {
   findMxConfig,
   MX_CONFIG_KEYS,
@@ -891,10 +896,20 @@ export function resolveTargetPolicyDetailed(
     const before = former
       ? `; before, its host was taken from ${former.file} ("${former.host}")`
       : "";
+    // The manifest-parse failure says two things to two readers: the host
+    // policy (above) and the tag scan, whose own diagnostic repeats the parse
+    // error and adds what happens to `mx.tags` (scan.ts `readManifest`). The
+    // consequence is folded in here so a tool that has both diagnostics can
+    // drop the scan twin (`scanDiagnosticsNotSaidByPolicy`) and lose nothing.
+    // A manifest that parses but is not a JSON object has no scan twin, so it
+    // keeps the plain wording.
+    const consequence = read.error
+      ? `; ${manifestParseConsequence(read.manifest)}`
+      : "";
     diagnostics.push({
       code: "malformed-package-json",
       file,
-      message: `${file} ${reason}; using the default "${lookup.defaultTarget()}" host for the files under ${dir}${before}`,
+      message: `${file} ${reason}; using the default "${lookup.defaultTarget()}" host for the files under ${dir}${before}${consequence}`,
       line: read.error?.line ?? 1,
       column: read.error?.column ?? 0,
     });
@@ -1087,4 +1102,41 @@ function formerAncestorPolicy(
     if (parent === dir) return undefined;
     dir = parent;
   }
+}
+
+/**
+ * The scan diagnostics a set of host-policy diagnostics already says: a
+ * `malformed-package-json` policy diagnostic and the scan's manifest-parse
+ * `MX_IGNORED_CONFIG` diagnostic (scan.ts `readManifest`) are one problem —
+ * the same broken `package.json` — reported twice. The policy message
+ * carries the parse error, its position and the scan's consequence (whether
+ * the previous valid `mx.tags` stay in force), so the scan twin adds nothing
+ * and a tool that holds both diagnostics drops it through this filter.
+ *
+ * Matched by file, and only the manifest-parse diagnostic: a scan warning
+ * for any other problem in the same `package.json` (an unknown `hosts` name,
+ * a missing `mx.tags` directory — neither of which a broken manifest can
+ * produce) and a broken `package.json` the policy never read keep their scan
+ * diagnostic. Host-agnostic on purpose: scan and policy are both core's.
+ */
+export function scanDiagnosticsNotSaidByPolicy<
+  Diagnostic extends { file: string; message: string; code?: string },
+>(
+  policy: readonly { file: string; code?: string }[],
+  scan: readonly Diagnostic[],
+): Diagnostic[] {
+  const said = new Set(
+    policy
+      .filter((diagnostic) => diagnostic.code === "malformed-package-json")
+      .map((diagnostic) => diagnostic.file),
+  );
+  if (said.size === 0) return [...scan];
+  return scan.filter(
+    (diagnostic) =>
+      !(
+        said.has(diagnostic.file) &&
+        diagnostic.code === IGNORED_CONFIG_CODE &&
+        diagnostic.message.startsWith(MANIFEST_PARSE_PREFIX)
+      ),
+  );
 }

@@ -3,6 +3,7 @@ import {
   type GeneratedMapping,
   type MxWarning,
   reportScanDiagnostics,
+  scanDiagnosticsNotSaidByPolicy,
 } from "@mxlang/core";
 import {
   astroMxTemplateOffset,
@@ -15,11 +16,7 @@ import {
   scanCached,
 } from "@mxlang/targets";
 import type { RawSourceMap } from "@mxlang/tsx-bridge";
-import type {
-  CodeInformation,
-  CodeMapping,
-  VirtualCode,
-} from "@volar/language-core";
+import type { CodeInformation, CodeMapping } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
 import { regionAuthoredSpans } from "./authored-spans.ts";
@@ -175,8 +172,14 @@ export function createAmxLanguagePlugin(
         const scan = scanCached(fileName, {
           host: fileKindHostFilter(fileKindForPipeline("astro-template")),
         });
-        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        reportScanDiagnostics(
+          scanDiagnosticsNotSaidByPolicy(
+            hostPolicies.get(fileName),
+            scan.diagnostics,
+          ),
+          reportedScanDiagnostics,
+          (d) =>
+            console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
         const discovered = scan.customTags;
         const result = compileWithDependencies(

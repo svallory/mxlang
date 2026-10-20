@@ -8,6 +8,7 @@ import {
   isTranslateError,
   type MxWarning,
   reportScanDiagnostics,
+  scanDiagnosticsNotSaidByPolicy,
   type TargetPolicyDiagnostic,
   withCalleeInputSources,
 } from "@mxlang/core";
@@ -31,7 +32,6 @@ import type {
   CodeInformation,
   CodeMapping,
   LanguagePlugin,
-  VirtualCode,
 } from "@volar/language-core";
 import type {} from "@volar/typescript";
 import type * as ts from "typescript";
@@ -257,8 +257,16 @@ export function createRegionLanguagePlugin(
         const scan = scanCached(fileName, {
           host: fileKindHostFilter(kind),
         });
-        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        // A manifest-parse warning the host policy already reports for this
+        // file (one positioned diagnostic, TS80003) is not logged twice.
+        reportScanDiagnostics(
+          scanDiagnosticsNotSaidByPolicy(
+            hostPolicies.get(fileName),
+            scan.diagnostics,
+          ),
+          reportedScanDiagnostics,
+          (d) =>
+            console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
         const discovered = scan.customTags;
         const regions: MxSourceRegion[] = [];

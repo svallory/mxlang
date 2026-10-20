@@ -1320,8 +1320,16 @@ export default () => <div />;
         await compile();
       }
 
-      // (The scan reports the same broken file in its own words; only the
-      // host-policy message says which host the files fell back to.)
+      // One message names the broken file: the policy diagnostic carries the
+      // parse error and the scan's consequence; the scan's `MX_IGNORED_CONFIG`
+      // twin is dropped, so exactly one warning mentions the parse failure.
+      expect(
+        warnings.filter((w) => w.includes("could not be parsed as JSON")),
+      ).toEqual([
+        expect.stringContaining(
+          "no `mx.tags` or `mx.contracts` are loaded until the manifest parses",
+        ),
+      ]);
       expect(warnings.filter((w) => w.includes("using the default"))).toEqual([
         expect.stringContaining(join(broken, "package.json")),
       ]);
@@ -1337,6 +1345,70 @@ export default () => <div />;
           )
           .every((w) => /package\.json:\d+:\d+: /.test(w)),
       ).toBe(true);
+    });
+
+    it("warns once each time a manifest is broken again under vite serve", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-vite-manifest-rebreak-"));
+      scratches.push(dir);
+      const manifest = join(dir, "package.json");
+      const caller = join(dir, "caller.mx");
+      const source = "<p>hi</p>\n";
+      writeFileSync(caller, source);
+      writeFileSync(manifest, '{"name":"t","mx":{"host":"html"}}');
+
+      const plugin = mx();
+      (plugin.configResolved as unknown as (config: unknown) => void)({
+        command: "serve",
+        root: dir,
+        resolve: { alias: [] },
+      });
+      const warnings: string[] = [];
+      const context = { warn: collectWarnings(warnings) };
+      const transform = transformOf(plugin);
+      const compile = () =>
+        transform.call(context, source, `${caller}${MX_SUFFIX}`);
+      const handle = plugin.handleHotUpdate as unknown as (
+        ctx: unknown,
+      ) => unknown;
+      const mod = { id: `${caller}${MX_SUFFIX}` };
+      const invalidated = vi.fn();
+      const changed = (text: string, version: number) => {
+        writeFileSync(manifest, text);
+        // Distinct versions without sleeps or filesystem timestamp races.
+        utimesSync(manifest, version, version);
+        handle({
+          file: manifest,
+          modules: [],
+          server: {
+            moduleGraph: {
+              getModuleById: (id: string) => (id === mod.id ? mod : undefined),
+              invalidateModule: invalidated,
+            },
+          },
+        });
+      };
+
+      await compile();
+      expect(warnings).toEqual([]);
+
+      changed("{ not json", 1_700_000_001);
+      await compile();
+      await compile();
+      expect(warnings).toEqual([
+        expect.stringContaining("could not be parsed as JSON"),
+      ]);
+      const firstWarning = warnings[0];
+      warnings.length = 0;
+
+      changed('{"name":"t","mx":{"host":"html"}}', 1_700_000_002);
+      await compile();
+      expect(warnings).toEqual([]);
+
+      changed("{ not json", 1_700_000_003);
+      await compile();
+      await compile();
+      expect(warnings).toEqual([firstWarning]);
+      expect(invalidated).toHaveBeenCalledWith(mod);
     });
 
     it("invalidates callers when a tag file is newly created", async () => {

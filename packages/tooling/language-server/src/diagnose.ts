@@ -18,6 +18,7 @@ import {
   isTranslateError,
   type MxWarning,
   type ScanDiagnostic,
+  scanDiagnosticsNotSaidByPolicy,
   type TargetLookup,
   type TargetPolicy,
   type TargetPolicyDiagnostic,
@@ -529,9 +530,12 @@ export function diagnoseDocument(
     for (const file of scan.files) dependencies?.add(file.path);
     scanWarnings = [
       ...scanWarnings,
-      ...scan.diagnostics.map((diagnostic) =>
-        scanDiagnosticToLsp(diagnostic, related, true),
-      ),
+      // A manifest-parse warning the host policy already says (same broken
+      // `package.json`, one positioned diagnostic) is dropped, not repeated.
+      ...scanDiagnosticsNotSaidByPolicy(
+        hostPolicyDiagnostics ?? [],
+        scan.diagnostics,
+      ).map((diagnostic) => scanDiagnosticToLsp(diagnostic, related, true)),
     ];
     // Tags the caller supplied win over the scan's. Normally nothing is
     // supplied and discovery is the whole story; a caller that does pass a map

@@ -8,6 +8,7 @@ import {
   flattenErrors,
   isTranslateError,
   otherErrorsText,
+  scanDiagnosticsNotSaidByPolicy,
   type TargetPolicyDiagnostic,
 } from "@mxlang/core";
 import type { MxRegionCompile } from "@mxlang/tsx-bridge";
@@ -954,7 +955,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    * Scan and policy diagnostics already reported as warnings. Cleared when a
    * build starts (`buildStart`), so each build reports its own.
    *
-   * A scan diagnostic is keyed by the offending file, its version (mtime), its
+   * A diagnostic is keyed by the offending file, its version (mtime), its
    * position, its code and its message. Every compiled caller of a project
    * re-reads the same tag files, so keying on the diagnostic rather than on
    * the caller is what makes one broken tag file one warning instead of one
@@ -984,7 +985,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    */
   const lastScanKeys = new Map<string, Set<string>>();
 
-  /** The key one scan diagnostic is deduplicated by (see `reported`). */
+  /** The key a policy or scan diagnostic is deduplicated by (see `reported`). */
   const scanKey = (diagnostic: ScanDiagnostic): string => {
     let version = 0;
     try {
@@ -1024,7 +1025,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // cannot make a bad target pass. Existing malformed-manifest/unknown-host
     // warnings remain non-fatal and are deduped like the scan's.
     for (const diagnostic of resolution.diagnostics) {
-      const key = `${diagnostic.file}\u0000${diagnostic.message}`;
+      const key = scanKey(diagnostic);
       if (reported.has(key)) continue;
       reported.add(key);
       warn(
@@ -1046,8 +1047,18 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // out before the build fails, so the failure does not hide them. The
     // warning is positioned at the tag file itself, so Vite prints that file
     // and its real position rather than the caller being compiled.
+    //
+    // A `package.json` that fails to parse is already said by the policy
+    // warning above (its message carries the parse error and the scan's
+    // consequence), so the scan's `MX_IGNORED_CONFIG` twin is dropped here:
+    // one broken manifest, one warning. The `failing` errors above stay
+    // unfiltered on purpose — they come only from scan errors, which the
+    // policy never reports.
     const scanKeys = new Map<string, ScanDiagnostic>();
-    for (const diagnostic of scan.diagnostics) {
+    for (const diagnostic of scanDiagnosticsNotSaidByPolicy(
+      resolution.diagnostics,
+      scan.diagnostics,
+    )) {
       if (failing.includes(diagnostic)) continue;
       scanKeys.set(scanKey(diagnostic), diagnostic);
     }
