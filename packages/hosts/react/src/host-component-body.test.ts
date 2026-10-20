@@ -22,11 +22,12 @@
  * The full emitted-shape matrices live in
  * `packages/hosts/preact/src/host-component-body.test.ts`. The first half here
  * keeps React's Fragment import, host-body wiring smokes and keyed shapes.
- * React owns #arrowBody's sequence-parenthesis branch because it has no
- * placeholder wrapper; Preact's equal-looking sequence expectation reaches
- * parentheses through #textValue instead. Every emit row is also parsed by
- * `@babel/parser` with `jsx` and `typescript`. The second half keeps every
- * React render and children observation against hand-written JSX on this host.
+ * React owns #arrowBody's sequence parentheses and the tag-params path's
+ * object parentheses because it has no placeholder wrapper. Preact's guard
+ * and unguard helper hide these distinct paths behind equal-looking strings.
+ * Every emit row is also parsed by `@babel/parser` with `jsx` and `typescript`.
+ * The second half keeps every React render and children observation against
+ * hand-written JSX on this host.
  */
 import { parse } from "@babel/parser";
 import { createElement } from "react";
@@ -99,6 +100,11 @@ const EMITTED: Array<[string, string, string]> = [
     "tag params with a lone placeholder: the render prop returns it bare",
     `${BOX}<Box|n|>${D}{n}</Box>`,
     callParams("((n) => n)"),
+  ],
+  [
+    "tag params with an object literal",
+    `${BOX}<Box|n|>${D}{{ a: n }}</Box>`,
+    callParams("((n) => ({ a: n }))"),
   ],
 ];
 
