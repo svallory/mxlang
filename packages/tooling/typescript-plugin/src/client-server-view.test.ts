@@ -131,6 +131,7 @@ describe("client code keeps its own scope and order", {
     const source = "client const z = st + 1;\nstatic const st = 1;\n<div/>\n";
     const found = errorsOf({ [FILE]: source }, FILE);
     expect(found.map((diagnostic) => diagnostic.code)).toContain(2448);
+    expect(found[0]?.code).toBe(2448);
     expect(found[0]?.start).toBe(source.indexOf("st +"));
   });
 
