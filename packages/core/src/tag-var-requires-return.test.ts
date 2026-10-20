@@ -22,6 +22,7 @@ const PAGE = join(dir, "page.mx");
 writeFileSync(join(dir, "plain.mx"), "<b>x</b>\n");
 writeFileSync(join(dir, "returns.mx"), "<b>x</b>\n<return value=1/>\n");
 writeFileSync(join(dir, "empty.mx"), "");
+writeFileSync(join(dir, "Foo.mx"), "<return=1/>");
 
 const plainTag: TemplateBackedTag = {
   template: { filename: join(dir, "tags", "plain.mx"), source: "<b>x</b>\n" },
@@ -88,6 +89,17 @@ const IMPORTED = (name: string) =>
   `\`<${name}>\` does not return a value; add \`<return value=…/>\` to the imported file to bind it with \`/var\``;
 
 describe("returning imports and dynamic calls follow declaration rules", () => {
+  it.each([
+    'import Foo from "./Foo.mx"\n<Foo/x(x)/>',
+    'import Foo from "./Foo.mx"\n<Foo/x((() => x)())/>',
+    "<${input.t}/x(x)/>",
+    "<${input.t}/x ...x/>",
+    'import Foo from "./Foo.mx"\n<Foo/x ...x/>',
+    'import Foo from "./Foo.mx"\n<Foo/x ...(() => x)()/>',
+  ])("accepts stock's unchecked argument/spread self-reads: %s", (source) => {
+    expect(compile(source)).toBeUndefined();
+  });
+
   it.each([
     "<returns/x a=x/>",
     'import R from "./returns.mx"\n<R/x a=x/>',

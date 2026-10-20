@@ -1011,7 +1011,7 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
   },
   {
     name: "a tag variable on `id`",
-    source: "id/x foo=1\n",
+    source: "id/x\n",
     mx: "tag variable `/x` on `<id>` is not supported in a standalone template",
     option:
       "tag variable `/x` on `id` is not supported in a standalone template",

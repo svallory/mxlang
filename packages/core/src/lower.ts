@@ -46,7 +46,10 @@ import {
   unifyNestedAttrTagPlanGroups,
 } from "./attr-tag.ts";
 import { coreBabel, coreParser } from "./babel.ts";
-import { BUILTIN_CUSTOM_TAGS } from "./builtin-tags.ts";
+import {
+  BUILTIN_CUSTOM_TAGS,
+  tryMissingHandlerMessage,
+} from "./builtin-tags.ts";
 import {
   type AttrTagDecl,
   type CalleeInput,
@@ -167,6 +170,7 @@ import {
   INVALID_TAG_CALL_CODE,
   INVALID_TAG_NAME_CODE,
   INVALID_TAG_VAR_CODE,
+  INVALID_TRY_CODE,
   LET_WRITE_BEFORE_DECLARATION_CODE,
   LOWERCASE_BINDING_NOT_CALLED_CODE,
   MISSING_ATTRIBUTE_TAG_CODE,
@@ -1420,15 +1424,12 @@ function checkTagVarReads(ctx: Ctx, code: string, node: Node): void {
     if (!read.has(name)) continue;
     // A tag param of the same spelling is a different variable.
     if (ctx.tagVarShadowed?.has(name)) continue;
-    // The tag funnel already checked its own attributes for eager self-reads.
-    // A deferred read there is legal even while the binding is pending; reads
-    // in another tag above the declaration still take the ordinary check.
+    // The tag funnel checks named attribute values for eager self-reads.
+    // Deferred reads there, and unchecked argument/spread self-reads, stay
+    // legal while pending. Other reads above the call keep the ordinary check.
     if (
       binding.pending &&
-      deferredSelfReads
-        .get(ctx)
-        ?.get(nodeSpan(ctx, node).sourceStart)
-        ?.has(name)
+      allowedSelfReads.get(ctx)?.get(nodeSpan(ctx, node).sourceStart)?.has(name)
     )
       continue;
     if (binding.define) {
@@ -1515,7 +1516,7 @@ function checkDefineReads(
 }
 
 /**
- * A tag variable cannot be read in the attributes of the very tag that
+ * A tag variable cannot be read in named attribute values of the tag that
  * declares it: `<const/x=x+1/>`, `<let/x=x/>`, `<const/{a,b}={a:1, b:a}/>`.
  * The binding starts at the tag, so the read used to compile to a reference
  * the emitted JS leaves in the temporal dead zone — a crash at render. Stock
@@ -1527,17 +1528,37 @@ function checkDefineReads(
  * rebinds alone. This also applies to a custom call's `/var`: its own
  * attributes follow the same rule rather than the generic pending-read error.
  */
-const deferredSelfReads = new WeakMap<Ctx, Map<number, ReadonlySet<string>>>();
+const allowedSelfReads = new WeakMap<Ctx, Map<number, ReadonlySet<string>>>();
+
+function allowTagVarSelfReads(
+  ctx: Ctx,
+  value: Node,
+  names: ReadonlySet<string>,
+): void {
+  let byStart = allowedSelfReads.get(ctx);
+  if (!byStart) {
+    byStart = new Map();
+    allowedSelfReads.set(ctx, byStart);
+  }
+  byStart.set(nodeSpan(ctx, value).sourceStart, names);
+}
 
 function rejectTagVarSelfRead(ctx: Ctx, node: Node): void {
   const names = new Set(bindingIdentifiers(tagVarOf(node)));
   if (names.size === 0) return;
+  // Stock checks only MarkoAttribute roots. Arguments and spreads compile,
+  // even when evaluating them at render would hit the binding's TDZ. Exempt
+  // their roots from the separate pending-/var check too, without walking them.
+  for (const argument of tagArgsOf(node) ?? [])
+    allowTagVarSelfReads(ctx, argument, names);
   const values: Node[] = [];
   for (const attr of tagAttributesOf(node)) {
     const value = attrValueOf(ctx, attr);
-    if (value) values.push(value);
+    if (!value) continue;
+    if (isAttributeNode(attr)) values.push(value);
+    else if (isSpreadAttributeNode(attr))
+      allowTagVarSelfReads(ctx, value, names);
   }
-  values.push(...(tagArgsOf(node) ?? []));
   if (values.length === 0) return;
   const { traverse, types } = coreBabel();
   for (const value of values) {
@@ -1588,14 +1609,7 @@ function rejectTagVarSelfRead(ctx: Ctx, node: Node): void {
         );
       },
     });
-    if (deferred.size > 0) {
-      let byStart = deferredSelfReads.get(ctx);
-      if (!byStart) {
-        byStart = new Map();
-        deferredSelfReads.set(ctx, byStart);
-      }
-      byStart.set(nodeSpan(ctx, value).sourceStart, deferred);
-    }
+    if (deferred.size > 0) allowTagVarSelfReads(ctx, value, deferred);
   }
 }
 
@@ -1962,8 +1976,28 @@ function validateBuiltinValueAttributes(
   name: string,
 ): void {
   const voice = voiceOfCtx(ctx);
+  const attrs = tagAttributesOf(node);
+  // These added checks order shape errors ahead of a binding's self-read;
+  // without a binding, retain the host's existing support/shape precedence.
+  const checkShape = ctx.tagRules !== "none" && !!tagVarOf(node);
+  const rejectArgs = (): void => {
+    if (checkShape)
+      rejectUnsupportedFields(ctx, node, builtinOwner(ctx, name, node), {
+        var: true,
+        params: true,
+        attributeTags: true,
+      });
+  };
   if (name === "const" || name === "id") {
-    if (tagAttributesOf(node).length > 1) {
+    rejectArgs();
+    const first = attrs[0];
+    if (
+      attrs.length > 1 ||
+      (checkShape &&
+        first &&
+        (!isAttributeNode(first) ||
+          (!isDefaultAttr(first) && attrNameOf(first) !== "value")))
+    ) {
       raise(
         INVALID_ATTRIBUTE_CODE,
         `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
@@ -1972,8 +2006,21 @@ function validateBuiltinValueAttributes(
     }
   } else if (name === "let" || name === "return") {
     let seen = false;
-    for (const attr of tagAttributesOf(node)) {
-      if (!isAttributeNode(attr) || attrNameOf(attr) !== "value") continue;
+    for (const attr of attrs) {
+      if (!isAttributeNode(attr)) continue;
+      if (
+        checkShape &&
+        name === "let" &&
+        attrNameOf(attr) !== "value" &&
+        attrNameOf(attr) !== "valueChange"
+      ) {
+        raise(
+          INVALID_ATTRIBUTE_CODE,
+          `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute} and its change handler.`,
+          attr,
+        );
+      }
+      if (attrNameOf(attr) !== "value") continue;
       if (seen)
         raise(
           DUPLICATE_VALUE_ATTRIBUTE_CODE,
@@ -1981,6 +2028,16 @@ function validateBuiltinValueAttributes(
           attr,
         );
       seen = true;
+    }
+    if (name === "let") {
+      rejectArgs();
+      const spread = checkShape && attrs.find(isSpreadAttributeNode);
+      if (spread)
+        raise(
+          INVALID_ATTRIBUTE_CODE,
+          `The ${voice.tag(name)} tag does not support spread ${voice.attributes}.`,
+          spread,
+        );
     }
   }
 }
@@ -6196,6 +6253,40 @@ function lowerCustomTagBody(
   });
   raiseInvalidCalleeInput(ctx, input, name, loweredTags.flat);
   const children = loweredTags.contentChildren;
+  // Stock validates the try's missing handler before visiting its body, so
+  // a duplicate declaration inside cannot mask the enclosing shape error.
+  // Earlier header-shape errors and the empty-body rule retain their existing
+  // validation path and position. Under none there is no body duplicate rule.
+  if (
+    ctx.tagRules !== "none" &&
+    isBuiltin &&
+    name === "try" &&
+    !tagVarOf(node) &&
+    tagParamsOf(node).length === 0 &&
+    tagAttributesOf(node).length === 0 &&
+    children.length > 0 &&
+    loweredTags.flat.length === 0
+  ) {
+    // Stock parses scripts before it analyzes the enclosing try. Checking
+    // its shape early must not hide an existing script syntax error.
+    const checkScripts = (body: readonly Node[]): void => {
+      for (const child of body) {
+        if (!isTagNode(child)) continue;
+        if (isRawTextScript(ctx, child)) {
+          const parsed = scriptBodyOf(ctx, child);
+          if (parsed && "failure" in parsed) throw parsed.failure;
+        } else {
+          checkScripts(bodyChildren(child));
+        }
+      }
+    };
+    checkScripts(children);
+    raise(
+      INVALID_TRY_CODE,
+      `${ownerText(label)}: ${tryMissingHandlerMessage(voice)}`,
+      node,
+    );
+  }
   const childTree = authoredChildTree(ctx, children);
   // A transform may consume its body, so the IR check cannot be left to
   // report a `for` or `if` in it.

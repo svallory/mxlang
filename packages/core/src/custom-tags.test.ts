@@ -1322,6 +1322,44 @@ describe("core-owned custom tags", () => {
     },
   );
 
+  it("reports a missing try handler before body duplicates", () => {
+    expect(() =>
+      lowerWithTags("<try><const/x=1/><const/x=2/></try>", {}, tryDeclarations),
+    ).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_INVALID_TRY",
+        message:
+          "`<try>`: needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; without either it has no effect, so render its content directly",
+        line: 1,
+        column: 0,
+      }),
+    );
+  });
+  it.each([
+    "<try><const/x=1/><const/x=2/><script>const = 1;</script></try>",
+    "<try><div><script>const = 1;</script></div></try>",
+  ])("keeps script syntax before try analysis: %s", (source) => {
+    expect(() => lowerWithTags(source, {}, tryDeclarations)).toThrowError(
+      expect.objectContaining({
+        diagnosticCode: "MX_INVALID_STATEMENT",
+        message: "Unexpected token",
+        line: 1,
+        column: source.indexOf("= 1"),
+      }),
+    );
+  });
+  it("still checks body duplicates when a try handler exists", () => {
+    expect(() =>
+      lowerWithTags(
+        "<try><const/x=1/><const/x=2/><@catch>oops</@catch></try>",
+        {},
+        tryDeclarations,
+      ),
+    ).toThrowError(
+      expect.objectContaining({ diagnosticCode: "MX_DUPLICATE_DECLARATION" }),
+    );
+  });
+
   it.each([
     ["no children", "<try></try>\n"],
     ["only `<@catch>`", "<try><@catch>oops</@catch></try>\n"],

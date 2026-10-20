@@ -29,6 +29,12 @@ import {
 } from "./custom-tags.ts";
 import { INVALID_TRY_CODE, RESERVED_TAG_CODE } from "./diagnostic-codes.ts";
 import type { IrNode } from "./ir.ts";
+import type { Voice } from "./message-vocabulary.ts";
+
+/** Shared by the authored-body precheck and the lowered-call validation. */
+export function tryMissingHandlerMessage(voice: Voice): string {
+  return `needs a ${voice.attrTag("catch")} to handle errors or a ${voice.attrTag("placeholder")} to show while its content is pending; without either it has no effect, so render its content directly`;
+}
 
 /** `<try>`'s own shape rules: core's tag, so its `ctx.fail` is coded. */
 const TRY = { code: INVALID_TRY_CODE } as const;
@@ -67,10 +73,7 @@ function tryTransform(call: TagCall, ctx: TransformContext): IrNode[] {
     ctx.fail("requires body content", TRY);
   }
   if (call.attributeTags.length === 0) {
-    ctx.fail(
-      `needs a ${voice.attrTag("catch")} to handle errors or a ${voice.attrTag("placeholder")} to show while its content is pending; without either it has no effect, so render its content directly`,
-      TRY,
-    );
+    ctx.fail(tryMissingHandlerMessage(voice), TRY);
   }
 
   return [

@@ -1727,8 +1727,8 @@ one.
 <const/total=items.reduce((sum, i) => sum + i.price, 0)/>
 ```
 
-A tag cannot read a variable it declares in its own attributes, even when an
-outer binding has the same name (§5.5). To derive another value, give it a new
+A tag cannot read a variable it declares in its own named attribute values,
+even when an outer binding has the same name (§5.5). To derive another value, give it a new
 name: `<const/nextCount=count + 1/>`. A plain-name `<const>` also cannot write
 itself from a function in its initializer (`<const/x=() => { x = 1 }/>`): it is
 readonly there just as it is below its declaration (§5.5).
@@ -1858,15 +1858,20 @@ introduces (`|{ n }, i|` binds `n` and `i`).
 
 ### 5.5 `<let>`
 
-**Not core-owned.** There is no `let` case in the lowerer; it routes entirely
-through host declarations. See §11 and the per-host row in §13.3. Do not
-attribute a `<let>` message to `@mxlang/core`.
+**Stateful lowering is host-owned.** There is no `let` case in the lowerer;
+it routes through host declarations. Core checks builtin argument/attribute
+shape and common binding rules before the host handles the tag. See §11 and
+the per-host row in §13.3.
 
-**A tag's attributes cannot read its own tag variable.** `<const/x=x+1/>`,
-`<let/x=x/>`, `<const/{a,b}={a:1, b:a}/>` and a returning custom call whose
-attributes read its own `/var` are refused with `MX_TAG_VAR_SELF_READ`, at the
-read identifier. An outer binding of the same name does not help. Read the
-variable below the tag instead, or declare the derived value under another
+**A tag's named attribute values cannot read its own tag variable.**
+`<const/x=x+1/>`, `<let/x=x/>`, `<const/{a,b}={a:1, b:a}/>` and a returning
+custom call whose named attribute values read its own `/var` are refused with
+`MX_TAG_VAR_SELF_READ`, at the read identifier. This check does not cover tag
+arguments or spread attributes: returning calls such as `<Foo/x(x)/>` and
+`<Foo/x ...x/>` compile, as in Marko; a run-time temporal-dead-zone read there
+is the author's responsibility. Builtin argument and attribute shape errors
+are reported before the self-read check. An outer binding of the same name
+does not help. Read the variable below the tag instead, or declare the derived value under another
 name. Function, arrow and object-method bodies may read it later
 (`<const/f=() => f()/>`, `<const/f={ g: () => f }/>`, a `<let>`'s own
 `valueChange`) only when they are deferred: a call, optional call or `new`
@@ -2094,7 +2099,7 @@ Errors, all carrying the `` `<try>`:  `` prefix:
 | `` `<try>`: tag variable (`/name`) on `<try>` `` | A `/var` on `<try>`. |
 | `` `<try>`: tag params (`\|a, b\|`) on `<@placeholder>` `` | `<@placeholder>` declared its own params. |
 | `` `<try>`: requires body content `` | No body besides the attribute tags (`<try></try>`, or only `<@catch>`/`<@placeholder>`). Whitespace that survives normalization counts as content. Marko 6.4.4 words it "requires body content". |
-| `` `<try>`: needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; … `` | Neither attribute tag is present, so the `<try>` would have no effect. Checked after the body-content rule, as Marko does. |
+| `` `<try>`: needs a `<@catch>` to handle errors or a `<@placeholder>` to show while its content is pending; … `` | Neither attribute tag is present, so the `<try>` would have no effect. Checked after the body-content rule and before lowering the body (including its duplicate declarations), as Marko does. |
 | `` `<try>`: attribute tag `<@catch>` may not appear inside `<if>`… `` | `<@catch>`/`<@placeholder>` written under `<if>`/`<for>` rather than directly inside `<try>`; positioned at the misplaced tag (Marko positions at `<try>`). |
 
 And from the host-primitive request:

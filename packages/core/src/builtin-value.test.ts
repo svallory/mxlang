@@ -74,6 +74,60 @@ describe("builtin duplicate value validation (Marko 6.4.4)", () => {
       }
       expect(error).toMatchObject({ message, line: 1, column });
     });
+  it.each([
+    ["<id/x data-x=x/>", onlyValue("id"), "MX_INVALID_ATTRIBUTE", 1],
+    [
+      "<let/x=1 data-x=x/>",
+      "The `<let>` tag only supports the `value=` attribute and its change handler.",
+      "MX_INVALID_ATTRIBUTE",
+      9,
+    ],
+    [
+      "<let/x=x valueChange=1 extra=2/>",
+      "The `<let>` tag only supports the `value=` attribute and its change handler.",
+      "MX_INVALID_ATTRIBUTE",
+      23,
+    ],
+    [
+      "<const/x(x)=x/>",
+      "Tag does not support arguments.",
+      "MX_UNSUPPORTED_CONSTRUCT",
+      9,
+    ],
+    [
+      "<let/x(x)=x/>",
+      "Tag does not support arguments.",
+      "MX_UNSUPPORTED_CONSTRUCT",
+      7,
+    ],
+    [
+      "<id/x(x)/>",
+      "Tag does not support arguments.",
+      "MX_UNSUPPORTED_CONSTRUCT",
+      6,
+    ],
+    ["<const/x ...x/>", onlyValue("const"), "MX_INVALID_ATTRIBUTE", 1],
+    ["<id/x ...x/>", onlyValue("id"), "MX_INVALID_ATTRIBUTE", 1],
+    [
+      "<let/x ...x/>",
+      "The `<let>` tag does not support spread attributes.",
+      "MX_INVALID_ATTRIBUTE",
+      7,
+    ],
+  ])(
+    "reports builtin shape before self-read: %s",
+    (source, message, diagnosticCode, column) => {
+      expect(() => check(source)).toThrowError(
+        expect.objectContaining({
+          message,
+          diagnosticCode,
+          line: 1,
+          column,
+        }),
+      );
+    },
+  );
+
   it("positions a multiline duplicate on its authored value", () => {
     let error: unknown;
     try {

@@ -644,7 +644,6 @@ describe("a `<let>`'s own attributes", () => {
       "<let/count=0 valueChange=(count = 1, null)/>\n",
       "count = 1",
     ],
-    ["another attribute", "<let/count=0 data-x=(count += 2)/>\n", "count += 2"],
   ])("refuses a write in %s", (_name, source, write) => {
     const error = attempt(source);
     const at = span(source, write);
@@ -671,10 +670,24 @@ describe("a `<let>`'s own attributes", () => {
     expect(attempt(source)).toBeUndefined();
   });
 
-  it("refuses a read of the name in its own attributes", () => {
-    expect(attempt("<let/count=0 data-x=(count)/>\n")?.diagnosticCode).toBe(
-      "MX_TAG_VAR_SELF_READ",
+  it.each([
+    "<let/count=0 data-x=(count)/>\n",
+    "<let/count=0 data-x=(count += 2)/>\n",
+  ])("reports the invalid attribute before its read or write: %s", (source) => {
+    const error = attempt(source);
+    const at = span(
+      source,
+      source.slice(source.indexOf("data-x"), source.indexOf("/>")),
     );
+    expect(error?.message).toBe(
+      "The `<let>` tag only supports the `value=` attribute and its change handler.",
+    );
+    expect(error?.diagnosticCode).toBe("MX_INVALID_ATTRIBUTE");
+    expect([error?.line, error?.column]).toEqual([
+      at.start.line,
+      at.start.column,
+    ]);
+    expect(error?.end).toEqual(at.end);
   });
 
   it("lowerSource refuses the same write", () => {
