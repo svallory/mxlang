@@ -79,7 +79,7 @@ export const SUPPORTED_VERSIONS: Readonly<Record<string, string>> = {
  * third-party `vite:*` plugin (react, vue) carries option closures nobody
  * fingerprints.
  */
-export const SUPPORTED_PLUGINS: ReadonlySet<string> = new Set([
+const SUPPORTED_PLUGINS: ReadonlySet<string> = new Set([
   "vite:optimized-deps",
   "vite:watch-package-data",
   "vite:pre-alias",
@@ -161,7 +161,7 @@ class Unsupported extends Error {}
  * class instance or cycle cannot be fingerprinted (its closure is invisible),
  * so it throws `Unsupported` and the caller falls back to native.
  */
-export function canonical(value: unknown, seen = new Set<object>()): string {
+function canonical(value: unknown, seen = new Set<object>()): string {
   if (value === undefined) return "undefined";
   if (value === null || typeof value !== "object") {
     if (typeof value === "function" || typeof value === "symbol") {
@@ -227,10 +227,7 @@ function git(root: string, args: string[]): string | undefined {
 }
 
 /** Read `<name>/package.json`'s version, walking up from `from` like node does. */
-export function installedVersion(
-  name: string,
-  from: string,
-): string | undefined {
+function installedVersion(name: string, from: string): string | undefined {
   let dir = from;
   for (;;) {
     const p = join(dir, "node_modules", name, "package.json");
@@ -292,26 +289,31 @@ function walk(root: string, rel = ""): string[] | undefined {
 }
 
 /** Build output of each package (one or two levels below `packages`), relative to `root`. */
+function workspaceDirs(root: string): string[] {
+  const dirs: string[] = [];
+  const list = (rel: string): string[] => {
+    try {
+      return readdirSync(join(root, rel)).sort();
+    } catch {
+      return [];
+    }
+  };
+  for (const a of list("packages")) {
+    dirs.push(`packages/${a}`);
+    for (const b of list(`packages/${a}`)) {
+      if (b !== "node_modules") dirs.push(`packages/${a}/${b}`);
+    }
+  }
+  for (const a of list("examples")) dirs.push(`examples/${a}`);
+  return dirs;
+}
+
 function distFiles(root: string): string[] {
   const out: string[] = [];
-  const dirs: string[] = [];
-  try {
-    for (const a of readdirSync(join(root, "packages"))) {
-      dirs.push(`packages/${a}`);
-      try {
-        for (const b of readdirSync(join(root, "packages", a))) {
-          if (b !== "node_modules") dirs.push(`packages/${a}/${b}`);
-        }
-      } catch {}
-    }
-  } catch {
-    return out;
-  }
-  for (const d of dirs) {
-    if (d.endsWith("/dist")) continue;
-    const dist = `${d}/dist`;
-    if (existsSync(join(root, dist))) {
-      out.push(...(walk(root, dist) ?? []));
+  for (const d of workspaceDirs(root)) {
+    if (!d.startsWith("packages/") || d.endsWith("/dist")) continue;
+    if (existsSync(join(root, d, "dist"))) {
+      out.push(...(walk(root, `${d}/dist`) ?? []));
     }
   }
   return out;
@@ -370,7 +372,13 @@ export function collectInputs(
   try {
     packages.push(...readdirSync(join(root, "node_modules", ".bun")).sort());
   } catch {}
-  for (const dir of new Set([root, ...projects.map((p) => p.root)])) {
+  // Every workspace package, not only the vitest projects: a package the
+  // tests reach through a link (for example a host's dist) can be re-linked.
+  for (const dir of new Set([
+    root,
+    ...projects.map((p) => p.root),
+    ...workspaceDirs(root).map((d) => join(root, d)),
+  ])) {
     symlinkTargets(join(dir, "node_modules"), packages);
   }
   packages.sort();
@@ -587,7 +595,11 @@ export class Store {
    * Keep the newest `maxNamespaces` namespaces (this one always), drop
    * leftover temp files, then evict oldest entries until under `maxBytes`.
    */
-  gc(maxBytes = MAX_STORE_BYTES, maxNamespaces = MAX_NAMESPACES): void {
+  gc(
+    maxBytes = MAX_STORE_BYTES,
+    maxNamespaces = MAX_NAMESPACES,
+    now = Date.now(),
+  ): void {
     try {
       const versionDir = join(this.dir, `v${SCHEMA_VERSION}`);
       for (const v of readdirSync(this.dir)) {
@@ -610,7 +622,7 @@ export class Store {
           for (const f of readdirSync(join(versionDir, s, shard))) {
             const p = join(versionDir, s, shard, f);
             const st = statSync(p);
-            if (f.endsWith(".tmp") && Date.now() - st.mtimeMs > 60_000) {
+            if (f.endsWith(".tmp") && now - st.mtimeMs > 60_000) {
               rmSync(p, { force: true });
               continue;
             }

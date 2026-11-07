@@ -29,7 +29,7 @@ interface VitestCtx {
 }
 
 /** The settings of a project that steer module resolution and transforms. */
-export function projectInput(p: VitestProject): ProjectInput {
+function projectInput(p: VitestProject): ProjectInput {
   const c = p.vite.config;
   return {
     name: p.name,

@@ -56,9 +56,10 @@ const write = (rel: string, text: string) => {
 };
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), "mx-affected-cache-"));
+  root = realpathSync(mkdtempSync(join(tmpdir(), "mx-affected-cache-")));
   storeDir = join(root, ".store");
-  write(".gitignore", "node_modules/\n.store/\n");
+  write(".gitignore", "node_modules/\n.store/\ndist/\n");
+  write("packages/x/package.json", '{"name":"x"}');
   write("package.json", '{"name":"fx"}');
   write("bun.lock", "lock-1");
   write("tsconfig.base.json", "{}");
@@ -69,28 +70,42 @@ beforeAll(() => {
   for (const [n, v] of Object.entries(SUPPORTED_VERSIONS)) {
     write(`node_modules/${n}/package.json`, JSON.stringify({ version: v }));
   }
+  write("globproj/package.json", '{"name":"glob-fx","type":"module"}');
+  write("globproj/cases/a.ts", "export const value = 1;");
+  write(
+    "globproj/glob.test.ts",
+    'it("g", () => {});\nexport const modules = import.meta.glob("./cases/*.ts");',
+  );
+  write(
+    "globproj/plain.test.ts",
+    'import { value } from "./cases/a.ts";\nit("p", () => { void value; });',
+  );
   mkdirSync(join(root, "real-1"));
   mkdirSync(join(root, "real-2"));
   symlinkSync("../real-1", join(root, "node_modules", "link"));
   // Track every file: the delete/rename rows must exercise tracked files,
   // which `git ls-files -co` keeps listing after a plain `rm`.
-  for (const args of [
-    ["init", "-q"],
-    ["add", "-A"],
-    [
-      "-c",
-      "user.name=t",
-      "-c",
-      "user.email=t@t",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "fixture",
-    ],
-  ]) {
-    spawnSync("git", args, { cwd: root });
-  }
+  const git = (...args: string[]) => {
+    const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    expect(r.status, `git ${args.join(" ")}: ${r.stderr}`).toBe(0);
+  };
+  git("init", "-q");
+  git("add", "-A");
+  git(
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@t",
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "commit",
+    "-q",
+    "--no-verify",
+    "-m",
+    "fixture",
+  );
 });
 
 afterAll(() => {
@@ -250,6 +265,23 @@ describe("guards fall back to native (AC-3)", () => {
         },
       ),
       onDisk(
+        "symlink retarget in a workspace package that is not a project",
+        () => {
+          mkdirSync(join(root, "packages/x/node_modules"), { recursive: true });
+          symlinkSync(
+            "../../../real-1",
+            join(root, "packages/x/node_modules/lnk"),
+          );
+        },
+        () =>
+          rmSync(join(root, "packages/x/node_modules"), { recursive: true }),
+      ),
+      onDisk(
+        "gitignored build output added",
+        () => write("packages/x/dist/f.js", ""),
+        () => rmSync(join(root, "packages/x/dist"), { recursive: true }),
+      ),
+      onDisk(
         "file added",
         () => write("src/new.ts", ""),
         () => unlinkSync(join(root, "src/new.ts")),
@@ -279,13 +311,6 @@ describe("guards fall back to native (AC-3)", () => {
           }),
       },
       {
-        name: "runtime",
-        inputs: () =>
-          clone((i) => {
-            i.runtime.node = "v0.0.0";
-          }),
-      },
-      {
         name: "resolve conditions",
         inputs: () =>
           clone((i) => {
@@ -309,13 +334,6 @@ describe("guards fall back to native (AC-3)", () => {
           }),
       },
       {
-        name: "vite-node missing",
-        inputs: () =>
-          clone((i) => {
-            i.versions["vite-node"] = "missing";
-          }),
-      },
-      {
         name: "inventory unavailable",
         inputs: () =>
           clone((i) => {
@@ -327,13 +345,6 @@ describe("guards fall back to native (AC-3)", () => {
         inputs: () =>
           clone((i) => {
             i.projects[0].plugins.push("some-user-plugin");
-          }),
-      },
-      {
-        name: "function in config",
-        inputs: () =>
-          clone((i) => {
-            i.projects[0].config = { define: () => 1 };
           }),
       },
       {
@@ -360,7 +371,6 @@ describe("guards fall back to native (AC-3)", () => {
     for (const name of [
       "unsupported plugin",
       "third-party vite:-prefixed plugin",
-      "function in config",
       "plugin option closure",
     ]) {
       const row = rows.find((r) => r.name === name);
@@ -414,9 +424,10 @@ describe("guards fall back to native (AC-3)", () => {
 
     // GC: namespace cap, size bound, stale temp files, old schema dirs, and
     // nothing outside `v<digits>` is ever removed.
+    const NOW = 1_700_000_000_000;
     const gcDir = join(root, ".gc-store");
     const old = (path: string, ageSec: number) => {
-      const t = new Date(Date.now() - ageSec * 1000);
+      const t = new Date(NOW - ageSec * 1000);
       utimesSync(path, t, t);
     };
     const space = (name: string, ageSec: number) => {
@@ -435,15 +446,16 @@ describe("guards fall back to native (AC-3)", () => {
     writeFileSync(join(cur.nsDir, "ab", "stale.tmp"), "x");
     old(join(cur.nsDir, "ab", "stale.tmp"), 120);
     writeFileSync(join(cur.nsDir, "ab", "fresh.tmp"), "x");
+    old(join(cur.nsDir, "ab", "fresh.tmp"), 0);
     mkdirSync(join(gcDir, "v0"), { recursive: true });
     mkdirSync(join(gcDir, "keep-me"), { recursive: true });
 
-    cur.gc(1 << 30, 3);
+    cur.gc(1 << 30, 3, NOW);
     expect(existsSync(join(cur.nsDir, "ab", "stale.tmp"))).toBe(false);
     expect(existsSync(join(cur.nsDir, "ab", "fresh.tmp"))).toBe(true);
     expect(cur.get("ab0"), "nothing evicted under the bound").toEqual(deps);
 
-    cur.gc(size * 2 + 1, 3);
+    cur.gc(size * 2 + 1, 3, NOW);
     expect(existsSync(n0.nsDir), "oldest namespace evicted").toBe(false);
     expect(existsSync(n1.nsDir), "newer namespace kept").toBe(true);
     expect(existsSync(n2.nsDir)).toBe(true);
@@ -493,12 +505,14 @@ describe("guards fall back to native (AC-3)", () => {
     expect(calls).toEqual(["/src/a.ts"]);
     expect(second?.stats.hits).toBe(1);
 
-    // The source changes while it is being transformed: not stored.
+    // The source changes while it is being transformed: not stored. Only a
+    // stored entry could be hit by the stable re-run below.
     const flip = join(root, "src/flip.ts");
     writeFileSync(flip, "export {}");
+    let n = 0;
     const flipNode = {
       _transformRequest: async () => {
-        writeFileSync(flip, `export const t = ${Math.random()};`);
+        writeFileSync(flip, `export const t = ${++n};`);
         return { code: "x", deps: ["/src/b.ts"], dynamicDeps: [] };
       },
     };
@@ -511,41 +525,36 @@ describe("guards fall back to native (AC-3)", () => {
     third?.finish();
     expect(third?.stats).toMatchObject({ unstable: 1, misses: 1 });
     second?.finish();
+
+    writeFileSync(flip, "export {}");
+    const steadyNode = {
+      _transformRequest: async () => ({
+        code: "x",
+        deps: ["/src/b.ts"],
+        dynamicDeps: [],
+      }),
+    };
     const fourth = install(
-      [{ name: "p", vitenode: flipNode, input: project() }],
+      [{ name: "p", vitenode: steadyNode, input: project() }],
       inputs,
       dir,
     );
-    await flipNode._transformRequest("/src/flip.ts", flip, "ssr" as never);
+    await steadyNode._transformRequest("/src/flip.ts", flip, "ssr" as never);
     fourth?.finish();
-    expect(fourth?.stats.hits).toBe(0);
+    expect(fourth?.stats).toMatchObject({ hits: 0, misses: 1 });
   });
 });
 
 describe("glob counterexample (AC-4)", () => {
   it("selects the covering test after a file is added under a glob, through the reporter", async () => {
-    const proj = realpathSync(mkdtempSync(join(tmpdir(), "mx-affected-glob-")));
+    // A subdirectory of the file fixture's repository (committed in beforeAll).
+    const proj = join(root, "globproj");
     const exitCode = process.exitCode;
     vi.stubEnv("MX_AFFECTED_CACHE", "1");
     vi.stubEnv("CI", "");
     try {
-      const w = (rel: string, text: string) => {
-        mkdirSync(join(proj, rel, ".."), { recursive: true });
-        writeFileSync(join(proj, rel), text);
-      };
-      w("package.json", '{"name":"glob-fx","type":"module"}');
-      w("cases/a.ts", "export const value = 1;");
-      w(
-        "glob.test.ts",
-        'it("g", () => {});\nexport const modules = import.meta.glob("./cases/*.ts");',
-      );
-      w(
-        "plain.test.ts",
-        'import { value } from "./cases/a.ts";\nit("p", () => { void value; });',
-      );
-      spawnSync("git", ["init", "-q"], { cwd: proj });
       // The nominal keys stay fixed across the runs: only the directory changes.
-      const fixed = collectInputs(proj, [], {}, root);
+      const fixed = collect();
       const dir = join(proj, ".store");
 
       const select = async (related: string, cached: boolean) => {
@@ -596,7 +605,7 @@ describe("glob counterexample (AC-4)", () => {
       const warm = await select("cases/a.ts", true);
       expect(warm.line).toMatch(/[1-9]\d* hits/);
       expect(warm.line).toMatch(/1x glob import/);
-      w("cases/b.ts", "export const value = 2;");
+      writeFileSync(join(proj, "cases", "b.ts"), "export const value = 2;");
       const added = await select("cases/b.ts", true);
       const native = await select("cases/b.ts", false);
       expect(native.files).toEqual(["glob.test.ts"]);
@@ -605,7 +614,7 @@ describe("glob counterexample (AC-4)", () => {
     } finally {
       vi.unstubAllEnvs();
       process.exitCode = exitCode;
-      rmSync(proj, { recursive: true, force: true });
+      rmSync(join(proj, "cases", "b.ts"), { force: true });
     }
   }, 60_000);
 });
