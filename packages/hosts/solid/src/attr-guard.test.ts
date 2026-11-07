@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { transformSync } from "@babel/core";
@@ -292,8 +293,10 @@ function compileCase(
   return { code: out.code, source };
 }
 
-// Six workers beat four on forge: median file time 5.65 s vs 6.82 s.
-const DOM_CONCURRENCY = 6;
+// Six workers beat four on forge: median file time 5.65 s vs 6.82 s. Capped by
+// the host's cores so small CI runners are not oversubscribed with bun+jsdom
+// children.
+const DOM_CONCURRENCY = Math.min(6, Math.max(1, availableParallelism() - 1));
 
 // A render that throws leaves Solid's global scheduler half-flushed, so every
 // DOM case gets its own process; SSR cases share one.
@@ -327,8 +330,8 @@ async function runAll(
   return runNames(generate, Object.keys(CASES));
 }
 
-// The runner processes are awaited, never `execFileSync`: the hook runs 67-162 s
-// in a full gate, and a synchronous wait held the worker's event loop for all of
+// The runner processes are awaited, never `execFileSync`: a full gate once ran
+// the serial hook for 67-162 s, and a synchronous wait held the worker's event loop for all of
 // it, so vitest's `onTaskUpdate` RPC reply (birpc's fixed 60 s limit) could not
 // be read and the run failed with `Timeout calling "onTaskUpdate"` (#390).
 async function runNames(
@@ -394,8 +397,8 @@ async function runNames(
   }
 }
 
-// Budget 2 x the 120 s child timeout: after a case fails, the other in-flight
-// cases must settle with their own timeouts and cleanup before the hook fails.
+// 240 s covers the measured gate times (serial: 67-162 s) with margin; a hang
+// still fails via the 120 s child timeout.
 beforeAll(async () => {
   outcomes.ssr = await runAll("ssr");
   outcomes.dom = await runAll("dom");
