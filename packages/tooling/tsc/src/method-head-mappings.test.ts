@@ -14,14 +14,17 @@ const TEMPLATE = [
   "</div>",
 ].join("\n");
 
-function check(host: string) {
+function check() {
   const dir = mkdtempSync(join(tmpdir(), "mx-method-head-"));
   try {
     symlinkSync(join(ROOT, "node_modules"), join(dir, "node_modules"), "dir");
-    writeFileSync(join(dir, "package.json"), JSON.stringify({ mx: { host } }));
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ mx: { host: "solid" } }),
+    );
     writeFileSync(join(dir, "page.mx"), TEMPLATE);
     writeFileSync(
-      join(dir, `Region.${host}.mx`),
+      join(dir, "Region.solid.mx"),
       `export const Page = (\n${TEMPLATE}\n);`,
     );
     writeFileSync(
@@ -35,12 +38,7 @@ function check(host: string) {
           module: "ESNext",
           moduleResolution: "Bundler",
           jsx: "preserve",
-          jsxImportSource:
-            host === "solid"
-              ? "@solidjs/web"
-              : host === "hono"
-                ? "hono/jsx"
-                : host,
+          jsxImportSource: "@solidjs/web",
           ignoreDeprecations: "6.0",
         },
         include: ["*.mx"],
@@ -59,19 +57,19 @@ function check(host: string) {
   }
 }
 
-// Solid is the CLI smoke. The per-host projection rows live in the plugin's
-// method-head-mappings.test.ts, and each host's CLI wiring in its
-// <host>-region.test.ts.
-describe.each(["solid"])("%s mx-tsc printed method heads", (host) => {
+// Solid is the CLI smoke. The plugin's method-head-mappings.test.ts owns the
+// per-host projection (whole-file and region); <host>-region.test.ts owns each
+// host's region CLI door.
+describe("solid mx-tsc printed method heads", () => {
   let output: string;
   beforeAll(() => {
-    output = check(host);
+    output = check();
   }, 60_000);
 
   it.each([false, true])(
     "reports authored line and column (region: %s)",
     (region) => {
-      const file = region ? `Region.${host}.mx` : "page.mx";
+      const file = region ? "Region.solid.mx" : "page.mx";
       const shift = region ? 1 : 0;
       const lines = output
         .split("\n")
@@ -103,12 +101,12 @@ describe.each(["solid"])("%s mx-tsc printed method heads", (host) => {
       .split("\n")
       .filter(
         (line) =>
-          line.includes(`Region.${host}.mx(`) &&
+          line.includes("Region.solid.mx(") &&
           line.includes("MissingConstraint"),
       );
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain(
-      `Region.${host}.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
+      `Region.solid.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
     );
   });
 });
