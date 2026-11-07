@@ -181,10 +181,18 @@ function run(cmd: string[], env: NodeJS.ProcessEnv): number {
  * test-affected-cache.ts). Empty (native, no cache read) unless
  * MX_AFFECTED_CACHE=1, and always empty with CI set or MX_AFFECTED_NATIVE=1.
  */
-export function cacheArgs(env: NodeJS.ProcessEnv): string[] {
+export function cacheArgs(
+  env: NodeJS.ProcessEnv,
+  extra: readonly string[] = [],
+): string[] {
   if (!cacheMode(env).on) return [];
+  // Naming a reporter on the CLI replaces the config's reporters, so the
+  // default one is kept unless the caller picked their own.
+  const own = extra.some(
+    (a) => a === "--reporter" || a.startsWith("--reporter="),
+  );
   return [
-    "--reporter=default",
+    ...(own ? [] : ["--reporter=default"]),
     `--reporter=${resolve(import.meta.dirname, "test-affected-cache-reporter.ts")}`,
   ];
 }
@@ -237,7 +245,7 @@ function main(): number {
       ...sources,
       "--run",
       "--passWithNoTests=false",
-      ...cacheArgs(process.env),
+      ...cacheArgs(process.env, extra),
       ...extra,
     ];
     console.log(

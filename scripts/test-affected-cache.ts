@@ -22,6 +22,13 @@
  *   inventory (an added, deleted or renamed file can change a resolution or a
  *   fallback candidate). Any difference is a different namespace, so an old
  *   entry is unreachable.
+ *   The inventory is what exists on disk: tracked and untracked files minus
+ *   tracked files deleted from the working tree, plus gitignored build
+ *   output in each package's `dist` directory (one or two levels below
+ *   `packages`). Other gitignored
+ *   files (`.gen/`, deeper `dist/`, vendored sources) are not listed, so
+ *   adding or removing one does not change the namespace; no test import
+ *   resolves through such a path today.
  * - entry      (`entryKey`): the file's content hash, module id, transform
  *   mode and project, inside that namespace.
  * - bypass     (`bypassReason`): virtual or query ids, files that do not
@@ -65,8 +72,52 @@ export const SUPPORTED_VERSIONS: Readonly<Record<string, string>> = {
   vite: "7.3.6",
 };
 
-/** Plugins whose transform output is a pure function of source + resolved config. */
-const SUPPORTED_PLUGIN = /^(?:vite:[\w-]+|vitest:[\w:-]+|vitest|alias)$/;
+/**
+ * The plugins vite 7.3.6 and vitest 3.2.7 register for this repo's projects
+ * (printed from the real projects and pinned): their output is a function of
+ * the source and the resolved config. An exact list, not a name prefix: a
+ * third-party `vite:*` plugin (react, vue) carries option closures nobody
+ * fingerprints.
+ */
+export const SUPPORTED_PLUGINS: ReadonlySet<string> = new Set([
+  "vite:optimized-deps",
+  "vite:watch-package-data",
+  "vite:pre-alias",
+  "alias",
+  "vitest",
+  "vitest:project",
+  "vitest:resolve-core",
+  "vitest:ssr-replacer",
+  "vitest:css-disable",
+  "vitest:resolve-root",
+  "vite:modulepreload-polyfill",
+  "vite:resolve",
+  "vite:html-inline-proxy",
+  "vite:css",
+  "vite:esbuild",
+  "vite:json",
+  "vite:wasm-helper",
+  "vite:worker",
+  "vite:asset",
+  "vitest:coverage-transform",
+  "vitest:normalize-optimizer",
+  "vite:wasm-fallback",
+  "vite:define",
+  "vite:css-post",
+  "vite:worker-import-meta-url",
+  "vite:asset-import-meta-url",
+  "vite:dynamic-import-vars",
+  "vite:import-glob",
+  "vitest:project:name",
+  "vitest:project:server",
+  "vitest:css-empty-post",
+  "vitest:mocks",
+  "vitest:automock",
+  "vitest:normalize-url",
+  "vite:client-inject",
+  "vite:css-analysis",
+  "vite:import-analysis",
+]);
 
 /** A source whose imports depend on directory contents. */
 const GLOB_SOURCE =
@@ -79,8 +130,8 @@ const ENV_RELEVANT =
 const MANIFEST =
   /(?:^|\/)(?:package\.json|bun\.lockb?|tsconfig[^/]*\.json|vitest\.config\.[cm]?[jt]s|vite\.config\.[cm]?[jt]s|\.prototools)$|^scripts\/vitest-|^patches\//;
 
-export const MAX_STORE_BYTES = 64 * 1024 * 1024;
-export const MAX_NAMESPACES = 3;
+const MAX_STORE_BYTES = 64 * 1024 * 1024;
+const MAX_NAMESPACES = 3;
 
 const sha = (data: string | Uint8Array): string =>
   createHash("sha256").update(data).digest("hex");
@@ -103,7 +154,7 @@ export function cacheMode(env: NodeJS.ProcessEnv): Mode {
 
 // ------------------------------------------------------------ canonical
 
-export class Unsupported extends Error {}
+class Unsupported extends Error {}
 
 /**
  * Stable JSON for config values. RegExps are typed; a function, symbol,
@@ -227,7 +278,7 @@ function walk(root: string, rel = ""): string[] | undefined {
   const out: string[] = [];
   try {
     for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
-      if (["node_modules", ".git", ".mxac", "coverage"].includes(e.name)) {
+      if (["node_modules", ".git", "coverage"].includes(e.name)) {
         continue;
       }
       const r = rel ? `${rel}/${e.name}` : e.name;
@@ -236,6 +287,32 @@ function walk(root: string, rel = ""): string[] | undefined {
     }
   } catch {
     return undefined;
+  }
+  return out;
+}
+
+/** Build output of each package (one or two levels below `packages`), relative to `root`. */
+function distFiles(root: string): string[] {
+  const out: string[] = [];
+  const dirs: string[] = [];
+  try {
+    for (const a of readdirSync(join(root, "packages"))) {
+      dirs.push(`packages/${a}`);
+      try {
+        for (const b of readdirSync(join(root, "packages", a))) {
+          if (b !== "node_modules") dirs.push(`packages/${a}/${b}`);
+        }
+      } catch {}
+    }
+  } catch {
+    return out;
+  }
+  for (const d of dirs) {
+    if (d.endsWith("/dist")) continue;
+    const dist = `${d}/dist`;
+    if (existsSync(join(root, dist))) {
+      out.push(...(walk(root, dist) ?? []));
+    }
   }
   return out;
 }
@@ -251,20 +328,35 @@ export function collectInputs(
   for (const name of Object.keys(SUPPORTED_VERSIONS)) {
     versions[name] = installedVersion(name, vitestDir) ?? "missing";
   }
-  const tracked = git(root, ["ls-files", "-z", "-co", "--exclude-standard"]);
-  // Build output resolved through workspace links is gitignored but followed.
-  const built = git(root, [
+  // One git call: `-t` tags each entry, and a tracked file deleted from the
+  // working tree is listed (as `H`) and again as `R`, so `R` paths are
+  // subtracted.
+  const listing = git(root, [
     "ls-files",
     "-z",
+    "-t",
+    "-c",
+    "-d",
     "-o",
-    "-i",
     "--exclude-standard",
-    "--",
-    "packages/*/dist",
-    "packages/*/*/dist",
   ]);
-  const files =
-    tracked === undefined ? walk(root) : tracked.split("\0").filter(Boolean);
+  let files: string[] | undefined;
+  if (listing === undefined) {
+    files = walk(root);
+  } else {
+    const gone = new Set<string>();
+    const present: string[] = [];
+    for (const entry of listing.split("\0")) {
+      if (!entry) continue;
+      const path = entry.slice(2);
+      if (entry.startsWith("R ")) gone.add(path);
+      else present.push(path);
+    }
+    // Build output resolved through workspace links is gitignored but followed.
+    files = [
+      ...new Set([...present.filter((f) => !gone.has(f)), ...distFiles(root)]),
+    ];
+  }
   const manifests: Record<string, string> = {};
   for (const f of files ?? []) {
     if (!MANIFEST.test(f)) continue;
@@ -300,13 +392,7 @@ export function collectInputs(
     manifests,
     packages,
     inventory:
-      files === undefined || (tracked !== undefined && built === undefined)
-        ? undefined
-        : sha(
-            [...files, ...(built ?? "").split("\0").filter(Boolean)]
-              .sort()
-              .join("\n"),
-          ),
+      files === undefined ? undefined : sha([...files].sort().join("\n")),
     projects,
   };
 }
@@ -317,7 +403,7 @@ export type Verdict<T> = { ok: true; value: T } | { ok: false; reason: string };
 
 /** A project's namespace component, or why that project must stay native. */
 export function projectKey(p: ProjectInput): Verdict<string> {
-  const unknown = p.plugins.find((n) => !SUPPORTED_PLUGIN.test(n));
+  const unknown = p.plugins.find((n) => !SUPPORTED_PLUGINS.has(n));
   if (unknown !== undefined) {
     return { ok: false, reason: `unsupported plugin ${unknown} in ${p.name}` };
   }
@@ -410,15 +496,15 @@ export function entryKey(
   contentHash: string,
 ): string {
   return sha(
-    canonical({
+    JSON.stringify([
       ns,
-      project: req.project,
-      projectKey: req.projectKey,
-      id: req.id,
-      filepath: req.filepath,
-      mode: req.mode,
+      req.project,
+      req.projectKey,
+      req.id,
+      req.filepath,
+      req.mode,
       contentHash,
-    }),
+    ]),
   );
 }
 
@@ -433,7 +519,7 @@ interface Payload {
 }
 
 const sumOf = (key: string, d: Deps): string =>
-  sha(canonical({ key, deps: d.deps, dynamicDeps: d.dynamicDeps }));
+  sha(JSON.stringify([key, d.deps, d.dynamicDeps]));
 
 /** Content-addressed, namespaced, atomic store. Every failure is a miss. */
 export class Store {
@@ -505,7 +591,7 @@ export class Store {
     try {
       const versionDir = join(this.dir, `v${SCHEMA_VERSION}`);
       for (const v of readdirSync(this.dir)) {
-        if (v !== `v${SCHEMA_VERSION}`)
+        if (/^v\d+$/.test(v) && v !== `v${SCHEMA_VERSION}`)
           rmSync(join(this.dir, v), { recursive: true, force: true });
       }
       const spaces = readdirSync(versionDir)
@@ -612,6 +698,10 @@ export function install(
     stats.reasons.set(why, (stats.reasons.get(why) ?? 0) + 1);
   };
   const restores: (() => void)[] = [];
+  const sourceFacts = new Map<
+    string,
+    { why: string | undefined; hash: string }
+  >();
 
   for (const project of projects) {
     const node = project.vitenode;
@@ -632,16 +722,26 @@ export function install(
       mode,
     ) {
       const native = () => original.call(this, id, filepath, mode);
-      let source: Buffer | undefined;
-      try {
-        source = readFileSync(filepath);
-      } catch {}
-      const why = bypassReason({ id, filepath }, source);
-      if (why !== undefined || source === undefined) {
-        bypass(why ?? "source unreadable");
+      // The same file is requested once per project: read and hash it once.
+      const seen = `${filepath}\0${id}`;
+      let facts = sourceFacts.get(seen);
+      if (!facts) {
+        let source: Buffer | undefined;
+        try {
+          source = readFileSync(filepath);
+        } catch {}
+        const why = bypassReason({ id, filepath }, source);
+        facts = {
+          why: why ?? (source === undefined ? "source unreadable" : undefined),
+          hash: source === undefined ? "" : sha(source),
+        };
+        sourceFacts.set(seen, facts);
+      }
+      if (facts.why !== undefined) {
+        bypass(facts.why);
         return native();
       }
-      const before = sha(source);
+      const before = facts.hash;
       const key = entryKey(
         ns.value,
         { project: project.name, projectKey: pk.value, id, filepath, mode },

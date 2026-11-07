@@ -1,13 +1,16 @@
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,9 +33,7 @@ import {
   Store,
   SUPPORTED_VERSIONS,
 } from "./test-affected-cache.ts";
-import AffectedCacheReporter, {
-  projectInput,
-} from "./test-affected-cache-reporter.ts";
+import AffectedCacheReporter from "./test-affected-cache-reporter.ts";
 
 let root: string;
 let storeDir: string;
@@ -71,7 +72,25 @@ beforeAll(() => {
   mkdirSync(join(root, "real-1"));
   mkdirSync(join(root, "real-2"));
   symlinkSync("../real-1", join(root, "node_modules", "link"));
-  spawnSync("git", ["init", "-q"], { cwd: root });
+  // Track every file: the delete/rename rows must exercise tracked files,
+  // which `git ls-files -co` keeps listing after a plain `rm`.
+  for (const args of [
+    ["init", "-q"],
+    ["add", "-A"],
+    [
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "-qm",
+      "fixture",
+    ],
+  ]) {
+    spawnSync("git", args, { cwd: root });
+  }
 });
 
 afterAll(() => {
@@ -94,20 +113,28 @@ describe("cache switch (AC-2)", () => {
     expect(cacheArgs({ MX_AFFECTED_CACHE: "1" }).join(" ")).toContain(
       "test-affected-cache-reporter.ts",
     );
+    expect(cacheArgs({ MX_AFFECTED_CACHE: "1" })[0]).toBe("--reporter=default");
+    // A reporter the caller names replaces the injected default.
+    expect(cacheArgs({ MX_AFFECTED_CACHE: "1" }, ["--reporter=dot"])).toEqual([
+      expect.stringContaining("test-affected-cache-reporter.ts"),
+    ]);
 
-    // The reporter, with the switch on but CI set, leaves vite-node untouched.
+    // The reporter, with the switch on but CI set, leaves vite-node untouched
+    // and writes no store.
     const transform = async () => null;
     const vitenode = { _transformRequest: transform };
+    const dir = join(root, ".ci-store");
     vi.stubEnv("MX_AFFECTED_CACHE", "1");
     vi.stubEnv("CI", "true");
-    vi.stubEnv("MX_AFFECTED_CACHE_DIR", join(root, ".ci-store"));
     try {
-      new AffectedCacheReporter().onInit({
+      new AffectedCacheReporter({ dir }).onInit({
         config: { root },
-        projects: [],
+        projects: [
+          { name: "p", config: { root }, vite: { config: {} }, vitenode },
+        ],
       } as never);
       expect(vitenode._transformRequest).toBe(transform);
-      expect(() => readFileSync(join(root, ".ci-store"))).toThrow();
+      expect(existsSync(dir)).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -175,7 +202,7 @@ describe("guards fall back to native (AC-3)", () => {
       inputs: () => {
         mutate();
         try {
-          return collect({ ...(name === "env" ? { NODE_ENV: "x" } : {}) });
+          return collect();
         } finally {
           undo();
         }
@@ -310,6 +337,13 @@ describe("guards fall back to native (AC-3)", () => {
           }),
       },
       {
+        name: "third-party vite:-prefixed plugin",
+        inputs: () =>
+          clone((i) => {
+            i.projects[0].plugins.push("vite:react-babel");
+          }),
+      },
+      {
         name: "plugin option closure",
         inputs: () =>
           clone((i) => {
@@ -325,6 +359,7 @@ describe("guards fall back to native (AC-3)", () => {
     // These must not merely change the key: the project has to stay native.
     for (const name of [
       "unsupported plugin",
+      "third-party vite:-prefixed plugin",
       "function in config",
       "plugin option closure",
     ]) {
@@ -376,6 +411,54 @@ describe("guards fall back to native (AC-3)", () => {
     }
     writeFileSync(path(key), good);
     expect(seed.get(key)).toEqual(deps);
+
+    // GC: namespace cap, size bound, stale temp files, old schema dirs, and
+    // nothing outside `v<digits>` is ever removed.
+    const gcDir = join(root, ".gc-store");
+    const old = (path: string, ageSec: number) => {
+      const t = new Date(Date.now() - ageSec * 1000);
+      utimesSync(path, t, t);
+    };
+    const space = (name: string, ageSec: number) => {
+      const st = new Store(gcDir, name);
+      st.touch();
+      old(join(st.nsDir, ".used"), ageSec);
+      return st;
+    };
+    const [n0, n1, n2] = [space("n0", 400), space("n1", 300), space("n2", 200)];
+    const cur = space("cur", 0);
+    for (let i = 0; i < 4; i++) {
+      expect(cur.put(`ab${i}`, deps)).toBe(true);
+      old(join(cur.nsDir, "ab", `ab${i}.json`), 100 - i * 10); // ab0 oldest
+    }
+    const size = statSync(join(cur.nsDir, "ab", "ab0.json")).size;
+    writeFileSync(join(cur.nsDir, "ab", "stale.tmp"), "x");
+    old(join(cur.nsDir, "ab", "stale.tmp"), 120);
+    writeFileSync(join(cur.nsDir, "ab", "fresh.tmp"), "x");
+    mkdirSync(join(gcDir, "v0"), { recursive: true });
+    mkdirSync(join(gcDir, "keep-me"), { recursive: true });
+
+    cur.gc(1 << 30, 3);
+    expect(existsSync(join(cur.nsDir, "ab", "stale.tmp"))).toBe(false);
+    expect(existsSync(join(cur.nsDir, "ab", "fresh.tmp"))).toBe(true);
+    expect(cur.get("ab0"), "nothing evicted under the bound").toEqual(deps);
+
+    cur.gc(size * 2 + 1, 3);
+    expect(existsSync(n0.nsDir), "oldest namespace evicted").toBe(false);
+    expect(existsSync(n1.nsDir), "newer namespace kept").toBe(true);
+    expect(existsSync(n2.nsDir)).toBe(true);
+    expect(existsSync(cur.nsDir), "current namespace kept").toBe(true);
+    expect(
+      cur.get("ab0"),
+      "oldest entry evicted for the size bound",
+    ).toBeUndefined();
+    expect(cur.get("ab1")).toBeUndefined();
+    expect(cur.get("ab2")).toEqual(deps);
+    expect(cur.get("ab3")).toEqual(deps);
+    expect(existsSync(join(gcDir, "v0")), "old schema dir").toBe(false);
+    expect(existsSync(join(gcDir, "keep-me")), "foreign dir untouched").toBe(
+      true,
+    );
   });
 
   it("serves cached lists only until finish, stores atomically, rejects an unstable file", async () => {
@@ -385,8 +468,6 @@ describe("guards fall back to native (AC-3)", () => {
       transformPromiseMap: { ssr: new Map() },
       _transformRequest: async (id: string) => {
         calls.push(id);
-        if (id === "/src/flip.ts")
-          writeFileSync(file, `export const a = ${calls.length};`);
         return { code: "x", deps: ["/src/b.ts"], dynamicDeps: ["/src/c.ts"] };
       },
     };
@@ -442,8 +523,11 @@ describe("guards fall back to native (AC-3)", () => {
 });
 
 describe("glob counterexample (AC-4)", () => {
-  it("selects the covering test after a file is added under a glob", async () => {
+  it("selects the covering test after a file is added under a glob, through the reporter", async () => {
     const proj = realpathSync(mkdtempSync(join(tmpdir(), "mx-affected-glob-")));
+    const exitCode = process.exitCode;
+    vi.stubEnv("MX_AFFECTED_CACHE", "1");
+    vi.stubEnv("CI", "");
     try {
       const w = (rel: string, text: string) => {
         mkdirSync(join(proj, rel, ".."), { recursive: true });
@@ -453,18 +537,26 @@ describe("glob counterexample (AC-4)", () => {
       w("cases/a.ts", "export const value = 1;");
       w(
         "glob.test.ts",
-        'export const modules = import.meta.glob("./cases/*.ts");',
+        'it("g", () => {});\nexport const modules = import.meta.glob("./cases/*.ts");',
       );
       w(
         "plain.test.ts",
-        'import { value } from "./cases/a.ts";\nexport { value };',
+        'import { value } from "./cases/a.ts";\nit("p", () => { void value; });',
       );
       spawnSync("git", ["init", "-q"], { cwd: proj });
-      // The four nominal keys stay fixed across both runs.
-      const inputs = collectInputs(proj, [], {}, root);
+      // The nominal keys stay fixed across the runs: only the directory changes.
+      const fixed = collectInputs(proj, [], {}, root);
       const dir = join(proj, ".store");
 
       const select = async (related: string, cached: boolean) => {
+        const reporter = new AffectedCacheReporter({
+          dir,
+          inputs: (_r, projects) => ({ ...fixed, projects }),
+        });
+        const lines: string[] = [];
+        const log = vi.spyOn(console, "log").mockImplementation((m) => {
+          lines.push(String(m));
+        });
         const ctx = await createVitest(
           "test",
           {
@@ -472,46 +564,47 @@ describe("glob counterexample (AC-4)", () => {
             config: false,
             watch: false,
             run: true,
+            globals: true,
             related: [join(proj, related)],
-            reporters: [],
+            reporters: cached ? [reporter] : [],
           },
           {},
           { stdout: process.stderr },
         );
+        let during: unknown;
         try {
-          const handle = cached
-            ? install(
-                ctx.projects.map((p) => ({
-                  name: p.name,
-                  vitenode: p.vitenode as never,
-                  input: { ...projectInput(p as never), plugins: [] },
-                })),
-                inputs,
-                dir,
-              )
-            : undefined;
-          const specs =
-            await ctx.specifications.getRelevantTestSpecifications();
-          handle?.finish();
-          return {
-            files: specs.map((s) => s.moduleId.slice(proj.length + 1)).sort(),
-            stats: handle?.stats,
+          const node = ctx.projects[0].vitenode as unknown as {
+            _transformRequest: unknown;
           };
+          const nativeFn = node._transformRequest;
+          await ctx.start();
+          during = node._transformRequest === nativeFn;
+          const files = ctx.state
+            .getFiles()
+            .map((f) => f.filepath.slice(proj.length + 1))
+            .sort();
+          return { files, restored: during, line: lines.join("\n") };
         } finally {
+          log.mockRestore();
           await ctx.close();
         }
       };
 
       const cold = await select("cases/a.ts", true);
       expect(cold.files).toEqual(["glob.test.ts", "plain.test.ts"]);
+      expect(cold.restored).toBe(true);
+      const warm = await select("cases/a.ts", true);
+      expect(warm.line).toMatch(/[1-9]\d* hits/);
+      expect(warm.line).toMatch(/1x glob import/);
       w("cases/b.ts", "export const value = 2;");
-      const warm = await select("cases/b.ts", true);
+      const added = await select("cases/b.ts", true);
       const native = await select("cases/b.ts", false);
       expect(native.files).toEqual(["glob.test.ts"]);
-      expect(warm.files).toEqual(native.files);
-      expect(warm.stats?.hits).toBeGreaterThan(0);
-      expect(warm.stats?.reasons.size).toBeGreaterThan(0);
+      expect(added.files).toEqual(native.files);
+      expect(added.line).toMatch(/[1-9]\d* hits/);
     } finally {
+      vi.unstubAllEnvs();
+      process.exitCode = exitCode;
       rmSync(proj, { recursive: true, force: true });
     }
   }, 60_000);

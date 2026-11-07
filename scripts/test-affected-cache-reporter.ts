@@ -9,6 +9,7 @@ import { resolve } from "node:path";
 import {
   cacheMode,
   collectInputs,
+  type Inputs,
   type Installed,
   install,
   type ProjectInput,
@@ -48,23 +49,30 @@ export function projectInput(p: VitestProject): ProjectInput {
   };
 }
 
+export interface ReporterOptions {
+  /** Store root; defaults to `node_modules/.cache/mx-affected` under the root. */
+  dir?: string;
+  /** Test seam: replaces the namespace inputs gathered from disk. */
+  inputs?: (root: string, projects: ProjectInput[]) => Inputs;
+}
+
 export default class AffectedCacheReporter {
   private installed: Installed | undefined;
   private start = 0;
+
+  constructor(private readonly options: ReporterOptions = {}) {}
 
   onInit(ctx: VitestCtx): void {
     if (!cacheMode(process.env).on) return;
     try {
       this.start = performance.now();
       const root = ctx.config.root;
-      const inputs = collectInputs(
+      const inputs = (this.options.inputs ?? defaultInputs)(
         root,
         ctx.projects.map(projectInput),
-        process.env,
-        realpathSync(resolve(root, "node_modules", "vitest")),
       );
       const dir =
-        process.env.MX_AFFECTED_CACHE_DIR ??
+        this.options.dir ??
         resolve(root, "node_modules", ".cache", "mx-affected");
       this.installed = install(
         ctx.projects.map((p) => ({
@@ -91,8 +99,22 @@ export default class AffectedCacheReporter {
     i.finish();
     const s = i.stats;
     const ms = Math.round(performance.now() - this.start);
+    const why = [...s.reasons]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([r, n]) => `${n}x ${r}`)
+      .join("; ");
     console.log(
-      `test:affected cache: selection ${ms} ms, ${s.hits} hits, ${s.misses} misses, ${s.bypassed} bypassed, ${s.unstable} unstable`,
+      `test:affected cache: selection ${ms} ms, ${s.hits} hits, ${s.misses} misses, ${s.bypassed} bypassed, ${s.unstable} unstable${why ? ` (bypassed: ${why})` : ""}`,
     );
   }
+}
+
+function defaultInputs(root: string, projects: ProjectInput[]): Inputs {
+  return collectInputs(
+    root,
+    projects,
+    process.env,
+    realpathSync(resolve(root, "node_modules", "vitest")),
+  );
 }
