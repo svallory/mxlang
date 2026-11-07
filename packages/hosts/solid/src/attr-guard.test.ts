@@ -331,9 +331,10 @@ async function runAll(
 }
 
 // The runner processes are awaited, never `execFileSync`: a full gate once ran
-// the serial hook for 67-162 s, and a synchronous wait held the worker's event loop for all of
-// it, so vitest's `onTaskUpdate` RPC reply (birpc's fixed 60 s limit) could not
-// be read and the run failed with `Timeout calling "onTaskUpdate"` (#390).
+// the serial hook for 67-162 s, and a synchronous wait held the worker's
+// event loop for all of it, so vitest's `onTaskUpdate` RPC reply (birpc's
+// fixed 60 s limit) could not be read and the run failed with `Timeout calling
+// "onTaskUpdate"` (#390).
 async function runNames(
   generate: "ssr" | "dom",
   names: string[],
