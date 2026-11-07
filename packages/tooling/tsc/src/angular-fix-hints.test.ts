@@ -206,7 +206,7 @@ describe("mx-tsc Angular fix hints", () => {
     { timeout: SPAWN_TIMEOUT_MS },
     async (
       { template, body, needle, code, message, fixed, build, track },
-      { expect },
+      { expect, signal },
     ) => {
       const dir = mkdtempSync(join(tmpdir(), "mx-tsc-angular-hints-"));
       try {
@@ -257,7 +257,11 @@ describe("mx-tsc Angular fix hints", () => {
         if (build) {
           // The same authored error on `mx-angular build`, as one error, no
           // NG cascade. Its position prints as `:line:column`.
-          const built = await runAsync(mxAngular, ["build", "--project", dir]);
+          const built = await runAsync(
+            mxAngular,
+            ["build", "--project", dir],
+            signal,
+          );
           expect(built.status).not.toBe(0);
           const buildText = strip(built.output).trim();
           const [line, column] = position.split(",");
@@ -279,7 +283,7 @@ describe("mx-tsc Angular fix hints", () => {
         });
         if (build) {
           expect(
-            await runAsync(mxAngular, ["build", "--project", dir]),
+            await runAsync(mxAngular, ["build", "--project", dir], signal),
           ).toEqual({
             status: 0,
             output: "",
