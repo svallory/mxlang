@@ -58,13 +58,13 @@ const outside = (why: string) =>
 describe("`package.json#mx.dialect`", () => {
   it("declares the dialect's id, name, extensions and module", () => {
     const { projectFile, packageFile } = dialectProject(dir, {
-      manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
+      manifest: { id: "kit", name: "Kit", extensions: [".kit.mx"] },
     });
     expect(discoverDialects(projectFile)).toEqual([
       {
-        id: "mesh",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
+        id: "kit",
+        name: "Kit",
+        extensions: [".kit.mx"],
         module: "./index.mjs",
         packageName: "test-dialect",
         packageFile,
@@ -93,23 +93,23 @@ describe("`package.json#mx.dialect`", () => {
   it("declares the tag-discovery fields, each optional", () => {
     const { projectFile, packageFile } = dialectProject(dir, {
       manifest: {
-        id: "mesh",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
+        id: "kit",
+        name: "Kit",
+        extensions: [".kit.mx"],
         tagDirs: ["components", "atoms"],
-        tagExtensions: [".component.mesh.mx"],
+        tagExtensions: [".component.kit.mx"],
         sidecars: false,
         reservedTags: ["entity"],
       },
     });
     expect(discoverDialects(projectFile)).toEqual([
       {
-        id: "mesh",
-        name: "Mesh",
-        extensions: [".mesh.mx"],
+        id: "kit",
+        name: "Kit",
+        extensions: [".kit.mx"],
         module: "./index.mjs",
         tagDirs: ["components", "atoms"],
-        tagExtensions: [".component.mesh.mx"],
+        tagExtensions: [".component.kit.mx"],
         sidecars: false,
         reservedTags: ["entity"],
         packageName: "test-dialect",
@@ -139,7 +139,7 @@ describe("`package.json#mx.dialect`", () => {
   it.each([
     [
       "not an object",
-      "mesh",
+      "kit",
       [4, 4],
       '`mx.dialect` must be an object declaring the dialect: `{ "id", "name", "extensions", "module" }`',
     ],
@@ -151,7 +151,7 @@ describe("`package.json#mx.dialect`", () => {
     ],
     [
       "an id that is not one",
-      { id: "Mesh" },
+      { id: "Kit" },
       [5, 6],
       "`mx.dialect.id` must be a dialect id: lower-case words joined by `-` (`mydsl`)",
     ],
@@ -217,15 +217,15 @@ describe("`package.json#mx.dialect`", () => {
     ],
     [
       "an absolute module",
-      { module: "/opt/dialects/mesh.js" },
+      { module: "/opt/dialects/kit.js" },
       [10, 6],
-      outside('"/opt/dialects/mesh.js" is an absolute path'),
+      outside('"/opt/dialects/kit.js" is an absolute path'),
     ],
     [
       "a Windows absolute module",
-      { module: "C:\\dialects\\mesh.js" },
+      { module: "C:\\dialects\\kit.js" },
       [10, 6],
-      outside('"C:\\\\dialects\\\\mesh.js" is an absolute path'),
+      outside('"C:\\\\dialects\\\\kit.js" is an absolute path'),
     ],
     [
       "a module outside the package",
@@ -433,17 +433,17 @@ describe("discovery reads the project's direct dependencies only", () => {
 
   it("a dialect package routes its own files", () => {
     writeJson(join(dir, "package.json"), {
-      name: "mesh",
+      name: "kit",
       mx: {
         dialect: {
-          id: "mesh",
-          name: "Mesh",
-          extensions: [".mesh.mx"],
+          id: "kit",
+          name: "Kit",
+          extensions: [".kit.mx"],
           module: "./index.mjs",
         },
       },
     });
-    expect(routeDialect(join(dir, "test/a.mesh.mx"))?.id).toBe("mesh");
+    expect(routeDialect(join(dir, "test/a.kit.mx"))?.id).toBe("kit");
   });
 
   it("the project is the file's nearest `package.json`: a nested package without the dialect gets none", () => {
@@ -659,9 +659,9 @@ describe("routing a file to its dialect", () => {
     ],
     [
       "an id no dependency declares",
-      { ".tst": "test", ".p": "mesh" },
+      { ".tst": "test", ".p": "kit" },
       [9, 6],
-      '`mx.extensions` routes `.p` to "mesh", which is not a dialect this project uses (it uses `test`); a dialect is found among the project\'s direct dependencies',
+      '`mx.extensions` routes `.p` to "kit", which is not a dialect this project uses (it uses `test`); a dialect is found among the project\'s direct dependencies',
     ],
   ])("`mx.extensions` %s is an error", (_, extensions, at, message) => {
     const { projectFile } = dialectProject(dir, { mx: { extensions } });
@@ -674,16 +674,16 @@ describe("routing a file to its dialect", () => {
 
 describe("a dialect's id is its identity", () => {
   const sameId = (packages: string) =>
-    `two dialects have the id \`mesh\`: ${packages}. A dialect's id is its identity; keep one of these dependencies`;
+    `two dialects have the id \`kit\`: ${packages}. A dialect's id is its identity; keep one of these dependencies`;
 
   it("two dependencies with one id is an error naming both, at the second's dependency entry", () => {
     dialectProject(dir, {
       packageName: "a-dialect",
-      manifest: { id: "mesh", extensions: [".a"] },
+      manifest: { id: "kit", extensions: [".a"] },
     });
     const { projectFile } = dialectProject(dir, {
       packageName: "b-dialect",
-      manifest: { id: "mesh", extensions: [".b"] },
+      manifest: { id: "kit", extensions: [".b"] },
     });
     for (const run of [
       () => discoverDialects(projectFile),
@@ -704,11 +704,11 @@ describe("a dialect's id is its identity", () => {
   it("the project's own dialect and a dependency with its id is an error at the dependency", () => {
     // `mx` spans lines 3 to 12; `devDependencies` opens on line 13.
     const { projectFile } = dialectProject(dir, {
-      manifest: { id: "mesh" },
+      manifest: { id: "kit" },
       project: {
         mx: {
           dialect: {
-            id: "mesh",
+            id: "kit",
             name: "Own",
             extensions: [".own"],
             module: "./index.mjs",
@@ -906,12 +906,12 @@ describe("extensions a dialect cannot claim", () => {
       expect(ids(discoverDialects(projectFile))).toEqual(["test"]);
     });
 
-    it("`.mesh.mx` stays claimable: `mesh` is not a host", () => {
+    it("`.kit.mx` stays claimable: `kit` is not a host", () => {
       dialectProject(dir, {
-        manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
+        manifest: { id: "kit", name: "Kit", extensions: [".kit.mx"] },
       });
-      expect(routeDialect(join(dir, "x.mesh.mx"), { hostSegments })?.id).toBe(
-        "mesh",
+      expect(routeDialect(join(dir, "x.kit.mx"), { hostSegments })?.id).toBe(
+        "kit",
       );
       expect(
         routeDialect(join(dir, "x.solid.mx"), { hostSegments }),

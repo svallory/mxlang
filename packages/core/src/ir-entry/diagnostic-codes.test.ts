@@ -189,7 +189,7 @@ describe("MX_EXPECTED_SINGLE_EXPRESSION", () => {
     ]);
   });
 
-  it("a default value followed by a spaced `:` (Mesh's case)", () => {
+  it("a default value followed by a spaced `:` (Kit's case)", () => {
     expect(only("<x=1 :n=2/>\n", {})).toEqual([
       {
         severity: "error",

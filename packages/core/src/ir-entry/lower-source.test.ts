@@ -160,7 +160,7 @@ const NATIVE_RULE_NAMES = [
 
 /**
  * An absent `tagRules` is the strict `html` preset (a dialect that chooses
- * no tag rules gets the full HTML rules). Mesh passes `none` itself.
+ * no tag rules gets the full HTML rules). Kit passes `none` itself.
  */
 describe("absent `tagRules`: the strict `html` preset", () => {
   it.each([
@@ -383,7 +383,7 @@ describe("the returned IR", () => {
 });
 
 /**
- * The fields `SpannedIr` requires beyond `span` (Mesh review of PR 484): a
+ * The fields `SpannedIr` requires beyond `span` (Kit review of PR 484): a
  * static attribute's `valueSpan` and an `Import`'s `from` and `names`. The
  * reads below go through the types without a cast, so a regression to
  * optional fails typecheck as well as the assertions.

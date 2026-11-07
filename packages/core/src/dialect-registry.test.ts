@@ -646,10 +646,10 @@ describe("a dialect's node types are validated", () => {
       {
         ...REF_DIALECT,
         table: {
-          lineTriggers: [{ ...REF, node: { type: "Ref", dialect: "mesh" } }],
+          lineTriggers: [{ ...REF, node: { type: "Ref", dialect: "kit" } }],
         },
       },
-      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `mesh:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect\'s types is not supported yet',
+      '`dialect.table.lineTriggers[0].node` (trigger "ref") names `kit:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect\'s types is not supported yet',
     ],
     [
       "a row naming core's own type",
@@ -1006,8 +1006,8 @@ describe("`claimNode` refuses a row naming an unregistered type", () => {
     ],
     [
       "another dialect's type",
-      { type: "Ref", dialect: "mesh" },
-      "the `ref` trigger names `mesh:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect's types is not supported yet",
+      { type: "Ref", dialect: "kit" },
+      "the `ref` trigger names `kit:Ref`, which is not a registered node type (a row can name `mx:Trigger`, `mx:Expression`, `ref:Ref`); a row names a type of core (`mx`) or of its own dialect: naming another dialect's types is not supported yet",
     ],
   ])("%s", (_, node, message) => {
     const row: Trigger = { ...REF, node };

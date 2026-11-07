@@ -180,7 +180,7 @@ const INTENDED: Record<
   },
   // `:name` in an expression is plain JavaScript, as in Marko: core has no
   // atom syntax, so `mode=:strict` is Marko's "Unexpected token" at the `:`.
-  // The grammar still reads atoms, which only a dialect builds (Mesh's own
+  // The grammar still reads atoms, which only a dialect builds (Kit's own
   // syntax module does).
   colonInExpression: {
     pattern: /^Unexpected token(, expected ",")?$/,
@@ -263,7 +263,7 @@ const KNOWN_GAPS: Record<string, string[]> = {
 };
 
 /**
- * Gaps of the `none` preset only (`tagRules: "none"`, Mesh's): open-tag-only
+ * Gaps of the `none` preset only (`tagRules: "none"`, Kit's): open-tag-only
  * void tags (`<img>`), raw-text `<script>`/`<style>`, an html-comment tag and
  * a regexp attribute ("Missing ending", "closing X does not match"). Not a
  * bug: `none` switches the HTML parse rules (openTagOnly, text) off on
@@ -304,7 +304,7 @@ function gapsOf(...groups: Record<string, string[]>[]): Map<string, string> {
   return gapBy;
 }
 
-/** The corpus under the default rules (strict) and under Mesh's `none`. */
+/** The corpus under the default rules (strict) and under Kit's `none`. */
 const PRESETS = [
   {
     label: "default (strict) tag rules",

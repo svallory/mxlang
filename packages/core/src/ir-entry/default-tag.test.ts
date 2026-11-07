@@ -240,8 +240,8 @@ describe("a configured defaultTag (mx.data.defaultTag)", () => {
   });
 });
 
-describe("a parent contract's defaultTag (the Mesh case)", () => {
-  const mesh: Record<string, CustomTag> = {
+describe("a parent contract's defaultTag (the Kit case)", () => {
+  const kit: Record<string, CustomTag> = {
     attributes: {
       defaultTag: "attribute",
       children: { attribute: { repeatable: true } },
@@ -254,7 +254,7 @@ describe("a parent contract's defaultTag (the Mesh case)", () => {
   it('<attributes><#title type="string"/></attributes> is <attribute id="title" type="string">', () => {
     const source = '<attributes><#title type="string"/></attributes>';
     const { ir, diagnostics } = lowerSource(source, "/m.mx", {
-      customTags: mesh,
+      customTags: kit,
     });
     expect(diagnostics).toEqual([]);
     const attributes = tagOf(ir?.body[0]);
@@ -266,7 +266,7 @@ describe("a parent contract's defaultTag (the Mesh case)", () => {
 
   it("the parent's default beats mx.data.defaultTag; elsewhere the config answers", () => {
     const tags: Record<string, CustomTag> = {
-      ...mesh,
+      ...kit,
       item: { attributes: { id: { type: "string" } } },
     };
     const { ir, diagnostics } = lowerSource(
@@ -282,7 +282,7 @@ describe("a parent contract's defaultTag (the Mesh case)", () => {
 
   it("a closed children that does not list the resolved name is E2, at the shorthand", () => {
     const tags: Record<string, CustomTag> = {
-      ...mesh,
+      ...kit,
       attributes: { defaultTag: "attribute", children: { other: {} } },
     };
     const { ir, diagnostics } = lowerSource(
@@ -306,7 +306,7 @@ describe("a parent contract's defaultTag (the Mesh case)", () => {
 
   it("a closed attributes without id is E1, at the shorthand", () => {
     const tags: Record<string, CustomTag> = {
-      ...mesh,
+      ...kit,
       attribute: { attributes: { type: { type: "string" } } },
     };
     const { ir, diagnostics } = lowerSource(
@@ -349,7 +349,7 @@ describe("a parent contract's defaultTag (the Mesh case)", () => {
     const source =
       "<attributes><if=x><#a/></if><else><#b/></else><for|i| of=xs><#c/></for></attributes>";
     const { ir, diagnostics } = lowerSource(source, "/m.mx", {
-      customTags: mesh,
+      customTags: kit,
     });
     expect(diagnostics).toEqual([]);
     expect(tagNames(ir?.body ?? [])).toEqual([

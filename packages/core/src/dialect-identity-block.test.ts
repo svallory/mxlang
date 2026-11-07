@@ -23,9 +23,9 @@ import { testTargetLookup } from "./test-targets.ts";
 const lookup = testTargetLookup();
 
 const DIALECT = {
-  id: "mesh",
-  name: "Mesh",
-  extensions: [".mesh.mx"],
+  id: "kit",
+  name: "Kit",
+  extensions: [".kit.mx"],
   module: "./index.mjs",
 };
 
@@ -48,11 +48,11 @@ function project(withDialect: boolean): string {
     strict: "always",
     page: { defaultTag: "section" },
     tags: ["tags"],
-    extensions: { ".mesh.mx": "mesh" },
+    extensions: { ".kit.mx": "kit" },
   };
   writeFileSync(
     join(dir, "package.json"),
-    JSON.stringify({ name: "mesh", mx }, null, 2),
+    JSON.stringify({ name: "kit", mx }, null, 2),
   );
   return dir;
 }
@@ -82,19 +82,19 @@ describe("`mx.dialect` next to a project's own settings", () => {
 
   it("routes by `mx.extensions` and by the block's own extensions, unchanged", () => {
     const dir = project(true);
-    expect(routeDialect(join(dir, "page.mesh.mx"))?.id).toBe("mesh");
+    expect(routeDialect(join(dir, "page.kit.mx"))?.id).toBe("kit");
     expect(routeDialect(join(dir, "page.other"))).toBeUndefined();
     // A name only `mx.extensions` could route is not routed by the block alone.
     const other = project(true);
     writeFileSync(
       join(other, "package.json"),
       JSON.stringify({
-        name: "mesh",
-        mx: { dialect: DIALECT, extensions: { ".other": "mesh" } },
+        name: "kit",
+        mx: { dialect: DIALECT, extensions: { ".other": "kit" } },
       }),
     );
-    expect(routeDialect(join(other, "page.other"))?.id).toBe("mesh");
-    expect(routeDialect(join(other, "page.mesh.mx"))?.id).toBe("mesh");
+    expect(routeDialect(join(other, "page.other"))?.id).toBe("kit");
+    expect(routeDialect(join(other, "page.kit.mx"))?.id).toBe("kit");
   });
 
   it("is not a setting: a project reads its own `mx.dialect` only as the dialect's manifest", () => {
@@ -103,7 +103,7 @@ describe("`mx.dialect` next to a project's own settings", () => {
     // `policy` or `routeDialect` changes when only the block is present.
     writeFileSync(
       join(dir, "package.json"),
-      JSON.stringify({ name: "mesh", mx: { dialect: DIALECT } }),
+      JSON.stringify({ name: "kit", mx: { dialect: DIALECT } }),
     );
     const { policy, diagnostics } = resolveTargetPolicyDetailed(
       join(dir, "a.mx"),

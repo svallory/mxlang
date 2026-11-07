@@ -511,13 +511,13 @@ describe("createTargetLookup", () => {
       expect(
         message(
           target({
-            name: "mesh",
-            packageName: "@t/mesh",
+            name: "kit",
+            packageName: "@t/kit",
             configKey: "dialect",
           }),
         ),
       ).toBe(
-        "target \"mesh\" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package's identity block, never a target's config block; set `configKey` to another word",
+        "target \"kit\" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package's identity block, never a target's config block; set `configKey` to another word",
       );
     });
 
@@ -580,19 +580,19 @@ describe("createTargetLookup", () => {
     });
 
     it("rejects an unregistered name, naming both targets", () => {
-      const verdict = [data, built("mesh", "dta")];
+      const verdict = [data, built("kit", "dta")];
       expect(lookupRule(verdict)).toBe("built-on-unknown");
       expect(message(verdict)).toBe(
-        'target "mesh" is built on "dta", which is not a registered target (registered: data, mesh)',
+        'target "kit" is built on "dta", which is not a registered target (registered: data, kit)',
       );
       expect(message([data, built("a", "b"), built("b", "c")])).toContain(
         'target "b" is built on "c"',
       );
-      expect(message([html, built("mesh", "data")])).toBe(
-        'target "mesh" is built on "data", which is not a registered target (registered: html, mesh); "data" is reserved for a future evaluated target; a consumer that reads the tree calls lowerSource from @mxlang/core',
+      expect(message([html, built("kit", "data")])).toBe(
+        'target "kit" is built on "data", which is not a registered target (registered: html, kit); "data" is reserved for a future evaluated target; a consumer that reads the tree calls lowerSource from @mxlang/core',
       );
-      expect(message([data, solid, built("mesh", "solid")])).toBe(
-        'target "mesh" is built on "solid", which is not a registered target (registered: data, solid-jsx, mesh); "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)',
+      expect(message([data, solid, built("kit", "solid")])).toBe(
+        'target "kit" is built on "solid", which is not a registered target (registered: data, solid-jsx, kit); "solid" is a host name, and builtOn takes a target name (did you mean "solid-jsx"?)',
       );
     });
 

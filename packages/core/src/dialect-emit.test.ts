@@ -86,11 +86,11 @@ describe("emitFor", () => {
 
   it("answers a routed dialect's file with the dialect and no emit", () => {
     dialectProject(dir, {
-      manifest: { id: "mesh", name: "Mesh", extensions: [".mesh.mx"] },
+      manifest: { id: "kit", name: "Kit", extensions: [".kit.mx"] },
       module: "export default { table: {} };",
     });
-    const found = emitFor(join(dir, "a.mesh.mx"));
-    expect(found.dialect).toMatchObject({ id: "mesh", name: "Mesh" });
+    const found = emitFor(join(dir, "a.kit.mx"));
+    expect(found.dialect).toMatchObject({ id: "kit", name: "Kit" });
     expect(found.emit).toBeUndefined();
     // MX's own files in the same project keep MX's emit.
     expect(emitFor(join(dir, "a.mx")).emit).toBeTypeOf("function");
@@ -144,7 +144,7 @@ describe("emitFor", () => {
 
   it("passes the caller's host segments on: a dialect claiming a host's file kind does not take it", () => {
     dialectProject(dir, {
-      manifest: { id: "mesh", name: "Mesh", extensions: [".solid.mx"] },
+      manifest: { id: "kit", name: "Kit", extensions: [".solid.mx"] },
       module: "export default { table: {} };",
     });
     // Nothing reserved: the dialect claims the file and registers no emit.

@@ -243,7 +243,7 @@ const closedRows: Row[] = [
   },
 ];
 
-describe("explainUnknownTag: the Mesh-style table, in both modes", () => {
+describe("explainUnknownTag: the Kit-style table, in both modes", () => {
   for (const mode of ["reject", "allow"] as const) {
     describe(`unknownTags: "${mode}"`, () => {
       for (const row of successRows) {

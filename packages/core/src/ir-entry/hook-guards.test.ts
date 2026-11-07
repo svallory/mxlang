@@ -192,7 +192,7 @@ describe("`IrDiagnostic.file` names only another file", () => {
   )(
     "%s, %j: a diagnostic in the parsed file has no `file`",
     (_, source, options) => {
-      for (const file of ["/v/x.mesh.mx", "relative/x.mesh.mx"]) {
+      for (const file of ["/v/x.kit.mx", "relative/x.kit.mx"]) {
         const { diagnostics } = lowerSource(source, file, options);
         expect(diagnostics.length, file).toBeGreaterThan(0);
         for (const diagnostic of diagnostics) {

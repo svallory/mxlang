@@ -128,7 +128,7 @@ describe("core is dialect zero", () => {
 });
 
 // One fixture per row of the design's §2.3 precedence table (`.kit.mx`
-// standing in for the table's `.mesh.mx`).
+// standing in for the table's `.kit.mx`).
 describe("names and claims (design §2.3)", () => {
   it("`components/button.kit.mx` from a dialect file is `<button>`, read through the dialect", () => {
     kitProject();

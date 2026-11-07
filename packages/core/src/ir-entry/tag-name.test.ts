@@ -7,7 +7,7 @@ import { lowerSource } from "./index.ts";
  * diagnostic instead of a child tag named `&title`.
  */
 function parse(source: string) {
-  return lowerSource(source, "x.mesh.mx");
+  return lowerSource(source, "x.kit.mx");
 }
 
 describe("invalid tag names (IR entry point)", () => {

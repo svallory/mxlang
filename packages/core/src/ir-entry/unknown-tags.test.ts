@@ -112,7 +112,7 @@ describe('unknownTags: "reject"', () => {
     ]);
   });
 
-  it("reports an unknown parent before its child's `parents` error (Mesh's typo)", () => {
+  it("reports an unknown parent before its child's `parents` error (Kit's typo)", () => {
     const { ir, diagnostics } = parse('resourse="post"\n  attributes\n', {
       structural: "reject",
     });

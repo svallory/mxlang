@@ -281,7 +281,7 @@ describe("invalidation", () => {
   });
 });
 
-// Mesh's request: adding or removing a file in a tag directory invalidates
+// Kit's request: adding or removing a file in a tag directory invalidates
 // the scan for the files below it. That is the listing rule; pinned for
 // dialect `tagDirs`, at the caller's level and two levels above it, with
 // the racy hash in play and with every file settled.

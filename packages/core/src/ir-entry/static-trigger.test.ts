@@ -257,7 +257,7 @@ describe("the matching is the template scanner's", () => {
   });
 
   it("valid JavaScript and TypeScript the template reads as no row", () => {
-    const mesh = [row("atom", ":", ":[a-z]+"), row("member", "&", "&[a-z]+")];
+    const kit = [row("atom", ":", ":[a-z]+"), row("member", "&", "&[a-z]+")];
     for (const code of [
       "const m = i++ &mask;",
       "const m = i-- &mask;",
@@ -271,7 +271,7 @@ describe("the matching is the template scanner's", () => {
       "const z = c ? i++ :y;",
       "const o = { key:value };",
     ]) {
-      expect([code, firstRowIn(code, mesh)?.row.id]).toEqual([code, undefined]);
+      expect([code, firstRowIn(code, kit)?.row.id]).toEqual([code, undefined]);
     }
   });
 

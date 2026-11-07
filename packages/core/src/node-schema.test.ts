@@ -782,7 +782,7 @@ describe("findMarkOverlap", () => {
     ).toBe("%");
   });
 
-  it("top-level alternatives mark their shared prefix: Mesh's atom row against `:a`", () => {
+  it("top-level alternatives mark their shared prefix: Kit's atom row against `:a`", () => {
     expect(
       findMarkOverlap(
         table(row(":", "::(?:[a-z]+)?|:[a-z]+")),

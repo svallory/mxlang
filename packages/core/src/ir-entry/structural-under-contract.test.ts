@@ -877,7 +877,7 @@ describe("structural: reject, an orphan else or else-if is the if construct", ()
     ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 3, 0, orphanText("else")]]);
   });
 
-  it("ends the message with the backticked if, as Mesh parses it", () => {
+  it("ends the message with the backticked if, as Kit parses it", () => {
     expect(run("<else/>\n", reject)[0]?.[3]).toMatch(/\bevaluate `<if>`$/);
   });
 

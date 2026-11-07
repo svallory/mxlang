@@ -1,6 +1,6 @@
 /**
  * `lowerSource`'s `dialect` option (PR C): a consumer's own table
- * (Mesh builds a frozen one) reaches core; until core lowers triggers, a
+ * (Kit builds a frozen one) reaches core; until core lowers triggers, a
  * trigger in the file is a positioned diagnostic, and a file without one
  * gives the default row's IR.
  *
@@ -25,7 +25,7 @@ const MEMBER: Trigger = {
   node: { call: "member" },
 };
 
-const MESH: SyntaxTable = Object.freeze({
+const KIT: SyntaxTable = Object.freeze({
   ...defaultSyntax(),
   expressionTriggers: [MEMBER],
   attributeTriggers: [MEMBER],
@@ -35,7 +35,7 @@ const MESH: SyntaxTable = Object.freeze({
 describe("lowerSource's dialect option", () => {
   it("a trigger the table produces is a positioned diagnostic", () => {
     const result = lowerSource("entity Order\n  &title\n", "/v/order.mx", {
-      dialect: MESH,
+      dialect: KIT,
     });
     expect(result.ir).toBeUndefined();
     expect(result.diagnostics).toHaveLength(1);
@@ -48,14 +48,14 @@ describe("lowerSource's dialect option", () => {
 
   it("a file without a trigger gives the default row's IR", () => {
     const source = "entity Order\n  field title\n";
-    expect(lowerSource(source, "/v/order.mx", { dialect: MESH })).toEqual(
+    expect(lowerSource(source, "/v/order.mx", { dialect: KIT })).toEqual(
       lowerSource(source, "/v/order.mx"),
     );
   });
 
   it("an invalid table is a diagnostic naming the option, not an internal error", () => {
     const bad = Object.freeze({
-      ...MESH,
+      ...KIT,
       expressionTriggers: [{ ...MEMBER, match: "&[" }],
     });
     const result = lowerSource("div\n", "/v/a.mx", { dialect: bad });

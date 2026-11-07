@@ -592,7 +592,7 @@ describe('structural: "reject"', () => {
   });
 
   it("a `//` line comment stays a `Comment` node under reject", () => {
-    const source = "// src/domain/billing/invoice.mesh.mx\nentity :Invoice\n";
+    const source = "// src/domain/billing/invoice.kit.mx\nentity :Invoice\n";
     const ir = ok(source, {
       structural: "reject",
       imports: "pass",
@@ -832,7 +832,7 @@ describe("a default method after other attributes (one `value`, no warning)", ()
     );
   });
 
-  it("the Mesh shape with a destructured parameter is one value, silent", () => {
+  it("the Kit shape with a destructured parameter is one value, silent", () => {
     expect(
       method("run [after=1] ({ self, actions }) { go(self, actions) }\n"),
     ).toEqual({ diagnostics: [], names: ["after", "value"] });
@@ -1992,10 +1992,10 @@ describe("a warning with no source position is file-level too", () => {
   });
 });
 
-describe("valueless default-attribute modifier (Mesh span bug)", () => {
+describe("valueless default-attribute modifier (Kit span bug)", () => {
   const options = { structural: "reject" } as const;
 
-  // The bare `:Todo` is `name="Todo"` sugar; the Mesh bug was an invariant
+  // The bare `:Todo` is `name="Todo"` sugar; the Kit bug was an invariant
   // failure on every valueless modifier attribute, so the regression rows use
   // the spellings that are still modifiers.
   it.each([

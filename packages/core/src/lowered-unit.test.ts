@@ -405,13 +405,13 @@ describe("`unit.fail` and `unit.warn`", () => {
     const error = failing((unit) =>
       unit.fail("nope", {
         at: { sourceStart: 6, sourceEnd: 7 },
-        code: "MESH_X",
+        code: "KIT_X",
         also,
       }),
     );
     expect(error.message).toBe("nope");
     expect([error.line, error.column]).toEqual([2, 1]);
-    expect(error.diagnosticCode).toBe("MESH_X");
+    expect(error.diagnosticCode).toBe("KIT_X");
     expect(error.spans).toEqual(also);
     expect(error.file).toBeUndefined();
   });
@@ -491,14 +491,14 @@ describe("`unit.fail` and `unit.warn`", () => {
     let raised: unknown;
     const error = failing((unit) => {
       try {
-        unit.fail("nope", { code: "MESH_X" });
+        unit.fail("nope", { code: "KIT_X" });
       } catch (cause) {
         raised = cause;
         throw cause;
       }
     });
     expect(error).toBe(raised);
-    expect(error.diagnosticCode).toBe("MESH_X");
+    expect(error.diagnosticCode).toBe("KIT_X");
   });
 
   it("refuses a `code` that starts with `MX_`, MX's own prefix", () => {
@@ -521,7 +521,7 @@ describe("`unit.fail` and `unit.warn`", () => {
         afterLower: (unit) => {
           unit.warn("here", {
             at: { sourceStart: 6, sourceEnd: 7 },
-            code: "MESH_W",
+            code: "KIT_W",
           });
           unit.warn("no code", { at: { sourceStart: 0, sourceEnd: 1 } });
         },
@@ -529,7 +529,7 @@ describe("`unit.fail` and `unit.warn`", () => {
       { warnings },
     );
     expect(warnings).toEqual([
-      { message: "here", line: 2, column: 1, code: "MESH_W" },
+      { message: "here", line: 2, column: 1, code: "KIT_W" },
       { message: "no code", line: 1, column: 0, code: "MX_DIALECT_WARNING" },
     ]);
   });
@@ -825,11 +825,11 @@ describe("`checkContract`", () => {
         }),
       );
     const error = failing((tag, _, ctx) =>
-      ctx.fail(`\`${tag}\` is wrong`, { code: "MESH_FACET" }),
+      ctx.fail(`\`${tag}\` is wrong`, { code: "KIT_FACET" }),
     );
     expect(error.message).toBe("`used` is wrong");
     expect([error.line, error.column, error.file]).toEqual([0, 0, undefined]);
-    expect(error.diagnosticCode).toBe("MESH_FACET");
+    expect(error.diagnosticCode).toBe("KIT_FACET");
     expect(
       failing(() => {
         throw new Error("boom");

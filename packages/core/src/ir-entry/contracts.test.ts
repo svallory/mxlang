@@ -428,7 +428,7 @@ describe("mx.contracts through lowerSource", () => {
     );
   });
 
-  it('unknownTags: reject refuses an unknown root tag (Mesh\'s widget="post")', () => {
+  it('unknownTags: reject refuses an unknown root tag (Kit\'s widget="post")', () => {
     const { result } = lowerWithDialect('widget="post"\n', {
       structural: "reject",
       unknownTags: "reject",
@@ -447,7 +447,7 @@ describe("mx.contracts through lowerSource", () => {
 
 /**
  * The direct one-liner a dialect's own build uses: import the module's
- * `ContractMap` and pass it as `customTags`, with no scan. Mesh depends on
+ * `ContractMap` and pass it as `customTags`, with no scan. Kit depends on
  * `analyze` running on this path under `structural: "reject"` for its
  * conditional rules (enum `values`, `action`/`action-type`), so it is pinned
  * here rather than inferred from the scan path above.

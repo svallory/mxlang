@@ -51,14 +51,14 @@ const MEMBER: Trigger = {
   node: { call: "member" },
 };
 
-const MESH = {
+const KIT = {
   expressionTriggers: [MEMBER],
   attributeTriggers: [MEMBER],
   lineTriggers: [MEMBER],
 };
 
 /**
- * MESH with a built-in node kind, which a table-only dialect may use: a
+ * KIT with a built-in node kind, which a table-only dialect may use: a
  * `{ call }` node needs the dialect's `lowerTrigger`.
  */
 const INLINE_ROW: Trigger = { ...MEMBER, node: "identifier" };
@@ -68,8 +68,8 @@ const INLINE = {
   lineTriggers: [INLINE_ROW],
 };
 
-/** MESH as an explicit table: the option path keeps "has no lowering yet". */
-const EXPLICIT: SyntaxTable = Object.freeze({ ...defaultSyntax(), ...MESH });
+/** KIT as an explicit table: the option path keeps "has no lowering yet". */
+const EXPLICIT: SyntaxTable = Object.freeze({ ...defaultSyntax(), ...KIT });
 
 let dir: string;
 beforeEach(() => {
@@ -312,7 +312,7 @@ describe("a table core cannot lower yet fails the file loudly", () => {
   });
 
   it("an error the table causes is reported too", () => {
-    // A row that refuses a value (slice a1 of lang-ext-move-sugars-to-mesh;
+    // A row that refuses a value (slice a1 of lang-ext-move-sugars-to-kit;
     // a match a word character would continue now declines silently).
     const table = overlay({
       attributeTriggers: [

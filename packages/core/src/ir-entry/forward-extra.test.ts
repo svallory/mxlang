@@ -251,8 +251,8 @@ function findExpr(ir: unknown): Expr {
 /**
  * The other way a dialect sets a mark: a `{ call }` expression row whose
  * `lowerTrigger` returns `ctx.expression(node)` with `extra` on it (no node
- * type, so no entry in `Expr.nodes`). The row has Mesh's shape (`%.name`, an
- * identifier stand-in, a marked `MemberExpression`), not Mesh's module.
+ * type, so no entry in `Expr.nodes`). The row has Kit's shape (`%.name`, an
+ * identifier stand-in, a marked `MemberExpression`), not Kit's module.
  */
 const TX = Object.freeze({
   id: "tx",

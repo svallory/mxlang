@@ -356,6 +356,8 @@ describe("messages in the dialect's words (the optionVocabulary column)", () => 
 interface BuiltinRow {
   readonly name: string;
   readonly source: string;
+  /** `"pass"` where the construct is legal: its shape error is only reported there. */
+  readonly structural?: "pass";
   /** Every message of the file, MX's words byte for byte. */
   readonly mx: readonly string[];
   /** The same under `optionVocabulary`: the tag as `formatTag` spells it, no MX example. */
@@ -367,12 +369,14 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`if` without a condition",
     source: 'if\n  entity name="e"\n',
+    structural: "pass",
     mx: ["`<if>` without a condition"],
     option: ["`if` without a condition"],
   },
   {
     name: "`if` with tag params",
     source: "if|a|=x\n  entity\n",
+    structural: "pass",
     mx: [
       "tag params `|...|` on `<if>` are not supported in a standalone template",
     ],
@@ -383,6 +387,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`if` with a tag variable",
     source: "if/v=x\n  entity\n",
+    structural: "pass",
     mx: [
       "tag variable `/v` on `<if>` is not supported in a standalone template",
     ],
@@ -393,6 +398,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`else` with no `if` before it in a data file",
     source: "else\n  entity\n",
+    structural: "pass",
     mx: [
       "`<else>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
@@ -401,6 +407,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`else-if` in a data file",
     source: "else-if=x\n  entity\n",
+    structural: "pass",
     mx: [
       "`<else-if>` cannot name a data tag: it is reserved — core consumes the structural names (`if`, `else`, `else-if`, `for`, `const`, `define`, `return`, `import`, `export`, `static`) and `<try>` before a target sees them",
     ],
@@ -419,6 +426,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`else` with tag params",
     source: 'if=x\n  entity name="e"\nelse|a|\n  entity name="e"\n',
+    structural: "pass",
     mx: [
       "tag params `|...|` on `<else>` are not supported in a standalone template",
     ],
@@ -429,18 +437,21 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`for` without params (the MX example is dropped for a dialect)",
     source: "for\n  entity\n",
+    structural: "pass",
     mx: ["`<for>` needs tag params: `<for|item| of=…>`"],
     option: ["`for` needs tag params"],
   },
   {
     name: "`for` without a range",
     source: "for|i|\n  entity\n",
+    structural: "pass",
     mx: ["`<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=`"],
     option: ["`for` requires `of=`, `in=`, or `from=`/`to=`/`until=`"],
   },
   {
     name: "`for` with `key=` (the attribute noun)",
     source: "for|i| of=x key=1\n  entity\n",
+    structural: "pass",
     mx: [
       'The `<for>` tag keys items with the `by=` attribute, not `key=`. Use `by="propName"` or `by=(item, index) => key`.',
     ],
@@ -451,6 +462,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`for` with two ranges",
     source: "for|i| of=x in=y\n  entity\n",
+    structural: "pass",
     mx: ["`<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`"],
     option: [
       "`for` with more than one of `of=`, `in=`, `from=`/`to=`/`until=`",
@@ -459,18 +471,21 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`for` with `to=` and `until=`",
     source: "for|i| to=1 until=2\n  entity\n",
+    structural: "pass",
     mx: ["`<for>` with both `to=` and `until=`"],
     option: ["`for` with both `to=` and `until=`"],
   },
   {
     name: "`for` with `step=` off a range",
     source: "for|i| of=x step=2\n  entity\n",
+    structural: "pass",
     mx: ["`<for step=...>` is only valid on a range"],
     option: ["`step=` on `for` is only valid on a range"],
   },
   {
     name: "`for` with a string `by` off `of`",
     source: 'for|i| in=x by="a"\n  entity\n',
+    structural: "pass",
     mx: [
       "The `<for>` tag only supports a string `by` key with `of`; use a `by=(key, value) => ...` function for `<for in>`.",
     ],
@@ -481,6 +496,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
   {
     name: "`for of` without a value",
     source: "for|i| of\n  entity\n",
+    structural: "pass",
     mx: ["`<for of=...>` requires an expression value"],
     option: ["`of=` on `for` requires an expression value"],
   },
@@ -644,19 +660,24 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
 
 describe("built-in tag names in messages", () => {
   describe("data files (the IR entry)", () => {
-    // A `for` or `if` with a refused head reports its shape error only where
-    // the construct is legal: under `structural: "reject"` it is the
-    // construct that is reported (structural-under-contract.test.ts).
-    const legal: LowerSourceOptions = { ...OPTIONS, structural: "pass" };
+    // A `for`, `if` or `else` with a refused head reports its shape error only
+    // where the construct is legal: under `structural: "reject"` it is the
+    // construct that is reported (structural-under-contract.test.ts), so those
+    // rows carry `structural: "pass"`; every other row runs under OPTIONS
+    // (reject).
+    const optionsOf = (row: BuiltinRow): LowerSourceOptions =>
+      row.structural === "pass" ? { ...OPTIONS, structural: "pass" } : OPTIONS;
     for (const row of BUILTIN_ROWS) {
       it(`MX's words: ${row.name}`, () => {
         for (const dialect of [noVocabulary, dialectWith({})]) {
-          expect(messages(row.source, dialect, legal)).toEqual([...row.mx]);
+          expect(messages(row.source, dialect, optionsOf(row))).toEqual([
+            ...row.mx,
+          ]);
         }
       });
 
       it(`the dialect's words: ${row.name}`, () => {
-        expect(messages(row.source, optionDialect, legal)).toEqual([
+        expect(messages(row.source, optionDialect, optionsOf(row))).toEqual([
           ...row.option,
         ]);
       });
@@ -759,7 +780,7 @@ describe("a reserved structural name in a data file", () => {
       });
     });
 
-    it("a bare dialect keeps the tail Mesh parses", () => {
+    it("a bare dialect keeps the tail Kit parses", () => {
       const bare = dialectWith({
         formatTag: ({ name }: { name: string }) => name,
       });

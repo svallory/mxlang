@@ -237,7 +237,7 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
       mx: { target: "./t.cjs" },
       files: {
         "t.cjs":
-          'module.exports = { descriptorVersion: 0, name: "mesh", packageName: "@t/mesh", defaultTag: "node", configKey: "dialect" };',
+          'module.exports = { descriptorVersion: 0, name: "kit", packageName: "@t/kit", defaultTag: "node", configKey: "dialect" };',
       },
     });
     const { policy, diagnostics } = resolveTargetPolicyDetailed(
@@ -250,7 +250,7 @@ describe("failures are positioned errors with no fallback (§4.3, OQ2 c)", () =>
       code: "target-invalid-descriptor",
       severity: "error",
       message:
-        'mx.target "./t.cjs" cannot be registered next to the built-in targets: target "mesh" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package\'s identity block, never a target\'s config block; set `configKey` to another word. See the TargetDescriptor contract (unstable).',
+        'mx.target "./t.cjs" cannot be registered next to the built-in targets: target "kit" reads mx.dialect, which is reserved: `mx.dialect` is a dialect package\'s identity block, never a target\'s config block; set `configKey` to another word. See the TargetDescriptor contract (unstable).',
       line: 3,
       column: 14,
     });

@@ -262,7 +262,7 @@ describe("the member dialect through the `dialect` option", () => {
 
 describe("a dialect package (`package.json#mx.dialect`)", () => {
   /**
-   * The member dialect, declared by a dependency claiming `.mesh.mx`, whose
+   * The member dialect, declared by a dependency claiming `.kit.mx`, whose
    * module (at `module`, inside the package) re-exports the fixture.
    */
   function memberProject(module = "./syntax.mjs") {
@@ -270,7 +270,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
       manifest: {
         id: "member",
         name: "Fixture",
-        extensions: [".mesh.mx"],
+        extensions: [".kit.mx"],
         module,
       },
     });
@@ -286,7 +286,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
   it("the module loads the dialect and its hooks for the files it claims", () => {
     memberProject();
     const [sort] = elements(
-      irOf("sort asc &dueOn\n", join(dir, "a.mesh.mx")).body,
+      irOf("sort asc &dueOn\n", join(dir, "a.kit.mx")).body,
     );
     expect(attr(sort as Element, "member")).toMatchObject({
       node: { type: "member:Member", name: "dueOn" },
@@ -297,7 +297,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
   it("a package subpath with no `./` resolves from the dialect's package", () => {
     memberProject("lib/syntax.mjs");
     const [input] = elements(
-      irOf("fields\n  &title\n", join(dir, "a.mesh.mx")).body,
+      irOf("fields\n  &title\n", join(dir, "a.kit.mx")).body,
     );
     expect(elements((input as Element).children)[0]?.name).toBe("member");
   });
@@ -390,7 +390,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
       "`lowerTrigger` must be a function",
     ],
     [
-      "export default { table: {}, productName: 'Mesh' };",
+      "export default { table: {}, productName: 'Kit' };",
       "`productName` is not a dialect field (id, name, table, tagRules, structural, imports, unknownTags, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, explainUnknownTag, describeAttribute, messageVocabulary, tagFile, contracts, bindingsCallTags, diagnosticCodes)",
     ],
     [
@@ -630,12 +630,12 @@ describe("a hook's result is checked", () => {
   it("a `TranslateError` from the hook passes through", () => {
     const own = dialectWith(rows, {
       lowerTrigger: () => {
-        throw new TranslateError("Mesh: unknown member", 9, 9);
+        throw new TranslateError("Kit: unknown member", 9, 9);
       },
     });
     const error = caught(() => irOf("rule x=&a\n", undefined, own));
     expect([error.message, error.line, error.column]).toEqual([
-      "Mesh: unknown member",
+      "Kit: unknown member",
       9,
       9,
     ]);

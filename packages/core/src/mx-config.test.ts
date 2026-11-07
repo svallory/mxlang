@@ -305,24 +305,24 @@ describe("findMxConfig: where MX's config comes from", () => {
       "package.json": PACKAGE,
       "mx.config.json": JSON.stringify({
         target: "view-jsx",
-        extensions: { ".mesh": "mesh" },
-        mesh: { strictModels: true },
+        extensions: { ".kit": "kit" },
+        kit: { strictModels: true },
         html: { defaultTag: "div" },
       }),
     });
     const source = findMxConfig(root);
-    expect(source?.extensions).toEqual({ ".mesh": "mesh" });
+    expect(source?.extensions).toEqual({ ".kit": "kit" });
     expect(source?.sections).toEqual({
-      mesh: { strictModels: true },
+      kit: { strictModels: true },
       html: { defaultTag: "div" },
     });
   });
 
   describe("`mx.dialect` is a dialect package's identity, never project config", () => {
     const identity = {
-      id: "mesh",
-      name: "Mesh",
-      extensions: [".mesh.mx"],
+      id: "kit",
+      name: "Kit",
+      extensions: [".kit.mx"],
       module: "./dist/dialect.js",
     };
 
@@ -333,19 +333,19 @@ describe("findMxConfig: where MX's config comes from", () => {
           mx: {
             dialect: identity,
             target: "view-jsx",
-            extensions: { ".page": "mesh" },
-            mesh: { strictModels: true },
+            extensions: { ".page": "kit" },
+            kit: { strictModels: true },
           },
         }),
       });
       const source = findMxConfig(root);
       expect(source?.config).toEqual({
         target: "view-jsx",
-        extensions: { ".page": "mesh" },
-        mesh: { strictModels: true },
+        extensions: { ".page": "kit" },
+        kit: { strictModels: true },
       });
-      expect(source?.extensions).toEqual({ ".page": "mesh" });
-      expect(source?.sections).toEqual({ mesh: { strictModels: true } });
+      expect(source?.extensions).toEqual({ ".page": "kit" });
+      expect(source?.sections).toEqual({ kit: { strictModels: true } });
       expect(Object.keys(source?.sections ?? {})).not.toContain("dialect");
       expect(policyOf(root).policy).toMatchObject({ target: "view-jsx" });
     });
@@ -366,7 +366,7 @@ describe("findMxConfig: where MX's config comes from", () => {
     it("alone in package.json#mx is no config, so an mx.config.* beside it applies", () => {
       const alone = project({
         "package.json": JSON.stringify({
-          name: "mesh-dialect",
+          name: "kit-dialect",
           mx: { dialect: identity },
         }),
       });
@@ -374,7 +374,7 @@ describe("findMxConfig: where MX's config comes from", () => {
 
       const beside = project({
         "package.json": JSON.stringify({
-          name: "mesh-dialect",
+          name: "kit-dialect",
           mx: { dialect: identity },
         }),
         "mx.config.json": JSON.stringify({ target: "unit-jsx" }),
@@ -704,10 +704,10 @@ describe("provideMxConfig: a config passed in", () => {
     const root = project({
       "package.json": JSON.stringify({ mx: { target: "unit-jsx" } }),
     });
-    provideMxConfig(root, { target: "view-jsx" }, { file: "mesh.config.ts" });
+    provideMxConfig(root, { target: "view-jsx" }, { file: "kit.config.ts" });
     const source = findMxConfig(join(root, "src/deep"));
     expect(source).toMatchObject({
-      file: "mesh.config.ts",
+      file: "kit.config.ts",
       dir: root,
       format: "provided",
       config: { target: "view-jsx" },
@@ -973,11 +973,11 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
 
   it("is an error at its key in package.json#mx", () => {
     const root = project({
-      "package.json": `{\n  "name": "app",\n  "mx": {\n    "target": "page",\n    "mesh": { "strictModels": true }\n  }\n}\n`,
+      "package.json": `{\n  "name": "app",\n  "mx": {\n    "target": "page",\n    "kit": { "strictModels": true }\n  }\n}\n`,
     });
     expect(policyOf(root)).toEqual({
       policy: { target: "page" },
-      diagnostics: [error("<root>/package.json", "mesh", 5, 4)],
+      diagnostics: [error("<root>/package.json", "kit", 5, 4)],
     });
   });
 
@@ -990,8 +990,8 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
     ],
     [
       "mx.config.yaml",
-      "target: page\nmesh:\n  strictModels: true\n",
-      "mesh",
+      "target: page\nkit:\n  strictModels: true\n",
+      "kit",
       [2, 0],
     ],
   ])("is an error at its key in %s", (name, text, key, [line, column]) => {
@@ -1049,7 +1049,7 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
 
   it("says nothing when discovery itself fails: routing reports that", () => {
     const root = project({});
-    dialectProject(root, { manifest: { id: "Bad" }, mx: { mesh: {} } });
+    dialectProject(root, { manifest: { id: "Bad" }, mx: { kit: {} } });
     expect(policyOf(root).diagnostics).toEqual([]);
   });
 });
