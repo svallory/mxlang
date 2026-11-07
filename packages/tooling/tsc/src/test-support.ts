@@ -108,16 +108,17 @@ export function run(entry: string, args: string[]): Run {
  * inherit the environment, use `here` as cwd, and leave the child timeout
  * unset. Successful runs return stdout only; failed runs include stderr.
  * Keep `mx-tsc` calls on synchronous `run`: its in-process capture is global.
- * Pass the test's `signal` so a timed-out or aborted test kills the child
- * instead of leaving it running; an aborted run resolves with status 1.
+ * Pass the test's `signal` (required) so a timed-out or aborted test kills the
+ * child instead of leaving it running; an aborted run resolves with status 1.
+ * stdin is closed, as in `run`, so a CLI that reads it cannot hang.
  */
 export function runAsync(
   entry: string,
   args: string[],
-  signal?: AbortSignal,
+  signal: AbortSignal,
 ): Promise<Run> {
   return new Promise((resolve) => {
-    execFile(
+    const child = execFile(
       process.execPath,
       [entry, ...args],
       { cwd: here, encoding: "utf8", signal },
@@ -128,6 +129,7 @@ export function runAsync(
         });
       },
     );
+    child.stdin?.end();
   });
 }
 

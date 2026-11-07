@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { runAsync } from "./test-support.ts";
+import { runAsync, SPAWN_TIMEOUT_MS } from "./test-support.ts";
 
 function alive(pid: number): boolean {
   try {
@@ -19,8 +19,11 @@ function alive(pid: number): boolean {
   }
 }
 
+const wait = { timeout: SPAWN_TIMEOUT_MS, interval: 20 };
+
 it("runAsync kills its child when the signal aborts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "mx-tsc-run-async-"));
+  const controller = new AbortController();
   try {
     const pidFile = join(dir, "pid");
     const script = join(dir, "sleeper.mjs");
@@ -30,17 +33,21 @@ it("runAsync kills its child when the signal aborts", async () => {
 writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
 setInterval(() => {}, 1000);`,
     );
-    const controller = new AbortController();
     const pending = runAsync(script, [], controller.signal);
     // Abort only once the child is provably running.
-    await vi.waitFor(() => expect(existsSync(pidFile)).toBe(true));
+    await vi.waitFor(() => {
+      expect(existsSync(pidFile)).toBe(true);
+      expect(readFileSync(pidFile, "utf8")).not.toBe("");
+    }, wait);
     const pid = Number(readFileSync(pidFile, "utf8"));
     expect(alive(pid)).toBe(true);
     controller.abort();
-    expect((await pending).status).not.toBe(0);
+    expect((await pending).status).toBe(1);
     // The abort reports first; the kill signal lands a moment later.
-    await vi.waitFor(() => expect(alive(pid)).toBe(false));
+    await vi.waitFor(() => expect(alive(pid)).toBe(false), wait);
   } finally {
+    // Never orphan the sleeper if an assertion above threw; a second abort is a no-op.
+    controller.abort();
     rmSync(dir, { recursive: true, force: true });
   }
 });
