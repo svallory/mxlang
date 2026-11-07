@@ -52,27 +52,23 @@ const expected = readFileSync(join(project, "expected.html"), "utf8").trim();
  */
 const COVERED_INTEGRATIONS = ["core scan", "html host", "hono host"] as const;
 
-const covered = new Set<string>();
+type Integration = (typeof COVERED_INTEGRATIONS)[number];
 
-function cover(name: (typeof COVERED_INTEGRATIONS)[number]): void {
-  covered.add(name);
-}
-
-afterEach(() => {
-  clearScanCache();
-});
-
-describe("custom tag discovery, per integration", () => {
-  it("the scan itself finds both tags with no import", () => {
+/**
+ * One probe per covered integration. Each row's test and the count gate both
+ * run the same probe, so the gate never depends on which rows ran before it
+ * (shuffle, isolate:false). A probe that is removed from this table leaves the
+ * gate short of `COVERED_INTEGRATIONS` and fails it.
+ */
+const probes: Partial<Record<Integration, () => void>> = {
+  "core scan": () => {
     const tags = getCustomTags(page);
 
     expect(Object.keys(tags).sort()).toEqual(["icon", "note", "snippet"]);
     // Read statically, before any hook ran and before the caller is parsed.
     expect(tags.snippet?.parseOptions).toEqual({ text: true });
-    cover("core scan");
-  });
-
-  it("renders the fixture through the HTML host with a discovered tag", () => {
+  },
+  "html host": () => {
     const { code } = compileHtml(source, page, {
       customTags: getCustomTags(page),
     });
@@ -81,17 +77,32 @@ describe("custom tag discovery, per integration", () => {
     // `parseOptions.text` reached Marko before this file was parsed.
     expect(code).toContain('<pre>if (a < b) { id = \\"#main\\"; }</pre>');
     expect(code).toContain("<title>check</title>");
-    cover("html host");
-  });
-
-  it("compiles the fixture through the Hono host with a discovered tag", () => {
+  },
+  "hono host": () => {
     const { code } = compileHonoMx(source, page, {
       customTags: getCustomTags(page),
     });
 
     expect(code).toContain("check");
     expect(code).toContain("#main");
-    cover("hono host");
+  },
+};
+
+afterEach(() => {
+  clearScanCache();
+});
+
+describe("custom tag discovery, per integration", () => {
+  it("the scan itself finds both tags with no import", () => {
+    probes["core scan"]?.();
+  });
+
+  it("renders the fixture through the HTML host with a discovered tag", () => {
+    probes["html host"]?.();
+  });
+
+  it("compiles the fixture through the Hono host with a discovered tag", () => {
+    probes["hono host"]?.();
   });
 
   it("compiles the fixture through the Preact and React hosts", () => {
@@ -106,6 +117,14 @@ describe("custom tag discovery, per integration", () => {
   });
 
   it("covered every integration the spec lists", () => {
+    const covered = new Set<string>();
+    for (const name of COVERED_INTEGRATIONS) {
+      const probe = probes[name];
+      if (!probe) continue;
+      probe();
+      covered.add(name);
+    }
+
     expect([...covered].sort()).toEqual([...COVERED_INTEGRATIONS].sort());
     expect(covered.size).toBe(COVERED_INTEGRATIONS.length);
   });
