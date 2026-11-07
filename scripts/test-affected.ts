@@ -9,6 +9,12 @@
  *                                    see AGENTS.md
  *   bun run test:affected -- <args>  extra args go to vitest (or moon with --moon)
  *
+ * `MX_AFFECTED_CACHE=1` (opt-in; ignored with `CI` set or
+ * `MX_AFFECTED_NATIVE=1`) caches the import lists `vitest related` computes
+ * while selecting, so a warm selection takes under a second instead of ~15 s.
+ * Native `vitest related` still selects and runs; any doubt falls back to
+ * native. See scripts/test-affected-cache.ts.
+ *
  * "Changed" is the union of the branch's commits since its merge-base with
  * origin/main, staged and unstaged edits, and untracked files.
  *
@@ -31,6 +37,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { cacheMode } from "./test-affected-cache.ts";
 import { PROJECT_GLOBS } from "./vitest-lanes.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -168,6 +175,20 @@ function run(cmd: string[], env: NodeJS.ProcessEnv): number {
   return r.status ?? 1;
 }
 
+/**
+ * Extra vitest args that turn on the opt-in selection cache: a reporter that
+ * serves cached import lists during native `vitest related` selection (see
+ * test-affected-cache.ts). Empty (native, no cache read) unless
+ * MX_AFFECTED_CACHE=1, and always empty with CI set or MX_AFFECTED_NATIVE=1.
+ */
+export function cacheArgs(env: NodeJS.ProcessEnv): string[] {
+  if (!cacheMode(env).on) return [];
+  return [
+    "--reporter=default",
+    `--reporter=${resolve(import.meta.dirname, "test-affected-cache-reporter.ts")}`,
+  ];
+}
+
 function main(): number {
   const argv = process.argv.slice(2);
   const moon = argv.includes("--moon");
@@ -216,6 +237,7 @@ function main(): number {
       ...sources,
       "--run",
       "--passWithNoTests=false",
+      ...cacheArgs(process.env),
       ...extra,
     ];
     console.log(
