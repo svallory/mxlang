@@ -27,6 +27,9 @@ export default defineConfig({
     },
   ],
   test: {
+    // Named explicitly: with a plugin in the config, Vitest would otherwise
+    // name the project after the plugin instead of the package.
+    name: "@mxlang/host-preact",
     // Only the independent strict-tsc cases opt into concurrency. Their shared
     // cross-worker checker pool is capped at 2, not 2 per test file.
     globalSetup: ["./src/fixtures/strict-tsc-setup.ts"],
