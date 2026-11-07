@@ -21,7 +21,9 @@ function alive(pid: number): boolean {
 
 const wait = { timeout: SPAWN_TIMEOUT_MS, interval: 20 };
 
-it("runAsync kills its child when the signal aborts", async () => {
+it("runAsync kills its child when the signal aborts", {
+  timeout: SPAWN_TIMEOUT_MS,
+}, async () => {
   const dir = mkdtempSync(join(tmpdir(), "mx-tsc-run-async-"));
   const controller = new AbortController();
   try {
