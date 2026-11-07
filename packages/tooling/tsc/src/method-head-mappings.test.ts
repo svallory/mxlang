@@ -59,62 +59,56 @@ function check(host: string) {
   }
 }
 
-describe.each(["solid", "preact", "react", "hono"])(
-  "%s mx-tsc printed method heads",
-  (host) => {
-    let output: string;
-    beforeAll(() => {
-      output = check(host);
-    }, 60_000);
+// Solid is the CLI smoke. The per-host projection rows live in the plugin's
+// method-head-mappings.test.ts, and each host's CLI wiring in its
+// <host>-region.test.ts.
+describe.each(["solid"])("%s mx-tsc printed method heads", (host) => {
+  let output: string;
+  beforeAll(() => {
+    output = check(host);
+  }, 60_000);
 
-    it.each([false, true])(
-      "reports authored line and column (region: %s)",
-      (region) => {
-        const file = region ? `Region.${host}.mx` : "page.mx";
-        const shift = region ? 1 : 0;
-        const lines = output
-          .split("\n")
-          .filter((line) => line.includes(`${file}(`));
-        for (const [line, column, code, message] of [
-          [2, 22, 2304, "MissingParameter"],
-          [3, 19, 2322, "Type 'string' is not assignable to type 'number'"],
-          [4, 29, 2304, "MissingConstraint"],
-          [5, 32, 2304, "MissingReturn"],
-        ] as const) {
-          // The region generic gap lives in the plugin's host matrix, with
-          // one CLI print smoke below.
-          if (region && message === "MissingConstraint") continue;
-          const diagnostic = lines.find(
-            (entry) =>
-              entry.includes(
-                `${file}(${line + shift},${column}): error TS${code}:`,
-              ) && entry.includes(message),
-          );
-          expect(diagnostic, output).toBeDefined();
-          expect(diagnostic).not.toMatch(
-            /position approximate|MX-generated code|position unknown/,
-          );
-        }
-      },
-    );
-
-    // The plugin's method-head-mappings.test.ts owns the same known gap for
-    // all four hosts. Keep one CLI smoke for its printed position and suffix;
-    // the exact whole-file/region rows above keep each host's door wired.
-    if (host === "solid") {
-      it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
-        const lines = output
-          .split("\n")
-          .filter(
-            (line) =>
-              line.includes(`Region.${host}.mx(`) &&
-              line.includes("MissingConstraint"),
-          );
-        expect(lines).toHaveLength(1);
-        expect(lines[0]).toContain(
-          `Region.${host}.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
+  it.each([false, true])(
+    "reports authored line and column (region: %s)",
+    (region) => {
+      const file = region ? `Region.${host}.mx` : "page.mx";
+      const shift = region ? 1 : 0;
+      const lines = output
+        .split("\n")
+        .filter((line) => line.includes(`${file}(`));
+      for (const [line, column, code, message] of [
+        [2, 22, 2304, "MissingParameter"],
+        [3, 19, 2322, "Type 'string' is not assignable to type 'number'"],
+        [4, 29, 2304, "MissingConstraint"],
+        [5, 32, 2304, "MissingReturn"],
+      ] as const) {
+        // The region generic gap lives in the plugin's host matrix, with
+        // one CLI print smoke below.
+        if (region && message === "MissingConstraint") continue;
+        const diagnostic = lines.find(
+          (entry) =>
+            entry.includes(
+              `${file}(${line + shift},${column}): error TS${code}:`,
+            ) && entry.includes(message),
         );
-      });
-    }
-  },
-);
+        expect(diagnostic, output).toBeDefined();
+        expect(diagnostic).not.toMatch(
+          /position approximate|MX-generated code|position unknown/,
+        );
+      }
+    },
+  );
+  it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
+    const lines = output
+      .split("\n")
+      .filter(
+        (line) =>
+          line.includes(`Region.${host}.mx(`) &&
+          line.includes("MissingConstraint"),
+      );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain(
+      `Region.${host}.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
+    );
+  });
+});
