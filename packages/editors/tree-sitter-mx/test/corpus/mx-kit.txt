@@ -1,7 +1,7 @@
 ===============
-mesh-invoice
+kit-invoice
 ===============
-// src/domain/billing/invoice.mesh.mx
+// src/domain/billing/invoice.kit.mx
 import { formatMoney, isStaff } from "./invoice.helpers"
 
 entity :Invoice table="invoices"

@@ -184,7 +184,7 @@ const INTENDED: Record<
   // syntax module does).
   colonInExpression: {
     pattern: /^Unexpected token(, expected ",")?$/,
-    cases: ["atom in expression", "mesh-invoice", "whole-value atom"],
+    cases: ["atom in expression", "kit-invoice", "whole-value atom"],
   },
   // Marko behaviour is the default: a tag with no argument contract takes
   // none, as in stock Marko

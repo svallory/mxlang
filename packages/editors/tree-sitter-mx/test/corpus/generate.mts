@@ -130,11 +130,11 @@ for (const entry of fs.readdirSync(D).sort()) {
   add(topicOf(entry), entry, source);
   kept++;
 }
-const mesh = fs.readFileSync(
-  path.join(CORPUS_DIR, "../fixtures/mesh-invoice.mx"),
+const kit = fs.readFileSync(
+  path.join(CORPUS_DIR, "../fixtures/kit-invoice.mx"),
   "utf-8",
 );
-add("mx-mesh", "mesh-invoice", mesh);
+add("mx-kit", "kit-invoice", kit);
 for (const [topic, cases] of Object.entries(EXTRA))
   for (const [n, s] of cases) add(topic, n, s);
 

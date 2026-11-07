@@ -6,7 +6,7 @@
 // grammar's query and in the Zed extension's copy.
 //
 // The corpus is Mesh's: every line of the brief's sample, and every line of
-// Mesh's syntax-v3 Invoice entity (test/fixtures/mesh-invoice.mx, from
+// Mesh's syntax-v3 Invoice entity (test/fixtures/kit-invoice.mx, from
 // mesh notes/team-lead-2026-10-04/briefs/syntax-v3.md), which put an ERROR at
 // the root on 0.1.0-alpha.1 because of its tagless `:name=value` lines.
 //
@@ -148,7 +148,7 @@ const INVOICE_LINES: [line: number, names: string[], atoms: string[]][] = [
 
 describe("atoms: Mesh's Invoice entity", () => {
   const src = fs.readFileSync(
-    path.join(here, "fixtures/mesh-invoice.mx"),
+    path.join(here, "fixtures/kit-invoice.mx"),
     "utf8",
   );
   const doc = root(src);

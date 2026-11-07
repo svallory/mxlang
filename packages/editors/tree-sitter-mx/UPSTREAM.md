@@ -157,7 +157,7 @@ is MX's own (atoms):
 - `README.md`: atoms and the docmd plugin's `ts-atom` / `ts-name` classes.
 - Tests: `test/atoms.bun-test.mts` (MX's own, not vendored): the brief's
   sample as trees, every line of Mesh's Invoice entity
-  (`test/fixtures/mesh-invoice.mx`), the ADR 156 positions and the captures of
+  (`test/fixtures/kit-invoice.mx`), the ADR 156 positions and the captures of
   both query copies.
 
 `patches/0008-docs-readme-an-atom-inside-a-nested-template-placeholder-is-not-recognised.patch`
