@@ -55,36 +55,45 @@ const COVERED_INTEGRATIONS = ["core scan", "html host", "hono host"] as const;
 type Integration = (typeof COVERED_INTEGRATIONS)[number];
 
 /**
- * One probe per covered integration. Each row's test and the count gate both
- * run the same probe, so the gate never depends on which rows ran before it
- * (shuffle, isolate:false). A probe that is removed from this table leaves the
- * gate short of `COVERED_INTEGRATIONS` and fails it.
+ * One row per covered integration. The row tests are generated from this
+ * table, so a row cannot exist without its probe running, and the count gate
+ * only compares the table's keys with the spec's list (no compiles, no state
+ * shared between tests, so any order works). Deleting a row fails the gate.
  */
-const probes: Partial<Record<Integration, () => void>> = {
-  "core scan": () => {
-    const tags = getCustomTags(page);
+const rows: Record<Integration, { title: string; probe: () => void }> = {
+  "core scan": {
+    title: "the scan itself finds both tags with no import",
+    probe: () => {
+      const tags = getCustomTags(page);
 
-    expect(Object.keys(tags).sort()).toEqual(["icon", "note", "snippet"]);
-    // Read statically, before any hook ran and before the caller is parsed.
-    expect(tags.snippet?.parseOptions).toEqual({ text: true });
+      expect(Object.keys(tags).sort()).toEqual(["icon", "note", "snippet"]);
+      // Read statically, before any hook ran and before the caller is parsed.
+      expect(tags.snippet?.parseOptions).toEqual({ text: true });
+    },
   },
-  "html host": () => {
-    const { code } = compileHtml(source, page, {
-      customTags: getCustomTags(page),
-    });
+  "html host": {
+    title: "renders the fixture through the HTML host with a discovered tag",
+    probe: () => {
+      const { code } = compileHtml(source, page, {
+        customTags: getCustomTags(page),
+      });
 
-    // `<` and `#` survive verbatim inside `<pre>`, which only happens when
-    // `parseOptions.text` reached Marko before this file was parsed.
-    expect(code).toContain('<pre>if (a < b) { id = \\"#main\\"; }</pre>');
-    expect(code).toContain("<title>check</title>");
+      // `<` and `#` survive verbatim inside `<pre>`, which only happens when
+      // `parseOptions.text` reached Marko before this file was parsed.
+      expect(code).toContain('<pre>if (a < b) { id = \\"#main\\"; }</pre>');
+      expect(code).toContain("<title>check</title>");
+    },
   },
-  "hono host": () => {
-    const { code } = compileHonoMx(source, page, {
-      customTags: getCustomTags(page),
-    });
+  "hono host": {
+    title: "compiles the fixture through the Hono host with a discovered tag",
+    probe: () => {
+      const { code } = compileHonoMx(source, page, {
+        customTags: getCustomTags(page),
+      });
 
-    expect(code).toContain("check");
-    expect(code).toContain("#main");
+      expect(code).toContain("check");
+      expect(code).toContain("#main");
+    },
   },
 };
 
@@ -93,17 +102,9 @@ afterEach(() => {
 });
 
 describe("custom tag discovery, per integration", () => {
-  it("the scan itself finds both tags with no import", () => {
-    probes["core scan"]?.();
-  });
-
-  it("renders the fixture through the HTML host with a discovered tag", () => {
-    probes["html host"]?.();
-  });
-
-  it("compiles the fixture through the Hono host with a discovered tag", () => {
-    probes["hono host"]?.();
-  });
+  for (const { title, probe } of Object.values(rows)) {
+    it(title, probe);
+  }
 
   it("compiles the fixture through the Preact and React hosts", () => {
     const tags = getCustomTags(page);
@@ -117,16 +118,7 @@ describe("custom tag discovery, per integration", () => {
   });
 
   it("covered every integration the spec lists", () => {
-    const covered = new Set<string>();
-    for (const name of COVERED_INTEGRATIONS) {
-      const probe = probes[name];
-      if (!probe) continue;
-      probe();
-      covered.add(name);
-    }
-
-    expect([...covered].sort()).toEqual([...COVERED_INTEGRATIONS].sort());
-    expect(covered.size).toBe(COVERED_INTEGRATIONS.length);
+    expect(Object.keys(rows).sort()).toEqual([...COVERED_INTEGRATIONS].sort());
   });
 
   it("keeps the shared fixture project intact", () => {
