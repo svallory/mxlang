@@ -468,6 +468,230 @@ export function tagParamError(
 }
 
 /**
+ * Decision 174: the class/id shorthand keeps its rules (a part runs to
+ * whitespace, `.`, `#`, `/`, `(`, `=` or `>`); what it cannot hold is an
+ * error that says so, positioned at the part, with a `class="…"` hint.
+ *
+ * Three diagnostics share this module's probe of the installed parser:
+ *
+ * 1. a shorthand part with an unbalanced `[` or `]` (`.bg-[#fff]` silently
+ *    emitted `class="bg-[" id="fff]"`; `.w-[calc(100%-2rem)]` tripped the
+ *    parser's "Mismatched group");
+ * 2. a class part that starts with a digit (`.w-1.5` silently emitted
+ *    `class="w-1 5"`) — checked only where the parse succeeds, in
+ *    `name-sugar.ts`'s head rewrite, since it never fails a parse;
+ * 3. `/` right after a shorthand followed by a non-identifier (`.w-1/2`),
+ *    where Marko read the tail as a tag variable and said so with its own
+ *    text and link.
+ */
+
+/** One shorthand token the installed parser lexed: sigil, word, word span (the sigil sits at `start - 1`). */
+export interface ShorthandPart {
+  sigil: "." | "#";
+  word: string;
+  start: number;
+  end: number;
+}
+
+/** What is wrong with a shorthand word: the bracket that does not balance, or a digit start. */
+export type ShorthandPartProblem =
+  | { kind: "bracket"; at: number; bracket: "[" | "]" }
+  | { kind: "digit"; at: 0 };
+
+/**
+ * Is `word` a shorthand part decision 174 rejects? A class part may not start
+ * with a digit; no part may hold an unbalanced `[` or `]`. Both spellings
+ * parsed — the shorthand accepts almost every character — and then emitted a
+ * class the author never meant (`class="w-1 5"`, `class="bg-["`).
+ */
+export function shorthandPartProblem(
+  sigil: string,
+  word: string,
+): ShorthandPartProblem | undefined {
+  if (sigil === "." && /^\d/.test(word)) return { kind: "digit", at: 0 };
+  let depth = 0;
+  let opener = -1;
+  for (let at = 0; at < word.length; at++) {
+    const char = word[at];
+    if (char === "[") {
+      if (depth === 0) opener = at;
+      depth++;
+    } else if (char === "]") {
+      depth--;
+      if (depth < 0) return { kind: "bracket", at, bracket: "]" };
+    }
+  }
+  if (depth > 0) return { kind: "bracket", at: opener, bracket: "[" };
+  return undefined;
+}
+
+export const SHORTHAND_BRACKET_MESSAGE = (
+  sigil: string,
+  word: string,
+  bracket: string,
+): string => {
+  const what = sigil === "." ? "class" : "id";
+  return `\`${sigil}${word}\` has an unbalanced \`${bracket}\`: a shorthand ${what} runs to whitespace, \`.\`, \`#\`, \`/\`, \`(\` or \`=\`, so the shorthand cannot hold this ${what}; write it as \`${what}="…"\` (decision 174)`;
+};
+
+export const SHORTHAND_DIGIT_MESSAGE = (word: string): string =>
+  `\`.${word}\` starts with a digit: a shorthand class cannot start with a digit, so the shorthand cannot hold this class; write it as \`class="…"\` (decision 174)`;
+
+let lexedPartsFor: { source: string; parts: ShorthandPart[] } = {
+  source: "",
+  parts: [],
+};
+
+/**
+ * The static shorthand tokens the installed parser lexes in `source`, in
+ * source order, for a diagnostic that must name a real shorthand part. A
+ * dynamic part (`.a${x}`) is skipped: its bracket may sit inside the
+ * placeholder, which is expression text. `undefined` when the parser cannot
+ * be loaded. Remembers the last source, like `lexedAtoms`.
+ */
+export function lexedShorthandParts(
+  source: string,
+): ShorthandPart[] | undefined {
+  if (lexedPartsFor.source === source) return lexedPartsFor.parts;
+  const parser = markoParser();
+  if (!parser) return undefined;
+  const parts: ShorthandPart[] = [];
+  const collect =
+    (sigil: "." | "#") =>
+    (text: {
+      quasis: { start: number; end: number }[];
+      expressions?: unknown[];
+    }) => {
+      if (text.expressions?.length) return;
+      const first = text.quasis[0];
+      if (!first) return;
+      parts.push({
+        sigil,
+        word: source.slice(first.start, first.end),
+        start: first.start,
+        end: first.end,
+      });
+    };
+  try {
+    const instance = parser.createParser({
+      // Statement and text tags as Marko's taglib types them, so a `static`
+      // line or a `<script>` body is never read as a shorthand.
+      onOpenTagName: (range: { start: number; end: number }) => {
+        const name = source.slice(range.start, range.end);
+        if (STATEMENT.has(name)) return parser.TagType.statement;
+        if (TEXT.has(name)) return parser.TagType.text;
+        return undefined;
+      },
+      onTagShorthandClass: collect("."),
+      onTagShorthandId: collect("#"),
+      onError: () => {},
+    });
+    instance.parse(source);
+  } catch {
+    // A parse that throws still reported the shorthand parts before it.
+  }
+  lexedPartsFor = { source, parts };
+  return parts;
+}
+
+/** The 1-based line and 0-based column of `offset` in `source`. */
+function lineColumnOf(source: string, offset: number): {
+  line: number;
+  column: number;
+} {
+  const before = source.slice(0, offset).split("\n");
+  return {
+    line: before.length,
+    column: before[before.length - 1]?.length ?? 0,
+  };
+}
+
+/** Every entry an error carries: itself, then its aggregate's entries. */
+function errorEntries(error: Error): Located[] {
+  return [
+    error as Located,
+    ...(((error as Located).errors ?? []) as Located[]),
+  ];
+}
+
+/**
+ * The positioned MX error for a shorthand part with an unbalanced `[` or `]`
+ * whose template failed to parse (decision 174, case 1): `.w-[calc(100%-2rem)]`
+ * and `.bg-[url('/x.png')]` tripped the parser's "Mismatched group",
+ * `.[&>*]:p-4` its "Missing ending tag" — none of which names the shorthand.
+ * Such a part is an error whether or not the parse recovers, so when the
+ * source holds one, it is the error to report; positioned at the part's word.
+ * `undefined` when no entry looks like a parse failure or no part offends.
+ */
+export function shorthandPartError(
+  error: unknown,
+  source: string,
+): TranslateError | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const entries = errorEntries(error);
+  if (
+    !entries.some(
+      (entry) => typeof entry?.label === "string" && entry.loc?.start,
+    )
+  ) {
+    return undefined;
+  }
+  const parts = lexedShorthandParts(source);
+  if (!parts) return undefined;
+  for (const part of parts) {
+    const problem = shorthandPartProblem(part.sigil, part.word);
+    if (problem?.kind !== "bracket") continue;
+    const at = lineColumnOf(source, part.start);
+    return new TranslateError(
+      SHORTHAND_BRACKET_MESSAGE(part.sigil, part.word, problem.bracket),
+      at.line,
+      at.column,
+    );
+  }
+  return undefined;
+}
+
+/** Marko's tag-variable rejection, whose text and link decision 174 replaces. */
+const TAG_VARIABLE_LABEL =
+  /`[^`]*` is not a valid \[tag variable\]/;
+
+/**
+ * The positioned MX error for `/` right after a class shorthand followed by a
+ * non-identifier (decision 174, case 3): Marko reads `.w-1/2` as the shorthand
+ * `.w-1` plus the tag variable `2` and rejects it with its tag-variable text
+ * and link. The shorthand is what the author wrote, so the error names it and
+ * the `class="…"` spelling; positioned at the shorthand's word. `undefined`
+ * when the failure is not a tag variable read right after a class shorthand.
+ */
+export function shorthandTagVarError(
+  error: unknown,
+  source: string,
+): TranslateError | undefined {
+  if (!(error instanceof Error)) return undefined;
+  for (const entry of errorEntries(error)) {
+    if (typeof entry?.label !== "string" || !TAG_VARIABLE_LABEL.test(entry.label)) {
+      continue;
+    }
+    const at = entry.loc?.start;
+    if (!at) continue;
+    const offset = at.index ?? offsetOf(source, at.line, at.column);
+    if (offset <= 0 || source[offset - 1] !== "/") continue;
+    const part = lexedShorthandParts(source)?.find(
+      (found) => found.sigil === "." && found.end === offset - 1,
+    );
+    if (!part) continue;
+    const trailer = source.slice(offset - 1).match(/^\/[^\s/>]*/)?.[0] ?? "/";
+    const position = lineColumnOf(source, part.start);
+    return new TranslateError(
+      `\`.${part.word}${trailer}\` is not a class shorthand: the shorthand \`.${part.word}\` ends at \`/\`, so \`${trailer.slice(1)}\` is read as a tag variable; a shorthand class cannot hold \`/\` — write it as \`class="${part.word}${trailer}"\` (decision 174)`,
+      position.line,
+      position.column,
+    );
+  }
+  return undefined;
+}
+
+/**
  * The same two errors for a recovered parse failure: `parseFragment` asks
  * Marko for an AST, and Marko then leaves a failing attribute value in the tree
  * as a `MarkoParseError` node (label + `errorLoc`) instead of throwing, so the
@@ -490,6 +714,8 @@ export function parseErrorToSugarError(
   });
   return (
     sugarAfterDefaultError(error, source) ??
+    shorthandTagVarError(error, source) ??
+    shorthandPartError(error, source) ??
     stockParserError(error, source, splits) ??
     stockAtomError(error, source)
   );

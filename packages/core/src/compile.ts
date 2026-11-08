@@ -49,6 +49,8 @@ import { markoBabel, markoCompiler } from "./marko-frontend.ts";
 import { hintParseError } from "./parse-error-hints.ts";
 import {
   bareCommaError,
+  shorthandPartError,
+  shorthandTagVarError,
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
@@ -441,6 +443,8 @@ export function compileSource(
       bareCommaError(error, source) ??
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
+      shorthandTagVarError(error, source) ??
+      shorthandPartError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source) ??
       error;

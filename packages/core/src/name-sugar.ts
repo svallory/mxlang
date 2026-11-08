@@ -1,6 +1,11 @@
 import { type Ctx, type Node, TranslateError } from "./core.ts";
 import { CORE_TAGLIB } from "./core-taglib.ts";
-import { markoParser } from "./stock-parser.ts";
+import {
+  markoParser,
+  SHORTHAND_BRACKET_MESSAGE,
+  SHORTHAND_DIGIT_MESSAGE,
+  shorthandPartProblem,
+} from "./stock-parser.ts";
 
 /**
  * Decision 146: `:name`, `#id` and `.class` sugar.
@@ -287,6 +292,34 @@ function headNamesIn(ctx: Ctx, part: Node, found: HeadName[]): void {
         }
       },
     });
+  }
+}
+
+/**
+ * Decision 174 on a static shorthand part the parse accepted: a class part
+ * may not start with a digit (`.w-1.5` silently emitted `class="w-1 5"`), and
+ * no part may hold an unbalanced `[` or `]` (`.bg-[#fff]` silently emitted
+ * `class="bg-[" id="fff]"`). Positioned at the offending word; a dynamic part
+ * is left alone (its bracket may sit inside the placeholder).
+ */
+function checkShorthandPart(ctx: Ctx, part: Node, sigil: "." | "#"): void {
+  if (part?.type !== "StringLiteral" || typeof part.value !== "string") return;
+  const start = startOf(ctx, part);
+  if (!Number.isFinite(start)) return;
+  const text: string = part.value;
+  let index = 0;
+  for (const word of text.split(" ")) {
+    const problem = shorthandPartProblem(sigil, word);
+    if (problem) {
+      failAt(
+        ctx,
+        problem.kind === "digit"
+          ? SHORTHAND_DIGIT_MESSAGE(word)
+          : SHORTHAND_BRACKET_MESSAGE(sigil, word, problem.bracket),
+        start + index,
+      );
+    }
+    index += word.length + 1;
   }
 }
 
@@ -799,6 +832,18 @@ function rewriteAttributes(ctx: Ctx, node: Node): void {
           partStart,
         );
       }
+      // Decision 174: the same two checks the tag head runs — a digit start
+      // or an unbalanced bracket parses here too and is just as silent.
+      const problem = shorthandPartProblem(sigil, word);
+      if (problem) {
+        failAt(
+          ctx,
+          problem.kind === "digit"
+            ? SHORTHAND_DIGIT_MESSAGE(word)
+            : SHORTHAND_BRACKET_MESSAGE(sigil, word, problem.bracket),
+          partStart + 1,
+        );
+      }
       if (sigil === "#") {
         out.push(
           sugarAttr(
@@ -920,12 +965,15 @@ function rewriteHead(ctx: Ctx, node: Node): void {
     .filter((attr) => attr.loc)
     .map((attr) => startOf(ctx, attr))
     .reduce((min, at) => Math.min(min, at), Number.POSITIVE_INFINITY);
-  const parts: Node[] = [];
+  const parts: { node: Node; sigil: "." | "#" }[] = [];
   const classAttr = attrs.find(
     (attr) => attr.type === "MarkoAttribute" && attr.name === "class",
   );
-  if (classAttr)
-    parts.push(...shorthandClassParts(ctx, classAttr, firstAuthored));
+  if (classAttr) {
+    for (const part of shorthandClassParts(ctx, classAttr, firstAuthored)) {
+      parts.push({ node: part, sigil: "." });
+    }
+  }
   const idAttr = attrs.find(
     (attr) =>
       attr.type === "MarkoAttribute" &&
@@ -933,8 +981,12 @@ function rewriteHead(ctx: Ctx, node: Node): void {
       !attr.loc &&
       !attr.sugarNameSpan,
   );
-  if (idAttr?.value) parts.push(idAttr.value);
-  for (const part of parts) headNamesIn(ctx, part, found);
+  if (idAttr?.value) parts.push({ node: idAttr.value, sigil: "#" });
+  // Decision 174's checks run in source order, so the first offending part
+  // is the one reported (`<div.bg-[#fff]>` names the class, not the id).
+  parts.sort((a, b) => startOf(ctx, a.node) - startOf(ctx, b.node));
+  for (const part of parts) checkShorthandPart(ctx, part.node, part.sigil);
+  for (const part of parts) headNamesIn(ctx, part.node, found);
 
   if (found.length === 0) return;
   found.sort((a, b) => a.start - b.start);

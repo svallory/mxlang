@@ -48,6 +48,8 @@ import { nullPrototypeTags } from "./lookup-safety.ts";
 import { markoCompiler } from "./marko-frontend.ts";
 import {
   bareCommaError,
+  shorthandPartError,
+  shorthandTagVarError,
   stockAtomError,
   stockParserError,
   sugarAfterDefaultError,
@@ -441,6 +443,8 @@ export function parseFragment(
       bareCommaError(error, source) ??
       tagParamError(error, source) ??
       sugarAfterDefaultError(error, source) ??
+      shorthandTagVarError(error, source) ??
+      shorthandPartError(error, source) ??
       stockParserError(error, source) ??
       stockAtomError(error, source);
     if (stock) {
