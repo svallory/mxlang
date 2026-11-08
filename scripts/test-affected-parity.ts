@@ -708,9 +708,24 @@ export const ROWS: Row[] = [
       if (leftovers.length > 0) {
         problems.push(`leftover temp files: ${leftovers.join(",")}`);
       }
-      const warm = await select(fx, { related: ["src/lib.ts"], cached: true });
-      if (!/[1-9]\d* hits/.test(warm.line)) {
-        problems.push(`no cache hits after concurrent writes: ${warm.line}`);
+      // A child again, not this process: vitest sets variables of its own in
+      // the process that creates it, and the cache key includes some of them.
+      const warm = await spawnPart([
+        "--part",
+        "select",
+        "--root",
+        fx.root,
+        "--store",
+        fx.store,
+        "--related",
+        "src/lib.ts",
+      ]).exit;
+      const line = /^RESULT (.*)$/m.exec(warm.out);
+      const warmLine = line
+        ? (JSON.parse(line[1]) as Selection).line
+        : warm.out;
+      if (!/[1-9]\d* hits/.test(warmLine)) {
+        problems.push(`no cache hits after concurrent writes: ${warmLine}`);
       }
       return problems;
     },
@@ -1049,10 +1064,14 @@ interface Spawned {
 
 /** Run this script as a child with `args`. */
 function spawnPart(args: string[], readyLine?: string): Spawned {
-  const c = spawn(process.execPath, [import.meta.filename, ...args], {
-    cwd: repoRoot,
-    env: process.env,
-  });
+  const c = spawn(
+    process.versions.bun ? process.execPath : "bun",
+    [import.meta.filename, ...args],
+    {
+      cwd: repoRoot,
+      env: process.env,
+    },
+  );
   let out = "";
   let ready!: () => void;
   const readyP = new Promise<void>((r) => {
