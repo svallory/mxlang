@@ -43,7 +43,7 @@
  *   content-addressed writes (temp file + rename), a size bound and GC.
  *
  * On by default for local runs; never with `CI` set or `MX_AFFECTED_NATIVE=1`
- * (and `MX_AFFECTED_CACHE=0` turns it off too). `bun run test:affected:parity`
+ * (and `MX_AFFECTED_CACHE=0`/`false`/`off`/`no` turns it off too). `bun run test:affected:parity`
  * (scripts/test-affected-parity.ts, a `verify` step) proves it agrees with
  * native selection.
  */
@@ -62,7 +62,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 /** Bump when the payload or the key model changes; old stores become unreachable. */
 export const SCHEMA_VERSION = 1;
@@ -148,8 +148,9 @@ export function cacheMode(env: NodeJS.ProcessEnv): Mode {
   if (env.MX_AFFECTED_NATIVE === "1") {
     return { on: false, reason: "MX_AFFECTED_NATIVE=1" };
   }
-  if (env.MX_AFFECTED_CACHE === "0") {
-    return { on: false, reason: "MX_AFFECTED_CACHE=0" };
+  const choice = (env.MX_AFFECTED_CACHE ?? "").trim().toLowerCase();
+  if (["0", "false", "off", "no"].includes(choice)) {
+    return { on: false, reason: `MX_AFFECTED_CACHE=${env.MX_AFFECTED_CACHE}` };
   }
   return { on: true };
 }
@@ -322,19 +323,32 @@ function distFiles(root: string): string[] {
 }
 
 /**
- * `path -> target` for every symlink in the file list. The list names a link
- * once whatever it points at, but a resolution follows it to the target's
- * files, so retargeting a link must change the inventory.
+ * `path -> target` for the given candidate symlinks, and whether any target
+ * leaves `root`. The file list names a link once whatever it points at, but a
+ * resolution follows it to the target's files, so retargeting a link must
+ * change the inventory. A target outside the repository is not in the list at
+ * all (a file added there would shadow a resolution unseen), so such a link
+ * makes the inventory unavailable and selection native.
  */
-function symlinkLines(root: string, files: readonly string[]): string[] {
-  const out: string[] = [];
-  for (const f of files) {
+function symlinkLines(
+  root: string,
+  candidates: Iterable<string>,
+): { lines: string[]; escapes: boolean } {
+  const lines: string[] = [];
+  let escapes = false;
+  for (const f of candidates) {
     try {
       const p = resolve(root, f);
-      if (lstatSync(p).isSymbolicLink()) out.push(`${f} -> ${readlinkSync(p)}`);
+      if (!lstatSync(p).isSymbolicLink()) continue;
+      const target = readlinkSync(p);
+      lines.push(`${f} -> ${target}`);
+      const rel = relative(resolve(root), resolve(dirname(p), target));
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+        escapes = true;
+      }
     } catch {}
   }
-  return out.sort();
+  return { lines: lines.sort(), escapes };
 }
 
 /** Gather every namespace input for `root` from disk and the environment. */
@@ -361,21 +375,40 @@ export function collectInputs(
     "--exclude-standard",
   ]);
   let files: string[] | undefined;
+  // Candidate symlinks: tracked ones come from the index (mode 120000), so
+  // only untracked files need an lstat; outside a git checkout every file does.
+  let linkCandidates: Iterable<string> = [];
   if (listing === undefined) {
     files = walk(root);
+    linkCandidates = files ?? [];
   } else {
     const gone = new Set<string>();
     const present: string[] = [];
+    const untracked: string[] = [];
     for (const entry of listing.split("\0")) {
       if (!entry) continue;
       const path = entry.slice(2);
       if (entry.startsWith("R ")) gone.add(path);
-      else present.push(path);
+      else {
+        present.push(path);
+        if (entry.startsWith("? ")) untracked.push(path);
+      }
     }
+    const tracked: string[] = [];
+    for (const e of (git(root, ["ls-files", "-s", "-z"]) ?? "").split("\0")) {
+      const tab = e.indexOf("\t");
+      if (tab > 0 && e.startsWith("120000 ")) tracked.push(e.slice(tab + 1));
+    }
+    linkCandidates = [...tracked.filter((f) => !gone.has(f)), ...untracked];
     // Build output resolved through workspace links is gitignored but followed.
     files = [
       ...new Set([...present.filter((f) => !gone.has(f)), ...distFiles(root)]),
     ];
+  }
+  let links: string | undefined;
+  if (files !== undefined) {
+    const sym = symlinkLines(root, linkCandidates);
+    if (!sym.escapes) links = [...files].sort().concat(sym.lines).join("\n");
   }
   const manifests: Record<string, string> = {};
   for (const f of files ?? []) {
@@ -417,10 +450,7 @@ export function collectInputs(
     env: envOut,
     manifests,
     packages,
-    inventory:
-      files === undefined
-        ? undefined
-        : sha([...files].sort().concat(symlinkLines(root, files)).join("\n")),
+    inventory: links === undefined ? undefined : sha(links),
     projects,
   };
 }
@@ -467,7 +497,10 @@ export function namespaceFor(i: Inputs): Verdict<string> {
     }
   }
   if (i.inventory === undefined) {
-    return { ok: false, reason: "file inventory unavailable" };
+    return {
+      ok: false,
+      reason: "file inventory unavailable (or a symlink leaves the repository)",
+    };
   }
   return {
     ok: true,

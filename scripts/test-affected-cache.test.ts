@@ -113,7 +113,7 @@ afterAll(() => {
 });
 
 describe("cache switch (AC-2)", () => {
-  it("is on locally by default; off with CI, MX_AFFECTED_NATIVE=1 and MX_AFFECTED_CACHE=0; reads nothing then", () => {
+  it("is on locally by default; off with CI, MX_AFFECTED_NATIVE=1 and MX_AFFECTED_CACHE=0/false/off/no; reads nothing then", () => {
     expect(cacheMode({}).on).toBe(true);
     expect(cacheMode({ MX_AFFECTED_CACHE: "1" }).on).toBe(true);
     expect(cacheMode({ CI: "true" }).on).toBe(false);
@@ -122,7 +122,12 @@ describe("cache switch (AC-2)", () => {
     expect(
       cacheMode({ MX_AFFECTED_CACHE: "1", MX_AFFECTED_NATIVE: "1" }).on,
     ).toBe(false);
-    expect(cacheMode({ MX_AFFECTED_CACHE: "0" }).on).toBe(false);
+    for (const off of ["0", "false", "FALSE", "off", "No", " 0 "]) {
+      expect(cacheMode({ MX_AFFECTED_CACHE: off }).on, off).toBe(false);
+    }
+    for (const on of ["", "1", "true", "yes"]) {
+      expect(cacheMode({ MX_AFFECTED_CACHE: on }).on, on).toBe(true);
+    }
     expect(cacheArgs({}).join(" ")).toContain(
       "test-affected-cache-reporter.ts",
     );
