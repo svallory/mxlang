@@ -26,9 +26,15 @@
  *    covering test is dropped. A control row shows the poison is live: with
  *    no mutation the cache must serve it and so must disagree with native.
  *
- * The cache is forced on here (`CI` and `MX_AFFECTED_NATIVE` are cleared in
- * this process only) because a verifier that inherited "cache off" would
+ * The cache is forced on while a half runs (`CI` and `MX_AFFECTED_NATIVE` are
+ * cleared, then restored) because a verifier that inherited "cache off" would
  * compare native with native.
+ *
+ * The rows also run in vitest (scripts/test-affected-parity.test.ts, so a
+ * change that touches this file selects them), which means `bun run verify`
+ * runs them twice, a few seconds. That is accepted: the verifier stays
+ * runnable on its own, and the real-repository half runs only here, in the
+ * local gate (CI runs the vitest rows, not this script).
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -38,6 +44,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -45,9 +52,11 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { createVitest } from "vitest/node";
+import { projectDirs, projectFor } from "./test-affected.ts";
 import {
   collectInputs,
   type Inputs,
@@ -65,17 +74,63 @@ const repoRoot = resolve(import.meta.dirname, "..");
 // --------------------------------------------------------------- harness
 
 /**
- * The reporter reports through `console.log`. Concurrent selections cannot
- * each swap and restore it (the last restore would reinstate another's
- * capture and swallow all later output), so one router is installed once and
- * fans lines out to the sinks of the selections in flight.
+ * The reporter reports through `console.log`. Selections can overlap, so they
+ * cannot each swap and restore it (the last restore would reinstate another's
+ * capture and swallow later output): one router is installed when the first
+ * capture starts and removed when the last one ends.
  */
-const realLog = console.log.bind(console);
 const sinks = new Set<string[]>();
-console.log = (...a: unknown[]) => {
-  if (sinks.size === 0) realLog(...a);
-  for (const sink of sinks) sink.push(a.join(" "));
-};
+let routedLog: typeof console.log | undefined;
+
+function capture(lines: string[]): void {
+  if (sinks.size === 0) {
+    routedLog = console.log;
+    console.log = (...a: unknown[]) => {
+      for (const sink of sinks) sink.push(a.join(" "));
+    };
+  }
+  sinks.add(lines);
+}
+
+function release(lines: string[]): void {
+  sinks.delete(lines);
+  if (sinks.size === 0 && routedLog) {
+    console.log = routedLog;
+    routedLog = undefined;
+  }
+}
+
+const ENV_KEYS = [
+  "MX_AFFECTED_CACHE",
+  "CI",
+  "MX_AFFECTED_NATIVE",
+  "MX_VITEST_QUIET",
+  "MX_TEST_LANE",
+] as const;
+
+/**
+ * Run `fn` with the cache forced on (see the header) and the environment put
+ * back afterwards, so importing this module from a test leaves no trace.
+ */
+async function withHarness<T>(
+  extra: Partial<Record<(typeof ENV_KEYS)[number], string>>,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const saved = ENV_KEYS.map((k) => [k, process.env[k]] as const);
+  process.env.MX_AFFECTED_CACHE = "1";
+  delete process.env.CI;
+  delete process.env.MX_AFFECTED_NATIVE;
+  process.env.MX_VITEST_QUIET = "1";
+  Object.assign(process.env, extra);
+  try {
+    return await fn();
+  } finally {
+    for (const [k, v] of saved) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
 
 interface Fx {
   /** fixture project root (a git repository) */
@@ -92,8 +147,8 @@ interface SelectOptions {
   plugins?: unknown[];
   /** rewrite the namespace inputs the reporter gathered */
   inputs?: (i: Inputs) => Inputs;
-  /** vitest `server` options (for example `deps.inline`) */
-  server?: unknown;
+  /** content of a vitest config file to run with (written into the fixture) */
+  configText?: string;
   /** use these exact namespace inputs instead of gathering them */
   pinned?: Inputs;
 }
@@ -111,14 +166,6 @@ const gather = (root: string, projects: Inputs["projects"]): Inputs =>
     realpathSync(join(root, "node_modules", "vitest")),
   );
 
-/** Forced-on environment for this process (see the header). */
-function forceCacheOn(): void {
-  process.env.MX_AFFECTED_CACHE = "1";
-  delete process.env.CI;
-  delete process.env.MX_AFFECTED_NATIVE;
-  process.env.MX_VITEST_QUIET = "1";
-}
-
 /** Select tests related to `o.related`, through the reporter or natively. */
 async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
   const reporter = new AffectedCacheReporter({
@@ -129,21 +176,25 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
         : (o.inputs ?? ((i) => i))(gather(root, projects)),
   });
   const lines: string[] = [];
-  sinks.add(lines);
+  capture(lines);
   const exitCode = process.exitCode;
   try {
+    let config: string | false = false;
+    if (o.configText !== undefined) {
+      config = join(fx.root, "parity.config.mts");
+      writeFileSync(config, o.configText);
+    }
     const ctx = await createVitest(
       "test",
       {
         root: fx.root,
-        config: false,
+        config,
         watch: false,
         run: true,
         globals: true,
-        related: o.related.map((f) => join(fx.root, f)),
+        related: o.related.map((f) => (isAbsolute(f) ? f : join(fx.root, f))),
         reporters: o.cached ? [reporter] : [],
         define: o.define,
-        server: o.server as never,
       },
       { plugins: o.plugins as never },
       { stdout: process.stderr },
@@ -160,7 +211,7 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
       await ctx.close();
     }
   } finally {
-    sinks.delete(lines);
+    release(lines);
     process.exitCode = exitCode;
   }
 }
@@ -235,7 +286,7 @@ function buildBaseline(root: string): void {
     mkdirSync(join(root, rel, ".."), { recursive: true });
     writeFileSync(join(root, rel), text);
   };
-  w(".gitignore", "node_modules/\n.store/\n");
+  w(".gitignore", "node_modules/\n.store/\n.hammer/\n");
   w(
     "package.json",
     JSON.stringify({
@@ -267,6 +318,7 @@ function buildBaseline(root: string): void {
   w("ren.test.ts", TEST("ren", 'import "./src/ren";'));
   w("link.test.ts", TEST("link", 'import "link/x.ts";'));
   w("tree.test.ts", TEST("tree", 'import "./src/tree/y.ts";'));
+  w("pkg.test.ts", TEST("pkg", 'import "./package.json";'));
   w(
     "glob.test.ts",
     'it("glob", () => {});\nexport const modules = import.meta.glob("./cases/*.ts");\n',
@@ -285,10 +337,17 @@ function buildBaseline(root: string): void {
 
 // ------------------------------------------------------------------ rows
 
-interface Row {
+interface RowBase {
   name: string;
   /** the guard this row exercises */
   guard: string;
+}
+
+/** The generic flow: warm, poison, mutate, select cached and natively. */
+interface FlowRow extends RowBase {
+  custom?: undefined;
+  /** prepare the fixture before the warm run */
+  setup?: (fx: Fx) => void;
   /** warm the store under these options before poisoning */
   warm?: Partial<SelectOptions>;
   poison?: Poison;
@@ -301,14 +360,37 @@ interface Row {
   after?: Partial<SelectOptions>;
   /** keep the namespace inputs fixed across the mutation (isolates a guard) */
   pin?: boolean;
-  related: string;
+  /** the edited file: fixture-relative, or absolute (computed from the fixture) */
+  related: string | ((fx: Fx) => string);
   /** native's selection after the mutation */
   expect: string[];
   /** the control: the cache must serve the poison, so it must disagree */
   diverges?: boolean;
-  /** replaces the generic flow */
-  custom?: (fx: Fx, copy: () => Fx) => Promise<string[]>;
 }
+
+/** A row with its own flow. */
+interface CustomRow extends RowBase {
+  custom: (fx: Fx) => Promise<string[]>;
+}
+
+type Row = FlowRow | CustomRow;
+
+const ALL_TESTS = [
+  "add.test.ts",
+  "dup.test.ts",
+  "edit.test.ts",
+  "glob.test.ts",
+  "lib.test.ts",
+  "link.test.ts",
+  "manifest.test.ts",
+  "pkg.test.ts",
+  "plugin.test.ts",
+  "ren.test.ts",
+  "tree.test.ts",
+];
+
+const CONFIG_WITH = (value: string) =>
+  `export default { test: { globals: true }, define: { __PARITY_CFG__: ${JSON.stringify(value)} } };\n`;
 
 /** A test-only plugin whose output depends on the run, not on the source. */
 const injecting = (on: boolean) => ({
@@ -332,6 +414,13 @@ export const ROWS: Row[] = [
     diverges: true,
   },
   {
+    name: "related file is a force-rerun trigger",
+    guard:
+      "none: pins the verifier's model of native for sampled edits (vitest returns every test for a package.json edit)",
+    related: "package.json",
+    expect: ALL_TESTS,
+  },
+  {
     name: "glob addition",
     guard: "bypassReason: glob import sources are never cached",
     pin: true,
@@ -344,6 +433,16 @@ export const ROWS: Row[] = [
     guard: "projectKey: resolved config (define) is part of every entry key",
     poison: "empty-lists",
     after: { define: { __PARITY__: '"2"' } },
+    related: "src/lib.ts",
+    expect: ["edit.test.ts", "lib.test.ts"],
+  },
+  {
+    name: "config-file define",
+    guard:
+      "projectKey: the resolved defines (a config file's simple defines land there, not in the vite config)",
+    warm: { configText: CONFIG_WITH('"1"') },
+    poison: "empty-lists",
+    after: { configText: CONFIG_WITH('"2"') },
     related: "src/lib.ts",
     expect: ["edit.test.ts", "lib.test.ts"],
   },
@@ -442,6 +541,30 @@ export const ROWS: Row[] = [
     expect: ["tree.test.ts"],
   },
   {
+    name: "symlink to a directory outside the repository",
+    guard:
+      "inventory: a link leaving the repository makes selection native (its target's files are not in the list)",
+    // The link and the directory behind it are created per row: a link out of
+    // the repository would make every other row native.
+    setup: (fx) => {
+      const ext = `${fx.root}-ext`;
+      mkdirSync(ext, { recursive: true });
+      writeFileSync(join(ext, "z.ts"), "export const z = 'ts';\n");
+      symlinkSync(ext, join(fx.root, "src", "ext"));
+      write(fx, "ext.test.ts", TEST("ext", 'import "./src/ext/z";'));
+    },
+    poison: "empty-lists",
+    // With the guard the warm run stores nothing, so there is nothing to poison.
+    poisonOptional: true,
+    mutate: (fx) =>
+      writeFileSync(
+        join(readlinkSync(join(fx.root, "src", "ext")), "z.js"),
+        "export const z = 'js';\n",
+      ),
+    related: (fx) => join(readlinkSync(join(fx.root, "src", "ext")), "z.js"),
+    expect: ["ext.test.ts"],
+  },
+  {
     name: "manifest edited (package.json imports)",
     guard: "manifests: package.json content is part of the namespace",
     poison: "empty-lists",
@@ -490,22 +613,86 @@ export const ROWS: Row[] = [
     expect: ["edit.test.ts", "lib.test.ts"],
   },
   {
-    name: "concurrent cold runs",
+    name: "concurrent runs in separate processes",
     guard:
-      "Store.put: atomic publish, so concurrent writers never corrupt an entry",
-    related: "src/lib.ts",
-    expect: ["edit.test.ts", "lib.test.ts"],
+      "Store.put: atomic publish, so a concurrent reader never sees a torn entry",
+    // Two writers hammer one large entry while two readers poll it, and four
+    // cold selections share the fixture store, all as separate processes. A
+    // put that writes straight to the final path is seen torn by a reader.
     custom: async (fx) => {
       const problems: string[] = [];
-      const runs = await Promise.all(
-        [0, 1, 2, 3].map(() =>
-          select(fx, { related: ["src/lib.ts"], cached: true }),
+      const hammer = join(fx.root, ".hammer");
+      const done = join(hammer, "done");
+      mkdirSync(hammer, { recursive: true });
+      const readers = [0, 1].map(() =>
+        spawnPart(
+          [
+            "--part",
+            "hammer",
+            "--role",
+            "read",
+            "--store",
+            hammer,
+            "--done",
+            done,
+          ],
+          "READY",
         ),
       );
-      for (const r of runs) {
-        if (r.files.join() !== "edit.test.ts,lib.test.ts") {
-          problems.push(`a concurrent run selected ${r.files.join(",")}`);
+      await Promise.all(readers.map((r) => r.ready));
+      const busy = [
+        ...[0, 1].map(() =>
+          spawnPart([
+            "--part",
+            "hammer",
+            "--role",
+            "write",
+            "--store",
+            hammer,
+            "--done",
+            done,
+          ]),
+        ),
+        ...[0, 1, 2, 3].map(() =>
+          spawnPart([
+            "--part",
+            "select",
+            "--root",
+            fx.root,
+            "--store",
+            fx.store,
+            "--related",
+            "src/lib.ts",
+          ]),
+        ),
+      ];
+      const results = await Promise.all(busy.map((p) => p.exit));
+      writeFileSync(done, "");
+      const readerResults = await Promise.all(readers.map((r) => r.exit));
+      for (const r of results.slice(0, 2)) {
+        if (r.code !== 0)
+          problems.push(`a writer failed: ${r.out.slice(-300)}`);
+      }
+      for (const r of results.slice(2)) {
+        const m = /^RESULT (.*)$/m.exec(r.out);
+        const files = m ? (JSON.parse(m[1]) as Selection).files : undefined;
+        if (files?.join() !== "edit.test.ts,lib.test.ts") {
+          problems.push(
+            `a concurrent run selected [${files}]: ${r.out.slice(-300)}`,
+          );
         }
+      }
+      for (const r of readerResults) {
+        const m = /^RESULT (.*)$/m.exec(r.out);
+        const got = m
+          ? (JSON.parse(m[1]) as { reads: number; torn: number })
+          : undefined;
+        if (!got || got.reads === 0)
+          problems.push(`a reader read nothing: ${r.out.slice(-300)}`);
+        else if (got.torn > 0)
+          problems.push(
+            `a reader saw ${got.torn} torn entries in ${got.reads} reads`,
+          );
       }
       const files = storeFiles(fx.store);
       if (files.length === 0) problems.push("no entry was stored");
@@ -515,7 +702,7 @@ export const ROWS: Row[] = [
           problems.push(`entry ${file} fails its own checksum`);
         }
       }
-      const leftovers = readdirSync(fx.store, { recursive: true }).filter((f) =>
+      const leftovers = readdirSync(fx.root, { recursive: true }).filter((f) =>
         String(f).endsWith(".tmp"),
       );
       if (leftovers.length > 0) {
@@ -532,16 +719,14 @@ export const ROWS: Row[] = [
 
 /** One row against its own copy of the baseline; returns the problems. */
 async function runRow(row: Row, baseline: string): Promise<string[]> {
-  const make = (): Fx => {
-    const root = mkdtempSync(join(tmpdir(), "mx-parity-row-"));
-    cpSync(baseline, root, { recursive: true, verbatimSymlinks: true });
-    const real = realpathSync(root);
-    return { root: real, store: join(real, ".store") };
-  };
-  let fx = make();
+  const root = mkdtempSync(join(tmpdir(), "mx-parity-row-"));
+  cpSync(baseline, root, { recursive: true, verbatimSymlinks: true });
+  const real = realpathSync(root);
+  let fx: Fx = { root: real, store: join(real, ".store") };
+  const ext = `${fx.root}-ext`;
   try {
-    if (row.custom) return await row.custom(fx, make);
-    const related = [row.related];
+    if (row.custom) return await row.custom(fx);
+    row.setup?.(fx);
     const warm = await select(fx, {
       related: ["src/lib.ts"],
       cached: true,
@@ -557,11 +742,8 @@ async function runRow(row: Row, baseline: string): Promise<string[]> {
     }
     let pinned: Inputs | undefined;
     if (row.pin) {
-      pinned = gather(
-        fx.root,
-        // the projects are re-supplied by the reporter; only the rest is fixed
-        [],
-      );
+      // the projects are re-supplied by the reporter; only the rest is fixed
+      pinned = gather(fx.root, []);
     }
     if (
       row.poison &&
@@ -570,8 +752,10 @@ async function runRow(row: Row, baseline: string): Promise<string[]> {
     ) {
       problems.push("nothing to poison");
     }
+    const related =
+      typeof row.related === "function" ? row.related(fx) : row.related;
     fx = row.mutate?.(fx) ?? fx;
-    const opts = { related, ...row.after, pinned };
+    const opts = { related: [related], ...row.after, pinned };
     const cached = await select(fx, { ...opts, cached: true });
     const native = await select(fx, { ...opts, cached: false });
     if (native.files.join() !== row.expect.join()) {
@@ -590,113 +774,142 @@ async function runRow(row: Row, baseline: string): Promise<string[]> {
     return problems;
   } finally {
     rmSync(fx.root, { recursive: true, force: true });
+    rmSync(real, { recursive: true, force: true });
+    rmSync(ext, { recursive: true, force: true });
   }
 }
 
-export interface RowResult {
+interface RowResult {
   row: Row;
   problems: string[];
 }
 
-/** Run the mutation rows; `only` filters by row name. */
-export async function runRows(
-  only?: (r: Row) => boolean,
-): Promise<RowResult[]> {
-  forceCacheOn();
-  const baseline = realpathSync(mkdtempSync(join(tmpdir(), "mx-parity-base-")));
-  try {
-    buildBaseline(baseline);
-    const out: RowResult[] = [];
-    for (const row of ROWS.filter(only ?? (() => true))) {
-      let problems: string[];
-      try {
-        problems = await runRow(row, baseline);
-      } catch (e) {
-        problems = [`threw: ${(e as Error).stack ?? e}`];
+/** Run the mutation rows. */
+export async function runRows(): Promise<RowResult[]> {
+  return withHarness({}, async () => {
+    const baseline = realpathSync(
+      mkdtempSync(join(tmpdir(), "mx-parity-base-")),
+    );
+    try {
+      buildBaseline(baseline);
+      const out: RowResult[] = [];
+      for (const row of ROWS) {
+        let problems: string[];
+        try {
+          problems = await runRow(row, baseline);
+        } catch (e) {
+          problems = [`threw: ${(e as Error).stack ?? e}`];
+        }
+        out.push({ row, problems });
       }
-      out.push({ row, problems });
+      return out;
+    } finally {
+      rmSync(baseline, { recursive: true, force: true });
     }
-    return out;
-  } finally {
-    rmSync(baseline, { recursive: true, force: true });
-  }
+  });
 }
 
 // ------------------------------------------------------------- real repo
 
 type DepMap = Map<string, string[]>;
 
-/** Dependency set of every discovered test of this repository. */
+interface Spec {
+  moduleId: string;
+  project: { name: string };
+}
+
+/** The vitest project names of shard `index` of `count`, balanced by test-file count. */
+function shardProjects(index: number, count: number): string[] {
+  const dirs = projectDirs();
+  const weight = new Map<string, number>(dirs.map((d) => [d, 0]));
+  const listed = spawnSync("git", ["ls-files", "--", "*.test.*"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 1 << 26,
+  }).stdout;
+  for (const file of listed.split("\n")) {
+    let best: string | undefined;
+    for (const d of dirs) {
+      if (file.startsWith(d) && (!best || d.length > best.length)) best = d;
+    }
+    if (best) weight.set(best, (weight.get(best) ?? 0) + 1);
+  }
+  const load = Array.from({ length: count }, () => 0);
+  const mine: string[] = [];
+  for (const [dir, w] of [...weight].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )) {
+    const k = load.indexOf(Math.min(...load));
+    load[k] += w;
+    const name = projectFor(dir, dirs);
+    if (k === index && name) mine.push(name);
+  }
+  return mine;
+}
+
+/** Dependency set of every test of the shard's projects. */
 async function realDeps(
   store: string,
-  shard: [number, number],
+  projects: string[],
   samples?: string[],
-): Promise<{ deps: DepMap; line: string; sampled: Map<string, string[]> }> {
+): Promise<{
+  deps: DepMap;
+  line: string;
+  /** per sampled file: the tests selected, and whether vitest forces a full rerun */
+  sampled: Map<string, { chosen: string[]; forced: boolean }>;
+}> {
   const reporter = new AffectedCacheReporter({ dir: store });
   const lines: string[] = [];
-  sinks.add(lines);
+  capture(lines);
   const exitCode = process.exitCode;
   try {
     const ctx = await createVitest(
       "test",
-      { root: repoRoot, watch: false, run: true, reporters: [reporter] },
+      {
+        root: repoRoot,
+        watch: false,
+        run: true,
+        reporters: [reporter],
+        project: projects,
+      },
       {},
       { stdout: process.stderr },
     );
     try {
       await ctx.init();
+      const missing = projects.filter(
+        (p) => !ctx.projects.some((q) => q.name === p),
+      );
+      if (missing.length > 0) {
+        throw new Error(`shard projects not found: ${missing.join(", ")}`);
+      }
       // biome-ignore lint/suspicious/noExplicitAny: vitest's specification API is internal
-      const all = (await (ctx as any).globTestSpecifications()) as {
-        moduleId: string;
-        project: { name: string };
-      }[];
-      // Whole projects per shard (greedy by size): a project's modules are
-      // transformed by its own server, so splitting a project would repeat
-      // its shared imports in every shard.
-      const byProject = new Map<string, typeof all>();
-      for (const sp of all) {
-        byProject.set(sp.project.name, [
-          ...(byProject.get(sp.project.name) ?? []),
-          sp,
-        ]);
-      }
-      const load = Array.from({ length: shard[1] }, () => 0);
-      const mine: typeof all = [];
-      for (const [, list] of [...byProject].sort(
-        (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]),
-      )) {
-        const k = load.indexOf(Math.min(...load));
-        load[k] += list.length;
-        if (k === shard[0]) mine.push(...list);
-      }
-      const specs = mine;
+      const internal = ctx as any;
+      const specs = (await internal.globTestSpecifications()) as Spec[];
+      const key = (s: Spec) =>
+        `${s.project.name} ${relative(repoRoot, s.moduleId)}`;
       const deps: DepMap = new Map();
       for (const spec of specs) {
-        // biome-ignore lint/suspicious/noExplicitAny: internal
-        const set = (await (ctx as any).specifications.getTestDependencies(
+        const set = (await internal.specifications.getTestDependencies(
           spec,
         )) as Set<string>;
-        deps.set(
-          `${spec.project.name} ${relative(repoRoot, spec.moduleId)}`,
-          [...set].sort(),
-        );
+        deps.set(key(spec), [...set].sort());
       }
-      const sampled = new Map<string, string[]>();
+      // vitest's own matcher: a related file matching a force-rerun trigger
+      // selects every test, whatever the import graph says.
+      const isTrigger = createRequire(
+        join(realpathSync(join(repoRoot, "node_modules", "vitest")), "/"),
+      )("picomatch")(ctx.config.forceRerunTriggers) as (f: string) => boolean;
+      const sampled = new Map<string, { chosen: string[]; forced: boolean }>();
       for (const f of samples ?? []) {
         ctx.config.related = [f];
-        // biome-ignore lint/suspicious/noExplicitAny: internal
-        const chosen = (await (ctx as any).specifications.filterTestsBySource(
+        const chosen = (await internal.specifications.filterTestsBySource(
           specs,
-        )) as {
-          moduleId: string;
-          project: { name: string };
-        }[];
-        sampled.set(
-          f,
-          chosen
-            .map((s) => `${s.project.name} ${relative(repoRoot, s.moduleId)}`)
-            .sort(),
-        );
+        )) as Spec[];
+        sampled.set(f, {
+          chosen: chosen.map(key).sort(),
+          forced: isTrigger(f),
+        });
       }
       reporter.onTestRunStart();
       return { deps, line: lines.join("\n"), sampled };
@@ -704,28 +917,26 @@ async function realDeps(
       await ctx.close();
     }
   } finally {
-    sinks.delete(lines);
+    release(lines);
     process.exitCode = exitCode;
   }
 }
 
 /**
  * Cold-vs-warm dependency parity over one shard of this repository's tests
- * (`shard` = [index, count]; the shards together cover every test) against a
- * store shared by the shards.
+ * (the shards together cover every vitest project) against a store shared by
+ * the shards.
  */
-export async function runReal(
+async function runReal(
   store: string,
   shard: [number, number],
 ): Promise<string[]> {
-  forceCacheOn();
-  // Every lane: the slow files are tests too.
-  process.env.MX_TEST_LANE = "all";
-  const problems: string[] = [];
-  try {
+  return withHarness({ MX_TEST_LANE: "all" }, async () => {
+    const problems: string[] = [];
+    const projects = shardProjects(shard[0], shard[1]);
     // Cold: the store is empty, so every module is transformed natively.
     const t0 = performance.now();
-    const cold = await realDeps(store, shard);
+    const cold = await realDeps(store, projects);
     const t1 = performance.now();
     if (!/ 0 hits/.test(cold.line)) {
       problems.push(`cold run was not cold: ${cold.line}`);
@@ -734,7 +945,7 @@ export async function runReal(
     for (const d of cold.deps.values()) for (const f of d) universe.add(f);
     const all = [...universe].filter((f) => !f.includes("node_modules")).sort();
     const samples = all.filter((_, i) => i % Math.ceil(all.length / 4) === 0);
-    const warm = await realDeps(store, shard, samples);
+    const warm = await realDeps(store, projects, samples);
     console.log(
       `real timing: cold ${Math.round(t1 - t0)} ms, warm ${Math.round(performance.now() - t1)} ms`,
     );
@@ -757,34 +968,127 @@ export async function runReal(
         );
       }
     }
-    for (const [f, got] of warm.sampled) {
-      const want = [...cold.deps]
-        .filter(
-          ([test, d]) =>
-            d.includes(f) || test.endsWith(` ${relative(repoRoot, f)}`),
-        )
-        .map(([test]) => test)
-        .sort();
-      if (want.join("\n") !== got.join("\n")) {
+    for (const [f, { chosen, forced }] of warm.sampled) {
+      const want = forced
+        ? [...cold.deps.keys()].sort()
+        : [...cold.deps]
+            .filter(
+              ([test, d]) =>
+                d.includes(f) || test.endsWith(` ${relative(repoRoot, f)}`),
+            )
+            .map(([test]) => test)
+            .sort();
+      if (want.join("\n") !== chosen.join("\n")) {
         problems.push(
-          `edit of ${relative(repoRoot, f)}: cached selects [${got}] but native selects [${want}]`,
+          `edit of ${relative(repoRoot, f)}: cached selects [${chosen}] but native selects [${want}]`,
         );
       }
     }
     console.log(
-      `real: ${cold.deps.size} tests, ${all.length} files, ${samples.length} sampled edits; warm ${warm.line.split("\n").pop()}`,
+      `real: ${cold.deps.size} tests in ${projects.length} projects, ${all.length} files, ${samples.length} sampled edits; warm ${warm.line.split("\n").pop()}`,
     );
-  } finally {
+    return problems;
+  });
+}
+
+// ------------------------------------------------- children and the hammer
+
+const BIG_ENTRY_KEY = "ab".repeat(32);
+
+/** Concurrent-writer probe: `write` re-puts one large entry, `read` looks for torn ones. */
+async function hammer(argv: string[]): Promise<number> {
+  const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  const store = new Store(arg("--store"), "hammer");
+  const done = arg("--done");
+  const deps = Array.from({ length: 60_000 }, (_, i) =>
+    `/entry/${i}`.padEnd(48, "x"),
+  );
+  if (arg("--role") === "write") {
+    for (let i = 0; i < 300; i++) {
+      if (!store.put(BIG_ENTRY_KEY, { deps, dynamicDeps: [] })) {
+        console.log("put failed");
+        return 1;
+      }
+    }
+    return 0;
   }
-  return problems;
+  const path = join(
+    store.nsDir,
+    BIG_ENTRY_KEY.slice(0, 2),
+    `${BIG_ENTRY_KEY}.json`,
+  );
+  let reads = 0;
+  let torn = 0;
+  console.log("READY");
+  for (;;) {
+    const finished = existsSync(done);
+    let text: string | undefined;
+    try {
+      text = readFileSync(path, "utf8");
+    } catch {}
+    if (text !== undefined) {
+      reads++;
+      try {
+        JSON.parse(text);
+      } catch {
+        torn++;
+      }
+    }
+    // One last pass after the writers finished, then stop.
+    if (finished) break;
+  }
+  console.log(`RESULT ${JSON.stringify({ reads, torn })}`);
+  return 0;
+}
+
+interface Spawned {
+  /** resolves when the child printed `readyLine` (if one was asked for) */
+  ready: Promise<void>;
+  exit: Promise<{ code: number; out: string }>;
+}
+
+/** Run this script as a child with `args`. */
+function spawnPart(args: string[], readyLine?: string): Spawned {
+  const c = spawn(process.execPath, [import.meta.filename, ...args], {
+    cwd: repoRoot,
+    env: process.env,
+  });
+  let out = "";
+  let ready!: () => void;
+  const readyP = new Promise<void>((r) => {
+    ready = r;
+  });
+  if (!readyLine) ready();
+  const onData = (d: Buffer) => {
+    out += d;
+    if (readyLine && out.includes(readyLine)) ready();
+  };
+  c.stdout.on("data", onData);
+  c.stderr.on("data", onData);
+  const exit = new Promise<{ code: number; out: string }>((done) => {
+    c.on("close", (code) => {
+      ready();
+      done({ code: code ?? 1, out });
+    });
+  });
+  return { ready: readyP, exit };
 }
 
 // ------------------------------------------------------------------ main
 
-async function part(which: "real" | "rows", argv: string[]): Promise<number> {
-  let bad = 0;
+async function part(argv: string[]): Promise<number> {
+  const which = argv[argv.indexOf("--part") + 1];
+  const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  if (which === "hammer") return hammer(argv);
+  if (which === "select") {
+    const fx = { root: arg("--root"), store: arg("--store") };
+    const sel = await withHarness({}, () =>
+      select(fx, { related: [arg("--related")], cached: true }),
+    );
+    console.log(`RESULT ${JSON.stringify(sel)}`);
+    return 0;
+  }
   if (which === "real") {
-    const arg = (n: string) => argv[argv.indexOf(n) + 1];
     const [i, n] = arg("--shard").split("/").map(Number);
     const problems = await runReal(arg("--store"), [i, n]);
     for (const p of problems) console.log(`FAIL real ${i + 1}/${n}: ${p}`);
@@ -793,8 +1097,8 @@ async function part(which: "real" | "rows", argv: string[]): Promise<number> {
     );
     return problems.length ? 1 : 0;
   }
-  const results = await runRows();
-  for (const { row, problems } of results) {
+  let bad = 0;
+  for (const { row, problems } of await runRows()) {
     if (problems.length === 0) console.log(`PASS row: ${row.name}`);
     else {
       bad++;
@@ -805,45 +1109,29 @@ async function part(which: "real" | "rows", argv: string[]): Promise<number> {
   return bad ? 1 : 0;
 }
 
-function child(
-  which: "real" | "rows",
-  extra: string[] = [],
-): Promise<{ code: number; out: string }> {
-  return new Promise((done) => {
-    const c = spawn(
-      process.execPath,
-      [import.meta.filename, "--part", which, ...extra],
-      {
-        cwd: repoRoot,
-        env: process.env,
-      },
-    );
-    let out = "";
-    c.stdout.on("data", (d) => {
-      out += d;
-    });
-    c.stderr.on("data", (d) => {
-      out += d;
-    });
-    c.on("close", (code) => done({ code: code ?? 1, out }));
-  });
-}
-
 async function main(): Promise<number> {
   const argv = process.argv.slice(2);
-  const i = argv.indexOf("--part");
-  if (i >= 0) return part(argv[i + 1] as "real" | "rows", argv);
+  if (argv.includes("--part")) return part(argv);
   const started = performance.now();
   // The shards share one private store; the cold pass is the expensive one
-  // (native transforms), so splitting it across processes keeps the verifier
-  // inside its time budget.
+  // (native transforms), so splitting it across processes, each initialising
+  // only its own projects, keeps the verifier inside its time budget.
   const store = mkdtempSync(join(tmpdir(), "mx-parity-store-"));
   let parts: { code: number; out: string }[];
   try {
     parts = await Promise.all([
-      child("rows"),
-      ...Array.from({ length: SHARDS }, (_, k) =>
-        child("real", ["--store", store, "--shard", `${k}/${SHARDS}`]),
+      spawnPart(["--part", "rows"]).exit,
+      ...Array.from(
+        { length: SHARDS },
+        (_, k) =>
+          spawnPart([
+            "--part",
+            "real",
+            "--store",
+            store,
+            "--shard",
+            `${k}/${SHARDS}`,
+          ]).exit,
       ),
     ]);
   } finally {
