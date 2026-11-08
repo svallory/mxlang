@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -116,36 +116,64 @@ describe("host-policy filename normalization", () => {
   });
 });
 
-/**
- * `mx-tsc --noEmit -p tsconfig.json` in `dir`: ANSI-stripped output and exit.
- * `spawn` runs the built binary with `dir` as its cwd. An exit code that
- * depends on how `package.json` is read must be asserted that way: the
- * in-process helper keeps the test runner's cwd, and Babel (under Marko's
- * compiler) reads a malformed `package.json` differently depending on it.
- */
-function check(dir: string, spawn = false): { status: number; text: string } {
-  const run = spawn
-    ? (() => {
-        const child = spawnSync(
-          process.execPath,
-          [mxTsc, "--noEmit", "-p", "tsconfig.json"],
-          { cwd: dir, encoding: "utf8" },
-        );
-        return {
-          status: child.status ?? -1,
-          stdout: child.stdout,
-          stderr: child.stderr,
-        };
-      })()
-    : runInProcess(["--noEmit", "-p", "tsconfig.json"], dir);
+/** ANSI-stripped, path-normalized output of a run in `dir`; `cwd` is what the paths are relative to. */
+function report(
+  run: { status: number; stdout: string; stderr: string },
+  dir: string,
+  cwd: string,
+): { status: number; text: string } {
   return {
     status: run.status,
     text: normalizePolicyOutput(
       stripVTControlCharacters(run.stdout + run.stderr),
       dir,
-      spawn ? dir : process.cwd(),
+      cwd,
     ),
   };
+}
+
+/** `mx-tsc --noEmit -p tsconfig.json` in `dir`, in this process. */
+function check(dir: string): { status: number; text: string } {
+  return report(
+    runInProcess(["--noEmit", "-p", "tsconfig.json"], dir),
+    dir,
+    process.cwd(),
+  );
+}
+
+/**
+ * The same run as a child with `dir` as its cwd, without blocking the worker's
+ * event loop. An exit code that depends on how `package.json` is read must be
+ * asserted that way: the in-process helper keeps the test runner's cwd, and
+ * Babel (under Marko's compiler) reads a malformed `package.json` differently
+ * depending on it. `signal` kills the child if the test times out.
+ */
+function checkSpawned(
+  dir: string,
+  signal: AbortSignal,
+): Promise<{ status: number; text: string }> {
+  return new Promise((resolve) => {
+    const child = execFile(
+      process.execPath,
+      [mxTsc, "--noEmit", "-p", "tsconfig.json"],
+      { cwd: dir, encoding: "utf8", signal },
+      (error, stdout, stderr) => {
+        const code = (error as { code?: unknown } | null)?.code;
+        resolve(
+          report(
+            {
+              status: error ? (typeof code === "number" ? code : -1) : 0,
+              stdout,
+              stderr,
+            },
+            dir,
+            dir,
+          ),
+        );
+      },
+    );
+    child.stdin?.end();
+  });
 }
 
 const HTML_FILES = {
@@ -180,13 +208,15 @@ describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
     expect(status).toBe(0);
   });
 
-  it("h24: a malformed package.json is a warning at the parse error, and the exit code is not changed", () => {
-    const control = check(
+  it("h24: a malformed package.json is a warning at the parse error, and the exit code is not changed", async ({
+    signal,
+  }) => {
+    const control = await checkSpawned(
       project({
         ...HTML_FILES,
         "package.json": '{ "name": "afa", "mx": { "host": "html" } }',
       }),
-      true,
+      signal,
     );
     const dir = project({
       ...HTML_FILES,
@@ -194,7 +224,7 @@ describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
         '{ "name": "afa", "type": "module", "mx": { "host": "preact", }',
     });
 
-    const { status, text } = check(dir, true);
+    const { status, text } = await checkSpawned(dir, signal);
 
     expect(text).toMatch(
       /(?:^|\n)package\.json\(1,\d+\): warning TS80003: could not be parsed as JSON: /,
