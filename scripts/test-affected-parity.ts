@@ -474,7 +474,8 @@ export const ROWS: Row[] = [
   },
   {
     name: "project relocated",
-    guard: "namespace and entry key include the project root",
+    guard:
+      "the project root is in the namespace, entry key, project key and symlink paths (redundant: all four must go to fail)",
     poison: "empty-lists",
     mutate: (fx) => {
       const root = mkdtempSync(join(tmpdir(), "mx-parity-moved-"));
