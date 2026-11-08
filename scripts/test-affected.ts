@@ -68,6 +68,23 @@ export function laneFor(changed: readonly string[]): string[] {
   );
 }
 
+/** The oracle test that renders every host in a probe subprocess. */
+export const PROBE_CONSUMER = "packages/oracle/src/attribute-value.test.ts";
+
+/**
+ * Tests that depend on files through a subprocess, which the import graph
+ * cannot see: the attribute-value probe renders each host's `src/**` and the
+ * oracle test spawns it, so a change to either selects that test.
+ */
+export function probeConsumers(changed: readonly string[]): string[] {
+  const hit = changed.some(
+    (f) =>
+      f === "scripts/attribute-value-probe.ts" ||
+      /^packages\/hosts\/(?:preact|react|hono|solid|astro)\/src\//.test(f),
+  );
+  return hit ? [PROBE_CONSUMER] : [];
+}
+
 export function isWide(file: string): boolean {
   return WIDE_FILES.some((re) => re.test(file));
 }
@@ -206,7 +223,12 @@ function main(): number {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
     return 0;
   }
-  const sources = changed.filter(isRelatedSource);
+  const sources = [
+    ...new Set([
+      ...changed.filter(isRelatedSource),
+      ...probeConsumers(changed),
+    ]),
+  ];
   const nonSources = changed.filter((f) => !isRelatedSource(f));
   const wide = changed.filter(isWide);
   if (wide.length > 0) {

@@ -1,4 +1,4 @@
-/** Real render subprocess shared by the hosts' attribute-value regression tests. */
+/** Real render subprocess for packages/oracle/src/attribute-value.test.ts and packages/targets/html/src/attribute-value.test.ts. */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";

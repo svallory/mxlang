@@ -5,6 +5,8 @@ import {
   isRelatedSource,
   isWide,
   laneFor,
+  PROBE_CONSUMER,
+  probeConsumers,
   projectDirs,
   projectFor,
 } from "./test-affected.ts";
@@ -155,5 +157,25 @@ describe("projectFor", () => {
     expect(projectFor("packages/editors/vscode/probe-fixture.json", dirs)).toBe(
       "@mxlang/vscode",
     );
+  });
+});
+
+describe("probeConsumers", () => {
+  it("selects the oracle attribute test for a host source or the probe", () => {
+    for (const f of [
+      "packages/hosts/solid/src/emitter.ts",
+      "packages/hosts/astro/src/astro-template.ts",
+      "scripts/attribute-value-probe.ts",
+    ])
+      expect(probeConsumers([f]), f).toEqual([PROBE_CONSUMER]);
+  });
+  it("selects nothing for other files", () => {
+    expect(
+      probeConsumers([
+        "packages/hosts/angular/src/x.ts",
+        "packages/core/src/x.ts",
+        "scripts/other.ts",
+      ]),
+    ).toEqual([]);
   });
 });

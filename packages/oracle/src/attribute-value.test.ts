@@ -7,8 +7,10 @@
  * Two kinds of check per host:
  *  - the shared assertions on the host's own rows (Marko's pin, applied to
  *    Marko itself too), and
- *  - a diff of every host row against the Marko row of the same form and
- *    value, so the error text is Marko's by construction, not by restatement.
+ *  - a diff of every host row's error against Marko's row of the same form
+ *    and value (and of Marko's rows against the host's, so a dropped form
+ *    fails), so the error text is Marko's by construction, not by
+ *    restatement. Rendered HTML is checked by the shared assertions only.
  */
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -30,8 +32,9 @@ beforeAll(async () => {
   const script = fileURLToPath(
     new URL("../../../scripts/attribute-value-probe.ts", import.meta.url),
   );
-  await Promise.all(
-    ["marko", ...HOSTS].map(async (host) => {
+  const hosts = ["marko", ...HOSTS];
+  const settled = await Promise.allSettled(
+    hosts.map(async (host) => {
       const { stdout } = await execFileAsync("bun", [script, host], {
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
@@ -39,9 +42,18 @@ beforeAll(async () => {
       rowsByHost[host] = JSON.parse(stdout);
     }),
   );
+  const failed = settled.flatMap((outcome, i) =>
+    outcome.status === "rejected"
+      ? [
+          `${hosts[i]}: ${String((outcome.reason as Error)?.message ?? outcome.reason).slice(0, 300)}`,
+        ]
+      : [],
+  );
+  if (failed.length > 0)
+    throw new Error(`attribute-value probe failed for:\n${failed.join("\n")}`);
   for (const host of Object.keys(rowsByHost))
     expect(rowsByHost[host]?.length, host).toBeGreaterThan(50);
-}, 60_000); // Real host compilers/renderers in separate Bun processes.
+}, 30_000); // Real host compilers/renderers in separate Bun processes.
 
 function find(host: string, form: string, value: string): RenderResult {
   const row = rowsByHost[host]?.find(
@@ -53,6 +65,9 @@ function find(host: string, form: string, value: string): RenderResult {
 }
 
 /** The Marko row a host row is diffed against. Marko has no `${input.tag}` forms; they diff against the same attribute written directly. */
+/** Fewer compared rows than this means a probe silently dropped forms. */
+const FLOOR = 90;
+
 const MARKO_FORM: Record<string, string> = {
   dynamic: "direct",
   dynamicArgs: "spread",
@@ -134,7 +149,11 @@ describe.each(["marko", ...HOSTS])("%s native attribute values", (host) => {
   it("does not reject class/style objects or controlled values", () => {
     const structured = result("structured", "plain");
     expect(structured.error).toBeUndefined();
-    const cls = /class=(?:"([^"]*)"|([^\s>]+))/.exec(structured.html ?? "");
+    const cls = /(?:^|\s)class=(?:"([^"]*)"|([^\s>]+))/.exec(
+      structured.html ?? "",
+    );
+    // Only Marko prints the value unquoted; the hosts must quote it.
+    if (host !== "marko") expect(cls?.[1], "quoted class").toBeDefined();
     expect((cls?.[1] ?? cls?.[2])?.trim()).toBe("a");
     expect(structured.html).toContain("color:red");
     for (const form of [
@@ -160,16 +179,37 @@ describe.each(["marko", ...HOSTS])("%s native attribute values", (host) => {
 
   if (host !== "marko")
     it("matches Marko row for row", () => {
-      for (const row of rowsByHost[host] ?? []) {
-        const marko = rowsByHost.marko?.find(
+      const skipped = (form: string) =>
+        form === "component" || form === "reads" || form.endsWith("Count");
+      const markoRows = rowsByHost.marko ?? [];
+      const hostRows = rowsByHost[host] ?? [];
+      let compared = 0;
+      for (const row of hostRows) {
+        if (skipped(row.form)) continue;
+        const marko = markoRows.find(
           (entry) =>
             entry.form === (MARKO_FORM[row.form] ?? row.form) &&
             entry.value === row.value,
         );
-        // Host-only forms (`component`) and counts are asserted above.
-        if (!marko || row.form.endsWith("Count") || row.form === "reads")
-          continue;
+        if (!marko)
+          throw new Error(`no Marko row for ${host}/${row.form}/${row.value}`);
         expect(row.error, `${row.form}/${row.value}`).toBe(marko.error);
+        compared++;
       }
+      // Marko's side: every row it emits must exist on the host too (Astro has
+      // no `dynamicDataTag`).
+      for (const marko of markoRows) {
+        if (skipped(marko.form)) continue;
+        if (host === "astro" && marko.form === "dynamicDataTag") continue;
+        if (
+          !hostRows.some(
+            (r) => r.form === marko.form && r.value === marko.value,
+          )
+        )
+          throw new Error(
+            `no ${host} row for marko/${marko.form}/${marko.value}`,
+          );
+      }
+      expect(compared, `${host} compared rows`).toBeGreaterThan(FLOOR);
     });
 });
