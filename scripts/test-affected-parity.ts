@@ -832,19 +832,22 @@ interface RowResult {
   problems: string[];
 }
 
-/** Run one mutation row on its own baseline (for a test per row). */
-export async function runRowAlone(row: Row): Promise<string[]> {
-  return withHarness({}, async () => {
-    const baseline = realpathSync(
-      mkdtempSync(join(tmpdir(), "mx-parity-base-")),
-    );
-    try {
-      buildBaseline(baseline);
-      return await runRow(row, baseline);
-    } finally {
-      rmSync(baseline, { recursive: true, force: true });
-    }
-  });
+/**
+ * Build the fixture repository once; every row copies it. Pass it to
+ * `runRowAlone` and remove it with `rmSync` when done.
+ */
+export function makeBaseline(): string {
+  const baseline = realpathSync(mkdtempSync(join(tmpdir(), "mx-parity-base-")));
+  buildBaseline(baseline);
+  return baseline;
+}
+
+/** Run one mutation row on a copy of `baseline` (for a test per row). */
+export async function runRowAlone(
+  row: Row,
+  baseline: string,
+): Promise<string[]> {
+  return withHarness({}, () => runRow(row, baseline));
 }
 
 /** Run the mutation rows. */

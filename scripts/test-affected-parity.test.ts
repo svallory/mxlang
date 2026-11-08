@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { rmSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   type Inputs,
   install,
@@ -7,6 +8,7 @@ import {
 } from "./test-affected-cache.ts";
 import {
   expectedSelection,
+  makeBaseline,
   nativeReason,
   nativeRunProblem,
   ROWS,
@@ -14,11 +16,20 @@ import {
 } from "./test-affected-parity.ts";
 
 describe("test:affected parity verifier rows", () => {
+  // One fixture repository for the file, copied per row.
+  let baseline = "";
+  beforeAll(() => {
+    baseline = makeBaseline();
+  });
+  afterAll(() => {
+    if (baseline) rmSync(baseline, { recursive: true, force: true });
+  });
+
   // One test per row: a failure names its row, and a slow one is visible.
   it.each(ROWS.map((r) => [r.name, r] as const))(
     "%s",
     async (_name, row) => {
-      expect(await runRowAlone(row)).toEqual([]);
+      expect(await runRowAlone(row, baseline)).toEqual([]);
     },
     60_000,
   );
