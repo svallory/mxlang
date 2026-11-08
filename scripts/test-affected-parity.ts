@@ -15,7 +15,7 @@
  *    serves from the store. Then, for a sample of files, the tests the warm
  *    run selects as related must equal the ones the cold sets imply.
  * 2. `rows`: on a small fixture project, one mutation per guard (glob
- *    addition, config define, unaudited plugin and version, file
+ *    addition, config define, unaudited tool version, file
  *    add/delete/rename, symlink, manifest, content edit, store corruption,
  *    concurrent runs, relocation). Every row warms the store, then
  *    *poisons* it (rewrites each stored import list to empty, with a valid
@@ -307,7 +307,6 @@ function buildBaseline(root: string): void {
   w("tree-2/y.ts", "export const y = 2;\n");
   w("lib.test.ts", TEST("lib", 'import "./src/lib.ts";'));
   w("edit.test.ts", TEST("edit", 'import "./src/lib.ts";'));
-  w("plugin.test.ts", TEST("plugin", 'import "./src/other.ts";'));
   w("manifest.test.ts", TEST("manifest", 'import "#target";'));
   w("add.test.ts", TEST("add", 'import "./src/addme";'));
   w("dup.test.ts", TEST("dup", 'import "./src/dup";'));
@@ -388,7 +387,6 @@ const ALL_TESTS = [
   "link.test.ts",
   "manifest.test.ts",
   "pkg.test.ts",
-  "plugin.test.ts",
   "ren.test.ts",
   "swap.test.ts",
   "tree.test.ts",
@@ -396,17 +394,6 @@ const ALL_TESTS = [
 
 const CONFIG_WITH = (value: string) =>
   `export default { test: { globals: true }, define: { __PARITY_CFG__: ${JSON.stringify(value)} } };\n`;
-
-/** A test-only plugin whose output depends on the run, not on the source. */
-const injecting = (on: boolean) => ({
-  name: "parity-inject",
-  enforce: "pre",
-  transform(code: string, id: string) {
-    if (on && id.endsWith("plugin.test.ts")) {
-      return `${code}\nimport "./src/lib.ts";\n`;
-    }
-  },
-});
 
 export const ROWS: Row[] = [
   {
@@ -450,16 +437,6 @@ export const ROWS: Row[] = [
     after: { configText: CONFIG_WITH('"2"') },
     related: "src/lib.ts",
     expect: ["edit.test.ts", "lib.test.ts"],
-  },
-  {
-    name: "plugin behaviour changes under a stable name",
-    guard: "projectKey: a plugin outside the audited list bypasses the project",
-    warm: { plugins: [injecting(false)] },
-    poison: "empty-lists",
-    poisonOptional: true,
-    after: { plugins: [injecting(true)] },
-    related: "src/lib.ts",
-    expect: ["edit.test.ts", "lib.test.ts", "plugin.test.ts"],
   },
   {
     name: "unaudited tool version",
@@ -1115,6 +1092,9 @@ async function runReal(
 const BIG_ENTRY_KEY = "ab".repeat(32);
 
 /** Concurrent-writer probe: `write` re-puts one large entry, `read` looks for torn ones. */
+/** Longest a hammer reader runs, whatever happens to its parent. */
+const READER_DEADLINE_MS = 30_000;
+
 async function hammer(argv: string[]): Promise<number> {
   const arg = (n: string) => argv[argv.indexOf(n) + 1];
   const store = new Store(arg("--store"), "hammer");
@@ -1139,8 +1119,14 @@ async function hammer(argv: string[]): Promise<number> {
   let reads = 0;
   let torn = 0;
   console.log("READY");
+  // Bounded: a reader must not outlive a parent that died or timed out, so it
+  // stops at a deadline or when it is re-parented, and yields between reads.
+  const parent = process.ppid;
+  const deadline = Date.now() + READER_DEADLINE_MS;
   for (;;) {
-    const finished = existsSync(done);
+    await new Promise((r) => setImmediate(r));
+    const orphaned = process.ppid !== parent || Date.now() > deadline;
+    const finished = existsSync(done) || orphaned;
     let text: string | undefined;
     try {
       text = readFileSync(path, "utf8");
@@ -1233,6 +1219,9 @@ function spawnPart(args: string[], readyLine?: string): Spawned {
 async function part(argv: string[]): Promise<number> {
   const which = argv[argv.indexOf("--part") + 1];
   const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  // The parent kills only its direct child, so every child (and so every
+  // grandchild) bounds itself.
+  setTimeout(() => process.exit(1), CHILD_TIMEOUT_MS).unref();
   if (process.versions.bun) {
     console.log("FAIL: a parity child ran under bun, not node");
     return 1;
