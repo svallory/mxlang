@@ -323,19 +323,23 @@ function distFiles(root: string): string[] {
 }
 
 /**
- * `path -> target` for the given candidate symlinks, and whether any target
- * leaves `root`. The file list names a link once whatever it points at, but a
- * resolution follows it to the target's files, so retargeting a link must
- * change the inventory. A target outside the repository is not in the list at
- * all (a file added there would shadow a resolution unseen), so such a link
- * makes the inventory unavailable and selection native.
+ * `path -> target` for the given candidate symlinks, and whether any link
+ * leaves what the inventory covers. The file list names a link once whatever
+ * it points at, but a resolution follows it to the target's files, so
+ * retargeting a link must change the inventory. A link whose target is
+ * outside the repository, or inside it but with no file in the list (a
+ * gitignored directory), is not covered: a file added there could shadow a
+ * resolution behind unchanged keys. Such a link makes the inventory
+ * unavailable and selection native.
  */
 function symlinkLines(
   root: string,
   candidates: Iterable<string>,
+  files: readonly string[],
 ): { lines: string[]; escapes: boolean } {
   const lines: string[] = [];
   let escapes = false;
+  const listed = new Set(files);
   for (const f of candidates) {
     try {
       const p = resolve(root, f);
@@ -343,10 +347,16 @@ function symlinkLines(
       const target = readlinkSync(p);
       lines.push(`${f} -> ${target}`);
       const rel = relative(resolve(root), resolve(dirname(p), target));
-      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-        escapes = true;
-      }
-    } catch {}
+      const outside =
+        rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+      const posix = rel.split(sep).join("/");
+      const covered =
+        !outside &&
+        (listed.has(posix) || files.some((x) => x.startsWith(`${posix}/`)));
+      if (!covered) escapes = true;
+    } catch {
+      escapes = true;
+    }
   }
   return { lines: lines.sort(), escapes };
 }
@@ -399,7 +409,18 @@ export function collectInputs(
       const tab = e.indexOf("\t");
       if (tab > 0 && e.startsWith("120000 ")) tracked.push(e.slice(tab + 1));
     }
-    linkCandidates = [...tracked.filter((f) => !gone.has(f)), ...untracked];
+    // A tracked regular file replaced by a link in the working tree (an
+    // unstaged typechange) is not mode 120000 in the index yet.
+    const typechanged = (
+      git(root, ["diff", "--name-only", "--diff-filter=T", "-z"]) ?? ""
+    )
+      .split("\0")
+      .filter(Boolean);
+    linkCandidates = [
+      ...tracked.filter((f) => !gone.has(f)),
+      ...untracked,
+      ...typechanged,
+    ];
     // Build output resolved through workspace links is gitignored but followed.
     files = [
       ...new Set([...present.filter((f) => !gone.has(f)), ...distFiles(root)]),
@@ -407,7 +428,7 @@ export function collectInputs(
   }
   let links: string | undefined;
   if (files !== undefined) {
-    const sym = symlinkLines(root, linkCandidates);
+    const sym = symlinkLines(root, linkCandidates, files);
     if (!sym.escapes) links = [...files].sort().concat(sym.lines).join("\n");
   }
   const manifests: Record<string, string> = {};
@@ -585,10 +606,13 @@ const sumOf = (key: string, d: Deps): string =>
 /** Content-addressed, namespaced, atomic store. Every failure is a miss. */
 export class Store {
   readonly nsDir: string;
-  constructor(
-    readonly dir: string,
-    readonly ns: string,
-  ) {
+  // Plain fields, not parameter properties: node runs this file by stripping
+  // types, which cannot express them (the parity verifier runs under node).
+  readonly dir: string;
+  readonly ns: string;
+  constructor(dir: string, ns: string) {
+    this.dir = dir;
+    this.ns = ns;
     this.nsDir = join(dir, `v${SCHEMA_VERSION}`, ns);
   }
 

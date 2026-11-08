@@ -21,7 +21,7 @@ package's tests actually **ran in that invocation** — not merely that some
 test wiring exists for it. This chain runs locally without deadlock, including `consumer-check:html` which checks consumer packing behavior. The chain is:
 
 ```
-scripts/pre-verify.ts && typecheck && lint && build && test && test:bun && test:grammar && scripts/verify-coverage.ts
+scripts/pre-verify.ts && build && typecheck && lint && test && test:bun && test:affected:parity && test:grammar && consumer-check:html && pack-probe && apps/docs test && apps/docs build && scripts/verify-coverage.ts
 ```
 
 - `scripts/pre-verify.ts` deletes any evidence left over from a previous run

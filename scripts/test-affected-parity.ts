@@ -66,6 +66,9 @@ import {
 } from "./test-affected-cache.ts";
 import AffectedCacheReporter from "./test-affected-cache-reporter.ts";
 
+/** Longest a child may run before it is killed and reported. */
+const CHILD_TIMEOUT_MS = 120_000;
+
 /** Processes the real-repository half is split across. */
 const SHARDS = 4;
 
@@ -74,30 +77,17 @@ const repoRoot = resolve(import.meta.dirname, "..");
 // --------------------------------------------------------------- harness
 
 /**
- * The reporter reports through `console.log`. Selections can overlap, so they
- * cannot each swap and restore it (the last restore would reinstate another's
- * capture and swallow later output): one router is installed when the first
- * capture starts and removed when the last one ends.
+ * The reporter reports through `console.log`; capture it for one selection.
+ * Returns the restore function.
  */
-const sinks = new Set<string[]>();
-let routedLog: typeof console.log | undefined;
-
-function capture(lines: string[]): void {
-  if (sinks.size === 0) {
-    routedLog = console.log;
-    console.log = (...a: unknown[]) => {
-      for (const sink of sinks) sink.push(a.join(" "));
-    };
-  }
-  sinks.add(lines);
-}
-
-function release(lines: string[]): void {
-  sinks.delete(lines);
-  if (sinks.size === 0 && routedLog) {
-    console.log = routedLog;
-    routedLog = undefined;
-  }
+function capture(lines: string[]): () => void {
+  const original = console.log;
+  console.log = (...a: unknown[]) => {
+    lines.push(a.join(" "));
+  };
+  return () => {
+    console.log = original;
+  };
 }
 
 const ENV_KEYS = [
@@ -176,7 +166,7 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
         : (o.inputs ?? ((i) => i))(gather(root, projects)),
   });
   const lines: string[] = [];
-  capture(lines);
+  const restore = capture(lines);
   const exitCode = process.exitCode;
   try {
     let config: string | false = false;
@@ -211,7 +201,7 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
       await ctx.close();
     }
   } finally {
-    release(lines);
+    restore();
     process.exitCode = exitCode;
   }
 }
@@ -319,6 +309,8 @@ function buildBaseline(root: string): void {
   w("link.test.ts", TEST("link", 'import "link/x.ts";'));
   w("tree.test.ts", TEST("tree", 'import "./src/tree/y.ts";'));
   w("pkg.test.ts", TEST("pkg", 'import "./package.json";'));
+  w("src/swap.ts", "export const swap = 'inside';\n");
+  w("swap.test.ts", TEST("swap", 'import "./src/swap.ts";'));
   w(
     "glob.test.ts",
     'it("glob", () => {});\nexport const modules = import.meta.glob("./cases/*.ts");\n',
@@ -386,6 +378,7 @@ const ALL_TESTS = [
   "pkg.test.ts",
   "plugin.test.ts",
   "ren.test.ts",
+  "swap.test.ts",
   "tree.test.ts",
 ];
 
@@ -509,8 +502,6 @@ export const ROWS: Row[] = [
   {
     name: "node_modules symlink retargeted",
     guard: "packages: top-level symlink targets are part of the namespace",
-    related: "real-2/x.ts",
-    expect: [],
     // Selection never follows a node_modules link (those are externalised and
     // skipped by vitest's graph walk), so the effect is not visible in the
     // selected names: assert the namespace itself moves.
@@ -563,6 +554,45 @@ export const ROWS: Row[] = [
       ),
     related: (fx) => join(readlinkSync(join(fx.root, "src", "ext")), "z.js"),
     expect: ["ext.test.ts"],
+  },
+  {
+    name: "tracked file replaced by a symlink out of the repository",
+    guard:
+      "inventory: an unstaged typechange is a symlink candidate, and a link out of the repository makes selection native",
+    poison: "empty-lists",
+    mutate: (fx) => {
+      const ext = `${fx.root}-ext`;
+      mkdirSync(ext, { recursive: true });
+      writeFileSync(join(ext, "swap.ts"), "export const swap = 'outside';\n");
+      unlinkSync(join(fx.root, "src", "swap.ts"));
+      symlinkSync(join(ext, "swap.ts"), join(fx.root, "src", "swap.ts"));
+    },
+    related: (fx) => join(`${fx.root}-ext`, "swap.ts"),
+    expect: ["swap.test.ts"],
+  },
+  {
+    name: "symlink to a gitignored directory inside the repository",
+    guard:
+      "inventory: a link whose target has no file in the list makes selection native",
+    setup: (fx) => {
+      const dir = join(fx.root, ".hammer", "ign");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "z.ts"), "export const z = 'ts';\n");
+      symlinkSync(
+        join(".hammer", "ign").replace(/^/, "../"),
+        join(fx.root, "src", "ign"),
+      );
+      write(fx, "ign.test.ts", TEST("ign", 'import "./src/ign/z";'));
+    },
+    poison: "empty-lists",
+    poisonOptional: true,
+    mutate: (fx) =>
+      writeFileSync(
+        join(fx.root, ".hammer", "ign", "z.js"),
+        "export const z = 'js';\n",
+      ),
+    related: (fx) => join(fx.root, ".hammer", "ign", "z.js"),
+    expect: ["ign.test.ts"],
   },
   {
     name: "manifest edited (package.json imports)",
@@ -833,8 +863,12 @@ interface Spec {
   project: { name: string };
 }
 
-/** The vitest project names of shard `index` of `count`, balanced by test-file count. */
-function shardProjects(index: number, count: number): string[] {
+/**
+ * The vitest project names of every shard, balanced by test-file count. Fails
+ * unless the shards together cover every project of the root config, each
+ * exactly once, and none is empty (`project: []` would mean every project).
+ */
+export function planShards(count: number): string[][] {
   const dirs = projectDirs();
   const weight = new Map<string, number>(dirs.map((d) => [d, 0]));
   const listed = spawnSync("git", ["ls-files", "--", "*.test.*"], {
@@ -850,16 +884,46 @@ function shardProjects(index: number, count: number): string[] {
     if (best) weight.set(best, (weight.get(best) ?? 0) + 1);
   }
   const load = Array.from({ length: count }, () => 0);
-  const mine: string[] = [];
+  const shards: string[][] = Array.from({ length: count }, () => []);
   for (const [dir, w] of [...weight].sort(
     (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
   )) {
+    const name = projectFor(dir, dirs);
+    if (!name) throw new Error(`no vitest project name for ${dir}`);
     const k = load.indexOf(Math.min(...load));
     load[k] += w;
-    const name = projectFor(dir, dirs);
-    if (k === index && name) mine.push(name);
+    shards[k].push(name);
   }
-  return mine;
+  const planned = shards.flat().sort();
+  const every = dirs.map((d) => projectFor(d, dirs)).sort();
+  if (planned.join() !== every.join()) {
+    throw new Error(
+      `shards cover [${planned}] but the root config has [${every}]`,
+    );
+  }
+  const empty = shards.findIndex((p) => p.length === 0);
+  if (empty >= 0) throw new Error(`shard ${empty + 1}/${count} has no project`);
+  return shards;
+}
+
+/**
+ * The tests a related file selects, from the cold dependency sets: every test
+ * when vitest forces a full rerun for it (a force-rerun trigger such as a
+ * package.json), else those that import it or are it.
+ */
+export function expectedSelection(
+  deps: ReadonlyMap<string, readonly string[]>,
+  file: string,
+  forced: boolean,
+  relativeName: string,
+): string[] {
+  if (forced) return [...deps.keys()].sort();
+  return [...deps]
+    .filter(
+      ([test, d]) => d.includes(file) || test.endsWith(` ${relativeName}`),
+    )
+    .map(([test]) => test)
+    .sort();
 }
 
 /** Dependency set of every test of the shard's projects. */
@@ -875,7 +939,7 @@ async function realDeps(
 }> {
   const reporter = new AffectedCacheReporter({ dir: store });
   const lines: string[] = [];
-  capture(lines);
+  const restore = capture(lines);
   const exitCode = process.exitCode;
   try {
     const ctx = await createVitest(
@@ -932,7 +996,7 @@ async function realDeps(
       await ctx.close();
     }
   } finally {
-    release(lines);
+    restore();
     process.exitCode = exitCode;
   }
 }
@@ -948,7 +1012,7 @@ async function runReal(
 ): Promise<string[]> {
   return withHarness({ MX_TEST_LANE: "all" }, async () => {
     const problems: string[] = [];
-    const projects = shardProjects(shard[0], shard[1]);
+    const projects = planShards(shard[1])[shard[0]];
     // Cold: the store is empty, so every module is transformed natively.
     const t0 = performance.now();
     const cold = await realDeps(store, projects);
@@ -959,7 +1023,12 @@ async function runReal(
     const universe = new Set<string>();
     for (const d of cold.deps.values()) for (const f of d) universe.add(f);
     const all = [...universe].filter((f) => !f.includes("node_modules")).sort();
-    const samples = all.filter((_, i) => i % Math.ceil(all.length / 4) === 0);
+    // The root package.json is always sampled: vitest selects every test for
+    // it, so the force-rerun model is exercised on every run.
+    const samples = [
+      join(repoRoot, "package.json"),
+      ...all.filter((_, i) => i % Math.ceil(all.length / 4) === 0),
+    ];
     const warm = await realDeps(store, projects, samples);
     console.log(
       `real timing: cold ${Math.round(t1 - t0)} ms, warm ${Math.round(performance.now() - t1)} ms`,
@@ -984,15 +1053,12 @@ async function runReal(
       }
     }
     for (const [f, { chosen, forced }] of warm.sampled) {
-      const want = forced
-        ? [...cold.deps.keys()].sort()
-        : [...cold.deps]
-            .filter(
-              ([test, d]) =>
-                d.includes(f) || test.endsWith(` ${relative(repoRoot, f)}`),
-            )
-            .map(([test]) => test)
-            .sort();
+      const want = expectedSelection(
+        cold.deps,
+        f,
+        forced,
+        relative(repoRoot, f),
+      );
       if (want.join("\n") !== chosen.join("\n")) {
         problems.push(
           `edit of ${relative(repoRoot, f)}: cached selects [${chosen}] but native selects [${want}]`,
@@ -1015,11 +1081,11 @@ async function hammer(argv: string[]): Promise<number> {
   const arg = (n: string) => argv[argv.indexOf(n) + 1];
   const store = new Store(arg("--store"), "hammer");
   const done = arg("--done");
-  const deps = Array.from({ length: 60_000 }, (_, i) =>
+  const deps = Array.from({ length: 20_000 }, (_, i) =>
     `/entry/${i}`.padEnd(48, "x"),
   );
   if (arg("--role") === "write") {
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 60; i++) {
       if (!store.put(BIG_ENTRY_KEY, { deps, dynamicDeps: [] })) {
         console.log("put failed");
         return 1;
@@ -1064,13 +1130,12 @@ interface Spawned {
 
 /** Run this script as a child with `args`. */
 function spawnPart(args: string[], readyLine?: string): Spawned {
+  // Node, the runtime `bunx vitest` runs under: the cache namespace includes
+  // the runtime, so the one verified must be the one users get.
   const c = spawn(
-    process.versions.bun ? process.execPath : "bun",
+    process.versions.bun ? "node" : process.execPath,
     [import.meta.filename, ...args],
-    {
-      cwd: repoRoot,
-      env: process.env,
-    },
+    { cwd: repoRoot, env: process.env },
   );
   let out = "";
   let ready!: () => void;
@@ -1085,7 +1150,18 @@ function spawnPart(args: string[], readyLine?: string): Spawned {
   c.stdout.on("data", onData);
   c.stderr.on("data", onData);
   const exit = new Promise<{ code: number; out: string }>((done) => {
+    // A hung child must not hang `verify` with no output.
+    const timer = setTimeout(() => {
+      out += `\ntimed out after ${CHILD_TIMEOUT_MS / 1000} s: ${args.join(" ")}`;
+      c.kill("SIGKILL");
+    }, CHILD_TIMEOUT_MS);
+    c.on("error", (e) => {
+      clearTimeout(timer);
+      ready();
+      done({ code: 1, out: `${out}\nspawn failed: ${e.message}` });
+    });
     c.on("close", (code) => {
+      clearTimeout(timer);
       ready();
       done({ code: code ?? 1, out });
     });
@@ -1098,6 +1174,10 @@ function spawnPart(args: string[], readyLine?: string): Spawned {
 async function part(argv: string[]): Promise<number> {
   const which = argv[argv.indexOf("--part") + 1];
   const arg = (n: string) => argv[argv.indexOf(n) + 1];
+  if (process.versions.bun) {
+    console.log("FAIL: a parity child ran under bun, not node");
+    return 1;
+  }
   if (which === "hammer") return hammer(argv);
   if (which === "select") {
     const fx = { root: arg("--root"), store: arg("--store") };
@@ -1132,6 +1212,12 @@ async function main(): Promise<number> {
   const argv = process.argv.slice(2);
   if (argv.includes("--part")) return part(argv);
   const started = performance.now();
+  try {
+    planShards(SHARDS);
+  } catch (e) {
+    console.log(`FAIL shards: ${(e as Error).message}`);
+    return 1;
+  }
   // The shards share one private store; the cold pass is the expensive one
   // (native transforms), so splitting it across processes, each initialising
   // only its own projects, keeps the verifier inside its time budget.

@@ -71,7 +71,12 @@ export default class AffectedCacheReporter {
   private installed: Installed | undefined;
   private start = 0;
 
-  constructor(private readonly options: ReporterOptions = {}) {}
+  // A plain field, not a parameter property: node strips types only.
+  private readonly options: ReporterOptions;
+
+  constructor(options: ReporterOptions = {}) {
+    this.options = options;
+  }
 
   onInit(ctx: VitestCtx): void {
     if (!cacheMode(process.env).on) return;
