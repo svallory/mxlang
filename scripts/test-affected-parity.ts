@@ -60,6 +60,7 @@ import { projectDirs, projectFor } from "./test-affected.ts";
 import {
   collectInputs,
   type Inputs,
+  NATIVE_PREFIX,
   namespaceFor,
   SCHEMA_VERSION,
   Store,
@@ -831,6 +832,21 @@ interface RowResult {
   problems: string[];
 }
 
+/** Run one mutation row on its own baseline (for a test per row). */
+export async function runRowAlone(row: Row): Promise<string[]> {
+  return withHarness({}, async () => {
+    const baseline = realpathSync(
+      mkdtempSync(join(tmpdir(), "mx-parity-base-")),
+    );
+    try {
+      buildBaseline(baseline);
+      return await runRow(row, baseline);
+    } finally {
+      rmSync(baseline, { recursive: true, force: true });
+    }
+  });
+}
+
 /** Run the mutation rows. */
 export async function runRows(): Promise<RowResult[]> {
   return withHarness({}, async () => {
@@ -1123,6 +1139,19 @@ async function hammer(argv: string[]): Promise<number> {
   return 0;
 }
 
+/**
+ * The reason a captured reporter line says the run was native, or undefined.
+ * Both emitters share `NATIVE_PREFIX`: `install` prints `<prefix>: <reason>`
+ * and the reporter's catch path prints the same, with the error's message.
+ */
+export function nativeReason(line: string): string | undefined {
+  const at = line.indexOf(`${NATIVE_PREFIX}: `);
+  return at < 0 ? undefined : line.slice(at + NATIVE_PREFIX.length + 2).trim();
+}
+
+/** Printed by a `rows` or `real` child when it ran to the end. */
+const CHILD_DONE = "parity-child done";
+
 interface Spawned {
   /** resolves when the child printed `readyLine` (if one was asked for) */
   ready: Promise<void>;
@@ -1195,6 +1224,7 @@ async function part(argv: string[]): Promise<number> {
     console.log(
       `${problems.length ? "FAIL" : "PASS"} real shard ${i + 1}/${n}`,
     );
+    console.log(CHILD_DONE);
     return problems.length ? 1 : 0;
   }
   let bad = 0;
@@ -1206,6 +1236,7 @@ async function part(argv: string[]): Promise<number> {
       for (const p of problems) console.log(`  ${p}`);
     }
   }
+  console.log(CHILD_DONE);
   return bad ? 1 : 0;
 }
 
@@ -1244,7 +1275,15 @@ async function main(): Promise<number> {
     rmSync(store, { recursive: true, force: true });
   }
   for (const p of parts) process.stdout.write(p.out);
-  const failed = parts.some((p) => p.code !== 0);
+  // An exit code alone is not proof: a node too old to run this file may exit
+  // 0 without doing anything.
+  const silent = parts.filter((p) => !p.out.includes(CHILD_DONE));
+  if (silent.length) {
+    console.log(
+      `FAIL ${silent.length} parity child(ren) exited without finishing (node ${process.versions.node} on PATH?)`,
+    );
+  }
+  const failed = silent.length > 0 || parts.some((p) => p.code !== 0);
   console.log(
     `test:affected:parity ${failed ? "FAILED" : "passed"} in ${Math.round((performance.now() - started) / 1000)} s`,
   );

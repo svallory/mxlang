@@ -12,6 +12,7 @@ import {
   type Inputs,
   type Installed,
   install,
+  NATIVE_PREFIX,
   type ProjectInput,
   type ProjectLike,
 } from "./test-affected-cache.ts";
@@ -102,7 +103,7 @@ export default class AffectedCacheReporter {
       );
     } catch (e) {
       console.warn(
-        `test:affected cache: native selection (${(e as Error).message})`,
+        `test:affected cache: ${NATIVE_PREFIX}: ${(e as Error).message}`,
       );
       this.installed?.finish();
       this.installed = undefined;

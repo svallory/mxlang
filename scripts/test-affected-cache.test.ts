@@ -128,6 +128,17 @@ describe("cache switch (AC-2)", () => {
     for (const on of ["", "1", "true", "yes"]) {
       expect(cacheMode({ MX_AFFECTED_CACHE: on }).on, on).toBe(true);
     }
+    // Unrecognised values are doubt, so native; explicit false words stay on.
+    for (const v of ["maybe", "2", "y"]) {
+      expect(cacheMode({ MX_AFFECTED_NATIVE: v }).on, v).toBe(false);
+      expect(cacheMode({ MX_AFFECTED_CACHE: v }).on, v).toBe(false);
+    }
+    for (const v of ["true", "On", "yes"]) {
+      expect(cacheMode({ MX_AFFECTED_NATIVE: v }).on, v).toBe(false);
+    }
+    for (const v of ["0", "false", "", "no"]) {
+      expect(cacheMode({ MX_AFFECTED_NATIVE: v }).on, v).toBe(true);
+    }
     expect(cacheArgs({}).join(" ")).toContain(
       "test-affected-cache-reporter.ts",
     );
@@ -163,6 +174,29 @@ describe("cache switch (AC-2)", () => {
 });
 
 describe("guards fall back to native (AC-3)", () => {
+  it("names the link that leaves the repository, and accepts a root reached through a symlink", () => {
+    const outer = realpathSync(mkdtempSync(join(tmpdir(), "mx-affected-esc-")));
+    try {
+      const real = join(outer, "real");
+      mkdirSync(join(real, "src"), { recursive: true });
+      writeFileSync(join(real, "src", "a.ts"), "export {};\n");
+      symlinkSync(join(real, "src", "a.ts"), join(real, "abs.ts"));
+      spawnSync("git", ["init", "-q"], { cwd: real });
+      const via = join(outer, "via");
+      symlinkSync(real, via);
+      // Absolute in-repo target, root given through a symlinked path: covered.
+      expect(namespaceFor(collectInputs(via, [project()], {}, root)).ok).toBe(
+        true,
+      );
+      symlinkSync(outer, join(real, "out"));
+      const ns = namespaceFor(collectInputs(real, [project()], {}, root));
+      expect(ns.ok).toBe(false);
+      expect(!ns.ok && ns.reason).toContain("out -> ");
+    } finally {
+      rmSync(outer, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     ["ls-files", "-s"],
     ["diff", "--diff-filter=T"],

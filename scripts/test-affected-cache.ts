@@ -59,6 +59,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -145,15 +146,42 @@ const sha = (data: string | Uint8Array): string =>
 
 export type Mode = { on: true } | { on: false; reason: string };
 
-/** Whether the cache may be read or written under this environment. */
+/** Start of every "this run is native" message; the verifier matches on it. */
+export const NATIVE_PREFIX = "native selection";
+
+const TRUE = ["1", "true", "on", "yes"];
+const FALSE = ["0", "false", "off", "no"];
+
+/**
+ * Whether the cache may be read or written under this environment. Doubt is
+ * native: a value of `MX_AFFECTED_NATIVE` or `MX_AFFECTED_CACHE` that is
+ * neither a true nor a false word turns the cache off, and says so.
+ */
 export function cacheMode(env: NodeJS.ProcessEnv): Mode {
   if (env.CI) return { on: false, reason: "CI is set" };
-  if (env.MX_AFFECTED_NATIVE === "1") {
-    return { on: false, reason: "MX_AFFECTED_NATIVE=1" };
+  const word = (v: string | undefined) => (v ?? "").trim().toLowerCase();
+  const native = word(env.MX_AFFECTED_NATIVE);
+  if (TRUE.includes(native)) {
+    return {
+      on: false,
+      reason: `MX_AFFECTED_NATIVE=${env.MX_AFFECTED_NATIVE}`,
+    };
   }
-  const choice = (env.MX_AFFECTED_CACHE ?? "").trim().toLowerCase();
-  if (["0", "false", "off", "no"].includes(choice)) {
+  if (native !== "" && !FALSE.includes(native)) {
+    return {
+      on: false,
+      reason: `unrecognised MX_AFFECTED_NATIVE=${env.MX_AFFECTED_NATIVE}`,
+    };
+  }
+  const choice = word(env.MX_AFFECTED_CACHE);
+  if (FALSE.includes(choice)) {
     return { on: false, reason: `MX_AFFECTED_CACHE=${env.MX_AFFECTED_CACHE}` };
+  }
+  if (choice !== "" && !TRUE.includes(choice)) {
+    return {
+      on: false,
+      reason: `unrecognised MX_AFFECTED_CACHE=${env.MX_AFFECTED_CACHE}`,
+    };
   }
   return { on: true };
 }
@@ -220,6 +248,8 @@ export interface Inputs {
   packages: string[];
   /** hash of the repository file list, or undefined when it cannot be read */
   inventory: string | undefined;
+  /** the first symlink that made the inventory unavailable, if one did */
+  linkEscape?: string;
   projects: ProjectInput[];
 }
 
@@ -339,29 +369,44 @@ function symlinkLines(
   root: string,
   candidates: Iterable<string>,
   files: readonly string[],
-): { lines: string[]; escapes: boolean } {
+): { lines: string[]; escape?: string } {
   const lines: string[] = [];
-  let escapes = false;
+  let firstEscape: string | undefined;
   const listed = new Set(files);
+  // Every directory that holds a listed file, so coverage is a set lookup.
+  const dirs = new Set<string>();
+  for (const f of files) {
+    for (let i = f.indexOf("/"); i >= 0; i = f.indexOf("/", i + 1)) {
+      dirs.add(f.slice(0, i));
+    }
+  }
+  let base = resolve(root);
+  try {
+    base = realpathSync(base);
+  } catch {}
   for (const f of candidates) {
     try {
       const p = resolve(root, f);
       if (!lstatSync(p).isSymbolicLink()) continue;
       const target = readlinkSync(p);
       lines.push(`${f} -> ${target}`);
-      const rel = relative(resolve(root), resolve(dirname(p), target));
+      const abs = resolve(dirname(p), target);
+      let rel = relative(resolve(root), abs);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+        // `root` reached through a symlinked path: compare real paths.
+        rel = relative(base, abs);
+      }
       const outside =
         rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
       const posix = rel.split(sep).join("/");
-      const covered =
-        !outside &&
-        (listed.has(posix) || files.some((x) => x.startsWith(`${posix}/`)));
-      if (!covered) escapes = true;
+      const covered = !outside && (listed.has(posix) || dirs.has(posix));
+      if (!covered && firstEscape === undefined)
+        firstEscape = `${f} -> ${target}`;
     } catch {
-      escapes = true;
+      if (firstEscape === undefined) firstEscape = `${f} (unreadable)`;
     }
   }
-  return { lines: lines.sort(), escapes };
+  return { lines: lines.sort(), escape: firstEscape };
 }
 
 /** Gather every namespace input for `root` from disk and the environment. */
@@ -446,9 +491,13 @@ export function collectInputs(
     }
   }
   let links: string | undefined;
+  let linkEscape: string | undefined;
   if (files !== undefined) {
     const sym = symlinkLines(root, linkCandidates, files);
-    if (!sym.escapes) links = [...files].sort().concat(sym.lines).join("\n");
+    linkEscape = sym.escape;
+    if (sym.escape === undefined) {
+      links = [...files].sort().concat(sym.lines).join("\n");
+    }
   }
   const manifests: Record<string, string> = {};
   for (const f of files ?? []) {
@@ -491,6 +540,7 @@ export function collectInputs(
     manifests,
     packages,
     inventory: links === undefined ? undefined : sha(links),
+    linkEscape,
     projects,
   };
 }
@@ -539,7 +589,9 @@ export function namespaceFor(i: Inputs): Verdict<string> {
   if (i.inventory === undefined) {
     return {
       ok: false,
-      reason: "file inventory unavailable (or a symlink leaves the repository)",
+      reason: i.linkEscape
+        ? `symlink leaves the repository or its file list: ${i.linkEscape}`
+        : "file inventory unavailable",
     };
   }
   return {
@@ -789,7 +841,7 @@ export function install(
 ): Installed | undefined {
   const ns = namespaceFor(inputs);
   if (!ns.ok) {
-    note(`native selection: ${ns.reason}`);
+    note(`${NATIVE_PREFIX}: ${ns.reason}`);
     return undefined;
   }
   const store = new Store(storeDir, ns.value);
