@@ -8,6 +8,7 @@ import {
 import {
   expectedSelection,
   nativeReason,
+  nativeRunProblem,
   ROWS,
   runRowAlone,
 } from "./test-affected-parity.ts";
@@ -44,6 +45,26 @@ describe("nativeReason (the verifier's reading of a native fallback)", () => {
     expect(nativeReason(`test:affected cache: ${NATIVE_PREFIX}: boom`)).toBe(
       "boom",
     );
+  });
+
+  it("fails a real run that went native with the reason, for both emitters", () => {
+    const viaInstall = [] as string[];
+    install(
+      [],
+      {
+        versions: SUPPORTED_VERSIONS,
+        inventory: undefined,
+      } as unknown as Inputs,
+      "/nowhere",
+      (m) => viaInstall.push(`test:affected cache: ${m}`),
+    );
+    expect(nativeRunProblem(viaInstall[0])).toMatch(
+      /^cache is native here: file inventory unavailable; parity cannot/,
+    );
+    expect(
+      nativeRunProblem(`test:affected cache: ${NATIVE_PREFIX}: boom`),
+    ).toBe("cache is native here: boom; parity cannot be proven");
+    expect(nativeRunProblem("selection 5 ms, 0 hits")).toBeUndefined();
   });
 
   it("is undefined for a normal summary line", () => {

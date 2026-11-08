@@ -364,6 +364,12 @@ interface FlowRow extends RowBase {
   expect: string[];
   /** the control: the cache must serve the poison, so it must disagree */
   diverges?: boolean;
+  /**
+   * The row's expected outcome is "selection goes native": the cached run's
+   * reason must match. Equal-to-native holds by construction for a native run,
+   * so without this a row passes whatever made it native.
+   */
+  expectNative?: RegExp;
 }
 
 /** A row with its own flow. */
@@ -468,6 +474,7 @@ export const ROWS: Row[] = [
     after: {
       inputs: (i) => ({ ...i, versions: { ...i.versions, vite: "0.0.0" } }),
     },
+    expectNative: /vite 0\.0\.0 is not the audited/,
     related: "src/lib.ts",
     expect: ["edit.test.ts", "lib.test.ts"],
   },
@@ -558,6 +565,7 @@ export const ROWS: Row[] = [
         join(readlinkSync(join(fx.root, "src", "ext")), "z.js"),
         "export const z = 'js';\n",
       ),
+    expectNative: /symlink leaves the repository.*src\/ext -> \//,
     related: (fx) => join(readlinkSync(join(fx.root, "src", "ext")), "z.js"),
     expect: ["ext.test.ts"],
   },
@@ -573,6 +581,7 @@ export const ROWS: Row[] = [
       unlinkSync(join(fx.root, "src", "swap.ts"));
       symlinkSync(join(ext, "swap.ts"), join(fx.root, "src", "swap.ts"));
     },
+    expectNative: /symlink leaves the repository.*src\/swap\.ts -> \//,
     related: (fx) => join(`${fx.root}-ext`, "swap.ts"),
     expect: ["swap.test.ts"],
   },
@@ -594,6 +603,8 @@ export const ROWS: Row[] = [
         join(fx.root, ".ignored", "ign", "z.js"),
         "export const z = 'js';\n",
       ),
+    expectNative:
+      /symlink leaves the repository.*src\/ign -> \.\.\/\.ignored\/ign/,
     related: (fx) => join(fx.root, ".ignored", "ign", "z.js"),
     expect: ["ign.test.ts"],
   },
@@ -812,6 +823,18 @@ async function runRow(row: Row, baseline: string): Promise<string[]> {
       );
     }
     const same = cached.files.join() === native.files.join();
+    if (row.expectNative) {
+      const reason = nativeReason(cached.line);
+      if (reason === undefined) {
+        problems.push(
+          `the run did not go native, expected ${row.expectNative} (${cached.line})`,
+        );
+      } else if (!row.expectNative.test(reason)) {
+        problems.push(
+          `went native for the wrong reason: "${reason}", expected ${row.expectNative}`,
+        );
+      }
+    }
     if (row.diverges) {
       if (same) problems.push("control: the cache did not serve the poison");
     } else if (!same) {
@@ -1030,10 +1053,8 @@ async function runReal(
     const t0 = performance.now();
     const cold = await realDeps(store, projects);
     const t1 = performance.now();
-    const native = /native selection \(.*\)/.exec(cold.line);
-    if (native) {
-      return [`cache is native here: ${native[0]}; parity cannot be proven`];
-    }
+    const nativeProblem = nativeRunProblem(cold.line);
+    if (nativeProblem) return [nativeProblem];
     if (!/ 0 hits/.test(cold.line)) {
       problems.push(`cold run was not cold: ${cold.line}`);
     }
@@ -1147,6 +1168,14 @@ async function hammer(argv: string[]): Promise<number> {
 export function nativeReason(line: string): string | undefined {
   const at = line.indexOf(`${NATIVE_PREFIX}: `);
   return at < 0 ? undefined : line.slice(at + NATIVE_PREFIX.length + 2).trim();
+}
+
+/** The failure for a real-repository run whose cache went native, if it did. */
+export function nativeRunProblem(line: string): string | undefined {
+  const reason = nativeReason(line);
+  return reason === undefined
+    ? undefined
+    : `cache is native here: ${reason}; parity cannot be proven`;
 }
 
 /** Printed by a `rows` or `real` child when it ran to the end. */
