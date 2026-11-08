@@ -64,7 +64,7 @@ attribute or spread key that a later source overwrites is never validated,
 which matches Marko. The wrapper cannot byte-match a hand-written twin, so the
 oracle rows `attrs` and `todos` (dom, ssr-hydratable; both backends) are
 recorded in `fixtures/divergences.md`. Coverage:
-`packages/hosts/solid/src/attribute-value.test.ts` (shared real-render probe)
+`packages/oracle/src/attribute-value.test.ts` (shared real-render probe)
 and `attr-guard.test.ts`.
 
 **On Solid, `prop:name` is Solid's own opt-in, and MX emits the name
