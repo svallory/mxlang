@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import {
   appendFileSync,
   cpSync,
@@ -11,9 +10,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
 import { expect, it } from "vitest";
-import { fixtures, mxTsc, plainTsc, repoRoot } from "./test-support.ts";
+import {
+  fixtures,
+  mxTsc,
+  plainTsc,
+  repoRoot,
+  spawnWatch,
+} from "./test-support.ts";
 
 const WAIT_MS = 30_000;
 const MESSAGE =
@@ -82,10 +86,10 @@ it.each([
       symlinkSync(join(repoRoot, "node_modules"), join(dir, "node_modules"));
       const file = join(dir, "src", `Widget.${extension}`);
       const other = join(dir, "src", "index.ts");
-      const child = spawn(
-        process.execPath,
-        [
-          entry,
+      const run = await spawnWatch({
+        cwd: dir,
+        entry,
+        args: [
           "-w",
           "-p",
           "tsconfig.json",
@@ -93,66 +97,17 @@ it.each([
           "false",
           "--preserveWatchOutput",
         ],
-        {
-          cwd: dir,
-          env: {
-            ...process.env,
-            NO_COLOR: "1",
-            TSC_WATCHFILE: "DynamicPriorityPolling",
-            TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
-          },
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
-      const closed = new Promise<void>((resolve) =>
-        child.once("close", () => resolve()),
-      );
-      const lifetime = setTimeout(() => child.kill("SIGKILL"), 90_000);
-      stop = async () => {
-        clearTimeout(lifetime);
-        child.kill("SIGKILL");
-        await closed;
-      };
-      let output = "";
-      let failure: Error | undefined;
-      child.on("error", (error) => {
-        failure = error;
+        armFile: other,
+        lifetimeMs: 90_000,
       });
-      child.stdout.on("data", (chunk) => {
-        output += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        output += chunk;
-      });
-      const untilSummary = async (since: number, edited?: string) => {
-        const deadline = Date.now() + WAIT_MS;
-        let nextTouch = Date.now() + 2_500;
-        while (
-          !/Found \d+ errors?\. Watching for file changes\./.test(
-            output.slice(since),
-          )
-        ) {
-          if (failure) throw failure;
-          if (
-            child.exitCode !== null ||
-            child.signalCode !== null ||
-            Date.now() > deadline
-          ) {
-            throw new Error(`watch did not finish a rebuild:\n${output}`);
-          }
-          // The initial summary can precede watcher arming. Retry a newline
-          // only until a rebuild starts; never debounce an ongoing compile.
-          if (
-            edited &&
-            Date.now() >= nextTouch &&
-            !output.slice(since).includes("File change detected")
-          ) {
-            appendFileSync(edited, "\n");
-            nextTouch = Date.now() + 2_500;
-          }
-          await delay(100);
-        }
-        return output.slice(since);
+      stop = () => run.stop();
+      const untilSummary = async (since: number) => {
+        await run.until(
+          /Found \d+ errors?\. Watching for file changes\./,
+          since,
+          WAIT_MS,
+        );
+        return run.output().slice(since);
       };
       const exact = `src/${position}: ${MESSAGE}`;
       const expectBroken = (cycle: string) => {
@@ -161,23 +116,28 @@ it.each([
         ).toEqual([exact]);
         expect(cycle).toContain("Found 1 error.");
       };
-      expectBroken(await untilSummary(0));
+      // Arming touched `other`, so cut at the first summary.
+      expectBroken(
+        run
+          .output()
+          .slice(0, run.output().indexOf("Watching for file changes.")),
+      );
       // A different file first exercises reuse of the original diagnostics;
       // changing the erroring file then exercises recompilation/remapping.
       for (const edited of [other, file, other, file]) {
-        const since = output.length;
+        const since = run.output().length;
         appendFileSync(edited, "\n");
-        expectBroken(await untilSummary(since, edited));
+        expectBroken(await untilSummary(since));
       }
       const broken = readFileSync(file, "utf8");
-      let since = output.length;
+      let since = run.output().length;
       writeFileSync(file, broken.replace('"not a number"', "2"));
-      const clean = await untilSummary(since, file);
+      const clean = await untilSummary(since);
       expect(clean).toContain("Found 0 errors.");
       expect(clean).not.toContain("error TS");
-      since = output.length;
+      since = run.output().length;
       writeFileSync(file, broken);
-      expectBroken(await untilSummary(since, file));
+      expectBroken(await untilSummary(since));
     } finally {
       await stop?.();
       rmSync(dir, { recursive: true, force: true });

@@ -1,5 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync, renameSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -11,6 +10,7 @@ import {
   privateNodeModules,
   scratch,
 } from "./build-uptodate-support.ts";
+import { type SpawnedWatch, spawnWatch } from "./test-support.ts";
 
 /**
  * Watch timing differs by platform, and so does tsc's own behaviour (see the
@@ -26,13 +26,6 @@ import {
  * resolve an extensionless `.ng.mx` import.
  */
 const WAIT_MS = 60_000;
-/**
- * Gap between touches while waiting for the watchers to arm. tsc debounces a
- * burst of changes by resetting a 250 ms timer on each one, and its dynamic
- * polling can lag a touch by up to 2 s, so touching faster than that can keep
- * resetting the rebuild forever and the touches never produce a rebuild.
- */
-const TOUCH_EVERY_MS = 2_500;
 /**
  * How long tsc gets to arm its watchers after printing the first summary. Under
  * load (several tsc processes at once) that took ~58 s, so it is generous.
@@ -51,82 +44,20 @@ const plainTsc = createRequire(import.meta.url).resolve(
 );
 const LATE_IMPORT =
   'import { late } from "late-pkg";\nexport const a: number = late;\n';
-const running: ChildProcess[] = [];
+const running: SpawnedWatch[] = [];
 
-afterEach(() => {
-  for (const child of running.splice(0)) child.kill("SIGKILL");
+afterEach(async () => {
+  await Promise.all(running.splice(0).map((w) => w.stop()));
 });
 
-function watch(cwd: string, args: string[], entry = mxTsc) {
-  const child = spawn(process.execPath, [entry, ...args], {
-    cwd,
-    env: {
-      ...process.env,
-      NO_COLOR: "1",
-      TSC_WATCHFILE: "DynamicPriorityPolling",
-      TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
-    },
-  });
-  running.push(child);
-  let output = "";
-  child.stdout.on("data", (chunk) => {
-    output += chunk;
-  });
-  child.stderr.on("data", (chunk) => {
-    output += chunk;
-  });
-  return {
-    output: () => output,
-    /** Resolves once `output` matches; rejects with the output on timeout. */
-    async until(
-      pattern: RegExp,
-      since = 0,
-      timeoutMs = WAIT_MS,
-    ): Promise<string> {
-      const deadline = Date.now() + timeoutMs;
-      while (Date.now() < deadline) {
-        if (pattern.test(output.slice(since))) return output;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      throw new Error(`timed out waiting for ${pattern}:\n${output}`);
-    },
-    /**
-     * Resolves once tsc's watchers are armed, proven by tsc rebuilding after a
-     * touch of `file`. The first "Found N errors" line is printed *before*
-     * `-b -w` creates its watchers, and creating them walks every directory
-     * under the project (slow under load), so a change made right after that
-     * line can land before the watchers take their baseline and is never
-     * reported. A touch that tsc reports is the only observable "armed" signal;
-     * the touch is repeated because the early ones may land before arming.
-     */
-    async armed(file: string, timeoutMs = ARM_WAIT_MS): Promise<void> {
-      const since = output.length;
-      let lastTail = "";
-      const deadline = Date.now() + timeoutMs;
-      while (!/File change detected/.test(output.slice(since))) {
-        if (Date.now() > deadline) {
-          throw new Error(`watch never armed:\n${output}`);
-        }
-        const now = new Date();
-        utimesSync(file, now, now);
-        await new Promise((resolve) => setTimeout(resolve, TOUCH_EVERY_MS));
-      }
-      // Let the rebuilds the touches caused finish (the loop above can touch
-      // once more after the first rebuild started), so none of them can be
-      // mistaken for, or overlap, the one the install causes.
-      let settled = 0;
-      while (settled < 8) {
-        if (Date.now() > deadline) {
-          throw new Error(`rebuild never settled:\n${output}`);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        const tail = output.slice(output.lastIndexOf("File change detected"));
-        settled =
-          /Found \d+ errors?/.test(tail) && tail === lastTail ? settled + 1 : 0;
-        lastTail = tail;
-      }
-    },
-  };
+async function watch(
+  cwd: string,
+  args: string[],
+  options: { entry?: string; armFile?: string } = {},
+) {
+  const w = await spawnWatch({ cwd, args, ...options });
+  running.push(w);
+  return w;
 }
 
 function installLatePackage(dir: string) {
@@ -150,14 +81,12 @@ describe("mx-tsc watch modes", () => {
       const dir = scratch(cliFixture);
       privateNodeModules(dir);
       importsOf(dir, LATE_IMPORT);
-      const run = watch(dir, [
-        "-b",
-        "-w",
-        "tsconfig.app.json",
-        "--preserveWatchOutput",
-      ]);
+      const run = await watch(
+        dir,
+        ["-b", "-w", "tsconfig.app.json", "--preserveWatchOutput"],
+        { armFile: join(dir, "src", "main.ts") },
+      );
       await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
-      await run.armed(join(dir, "src", "main.ts"));
       const mark = run.output().length;
       installLatePackage(dir);
       await run.until(/Found 0 errors/, mark);
@@ -177,10 +106,10 @@ describe("mx-tsc watch modes", () => {
         const dir = scratch(cliFixture);
         privateNodeModules(dir);
         importsOf(dir, LATE_IMPORT);
-        const run = watch(
+        const run = await watch(
           dir,
           ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"],
-          entry,
+          { entry, armFile: join(dir, "src", "main.ts") },
         );
         await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
         const mark = run.output().length;
@@ -213,7 +142,7 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component";\nexport const s: string = AppComponent;\n',
       );
-      const run = watch(dir, [
+      const run = await watch(dir, [
         "-w",
         "-p",
         "tsconfig.app.json",
@@ -233,7 +162,7 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component.ng";\nexport const c = AppComponent;\n',
       );
-      const run = watch(dir, [
+      const run = await watch(dir, [
         "-b",
         "-w",
         "tsconfig.app.json",

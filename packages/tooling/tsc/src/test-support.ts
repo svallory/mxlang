@@ -1,5 +1,13 @@
-import { execFile, execFileSync, spawnSync } from "node:child_process";
+import {
+  type ChildProcess,
+  execFile,
+  execFileSync,
+  spawn,
+  spawnSync,
+} from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { runInProcess } from "./in-process.ts";
 
@@ -158,4 +166,146 @@ export function runSplit(entry: string, args: string[]): RunSplit {
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
+}
+
+/** Gap between touches while arming; see `spawnWatch`. */
+const ARM_TOUCH_EVERY_MS = 2_500;
+/** How long a watcher gets to print its first summary. */
+const WATCH_FIRST_SUMMARY_MS = 60_000;
+/** How long tsc gets to arm its watchers after the first summary (~58 s under load). */
+const WATCH_ARM_MS = 150_000;
+
+export interface SpawnedWatch {
+  child: ChildProcess;
+  /** Everything the watcher printed so far (stdout and stderr). */
+  output(): string;
+  /** Resolves once `output.slice(since)` matches; rejects with the output on timeout or exit. */
+  until(pattern: RegExp, since?: number, timeoutMs?: number): Promise<string>;
+  /** Kills the watcher and waits for it to close. Idempotent. */
+  stop(): Promise<void>;
+}
+
+export interface SpawnWatchOptions {
+  cwd: string;
+  /** Arguments after the entry point, e.g. `["-w", "-p", "tsconfig.json"]`. */
+  args: string[];
+  entry?: string;
+  /**
+   * A file of the watched project. Required whenever the test acts on the
+   * project after this returns: tsc registers its directory and file watchers
+   * only after the first summary (plain TypeScript does the same; `-b -w`
+   * walks every directory first, slow under load), so a change made right
+   * after the summary can land before the watchers take their baseline and is
+   * never reported. The helper appends a newline to this file until tsc
+   * reports a rebuild, the one observable "armed" signal, then waits for the
+   * rebuilds the touches caused to finish so none is mistaken for the test's
+   * own. The output of the first build is `output()` up to its first
+   * `Watching for file changes.`. Omit it for a test that only reads the
+   * first build.
+   */
+  armFile?: string;
+  /** Kill the watcher after this long even if the test never stops it. */
+  lifetimeMs?: number;
+  /** First-summary pattern. Default: any `Found N errors` line. */
+  ready?: RegExp;
+}
+
+/**
+ * The one way watch tests spawn `tsc -w` / `-b -w`: polling watchers for steady
+ * timing, NO_COLOR, output capture. Resolves with the first summary printed
+ * and, when `armFile` is given, only once the watchers are armed. The caller
+ * owns `stop()` (call it in a `finally`/`afterEach`).
+ */
+export async function spawnWatch(
+  options: SpawnWatchOptions,
+): Promise<SpawnedWatch> {
+  const { cwd, args, entry = mxTsc, armFile, lifetimeMs, ready } = options;
+  const child = spawn(process.execPath, [entry, ...args], {
+    cwd,
+    env: {
+      ...process.env,
+      NO_COLOR: "1",
+      TSC_WATCHFILE: "DynamicPriorityPolling",
+      TSC_WATCHDIRECTORY: "RecursiveDirectoryUsingDynamicPriorityPolling",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const closed = new Promise<void>((resolve) =>
+    child.once("close", () => resolve()),
+  );
+  const lifetime =
+    lifetimeMs === undefined
+      ? undefined
+      : setTimeout(() => child.kill("SIGKILL"), lifetimeMs);
+  let output = "";
+  let failure: Error | undefined;
+  child.on("error", (error) => {
+    failure = error;
+  });
+  child.stdout?.on("data", (chunk) => {
+    output += chunk;
+  });
+  child.stderr?.on("data", (chunk) => {
+    output += chunk;
+  });
+  const watch: SpawnedWatch = {
+    child,
+    output: () => output,
+    async until(pattern, since = 0, timeoutMs = WATCH_FIRST_SUMMARY_MS) {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        if (pattern.test(output.slice(since))) return output;
+        if (failure) throw failure;
+        if (child.exitCode !== null || child.signalCode !== null) {
+          throw new Error(`watch exited waiting for ${pattern}:\n${output}`);
+        }
+        await delay(100);
+      }
+      throw new Error(`timed out waiting for ${pattern}:\n${output}`);
+    },
+    async stop() {
+      if (lifetime) clearTimeout(lifetime);
+      child.kill("SIGKILL");
+      await closed;
+    },
+  };
+  try {
+    await watch.until(ready ?? /Found \d+ errors?/);
+    if (armFile) await armWatch(watch, armFile);
+  } catch (error) {
+    await watch.stop();
+    throw error;
+  }
+  return watch;
+}
+
+async function armWatch(watch: SpawnedWatch, file: string): Promise<void> {
+  const since = watch.output().length;
+  const deadline = Date.now() + WATCH_ARM_MS;
+  let nextTouch = 0;
+  while (!/File change detected/.test(watch.output().slice(since))) {
+    if (Date.now() > deadline) {
+      throw new Error(`watch never armed:\n${watch.output()}`);
+    }
+    if (Date.now() >= nextTouch) {
+      appendFileSync(file, "\n");
+      nextTouch = Date.now() + ARM_TOUCH_EVERY_MS;
+    }
+    await delay(50);
+  }
+  // Let the rebuilds the touches caused finish (the loop above can touch once
+  // more after the first rebuild started).
+  let settled = 0;
+  let lastTail = "";
+  while (settled < 3) {
+    if (Date.now() > deadline) {
+      throw new Error(`rebuild never settled:\n${watch.output()}`);
+    }
+    await delay(200);
+    const output = watch.output();
+    const tail = output.slice(output.lastIndexOf("File change detected"));
+    settled =
+      /Found \d+ errors?/.test(tail) && tail === lastTail ? settled + 1 : 0;
+    lastTail = tail;
+  }
 }
