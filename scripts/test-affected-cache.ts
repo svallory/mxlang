@@ -1,5 +1,5 @@
 /**
- * Opt-in selection cache for `bun run test:affected`.
+ * Selection cache for `bun run test:affected`.
  *
  * `vitest related` spends ~15 s serially transforming every test file and its
  * imports just to read each module's import list (`deps` + `dynamicDeps`).
@@ -42,8 +42,10 @@
  * - storage: a versioned payload with an integrity checksum, atomic
  *   content-addressed writes (temp file + rename), a size bound and GC.
  *
- * Off unless `MX_AFFECTED_CACHE=1`; never with `CI` set or
- * `MX_AFFECTED_NATIVE=1`.
+ * On by default for local runs; never with `CI` set or `MX_AFFECTED_NATIVE=1`
+ * (and `MX_AFFECTED_CACHE=0` turns it off too). `bun run test:affected:parity`
+ * (scripts/test-affected-parity.ts, a `verify` step) proves it agrees with
+ * native selection.
  */
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -146,8 +148,8 @@ export function cacheMode(env: NodeJS.ProcessEnv): Mode {
   if (env.MX_AFFECTED_NATIVE === "1") {
     return { on: false, reason: "MX_AFFECTED_NATIVE=1" };
   }
-  if (env.MX_AFFECTED_CACHE !== "1") {
-    return { on: false, reason: "MX_AFFECTED_CACHE is not 1" };
+  if (env.MX_AFFECTED_CACHE === "0") {
+    return { on: false, reason: "MX_AFFECTED_CACHE=0" };
   }
   return { on: true };
 }
@@ -319,6 +321,22 @@ function distFiles(root: string): string[] {
   return out;
 }
 
+/**
+ * `path -> target` for every symlink in the file list. The list names a link
+ * once whatever it points at, but a resolution follows it to the target's
+ * files, so retargeting a link must change the inventory.
+ */
+function symlinkLines(root: string, files: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const f of files) {
+    try {
+      const p = resolve(root, f);
+      if (lstatSync(p).isSymbolicLink()) out.push(`${f} -> ${readlinkSync(p)}`);
+    } catch {}
+  }
+  return out.sort();
+}
+
 /** Gather every namespace input for `root` from disk and the environment. */
 export function collectInputs(
   root: string,
@@ -400,7 +418,9 @@ export function collectInputs(
     manifests,
     packages,
     inventory:
-      files === undefined ? undefined : sha([...files].sort().join("\n")),
+      files === undefined
+        ? undefined
+        : sha([...files].sort().concat(symlinkLines(root, files)).join("\n")),
     projects,
   };
 }

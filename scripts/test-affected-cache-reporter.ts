@@ -18,7 +18,12 @@ import {
 
 interface VitestProject {
   name: string;
-  config: { root: string; server?: unknown; alias?: unknown };
+  config: {
+    root: string;
+    server?: unknown;
+    alias?: unknown;
+    define?: unknown;
+  };
   vite: { config: Record<string, unknown> };
   vitenode: ProjectLike["vitenode"];
 }
@@ -40,6 +45,9 @@ function projectInput(p: VitestProject): ProjectInput {
     config: {
       mode: c.mode,
       define: c.define,
+      // Vitest moves a project's `define` out of the vite config into its own
+      // (the vite one keeps only NODE_ENV), so the vite value alone misses it.
+      testDefine: p.config.define,
       resolve: c.resolve,
       ssr: c.ssr,
       esbuild: c.esbuild,

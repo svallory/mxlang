@@ -113,28 +113,29 @@ afterAll(() => {
 });
 
 describe("cache switch (AC-2)", () => {
-  it("is off by default, with CI, and with MX_AFFECTED_NATIVE=1; reads nothing then", () => {
-    expect(cacheMode({}).on).toBe(false);
+  it("is on locally by default; off with CI, MX_AFFECTED_NATIVE=1 and MX_AFFECTED_CACHE=0; reads nothing then", () => {
+    expect(cacheMode({}).on).toBe(true);
     expect(cacheMode({ MX_AFFECTED_CACHE: "1" }).on).toBe(true);
+    expect(cacheMode({ CI: "true" }).on).toBe(false);
     expect(cacheMode({ MX_AFFECTED_CACHE: "1", CI: "true" }).on).toBe(false);
+    expect(cacheMode({ MX_AFFECTED_NATIVE: "1" }).on).toBe(false);
     expect(
       cacheMode({ MX_AFFECTED_CACHE: "1", MX_AFFECTED_NATIVE: "1" }).on,
     ).toBe(false);
-    expect(cacheArgs({})).toEqual([]);
-    expect(cacheArgs({ MX_AFFECTED_CACHE: "1", CI: "1" })).toEqual([]);
-    expect(
-      cacheArgs({ MX_AFFECTED_CACHE: "1", MX_AFFECTED_NATIVE: "1" }),
-    ).toEqual([]);
-    expect(cacheArgs({ MX_AFFECTED_CACHE: "1" }).join(" ")).toContain(
+    expect(cacheMode({ MX_AFFECTED_CACHE: "0" }).on).toBe(false);
+    expect(cacheArgs({}).join(" ")).toContain(
       "test-affected-cache-reporter.ts",
     );
-    expect(cacheArgs({ MX_AFFECTED_CACHE: "1" })[0]).toBe("--reporter=default");
+    expect(cacheArgs({ CI: "1" })).toEqual([]);
+    expect(cacheArgs({ MX_AFFECTED_NATIVE: "1" })).toEqual([]);
+    expect(cacheArgs({ MX_AFFECTED_CACHE: "0" })).toEqual([]);
+    expect(cacheArgs({})[0]).toBe("--reporter=default");
     // A reporter the caller names replaces the injected default.
-    expect(cacheArgs({ MX_AFFECTED_CACHE: "1" }, ["--reporter=dot"])).toEqual([
+    expect(cacheArgs({}, ["--reporter=dot"])).toEqual([
       expect.stringContaining("test-affected-cache-reporter.ts"),
     ]);
 
-    // The reporter, with the switch on but CI set, leaves vite-node untouched
+    // The reporter, with CI set, leaves vite-node untouched
     // and writes no store.
     const transform = async () => null;
     const vitenode = { _transformRequest: transform };

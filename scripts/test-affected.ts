@@ -9,8 +9,8 @@
  *                                    see AGENTS.md
  *   bun run test:affected -- <args>  extra args go to vitest (or moon with --moon)
  *
- * `MX_AFFECTED_CACHE=1` (opt-in; ignored with `CI` set or
- * `MX_AFFECTED_NATIVE=1`) caches the import lists `vitest related` computes
+ * The selection cache (on by default locally; off with `CI` set,
+ * `MX_AFFECTED_NATIVE=1` or `MX_AFFECTED_CACHE=0`) caches the import lists `vitest related` computes
  * while selecting, so a warm selection takes under a second instead of ~15 s.
  * Native `vitest related` still selects and runs; any doubt falls back to
  * native. See scripts/test-affected-cache.ts.
@@ -176,10 +176,10 @@ function run(cmd: string[], env: NodeJS.ProcessEnv): number {
 }
 
 /**
- * Extra vitest args that turn on the opt-in selection cache: a reporter that
- * serves cached import lists during native `vitest related` selection (see
- * test-affected-cache.ts). Empty (native, no cache read) unless
- * MX_AFFECTED_CACHE=1, and always empty with CI set or MX_AFFECTED_NATIVE=1.
+ * Extra vitest args that turn on the selection cache: a reporter that serves
+ * cached import lists during native `vitest related` selection (see
+ * test-affected-cache.ts). Empty (native, no cache read) with CI set,
+ * MX_AFFECTED_NATIVE=1 or MX_AFFECTED_CACHE=0.
  */
 export function cacheArgs(
   env: NodeJS.ProcessEnv,
