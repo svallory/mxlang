@@ -64,6 +64,19 @@ const repoRoot = resolve(import.meta.dirname, "..");
 
 // --------------------------------------------------------------- harness
 
+/**
+ * The reporter reports through `console.log`. Concurrent selections cannot
+ * each swap and restore it (the last restore would reinstate another's
+ * capture and swallow all later output), so one router is installed once and
+ * fans lines out to the sinks of the selections in flight.
+ */
+const realLog = console.log.bind(console);
+const sinks = new Set<string[]>();
+console.log = (...a: unknown[]) => {
+  if (sinks.size === 0) realLog(...a);
+  for (const sink of sinks) sink.push(a.join(" "));
+};
+
 interface Fx {
   /** fixture project root (a git repository) */
   root: string;
@@ -116,10 +129,7 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
         : (o.inputs ?? ((i) => i))(gather(root, projects)),
   });
   const lines: string[] = [];
-  const log = console.log;
-  console.log = (...a: unknown[]) => {
-    lines.push(a.join(" "));
-  };
+  sinks.add(lines);
   const exitCode = process.exitCode;
   try {
     const ctx = await createVitest(
@@ -150,7 +160,7 @@ async function select(fx: Fx, o: SelectOptions): Promise<Selection> {
       await ctx.close();
     }
   } finally {
-    console.log = log;
+    sinks.delete(lines);
     process.exitCode = exitCode;
   }
 }
@@ -623,10 +633,7 @@ async function realDeps(
 ): Promise<{ deps: DepMap; line: string; sampled: Map<string, string[]> }> {
   const reporter = new AffectedCacheReporter({ dir: store });
   const lines: string[] = [];
-  const log = console.log;
-  console.log = (...a: unknown[]) => {
-    lines.push(a.join(" "));
-  };
+  sinks.add(lines);
   const exitCode = process.exitCode;
   try {
     const ctx = await createVitest(
@@ -696,7 +703,7 @@ async function realDeps(
       await ctx.close();
     }
   } finally {
-    console.log = log;
+    sinks.delete(lines);
     process.exitCode = exitCode;
   }
 }
