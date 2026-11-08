@@ -153,25 +153,33 @@ function checkSpawned(
   signal: AbortSignal,
 ): Promise<{ status: number; text: string }> {
   return new Promise((resolve) => {
+    let result: { status: number; text: string };
     const child = execFile(
       process.execPath,
       [mxTsc, "--noEmit", "-p", "tsconfig.json"],
       { cwd: dir, encoding: "utf8", signal },
       (error, stdout, stderr) => {
-        const code = (error as { code?: unknown } | null)?.code;
-        resolve(
-          report(
-            {
-              status: error ? (typeof code === "number" ? code : -1) : 0,
-              stdout,
-              stderr,
-            },
-            dir,
-            dir,
-          ),
+        const code = error?.code;
+        // Abort, maxBuffer, a missing entry or death by signal have no numeric
+        // exit code: say why in the text the assertions print.
+        const failure =
+          error && typeof code !== "number"
+            ? `\n[spawn failed: ${error.message}${error.signal ? ` (signal ${error.signal})` : ""}]`
+            : "";
+        result = report(
+          {
+            status: error ? (typeof code === "number" ? code : -1) : 0,
+            stdout,
+            stderr: stderr + failure,
+          },
+          dir,
+          dir,
         );
       },
     );
+    // Resolve on `close`, not on the callback: after an abort the child may
+    // still be running in `dir`, which afterEach is about to remove.
+    child.on("close", () => resolve(result));
     child.stdin?.end();
   });
 }
@@ -193,8 +201,9 @@ const UNKNOWN_HOST = [
   "",
 ].join("\n");
 
-// Each case runs `mx-tsc` in this process; under a loaded machine (the whole
-// package's files in parallel) one can pass vitest's 5 s default.
+// Most cases run `mx-tsc` in this process; h24 runs it as an async child with
+// the temp project as cwd. Under a loaded machine (the whole package's files in
+// parallel) one can pass vitest's 5 s default.
 describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
   it("h23: an unknown mx.host is a warning at the value, and the exit code stays 0", () => {
     const dir = project({ ...HTML_FILES, "package.json": UNKNOWN_HOST });
@@ -211,20 +220,20 @@ describe("mx-tsc prints host-policy diagnostics", { timeout: 60_000 }, () => {
   it("h24: a malformed package.json is a warning at the parse error, and the exit code is not changed", async ({
     signal,
   }) => {
-    const control = await checkSpawned(
-      project({
-        ...HTML_FILES,
-        "package.json": '{ "name": "afa", "mx": { "host": "html" } }',
-      }),
-      signal,
-    );
+    const controlDir = project({
+      ...HTML_FILES,
+      "package.json": '{ "name": "afa", "mx": { "host": "html" } }',
+    });
     const dir = project({
       ...HTML_FILES,
       "package.json":
         '{ "name": "afa", "type": "module", "mx": { "host": "preact", }',
     });
 
-    const { status, text } = await checkSpawned(dir, signal);
+    const [control, { status, text }] = await Promise.all([
+      checkSpawned(controlDir, signal),
+      checkSpawned(dir, signal),
+    ]);
 
     expect(text).toMatch(
       /(?:^|\n)package\.json\(1,\d+\): warning TS80003: could not be parsed as JSON: /,
