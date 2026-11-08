@@ -77,16 +77,21 @@ const repoRoot = resolve(import.meta.dirname, "..");
 // --------------------------------------------------------------- harness
 
 /**
- * The reporter reports through `console.log`; capture it for one selection.
- * Returns the restore function.
+ * The reporter reports through `console.log` and explains a native fallback
+ * through `console.warn`; capture both for one selection. Returns the restore
+ * function.
  */
 function capture(lines: string[]): () => void {
-  const original = console.log;
-  console.log = (...a: unknown[]) => {
+  const log = console.log;
+  const warn = console.warn;
+  const push = (...a: unknown[]) => {
     lines.push(a.join(" "));
   };
+  console.log = push;
+  console.warn = push;
   return () => {
-    console.log = original;
+    console.log = log;
+    console.warn = warn;
   };
 }
 
@@ -276,7 +281,7 @@ function buildBaseline(root: string): void {
     mkdirSync(join(root, rel, ".."), { recursive: true });
     writeFileSync(join(root, rel), text);
   };
-  w(".gitignore", "node_modules/\n.store/\n.hammer/\n");
+  w(".gitignore", "node_modules/\n.store/\n.hammer/\n.ignored/\n");
   w(
     "package.json",
     JSON.stringify({
@@ -575,23 +580,20 @@ export const ROWS: Row[] = [
     guard:
       "inventory: a link whose target has no file in the list makes selection native",
     setup: (fx) => {
-      const dir = join(fx.root, ".hammer", "ign");
+      const dir = join(fx.root, ".ignored", "ign");
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, "z.ts"), "export const z = 'ts';\n");
-      symlinkSync(
-        join(".hammer", "ign").replace(/^/, "../"),
-        join(fx.root, "src", "ign"),
-      );
+      symlinkSync("../.ignored/ign", join(fx.root, "src", "ign"));
       write(fx, "ign.test.ts", TEST("ign", 'import "./src/ign/z";'));
     },
     poison: "empty-lists",
     poisonOptional: true,
     mutate: (fx) =>
       writeFileSync(
-        join(fx.root, ".hammer", "ign", "z.js"),
+        join(fx.root, ".ignored", "ign", "z.js"),
         "export const z = 'js';\n",
       ),
-    related: (fx) => join(fx.root, ".hammer", "ign", "z.js"),
+    related: (fx) => join(fx.root, ".ignored", "ign", "z.js"),
     expect: ["ign.test.ts"],
   },
   {
@@ -864,9 +866,11 @@ interface Spec {
 }
 
 /**
- * The vitest project names of every shard, balanced by test-file count. Fails
- * unless the shards together cover every project of the root config, each
- * exactly once, and none is empty (`project: []` would mean every project).
+ * The vitest project names of every shard, balanced by test-file count. Every
+ * directory `projectDirs()` lists is placed in exactly one shard and none is
+ * empty (`project: []` would mean every project). That `projectDirs()` matches
+ * the projects the root config creates is pinned by the drift test in
+ * `test-affected.test.ts`.
  */
 export function planShards(count: number): string[][] {
   const dirs = projectDirs();
@@ -893,13 +897,6 @@ export function planShards(count: number): string[][] {
     const k = load.indexOf(Math.min(...load));
     load[k] += w;
     shards[k].push(name);
-  }
-  const planned = shards.flat().sort();
-  const every = dirs.map((d) => projectFor(d, dirs)).sort();
-  if (planned.join() !== every.join()) {
-    throw new Error(
-      `shards cover [${planned}] but the root config has [${every}]`,
-    );
   }
   const empty = shards.findIndex((p) => p.length === 0);
   if (empty >= 0) throw new Error(`shard ${empty + 1}/${count} has no project`);
@@ -1017,6 +1014,10 @@ async function runReal(
     const t0 = performance.now();
     const cold = await realDeps(store, projects);
     const t1 = performance.now();
+    const native = /native selection \(.*\)/.exec(cold.line);
+    if (native) {
+      return [`cache is native here: ${native[0]}; parity cannot be proven`];
+    }
     if (!/ 0 hits/.test(cold.line)) {
       problems.push(`cold run was not cold: ${cold.line}`);
     }

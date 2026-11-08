@@ -28,7 +28,10 @@
  *   `packages`). Other gitignored
  *   files (`.gen/`, deeper `dist/`, vendored sources) are not listed, so
  *   adding or removing one does not change the namespace; no test import
- *   resolves through such a path today.
+ *   resolves through such a path today. For the same reason a gitignored
+ *   symlink outside `node_modules` is not a link candidate: it is neither
+ *   tracked, untracked nor a typechange, so retargeting it, or pointing it
+ *   outside the repository, is not checked.
  * - entry      (`entryKey`): the file's content hash, module id, transform
  *   mode and project, inside that namespace.
  * - bypass     (`bypassReason`): virtual or query ids, files that do not
@@ -367,6 +370,7 @@ export function collectInputs(
   projects: ProjectInput[],
   env: NodeJS.ProcessEnv,
   vitestDir: string,
+  run: (root: string, args: string[]) => string | undefined = git,
 ): Inputs {
   const versions: Record<string, string> = {};
   for (const name of Object.keys(SUPPORTED_VERSIONS)) {
@@ -375,7 +379,7 @@ export function collectInputs(
   // One git call: `-t` tags each entry, and a tracked file deleted from the
   // working tree is listed (as `H`) and again as `R`, so `R` paths are
   // subtracted.
-  const listing = git(root, [
+  const listing = run(root, [
     "ls-files",
     "-z",
     "-t",
@@ -404,27 +408,42 @@ export function collectInputs(
         if (entry.startsWith("? ")) untracked.push(path);
       }
     }
-    const tracked: string[] = [];
-    for (const e of (git(root, ["ls-files", "-s", "-z"]) ?? "").split("\0")) {
-      const tab = e.indexOf("\t");
-      if (tab > 0 && e.startsWith("120000 ")) tracked.push(e.slice(tab + 1));
+    // A failed read of either list is doubt, not an empty list: without the
+    // link candidates a retargeted link would go unchecked, so the inventory
+    // is unavailable and selection native.
+    const staged = run(root, ["ls-files", "-s", "-z"]);
+    // `--relative`: paths relative to `root`, as `ls-files` prints them.
+    const changedType = run(root, [
+      "diff",
+      "--relative",
+      "--name-only",
+      "--diff-filter=T",
+      "-z",
+    ]);
+    if (staged === undefined || changedType === undefined) {
+      files = undefined;
+    } else {
+      const tracked: string[] = [];
+      for (const e of staged.split("\0")) {
+        const tab = e.indexOf("\t");
+        if (tab > 0 && e.startsWith("120000 ")) tracked.push(e.slice(tab + 1));
+      }
+      // A tracked regular file replaced by a link in the working tree (an
+      // unstaged typechange) is not mode 120000 in the index yet.
+      const typechanged = changedType.split("\0").filter(Boolean);
+      linkCandidates = [
+        ...tracked.filter((f) => !gone.has(f)),
+        ...untracked,
+        ...typechanged,
+      ];
+      // Build output resolved through workspace links is gitignored but followed.
+      files = [
+        ...new Set([
+          ...present.filter((f) => !gone.has(f)),
+          ...distFiles(root),
+        ]),
+      ];
     }
-    // A tracked regular file replaced by a link in the working tree (an
-    // unstaged typechange) is not mode 120000 in the index yet.
-    const typechanged = (
-      git(root, ["diff", "--name-only", "--diff-filter=T", "-z"]) ?? ""
-    )
-      .split("\0")
-      .filter(Boolean);
-    linkCandidates = [
-      ...tracked.filter((f) => !gone.has(f)),
-      ...untracked,
-      ...typechanged,
-    ];
-    // Build output resolved through workspace links is gitignored but followed.
-    files = [
-      ...new Set([...present.filter((f) => !gone.has(f)), ...distFiles(root)]),
-    ];
   }
   let links: string | undefined;
   if (files !== undefined) {

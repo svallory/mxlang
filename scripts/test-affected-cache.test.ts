@@ -163,6 +163,20 @@ describe("cache switch (AC-2)", () => {
 });
 
 describe("guards fall back to native (AC-3)", () => {
+  it.each([
+    ["ls-files", "-s"],
+    ["diff", "--diff-filter=T"],
+  ])("a failed `git %s` read makes the inventory unavailable", (cmd, flag) => {
+    const failing = (r: string, args: string[]) =>
+      args[0] === cmd && args.includes(flag)
+        ? undefined
+        : spawnSync("git", args, { cwd: r, encoding: "utf8" }).stdout;
+    const i = collectInputs(root, [project()], {}, root, failing);
+    expect(i.inventory).toBeUndefined();
+    expect(namespaceFor(i).ok).toBe(false);
+    expect(namespaceFor(collect()).ok).toBe(true);
+  });
+
   it("every guard makes the cached entry unreachable or unusable", () => {
     const base = collect();
     const ns = namespaceFor(base);
