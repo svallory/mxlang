@@ -121,7 +121,7 @@ jobs:
         run: test "$(node --version)" = "v22.18.0"
       - run: >-
           node ./node_modules/vitest/vitest.mjs run
-          --project @mxlang/core
+          --project '@mxlang/core*'
 
   test-bun-grammar:
     runs-on: ubuntu-latest

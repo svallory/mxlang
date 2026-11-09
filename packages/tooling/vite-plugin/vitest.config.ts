@@ -2,8 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Needs per-file process isolation (cached consumers bypass hoisted mocks
-    // and shared emitter/reader state when files share a worker).
+    // Module reset per file in a reused process (root forks pool shares workers).
+    // Without it: index.test.ts "mx() custom tag discovery warns once about a
+    // misconfigured mx.tags" expects 1 warning, got 0 (cached tag discovery).
     poolOptions: { forks: { isolate: true } },
     name: "@mxlang/vite-plugin",
     include: ["src/**/*.test.ts"],

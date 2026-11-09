@@ -2,8 +2,10 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Needs per-file process isolation (hoisted mocks/shared state break when
-    // files share a worker).
+    // Module reset per file in a reused process (root forks pool shares workers).
+    // Without it: ir-contract.test.ts "E3: prints Expr.code, not text rebuilt
+    // from Expr.node" expects `replaced` (its hoisted mock) and gets the
+    // unmocked output.
     poolOptions: { forks: { isolate: true } },
     // Each test in `server.test.ts` compiles a template through
     // `@mxlang/target-html` -> `@marko/compiler` and dynamic-imports the result.

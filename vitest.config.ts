@@ -13,20 +13,28 @@ if (!process.env.MX_VITEST_QUIET) {
   console.warn(workersLogLine(resolved));
 }
 
-// Root `poolOptions.forks.isolate: false` lets forks workers be reused across
-// files (the per-project `isolate` flag alone only resets modules; it cannot
-// defeat the root pool's per-file process). Projects that cannot share state
-// keep `isolate: true` explicitly in their own config; every project is
-// otherwise reset per file by vitest's module isolation settings.
+// Root `poolOptions.forks.isolate: false` is what lets the forks pool reuse
+// worker processes across files: vitest reads process isolation only from the
+// root config. A project's own `isolate` / `poolOptions.forks.isolate: true`
+// does NOT give it a fresh process; it makes vitest reset the module registry
+// and mocks per file inside the reused process (hoisted `vi.mock`s apply again,
+// source modules re-evaluate). Externalized/CJS modules, `globalThis`, process
+// listeners and child processes still carry across files.
 //
-// Core runs as two projects: the ordinary files share one module graph per
-// worker, and these three keep per-file isolation:
-// - syntax-stock-parser.test.ts: hoisted frontend mock; a cached importer
-//   bypasses it (2 failures when shared).
-// - ir-entry/ir-readonly.test.ts: compile mock freezes/records IR; cached
-//   lowering bypasses it (7 failures when shared).
-// - callee-input-probes.test.ts: registers `.solid.mx` with no unregister; the
-//   reader map survives a module reset.
+// Three tiers:
+// - Module reset per file in a reused process (`isolate: true`): host-solid,
+//   host-astro, host-preact, parser, language-server, vite-plugin and
+//   `@mxlang/core-isolated`. Each failed with `isolate: false` on hoisted-mock
+//   or shared-emitter state (named per project in its vitest.config.ts).
+// - Fresh worker per file (`pool: "threads"`, whose isolation defaults to true
+//   and is not read from the forks root): host-angular and target-html, which
+//   depend on process-level state a module reset does not clear. The threads
+//   pool runs concurrently with the forks pool, so the two are capped to share
+//   `resolved.workers` (see THREADS/FORKS below).
+// - Every other project (tsc, typescript-plugin, babel, tsx-bridge, react,
+//   hono, oracle, angular-checker, target-registry, web-elements, ...) shares
+//   one module graph per worker with no reset.
+//
 const CORE_ROOT = "packages/core";
 const CORE_ISOLATED = [
   "src/syntax-stock-parser.test.ts",
@@ -66,10 +74,19 @@ const slowProjects = [
   "packages/tooling/typescript-plugin",
 ];
 
+// The threads pool (host-angular, target-html) and the forks pool run at the
+// same time, each with its own cap; split `resolved.workers` between them so
+// the memory-based cap holds. One worker minimum each.
+const THREADS = Math.max(1, Math.floor(resolved.workers / 2));
+const FORKS = Math.max(1, resolved.workers - THREADS);
+
 export default defineConfig({
   test: {
     maxWorkers: resolved.workers,
-    poolOptions: { forks: { isolate: false } },
+    poolOptions: {
+      forks: { isolate: false, maxForks: FORKS },
+      threads: { maxThreads: THREADS },
+    },
     projects: currentLane() === "slow" ? slowProjects : projects,
   },
 });

@@ -2,8 +2,10 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Needs per-file process isolation (hoisted mocks/shared state break when
-    // files share a worker).
+    // Module reset per file in a reused process (root forks pool shares workers).
+    // Without it: frontend/stand-in-checks.test.ts "the reparse does not run
+    // for an error in a container with no triggers" expects 1 call, got 0 (a
+    // hoisted mock bypassed by an already-imported module).
     poolOptions: { forks: { isolate: true } },
     exclude: [
       "**/node_modules/**",

@@ -4,8 +4,10 @@ import { singlePreact } from "./src/fixtures/single-preact-plugin.ts";
 export default defineConfig({
   plugins: [singlePreact()],
   test: {
-    // Needs per-file process isolation (hoisted mocks/shared state break when
-    // files share a worker).
+    // Module reset per file in a reused process (root forks pool shares workers).
+    // Without it: ir-contract.test.ts "E3: prints Expr.code and never
+    // re-derives it from Expr.node" expects `replaced` (its hoisted mock) and
+    // gets the unmocked output.
     poolOptions: { forks: { isolate: true } },
     name: "@mxlang/host-preact",
     // Only the independent strict-tsc cases opt into concurrency. Their shared

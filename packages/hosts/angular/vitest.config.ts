@@ -3,10 +3,12 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Needs per-file process isolation (cached consumers bypass hoisted mocks
-    // and shared emitter/reader state when files share a worker).
+    // A fresh worker per file: Angular's TestBed is process-global. Under a
+    // shared or module-reset process, 13+ files fail in beforeAll with "Cannot
+    // set base providers because it has already been called" (e.g.
+    // attr-interpolation-literal-render.test.ts). The threads pool isolates by
+    // default; the forks pool's isolation is read only from the root config.
     pool: "threads",
-    poolOptions: { threads: { isolate: true } },
     testTimeout: 30_000,
     // Yields between tests so a file of synchronous ngtsc tests cannot hold
     // the event loop for its whole run (#390).
