@@ -42,6 +42,21 @@ export const PROJECT_GLOBS: readonly string[] = [
   "packages/editors/*",
 ];
 
+/**
+ * `packages/core` runs as two vitest projects: the ordinary files share one
+ * module graph per worker, and these three get a module reset per file in a
+ * reused process (the root vitest.config.ts says why each needs it). Single
+ * source for the root config and for `scripts/test-affected.ts`.
+ */
+export const CORE_DIR = "packages/core";
+export const CORE_PROJECT = "@mxlang/core";
+export const CORE_ISOLATED_PROJECT = "@mxlang/core-isolated";
+export const CORE_ISOLATED_FILES: readonly string[] = [
+  "src/syntax-stock-parser.test.ts",
+  "src/ir-entry/ir-readonly.test.ts",
+  "src/callee-input-probes.test.ts",
+];
+
 /** Slow-lane test files per project dir, relative to the project root. */
 export const SLOW_LANE_FILES: Readonly<Record<string, readonly string[]>> = {
   "packages/tooling/tsc": [

@@ -38,7 +38,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cacheMode } from "./test-affected-cache.ts";
-import { PROJECT_GLOBS } from "./vitest-lanes.ts";
+import {
+  CORE_DIR,
+  CORE_ISOLATED_PROJECT,
+  PROJECT_GLOBS,
+} from "./vitest-lanes.ts";
 
 const root = resolve(import.meta.dirname, "..");
 
@@ -149,7 +153,7 @@ export function projectFor(
  * files that need a module reset per file; see the root vitest.config.ts).
  */
 export const SIBLING_PROJECTS: Readonly<Record<string, readonly string[]>> = {
-  "packages/core/": ["@mxlang/core-isolated"],
+  [`${CORE_DIR}/`]: [CORE_ISOLATED_PROJECT],
 };
 
 /** Every vitest project owning a changed file: `projectFor`'s name plus its dir's siblings. */

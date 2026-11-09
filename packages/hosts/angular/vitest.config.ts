@@ -9,6 +9,8 @@ export default defineConfig({
     // attr-interpolation-literal-render.test.ts). The threads pool isolates by
     // default; the forks pool's isolation is read only from the root config.
     pool: "threads",
+    // Run after the forks projects (see the root vitest.config.ts).
+    sequence: { groupOrder: 1 },
     testTimeout: 30_000,
     // Yields between tests so a file of synchronous ngtsc tests cannot hold
     // the event loop for its whole run (#390).

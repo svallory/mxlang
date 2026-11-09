@@ -22,6 +22,8 @@ export default defineConfig({
     // threads pool isolates by default; forks isolation is read only from the
     // root config.
     pool: "threads",
+    // Run after the forks projects (see the root vitest.config.ts).
+    sequence: { groupOrder: 1 },
     exclude: [
       "**/node_modules/**",
       "src/bun.test.ts",

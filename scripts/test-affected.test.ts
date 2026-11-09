@@ -165,7 +165,9 @@ describe("projectFor", () => {
     try {
       const names = ctx.projects.map((p) => p.name);
       for (const dir of dirs) {
-        expect(names, dir).toContain(projectFor(`${dir}probe.json`, dirs));
+        for (const n of projectsFor(`${dir}probe.json`, dirs)) {
+          expect(names, dir).toContain(n);
+        }
       }
     } finally {
       await ctx.close();

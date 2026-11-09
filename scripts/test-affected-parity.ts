@@ -56,7 +56,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { createVitest } from "vitest/node";
-import { projectDirs, projectFor, SIBLING_PROJECTS } from "./test-affected.ts";
+import { projectDirs, projectsFor } from "./test-affected.ts";
 import {
   collectInputs,
   type Inputs,
@@ -911,11 +911,12 @@ export function planShards(count: number): string[][] {
   for (const [dir, w] of [...weight].sort(
     (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
   )) {
-    const name = projectFor(dir, dirs);
-    if (!name) throw new Error(`no vitest project name for ${dir}`);
+    const names = projectsFor(dir, dirs);
+    if (names.length === 0)
+      throw new Error(`no vitest project name for ${dir}`);
     const k = load.indexOf(Math.min(...load));
     load[k] += w;
-    shards[k].push(name, ...(SIBLING_PROJECTS[dir] ?? []));
+    shards[k].push(...names);
   }
   const empty = shards.findIndex((p) => p.length === 0);
   if (empty >= 0) throw new Error(`shard ${empty + 1}/${count} has no project`);

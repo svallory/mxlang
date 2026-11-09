@@ -1,5 +1,12 @@
 import { configDefaults, defineConfig } from "vitest/config";
-import { currentLane, PROJECT_GLOBS } from "./scripts/vitest-lanes.ts";
+import {
+  CORE_DIR,
+  CORE_ISOLATED_FILES,
+  CORE_ISOLATED_PROJECT,
+  CORE_PROJECT,
+  currentLane,
+  PROJECT_GLOBS,
+} from "./scripts/vitest-lanes.ts";
 import { resolveWorkers, workersLogLine } from "./scripts/vitest-workers.ts";
 
 // Workers are capped by free memory (operator ruling 2026-10-19):
@@ -28,40 +35,36 @@ if (!process.env.MX_VITEST_QUIET) {
 //   or shared-emitter state (named per project in its vitest.config.ts).
 // - Fresh worker per file (`pool: "threads"`, whose isolation defaults to true
 //   and is not read from the forks root): host-angular and target-html, which
-//   depend on process-level state a module reset does not clear. The threads
-//   pool runs concurrently with the forks pool, so the two are capped to share
-//   `resolved.workers` (see THREADS/FORKS below).
+//   depend on process-level state a module reset does not clear. They run in
+//   `sequence.groupOrder: 1`, after every forks project: vitest runs groups
+//   one after another, so the threads pool never overlaps the forks pool and
+//   each gets the full `maxWorkers` (the worker cap holds, `--maxWorkers=N`
+//   including a percentage applies as usual, and `--maxWorkers=1` serializes).
 // - Every other project (tsc, typescript-plugin, babel, tsx-bridge, react,
 //   hono, oracle, angular-checker, target-registry, web-elements, ...) shares
 //   one module graph per worker with no reset.
 //
-const CORE_ROOT = "packages/core";
-const CORE_ISOLATED = [
-  "src/syntax-stock-parser.test.ts",
-  "src/ir-entry/ir-readonly.test.ts",
-  "src/callee-input-probes.test.ts",
-];
 const coreProjects = [
   {
     test: {
-      name: "@mxlang/core",
-      root: CORE_ROOT,
+      name: CORE_PROJECT,
+      root: CORE_DIR,
       isolate: false,
-      exclude: [...configDefaults.exclude, ...CORE_ISOLATED],
+      exclude: [...configDefaults.exclude, ...CORE_ISOLATED_FILES],
     },
   },
   {
     test: {
-      name: "@mxlang/core-isolated",
-      root: CORE_ROOT,
+      name: CORE_ISOLATED_PROJECT,
+      root: CORE_DIR,
       isolate: true,
-      include: CORE_ISOLATED,
+      include: [...CORE_ISOLATED_FILES],
     },
   },
 ];
 
 const projects = PROJECT_GLOBS.flatMap((g) =>
-  g === CORE_ROOT ? coreProjects : [g],
+  g === CORE_DIR ? coreProjects : [g],
 );
 
 // `MX_TEST_LANE=slow` must run only the slow files. Every project other than
@@ -74,19 +77,10 @@ const slowProjects = [
   "packages/tooling/typescript-plugin",
 ];
 
-// The threads pool (host-angular, target-html) and the forks pool run at the
-// same time, each with its own cap; split `resolved.workers` between them so
-// the memory-based cap holds. One worker minimum each.
-const THREADS = Math.max(1, Math.floor(resolved.workers / 2));
-const FORKS = Math.max(1, resolved.workers - THREADS);
-
 export default defineConfig({
   test: {
     maxWorkers: resolved.workers,
-    poolOptions: {
-      forks: { isolate: false, maxForks: FORKS },
-      threads: { maxThreads: THREADS },
-    },
+    poolOptions: { forks: { isolate: false } },
     projects: currentLane() === "slow" ? slowProjects : projects,
   },
 });
