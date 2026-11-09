@@ -12,6 +12,10 @@ import { defineConfig } from "vitest/config";
 // `sync-esm-reload-node`).
 export default defineConfig({
   test: {
+    // Needs per-file process isolation (hoisted mocks/shared state break when
+    // files share a worker).
+    pool: "threads",
+    poolOptions: { threads: { isolate: true } },
     exclude: [
       "**/node_modules/**",
       "src/bun.test.ts",

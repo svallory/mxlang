@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Needs per-file process isolation (cached consumers bypass hoisted mocks
+    // and shared emitter/reader state when files share a worker).
+    poolOptions: { forks: { isolate: true } },
     name: "@mxlang/vite-plugin",
     include: ["src/**/*.test.ts"],
     server: {

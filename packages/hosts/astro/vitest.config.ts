@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Needs per-file process isolation (hoisted mocks/shared state break when
+    // files share a worker).
+    poolOptions: { forks: { isolate: true } },
     // Each test in `server.test.ts` compiles a template through
     // `@mxlang/target-html` -> `@marko/compiler` and dynamic-imports the result.
     // That first compile is a genuinely heavy cold import (~1.5s for the whole
