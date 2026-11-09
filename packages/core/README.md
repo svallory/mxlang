@@ -997,7 +997,7 @@ also how `.astro.mx` moves a template `static` statement into Astro frontmatter.
 ## Tests
 
 ```
-bunx vitest run --root ../.. --project @mxlang/core
+bunx vitest run --root ../.. --project '@mxlang/core*'
 ```
 
 `src/lower.test.ts` (one fixture per IR kind, positions, host hooks and error

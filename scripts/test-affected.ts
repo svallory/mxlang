@@ -123,13 +123,6 @@ export function isRelatedSource(file: string): boolean {
   return SOURCE_EXT.test(file) && !FIXTURE_DIR.test(file);
 }
 
-/**
- * The vitest project name owning a changed workspace-relative file: the
- * `test.name` of the project's vitest config when it sets one, else the
- * package.json name, else the dir name (vitest's own naming rules for a
- * config without `test.name`). `undefined` when the file is in no project
- * (docs, root scripts, apps/).
- */
 /** The longest project dir (`dirs` entries end in `/`) enclosing `file`, if any. */
 function ownerDir(file: string, list: readonly string[]): string | undefined {
   const f = `${file.replace(/\/+$/, "")}/`;
@@ -140,6 +133,13 @@ function ownerDir(file: string, list: readonly string[]): string | undefined {
   return best;
 }
 
+/**
+ * The vitest project name owning a changed workspace-relative file: the
+ * `test.name` of the project's vitest config when it sets one, else the
+ * package.json name, else the dir name (vitest's own naming rules for a
+ * config without `test.name`). `undefined` when the file is in no project
+ * (docs, root scripts, apps/).
+ */
 export function projectFor(
   file: string,
   dirs?: readonly string[],

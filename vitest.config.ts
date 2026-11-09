@@ -41,6 +41,10 @@ if (!process.env.MX_VITEST_QUIET) {
 //   one after another, so the threads pool never overlaps the forks pool and
 //   each gets the full `maxWorkers` (the worker cap holds, `--maxWorkers=N`
 //   including a percentage applies as usual, and `--maxWorkers=1` serializes).
+//   During that group the idle forks stay alive with their module graphs
+//   (measured about +0.9 GB peak over main, 3 workers, 7.5 GB box). `minForks:
+//   0` would let them exit but is not used: it raises a "Terminating worker
+//   thread" unhandled rejection in the parity run.
 // - Every other project (typescript-plugin, babel, tsx-bridge, react,
 //   hono, oracle, angular-checker, web-elements, ...) shares
 //   one module graph per worker with no reset.
