@@ -17,9 +17,13 @@ import {
   plainTsc,
   repoRoot,
   spawnWatch,
+  WATCH_ARM_MS,
+  WATCH_FIRST_SUMMARY_MS,
 } from "./test-support.ts";
 
 const WAIT_MS = 30_000;
+/** First build + arming (the helper's budgets) + five rebuilds + slack. */
+const TIMEOUT_MS = WATCH_FIRST_SUMMARY_MS + WATCH_ARM_MS + 5 * WAIT_MS + 30_000;
 const MESSAGE =
   "error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.";
 const TS_SOURCE =
@@ -98,7 +102,7 @@ it.each([
           "--preserveWatchOutput",
         ],
         armFile: other,
-        lifetimeMs: 90_000,
+        lifetimeMs: TIMEOUT_MS - 10_000,
       });
       stop = () => run.stop();
       const untilSummary = async (since: number) => {
@@ -116,15 +120,20 @@ it.each([
         ).toEqual([exact]);
         expect(cycle).toContain("Found 1 error.");
       };
-      // Arming touched `other`, so cut at the first summary.
-      expectBroken(
-        run
-          .output()
-          .slice(0, run.output().indexOf("Watching for file changes.")),
-      );
-      // A different file first exercises reuse of the original diagnostics;
-      // changing the erroring file then exercises recompilation/remapping.
-      for (const edited of [other, file, other, file]) {
+      // The first build: cut at its summary.
+      const first = run.output();
+      const firstEnd = first.indexOf("Watching for file changes.");
+      expectBroken(first.slice(0, firstEnd));
+      // Arming touched `other`, a different file: each rebuild it caused
+      // exercises reuse of the original diagnostics.
+      const armed = first
+        .slice(firstEnd)
+        .split("File change detected")
+        .slice(1);
+      expect(armed.length).toBeGreaterThan(0);
+      for (const cycle of armed) expectBroken(cycle);
+      // Changing the erroring file then exercises recompilation/remapping.
+      for (const edited of [file, other, file]) {
         const since = run.output().length;
         appendFileSync(edited, "\n");
         expectBroken(await untilSummary(since));
@@ -143,5 +152,5 @@ it.each([
       rmSync(dir, { recursive: true, force: true });
     }
   },
-  90_000,
+  TIMEOUT_MS,
 );

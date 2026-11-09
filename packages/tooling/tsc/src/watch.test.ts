@@ -10,7 +10,12 @@ import {
   privateNodeModules,
   scratch,
 } from "./build-uptodate-support.ts";
-import { type SpawnedWatch, spawnWatch } from "./test-support.ts";
+import {
+  type SpawnedWatch,
+  spawnWatch,
+  WATCH_ARM_MS,
+  WATCH_FIRST_SUMMARY_MS,
+} from "./test-support.ts";
 
 /**
  * Watch timing differs by platform, and so does tsc's own behaviour (see the
@@ -25,18 +30,13 @@ import { type SpawnedWatch, spawnWatch } from "./test-support.ts";
  * clear its TS2307 without restarting the watcher, and `-b -w` must still
  * resolve an extensionless `.ng.mx` import.
  */
-const WAIT_MS = 60_000;
 /**
- * How long tsc gets to arm its watchers after printing the first summary. Under
- * load (several tsc processes at once) that took ~58 s, so it is generous.
+ * Vitest timeout of the `-b -w` late-install case: first build + arming (both
+ * the helper's budgets) + recovery (`WATCH_FIRST_SUMMARY_MS`) + 30 s slack, so
+ * a slow but correct run fails with "watch never armed", not a test timeout.
  */
-const ARM_WAIT_MS = 150_000;
-/**
- * Vitest timeout of the `-b -w` late-install case: first build (`WAIT_MS`) +
- * arming (`ARM_WAIT_MS`) + recovery (`WAIT_MS`) + 30 s slack = 300 s, so a
- * slow but correct run fails with "watch never armed", not a test timeout.
- */
-const LATE_INSTALL_TIMEOUT_MS = 2 * WAIT_MS + ARM_WAIT_MS + 30_000;
+const LATE_INSTALL_TIMEOUT_MS =
+  2 * WATCH_FIRST_SUMMARY_MS + WATCH_ARM_MS + 30_000;
 /** How long a late install gets to be noticed before it counts as never. */
 const PARITY_WAIT_MS = 15_000;
 const plainTsc = createRequire(import.meta.url).resolve(
@@ -50,7 +50,7 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((w) => w.stop()));
 });
 
-async function watch(
+async function tracked(
   cwd: string,
   args: string[],
   options: { entry?: string; armFile?: string } = {},
@@ -81,7 +81,7 @@ describe("mx-tsc watch modes", () => {
       const dir = scratch(cliFixture);
       privateNodeModules(dir);
       importsOf(dir, LATE_IMPORT);
-      const run = await watch(
+      const run = await tracked(
         dir,
         ["-b", "-w", "tsconfig.app.json", "--preserveWatchOutput"],
         { armFile: join(dir, "src", "main.ts") },
@@ -102,16 +102,24 @@ describe("mx-tsc watch modes", () => {
   it(
     "-w -p: recovers from a late install exactly when plain tsc -w -p does",
     async () => {
-      const recovered = async (entry: string) => {
+      // Phase 1 spawns and arms both children; phase 2 installs and waits, so
+      // one child's arming load cannot land in the other's wait window.
+      const armedRun = async (entry: string) => {
         const dir = scratch(cliFixture);
         privateNodeModules(dir);
         importsOf(dir, LATE_IMPORT);
-        const run = await watch(
+        const run = await tracked(
           dir,
           ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"],
           { entry, armFile: join(dir, "src", "main.ts") },
         );
         await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
+        return { dir, run };
+      };
+      const recovered = async ({
+        dir,
+        run,
+      }: Awaited<ReturnType<typeof armedRun>>) => {
         const mark = run.output().length;
         installLatePackage(dir);
         try {
@@ -121,9 +129,13 @@ describe("mx-tsc watch modes", () => {
           return false;
         }
       };
+      const [mxRun, plainRun] = await Promise.all([
+        armedRun(mxTsc),
+        armedRun(plainTsc),
+      ]);
       const [mx, plain] = await Promise.all([
-        recovered(mxTsc),
-        recovered(plainTsc),
+        recovered(mxRun),
+        recovered(plainRun),
       ]);
       expect(mx).toBe(plain);
     },
@@ -142,7 +154,7 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component";\nexport const s: string = AppComponent;\n',
       );
-      const run = await watch(dir, [
+      const run = await tracked(dir, [
         "-w",
         "-p",
         "tsconfig.app.json",
@@ -162,7 +174,7 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component.ng";\nexport const c = AppComponent;\n',
       );
-      const run = await watch(dir, [
+      const run = await tracked(dir, [
         "-b",
         "-w",
         "tsconfig.app.json",
