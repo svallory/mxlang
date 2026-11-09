@@ -31,7 +31,7 @@ if (!process.env.MX_VITEST_QUIET) {
 // Three tiers:
 // - Module reset per file in a reused process (`isolate: true`): host-solid,
 //   host-astro, host-preact, parser, language-server, vite-plugin,
-//   target-registry, vscode and `@mxlang/core-isolated`. Each hoists mocks or holds shared emitter state
+//   target-registry, vscode, tsc and `@mxlang/core-isolated`. Each hoists mocks or holds shared emitter state
 //   that a shared graph bypasses (the failing assertion, or for target-registry
 //   and vscode the mocking test, is named in the project's vitest.config.ts).
 // - Fresh worker per file (`pool: "threads"`, whose isolation defaults to true
@@ -41,7 +41,7 @@ if (!process.env.MX_VITEST_QUIET) {
 //   one after another, so the threads pool never overlaps the forks pool and
 //   each gets the full `maxWorkers` (the worker cap holds, `--maxWorkers=N`
 //   including a percentage applies as usual, and `--maxWorkers=1` serializes).
-// - Every other project (tsc, typescript-plugin, babel, tsx-bridge, react,
+// - Every other project (typescript-plugin, babel, tsx-bridge, react,
 //   hono, oracle, angular-checker, web-elements, ...) shares
 //   one module graph per worker with no reset.
 //

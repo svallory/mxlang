@@ -10,6 +10,16 @@ import { laneTest, SLOW_LANE_FILES } from "../../../scripts/vitest-lanes.ts";
 // JSON) stay in the fast lane, which is why this is an explicit list.
 export default defineConfig({
   test: {
+    // Module reset per file in a reused process (root forks pool shares
+    // workers). mx-tsc runs in-process and patches Volar's decorateProgram,
+    // volar.getLanguagePlugins and process.stdout.isTTY once per process; with
+    // a shared graph, watch-ambient-types.test.ts "mx-tsc -w reports a throwing
+    // host on every build while it throws, and not after" failed three times
+    // on this branch (expected 131 to be less than 89: the diagnostic printed
+    // after the summary that counts it). It did not fail in 12 full and slow-lane
+    // runs on main, nor in 12 on the shared-graph branch, so the cause is
+    // inferred, not proven.
+    poolOptions: { forks: { isolate: true } },
     ...laneTest(SLOW_LANE_FILES["packages/tooling/tsc"]),
   },
 });
