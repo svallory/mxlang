@@ -45,15 +45,18 @@ export const PROJECT_GLOBS: readonly string[] = [
 /**
  * `packages/core` runs as two vitest projects: the ordinary files share one
  * module graph per worker, and these three get a module reset per file in a
- * reused process (the root vitest.config.ts says why each needs it). Single
+ * reused process. Single
  * source for the root config and for `scripts/test-affected.ts`.
  */
 export const CORE_DIR = "packages/core";
 export const CORE_PROJECT = "@mxlang/core";
 export const CORE_ISOLATED_PROJECT = "@mxlang/core-isolated";
 export const CORE_ISOLATED_FILES: readonly string[] = [
+  // hoisted frontend mock: a cached importer bypasses it when shared
   "src/syntax-stock-parser.test.ts",
+  // hoisted compile mock freezes/records IR: cached lowering bypasses it
   "src/ir-entry/ir-readonly.test.ts",
+  // registers `.solid.mx` with no unregister; the reader map is in callee-input.ts
   "src/callee-input-probes.test.ts",
 ];
 

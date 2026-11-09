@@ -130,21 +130,22 @@ export function isRelatedSource(file: string): boolean {
  * config without `test.name`). `undefined` when the file is in no project
  * (docs, root scripts, apps/).
  */
+/** The longest project dir (`dirs` entries end in `/`) enclosing `file`, if any. */
+function ownerDir(file: string, list: readonly string[]): string | undefined {
+  const f = `${file.replace(/\/+$/, "")}/`;
+  let best: string | undefined;
+  for (const d of list) {
+    if (f.startsWith(d) && (!best || d.length > best.length)) best = d;
+  }
+  return best;
+}
+
 export function projectFor(
   file: string,
   dirs?: readonly string[],
 ): string | undefined {
-  const list = dirs ?? projectDirs();
-  const f = `${file.replace(/\/+$/, "")}/`;
-  let best: string | undefined;
-  let bestLen = -1;
-  for (const d of list) {
-    if (f.startsWith(d) && d.length > bestLen) {
-      bestLen = d.length;
-      best = projectName(d);
-    }
-  }
-  return best;
+  const owner = ownerDir(file, dirs ?? projectDirs());
+  return owner === undefined ? undefined : projectName(owner);
 }
 
 /**
@@ -158,15 +159,9 @@ export const SIBLING_PROJECTS: Readonly<Record<string, readonly string[]>> = {
 
 /** Every vitest project owning a changed file: `projectFor`'s name plus its dir's siblings. */
 export function projectsFor(file: string, dirs?: readonly string[]): string[] {
-  const list = dirs ?? projectDirs();
-  const name = projectFor(file, list);
-  if (!name) return [];
-  const f = `${file.replace(/\/+$/, "")}/`;
-  let owner: string | undefined;
-  for (const d of list) {
-    if (f.startsWith(d) && (!owner || d.length > owner.length)) owner = d;
-  }
-  return [name, ...((owner && SIBLING_PROJECTS[owner]) || [])];
+  const owner = ownerDir(file, dirs ?? projectDirs());
+  if (owner === undefined) return [];
+  return [projectName(owner), ...(SIBLING_PROJECTS[owner] ?? [])];
 }
 
 function projectName(dir: string): string {

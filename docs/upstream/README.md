@@ -272,7 +272,7 @@ config to link packages caused a real, unrelated regression in the
 `@marko/compiler` clone's *own* test suite and must not be repeated). Then:
 
 ```
-bunx vitest run --project @mxlang/core
+bunx vitest run --project '@mxlang/core*'
 ```
 With the patched packages linked, all 8 tests in
 `fragment-native.test.ts` run (0 skipped) and pass. Restoring the original
@@ -285,7 +285,7 @@ delegate to `parseFragmentNative` (a local, uncommitted one-line change, not
 part of this commit) and the following ran:
 
 ```
-bunx vitest run --project @mxlang/core --project @mxlang/host-solid --project @mxlang/tsx-bridge
+bunx vitest run --project '@mxlang/core*' --project @mxlang/host-solid --project @mxlang/tsx-bridge
 ```
 ```
 Test Files  16 passed (16)

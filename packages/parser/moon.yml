@@ -19,3 +19,4 @@ tasks:
       - "src/**/*"
       - "/packages/babel/src/mx-ast.ts"
       - "/vitest.config.ts"
+      - "vitest.config.ts"

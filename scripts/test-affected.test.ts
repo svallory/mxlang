@@ -164,11 +164,16 @@ describe("projectFor", () => {
     });
     try {
       const names = ctx.projects.map((p) => p.name);
+      const mapped = new Set<string>();
       for (const dir of dirs) {
         for (const n of projectsFor(`${dir}probe.json`, dirs)) {
           expect(names, dir).toContain(n);
+          mapped.add(n);
         }
       }
+      // And the other direction: no vitest project is unreachable, so an
+      // inline split that skips SIBLING_PROJECTS is caught.
+      for (const n of names) expect([...mapped], n).toContain(n);
     } finally {
       await ctx.close();
     }

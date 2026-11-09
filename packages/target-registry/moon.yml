@@ -17,5 +17,6 @@ tasks:
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+      - "vitest.config.ts"
       # region.test.ts imports the tsx-bridge's built entry (`print`).
       - "/packages/tsx-bridge/dist/**/*"

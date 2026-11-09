@@ -18,3 +18,4 @@ tasks:
     inputs:
       - "src/**/*"
       - "/vitest.config.ts"
+      - "vitest.config.ts"

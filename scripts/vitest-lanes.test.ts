@@ -2,7 +2,13 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { currentLane, laneTest, SLOW_LANE_FILES } from "./vitest-lanes.ts";
+import {
+  CORE_DIR,
+  CORE_ISOLATED_FILES,
+  currentLane,
+  laneTest,
+  SLOW_LANE_FILES,
+} from "./vitest-lanes.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -71,4 +77,18 @@ describe("the declared slow lanes", () => {
       }
     });
   }
+});
+
+// A core-isolated file that no longer exists would drop out of the exclude
+// list and run in the shared-graph @mxlang/core, where its hoisted mock can be
+// bypassed while @mxlang/core-isolated stays green with fewer files.
+describe("the core-isolated files", () => {
+  it("all exist", () => {
+    expect(CORE_ISOLATED_FILES.length).toBeGreaterThan(0);
+    for (const f of CORE_ISOLATED_FILES) {
+      expect(existsSync(resolve(root, CORE_DIR, f)), `${CORE_DIR}/${f}`).toBe(
+        true,
+      );
+    }
+  });
 });
