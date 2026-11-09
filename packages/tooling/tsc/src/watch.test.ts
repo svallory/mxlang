@@ -22,7 +22,7 @@ import {
  * `-w -p` case), so nothing here asserts more than tsc itself does: a module
  * is installed with one atomic rename (no half-written package for a rebuild
  * to catch) and recovery is asserted on that install alone, with no edit to
- * the importer. tsc is told to poll (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`)
+ * the importer after the install (arming appends newlines to it before). tsc is told to poll (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`)
  * to keep timing steady; that does not remove the platform difference.
  *
  * Watch modes keep tsc's own failed-lookup watching only while the host's
@@ -50,12 +50,18 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((w) => w.stop()));
 });
 
+/**
+ * Spawns a watcher that `afterEach` stops. `lifetimeMs` is the case's vitest
+ * timeout, so a watcher still arming when the case fails or times out (and is
+ * never pushed onto `running`) dies on its own.
+ */
 async function tracked(
   cwd: string,
   args: string[],
+  lifetimeMs: number,
   options: { entry?: string; armFile?: string } = {},
 ) {
-  const w = await spawnWatch({ cwd, args, ...options });
+  const w = await spawnWatch({ cwd, args, lifetimeMs, ...options });
   running.push(w);
   return w;
 }
@@ -84,6 +90,7 @@ describe("mx-tsc watch modes", () => {
       const run = await tracked(
         dir,
         ["-b", "-w", "tsconfig.app.json", "--preserveWatchOutput"],
+        LATE_INSTALL_TIMEOUT_MS,
         { armFile: join(dir, "src", "main.ts") },
       );
       await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
@@ -94,11 +101,10 @@ describe("mx-tsc watch modes", () => {
     LATE_INSTALL_TIMEOUT_MS,
   );
 
-  // Plain `tsc -w -p` (TypeScript 6.0.3) does not recover from a module
-  // installed after the first error on Linux (it does on macOS); `-b -w` does on
-  // both. So `-w -p` is asserted as parity with plain tsc, never as recovery:
+  // Plain `tsc -w -p` (TypeScript 6.0.3) was observed, before the shared
+  // arming helper, not to recover from a module installed after the first
+  // error on Linux (it did on macOS); `-b -w` did on both. So `-w -p` is asserted as parity with plain tsc, never as recovery:
   // mx-tsc must lose none of tsc's failed-lookup watching, and gain none either.
-  // See scratch/reports/review-mx-tsc-build-extensionless-resolve-r3.md.
   it(
     "-w -p: recovers from a late install exactly when plain tsc -w -p does",
     async () => {
@@ -111,6 +117,7 @@ describe("mx-tsc watch modes", () => {
         const run = await tracked(
           dir,
           ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"],
+          CASE_TIMEOUT_MS,
           { entry, armFile: join(dir, "src", "main.ts") },
         );
         await run.until(/TS2307[^\n]*late-pkg[\s\S]*Found 1 error/);
@@ -129,10 +136,20 @@ describe("mx-tsc watch modes", () => {
           return false;
         }
       };
-      const [mxRun, plainRun] = await Promise.all([
+      const armed = await Promise.allSettled([
         armedRun(mxTsc),
         armedRun(plainTsc),
       ]);
+      const runs = armed.flatMap((r) =>
+        r.status === "fulfilled" ? [r.value] : [],
+      );
+      const failed = armed.find((r) => r.status === "rejected");
+      if (failed) {
+        // The other run may have armed: stop it before failing the case.
+        await Promise.all(runs.map(({ run }) => run.stop()));
+        throw failed.reason;
+      }
+      const [mxRun, plainRun] = runs as [(typeof runs)[0], (typeof runs)[0]];
       const [mx, plain] = await Promise.all([
         recovered(mxRun),
         recovered(plainRun),
@@ -154,13 +171,12 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component";\nexport const s: string = AppComponent;\n',
       );
-      const run = await tracked(dir, [
-        "-w",
-        "-p",
-        "tsconfig.app.json",
-        "--preserveWatchOutput",
-      ]);
-      const output = await run.until(/Found \d+ errors?/);
+      const run = await tracked(
+        dir,
+        ["-w", "-p", "tsconfig.app.json", "--preserveWatchOutput"],
+        CASE_TIMEOUT_MS,
+      );
+      const output = run.output();
       expect(output).toContain("TS2322");
     },
     CASE_TIMEOUT_MS,
@@ -174,13 +190,12 @@ describe("mx-tsc watch modes", () => {
         dir,
         'import { AppComponent } from "./app.component.ng";\nexport const c = AppComponent;\n',
       );
-      const run = await tracked(dir, [
-        "-b",
-        "-w",
-        "tsconfig.app.json",
-        "--preserveWatchOutput",
-      ]);
-      const output = await run.until(/Found \d+ errors?/);
+      const run = await tracked(
+        dir,
+        ["-b", "-w", "tsconfig.app.json", "--preserveWatchOutput"],
+        CASE_TIMEOUT_MS,
+      );
+      const output = run.output();
       expect(output).not.toContain("TS2307");
       expect(output).toMatch(/Found 0 errors/);
     },

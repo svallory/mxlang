@@ -117,15 +117,16 @@ it(
       const first = stripVTControlCharacters(run.output());
       const firstEnd = first.indexOf("Watching for file changes.");
       expectThrown(first.slice(0, firstEnd));
-      // Arming touched `index.ts`: each rebuild it caused is content-only, so
-      // the host is not asked again, but its program still lacks the host's
-      // files: said again.
+      // Arming touched `index.ts`: a rebuild it caused is content-only, so the
+      // host is not asked again, but its program still lacks the host's files:
+      // said again. Only the last arming rebuild is asserted: stdout and stderr
+      // interleave in arrival order, so an earlier one's split is not exact.
       const armed = first
         .slice(firstEnd)
         .split("File change detected")
         .slice(1);
       expect(armed.length).toBeGreaterThan(0);
-      for (const build of armed) expectThrown(build);
+      expectThrown(armed[armed.length - 1] ?? "");
       // `throw.ts` removed: the root list changed, the host is asked, answers.
       let since = run.output().length;
       rmSync(thrower);

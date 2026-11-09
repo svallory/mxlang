@@ -164,6 +164,8 @@ export function runSplit(entry: string, args: string[]): RunSplit {
 
 /** Gap between touches while arming; see `spawnWatch`. */
 const ARM_TOUCH_EVERY_MS = 2_500;
+/** How long the output must stay unchanged after the last arming rebuild. */
+const ARM_STABLE_MS = 300;
 /** How long a watcher gets to print its first summary. */
 export const WATCH_FIRST_SUMMARY_MS = 60_000;
 /** How long tsc gets to arm its watchers after the first summary (~58 s under load). */
@@ -174,8 +176,6 @@ export interface SpawnedWatch {
   output(): string;
   /** Resolves once `output.slice(since)` matches; rejects with the output on timeout or exit. */
   until(pattern: RegExp, since?: number, timeoutMs?: number): Promise<string>;
-  /** Throws, with the output, if the watcher exited or failed to spawn. */
-  assertAlive(doing: string): void;
   /** Kills the watcher and waits for it to close. Idempotent. */
   stop(): Promise<void>;
 }
@@ -194,8 +194,9 @@ export interface SpawnWatchOptions {
    * never reported. The helper appends a newline to this file until tsc
    * reports a rebuild, the one observable "armed" signal, then waits for the
    * rebuilds the touches caused to finish so none is mistaken for the test's
-   * own. tsc creates all its watchers in one pass after the first summary,
-   * so arming one file arms the rest. The output of the first build is
+   * own. A rebuild proves the file watchers took their baseline; tsc creates
+   * its directory watchers in the same pass after the first summary, but they
+   * are not separately proven. The output of the first build is
    * `output()` up to its first `Watching for file changes.`. Omit it for a
    * test that only reads the first build.
    */
@@ -228,8 +229,11 @@ export async function spawnWatch(
     lifetimeMs === undefined
       ? undefined
       : setTimeout(() => child.kill("SIGKILL"), lifetimeMs);
+  // Set on 'close', not 'exit': 'exit' can fire before the last output chunks.
+  let exited = false;
   const closed = new Promise<void>((resolve) =>
     child.once("close", () => {
+      exited = true;
       if (lifetime) clearTimeout(lifetime);
       resolve();
     }),
@@ -245,19 +249,18 @@ export async function spawnWatch(
   child.stderr?.on("data", (chunk) => {
     output += chunk;
   });
+  /** Throws, with the output, if the watcher exited or failed to spawn. */
+  const assertAlive = (doing: string) => {
+    if (failure) throw failure;
+    if (exited) throw new Error(`watch exited while ${doing}:\n${output}`);
+  };
   const watch: SpawnedWatch = {
     output: () => output,
-    assertAlive(doing) {
-      if (failure) throw failure;
-      if (child.exitCode !== null || child.signalCode !== null) {
-        throw new Error(`watch exited while ${doing}:\n${output}`);
-      }
-    },
     async until(pattern, since = 0, timeoutMs = WATCH_FIRST_SUMMARY_MS) {
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
         if (pattern.test(output.slice(since))) return output;
-        watch.assertAlive(`waiting for ${pattern}`);
+        assertAlive(`waiting for ${pattern}`);
         await delay(100);
       }
       throw new Error(`timed out waiting for ${pattern}:\n${output}`);
@@ -270,7 +273,7 @@ export async function spawnWatch(
   };
   try {
     await watch.until(/Found \d+ errors?/);
-    if (armFile) await armWatch(watch, armFile);
+    if (armFile) await armWatch(watch, armFile, assertAlive);
   } catch (error) {
     await watch.stop();
     throw error;
@@ -278,13 +281,17 @@ export async function spawnWatch(
   return watch;
 }
 
-async function armWatch(watch: SpawnedWatch, file: string): Promise<void> {
+async function armWatch(
+  watch: SpawnedWatch,
+  file: string,
+  assertAlive: (doing: string) => void,
+): Promise<void> {
   const since = watch.output().length;
   const deadline = Date.now() + WATCH_ARM_MS;
   let nextTouch = 0;
   let lastTouch = 0;
   while (!/File change detected/.test(watch.output().slice(since))) {
-    watch.assertAlive("arming");
+    assertAlive("arming");
     if (Date.now() > deadline) {
       throw new Error(`watch never armed:\n${watch.output()}`);
     }
@@ -295,14 +302,14 @@ async function armWatch(watch: SpawnedWatch, file: string): Promise<void> {
     }
     await delay(50);
   }
-  // Return only when the rebuilds the touches caused are over: the last one
-  // finished (a summary closes the output) and nothing new has appeared for
-  // longer than the polling lag (`ARM_TOUCH_EVERY_MS`) after the last touch
-  // and after the last output, so no trailing touch can rebuild after return.
+  // Return only when the rebuilds the touches caused are over. Only a touch
+  // can cause one, so wait out the polling lag (`ARM_TOUCH_EVERY_MS`) after
+  // the last touch, then for the last rebuild's summary to close the output
+  // and stay unchanged for `ARM_STABLE_MS`.
   let seen = watch.output();
   let lastChange = Date.now();
   for (;;) {
-    watch.assertAlive("arming");
+    assertAlive("arming");
     if (Date.now() > deadline) {
       throw new Error(`rebuild never settled:\n${watch.output()}`);
     }
@@ -313,8 +320,13 @@ async function armWatch(watch: SpawnedWatch, file: string): Promise<void> {
       lastChange = Date.now();
       continue;
     }
-    const quiet = Date.now() - Math.max(lastChange, lastTouch);
     const tail = output.slice(output.lastIndexOf("File change detected"));
-    if (quiet >= ARM_TOUCH_EVERY_MS && /Found \d+ errors?/.test(tail)) return;
+    if (
+      Date.now() - lastTouch >= ARM_TOUCH_EVERY_MS &&
+      Date.now() - lastChange >= ARM_STABLE_MS &&
+      /Found \d+ errors?/.test(tail)
+    ) {
+      return;
+    }
   }
 }
