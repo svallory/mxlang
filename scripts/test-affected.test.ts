@@ -9,6 +9,7 @@ import {
   probeConsumers,
   projectDirs,
   projectFor,
+  projectsFor,
 } from "./test-affected.ts";
 
 describe("laneFor", () => {
@@ -93,6 +94,24 @@ describe("isRelatedSource (what vitest related can see)", () => {
     expect(
       changed.filter((f) => !isRelatedSource(f)).map((f) => projectFor(f)),
     ).toEqual(["@mxlang/oracle"]);
+  });
+});
+
+describe("projectsFor", () => {
+  const dirs = projectDirs();
+
+  it("a core file selects both core projects", () => {
+    expect(projectsFor("packages/core/src/fixtures/a.json", dirs)).toEqual([
+      "@mxlang/core",
+      "@mxlang/core-isolated",
+    ]);
+  });
+
+  it("a package with no sibling selects only its own project", () => {
+    expect(projectsFor("packages/parser/test/fixtures/e.html", dirs)).toEqual([
+      "@mxlang/parser",
+    ]);
+    expect(projectsFor("docs/a.md", dirs)).toEqual([]);
   });
 });
 

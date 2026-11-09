@@ -11,6 +11,7 @@ import {
   makeBaseline,
   nativeReason,
   nativeRunProblem,
+  planShards,
   ROWS,
   runRowAlone,
 } from "./test-affected-parity.ts";
@@ -104,5 +105,15 @@ describe("expectedSelection (the sampled-edit model of native)", () => {
     expect(
       expectedSelection(deps, "/r/package.json", true, "package.json"),
     ).toEqual(["p a.test.ts", "p b.test.ts"]);
+  });
+});
+
+describe("planShards", () => {
+  it("places @mxlang/core-isolated in the same shard as @mxlang/core, once", () => {
+    const shards = planShards(3);
+    const all = shards.flat();
+    expect(all.filter((n) => n === "@mxlang/core-isolated")).toHaveLength(1);
+    const k = shards.findIndex((p) => p.includes("@mxlang/core"));
+    expect(shards[k]).toContain("@mxlang/core-isolated");
   });
 });

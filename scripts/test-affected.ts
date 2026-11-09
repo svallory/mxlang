@@ -143,6 +143,28 @@ export function projectFor(
   return best;
 }
 
+/**
+ * Extra vitest projects a project dir owns beside the one `projectName` names:
+ * `packages/core` runs as `@mxlang/core` plus `@mxlang/core-isolated` (three
+ * files that need a module reset per file; see the root vitest.config.ts).
+ */
+export const SIBLING_PROJECTS: Readonly<Record<string, readonly string[]>> = {
+  "packages/core/": ["@mxlang/core-isolated"],
+};
+
+/** Every vitest project owning a changed file: `projectFor`'s name plus its dir's siblings. */
+export function projectsFor(file: string, dirs?: readonly string[]): string[] {
+  const list = dirs ?? projectDirs();
+  const name = projectFor(file, list);
+  if (!name) return [];
+  const f = `${file.replace(/\/+$/, "")}/`;
+  let owner: string | undefined;
+  for (const d of list) {
+    if (f.startsWith(d) && (!owner || d.length > owner.length)) owner = d;
+  }
+  return [name, ...((owner && SIBLING_PROJECTS[owner]) || [])];
+}
+
 function projectName(dir: string): string {
   // An explicit test.name in the project's vitest config wins: vscode's
   // package.json name ("vscode") differs from its vitest project name
@@ -283,9 +305,9 @@ function main(): number {
     const byProject = new Map<string, string[]>();
     const unmapped: string[] = [];
     for (const f of nonSources) {
-      const p = projectFor(f);
-      if (p) byProject.set(p, [...(byProject.get(p) ?? []), f]);
-      else unmapped.push(f);
+      const ps = projectsFor(f);
+      for (const p of ps) byProject.set(p, [...(byProject.get(p) ?? []), f]);
+      if (ps.length === 0) unmapped.push(f);
     }
     if (byProject.size > 0) {
       const projects = [...byProject.keys()];
