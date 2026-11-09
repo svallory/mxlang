@@ -124,14 +124,16 @@ it.each([
       const first = run.output();
       const firstEnd = first.indexOf("Watching for file changes.");
       expectBroken(first.slice(0, firstEnd));
-      // Arming touched `other`, a different file: each rebuild it caused
+      // Arming touched `other`, a different file: a rebuild it caused
       // exercises reuse of the original diagnostics.
       const armed = first
         .slice(firstEnd)
         .split("File change detected")
         .slice(1);
       expect(armed.length).toBeGreaterThan(0);
-      for (const cycle of armed) expectBroken(cycle);
+      // Only the last arming rebuild is asserted: stdout and stderr interleave
+      // in arrival order, so an earlier one's split is not exact.
+      expectBroken(armed[armed.length - 1] ?? "");
       // Changing the erroring file then exercises recompilation/remapping.
       for (const edited of [file, other, file]) {
         const since = run.output().length;

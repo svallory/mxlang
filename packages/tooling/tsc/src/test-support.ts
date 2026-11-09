@@ -164,8 +164,13 @@ export function runSplit(entry: string, args: string[]): RunSplit {
 
 /** Gap between touches while arming; see `spawnWatch`. */
 const ARM_TOUCH_EVERY_MS = 2_500;
-/** How long the output must stay unchanged after the last arming rebuild. */
-const ARM_STABLE_MS = 300;
+/**
+ * How long the output must stay unchanged after the last arming rebuild. tsc
+ * prints "File change detected" 250 ms after the poll that saw a change, so a
+ * touch can land in that gap and be detected only after the first rebuild
+ * ends; this outlasts the debounce plus a poll interval, with margin.
+ */
+const ARM_STABLE_MS = 1_000;
 /** How long a watcher gets to print its first summary. */
 export const WATCH_FIRST_SUMMARY_MS = 60_000;
 /** How long tsc gets to arm its watchers after the first summary (~58 s under load). */
@@ -263,6 +268,8 @@ export async function spawnWatch(
         assertAlive(`waiting for ${pattern}`);
         await delay(100);
       }
+      // A match that arrived during the last delay is not a timeout.
+      if (pattern.test(output.slice(since))) return output;
       throw new Error(`timed out waiting for ${pattern}:\n${output}`);
     },
     async stop() {

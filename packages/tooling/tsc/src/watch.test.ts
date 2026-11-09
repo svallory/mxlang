@@ -22,8 +22,9 @@ import {
  * `-w -p` case), so nothing here asserts more than tsc itself does: a module
  * is installed with one atomic rename (no half-written package for a rebuild
  * to catch) and recovery is asserted on that install alone, with no edit to
- * the importer after the install (arming appends newlines to it before). tsc is told to poll (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`)
- * to keep timing steady; that does not remove the platform difference.
+ * the importer after the install (arming appends newlines to it before). tsc
+ * is told to poll (`TSC_WATCHFILE` / `TSC_WATCHDIRECTORY`) to keep timing
+ * steady; that does not remove the platform difference.
  *
  * Watch modes keep tsc's own failed-lookup watching only while the host's
  * resolver stays in charge: a module that is missing and then installed must
@@ -103,8 +104,9 @@ describe("mx-tsc watch modes", () => {
 
   // Plain `tsc -w -p` (TypeScript 6.0.3) was observed, before the shared
   // arming helper, not to recover from a module installed after the first
-  // error on Linux (it did on macOS); `-b -w` did on both. So `-w -p` is asserted as parity with plain tsc, never as recovery:
-  // mx-tsc must lose none of tsc's failed-lookup watching, and gain none either.
+  // error on Linux (it did on macOS); `-b -w` did on both. So `-w -p` is
+  // asserted as parity with plain tsc, never as recovery: mx-tsc must lose
+  // none of tsc's failed-lookup watching, and gain none either.
   it(
     "-w -p: recovers from a late install exactly when plain tsc -w -p does",
     async () => {
