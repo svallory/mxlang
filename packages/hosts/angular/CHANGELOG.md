@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (angular-page-dispatch):** Angular page `.mx` files no longer produce a false "host not wired" error or a virtual module in the TypeScript plugin. Pages compile to Angular template strings, not modules; the Vite plugin refuses their import with guidance to run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`. The language server continues to report real MX compile diagnostics for those pages.
+
+- **Fixed (const-write-guards):** A two-way binding (`:=`, `:x:=`, `:fn:=`) whose value is a `<const>` bound as a plain name is now a compile error, as it is in Marko: the binding writes back into the const on every change. A name from a `<const>`'s object pattern, a member of a const value and a `<let>` keep compiling. A write to a `<const>` above its declaration is refused too (`MX_CONST_WRITE_BEFORE_DECLARATION`), while a read above it still compiles, as in Marko; where a declaration above and one below share a spelling, the nearer (innermost, later) declaration decides. A binding above a `<let>` or a plain-name `<const>` declaration is refused like any other write above it, and an inner `<let>` or `<const>` now shadows a same-named declaration below its block for every write after it in that block, however many siblings sit between them. On Angular, `value:=a` on a `<const>` used to emit `[(value)]="a"` on a `@let` and is now refused at the value.
+
 ## 0.1.0-alpha.36 — 2026-10-19
 
 - **Fixed (attribute-args-refusal):** React, Preact, Hono, Solid and Angular reject attribute argument lists such as `onClick(v)=fn` at the attribute where Marko refuses them, instead of silently dropping the arguments. `<define>` and `<const>` retain Marko's acceptance and dropped arguments; builtin, host-tag and region module-statement errors keep their existing precedence. Write `onClick=fn` instead; method shorthand remains subject to the host's existing callable-value policy. Hosts opt in through the generic `attributeArgs: "refuse"` declaration; core's default IR lowering still retains attribute arguments, including dialect expressions.

@@ -1,5 +1,21 @@
 # @mxlang/typescript-plugin
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (angular-page-dispatch):** Angular page `.mx` files no longer produce a false "host not wired" error or a virtual module in the TypeScript plugin. Pages compile to Angular template strings, not modules; the Vite plugin refuses their import with guidance to run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`. The language server continues to report real MX compile diagnostics for those pages.
+
+- **Changed (host-dispatch-d3):** The TypeScript plugin's mapping pass now looks tags up through the compile target's own translator instead of always html's: `createHtmlMappings` gained a public optional trailing `translator` parameter, `compileMxVirtual` passes the target descriptor's, and a target that defines none falls back to the default target's. The `preact-jsx`, `react-jsx` and `hono-jsx` target descriptors declare a lazy memoized `translator`; the registry's `defaultTag` scope and contract checks also resolve those targets' own translator now (equivalent tables, mappings unchanged for every existing target).
+
+- **Changed (host-policy-h24):** A `package.json` that fails to parse is now reported once instead of twice by the language server, Vite plugin, and the TypeScript plugin / `mx-tsc` for `.mx`, JSX region and `.astro.mx` files. The `.ng.mx` config-error path is unchanged. The host policy's `malformed-package-json` diagnostic carries the tag scan's consequence (whether the previous valid `mx.tags`/`mx.contracts` stay in force, or none are loaded until the manifest parses), and the language server, the TypeScript plugin and the Vite plugin drop the scan's duplicate `MX_IGNORED_CONFIG` diagnostic for that file through the new core helper `scanDiagnosticsNotSaidByPolicy`; `mx-tsc` therefore prints one TS80003 with the consequence, not the policy warning plus its stderr twin. In Vite serve mode, the warning is reported again when the manifest is fixed and broken again. Scan diagnostics with no policy twin — any other problem in the same `package.json`, or a broken manifest the policy never read — are still reported.
+
+- **Fixed (mapping-tag-types):** Templates with tag type arguments or `<define>` type parameters that compile successfully no longer fail the editor's independent source-mapping pass. The mapping pass erases only those tag containers through the opt-in `parseFragment` option `stripTagTypes`; expression types and authored error positions remain intact, and other fragment callers retain their existing behavior.
+
+- **Fixed (solid-method-head-map):** Method-shorthand parameter types, defaults and generic constraints on ordinary element and component attributes in whole-file Solid, Preact, React and Hono templates now report TypeScript errors at their exact authored positions. Solid also covers dynamic-tag props and attribute-tag attributes. Printed method heads are mapped separately from their bodies; emitted code is unchanged.
+
+- **Fixed (tsconfig-paths-callee):** Honour tsconfig `paths` and `baseUrl` when the TypeScript plugin and `mx-tsc` resolve callee imports from whole-file `.mx` callers. Region, `.astro.mx`, and `.ng.mx` callers are not included. A project that mirrors its Vite `resolve.alias` in tsconfig `paths` (for example `import Card from "~/Card.mx"`) no longer reports a false `MX_UNREADABLE_CALLEE_INPUT` in the editor or `mx-tsc` while `vite build` resolves the import. The editor also retries unresolved exact and extension-omitted aliases through Volar to avoid a false `TS2307`; `mx-tsc` already has that import-resolution fallback. Callee `Input` reads use the program's own compiler options and resolve afresh on each lookup, so a caller edit sees newly created or moved callees even when those options do not change. The language server has no ts program and still reports the alias as unresolved.
+
+  `MxLanguagePluginOptions` gains an optional synchronous `resolveImport` callback for whole-file callee reads. The package also ships the resolver's supporting `tsconfig-paths.d.ts` declaration without adding a package-entry export.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed:** `.mx` compile errors: one diagnostic per entry of core's `TranslateError.errors` (so `mx-tsc` prints them all); `getSyntaxError` stays the first.

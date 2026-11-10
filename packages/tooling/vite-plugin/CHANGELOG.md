@@ -1,5 +1,13 @@
 # @mxlang/vite-plugin
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (angular-page-dispatch):** Angular page `.mx` files no longer produce a false "host not wired" error or a virtual module in the TypeScript plugin. Pages compile to Angular template strings, not modules; the Vite plugin refuses their import with guidance to run `mx-angular build` before `ng build`, or `mx-angular watch` next to `ng serve`. The language server continues to report real MX compile diagnostics for those pages.
+
+- **Changed (host-dispatch-d1):** The Vite plugin now resolves build strictness from the target descriptor and the project's `package.json`, like the editor tools always did. A build that compiled `<let>` (or other strict-rejected constructs) under the astro host or with `mx.strict: true` now fails with `MX_UNSUPPORTED_CONSTRUCT`, matching what the editor flags. Astro pages compile under the astro target's always-strict policy, so the fix is to remove or replace the construct (`<const/…>` instead of `<let>`). In a project that opted in with `mx.strict: true`, remove the construct or drop `mx.strict: true`. An explicit `strict: true` plugin option still adds strictness; `strict: false` cannot turn off strictness the resolved policy demands.
+
+- **Changed (host-policy-h24):** A `package.json` that fails to parse is now reported once instead of twice by the language server, Vite plugin, and the TypeScript plugin / `mx-tsc` for `.mx`, JSX region and `.astro.mx` files. The `.ng.mx` config-error path is unchanged. The host policy's `malformed-package-json` diagnostic carries the tag scan's consequence (whether the previous valid `mx.tags`/`mx.contracts` stay in force, or none are loaded until the manifest parses), and the language server, the TypeScript plugin and the Vite plugin drop the scan's duplicate `MX_IGNORED_CONFIG` diagnostic for that file through the new core helper `scanDiagnosticsNotSaidByPolicy`; `mx-tsc` therefore prints one TS80003 with the consequence, not the policy warning plus its stderr twin. In Vite serve mode, the warning is reported again when the manifest is fixed and broken again. Scan diagnostics with no policy twin — any other problem in the same `package.json`, or a broken manifest the policy never read — are still reported.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed:** a failing transform throws the first error and carries the file's other errors in its message.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (solid-method-head-map):** Method-shorthand parameter types, defaults and generic constraints on ordinary element and component attributes in whole-file Solid, Preact, React and Hono templates now report TypeScript errors at their exact authored positions. Solid also covers dynamic-tag props and attribute-tag attributes. Printed method heads are mapped separately from their bodies; emitted code is unchanged.
+
 ## 0.1.0-alpha.36 — 2026-10-19
 
 - **Fixed (attribute-args-refusal):** React, Preact, Hono, Solid and Angular reject attribute argument lists such as `onClick(v)=fn` at the attribute where Marko refuses them, instead of silently dropping the arguments. `<define>` and `<const>` retain Marko's acceptance and dropped arguments; builtin, host-tag and region module-statement errors keep their existing precedence. Write `onClick=fn` instead; method shorthand remains subject to the host's existing callable-value policy. Hosts opt in through the generic `attributeArgs: "refuse"` declaration; core's default IR lowering still retains attribute arguments, including dialect expressions.

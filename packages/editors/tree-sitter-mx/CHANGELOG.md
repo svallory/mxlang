@@ -1,5 +1,9 @@
 # @mxlang/tree-sitter-mx
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (tree-sitter-malformed-comment-error):** Report unterminated content comments as tree-sitter ERROR nodes instead of silently dropping the malformed tail, including comments after a concise tag's semicolon. With one error in a parse, completed preceding siblings stay intact and parsing continues normally after a comment terminator; a second error in the same parse ends it (root ERROR, earlier siblings inside it), as it already did for a concise `-` line and for `<!--`. An unterminated comment or template inside a template literal in parsed text is still not reported as an ERROR.
+
 ## 0.1.0-alpha.33 — 2026-10-18
 
 - **Changed (release-changelog-in-package):** `CHANGELOG.md` is now part of every published tarball (`files` lists it in all packed packages); `bun pm pack` honours `files` only, so the alpha.11 tarballs carried just `README.md` and `dist`.

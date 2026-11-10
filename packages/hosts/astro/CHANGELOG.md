@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.0-alpha.37 — 2026-11-09
+
+- **Fixed (satisfies-typecheck):** An authored `x satisfies T` (and `x as T`, `x!`) in a template placeholder is no longer erased from the type-check module: `@mxlang/target-html`'s tooling projection (`typeCheck: true`) now keeps the TypeScript wrappers so tsc checks them, and `@mxlang/host-astro` forwards the tooling flag to it, so a failing `satisfies` reports at its authored position instead of silently passing. Expression, argument and pattern containers holding an angle-bracket cast (`<T>x`) still undergo the full type strip, including surrounding wrappers and chained casts: the tooling projection is checked as TSX, where a kept `<T>` parses as a JSX tag and breaks the whole file. This also removes angle-cast prefixes from the shared Preact/React/Hono type-check output. Tag type-argument and type-parameter containers (`<const<string>/x=…/>`, `<p<string>>`, `<Foo<string> …/>`) are still dropped in this mode, so tags accepted by the html build remain accepted by its tooling projection. The shared Preact/React/Hono type-check output now accepts them too, where it previously rejected them with `MX_UNSUPPORTED_CONSTRUCT`. Runtime output is unchanged; the wrappers are still stripped for builds.
+
 ## 0.1.0-alpha.35 — 2026-10-19
 
 - **Fixed (jsx-host-script-refusal-first):** On a host that does not support `<script>` (Preact, React, Hono, Solid, Angular, Astro), the host refusal is now the only error for the tag. A `<script>` body that does not parse, a head the tag has no use for or a `${...}` placeholder in the body was reported first, so the fix led to the refusal next. Hosts that support `<script>` report the same errors as before.
