@@ -234,8 +234,10 @@ interface CalleeCacheEntry {
 // counter outlives the lookup it numbers.
 interface CalleePartition {
   entries: Map<string, CalleeCacheEntry>;
-  resolverIds: WeakMap<NonNullable<ResolveContext["resolveImport"]>, number>;
-  nextResolverId: number;
+  // Opaque ids for the objects a cache key names by identity (a resolver
+  // function, a compile's `customTags` map); never part of any output.
+  ids: WeakMap<object, number>;
+  nextId: number;
 }
 let calleeCaches = new WeakMap<TargetLookup, CalleePartition>();
 function cacheFor(targets: TargetLookup): CalleePartition {
@@ -243,8 +245,8 @@ function cacheFor(targets: TargetLookup): CalleePartition {
   if (!cache) {
     cache = {
       entries: new Map(),
-      resolverIds: new WeakMap(),
-      nextResolverId: 1,
+      ids: new WeakMap(),
+      nextId: 1,
     };
     calleeCaches.set(targets, cache);
   }
@@ -312,18 +314,28 @@ export function registerCalleeInputReader(
   resetCalleeInputCache();
 }
 
+function idOf(partition: CalleePartition, object: object): number {
+  let id = partition.ids.get(object);
+  if (id === undefined) {
+    id = partition.nextId++;
+    partition.ids.set(object, id);
+  }
+  return id;
+}
+
+/**
+ * A `.mx` callee's `Input` is read through template metadata, which is
+ * derived under the compile's tag set, so the tag set is part of the key
+ * (an absent one is `0`).
+ */
 function cacheKey(
   partition: CalleePartition,
   path: string,
-  resolver: ResolveContext["resolveImport"],
+  context: ResolveContext,
 ): string {
-  if (!resolver) return `${path}\0default`;
-  let id = partition.resolverIds.get(resolver);
-  if (id === undefined) {
-    id = partition.nextResolverId++;
-    partition.resolverIds.set(resolver, id);
-  }
-  return `${path}\0resolver:${id}`;
+  const resolver = context.resolveImport;
+  const tags = context.ctx?.customTags;
+  return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}\0tags:${tags ? idOf(partition, tags) : 0}`;
 }
 
 /**
@@ -380,7 +392,7 @@ export function readCalleeInput(
   }
 
   const partition = cacheFor(context.targets);
-  const key = cacheKey(partition, resolved.path, context.resolveImport);
+  const key = cacheKey(partition, resolved.path, context);
   const calleeCache = partition.entries;
   const cached = calleeCache.get(key);
   if (

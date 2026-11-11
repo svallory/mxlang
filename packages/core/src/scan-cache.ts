@@ -41,7 +41,7 @@
  * it (`evictTaglibCaches`). Core builds no Marko lookup since S3a.
  */
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import { isTranslateError } from "./core.ts";
@@ -555,6 +555,12 @@ function hit(cached: CacheEntry, options: ScanOptions): ScanResult {
 /** The snapshot each result `scanCached` returned was taken with. */
 const entries = new WeakMap<ScanResult, CacheEntry>();
 
+/**
+ * Only feeds equality checks in `tag-file.ts` (a signature never reaches
+ * emitted text or a diagnostic), so the count cannot change output.
+ */
+let unstamped = 0;
+
 /** {@link contractSignatureOf}, once per result. */
 const contractSignatures = new WeakMap<ScanResult, string>();
 
@@ -579,11 +585,10 @@ export function contractSignatureOf(result: ScanResult): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([path, stamp]) => JSON.stringify([path, printableStamp(stamp)]))
     .join("\n");
-  // A result no snapshot backs matches nothing, not even itself next time:
-  // a fresh token per result, so no process-wide counter decides the text.
+  // A result no snapshot backs matches nothing, not even itself next time.
   const signature = entry
     ? `${parserSignatureOf(result)}\n--\n${files}`
-    : `unstamped ${randomUUID()}`;
+    : `unstamped ${++unstamped}`;
   contractSignatures.set(result, signature);
   return signature;
 }

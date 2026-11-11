@@ -35,7 +35,6 @@ import {
   voiceOfCtx,
   writesMxSyntax,
 } from "./message-vocabulary.ts";
-import type { TargetLookup } from "./target-descriptor.ts";
 
 export interface TemplateTag {
   filename: string;
@@ -146,35 +145,40 @@ interface CacheEntry {
    * silent-drop warnings rather than raising them off an empty value.
    */
   pending?: boolean;
+  scope: Scope;
 }
 
 const MAX_CACHED_TEMPLATES = 256;
 
-/**
- * Template metadata is derived under a compile's `Ctx` (its tag set and
- * lookup), not from the template's text alone, so one shared map could hand a
- * compile another's facts. Each `TargetLookup` owns its own map, the same
- * partition the callee-input cache uses; `reset`/`peek` reach every live one.
- */
-const templateCaches = new WeakMap<TargetLookup, Map<string, CacheEntry>>();
-const liveTemplateCaches = new Set<WeakRef<Map<string, CacheEntry>>>();
+const templateCache = new Map<string, CacheEntry>();
 
-function templateCacheFor(targets: TargetLookup): Map<string, CacheEntry> {
-  let cache = templateCaches.get(targets);
-  if (!cache) {
-    cache = new Map();
-    templateCaches.set(targets, cache);
-    liveTemplateCaches.add(new WeakRef(cache));
-  }
-  return cache;
+/**
+ * What the metadata compiler reads from a compile's `Ctx` besides the tag's
+ * own text: its tag set, declarations and lookup (the tag table and generator
+ * derive from them). An entry is a hit only for the same three objects, held
+ * weakly, so a compile under another tag set misses instead of being served
+ * the facts another compile derived.
+ */
+interface Scope {
+  customTags: WeakRef<object> | undefined;
+  declarations: WeakRef<object>;
+  targets: WeakRef<object> | undefined;
 }
 
-function* liveCaches(): Generator<Map<string, CacheEntry>> {
-  for (const ref of liveTemplateCaches) {
-    const cache = ref.deref();
-    if (cache) yield cache;
-    else liveTemplateCaches.delete(ref);
-  }
+function scopeOf(ctx: Ctx): Scope {
+  return {
+    customTags: ctx.customTags && new WeakRef(ctx.customTags),
+    declarations: new WeakRef(ctx.declarations),
+    targets: ctx.targets && new WeakRef(ctx.targets),
+  };
+}
+
+function sameScope(entry: Scope, ctx: Ctx): boolean {
+  return (
+    entry.customTags?.deref() === ctx.customTags &&
+    entry.declarations.deref() === ctx.declarations &&
+    entry.targets?.deref() === ctx.targets
+  );
 }
 
 /**
@@ -221,15 +225,11 @@ export function templateCompileCount(): number {
 export function peekTemplateMetadata(
   filename: string,
 ): TemplateMetadata | undefined {
-  for (const cache of liveCaches()) {
-    const entry = cache.get(filename);
-    if (entry) return entry.metadata;
-  }
-  return undefined;
+  return templateCache.get(filename)?.metadata;
 }
 
 export function resetTemplateCache(): void {
-  for (const cache of liveCaches()) cache.clear();
+  templateCache.clear();
   compileCount = 0;
 }
 
@@ -251,18 +251,17 @@ export function metadataForTemplate(
   ctx: Ctx,
   tag: TemplateTag,
 ): TemplateMetadata {
-  const templateCache = templateCacheFor(ctx.targets);
   const recoveryScope = partialAnalyzeScope(ctx);
   // Recovery must derive completed facts with its own omissions, even when
   // an independent compile has already warmed the shared cache. Only shared
   // pending placeholders are scope-independent: they terminate recursion.
+  const shared = templateCache.get(tag.filename);
   const cached =
     recoveryScope?.analyzeMetadata?.get(tag.filename) ??
-    (recoveryScope && !templateCache.get(tag.filename)?.pending
-      ? undefined
-      : templateCache.get(tag.filename));
+    (recoveryScope && !shared?.pending ? undefined : shared);
   if (
     cached &&
+    sameScope(cached.scope, ctx) &&
     cached.mtimeMs === tag.mtimeMs &&
     cached.source === tag.source
   ) {
@@ -277,8 +276,8 @@ export function metadataForTemplate(
   // A provisional entry breaks direct and mutual recursion while the unit is
   // being compiled: a nested call back to this same file finds it and returns
   // rather than recursing forever. It is marked `pending`, because its
-  // metadata is a placeholder and not an answer — the cache is process-global,
-  // so a caller that reaches this file by another route while the compile is
+  // metadata is a placeholder and not an answer — the cache is shared by
+  // every compile under one scope, so a caller that reaches this file by another route while the compile is
   // in flight would otherwise read `readsContent: false` and warn that a body
   // was dropped by a template that does read it.
   const provisional: CacheEntry = {
@@ -286,6 +285,7 @@ export function metadataForTemplate(
     source: tag.source,
     metadata: { readsContent: false, attributeTags: [], pending: true },
     pending: true,
+    scope: scopeOf(ctx),
   };
   templateCache.set(tag.filename, provisional);
   compileCount++;
@@ -295,6 +295,7 @@ export function metadataForTemplate(
       mtimeMs: tag.mtimeMs,
       source: tag.source,
       metadata,
+      scope: scopeOf(ctx),
     };
     if (recoveryScope) {
       // Only completed metadata can contain omitted calls. Keep it private;

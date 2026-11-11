@@ -12,7 +12,7 @@ import {
   templateCompileCount,
   touchAndEvict,
 } from "./template-tag.ts";
-import { lookup, testTargetLookup } from "./test-targets.ts";
+import { lookup } from "./test-targets.ts";
 
 const CALLER = "/tmp/mx-template-test/page.mx";
 
@@ -38,13 +38,12 @@ function lowerWithTags(
   filename = CALLER,
   warnings: MxWarning[] = [],
   policy: Policy = declarations(),
-  targets = lookup,
 ): Ir {
   let ir: Ir | null = null;
   compileSource(source, filename, policy, {
     customTags,
     warnings,
-    targets,
+    targets: lookup,
     tagDiscoveryDirs: [],
     emitIr(lowered) {
       ir = lowered;
@@ -355,29 +354,52 @@ describe("template custom tags as compilation units", () => {
     );
   });
 
-  it("gives the same result for the same input after other compiles", () => {
-    resetTemplateCache();
-    const filename = "/tmp/mx-template-test/tags/box.mx";
-    const run = (source: string, targets = lookup) => {
-      const warnings: MxWarning[] = [];
-      const ir = lowerWithTags(
-        "<box>one</box>\n",
-        { box: template(filename, source) },
-        CALLER,
-        warnings,
-        declarations(),
-        targets,
+  // One lookup, one template file with one source; the two tag sets differ in
+  // what the template's nested `<wrap/>` does, so its metadata compile
+  // succeeds under one and throws under the other. Whichever ran first must
+  // not decide what the other gets.
+  it.each([
+    ["ok, bad, ok", ["ok", "bad", "ok"]],
+    ["bad, ok, bad", ["bad", "ok", "bad"]],
+  ] as const)(
+    "a compile's result ignores earlier compiles under other tag sets: %s",
+    (_name, order) => {
+      resetTemplateCache();
+      const box = template(
+        "/tmp/mx-template-test/tags/box.mx",
+        "<div><wrap/></div>",
       );
-      return JSON.stringify({ ir, warnings });
-    };
-    const first = run("<div/>");
-    // Same file, other content, under another lookup: must not leak back.
-    run("<div><${input.content}/></div>", testTargetLookup());
-    expect(run("<div/>")).toBe(first);
-    const before = templateCompileCount();
-    run("<div/>", testTargetLookup());
-    expect(templateCompileCount()).toBe(before + 1);
-  });
+      const tagSets = {
+        ok: { box, wrap: { transform: (): [] => [] } },
+        bad: {
+          box,
+          wrap: {
+            transform: (): never => {
+              throw new Error("wrap refused");
+            },
+          },
+        },
+      } satisfies Record<string, Record<string, CustomTag>>;
+      const outcome = (name: "ok" | "bad") => {
+        const warnings: MxWarning[] = [];
+        try {
+          const ir = lowerWithTags(
+            "<box>one</box>\n",
+            tagSets[name],
+            CALLER,
+            warnings,
+          );
+          return JSON.stringify({ ir, warnings });
+        } catch (error) {
+          return `threw: ${(error as Error).message}`;
+        }
+      };
+      const results = order.map(outcome);
+      expect(results[0]).toBe(results[2]);
+      expect(results[0]).not.toBe(results[1]);
+      expect(results.some((r) => r.startsWith("threw: "))).toBe(true);
+    },
+  );
 
   it("caches content metadata and preserves the dropped-body warning", () => {
     resetTemplateCache();
