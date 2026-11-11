@@ -332,9 +332,11 @@ export {
 } from "./scan.ts";
 export {
   clearScanCache,
+  createScanCache,
   getCustomTags,
   liveTagMapCount,
   reportScanDiagnostics,
+  type ScanCache,
   scanCached,
 } from "./scan-cache.ts";
 export { unwrapStatementBlock } from "./statement-block.ts";

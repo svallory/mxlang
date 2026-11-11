@@ -3,8 +3,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     // Module reset per file in a reused process (root forks pool shares workers).
-    // Without it: index.test.ts "mx() custom tag discovery warns once about a
-    // misconfigured mx.tags" expects 1 warning, got 0 (cached tag discovery).
+    // Still needed: scan-error-dedupe-unit.test.ts and
+    // target-select-scan-error.test.ts `vi.mock("@mxlang/targets")`, and index.ts
+    // keeps the registry in a module-level cached import, so without a reset the
+    // first file's registry (mocked or not) serves every later file and their
+    // mocked `scanCached` never runs. The scan cache itself no longer needs it.
     poolOptions: { forks: { isolate: true } },
     name: "@mxlang/vite-plugin",
     include: ["src/**/*.test.ts"],

@@ -120,8 +120,6 @@ let racyWindowMs = RACY_WINDOW_MS;
 /** A listing value no real directory can produce, so "absent" is a state. */
 const MISSING_DIR = "<missing>";
 
-const scans = new Map<string, CacheEntry>();
-
 /**
  * How a directory's file names route to a dialect's discovery, plus the
  * files that routing read. A hit trusts the memo only because every cache
@@ -136,13 +134,10 @@ interface Routing {
   evidence: string[];
 }
 
-const routings = new Map<string, Routing>();
-
 /**
  * Tag maps kept alive by their signature, so an unchanged tag set hands back
  * one object. See the module doc.
  */
-const maps = new Map<string, Record<string, CustomTag>>();
 
 function listingOf(dir: string): string {
   try {
@@ -403,11 +398,12 @@ export function reportScanDiagnostics(
   }
 }
 
-/**
- * The cached scan itself, for a caller that needs the evidence as well as the
- * map — an integration wiring up its own file watcher, for instance.
- */
-export function scanCached(filePath: string, options: ScanOptions): ScanResult {
+function scanIn(
+  state: CacheState,
+  filePath: string,
+  options: ScanOptions,
+): ScanResult {
+  const { scans, routings, maps } = state;
   // The key is deliberately unchanged by `options.targets`: the lookup is
   // which file-kind segments exist, not which files are found. Diagnostic
   // wording is derived per caller from cached filename evidence.
@@ -494,6 +490,64 @@ export function scanCached(filePath: string, options: ScanOptions): ScanResult {
   entries.set(result, entry);
   if (entry.result !== result) entries.set(entry.result, entry);
   return result;
+}
+
+interface CacheState {
+  scans: Map<string, CacheEntry>;
+  routings: Map<string, Routing>;
+  maps: Map<string, Record<string, CustomTag>>;
+}
+
+/**
+ * A scan cache: the per-path scans, directory routings and live tag maps,
+ * revalidated by mtime. Each owner (a plugin instance, a test) creates its own
+ * with {@link createScanCache}; the module-level functions share one default.
+ */
+export interface ScanCache {
+  /** {@link scanCached} against this cache only. */
+  scan(filePath: string, options: ScanOptions): ScanResult;
+  /** {@link getCustomTags} against this cache only. */
+  getCustomTags(
+    filePath: string,
+    options: ScanOptions,
+  ): Record<string, CustomTag>;
+  /** Drops everything this cache holds. */
+  clear(): void;
+}
+
+/** Creates an empty, independent {@link ScanCache}. */
+export function createScanCache(): ScanCache {
+  return cacheOver(newState());
+}
+
+function newState(): CacheState {
+  return { scans: new Map(), routings: new Map(), maps: new Map() };
+}
+
+function cacheOver(state: CacheState): ScanCache {
+  return {
+    scan: (filePath, options) => scanIn(state, filePath, options),
+    getCustomTags: (filePath, options) =>
+      scanIn(state, filePath, options).customTags,
+    clear() {
+      state.scans.clear();
+      state.routings.clear();
+      state.maps.clear();
+    },
+  };
+}
+
+/** What the module-level functions share, for callers that own no cache. */
+const defaultState = newState();
+const defaultCache = cacheOver(defaultState);
+
+/**
+ * The cached scan itself, for a caller that needs the evidence as well as the
+ * map — an integration wiring up its own file watcher, for instance. Uses the
+ * process-wide default cache.
+ */
+export function scanCached(filePath: string, options: ScanOptions): ScanResult {
+  return defaultCache.scan(filePath, options);
 }
 
 /** A fresh entry's result, with dotted-name wording derived per caller. */
@@ -605,9 +659,7 @@ export function snapshotFreshForTests(result: ScanResult): () => boolean {
 
 /** Drops every cached scan. For tests and for an editor's "restart" command. */
 export function clearScanCache(): void {
-  scans.clear();
-  routings.clear();
-  maps.clear();
+  defaultCache.clear();
 }
 
 /** A copy of a stamp, so a test cannot mutate the cache. */
@@ -617,14 +669,14 @@ function printableStamp(stamp: FileStamp): object {
 
 /** Copies of file evidence only, for testing snapshot retention (not public API). */
 export function scanCacheStampsForTests(): object[] {
-  return [...scans.values()].flatMap((entry) =>
+  return [...defaultState.scans.values()].flatMap((entry) =>
     [...entry.files.values(), ...entry.manifests.values()].map(printableStamp),
   );
 }
 
 /** Each evidence path with its printable stamp, for tests (not public API). */
 export function scanCacheEvidenceForTests(): Array<[string, object]> {
-  return [...scans.values()].flatMap((entry) =>
+  return [...defaultState.scans.values()].flatMap((entry) =>
     [...entry.files, ...entry.manifests].map(
       ([path, stamp]): [string, object] => [path, printableStamp(stamp)],
     ),
@@ -643,5 +695,5 @@ export function setRacyWindowForTests(ms: number): number {
 
 /** How many distinct tag-set maps are live. A test asserts this stays bounded. */
 export function liveTagMapCount(): number {
-  return maps.size;
+  return defaultState.maps.size;
 }

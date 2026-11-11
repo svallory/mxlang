@@ -965,6 +965,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    * just touched.
    */
   const reported = new Set<string>();
+  // Each plugin instance owns its tag-scan cache, so two servers or builds in
+  // one process never share scan results or diagnostics.
+  const scanCache = core.createScanCache();
 
   /**
    * Scan errors a build already failed with, keyed like `reported`. A build
@@ -1019,7 +1022,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
     // `mx.host` value, which is the string existing entries already match.
     const targets = lookupFor(resolution.policy);
     const host = targets.hostFilterKey(resolution.policy.target) ?? null;
-    const scan = scanCached(file, { host, targets });
+    const scan = scanCached(file, { host, targets, cache: scanCache });
 
     // Errors were raised above, before warning dedupe: repeating a transform
     // cannot make a bad target pass. Existing malformed-manifest/unknown-host

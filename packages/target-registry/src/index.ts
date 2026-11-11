@@ -31,6 +31,7 @@ import {
   type MxWarning,
   readTargetDefaultTag,
   registerCalleeInputReader,
+  type ScanCache,
   type ScanDiagnostic,
   type ScanOptions,
   type ScanResult,
@@ -749,6 +750,11 @@ function restrictionWarnings(
  */
 export type RegistryScanOptions = Omit<ScanOptions, "targets"> & {
   targets?: TargetLookup;
+  /**
+   * The scan cache to use (`createScanCache()` from core). Unset, the
+   * process-wide default is shared with every other caller.
+   */
+  cache?: ScanCache;
 };
 
 /**
@@ -763,7 +769,11 @@ export function scanCached(
   options: RegistryScanOptions = {},
 ): ScanResult {
   const targets = options.targets ?? builtinLookup();
-  const result = coreScanCached(filePath, { ...options, targets });
+  const { cache, ...scanOptions } = options;
+  const result = (cache?.scan ?? coreScanCached)(filePath, {
+    ...scanOptions,
+    targets,
+  });
   const extra = restrictionWarnings(result, targets);
   return extra.length === 0
     ? result
