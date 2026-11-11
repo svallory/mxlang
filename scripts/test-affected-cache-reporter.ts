@@ -41,13 +41,18 @@ const BARE_IMPORT =
   /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"'./][^"']*)["']/g;
 const MAX_PACKAGE_FILES = 3000;
 
-const hashFile = (f: string): string => {
+/** Read once: the content hash and, for source files, the text to scan. */
+function readHashed(f: string): { hash: string; text: string } {
   try {
-    return createHash("sha256").update(readFileSync(f)).digest("hex");
+    const buf = readFileSync(f);
+    return {
+      hash: createHash("sha256").update(buf).digest("hex"),
+      text: /\.[cm]?[jt]sx?$/.test(f) ? buf.toString("utf8") : "",
+    };
   } catch {
-    return "unreadable";
+    return { hash: "unreadable", text: "" };
   }
-};
+}
 
 /** The package name of a bare specifier (`@scope/name/sub` -> `@scope/name`). */
 function packageName(spec: string): string | undefined {
@@ -56,8 +61,14 @@ function packageName(spec: string): string | undefined {
   return spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
 }
 
-/** Every file below `dir` except node_modules and .git; undefined past the cap. */
-function packageFiles(dir: string): string[] | undefined {
+/**
+ * Every file below `dir` except node_modules and .git; undefined when
+ * `budget.left` runs out (the budget is shared by every package of a closure).
+ */
+function packageFiles(
+  dir: string,
+  budget: { left: number },
+): string[] | undefined {
   const out: string[] = [];
   const walk = (d: string): boolean => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
@@ -65,7 +76,10 @@ function packageFiles(dir: string): string[] | undefined {
       const f = join(d, e.name);
       if (e.isDirectory()) {
         if (!walk(f)) return false;
-      } else if (e.isFile() && out.push(f) > MAX_PACKAGE_FILES) return false;
+      } else if (e.isFile()) {
+        if (budget.left-- <= 0) return false;
+        out.push(f);
+      }
     }
     return true;
   };
@@ -81,38 +95,39 @@ function packageFiles(dir: string): string[] | undefined {
  *
  * Vite leaves bare imports out of `configFileDependencies`, so a plugin
  * imported from a workspace package (a `node_modules` symlink into the
- * repository) is found here: each bare import of those files whose package
- * resolves to a directory inside the repository and outside `node_modules`
- * gets every file of that package hashed. A package too large to hash is
- * returned as `unhashed`, and the project goes native.
+ * repository) is found here: each bare import whose package resolves, from the
+ * importing file, to a directory inside the repository and outside
+ * `node_modules` gets every file of that package hashed, and the bare imports
+ * of those files are followed the same way (a worklist, so a package a plugin
+ * package uses is covered too). The files of all packages together are capped
+ * at `maxPackageFiles`; past it the first package that did not fit is returned
+ * as `unhashed`, and the project goes native.
  */
 export function configFiles(
   c: Record<string, unknown>,
   root: string,
   repoRoot: string,
+  maxPackageFiles = MAX_PACKAGE_FILES,
 ): { files: Record<string, string>; unhashed?: string } {
   const sources = [
     c.configFile,
     ...((c.configFileDependencies as string[] | undefined) ?? []),
   ].filter((f): f is string => typeof f === "string");
   const files: Record<string, string> = {};
-  let unhashed: string | undefined;
-  const packages = new Map<string, string>();
-  for (const f of [...new Set(sources)].sort()) {
-    files[relative(root, f)] = hashFile(f);
-    let text = "";
-    try {
-      text = readFileSync(f, "utf8");
-    } catch {}
+  const packages = new Set<string>();
+  const queue: { name: string; dir: string }[] = [];
+  const budget = { left: maxPackageFiles };
+
+  /** Queue every workspace package the text of `file` imports. */
+  const follow = (file: string, text: string) => {
     for (const m of text.matchAll(BARE_IMPORT)) {
       const name = packageName(m[1]);
       if (name === undefined || packages.has(name)) continue;
       // The nearest node_modules/<name> above the importing file.
-      for (let d = dirname(f); ; d = dirname(d)) {
-        const link = join(d, "node_modules", name);
+      for (let d = dirname(file); ; d = dirname(d)) {
         let real: string;
         try {
-          real = realpathSync(link);
+          real = realpathSync(join(d, "node_modules", name));
         } catch {
           if (d === dirname(d)) break;
           continue;
@@ -120,22 +135,30 @@ export function configFiles(
         const rel = relative(repoRoot, real);
         const inside = !rel.startsWith("..") && !isAbsolute(rel);
         if (inside && !rel.split(sep).includes("node_modules")) {
-          packages.set(name, real);
+          packages.add(name);
+          queue.push({ name, dir: real });
         }
         break;
       }
     }
+  };
+
+  for (const f of [...new Set(sources)].sort()) {
+    const r = readHashed(f);
+    files[relative(root, f)] = r.hash;
+    follow(f, r.text);
   }
-  for (const [name, dir] of [...packages].sort()) {
-    const list = packageFiles(dir);
-    if (list === undefined) {
-      unhashed = name;
-      continue;
+  while (queue.length > 0) {
+    const { name, dir } = queue.shift() as { name: string; dir: string };
+    const list = packageFiles(dir, budget);
+    if (list === undefined) return { files, unhashed: name };
+    for (const f of list) {
+      const r = readHashed(f);
+      files[`pkg:${name}/${relative(dir, f)}`] = r.hash;
+      follow(f, r.text);
     }
-    for (const f of list)
-      files[`pkg:${name}/${relative(dir, f)}`] = hashFile(f);
   }
-  return { files, unhashed };
+  return { files };
 }
 
 /** The settings of a project that steer module resolution and transforms. */
@@ -190,18 +213,16 @@ export default class AffectedCacheReporter {
     try {
       this.start = performance.now();
       const root = ctx.config.root;
-      const inputs = (this.options.inputs ?? defaultInputs)(
-        root,
-        ctx.projects.map((p) => projectInput(p, root)),
-      );
+      const perProject = ctx.projects.map((p) => projectInput(p, root));
+      const inputs = (this.options.inputs ?? defaultInputs)(root, perProject);
       const dir =
         this.options.dir ??
         resolve(root, "node_modules", ".cache", "mx-affected");
       this.installed = install(
-        ctx.projects.map((p) => ({
+        ctx.projects.map((p, i) => ({
           name: p.name,
           vitenode: p.vitenode,
-          input: projectInput(p, root),
+          input: perProject[i],
         })),
         inputs,
         dir,

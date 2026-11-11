@@ -256,38 +256,58 @@ describe("guards fall back to native (AC-3)", () => {
     mkdirSync(join(base, rel, ".."), { recursive: true });
     writeFileSync(join(base, rel), text);
   };
-  it("a workspace package the config imports by a bare specifier is hashed", () => {
+  it("a workspace package the config imports, and the packages it imports, are hashed", () => {
     const repo = realpathSync(mkdtempSync(join(tmpdir(), "mx-ws-")));
-    const pkg = join(repo, "packages", "plug");
-    put(repo, "packages/plug/index.js", "export default () => 1;\n");
-    put(repo, "packages/plug/helper.js", "export const h = 'a';\n");
-    put(
-      repo,
-      "app/vitest.config.ts",
-      'import p from "plug";\nexport default {};\n',
-    );
-    mkdirSync(join(repo, "app", "node_modules"), { recursive: true });
-    symlinkSync(pkg, join(repo, "app", "node_modules", "plug"));
-    const c = { configFile: join(repo, "app", "vitest.config.ts") };
-    const key = (files: Record<string, string>) =>
-      projectKey({ ...project(), config: { files } });
-    const before = configFiles(c, join(repo, "app"), repo);
-    expect(Object.keys(before.files)).toContain("pkg:plug/helper.js");
-    put(repo, "packages/plug/helper.js", "export const h = 'b';\n");
-    const after = configFiles(c, join(repo, "app"), repo);
-    expect(key(after.files)).not.toEqual(key(before.files));
-    // An installed (non-workspace) package is not hashed here.
-    mkdirSync(join(repo, "app", "node_modules", "dep"), { recursive: true });
-    put(repo, "app/node_modules/dep/index.js", "x");
-    put(
-      repo,
-      "app/vitest.config.ts",
-      'import d from "dep";\nexport default {};\n',
-    );
-    expect(Object.keys(configFiles(c, join(repo, "app"), repo).files)).toEqual([
-      "vitest.config.ts",
-    ]);
-    rmSync(repo, { recursive: true, force: true });
+    try {
+      const plug = join(repo, "packages", "plug");
+      const dep2 = join(repo, "packages", "dep2");
+      put(
+        repo,
+        "packages/plug/index.js",
+        'import { d } from "dep2";\nexport default () => d;\n',
+      );
+      put(repo, "packages/plug/helper.js", "export const h = 'a';\n");
+      put(repo, "packages/dep2/index.js", "export const d = 'a';\n");
+      put(
+        repo,
+        "app/vitest.config.ts",
+        'import p from "plug";\nexport default {};\n',
+      );
+      const app = join(repo, "app");
+      mkdirSync(join(app, "node_modules"), { recursive: true });
+      symlinkSync(plug, join(app, "node_modules", "plug"));
+      // dep2 is reachable from plug, not from the config.
+      mkdirSync(join(plug, "node_modules"), { recursive: true });
+      symlinkSync(dep2, join(plug, "node_modules", "dep2"));
+      const c = { configFile: join(app, "vitest.config.ts") };
+      const key = (files: Record<string, string>) =>
+        projectKey({ ...project(), config: { files } });
+      const before = configFiles(c, app, repo);
+      expect(Object.keys(before.files)).toContain("pkg:plug/helper.js");
+      expect(Object.keys(before.files)).toContain("pkg:dep2/index.js");
+      put(repo, "packages/plug/helper.js", "export const h = 'b';\n");
+      const afterPlug = configFiles(c, app, repo);
+      expect(key(afterPlug.files)).not.toEqual(key(before.files));
+      put(repo, "packages/dep2/index.js", "export const d = 'b';\n");
+      const afterDep = configFiles(c, app, repo);
+      expect(key(afterDep.files)).not.toEqual(key(afterPlug.files));
+      // A closure too large for the cap is reported, not silently cut.
+      expect(configFiles(c, app, repo, 1).unhashed).toBe("plug");
+      expect(afterDep.unhashed).toBeUndefined();
+      // An installed (non-workspace) package is not hashed here.
+      mkdirSync(join(app, "node_modules", "dep"), { recursive: true });
+      put(repo, "app/node_modules/dep/index.js", "x");
+      put(
+        repo,
+        "app/vitest.config.ts",
+        'import d from "dep";\nexport default {};\n',
+      );
+      expect(Object.keys(configFiles(c, app, repo).files)).toEqual([
+        "vitest.config.ts",
+      ]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   it("projectKey names a length mismatch apart from an unknown origin", () => {
