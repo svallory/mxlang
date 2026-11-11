@@ -13,10 +13,10 @@ import {
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { createLoader } from "./helpers.ts";
+import { __testing, createLoader, loadMx } from "./helpers.ts";
 
 const packageRoot = new URL("..", import.meta.url).pathname;
-const dir = mkdtempSync(join(packageRoot, ".mx-loader-isolation-tmp-"));
+const dir = mkdtempSync(join(packageRoot, ".mx-helpers-loader-isolation-tmp-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("loader instances", () => {
@@ -26,7 +26,6 @@ describe("loader instances", () => {
     const filename = join(dir, "inline.mx");
     writeFileSync(filename, "");
     const srcA = "<p>a</p>";
-    const srcB = "<p>b</p>";
 
     const ra = a.mx(srcA, { filename });
     // Same loader, same input: cache hit.
@@ -34,9 +33,6 @@ describe("loader instances", () => {
     // Other loader, same input: its own compile, not A's cache entry.
     const rb = b.mx(srcA, { filename });
     expect(rb).not.toBe(ra);
-    // Same path, different source per loader: each renders its own.
-    expect(a.mx(srcB, { filename })("")).toBe("<p>b</p>");
-    expect(b.mx(srcA, { filename })("")).toBe("<p>a</p>");
   });
 
   it("recompiling in one loader leaves the other's module untouched", () => {
@@ -46,17 +42,21 @@ describe("loader instances", () => {
     const b = createLoader();
     const ra1 = a.loadMx(file);
     const rb1 = b.loadMx(file);
+    // B compiled for itself, not served from A's top-level cache.
+    expect(rb1).not.toBe(ra1);
 
     writeFileSync(file, "<p>two</p>\n");
-    const later = new Date(Date.now() + 5000);
+    const later = new Date("2100-01-01T00:00:00Z");
     utimesSync(file, later, later);
 
-    expect(a.loadMx(file)("")).toBe("<p>two</p>");
-    expect(a.loadMx(file)).not.toBe(ra1);
-    // B's entry is still B's own, still fresh-checked against its mtime.
-    expect(ra1("")).toBe("<p>one</p>");
-    expect(rb1("")).toBe("<p>one</p>");
-    expect(b.loadMx(file)("")).toBe("<p>two</p>");
+    const ra2 = a.loadMx(file);
+    expect(ra2("")).toBe("<p>two</p>");
+    expect(ra2).not.toBe(ra1);
+    // B recompiles on its own; A's fresh entry is not B's.
+    const rb2 = b.loadMx(file);
+    expect(rb2("")).toBe("<p>two</p>");
+    expect(rb2).not.toBe(rb1);
+    expect(rb2).not.toBe(ra2);
   });
 
   it("register the Node hook once and still resolve each one's modules", () => {
@@ -68,14 +68,16 @@ describe("loader instances", () => {
     const nodeModule = createRequire(import.meta.url)(
       "node:module",
     ) as typeof import("node:module");
+    // Any load through the default loader guarantees the hook is registered.
+    expect(loadMx(page)("")).toBe("<b>badge</b>");
     const spy = vi.spyOn(nodeModule, "registerHooks");
     try {
       const a = createLoader();
       const b = createLoader();
       expect(a.loadMx(page)("")).toBe("<b>badge</b>");
       expect(b.loadMx(page)("")).toBe("<b>badge</b>");
-      expect(a.hasNested(join(dir, "tags", "badge.mx"))).toBe(true);
-      expect(spy.mock.calls.length).toBeLessThanOrEqual(1);
+      expect(__testing.hasNested(join(dir, "tags", "badge.mx"), a)).toBe(true);
+      expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
     }

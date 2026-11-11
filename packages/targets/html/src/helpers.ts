@@ -300,7 +300,9 @@ interface LoaderState {
 interface VirtualRegistry {
   nextId: number;
   hooksRegistered: boolean;
-  loaders: Map<number, LoaderState>;
+  /** Weak, so a dropped loader (and its module text) can be collected; the
+   * hook only runs while the loader's own call is on the stack. */
+  loaders: Map<number, WeakRef<LoaderState>>;
 }
 
 const REGISTRY_KEY = Symbol.for("@mxlang/target-html/virtual-registry");
@@ -315,6 +317,10 @@ function registry(): VirtualRegistry {
   return g[REGISTRY_KEY];
 }
 
+const sweeper = new FinalizationRegistry<number>((id) => {
+  registry().loaders.delete(id);
+});
+
 function createState(): LoaderState {
   const reg = registry();
   const state: LoaderState = {
@@ -326,7 +332,8 @@ function createState(): LoaderState {
     urlForPath: new Map(),
     virtualVersion: 0,
   };
-  reg.loaders.set(state.id, state);
+  reg.loaders.set(state.id, new WeakRef(state));
+  sweeper.register(state, state.id);
   return state;
 }
 
@@ -381,7 +388,7 @@ function ensureNodeHooks(): void {
       if (url.startsWith("mx-virtual:")) {
         const owner = VIRTUAL_URL_SUFFIX.exec(url);
         const source = owner
-          ? reg.loaders.get(Number(owner[1]))?.virtualSources.get(url)
+          ? reg.loaders.get(Number(owner[1]))?.deref()?.virtualSources.get(url)
           : undefined;
         if (source === undefined) {
           throw new Error(
@@ -868,17 +875,24 @@ export interface MxLoader {
     path: string,
     options?: CompileOptions,
   ): MxRenderer<I>;
-  /** Whether this loader's nested-tag cache holds an entry for `path`. */
-  hasNested(path: string): boolean;
 }
 
+const stateOf = new WeakMap<MxLoader, LoaderState>();
+
+/**
+ * Makes a loader with state of its own.
+ *
+ * @internal Not exported from the package index; the package's own `mx` and
+ * `loadMx` use one default loader, and tests make more.
+ */
 export function createLoader(): MxLoader {
   const st = createState();
-  return {
+  const loader: MxLoader = {
     mx: (source, options) => mxIn(st, source, options),
     loadMx: (path, options) => loadMxIn(st, path, options),
-    hasNested: (path) => hasNestedIn(st, path),
   };
+  stateOf.set(loader, st);
+  return loader;
 }
 
 function hasNestedIn(st: LoaderState, path: string): boolean {
@@ -925,8 +939,9 @@ export const loadMx: MxLoader["loadMx"] = (path, options) =>
  */
 export const __testing = {
   /** Whether the shared nested-tag cache (`pathCache`) holds an entry for `path`. */
-  hasNested(path: string): boolean {
-    return defaultLoader.hasNested(path);
+  hasNested(path: string, loader: MxLoader = defaultLoader): boolean {
+    const st = stateOf.get(loader);
+    return st !== undefined && hasNestedIn(st, path);
   },
   /** `fingerprintOptions`, exposed so a test can assert on it directly. */
   fingerprintOptions,
