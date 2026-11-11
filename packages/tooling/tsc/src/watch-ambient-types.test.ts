@@ -96,31 +96,40 @@ it(
       armFile: index,
       lifetimeMs: TIMEOUT_MS - 10_000,
     });
-    // One build's output, up to its summary.
-    const untilSummary = async (since: number) => {
-      await run.until(
-        /Found \d+ errors?\. Watching for file changes\./,
-        since,
-        WAIT_MS,
-      );
-      return stripVTControlCharacters(run.output().slice(since));
-    };
+    const lines = (text: string) =>
+      text.split("\n").filter((line) => line.includes("TS80004"));
+    // The builds that follow `since`, up to and including the first one that
+    // ends in `Found <count> error(s). Watching for file changes.`. The host's
+    // error goes to stderr and tsc's summary to stdout, two pipes that reach
+    // the capture in either order, so a build that should throw is waited for
+    // until both are in, and its text runs to the next build's start, not to
+    // its summary. Returns the last of those builds; any before it is checked
+    // below.
+    //
     // Removing a root file can take tsc through two builds. The file's own
     // watcher and the directory watcher poll independently: when the file's
     // fires first, tsc rebuilds with the root list it still holds, so the file
     // is `TS6053` missing, and the host (asked only when the root list changes)
     // keeps its last answer, which is the throw. The directory watcher then
-    // triggers the build that re-reads the list. So wait for the clean build,
-    // and require any build before it to be that missing-root one. (A created
-    // file is not waited on this way: tsc can keep reporting it missing, so the
-    // host comes back through a config edit.)
-    const untilClean = async (since: number) => {
-      await run.until(
-        /Found 0 errors\. Watching for file changes\./,
-        since,
-        WAIT_MS,
-      );
-      const builds = stripVTControlCharacters(run.output().slice(since))
+    // triggers the build that re-reads the list. So the build waited for is the
+    // one with the expected count, and any before it must be that missing-root
+    // one.
+    const untilBuild = async (since: number, count: 0 | 1) => {
+      const summary = count === 0 ? "Found 0 errors" : "Found 1 error";
+      const done = `${summary}\\. Watching for file changes\\.`;
+      const out = stripVTControlCharacters(
+        await run.until(
+          new RegExp(
+            count === 0 ? done : `^(?=[\\s\\S]*TS80004)[\\s\\S]*${done}`,
+          ),
+          since,
+          WAIT_MS,
+        ),
+      ).slice(since);
+      const end = out.search(new RegExp(done)) + summary.length;
+      const next = out.indexOf("File change detected", end);
+      const builds = out
+        .slice(0, next < 0 ? out.length : next)
         .split("File change detected")
         .slice(1);
       for (const earlier of builds.slice(0, -1)) {
@@ -128,50 +137,36 @@ it(
       }
       return builds[builds.length - 1] ?? "";
     };
-    const lines = (build: string) =>
-      build.split("\n").filter((line) => line.includes("TS80004"));
-    const expectThrown = (build: string) => {
-      expect(lines(build)).toEqual([DIAGNOSTIC]);
-      // Printed before the summary that counts it.
-      expect(build.indexOf(DIAGNOSTIC)).toBeLessThan(
-        build.indexOf("Found 1 error."),
-      );
-      expect(build).toContain("Found 1 error.");
-    };
-    const expectClean = (build: string) => {
-      expect(lines(build)).toEqual([]);
-      expect(build).toContain("Found 0 errors.");
-    };
     const touchIndex = () => appendFileSync(index, "\n");
     try {
-      // The first build holds `throw.ts`: cut the output at its summary.
-      const first = stripVTControlCharacters(run.output());
-      const firstEnd = first.indexOf("Watching for file changes.");
-      expectThrown(first.slice(0, firstEnd));
-      // Arming touched `index.ts`: a rebuild it caused is content-only, so the
-      // host is not asked again, but its program still lacks the host's files:
-      // said again. Only the last arming rebuild is asserted: stdout and stderr
-      // interleave in arrival order, so an earlier one's split is not exact.
-      const armed = first
-        .slice(firstEnd)
-        .split("File change detected")
-        .slice(1);
-      expect(armed.length).toBeGreaterThan(0);
-      expectThrown(armed[armed.length - 1] ?? "");
+      // The first build holds `throw.ts`, and so does every rebuild arming
+      // caused (content-only: the host is not asked again, but its program
+      // still lacks the host's files: said again). The helper has waited until
+      // the output stopped changing, so every line is in; counted over all of
+      // it, since which build a line from the other pipe lands in is not fixed.
+      const all = stripVTControlCharacters(run.output());
+      const builds = all.split("File change detected").length - 1;
+      expect(builds).toBeGreaterThan(0);
+      expect(lines(all)).toEqual(Array(builds + 1).fill(DIAGNOSTIC));
+      expect(all.split("Found 1 error.").length - 1).toBe(builds + 1);
       // `throw.ts` removed: the root list changed, the host is asked, answers.
       let since = run.output().length;
       rmSync(thrower);
-      expectClean(await untilClean(since));
+      expect(lines(await untilBuild(since, 0))).toEqual([]);
       since = run.output().length;
       touchIndex();
-      expectClean(await untilSummary(since));
-      // Back: the host throws on a rebuild, not only on the first build.
+      expect(lines(await untilBuild(since, 0))).toEqual([]);
+      // Back: the host throws on a rebuild, not only on the first build. The
+      // root comes back through a config edit, not by creating `throw.ts`:
+      // plain `tsc -w` (no mx-tsc, same polling settings, 24 busy loops on a
+      // 10-core machine) builds once after a removed root is created again
+      // and reports it `TS6053` missing for good, in 8 of 8 runs.
       since = run.output().length;
       writeFileSync(
         project.path("tsconfig.json"),
         tsconfig(["*.ts", "spare/*.ts"]),
       );
-      expectThrown(await untilSummary(since));
+      expect(lines(await untilBuild(since, 1))).toEqual([DIAGNOSTIC]);
     } finally {
       await run.stop();
     }
