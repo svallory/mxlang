@@ -334,8 +334,11 @@ function cacheKey(
   context: ResolveContext,
 ): string {
   const resolver = context.resolveImport;
-  const tags = context.ctx?.customTags;
-  const declarations = context.ctx?.declarations;
+  // Only a `.mx` callee is read through metadata; a TS/JS one is the same
+  // under every ctx.
+  const scoped = path.endsWith(".mx") ? context.ctx : undefined;
+  const tags = scoped?.customTags;
+  const declarations = scoped?.declarations;
   return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}\0tags:${tags ? idOf(partition, tags) : 0}\0decl:${declarations ? idOf(partition, declarations) : 0}`;
 }
 
