@@ -7,7 +7,9 @@ export default defineConfig({
     // target-select-scan-error.test.ts `vi.mock("@mxlang/targets")`, and index.ts
     // keeps the registry in a module-level cached import, so without a reset the
     // first file's registry (mocked or not) serves every later file and their
-    // mocked `scanCached` never runs. The scan cache itself no longer needs it.
+    // mocked `scanCached` never runs. The scan cache itself no longer needs it:
+    // index.test.ts "warns once about a misconfigured mx.tags" passes under
+    // isolate: false, shuffled with seed 2.
     poolOptions: { forks: { isolate: true } },
     name: "@mxlang/vite-plugin",
     include: ["src/**/*.test.ts"],

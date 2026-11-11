@@ -506,13 +506,6 @@ interface CacheState {
 export interface ScanCache {
   /** {@link scanCached} against this cache only. */
   scan(filePath: string, options: ScanOptions): ScanResult;
-  /** {@link getCustomTags} against this cache only. */
-  getCustomTags(
-    filePath: string,
-    options: ScanOptions,
-  ): Record<string, CustomTag>;
-  /** Drops everything this cache holds. */
-  clear(): void;
 }
 
 /** Creates an empty, independent {@link ScanCache}. */
@@ -527,13 +520,6 @@ function newState(): CacheState {
 function cacheOver(state: CacheState): ScanCache {
   return {
     scan: (filePath, options) => scanIn(state, filePath, options),
-    getCustomTags: (filePath, options) =>
-      scanIn(state, filePath, options).customTags,
-    clear() {
-      state.scans.clear();
-      state.routings.clear();
-      state.maps.clear();
-    },
   };
 }
 
@@ -659,7 +645,9 @@ export function snapshotFreshForTests(result: ScanResult): () => boolean {
 
 /** Drops every cached scan. For tests and for an editor's "restart" command. */
 export function clearScanCache(): void {
-  defaultCache.clear();
+  defaultState.scans.clear();
+  defaultState.routings.clear();
+  defaultState.maps.clear();
 }
 
 /** A copy of a stamp, so a test cannot mutate the cache. */

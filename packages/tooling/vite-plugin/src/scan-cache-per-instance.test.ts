@@ -3,14 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 
-const seen = vi.hoisted(() => ({ caches: [] as unknown[] }));
-vi.mock("@mxlang/targets", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mxlang/targets")>();
+// `spyOn` cannot patch an ES module namespace, so core's factory is wrapped to
+// count each created cache's scans. Nothing else is replaced.
+const counts = vi.hoisted(() => [] as number[]);
+vi.mock("@mxlang/core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@mxlang/core")>();
   return {
     ...original,
-    scanCached: (...args: Parameters<typeof original.scanCached>) => {
-      seen.caches.push(args[1]?.cache);
-      return original.scanCached(...args);
+    createScanCache: () => {
+      const cache = original.createScanCache();
+      const index = counts.push(0) - 1;
+      return {
+        scan: (...args: Parameters<typeof cache.scan>) => {
+          counts[index] = (counts[index] ?? 0) + 1;
+          return cache.scan(...args);
+        },
+      };
     },
   };
 });
@@ -31,11 +39,7 @@ it("each mx() instance scans through its own cache, kept for its lifetime", asyn
     await first.call({}, "<p>b</p>", id);
     await second.call({}, "<p>a</p>", id);
 
-    const [a1, a2, b1] = seen.caches;
-    expect(a1).toBeDefined();
-    expect(a2).toBe(a1);
-    expect(b1).toBeDefined();
-    expect(b1).not.toBe(a1);
+    expect(counts).toEqual([2, 1]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
