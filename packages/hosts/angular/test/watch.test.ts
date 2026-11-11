@@ -240,8 +240,9 @@ describe("startWatch incremental rebuilds", () => {
       });
     writeProject({
       "package.json": manifest("input"),
-      "src/a.mx": "<.x>a</>",
+      "src/a.mx": "<badge/>",
       "src/b.mx": "<.y>b</>",
+      "src/tags/badge.mx": "<span>v1</span>",
     });
     const lines: string[] = [];
     handle = startWatch(projectDir, {
@@ -264,6 +265,11 @@ describe("startWatch incremental rebuilds", () => {
     writeFileSync(join(projectDir, "package.json"), manifest("input"), "utf8");
     await handle.onIdle;
     expect(invalid()).toBe(2);
+
+    // A tag file is a scan input: its recompile wave reports afresh.
+    writeFileSync(join(projectDir, "src/tags/badge.mx"), "<span>v2</span>");
+    await handle.onIdle;
+    expect(invalid()).toBe(3);
   });
 
   it.each(["mx.config.json", ".config/mxrc.json"])(

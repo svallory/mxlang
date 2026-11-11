@@ -493,12 +493,13 @@ export function startWatch(
         return;
       }
 
+      // A tag file is a scan input too: the whole wave (pages and dependents)
+      // shares one fresh set, so it reports afresh once.
+      if (tagChanges.size > 0) reportedScan.clear();
       for (const p of pageChanges) {
         const routed = routedByPath.get(p);
         if (routed) rebuildOne(routed, config);
       }
-      // A tag file is a scan input too: let its wave report afresh.
-      if (tagChanges.size > 0) reportedScan.clear();
       for (const p of tagChanges) {
         for (const page of pagesDependingOn(p)) {
           const routed = routedByPath.get(page);
