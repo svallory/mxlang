@@ -256,12 +256,17 @@ export function metadataForTemplate(
   // an independent compile has already warmed the shared cache. Only shared
   // pending placeholders are scope-independent: they terminate recursion.
   const shared = templateCache.get(tag.filename);
+  // The recovery scope's own map lives and dies with one compile, so only a
+  // shared entry needs its scope checked.
   const cached =
     recoveryScope?.analyzeMetadata?.get(tag.filename) ??
-    (recoveryScope && !shared?.pending ? undefined : shared);
+    (shared &&
+    sameScope(shared.scope, ctx) &&
+    !(recoveryScope && !shared.pending)
+      ? shared
+      : undefined);
   if (
     cached &&
-    sameScope(cached.scope, ctx) &&
     cached.mtimeMs === tag.mtimeMs &&
     cached.source === tag.source
   ) {
