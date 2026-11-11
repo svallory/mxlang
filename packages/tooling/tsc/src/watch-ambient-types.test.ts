@@ -1,4 +1,4 @@
-import { appendFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -25,6 +25,17 @@ const DIAGNOSTIC =
 const WAIT_MS = 30_000;
 /** First build + arming (the helper's budgets) + three rebuilds + slack. */
 const TIMEOUT_MS = WATCH_FIRST_SUMMARY_MS + WATCH_ARM_MS + 3 * WAIT_MS + 30_000;
+const tsconfig = (include: string[]) =>
+  JSON.stringify({
+    compilerOptions: {
+      noEmit: true,
+      strict: true,
+      module: "esnext",
+      target: "es2022",
+      types: [],
+    },
+    include,
+  });
 const EMPTY = { reports: [], errors: [], warnings: [] };
 
 afterEach(cleanupProjects);
@@ -66,20 +77,17 @@ it(
       mx: { target: specifier("ambient-types-misbehaves") },
       install: ["ambient-types-misbehaves"],
       files: {
-        "tsconfig.json": JSON.stringify({
-          compilerOptions: {
-            noEmit: true,
-            strict: true,
-            module: "esnext",
-            target: "es2022",
-            types: [],
-          },
-          include: ["*.ts"],
-        }),
+        "tsconfig.json": tsconfig(["*.ts"]),
         "index.ts": "export const answer: number = 42;\n",
         "throw.ts": "export const thrown = true;\n",
       },
     });
+    // Outside the program until the last step brings it in.
+    mkdirSync(project.path("spare"));
+    writeFileSync(
+      project.path("spare/throw.ts"),
+      "export const thrown = true;\n",
+    );
     const index = project.path("index.ts");
     const thrower = project.path("throw.ts");
     const run = await spawnWatch({
@@ -96,6 +104,29 @@ it(
         WAIT_MS,
       );
       return stripVTControlCharacters(run.output().slice(since));
+    };
+    // Removing a root file can take tsc through two builds. The file's own
+    // watcher and the directory watcher poll independently: when the file's
+    // fires first, tsc rebuilds with the root list it still holds, so the file
+    // is `TS6053` missing, and the host (asked only when the root list changes)
+    // keeps its last answer, which is the throw. The directory watcher then
+    // triggers the build that re-reads the list. So wait for the clean build,
+    // and require any build before it to be that missing-root one. (A created
+    // file is not waited on this way: tsc can keep reporting it missing, so the
+    // host comes back through a config edit.)
+    const untilClean = async (since: number) => {
+      await run.until(
+        /Found 0 errors\. Watching for file changes\./,
+        since,
+        WAIT_MS,
+      );
+      const builds = stripVTControlCharacters(run.output().slice(since))
+        .split("File change detected")
+        .slice(1);
+      for (const earlier of builds.slice(0, -1)) {
+        expect(earlier).toContain("error TS6053");
+      }
+      return builds[builds.length - 1] ?? "";
     };
     const lines = (build: string) =>
       build.split("\n").filter((line) => line.includes("TS80004"));
@@ -130,13 +161,16 @@ it(
       // `throw.ts` removed: the root list changed, the host is asked, answers.
       let since = run.output().length;
       rmSync(thrower);
-      expectClean(await untilSummary(since));
+      expectClean(await untilClean(since));
       since = run.output().length;
       touchIndex();
       expectClean(await untilSummary(since));
       // Back: the host throws on a rebuild, not only on the first build.
       since = run.output().length;
-      writeFileSync(thrower, "export const thrown = true;\n");
+      writeFileSync(
+        project.path("tsconfig.json"),
+        tsconfig(["*.ts", "spare/*.ts"]),
+      );
       expectThrown(await untilSummary(since));
     } finally {
       await run.stop();
