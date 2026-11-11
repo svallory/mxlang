@@ -325,8 +325,8 @@ function idOf(partition: CalleePartition, object: object): number {
 
 /**
  * A `.mx` callee's `Input` is read through template metadata, which is
- * derived under the compile's tag set, so the tag set is part of the key
- * (an absent one is `0`).
+ * derived under the compile's tag set and declarations, so both are part of
+ * the key (an absent one is `0`), matching the template cache's scope.
  */
 function cacheKey(
   partition: CalleePartition,
@@ -335,7 +335,8 @@ function cacheKey(
 ): string {
   const resolver = context.resolveImport;
   const tags = context.ctx?.customTags;
-  return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}\0tags:${tags ? idOf(partition, tags) : 0}`;
+  const declarations = context.ctx?.declarations;
+  return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}\0tags:${tags ? idOf(partition, tags) : 0}\0decl:${declarations ? idOf(partition, declarations) : 0}`;
 }
 
 /**

@@ -154,8 +154,9 @@ const templateCache = new Map<string, CacheEntry>();
 
 /**
  * What the metadata compiler reads from a compile's `Ctx` besides the tag's
- * own text: its tag set, declarations and lookup (the tag table and generator
- * derive from them). An entry is a hit only for the same three objects, held
+ * own text: its tag set, declarations and lookup. The tag table is taken to be
+ * fixed by those three; a dialect-routed file can swap its own table in under
+ * the same three objects, an accepted gap. An entry is a hit only for the same three objects, held
  * weakly, so a compile under another tag set misses instead of being served
  * the facts another compile derived.
  */

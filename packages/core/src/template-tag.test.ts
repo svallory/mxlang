@@ -1,6 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { compileSource } from "./compile.ts";
-import { type MxWarning, TranslateError } from "./core.ts";
+import { readCalleeInput, resetCalleeInputCache } from "./callee-input.ts";
+import { compileSource, printExpression } from "./compile.ts";
+import { type MxWarning, newCtx, TranslateError } from "./core.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { Ir, IrNode } from "./ir.ts";
@@ -380,6 +384,8 @@ describe("template custom tags as compilation units", () => {
           },
         },
       } satisfies Record<string, Record<string, CustomTag>>;
+      // One policy object for every compile, so only the tag set differs.
+      const policy = declarations();
       const outcome = (name: "ok" | "bad") => {
         const warnings: MxWarning[] = [];
         try {
@@ -388,6 +394,7 @@ describe("template custom tags as compilation units", () => {
             tagSets[name],
             CALLER,
             warnings,
+            policy,
           );
           return JSON.stringify({ ir, warnings });
         } catch (error) {
@@ -398,6 +405,61 @@ describe("template custom tags as compilation units", () => {
       expect(results[0]).toBe(results[2]);
       expect(results[0]).not.toBe(results[1]);
       expect(results.some((r) => r.startsWith("threw: "))).toBe(true);
+    },
+  );
+
+  // Same lookup, same tags, same files; only the policy differs. `<Missing/>`
+  // in the callee's template is refused by one policy and lowers as a
+  // component under the other, so reading its metadata fails under one only, and that failure is cached as the callee's
+  // `Input`, so it must not be served to the compile that lowers fine.
+  it.each([
+    ["strict, loose, strict", ["strict", "loose", "strict"]],
+    ["loose, strict, loose", ["loose", "strict", "loose"]],
+  ] as const)(
+    "a callee's cached Input ignores earlier compiles under other policies: %s",
+    (_name, order) => {
+      resetTemplateCache();
+      resetCalleeInputCache();
+      const dir = mkdtempSync(join(tmpdir(), "mx-callee-policy-"));
+      try {
+        writeFileSync(join(dir, "package.json"), "{}");
+        writeFileSync(join(dir, "card.mx"), "<Missing/>\n");
+        const page = join(dir, "page.mx");
+        const policies = {
+          loose: { ...declarations(), isComponent: () => true },
+          strict: {
+            ...declarations(),
+            isComponent: () => true,
+            rejectComponentTag(name: string) {
+              if (name === "Missing") throw new Error("Missing refused");
+            },
+          },
+        } satisfies Record<string, Policy>;
+        const outcome = (name: "strict" | "loose") => {
+          const ctx = newCtx(
+            "",
+            printExpression,
+            policies[name],
+            undefined,
+            page,
+            lookup,
+          );
+          return readCalleeInput(
+            { kind: "name", name: "Card" },
+            {
+              importer: page,
+              imports: new Map([["Card", "./card.mx"]]),
+              ctx,
+              targets: lookup,
+            },
+          ).input.kind;
+        };
+        const results = order.map(outcome);
+        expect(results[0]).toBe(results[2]);
+        expect(results[0]).not.toBe(results[1]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
   );
 
