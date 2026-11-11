@@ -131,6 +131,7 @@ describe("reservation ledger", () => {
     const env: NodeJS.ProcessEnv = {};
     markRunPid(env, 7);
     markRunPid(env, 9);
+    markRunPid(env, 9);
     expect(ancestorRunPids(env)).toEqual([7, 9]);
     expect(ancestorRunPids({})).toEqual([]);
   });

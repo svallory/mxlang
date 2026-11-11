@@ -160,7 +160,7 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-export interface LockClock {
+interface LockClock {
   now: () => number;
   sleep: (ms: number) => void;
   /** Test hook: called right before the lock is released. */
@@ -289,7 +289,9 @@ export function markRunPid(
   env: NodeJS.ProcessEnv = process.env,
   pid: number = process.pid,
 ): void {
-  env[ANCESTORS_ENV] = [...ancestorRunPids(env), pid].join(",");
+  const pids = ancestorRunPids(env);
+  if (pids.includes(pid)) return; // a watch-mode config reload runs this again
+  env[ANCESTORS_ENV] = [...pids, pid].join(",");
 }
 
 /** Release this run's entry on exit, and on SIGINT/SIGTERM (then re-raise). */

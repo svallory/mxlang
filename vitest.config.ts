@@ -30,7 +30,7 @@ import {
 // free memory first, and this run records workers x heap cap + main process,
 // dropped on exit/SIGINT. Every forks worker runs with `--max-old-space-size`
 // (default measured; `MX_VITEST_WORKER_HEAP_MB` overrides it). The threads
-// group (host-angular, target-html) is NOT capped: Node rejects
+// project (host-angular) is NOT capped: Node rejects
 // `--max-old-space-size` in a worker thread's execArgv
 // (ERR_WORKER_INVALID_EXEC_ARGV) and vitest does not expose tinypool's
 // `resourceLimits`.
@@ -81,7 +81,7 @@ if (!process.env.MX_VITEST_QUIET) {
 //   that a shared graph bypasses (the failing assertion, or for target-registry
 //   and vscode the mocking test, is named in the project's vitest.config.ts).
 // - Fresh worker per file (`pool: "threads"`, whose isolation defaults to true
-//   and is not read from the forks root): host-angular and target-html, which
+//   and is not read from the forks root): host-angular, which
 //   depend on process-level state a module reset does not clear. They run in
 //   `sequence.groupOrder: 1`, after every forks project: vitest runs groups
 //   one after another, so the threads pool never overlaps the forks pool and
