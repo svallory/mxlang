@@ -4,8 +4,9 @@
  * Vitest selects the tests, `onTestRunStart` after, which is where the native
  * transforms are put back. Anything unexpected leaves selection native.
  */
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { readFileSync, realpathSync } from "node:fs";
+import { relative, resolve } from "node:path";
 import {
   cacheMode,
   collectInputs,
@@ -15,6 +16,7 @@ import {
   NATIVE_PREFIX,
   type ProjectInput,
   type ProjectLike,
+  pluginOrigin,
 } from "./test-affected-cache.ts";
 
 interface VitestProject {
@@ -35,16 +37,44 @@ interface VitestCtx {
   projects: VitestProject[];
 }
 
+/**
+ * Content hash of the config file and every file it imports (vite's
+ * `configFileDependencies`): a plugin factory or option closure defined there
+ * shows no text in the plugin object. A file that cannot be read is recorded
+ * as such, which still changes the key when it appears or disappears.
+ */
+function configFiles(
+  c: Record<string, unknown>,
+  root: string,
+): Record<string, string> {
+  const files = [
+    c.configFile,
+    ...((c.configFileDependencies as string[] | undefined) ?? []),
+  ].filter((f): f is string => typeof f === "string");
+  const out: Record<string, string> = {};
+  for (const f of [...new Set(files)].sort()) {
+    try {
+      out[relative(root, f)] = createHash("sha256")
+        .update(readFileSync(f))
+        .digest("hex");
+    } catch {
+      out[relative(root, f)] = "unreadable";
+    }
+  }
+  return out;
+}
+
 /** The settings of a project that steer module resolution and transforms. */
 function projectInput(p: VitestProject): ProjectInput {
   const c = p.vite.config;
+  const plugins = (c.plugins as { name?: string }[] | undefined) ?? [];
   return {
     name: p.name,
     root: p.config.root,
-    plugins: ((c.plugins as { name?: string }[] | undefined) ?? []).map(
-      (pl) => pl.name ?? "",
-    ),
+    plugins: plugins.map((pl) => pl.name ?? ""),
+    origins: plugins.map((pl) => pluginOrigin(pl)),
     config: {
+      configFiles: configFiles(c, p.config.root),
       mode: c.mode,
       define: c.define,
       // Vitest moves a project's `define` out of the vite config into its own

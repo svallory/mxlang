@@ -38,8 +38,11 @@
  *   exist, and sources using a glob import (`import.meta.glob`,
  *   `require.context`) are never cached, because their imports depend on
  *   directory contents no content hash shows. A project whose plugins or
- *   config cannot be fingerprinted (an unknown plugin, a function or other
- *   non-canonical value) is bypassed whole.
+ *   config cannot be fingerprinted (an unknown plugin, a plugin whose origin
+ *   `pluginOrigin` cannot read, a function or other non-canonical value) is
+ *   bypassed whole. A plugin's origin (the text of its hooks, plus the hashed
+ *   config file and its imports) is part of the project key, so a plugin that
+ *   keeps its name and changes its code is a different key.
  * - stability: the source is hashed before and after the native transform; a
  *   changing file is not stored.
  * - storage: a versioned payload with an integrity checksum, atomic
@@ -69,7 +72,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 /** Bump when the payload or the key model changes; old stores become unreachable. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** The private vite-node API this adapter wraps is audited for exactly these. */
 export const SUPPORTED_VERSIONS: Readonly<Record<string, string>> = {
@@ -123,6 +126,11 @@ const SUPPORTED_PLUGINS: ReadonlySet<string> = new Set([
   "vite:client-inject",
   "vite:css-analysis",
   "vite:import-analysis",
+  // The one workspace plugin of this repo's projects (host-preact's config):
+  // it resolves `preact` specifiers. Its hook code is hashed into the key
+  // (`pluginOrigin`) and its module is a dependency of that project's config
+  // file, so an edit to it changes the key.
+  "mx-single-preact",
 ]);
 
 /** A source whose imports depend on directory contents. */
@@ -233,6 +241,11 @@ export interface ProjectInput {
   name: string;
   root: string;
   plugins: string[];
+  /**
+   * Parallel to `plugins`: where each plugin's behaviour comes from (see
+   * `pluginOrigin`), or null when that cannot be determined.
+   */
+  origins: (string | null)[];
   /** The resolved settings that steer resolution and transforms. */
   config: unknown;
 }
@@ -549,11 +562,77 @@ export function collectInputs(
 
 export type Verdict<T> = { ok: true; value: T } | { ok: false; reason: string };
 
+/**
+ * Where a plugin object's behaviour comes from, as a hash, or null when that
+ * cannot be determined.
+ *
+ * A plugin object carries no module path, so its origin is its code: the
+ * source text of every hook function (a function's text is its code whatever
+ * file or package defined it), plus its other plain settings (`enforce`,
+ * `apply`, ...). A name never decides it: a workspace plugin that borrows an
+ * allowlisted name changes the hash as soon as its transform changes. What the
+ * text cannot show is a value the hook closes over; that value comes from the
+ * plugin's factory, whose own file is hashed with the project config (the
+ * config file and every file it imports, see the reporter) or is an installed
+ * package (pinned by the namespace's package list and tool versions).
+ * Undeterminable: a hook that is native, bound or a class, an accessor, or a
+ * value that is neither a function nor plain data (an options object, a map).
+ */
+export function pluginOrigin(plugin: unknown): string | null {
+  if (typeof plugin !== "object" || plugin === null || Array.isArray(plugin)) {
+    return null;
+  }
+  const seen = new Set<object>();
+  // Throws `undetermined` for anything whose behaviour the text cannot show.
+  const undetermined = new Error("undetermined");
+  const walk = (v: unknown): unknown => {
+    if (v === undefined || v === null) return null;
+    if (["string", "number", "boolean"].includes(typeof v)) return v;
+    if (v instanceof RegExp) return `re:${v}`;
+    if (typeof v === "function") {
+      const text = Function.prototype.toString.call(v);
+      // Bound and native functions print `[native code]`; a class is no hook.
+      if (/\{\s*\[native code\]\s*\}\s*$/.test(text) || /^class\b/.test(text)) {
+        throw undetermined;
+      }
+      return `fn:${sha(text)}`;
+    }
+    if (typeof v !== "object" || seen.has(v)) throw undetermined;
+    seen.add(v);
+    try {
+      if (Array.isArray(v)) return v.map(walk);
+      const proto = Object.getPrototypeOf(v);
+      if (proto !== Object.prototype && proto !== null) throw undetermined;
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(v).sort()) {
+        const d = Object.getOwnPropertyDescriptor(v, key);
+        if (d === undefined || !("value" in d)) throw undetermined;
+        out[key] = walk(d.value);
+      }
+      return out;
+    } finally {
+      seen.delete(v);
+    }
+  };
+  try {
+    return sha(canonical(walk(plugin)));
+  } catch {
+    return null;
+  }
+}
+
 /** A project's namespace component, or why that project must stay native. */
 export function projectKey(p: ProjectInput): Verdict<string> {
   const unknown = p.plugins.find((n) => !SUPPORTED_PLUGINS.has(n));
   if (unknown !== undefined) {
     return { ok: false, reason: `unsupported plugin ${unknown} in ${p.name}` };
+  }
+  const undetermined = p.plugins.findIndex((_, i) => !p.origins[i]);
+  if (p.origins.length !== p.plugins.length || undetermined !== -1) {
+    return {
+      ok: false,
+      reason: `unknown origin of plugin ${p.plugins[Math.max(undetermined, 0)]} in ${p.name}`,
+    };
   }
   try {
     return {
@@ -563,6 +642,7 @@ export function projectKey(p: ProjectInput): Verdict<string> {
           name: p.name,
           root: p.root,
           plugins: p.plugins,
+          origins: p.origins,
           config: p.config,
         }),
       ),
@@ -872,7 +952,7 @@ export function install(
       continue;
     }
     if (!pk.ok) {
-      note(`${pk.reason}, native`);
+      note(`${NATIVE_PREFIX}: ${pk.reason}`);
       continue;
     }
     node._transformRequest = async function (

@@ -28,6 +28,7 @@ import {
   install,
   namespaceFor,
   type ProjectInput,
+  pluginOrigin,
   projectKey,
   SCHEMA_VERSION,
   Store,
@@ -41,6 +42,7 @@ const project = (): ProjectInput => ({
   name: "p",
   root,
   plugins: ["vite:esbuild", "alias"],
+  origins: ["o1", "o2"],
   config: {
     resolve: {
       conditions: ["node"],
@@ -209,6 +211,43 @@ describe("guards fall back to native (AC-3)", () => {
     expect(i.inventory).toBeUndefined();
     expect(namespaceFor(i).ok).toBe(false);
     expect(namespaceFor(collect()).ok).toBe(true);
+  });
+
+  it("pluginOrigin hashes hook code, not the name, and refuses what it cannot read", () => {
+    const mk = (body: string) => ({
+      name: "vite:esbuild",
+      transform: new Function("code", body),
+    });
+    const a = pluginOrigin(mk("return code"));
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(pluginOrigin(mk("return code"))).toBe(a);
+    expect(pluginOrigin(mk("return code + 1"))).not.toBe(a);
+    expect(pluginOrigin({ name: "x", transform() {} })).not.toBe(
+      pluginOrigin({
+        name: "x",
+        transform() {
+          return 1;
+        },
+      }),
+    );
+    // hook object form
+    expect(
+      pluginOrigin({ name: "x", transform: { handler() {}, order: "pre" } }),
+    ).not.toBeNull();
+    // undeterminable
+    expect(
+      pluginOrigin({ name: "x", transform: (() => {}).bind(null) }),
+    ).toBeNull();
+    expect(pluginOrigin({ name: "x", api: new Map() })).toBeNull();
+    expect(
+      pluginOrigin({
+        name: "x",
+        get transform() {
+          return () => {};
+        },
+      }),
+    ).toBeNull();
+    expect(pluginOrigin(null)).toBeNull();
   });
 
   it("every guard makes the cached entry unreachable or unusable", () => {
@@ -395,6 +434,20 @@ describe("guards fall back to native (AC-3)", () => {
           }),
       },
       {
+        name: "plugin origin changed (same names)",
+        inputs: () =>
+          clone((i) => {
+            i.projects[0].origins = ["o1", "changed"];
+          }),
+      },
+      {
+        name: "plugin origin unknown",
+        inputs: () =>
+          clone((i) => {
+            i.projects[0].origins = ["o1", null];
+          }),
+      },
+      {
         name: "unsupported plugin",
         inputs: () =>
           clone((i) => {
@@ -423,6 +476,7 @@ describe("guards fall back to native (AC-3)", () => {
     }
     // These must not merely change the key: the project has to stay native.
     for (const name of [
+      "plugin origin unknown",
       "unsupported plugin",
       "third-party vite:-prefixed plugin",
       "plugin option closure",

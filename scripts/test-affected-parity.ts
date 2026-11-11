@@ -243,7 +243,7 @@ function poison(store: string, how: Poison): number {
     } else if (how === "stale-checksum") {
       writeFileSync(file, JSON.stringify({ ...p, deps: [], dynamicDeps: [] }));
     } else {
-      writeFileSync(file, '{"schema":1,"key":');
+      writeFileSync(file, '{"schema":2,"key":');
     }
   }
   return files.length;
@@ -314,6 +314,8 @@ function buildBaseline(root: string): void {
   w("link.test.ts", TEST("link", 'import "link/x.ts";'));
   w("tree.test.ts", TEST("tree", 'import "./src/tree/y.ts";'));
   w("pkg.test.ts", TEST("pkg", 'import "./package.json";'));
+  w("src/plug.ts", "export const plug = 1;\n");
+  w("plug.test.ts", TEST("plug", 'import "./src/plug.ts";'));
   w("src/swap.ts", "export const swap = 'inside';\n");
   w("swap.test.ts", TEST("swap", 'import "./src/swap.ts";'));
   w(
@@ -387,6 +389,7 @@ const ALL_TESTS = [
   "link.test.ts",
   "manifest.test.ts",
   "pkg.test.ts",
+  "plug.test.ts",
   "ren.test.ts",
   "swap.test.ts",
   "tree.test.ts",
@@ -394,6 +397,23 @@ const ALL_TESTS = [
 
 const CONFIG_WITH = (value: string) =>
   `export default { test: { globals: true }, define: { __PARITY_CFG__: ${JSON.stringify(value)} } };\n`;
+
+/**
+ * A workspace-defined plugin: `src/plug.ts` gains an import of `imports`
+ * under the given plugin name, so the plugin's code decides what that module
+ * depends on while its name stays fixed.
+ */
+const IMPORTING_PLUGIN = (name: string, imports: string) => ({
+  name,
+  enforce: "pre" as const,
+  // The path is in the function's text, not a closure: two plugins that
+  // differ only in a captured value would hash alike (see `pluginOrigin`).
+  transform: new Function(
+    "code",
+    "id",
+    `return id.endsWith("/src/plug.ts") ? code + ${JSON.stringify(`\nimport ${JSON.stringify(imports)};\n`)} : null;`,
+  ) as (code: string, id: string) => string | null,
+});
 
 export const ROWS: Row[] = [
   {
@@ -437,6 +457,55 @@ export const ROWS: Row[] = [
     after: { configText: CONFIG_WITH('"2"') },
     related: "src/lib.ts",
     expect: ["edit.test.ts", "lib.test.ts"],
+  },
+  {
+    name: "plugin keeps an allowlisted name, changes its transform",
+    guard:
+      "projectKey: a plugin's origin (its code), not its name, is part of the key",
+    warm: { plugins: [IMPORTING_PLUGIN("vite:esbuild", "./lib.ts")] },
+    poison: "empty-lists",
+    after: { plugins: [IMPORTING_PLUGIN("vite:esbuild", "./other.ts")] },
+    related: "src/other.ts",
+    expect: ["plug.test.ts"],
+  },
+  {
+    name: "plugin with an unlisted name changes its transform",
+    guard:
+      "projectKey: a name outside the allowlist stays native whatever its code does",
+    warm: { plugins: [IMPORTING_PLUGIN("mx-parity-plugin", "./lib.ts")] },
+    poison: "empty-lists",
+    poisonOptional: true,
+    after: { plugins: [IMPORTING_PLUGIN("mx-parity-plugin", "./other.ts")] },
+    expectNative: /unsupported plugin mx-parity-plugin/,
+    related: "src/other.ts",
+    expect: ["plug.test.ts"],
+  },
+  {
+    name: "plugin with an allowlisted name and an unreadable origin",
+    guard:
+      "projectKey: a plugin whose behaviour cannot be traced sends its project native",
+    warm: {
+      plugins: [
+        {
+          ...IMPORTING_PLUGIN("vite:esbuild", "./lib.ts"),
+          // A bound function prints as native code: no text, no origin.
+          transform: IMPORTING_PLUGIN("x", "./other.ts").transform.bind(null),
+        },
+      ],
+    },
+    poison: "empty-lists",
+    poisonOptional: true,
+    after: {
+      plugins: [
+        {
+          ...IMPORTING_PLUGIN("vite:esbuild", "./other.ts"),
+          transform: IMPORTING_PLUGIN("x", "./other.ts").transform.bind(null),
+        },
+      ],
+    },
+    expectNative: /unknown origin of plugin vite:esbuild/,
+    related: "src/other.ts",
+    expect: ["plug.test.ts"],
   },
   {
     name: "unaudited tool version",
