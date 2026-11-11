@@ -93,4 +93,25 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
       expect(hoisted).toEqual(["__mx_DefineFoo1", "__mx_DefineFoo2"]);
     });
   });
+
+  describe("define-scope state does not outlive a compile", () => {
+    const A = "<define/D a=input.x/><define/E><i>${D.a}</i></define><E/>";
+    const B = "<define/D a=input.y/><p>${D.a}</p><p>${D.a}</p>";
+    const compileAll = (source: string): string => {
+      try {
+        return compile(source, false);
+      } catch (error) {
+        return `throws: ${(error as Error).message}`;
+      }
+    };
+
+    it("compiling A, B, A gives A's output and diagnostics both times", () => {
+      const first = compileAll(A);
+      expect(first).toContain("throws: ");
+      expect(first).toContain("cannot close over `D`");
+      expect(compileAll(B)).toContain("__mxDefine1");
+      expect(compileAll(A)).toBe(first);
+      expect(compileAll(B)).toBe(compileAll(B));
+    });
+  });
 });

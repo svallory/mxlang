@@ -1873,10 +1873,10 @@ function resolveDefineFns(
 type DefineScope = { name: string; attrs: Attr[]; rest: IrNode[] };
 
 /** The nodes `withDefineAttributeReads` stands in for a define's later siblings. */
-const defineScopes = new WeakMap<IrNode, DefineScope>();
+let defineScopes = new WeakMap<IrNode, DefineScope>();
 
 /** The author's name of each define scope's generated binding, for diagnostics. */
-const defineScopeAuthorNames = new Map<string, string>();
+let defineScopeAuthorNames = new Map<string, string>();
 
 /**
  * Marko makes a `<define>`'s attributes properties of its value
@@ -3653,14 +3653,23 @@ export function createEmitter(): SolidEmitter {
   return new SolidEmitter();
 }
 
-/** Runs `emit` with a fresh dynamic-name counter, restoring the outer one. */
+/**
+ * Runs `emit` with a fresh dynamic-name counter and fresh define-scope maps,
+ * restoring the outer ones.
+ */
 function withDynSerial<T>(emit: () => T): T {
   const outer = dynSerial;
+  const outerScopes = defineScopes;
+  const outerAuthorNames = defineScopeAuthorNames;
   dynSerial = { n: 0 };
+  defineScopes = new WeakMap();
+  defineScopeAuthorNames = new Map();
   try {
     return emit();
   } finally {
     dynSerial = outer;
+    defineScopes = outerScopes;
+    defineScopeAuthorNames = outerAuthorNames;
   }
 }
 
