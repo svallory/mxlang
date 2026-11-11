@@ -35,6 +35,7 @@ import {
   voiceOfCtx,
   writesMxSyntax,
 } from "./message-vocabulary.ts";
+import { type ScopeRef, sameScopeRef, scopeRefOf } from "./scope-ref.ts";
 
 export interface TemplateTag {
   filename: string;
@@ -161,24 +162,24 @@ const templateCache = new Map<string, CacheEntry>();
  * the facts another compile derived.
  */
 interface Scope {
-  customTags: WeakRef<object> | undefined;
-  declarations: WeakRef<object>;
-  targets: WeakRef<object> | undefined;
+  customTags: ScopeRef;
+  declarations: ScopeRef;
+  targets: ScopeRef;
 }
 
 function scopeOf(ctx: Ctx): Scope {
   return {
-    customTags: ctx.customTags && new WeakRef(ctx.customTags),
-    declarations: new WeakRef(ctx.declarations),
-    targets: ctx.targets && new WeakRef(ctx.targets),
+    customTags: scopeRefOf(ctx.customTags),
+    declarations: scopeRefOf(ctx.declarations),
+    targets: scopeRefOf(ctx.targets),
   };
 }
 
 function sameScope(entry: Scope, ctx: Ctx): boolean {
   return (
-    entry.customTags?.deref() === ctx.customTags &&
-    entry.declarations.deref() === ctx.declarations &&
-    entry.targets?.deref() === ctx.targets
+    sameScopeRef(entry.customTags, ctx.customTags) &&
+    sameScopeRef(entry.declarations, ctx.declarations) &&
+    sameScopeRef(entry.targets, ctx.targets)
   );
 }
 

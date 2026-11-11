@@ -36,6 +36,7 @@ import type { Ctx, Node } from "./core.ts";
 import type { ComponentTarget } from "./ir.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { hostModuleSegment } from "./scan.ts";
+import { type ScopeRef, sameScopeRef, scopeRefOf } from "./scope-ref.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { metadataForTemplate, touchAndEvict } from "./template-tag.ts";
 
@@ -236,21 +237,21 @@ interface CalleeCacheEntry {
 }
 
 interface CalleeScope {
-  customTags: WeakRef<object> | undefined;
-  declarations: WeakRef<object> | undefined;
+  customTags: ScopeRef;
+  declarations: ScopeRef;
 }
 
 function calleeScopeOf(ctx: Ctx | undefined): CalleeScope {
   return {
-    customTags: ctx?.customTags && new WeakRef(ctx.customTags),
-    declarations: ctx && new WeakRef(ctx.declarations),
+    customTags: scopeRefOf(ctx?.customTags),
+    declarations: scopeRefOf(ctx?.declarations),
   };
 }
 
 function sameCalleeScope(scope: CalleeScope, ctx: Ctx | undefined): boolean {
   return (
-    scope.customTags?.deref() === ctx?.customTags &&
-    scope.declarations?.deref() === ctx?.declarations
+    sameScopeRef(scope.customTags, ctx?.customTags) &&
+    sameScopeRef(scope.declarations, ctx?.declarations)
   );
 }
 
@@ -268,8 +269,8 @@ let templateMetadataReads = 0;
 // counter outlives the lookup it numbers.
 interface CalleePartition {
   entries: Map<string, CalleeCacheEntry>;
-  // Opaque ids for the objects a cache key names by identity (a resolver
-  // function, a compile's `customTags` map); never part of any output.
+  // Opaque ids for the resolver functions a cache key names by identity;
+  // never part of any output.
   ids: WeakMap<object, number>;
   nextId: number;
 }
