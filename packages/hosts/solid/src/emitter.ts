@@ -171,11 +171,13 @@ let lazyScope = false;
 /**
  * Gensym counter for the dynamic-tag IIFE's temp binding.
  *
- * Module-level, same reason `returnVars`/`lazyScope` are: monotonic across
- * every compile in the process is still unique within any one compile's
- * output, which is all uniqueness this binding needs.
+ * Module-level, same reason `returnVars`/`lazyScope` are, and scoped per
+ * compile by `collectReturnVars` (saved, reset to 0, restored): counting
+ * from 0 in each compile is unique within that compile's output, which is
+ * all uniqueness this binding needs, and keeps output independent of how
+ * many compiles ran before it in the process.
  */
-const dynSerial = { n: 0 };
+let dynSerial = { n: 0 };
 
 /**
  * `<define>`s hoisted to module scope during the current compile, and the
@@ -617,6 +619,8 @@ export function collectReturnVars(
   const outerAttrGuardUse = attrGuardUse;
   const outerHoistedDefines = hoistedDefines;
   const outerDefineBindings = defineBindings;
+  const outerDynSerial = dynSerial;
+  dynSerial = { n: 0 };
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
@@ -648,6 +652,7 @@ export function collectReturnVars(
     attrGuardUse = outerAttrGuardUse;
     hoistedDefines = outerHoistedDefines;
     defineBindings = outerDefineBindings;
+    dynSerial = outerDynSerial;
   }
 }
 
