@@ -12,18 +12,15 @@ import { defineConfig } from "vitest/config";
 // `sync-esm-reload-node`).
 export default defineConfig({
   test: {
-    // A fresh worker per file. With a module reset in a reused process only,
-    // client-block.test.ts "`typeof q` renders undefined" gets '<p></p>'
-    // instead of '<div>undefined</div>': `mx()`'s synthetic module ids collide
-    // in the process-level module cache across files (dup-attr,
-    // text-falsy-values and html-comment-render fail the same way). Without
-    // even the module reset, ir-contract.test.ts "E3: prints Expr.code and
-    // never re-derives it from Expr.node" fails (hoisted mock bypassed). The
-    // threads pool isolates by default; forks isolation is read only from the
-    // root config.
-    pool: "threads",
-    // Run after the forks projects (see the root vitest.config.ts).
-    sequence: { groupOrder: 1 },
+    // A module reset per file in a reused forks process (the root config
+    // reuses workers; this project's own `isolate` resets modules and mocks
+    // per file). The reset is needed only by ir-contract.test.ts "E3: prints
+    // Expr.code and never re-derives it from Expr.node": it hoists a
+    // `vi.mock`, and without a reset the mock is bypassed by the module
+    // graph an earlier file already loaded. The `mx()` module-id collisions
+    // that used to force a fresh worker per file are gone: each loader's
+    // virtual URLs carry a process-unique id.
+    isolate: true,
     exclude: [
       "**/node_modules/**",
       "src/bun.test.ts",

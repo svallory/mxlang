@@ -266,48 +266,106 @@ interface CacheEntry<I> {
 }
 
 const MAX_CACHE_ENTRIES = 256;
-const sourceCache = new Map<string, CacheEntry<never>>();
-/** Nested `.mx` imports only — always compiled with just `customTags`, so
- * this is keyed by path alone, never by caller options. */
-const pathCache = new Map<string, CacheEntry<never>>();
-/** `loadMx`'s own top-level entries — keyed by path AND options, since two
- * `loadMx(path, options)` calls with different options are different
- * compiles (round 2, finding 1). Deliberately a separate map from
- * `pathCache`: the two have different key shapes for the same path. */
-const topLevelPathCache = new Map<string, CacheEntry<never>>();
 
-/** In-memory module text, keyed by the URL it was last registered under. */
-const virtualSources = new Map<string, string>();
-/** Real path -> its current virtual/data URL, so a cache hit reuses it. */
-const urlForPath = new Map<string, string>();
-let virtualVersion = 0;
+/**
+ * Everything one loader owns: its caches, its in-memory module text, its
+ * URL map and its version counter. Two loaders share nothing.
+ */
+interface LoaderState {
+  /** Process-unique id, baked into every virtual URL this loader makes. */
+  readonly id: number;
+  sourceCache: Map<string, CacheEntry<never>>;
+  /** Nested `.mx` imports only — always compiled with just `customTags`, so
+   * this is keyed by path alone, never by caller options. */
+  pathCache: Map<string, CacheEntry<never>>;
+  /** `loadMx`'s own top-level entries — keyed by path AND options, since two
+   * `loadMx(path, options)` calls with different options are different
+   * compiles (round 2, finding 1). Deliberately a separate map from
+   * `pathCache`: the two have different key shapes for the same path. */
+  topLevelPathCache: Map<string, CacheEntry<never>>;
+  /** In-memory module text, keyed by the URL it was last registered under. */
+  virtualSources: Map<string, string>;
+  /** Real path -> its current virtual/data URL, so a cache hit reuses it. */
+  urlForPath: Map<string, string>;
+  virtualVersion: number;
+}
+
+/**
+ * The one process-wide registry the Node hook reads. It lives on
+ * `globalThis` so every copy of this module in the process (a bundler or a
+ * test runner may load it more than once) shares one id counter and one hook
+ * instead of each copy restarting at `#v0` and colliding in the runtime's
+ * module cache.
+ */
+interface VirtualRegistry {
+  nextId: number;
+  hooksRegistered: boolean;
+  loaders: Map<number, LoaderState>;
+}
+
+const REGISTRY_KEY = Symbol.for("@mxlang/target-html/virtual-registry");
+
+function registry(): VirtualRegistry {
+  const g = globalThis as { [REGISTRY_KEY]?: VirtualRegistry };
+  g[REGISTRY_KEY] ??= {
+    nextId: 0,
+    hooksRegistered: false,
+    loaders: new Map(),
+  };
+  return g[REGISTRY_KEY];
+}
+
+function createState(): LoaderState {
+  const reg = registry();
+  const state: LoaderState = {
+    id: reg.nextId++,
+    sourceCache: new Map(),
+    pathCache: new Map(),
+    topLevelPathCache: new Map(),
+    virtualSources: new Map(),
+    urlForPath: new Map(),
+    virtualVersion: 0,
+  };
+  reg.loaders.set(state.id, state);
+  return state;
+}
+
+/** `mx-virtual:<path>#i<loader id>v<version>`. */
+function virtualUrl(st: LoaderState, anchor: string): string {
+  return `mx-virtual:${anchor}#i${st.id}v${st.virtualVersion++}`;
+}
+
+const VIRTUAL_URL_SUFFIX = /#i(\d+)v\d+$/;
 
 /**
  * Bun's half of the `mx-virtual:` scheme: one plugin, registered lazily,
  * whose builder is kept so each new module is added with `build.module`
- * (registering a whole plugin per module would pile up plugins).
+ * (registering a whole plugin per module would pile up plugins). The builder
+ * is process-global, so it is kept on the registry's lifetime via the
+ * `globalThis` symbol below rather than per module copy.
  */
-let bunBuild: PluginBuilder | undefined;
+const BUN_BUILD_KEY = Symbol.for("@mxlang/target-html/bun-build");
 
-function registerVirtual(url: string, source: string): void {
-  virtualSources.set(url, source);
+function registerVirtual(st: LoaderState, url: string, source: string): void {
+  st.virtualSources.set(url, source);
   if (!isBun) return;
-  if (!bunBuild) {
+  const g = globalThis as { [BUN_BUILD_KEY]?: PluginBuilder };
+  if (!g[BUN_BUILD_KEY]) {
     // SAFETY: the isBun guard above checked the runtime's Bun global.
     (globalThis as unknown as { Bun: typeof import("bun") }).Bun.plugin({
       name: "mxlang-virtual",
       setup(build) {
-        bunBuild = build;
+        g[BUN_BUILD_KEY] = build;
       },
     });
   }
-  bunBuild?.module(url, () => ({ contents: source, loader: "ts" }));
+  g[BUN_BUILD_KEY]?.module(url, () => ({ contents: source, loader: "ts" }));
 }
 
-let nodeHooksRegistered = false;
-
 function ensureNodeHooks(): void {
-  if (nodeHooksRegistered || isBun) return;
+  const reg = registry();
+  if (reg.hooksRegistered || isBun) return;
+  reg.hooksRegistered = true;
   const localRequire = createRequire(import.meta.url);
   const nodeModule = localRequire(
     "node:module",
@@ -321,7 +379,10 @@ function ensureNodeHooks(): void {
     },
     load(url, context, nextLoad) {
       if (url.startsWith("mx-virtual:")) {
-        const source = virtualSources.get(url);
+        const owner = VIRTUAL_URL_SUFFIX.exec(url);
+        const source = owner
+          ? reg.loaders.get(Number(owner[1]))?.virtualSources.get(url)
+          : undefined;
         if (source === undefined) {
           throw new Error(
             `@mxlang/target-html: no virtual source registered for ${url}`,
@@ -337,10 +398,12 @@ function ensureNodeHooks(): void {
           // with a value), which `compile()` accepts and emits verbatim
           // since it's ordinary author-written TypeScript on every other
           // host. Wrapped in an MX-branded error naming the real file (the
-          // path embedded in `mx-virtual:<path>#v<n>`) and stating the
+          // path embedded in `mx-virtual:<path>#i<id>v<n>`) and stating the
           // no-bundler-helpers constraint, rather than surfacing Node's own
           // wording with no file context at all.
-          const path = url.slice("mx-virtual:".length).replace(/#v\d+$/, "");
+          const path = url
+            .slice("mx-virtual:".length)
+            .replace(VIRTUAL_URL_SUFFIX, "");
           throw new Error(
             `@mxlang/target-html: ${path}: mx()/loadMx() support only erasable TypeScript (types only, no enum/namespace/parameter-property runtime code) — ${(cause as Error).message}`,
           );
@@ -354,7 +417,6 @@ function ensureNodeHooks(): void {
       return nextLoad(url, context);
     },
   });
-  nodeHooksRegistered = true;
 }
 
 function evictOldest<K, V>(map: Map<K, V>, max: number): void {
@@ -402,6 +464,7 @@ function fresh(deps: ReadonlyMap<string, number>): boolean {
  * edit's own offsets stay valid as later ones are spliced in.
  */
 function rewriteImports(
+  st: LoaderState,
   code: string,
   anchor: string | undefined,
   deps: Map<string, number>,
@@ -444,7 +507,7 @@ function rewriteImports(
       const resolved = specifier.startsWith(".")
         ? resolvePath(dirname(anchor), specifier)
         : specifier;
-      replacement = loadNestedMx(resolved, deps, seen, targets);
+      replacement = loadNestedMx(st, resolved, deps, seen, targets);
     } else if (specifier.startsWith(".")) {
       if (!anchor) {
         throw new Error(
@@ -511,6 +574,7 @@ function nestedKey(path: string, defaultTag: string | undefined): string {
 }
 
 function loadNestedMx(
+  st: LoaderState,
   path: string,
   callerDeps: Map<string, number>,
   seen: Set<string>,
@@ -534,10 +598,10 @@ function loadNestedMx(
     scanned.tags,
   );
   const cacheKey = nestedKey(path, defaultTag);
-  const cached = pathCache.get(cacheKey);
-  const cachedUrl = urlForPath.get(cacheKey);
+  const cached = st.pathCache.get(cacheKey);
+  const cachedUrl = st.urlForPath.get(cacheKey);
   if (cached && cachedUrl && fresh(cached.deps)) {
-    touch(pathCache, cacheKey, cached);
+    touch(st.pathCache, cacheKey, cached);
     for (const [depPath, mtimeMs] of cached.deps) {
       callerDeps.set(depPath, mtimeMs);
     }
@@ -575,12 +639,12 @@ function loadNestedMx(
   deps.set(path, statSync(path).mtimeMs);
   for (const dep of dependencies) deps.set(dep, statSync(dep).mtimeMs);
 
-  const rewritten = rewriteImports(code, path, deps, nextSeen, targets);
-  const url = `mx-virtual:${path}#v${virtualVersion++}`;
-  registerVirtual(url, rewritten);
-  urlForPath.set(cacheKey, url);
-  pathCache.set(cacheKey, { renderer: null as never, deps });
-  evictOldest(pathCache, MAX_CACHE_ENTRIES);
+  const rewritten = rewriteImports(st, code, path, deps, nextSeen, targets);
+  const url = virtualUrl(st, path);
+  registerVirtual(st, url, rewritten);
+  st.urlForPath.set(cacheKey, url);
+  st.pathCache.set(cacheKey, { renderer: null as never, deps });
+  evictOldest(st.pathCache, MAX_CACHE_ENTRIES);
 
   for (const [depPath, mtimeMs] of deps) callerDeps.set(depPath, mtimeMs);
   return url;
@@ -596,24 +660,21 @@ function loadNestedMx(
  * exactly what comes back from here, never reconstructs it.
  */
 function evaluate(
+  st: LoaderState,
   rewritten: string,
   anchor: string | undefined,
 ): { mod: unknown; url: string } {
-  const url = `mx-virtual:${anchor ?? "inline"}#v${virtualVersion++}`;
-  registerVirtual(url, rewritten);
+  const url = virtualUrl(st, anchor ?? "inline");
+  registerVirtual(st, url, rewritten);
   if (isBun) return { mod: require(url), url };
   ensureNodeHooks();
   const req = createRequire(anchor ?? import.meta.url);
   return { mod: req(url), url };
 }
 
-/**
- * Compiles `source`, resolves every import to a real target, evaluates the
- * result synchronously, in memory, and returns a callable renderer.
- * `options.filename` anchors any relative or bare import the source's fence
- * writes; omit it only when the source has none.
- */
-export function mx<I = Record<string, unknown>>(
+/** `mx()` over the state of loader `st`. */
+function mxIn<I = Record<string, unknown>>(
+  st: LoaderState,
   source: string,
   rawOptions: MxOptions = {},
 ): MxRenderer<I> {
@@ -638,9 +699,9 @@ export function mx<I = Record<string, unknown>>(
     .update("\u0000")
     .update(source)
     .digest("hex");
-  const cached = sourceCache.get(key);
+  const cached = st.sourceCache.get(key);
   if (cached && fresh(cached.deps)) {
-    touch(sourceCache, key, cached);
+    touch(st.sourceCache, key, cached);
     return cached.renderer as MxRenderer<I>;
   }
 
@@ -662,21 +723,22 @@ export function mx<I = Record<string, unknown>>(
 
   const seen = new Set<string>(options.filename ? [options.filename] : []);
   const rewritten = rewriteImports(
+    st,
     code,
     options.filename,
     deps,
     seen,
     options.targets ?? htmlTargets,
   );
-  const { mod: rawMod } = evaluate(rewritten, options.filename);
+  const { mod: rawMod } = evaluate(st, rewritten, options.filename);
   const mod = rawMod as { default: (input: I) => string };
 
   const renderer = Object.assign((input: I) => mod.default(input), {
     warnings,
   }) as MxRenderer<I>;
 
-  sourceCache.set(key, { renderer: renderer as never, deps });
-  evictOldest(sourceCache, MAX_CACHE_ENTRIES);
+  st.sourceCache.set(key, { renderer: renderer as never, deps });
+  evictOldest(st.sourceCache, MAX_CACHE_ENTRIES);
   return renderer;
 }
 
@@ -684,12 +746,9 @@ function safeMtime(path: string): number {
   return existsSync(path) ? statSync(path).mtimeMs : -1;
 }
 
-/**
- * `loadMx(path)` — `mx()` over a file already on disk, cached by the file's
- * own resolved path and mtime (plus every transitive dependency's), not by
- * content hash.
- */
-export function loadMx<I = Record<string, unknown>>(
+/** `loadMx()` over the state of loader `st`. */
+function loadMxIn<I = Record<string, unknown>>(
+  st: LoaderState,
   path: string,
   options: CompileOptions = {},
 ): MxRenderer<I> {
@@ -713,9 +772,9 @@ export function loadMx<I = Record<string, unknown>>(
   const { customTags: _ignoredForLoadMx, ...fingerprintableOptions } =
     effective;
   const key = `${abs}\u0000${fingerprintOptions(fingerprintableOptions)}`;
-  const cached = topLevelPathCache.get(key) as CacheEntry<I> | undefined;
+  const cached = st.topLevelPathCache.get(key) as CacheEntry<I> | undefined;
   if (cached?.renderer && fresh(cached.deps)) {
-    touch(topLevelPathCache, key, cached);
+    touch(st.topLevelPathCache, key, cached);
     return cached.renderer;
   }
 
@@ -744,13 +803,14 @@ export function loadMx<I = Record<string, unknown>>(
 
   const seen = new Set<string>([abs]);
   const rewritten = rewriteImports(
+    st,
     code,
     abs,
     deps,
     seen,
     options.targets ?? htmlTargets,
   );
-  const { mod: rawMod, url } = evaluate(rewritten, abs);
+  const { mod: rawMod, url } = evaluate(st, rewritten, abs);
   const mod = rawMod as { default: (input: I) => string };
 
   const renderer = Object.assign((input: I) => mod.default(input), {
@@ -781,15 +841,72 @@ export function loadMx<I = Record<string, unknown>>(
   const { customTags: _ownTags, ...callerOptions } = options;
   if (fingerprintOptions(callerOptions) === NESTED_DEFAULT_FINGERPRINT) {
     const nested = nestedKey(abs, configured);
-    pathCache.set(nested, { renderer: renderer as never, deps });
-    urlForPath.set(nested, url);
-    evictOldest(pathCache, MAX_CACHE_ENTRIES);
+    st.pathCache.set(nested, { renderer: renderer as never, deps });
+    st.urlForPath.set(nested, url);
+    evictOldest(st.pathCache, MAX_CACHE_ENTRIES);
   }
 
-  topLevelPathCache.set(key, { renderer: renderer as never, deps });
-  evictOldest(topLevelPathCache, MAX_CACHE_ENTRIES);
+  st.topLevelPathCache.set(key, { renderer: renderer as never, deps });
+  evictOldest(st.topLevelPathCache, MAX_CACHE_ENTRIES);
   return renderer;
 }
+
+/**
+ * A loader: `mx`/`loadMx` over state of its own (version counter, module
+ * text, URL map, caches). Two loaders in one process share none of it; they
+ * share only the process-wide Node hook, which finds the owner from the
+ * instance id in the virtual URL.
+ */
+export interface MxLoader {
+  /** Compiles `source` in this loader; see {@link mx}. */
+  mx<I = Record<string, unknown>>(
+    source: string,
+    options?: MxOptions,
+  ): MxRenderer<I>;
+  /** Loads the file at `path` in this loader; see {@link loadMx}. */
+  loadMx<I = Record<string, unknown>>(
+    path: string,
+    options?: CompileOptions,
+  ): MxRenderer<I>;
+  /** Whether this loader's nested-tag cache holds an entry for `path`. */
+  hasNested(path: string): boolean;
+}
+
+export function createLoader(): MxLoader {
+  const st = createState();
+  return {
+    mx: (source, options) => mxIn(st, source, options),
+    loadMx: (path, options) => loadMxIn(st, path, options),
+    hasNested: (path) => hasNestedIn(st, path),
+  };
+}
+
+function hasNestedIn(st: LoaderState, path: string): boolean {
+  for (const key of st.pathCache.keys()) {
+    if (key.startsWith(`${path}\u0000`)) return true;
+  }
+  return false;
+}
+
+/** The loader behind the package's top-level `mx` and `loadMx`. */
+const defaultLoader = createLoader();
+
+/**
+ * Compiles `source`, resolves every import to a real target, evaluates the
+ * result synchronously, in memory, and returns a callable renderer.
+ * `options.filename` anchors any relative or bare import the source's fence
+ * writes; omit it only when the source has none.
+ */
+export const mx: MxLoader["mx"] = (source, options) =>
+  defaultLoader.mx(source, options);
+
+/**
+ * `loadMx(path)` — `mx()` over a file already on disk, cached by the file's
+ * own resolved path and mtime (plus every transitive dependency's), not by
+ * content hash.
+ */
+export const loadMx: MxLoader["loadMx"] = (path, options) =>
+  defaultLoader.loadMx(path, options);
 
 /**
  * Test-only introspection — never re-exported from `./index.ts`, so it is
@@ -809,10 +926,7 @@ export function loadMx<I = Record<string, unknown>>(
 export const __testing = {
   /** Whether the shared nested-tag cache (`pathCache`) holds an entry for `path`. */
   hasNested(path: string): boolean {
-    for (const key of pathCache.keys()) {
-      if (key.startsWith(`${path}\u0000`)) return true;
-    }
-    return false;
+    return defaultLoader.hasNested(path);
   },
   /** `fingerprintOptions`, exposed so a test can assert on it directly. */
   fingerprintOptions,
