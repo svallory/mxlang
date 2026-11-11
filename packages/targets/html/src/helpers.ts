@@ -269,6 +269,9 @@ function fingerprintOptions(
  * from round 2 let a `strict`/`resolveImport`/`customTags`-bearing
  * `loadMx` call taint the plain-compile cache another page's nested
  * lookup would otherwise reuse).
+ *
+ * It contains no function ids, so a throwaway id table is safe here, and any
+ * options that do contain a function never match it.
  */
 const NESTED_DEFAULT_FINGERPRINT = fingerprintOptions(newFunctionIds(), {});
 

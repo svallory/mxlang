@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { __testing, loadMx, mx } from "./helpers.ts";
+import { __testing, createLoader, loadMx, mx } from "./helpers.ts";
 
 const packageRoot = new URL("..", import.meta.url).pathname;
 
@@ -194,31 +194,48 @@ describe("loadMx(path)", () => {
     }
   });
 
-  it("option-function ids count per loader: the same function gets the same id however many others were seen first", () => {
+  it("option-function ids are per table: a function's fingerprint does not depend on how many others an earlier table saw", () => {
     const f = () => "x";
-    const fingerprint = (others: number) => {
-      const ids = __testing.newFunctionIds();
-      for (let i = 0; i < others; i++) {
-        __testing.fingerprintOptions(ids, { resolveImport: () => `o${i}` });
-      }
-      return __testing.fingerprintOptions(ids, { resolveImport: f });
-    };
-    // Same function, a fresh loader's table: the fingerprint is the first id
-    // regardless of what other compiles ran in this process before.
-    expect(fingerprint(0)).toBe("strict:0|resolveImport:0");
-    expect(fingerprint(0)).toBe(fingerprint(0));
-    expect(fingerprint(3)).toBe("strict:0|resolveImport:3");
+    const first = __testing.newFunctionIds();
+    for (let i = 0; i < 3; i++) {
+      __testing.fingerprintOptions(first, { resolveImport: () => `o${i}` });
+    }
+    const afterOthers = __testing.fingerprintOptions(first, {
+      resolveImport: f,
+    });
+    const fresh = __testing.fingerprintOptions(__testing.newFunctionIds(), {
+      resolveImport: f,
+    });
+    // A loader owns one table, so a second loader numbers `f` from zero
+    // however many functions the first one has seen.
+    expect(fresh).not.toBe(afterOthers);
+    expect(
+      __testing.fingerprintOptions(__testing.newFunctionIds(), {
+        resolveImport: f,
+      }),
+    ).toBe(fresh);
   });
 
-  it("compiling A, B, A with option functions in between gives A's output and diagnostics both times", () => {
-    const a = (spec: string) => spec;
-    const b = (spec: string) => spec;
-    const run = (resolveImport: (s: string) => string) =>
-      mx<{ n: number }>("<p>${input.n}</p>", { resolveImport })({ n: 1 });
-    const first = run(a);
-    run(b);
-    expect(run(a)).toBe(first);
-    expect(first).toBe("<p>1</p>");
+  it("pins output only (not mutation-proved: ids never reach emitted code): the same source and function render the same on two loaders however many compiles ran before", () => {
+    const source = "<p>${input.n}</p>";
+    const f = (spec: string) => spec;
+    const l1 = createLoader();
+    for (const tag of ["a", "b", "c"]) {
+      l1.mx(source, { resolveImport: (spec: string) => `${tag}${spec}` });
+    }
+    const l2 = createLoader();
+    const r1 = l1.mx<{ n: number }>(source, { resolveImport: f });
+    const r2 = l2.mx<{ n: number }>(source, { resolveImport: f });
+    expect(r1({ n: 1 })).toBe("<p>1</p>");
+    expect(r2({ n: 1 })).toBe("<p>1</p>");
+    expect(r1.warnings).toEqual(r2.warnings);
+    // Each loader's cache is its own: a repeat with `f` hits, a new function
+    // does not.
+    expect(l1.mx(source, { resolveImport: f })).toBe(r1);
+    expect(l2.mx(source, { resolveImport: f })).toBe(r2);
+    expect(l2.mx(source, { resolveImport: (spec: string) => spec })).not.toBe(
+      r2,
+    );
   });
 
   describe("round 3: an options-bearing loadMx call must not taint the shared nested-tag cache", () => {
