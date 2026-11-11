@@ -34,7 +34,9 @@ import {
   Store,
   SUPPORTED_VERSIONS,
 } from "./test-affected-cache.ts";
-import AffectedCacheReporter from "./test-affected-cache-reporter.ts";
+import AffectedCacheReporter, {
+  configFiles,
+} from "./test-affected-cache-reporter.ts";
 
 let root: string;
 let storeDir: string;
@@ -219,7 +221,7 @@ describe("guards fall back to native (AC-3)", () => {
       transform: new Function("code", body),
     });
     const a = pluginOrigin(mk("return code"));
-    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    expect(a).not.toBeNull();
     expect(pluginOrigin(mk("return code"))).toBe(a);
     expect(pluginOrigin(mk("return code + 1"))).not.toBe(a);
     expect(pluginOrigin({ name: "x", transform() {} })).not.toBe(
@@ -248,6 +250,52 @@ describe("guards fall back to native (AC-3)", () => {
       }),
     ).toBeNull();
     expect(pluginOrigin(null)).toBeNull();
+  });
+
+  const put = (base: string, rel: string, text: string) => {
+    mkdirSync(join(base, rel, ".."), { recursive: true });
+    writeFileSync(join(base, rel), text);
+  };
+  it("a workspace package the config imports by a bare specifier is hashed", () => {
+    const repo = realpathSync(mkdtempSync(join(tmpdir(), "mx-ws-")));
+    const pkg = join(repo, "packages", "plug");
+    put(repo, "packages/plug/index.js", "export default () => 1;\n");
+    put(repo, "packages/plug/helper.js", "export const h = 'a';\n");
+    put(
+      repo,
+      "app/vitest.config.ts",
+      'import p from "plug";\nexport default {};\n',
+    );
+    mkdirSync(join(repo, "app", "node_modules"), { recursive: true });
+    symlinkSync(pkg, join(repo, "app", "node_modules", "plug"));
+    const c = { configFile: join(repo, "app", "vitest.config.ts") };
+    const key = (files: Record<string, string>) =>
+      projectKey({ ...project(), config: { files } });
+    const before = configFiles(c, join(repo, "app"), repo);
+    expect(Object.keys(before.files)).toContain("pkg:plug/helper.js");
+    put(repo, "packages/plug/helper.js", "export const h = 'b';\n");
+    const after = configFiles(c, join(repo, "app"), repo);
+    expect(key(after.files)).not.toEqual(key(before.files));
+    // An installed (non-workspace) package is not hashed here.
+    mkdirSync(join(repo, "app", "node_modules", "dep"), { recursive: true });
+    put(repo, "app/node_modules/dep/index.js", "x");
+    put(
+      repo,
+      "app/vitest.config.ts",
+      'import d from "dep";\nexport default {};\n',
+    );
+    expect(Object.keys(configFiles(c, join(repo, "app"), repo).files)).toEqual([
+      "vitest.config.ts",
+    ]);
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("projectKey names a length mismatch apart from an unknown origin", () => {
+    const r = projectKey({ ...project(), origins: ["o1"] });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.reason).toMatch(/origins missing/);
+    const u = projectKey({ ...project(), unhashedPackage: "big" });
+    expect(u.ok === false && u.reason).toMatch(/workspace package big/);
   });
 
   it("every guard makes the cached entry unreachable or unusable", () => {

@@ -246,6 +246,8 @@ export interface ProjectInput {
    * `pluginOrigin`), or null when that cannot be determined.
    */
   origins: (string | null)[];
+  /** A workspace package the config imports that was too large to hash. */
+  unhashedPackage?: string;
   /** The resolved settings that steer resolution and transforms. */
   config: unknown;
 }
@@ -567,14 +569,16 @@ export type Verdict<T> = { ok: true; value: T } | { ok: false; reason: string };
  * cannot be determined.
  *
  * A plugin object carries no module path, so its origin is its code: the
- * source text of every hook function (a function's text is its code whatever
- * file or package defined it), plus its other plain settings (`enforce`,
+ * source text of every hook function, plus its other plain settings (`enforce`,
  * `apply`, ...). A name never decides it: a workspace plugin that borrows an
  * allowlisted name changes the hash as soon as its transform changes. What the
  * text cannot show is a value the hook closes over; that value comes from the
- * plugin's factory, whose own file is hashed with the project config (the
- * config file and every file it imports, see the reporter) or is an installed
- * package (pinned by the namespace's package list and tool versions).
+ * plugin's factory, and a helper the hook calls lives in a module: the text of
+ * a hook does not cover either. Those files are hashed with the project config
+ * (the config file, every file it imports, and every file of a workspace
+ * package it imports by a bare specifier; see the reporter's `configFiles`).
+ * An installed package is pinned by the namespace's package list and tool
+ * versions instead.
  * Undeterminable: a hook that is native, bound or a class, an accessor, or a
  * value that is neither a function nor plain data (an options object, a map).
  */
@@ -627,11 +631,20 @@ export function projectKey(p: ProjectInput): Verdict<string> {
   if (unknown !== undefined) {
     return { ok: false, reason: `unsupported plugin ${unknown} in ${p.name}` };
   }
+  if (p.origins.length !== p.plugins.length) {
+    return { ok: false, reason: `plugin origins missing in ${p.name}` };
+  }
   const undetermined = p.plugins.findIndex((_, i) => !p.origins[i]);
-  if (p.origins.length !== p.plugins.length || undetermined !== -1) {
+  if (undetermined !== -1) {
     return {
       ok: false,
-      reason: `unknown origin of plugin ${p.plugins[Math.max(undetermined, 0)]} in ${p.name}`,
+      reason: `unknown origin of plugin ${p.plugins[undetermined]} in ${p.name}`,
+    };
+  }
+  if (p.unhashedPackage !== undefined) {
+    return {
+      ok: false,
+      reason: `unknown origin of plugins in ${p.name} (workspace package ${p.unhashedPackage} too large to hash)`,
     };
   }
   try {

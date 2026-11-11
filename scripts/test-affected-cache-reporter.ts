@@ -5,8 +5,8 @@
  * transforms are put back. Anything unexpected leaves selection native.
  */
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   cacheMode,
   collectInputs,
@@ -37,44 +37,120 @@ interface VitestCtx {
   projects: VitestProject[];
 }
 
+const BARE_IMPORT =
+  /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"'./][^"']*)["']/g;
+const MAX_PACKAGE_FILES = 3000;
+
+const hashFile = (f: string): string => {
+  try {
+    return createHash("sha256").update(readFileSync(f)).digest("hex");
+  } catch {
+    return "unreadable";
+  }
+};
+
+/** The package name of a bare specifier (`@scope/name/sub` -> `@scope/name`). */
+function packageName(spec: string): string | undefined {
+  if (spec.startsWith("node:")) return undefined;
+  const parts = spec.split("/");
+  return spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
+}
+
+/** Every file below `dir` except node_modules and .git; undefined past the cap. */
+function packageFiles(dir: string): string[] | undefined {
+  const out: string[] = [];
+  const walk = (d: string): boolean => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === ".git") continue;
+      const f = join(d, e.name);
+      if (e.isDirectory()) {
+        if (!walk(f)) return false;
+      } else if (e.isFile() && out.push(f) > MAX_PACKAGE_FILES) return false;
+    }
+    return true;
+  };
+  return walk(dir) ? out.sort() : undefined;
+}
+
 /**
  * Content hash of the config file and every file it imports (vite's
  * `configFileDependencies`): a plugin factory or option closure defined there
- * shows no text in the plugin object. A file that cannot be read is recorded
- * as such, which still changes the key when it appears or disappears.
+ * shows no text in the plugin object, nor do the helpers a hook calls. A file
+ * that cannot be read is recorded as such, which still changes the key when it
+ * appears or disappears.
+ *
+ * Vite leaves bare imports out of `configFileDependencies`, so a plugin
+ * imported from a workspace package (a `node_modules` symlink into the
+ * repository) is found here: each bare import of those files whose package
+ * resolves to a directory inside the repository and outside `node_modules`
+ * gets every file of that package hashed. A package too large to hash is
+ * returned as `unhashed`, and the project goes native.
  */
-function configFiles(
+export function configFiles(
   c: Record<string, unknown>,
   root: string,
-): Record<string, string> {
-  const files = [
+  repoRoot: string,
+): { files: Record<string, string>; unhashed?: string } {
+  const sources = [
     c.configFile,
     ...((c.configFileDependencies as string[] | undefined) ?? []),
   ].filter((f): f is string => typeof f === "string");
-  const out: Record<string, string> = {};
-  for (const f of [...new Set(files)].sort()) {
+  const files: Record<string, string> = {};
+  let unhashed: string | undefined;
+  const packages = new Map<string, string>();
+  for (const f of [...new Set(sources)].sort()) {
+    files[relative(root, f)] = hashFile(f);
+    let text = "";
     try {
-      out[relative(root, f)] = createHash("sha256")
-        .update(readFileSync(f))
-        .digest("hex");
-    } catch {
-      out[relative(root, f)] = "unreadable";
+      text = readFileSync(f, "utf8");
+    } catch {}
+    for (const m of text.matchAll(BARE_IMPORT)) {
+      const name = packageName(m[1]);
+      if (name === undefined || packages.has(name)) continue;
+      // The nearest node_modules/<name> above the importing file.
+      for (let d = dirname(f); ; d = dirname(d)) {
+        const link = join(d, "node_modules", name);
+        let real: string;
+        try {
+          real = realpathSync(link);
+        } catch {
+          if (d === dirname(d)) break;
+          continue;
+        }
+        const rel = relative(repoRoot, real);
+        const inside = !rel.startsWith("..") && !isAbsolute(rel);
+        if (inside && !rel.split(sep).includes("node_modules")) {
+          packages.set(name, real);
+        }
+        break;
+      }
     }
   }
-  return out;
+  for (const [name, dir] of [...packages].sort()) {
+    const list = packageFiles(dir);
+    if (list === undefined) {
+      unhashed = name;
+      continue;
+    }
+    for (const f of list)
+      files[`pkg:${name}/${relative(dir, f)}`] = hashFile(f);
+  }
+  return { files, unhashed };
 }
 
 /** The settings of a project that steer module resolution and transforms. */
-function projectInput(p: VitestProject): ProjectInput {
+function projectInput(p: VitestProject, repoRoot: string): ProjectInput {
   const c = p.vite.config;
+  const cf = configFiles(c, p.config.root, repoRoot);
   const plugins = (c.plugins as { name?: string }[] | undefined) ?? [];
   return {
     name: p.name,
     root: p.config.root,
     plugins: plugins.map((pl) => pl.name ?? ""),
     origins: plugins.map((pl) => pluginOrigin(pl)),
+    unhashedPackage: cf.unhashed,
     config: {
-      configFiles: configFiles(c, p.config.root),
+      configFiles: cf.files,
       mode: c.mode,
       define: c.define,
       // Vitest moves a project's `define` out of the vite config into its own
@@ -116,7 +192,7 @@ export default class AffectedCacheReporter {
       const root = ctx.config.root;
       const inputs = (this.options.inputs ?? defaultInputs)(
         root,
-        ctx.projects.map(projectInput),
+        ctx.projects.map((p) => projectInput(p, root)),
       );
       const dir =
         this.options.dir ??
@@ -125,7 +201,7 @@ export default class AffectedCacheReporter {
         ctx.projects.map((p) => ({
           name: p.name,
           vitenode: p.vitenode,
-          input: projectInput(p),
+          input: projectInput(p, root),
         })),
         inputs,
         dir,

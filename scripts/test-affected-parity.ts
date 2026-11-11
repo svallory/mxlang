@@ -243,7 +243,7 @@ function poison(store: string, how: Poison): number {
     } else if (how === "stale-checksum") {
       writeFileSync(file, JSON.stringify({ ...p, deps: [], dynamicDeps: [] }));
     } else {
-      writeFileSync(file, '{"schema":2,"key":');
+      writeFileSync(file, `{"schema":${SCHEMA_VERSION},"key":`);
     }
   }
   return files.length;
@@ -415,6 +415,24 @@ const IMPORTING_PLUGIN = (name: string, imports: string) => ({
   ) as (code: string, id: string) => string | null,
 });
 
+/** A config whose plugin lives in `parity-plugin.ts` (a name that is allowlisted). */
+const PLUGIN_CONFIG = `import plugin from "./parity-plugin.ts";\nexport default { test: { globals: true }, plugins: [plugin()] };\n`;
+
+/** The hook's text is fixed; only the helper `extra` changes between edits. */
+const PARITY_PLUGIN = (
+  imports: string,
+) => `const extra = () => ${JSON.stringify(imports)};
+export default () => ({
+  name: "vite:esbuild",
+  enforce: "pre",
+  transform(code: string, id: string) {
+    return id.endsWith("/src/plug.ts")
+      ? code + "\\nimport " + JSON.stringify(extra()) + ";\\n"
+      : null;
+  },
+});
+`;
+
 export const ROWS: Row[] = [
   {
     name: "control: unmutated poison is served",
@@ -465,6 +483,18 @@ export const ROWS: Row[] = [
     warm: { plugins: [IMPORTING_PLUGIN("vite:esbuild", "./lib.ts")] },
     poison: "empty-lists",
     after: { plugins: [IMPORTING_PLUGIN("vite:esbuild", "./other.ts")] },
+    related: "src/other.ts",
+    expect: ["plug.test.ts"],
+  },
+  {
+    name: "plugin helper edited in a file the config imports",
+    guard:
+      "projectKey: the config file and the files it imports are hashed (a hook's text does not show the helper it calls)",
+    setup: (fx) => write(fx, "parity-plugin.ts", PARITY_PLUGIN("./lib.ts")),
+    warm: { configText: PLUGIN_CONFIG },
+    poison: "empty-lists",
+    mutate: (fx) => write(fx, "parity-plugin.ts", PARITY_PLUGIN("./other.ts")),
+    after: { configText: PLUGIN_CONFIG },
     related: "src/other.ts",
     expect: ["plug.test.ts"],
   },
