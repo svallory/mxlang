@@ -50,11 +50,11 @@ describe("loader instances", () => {
     utimesSync(file, later, later);
 
     const ra2 = a.loadMx(file);
-    expect(ra2("")).toBe("<p>two</p>");
+    expect(ra2({})).toBe("<p>two</p>");
     expect(ra2).not.toBe(ra1);
     // B recompiles on its own; A's fresh entry is not B's.
     const rb2 = b.loadMx(file);
-    expect(rb2("")).toBe("<p>two</p>");
+    expect(rb2({})).toBe("<p>two</p>");
     expect(rb2).not.toBe(rb1);
     expect(rb2).not.toBe(ra2);
   });
@@ -69,13 +69,13 @@ describe("loader instances", () => {
       "node:module",
     ) as typeof import("node:module");
     // Any load through the default loader guarantees the hook is registered.
-    expect(loadMx(page)("")).toBe("<b>badge</b>");
+    expect(loadMx(page)({})).toBe("<b>badge</b>");
     const spy = vi.spyOn(nodeModule, "registerHooks");
     try {
       const a = createLoader();
       const b = createLoader();
-      expect(a.loadMx(page)("")).toBe("<b>badge</b>");
-      expect(b.loadMx(page)("")).toBe("<b>badge</b>");
+      expect(a.loadMx(page)({})).toBe("<b>badge</b>");
+      expect(b.loadMx(page)({})).toBe("<b>badge</b>");
       expect(__testing.hasNested(join(dir, "tags", "badge.mx"), a)).toBe(true);
       expect(spy).not.toHaveBeenCalled();
     } finally {
