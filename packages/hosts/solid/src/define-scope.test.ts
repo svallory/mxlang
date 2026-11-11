@@ -109,9 +109,23 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
       const first = compileAll(A);
       expect(first).toContain("throws: ");
       expect(first).toContain("cannot close over `D`");
-      expect(compileAll(B)).toContain("__mxDefine1");
+      const firstB = compileAll(B);
+      expect(firstB).toContain("__mxDefine1");
       expect(compileAll(A)).toBe(first);
-      expect(compileAll(B)).toBe(compileAll(B));
+      expect(compileAll(B)).toBe(firstB);
+    });
+
+    it("a capture diagnostic never names a define from an earlier compile", () => {
+      // The first compile gives F the binding `__mxDefine2`. The second never
+      // defines it, so its diagnostic must name the identifier as written.
+      compile(
+        "<define/D a=input.x/><define/F a=input.y/><p>${D.a}${F.a}</p>",
+        false,
+      );
+      const message = compileAll(
+        "<define/E><i>${__mxDefine2}</i></define><E/>",
+      );
+      expect(message).toContain("cannot close over `__mxDefine2`");
     });
   });
 });

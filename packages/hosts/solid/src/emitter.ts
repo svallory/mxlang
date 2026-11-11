@@ -176,7 +176,8 @@ let lazyScope = false;
  * restored): counting from 0 in each emit is unique within that output,
  * which is all uniqueness this binding needs, and keeps output independent
  * of how many emits ran before it in the process. Every compile path reaches
- * the emitter through one of those two entry points.
+ * the emitter through one of those two entry points. `defineScopes` and
+ * `defineScopeAuthorNames` are scoped the same way.
  */
 let dynSerial = { n: 0 };
 
@@ -3657,7 +3658,7 @@ export function createEmitter(): SolidEmitter {
  * Runs `emit` with a fresh dynamic-name counter and fresh define-scope maps,
  * restoring the outer ones.
  */
-function withDynSerial<T>(emit: () => T): T {
+function withCompileState<T>(emit: () => T): T {
   const outer = dynSerial;
   const outerScopes = defineScopes;
   const outerAuthorNames = defineScopeAuthorNames;
@@ -3674,7 +3675,7 @@ function withDynSerial<T>(emit: () => T): T {
 }
 
 export function emitSolid(ir: Ir): string {
-  return withDynSerial(() => {
+  return withCompileState(() => {
     const emitter = createEmitter();
     drive(emitter, withDefineAttributeReads(ir.body));
     return emitter.done();
@@ -3682,7 +3683,7 @@ export function emitSolid(ir: Ir): string {
 }
 
 export function emitSolidWithMappings(ir: Ir): MappedCode {
-  return withDynSerial(() => {
+  return withCompileState(() => {
     const emitter = createEmitter();
     drive(emitter, withDefineAttributeReads(ir.body));
     return emitter.result();
