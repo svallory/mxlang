@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { laneTest, SLOW_LANE_FILES } from "../../../scripts/vitest-lanes.ts";
 
@@ -20,6 +21,15 @@ export default defineConfig({
     // runs on main, nor in 12 on the shared-graph branch, so the cause is
     // inferred, not proven.
     poolOptions: { forks: { isolate: true } },
+    // Yields between tests: a file's runInProcess tests are synchronous (about
+    // 0.6 s each), so without a macrotask hop one file held the worker's event
+    // loop for 5-10 s. TypeScript's cold load is not the cause (about 1 s, and
+    // Node's require cache carries it across files).
+    setupFiles: [
+      fileURLToPath(
+        new URL("../../../scripts/vitest-yield.ts", import.meta.url),
+      ),
+    ],
     ...laneTest(SLOW_LANE_FILES["packages/tooling/tsc"]),
   },
 });
