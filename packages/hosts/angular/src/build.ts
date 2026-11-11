@@ -613,10 +613,11 @@ export function compileOne(
   /**
    * Scan diagnostics already reported, keyed per distinct problem: a
    * misconfigured `mx.tags` warns once per `build()` or watch session, not once
-   * per compiled file. Owned by the caller; a call without one reports every
-   * diagnostic, so a compile never depends on earlier compiles in the process.
+   * per compiled file. Required: each caller picks its scope (a build, a
+   * watch session), so a compile never depends on earlier compiles in the
+   * process.
    */
-  reported: Set<string> = new Set(),
+  reported: Set<string>,
 ): CompileOneResult {
   // A tag file routes through this same entry point (so the watcher, the
   // build and the error policy all share one path) but emits a different

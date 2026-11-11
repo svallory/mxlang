@@ -319,6 +319,10 @@ export function startWatch(
   }
 
   function fullRebuild(): void {
+    // A full rebuild re-reads every scan input (package.json, contracts, tag
+    // directories): a problem still present, or reintroduced after a fix,
+    // warns once more instead of staying silent for the whole session.
+    reportedScan.clear();
     const config = readConfigOrKeepLast();
     if (!config) return; // package.json has never read cleanly; nothing to rebuild yet.
     const { files, overlapWarnings, diagnostics, tagDirectories } =
@@ -493,6 +497,8 @@ export function startWatch(
         const routed = routedByPath.get(p);
         if (routed) rebuildOne(routed, config);
       }
+      // A tag file is a scan input too: let its wave report afresh.
+      if (tagChanges.size > 0) reportedScan.clear();
       for (const p of tagChanges) {
         for (const page of pagesDependingOn(p)) {
           const routed = routedByPath.get(page);

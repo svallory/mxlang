@@ -229,6 +229,43 @@ describe("startWatch incremental rebuilds", () => {
     expect(existsSync(join(projectDir, "src/a.ng.html"))).toBe(true);
   });
 
+  it("reports an invalid defaultTag once per session across files, and again when a fix is undone", async () => {
+    const manifest = (value: string) =>
+      JSON.stringify({
+        mx: {
+          host: "angular",
+          angular: { include: ["src/**/*.mx"] },
+          "angular-template": { defaultTag: value },
+        },
+      });
+    writeProject({
+      "package.json": manifest("input"),
+      "src/a.mx": "<.x>a</>",
+      "src/b.mx": "<.y>b</>",
+    });
+    const lines: string[] = [];
+    handle = startWatch(projectDir, {
+      debounceMs: 10,
+      onLine: (l) => lines.push(l),
+    });
+    await handle.onIdle;
+    const invalid = () =>
+      lines.filter((l) => l.includes("invalid `defaultTag` value")).length;
+    expect(invalid()).toBe(1);
+
+    writeFileSync(
+      join(projectDir, "package.json"),
+      manifest("section"),
+      "utf8",
+    );
+    await handle.onIdle;
+    expect(invalid()).toBe(1);
+
+    writeFileSync(join(projectDir, "package.json"), manifest("input"), "utf8");
+    await handle.onIdle;
+    expect(invalid()).toBe(2);
+  });
+
   it.each(["mx.config.json", ".config/mxrc.json"])(
     "builds from %s, rebuilds on its edit, and names a broken revision by file:line:col",
     async (name) => {

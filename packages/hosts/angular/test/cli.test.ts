@@ -1208,6 +1208,8 @@ describe("build: unlocated Babel suffix (angular-build-unlocated-babel-suffix)",
       { path: chip, kind: "tag" },
       readAngularConfig(projectDir),
       new Set(),
+      undefined,
+      new Set(),
     );
     expect(one.lines[0]).toBe(`${chip}:1:33 error: Unexpected token`);
   });
@@ -1739,28 +1741,17 @@ describe("build: scan diagnostics are per build", () => {
     },
   });
 
-  it("builds A, B, A report the same diagnostics and output", () => {
-    const other = mkdtempSync(join(tmpdir(), "mx-angular-test-b-"));
-    try {
-      writeProject({ "package.json": invalid, "src/a.mx": "<.x>hi</>" });
-      writeFileSync(join(other, "package.json"), invalid, "utf8");
-      mkdirSync(join(other, "src"));
-      writeFileSync(join(other, "src/a.mx"), "<.x>hi</>", "utf8");
-
-      const own = (r: ReturnType<typeof build>) =>
-        r.warnings
-          .filter((w) => w.message.includes("invalid `defaultTag` value"))
-          .map((w) => w.message);
-      const first = build(projectDir);
-      const html = readFileSync(join(projectDir, "src/a.html"), "utf8");
-      expect(own(first)).toHaveLength(1);
-      expect(own(build(other))).toEqual(own(first));
-      const again = build(projectDir);
-      expect(own(again)).toEqual(own(first));
-      expect(readFileSync(join(projectDir, "src/a.html"), "utf8")).toBe(html);
-    } finally {
-      rmSync(other, { recursive: true, force: true });
-    }
+  it("two builds of one project report the same diagnostics and output", () => {
+    writeProject({ "package.json": invalid, "src/a.mx": "<.x>hi</>" });
+    const own = (r: ReturnType<typeof build>) =>
+      r.warnings
+        .filter((w) => w.message.includes("invalid `defaultTag` value"))
+        .map((w) => w.message);
+    const first = build(projectDir);
+    const html = readFileSync(join(projectDir, "src/a.html"), "utf8");
+    expect(own(first)).toHaveLength(1);
+    expect(own(build(projectDir))).toEqual(own(first));
+    expect(readFileSync(join(projectDir, "src/a.html"), "utf8")).toBe(html);
   });
 });
 
