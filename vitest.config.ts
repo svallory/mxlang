@@ -1,3 +1,4 @@
+import os from "node:os";
 import { configDefaults, defineConfig } from "vitest/config";
 import {
   CORE_DIR,
@@ -7,15 +8,60 @@ import {
   currentLane,
   PROJECT_GLOBS,
 } from "./scripts/vitest-lanes.ts";
-import { resolveWorkers, workersLogLine } from "./scripts/vitest-workers.ts";
+import {
+  ancestorRunPids,
+  markRunPid,
+  memAvailableBytes,
+  releaseOnExit,
+  reservedWorkerCount,
+  reserveWorkers,
+  resolveWorkers,
+  workerExecArgv,
+  workersLogLine,
+} from "./scripts/vitest-workers.ts";
 
 // Workers are capped by free memory (operator ruling 2026-10-19):
 // clamp(floor(MemAvailable / 1 GiB), 1, availableParallelism - 1), so a
 // memory-starved box cannot fork one TypeScript-loaded worker per core
 // (a 14-core / 9 GB WSL2 box did exactly that and was OOM-killed). An explicit
 // `--maxWorkers` (CLI, overrides config) or `VITEST_MAX_WORKERS` still wins.
+// What other live vitest runs on this host have reserved (a per-host ledger in
+// the OS temp dir, entries of dead processes ignored) is subtracted from the
+// free memory first, and this run records workers x heap cap + main process,
+// dropped on exit/SIGINT. Every forks worker runs with `--max-old-space-size`
+// (default measured; `MX_VITEST_WORKER_HEAP_MB` overrides it). The threads
+// group (host-angular, target-html) is NOT capped: Node rejects
+// `--max-old-space-size` in a worker thread's execArgv
+// (ERR_WORKER_INVALID_EXEC_ARGV) and vitest does not expose tinypool's
+// `resourceLimits`.
 // Printed once at startup; MX_VITEST_QUIET=1 silences the line.
-const resolved = resolveWorkers();
+const freeBytes = memAvailableBytes();
+const parallelism = os.availableParallelism();
+const { reservedByOthers } = reserveWorkers({
+  freeBytes,
+  parallelism,
+  ignorePids: ancestorRunPids(),
+  decide: (reserved) =>
+    reservedWorkerCount(
+      resolveWorkers(
+        process.env,
+        freeBytes,
+        parallelism,
+        process.argv,
+        reserved,
+      ),
+      parallelism,
+    ),
+});
+markRunPid();
+releaseOnExit();
+const resolved = resolveWorkers(
+  process.env,
+  freeBytes,
+  parallelism,
+  process.argv,
+  reservedByOthers,
+);
 if (!process.env.MX_VITEST_QUIET) {
   console.warn(workersLogLine(resolved));
 }
@@ -85,7 +131,9 @@ const slowProjects = [
 export default defineConfig({
   test: {
     maxWorkers: resolved.workers,
-    poolOptions: { forks: { isolate: false } },
+    poolOptions: {
+      forks: { isolate: false, execArgv: workerExecArgv() },
+    },
     projects: currentLane() === "slow" ? slowProjects : projects,
   },
 });
