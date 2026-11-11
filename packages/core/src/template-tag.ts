@@ -35,6 +35,7 @@ import {
   voiceOfCtx,
   writesMxSyntax,
 } from "./message-vocabulary.ts";
+import type { TargetLookup } from "./target-descriptor.ts";
 
 export interface TemplateTag {
   filename: string;
@@ -147,8 +148,39 @@ interface CacheEntry {
   pending?: boolean;
 }
 
-const templateCache = new Map<string, CacheEntry>();
 const MAX_CACHED_TEMPLATES = 256;
+
+/**
+ * Template metadata is derived under a compile's `Ctx` (its tag set and
+ * lookup), not from the template's text alone, so one shared map could hand a
+ * compile another's facts. Each `TargetLookup` owns its own map, the same
+ * partition the callee-input cache uses; `reset`/`peek` reach every live one.
+ */
+const templateCaches = new WeakMap<TargetLookup, Map<string, CacheEntry>>();
+const liveTemplateCaches = new Set<WeakRef<Map<string, CacheEntry>>>();
+
+function templateCacheFor(targets: TargetLookup): Map<string, CacheEntry> {
+  let cache = templateCaches.get(targets);
+  if (!cache) {
+    cache = new Map();
+    templateCaches.set(targets, cache);
+    liveTemplateCaches.add(new WeakRef(cache));
+  }
+  return cache;
+}
+
+function* liveCaches(): Generator<Map<string, CacheEntry>> {
+  for (const ref of liveTemplateCaches) {
+    const cache = ref.deref();
+    if (cache) yield cache;
+    else liveTemplateCaches.delete(ref);
+  }
+}
+
+/**
+ * Observability only (`templateCompileCount`): no compile reads it, so it
+ * cannot change output.
+ */
 let compileCount = 0;
 
 /**
@@ -189,11 +221,15 @@ export function templateCompileCount(): number {
 export function peekTemplateMetadata(
   filename: string,
 ): TemplateMetadata | undefined {
-  return templateCache.get(filename)?.metadata;
+  for (const cache of liveCaches()) {
+    const entry = cache.get(filename);
+    if (entry) return entry.metadata;
+  }
+  return undefined;
 }
 
 export function resetTemplateCache(): void {
-  templateCache.clear();
+  for (const cache of liveCaches()) cache.clear();
   compileCount = 0;
 }
 
@@ -215,6 +251,7 @@ export function metadataForTemplate(
   ctx: Ctx,
   tag: TemplateTag,
 ): TemplateMetadata {
+  const templateCache = templateCacheFor(ctx.targets);
   const recoveryScope = partialAnalyzeScope(ctx);
   // Recovery must derive completed facts with its own omissions, even when
   // an independent compile has already warmed the shared cache. Only shared

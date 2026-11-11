@@ -173,11 +173,6 @@ function isMxAttrTagSource(specifier: string, targets: TargetLookup): boolean {
 const MAX_ALIAS_DEPTH = 4;
 const MAX_CACHED_CALLEES = 256;
 const calleeInputReaders = new Map<string, CalleeInputReader>();
-const resolverIds = new WeakMap<
-  NonNullable<ResolveContext["resolveImport"]>,
-  number
->();
-let nextResolverId = 1;
 
 /**
  * The readers one lookup's file kinds declare (`HostFileKind.readCalleeInput`),
@@ -234,11 +229,23 @@ interface CalleeCacheEntry {
 
 // Recognised AttrTag packages depend on this exact lookup. Keep the existing
 // path/resolver/snapshot key inside each partition; scan caches stay lookup-free.
-let calleeCaches = new WeakMap<TargetLookup, Map<string, CalleeCacheEntry>>();
-function cacheFor(targets: TargetLookup): Map<string, CalleeCacheEntry> {
+//
+// A partition also owns the ids its resolver functions are keyed by, so no
+// counter outlives the lookup it numbers.
+interface CalleePartition {
+  entries: Map<string, CalleeCacheEntry>;
+  resolverIds: WeakMap<NonNullable<ResolveContext["resolveImport"]>, number>;
+  nextResolverId: number;
+}
+let calleeCaches = new WeakMap<TargetLookup, CalleePartition>();
+function cacheFor(targets: TargetLookup): CalleePartition {
   let cache = calleeCaches.get(targets);
   if (!cache) {
-    cache = new Map();
+    cache = {
+      entries: new Map(),
+      resolverIds: new WeakMap(),
+      nextResolverId: 1,
+    };
     calleeCaches.set(targets, cache);
   }
   return cache;
@@ -306,14 +313,15 @@ export function registerCalleeInputReader(
 }
 
 function cacheKey(
+  partition: CalleePartition,
   path: string,
   resolver: ResolveContext["resolveImport"],
 ): string {
   if (!resolver) return `${path}\0default`;
-  let id = resolverIds.get(resolver);
+  let id = partition.resolverIds.get(resolver);
   if (id === undefined) {
-    id = nextResolverId++;
-    resolverIds.set(resolver, id);
+    id = partition.nextResolverId++;
+    partition.resolverIds.set(resolver, id);
   }
   return `${path}\0resolver:${id}`;
 }
@@ -371,8 +379,9 @@ export function readCalleeInput(
     };
   }
 
-  const key = cacheKey(resolved.path, context.resolveImport);
-  const calleeCache = cacheFor(context.targets);
+  const partition = cacheFor(context.targets);
+  const key = cacheKey(partition, resolved.path, context.resolveImport);
+  const calleeCache = partition.entries;
   const cached = calleeCache.get(key);
   if (
     cached &&

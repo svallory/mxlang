@@ -12,7 +12,7 @@ import {
   templateCompileCount,
   touchAndEvict,
 } from "./template-tag.ts";
-import { lookup } from "./test-targets.ts";
+import { lookup, testTargetLookup } from "./test-targets.ts";
 
 const CALLER = "/tmp/mx-template-test/page.mx";
 
@@ -38,12 +38,13 @@ function lowerWithTags(
   filename = CALLER,
   warnings: MxWarning[] = [],
   policy: Policy = declarations(),
+  targets = lookup,
 ): Ir {
   let ir: Ir | null = null;
   compileSource(source, filename, policy, {
     customTags,
     warnings,
-    targets: lookup,
+    targets,
     tagDiscoveryDirs: [],
     emitIr(lowered) {
       ir = lowered;
@@ -352,6 +353,30 @@ describe("template custom tags as compilation units", () => {
         line: 2,
       }),
     );
+  });
+
+  it("gives the same result for the same input after other compiles", () => {
+    resetTemplateCache();
+    const filename = "/tmp/mx-template-test/tags/box.mx";
+    const run = (source: string, targets = lookup) => {
+      const warnings: MxWarning[] = [];
+      const ir = lowerWithTags(
+        "<box>one</box>\n",
+        { box: template(filename, source) },
+        CALLER,
+        warnings,
+        declarations(),
+        targets,
+      );
+      return JSON.stringify({ ir, warnings });
+    };
+    const first = run("<div/>");
+    // Same file, other content, under another lookup: must not leak back.
+    run("<div><${input.content}/></div>", testTargetLookup());
+    expect(run("<div/>")).toBe(first);
+    const before = templateCompileCount();
+    run("<div/>", testTargetLookup());
+    expect(templateCompileCount()).toBe(before + 1);
   });
 
   it("caches content metadata and preserves the dropped-body warning", () => {
