@@ -172,10 +172,11 @@ let lazyScope = false;
  * Gensym counter for the dynamic-tag IIFE's temp binding.
  *
  * Module-level, same reason `returnVars`/`lazyScope` are, and scoped per
- * compile by `collectReturnVars` (saved, reset to 0, restored): counting
- * from 0 in each compile is unique within that compile's output, which is
- * all uniqueness this binding needs, and keeps output independent of how
- * many compiles ran before it in the process.
+ * emit by `emitSolid` / `emitSolidWithMappings` (saved, reset to 0,
+ * restored): counting from 0 in each emit is unique within that output,
+ * which is all uniqueness this binding needs, and keeps output independent
+ * of how many emits ran before it in the process. Every compile path reaches
+ * the emitter through one of those two entry points.
  */
 let dynSerial = { n: 0 };
 
@@ -619,8 +620,6 @@ export function collectReturnVars(
   const outerAttrGuardUse = attrGuardUse;
   const outerHoistedDefines = hoistedDefines;
   const outerDefineBindings = defineBindings;
-  const outerDynSerial = dynSerial;
-  dynSerial = { n: 0 };
   const collected = new Set<string>();
   const collectedEscapeUse = { used: false };
   const collectedAttrGuardUse = {
@@ -652,7 +651,6 @@ export function collectReturnVars(
     attrGuardUse = outerAttrGuardUse;
     hoistedDefines = outerHoistedDefines;
     defineBindings = outerDefineBindings;
-    dynSerial = outerDynSerial;
   }
 }
 
@@ -3655,14 +3653,29 @@ export function createEmitter(): SolidEmitter {
   return new SolidEmitter();
 }
 
+/** Runs `emit` with a fresh dynamic-name counter, restoring the outer one. */
+function withDynSerial<T>(emit: () => T): T {
+  const outer = dynSerial;
+  dynSerial = { n: 0 };
+  try {
+    return emit();
+  } finally {
+    dynSerial = outer;
+  }
+}
+
 export function emitSolid(ir: Ir): string {
-  const emitter = createEmitter();
-  drive(emitter, withDefineAttributeReads(ir.body));
-  return emitter.done();
+  return withDynSerial(() => {
+    const emitter = createEmitter();
+    drive(emitter, withDefineAttributeReads(ir.body));
+    return emitter.done();
+  });
 }
 
 export function emitSolidWithMappings(ir: Ir): MappedCode {
-  const emitter = createEmitter();
-  drive(emitter, withDefineAttributeReads(ir.body));
-  return emitter.result();
+  return withDynSerial(() => {
+    const emitter = createEmitter();
+    drive(emitter, withDefineAttributeReads(ir.body));
+    return emitter.result();
+  });
 }

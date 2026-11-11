@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: literal mx source
 import type { Ir, IrNode } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { compileSolidMx } from "./index.ts";
+import { compileSolidMx, emitSolid } from "./index.ts";
 
 /**
  * ir-spec 10.2: what the Solid emitter assumes about the IR it is handed.
@@ -180,5 +180,29 @@ describe("Solid emitter: what it assumes about the IR (ir-spec 10.2)", () => {
     // With the parser node gone the output changes or the compile fails: the
     // read is real, which is why section 4 lists it.
     expect(typeof nulled === "string" ? nulled : "error").not.toBe(authored);
+  });
+});
+
+describe("generated names are numbered per emit, not per process", () => {
+  /** Lowers `source` to IR once, capturing it at the `lower` seam. */
+  function lowered(source: string): Ir {
+    let captured: Ir | undefined;
+    edit = (ir) => {
+      captured = ir;
+    };
+    compileSolidMx(source, { filename: "fixture.solid.mx" });
+    if (!captured) throw new Error("lower was not called");
+    return captured;
+  }
+
+  it("emitSolid gives the same text for the same IR after other emits", () => {
+    const irA = lowered("<${which} n=1>x</><${again}>z</>");
+    const irB = lowered("<${other}>y</>");
+    const first = emitSolid(irA);
+    emitSolid(irB);
+    emitSolid(irB);
+    expect(emitSolid(irA)).toBe(first);
+    expect(first).toContain("__mxDyn0");
+    expect(first).toContain("__mxDyn1");
   });
 });

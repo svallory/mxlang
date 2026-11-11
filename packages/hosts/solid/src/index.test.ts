@@ -396,17 +396,6 @@ describe("Solid IR lowering", () => {
       expect(result.map.sourcesContent).toEqual([source]);
     });
   }
-
-  it("numbers generated names per compile, not per process", () => {
-    const a = `<\${which} n=1>x</><\${again}>z</>`;
-    const b = `<\${other}>y</>`;
-    const first = compile(a).code;
-    compile(b);
-    compile(b);
-    expect(compile(a).code).toBe(first);
-    expect(first).toContain("__mxDyn0");
-    expect(first).toContain("__mxDyn1");
-  });
 });
 
 describe("Solid callee Input reader", () => {
