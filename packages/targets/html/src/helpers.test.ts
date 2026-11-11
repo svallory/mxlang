@@ -194,6 +194,33 @@ describe("loadMx(path)", () => {
     }
   });
 
+  it("option-function ids count per loader: the same function gets the same id however many others were seen first", () => {
+    const f = () => "x";
+    const fingerprint = (others: number) => {
+      const ids = __testing.newFunctionIds();
+      for (let i = 0; i < others; i++) {
+        __testing.fingerprintOptions(ids, { resolveImport: () => `o${i}` });
+      }
+      return __testing.fingerprintOptions(ids, { resolveImport: f });
+    };
+    // Same function, a fresh loader's table: the fingerprint is the first id
+    // regardless of what other compiles ran in this process before.
+    expect(fingerprint(0)).toBe("strict:0|resolveImport:0");
+    expect(fingerprint(0)).toBe(fingerprint(0));
+    expect(fingerprint(3)).toBe("strict:0|resolveImport:3");
+  });
+
+  it("compiling A, B, A with option functions in between gives A's output and diagnostics both times", () => {
+    const a = (spec: string) => spec;
+    const b = (spec: string) => spec;
+    const run = (resolveImport: (s: string) => string) =>
+      mx<{ n: number }>("<p>${input.n}</p>", { resolveImport })({ n: 1 });
+    const first = run(a);
+    run(b);
+    expect(run(a)).toBe(first);
+    expect(first).toBe("<p>1</p>");
+  });
+
   describe("round 3: an options-bearing loadMx call must not taint the shared nested-tag cache", () => {
     // No option this host has today (`strict`, `resolveImport`, `customTags`)
     // changes `@mxlang/target-html`'s emitted runtime bytes or `compile()`'s own
@@ -237,12 +264,18 @@ describe("loadMx(path)", () => {
     });
 
     it("the fingerprint used by loadMx ignores customTags (compile() always overrides it with discovery there)", () => {
-      const fpWithCustomTags = __testing.fingerprintOptions({
-        customTags: {
-          fake: { template: { filename: "/x", source: "y" } },
-        } as never,
-      });
-      const fpWithoutCustomTags = __testing.fingerprintOptions({});
+      const fpWithCustomTags = __testing.fingerprintOptions(
+        __testing.newFunctionIds(),
+        {
+          customTags: {
+            fake: { template: { filename: "/x", source: "y" } },
+          } as never,
+        },
+      );
+      const fpWithoutCustomTags = __testing.fingerprintOptions(
+        __testing.newFunctionIds(),
+        {},
+      );
       // `fingerprintOptions` itself doesn't special-case `customTags` — the
       // exclusion is `loadMx`'s own responsibility (it strips `customTags`
       // before ever calling `fingerprintOptions`). This test documents that

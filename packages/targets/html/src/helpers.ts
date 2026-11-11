@@ -183,20 +183,30 @@ export interface MxOptions extends CompileOptions {
 const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
 /**
- * Stable, per-process identity ids for a function passed as an option
- * (`resolveImport`, or a `CustomTag`'s own `analyze`/`transform`/`finalize`
- * hooks) — behavior is decided by *which* function was passed, not by its
- * source text (`toString()` collapses two different closures with identical
- * bodies, or two calls of a factory that always returns textually-identical
- * code, onto the same fingerprint).
+ * Stable identity ids for a function passed as an option (`resolveImport`,
+ * or a `CustomTag`'s own `analyze`/`transform`/`finalize` hooks) — behavior
+ * is decided by *which* function was passed, not by its source text
+ * (`toString()` collapses two different closures with identical bodies, or
+ * two calls of a factory that always returns textually-identical code, onto
+ * the same fingerprint). The ids live in one loader's state: they only feed
+ * that loader's own cache keys and never reach emitted code, so what a loader
+ * has compiled before cannot change what it compiles next.
  */
-const functionIds = new WeakMap<object, number>();
-let nextFunctionId = 0;
-function functionId(fn: (...args: never[]) => unknown): number {
-  let id = functionIds.get(fn);
+interface FunctionIds {
+  ids: WeakMap<object, number>;
+  next: number;
+}
+function newFunctionIds(): FunctionIds {
+  return { ids: new WeakMap(), next: 0 };
+}
+function functionId(
+  fids: FunctionIds,
+  fn: (...args: never[]) => unknown,
+): number {
+  let id = fids.ids.get(fn);
   if (id === undefined) {
-    id = nextFunctionId++;
-    functionIds.set(fn, id);
+    id = fids.next++;
+    fids.ids.set(fn, id);
   }
   return id;
 }
@@ -209,14 +219,17 @@ function functionId(fn: (...args: never[]) => unknown): number {
  * call's renderer. `warnings` is excluded: it is an output-only array the
  * caller reads after the call, never part of what a compile decides.
  */
-function fingerprintOptions(options: CompileOptions): string {
+function fingerprintOptions(
+  fids: FunctionIds,
+  options: CompileOptions,
+): string {
   const parts: string[] = [`strict:${options.strict ? 1 : 0}`];
   if (options.defaultTag !== undefined) {
     parts.push(`defaultTag:${JSON.stringify(options.defaultTag)}`);
   }
 
   if (options.resolveImport) {
-    parts.push(`resolveImport:${functionId(options.resolveImport)}`);
+    parts.push(`resolveImport:${functionId(fids, options.resolveImport)}`);
   }
 
   if (options.customTags) {
@@ -232,7 +245,7 @@ function fingerprintOptions(options: CompileOptions): string {
         const fn = tag[key];
         if (typeof fn === "function")
           tagParts.push(
-            `${key}:${functionId(fn as (...args: never[]) => unknown)}`,
+            `${key}:${functionId(fids, fn as (...args: never[]) => unknown)}`,
           );
       }
       const template = tag.template as
@@ -257,7 +270,7 @@ function fingerprintOptions(options: CompileOptions): string {
  * `loadMx` call taint the plain-compile cache another page's nested
  * lookup would otherwise reuse).
  */
-const NESTED_DEFAULT_FINGERPRINT = fingerprintOptions({});
+const NESTED_DEFAULT_FINGERPRINT = fingerprintOptions(newFunctionIds(), {});
 
 interface CacheEntry<I> {
   renderer: MxRenderer<I>;
@@ -274,6 +287,8 @@ const MAX_CACHE_ENTRIES = 256;
 interface LoaderState {
   /** Process-unique id, baked into every virtual URL this loader makes. */
   readonly id: number;
+  /** Identity ids of option functions, for this loader's cache keys. */
+  readonly functionIds: FunctionIds;
   sourceCache: Map<string, CacheEntry<never>>;
   /** Nested `.mx` imports only — always compiled with just `customTags`, so
    * this is keyed by path alone, never by caller options. */
@@ -325,6 +340,7 @@ function createState(): LoaderState {
   const reg = registry();
   const state: LoaderState = {
     id: reg.nextId++,
+    functionIds: newFunctionIds(),
     sourceCache: new Map(),
     pathCache: new Map(),
     topLevelPathCache: new Map(),
@@ -702,7 +718,7 @@ function mxIn<I = Record<string, unknown>>(
   const key = createHash("sha256")
     .update(options.filename ?? "")
     .update("\u0000")
-    .update(fingerprintOptions(options))
+    .update(fingerprintOptions(st.functionIds, options))
     .update("\u0000")
     .update(source)
     .digest("hex");
@@ -778,7 +794,7 @@ function loadMxIn<I = Record<string, unknown>>(
     configured === undefined ? options : { ...options, defaultTag: configured };
   const { customTags: _ignoredForLoadMx, ...fingerprintableOptions } =
     effective;
-  const key = `${abs}\u0000${fingerprintOptions(fingerprintableOptions)}`;
+  const key = `${abs}\u0000${fingerprintOptions(st.functionIds, fingerprintableOptions)}`;
   const cached = st.topLevelPathCache.get(key) as CacheEntry<I> | undefined;
   if (cached?.renderer && fresh(cached.deps)) {
     touch(st.topLevelPathCache, key, cached);
@@ -846,7 +862,10 @@ function loadMxIn<I = Record<string, unknown>>(
   // The package's own `defaultTag` is not a caller option: a nested compile
   // reads the same config, so it stays eligible and keys on the value.
   const { customTags: _ownTags, ...callerOptions } = options;
-  if (fingerprintOptions(callerOptions) === NESTED_DEFAULT_FINGERPRINT) {
+  if (
+    fingerprintOptions(st.functionIds, callerOptions) ===
+    NESTED_DEFAULT_FINGERPRINT
+  ) {
     const nested = nestedKey(abs, configured);
     st.pathCache.set(nested, { renderer: renderer as never, deps });
     st.urlForPath.set(nested, url);
@@ -945,4 +964,6 @@ export const __testing = {
   },
   /** `fingerprintOptions`, exposed so a test can assert on it directly. */
   fingerprintOptions,
+  /** A fresh option-function id table, as one loader owns. */
+  newFunctionIds,
 };
