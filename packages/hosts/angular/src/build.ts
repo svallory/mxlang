@@ -272,13 +272,11 @@ function warningsFor(file: string, warnings: MxWarning[]): PositionedMessage[] {
   }));
 }
 
-/** De-dup key per distinct scan diagnostic, shared across every file one `build()`/`watch` process compiles, so a misconfigured `mx.tags` warns once per problem, not once per compiled file. */
-const reportedScanDiagnostics = new Set<string>();
-
 /** The custom tags callable from `mxPath`, surfacing structural scan diagnostics as build warnings. Host-name validation belongs to full-registry discovery, not this own-only compile path. */
 function customTagsFor(
   mxPath: string,
   targets: TargetLookup,
+  reported: Set<string>,
 ): {
   customTags: ReturnType<typeof scanCached>["customTags"];
   /** `mx.angular-template.defaultTag`; the target's built-in answers when absent. */
@@ -287,7 +285,7 @@ function customTagsFor(
 } {
   const scan = scanCached(mxPath, { host: "angular", targets });
   const scanWarnings: PositionedMessage[] = [];
-  reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
+  reportScanDiagnostics(scan.diagnostics, reported, (d) =>
     scanWarnings.push({
       file: d.file,
       line: d.line,
@@ -303,8 +301,8 @@ function customTagsFor(
       // Once per package.json position, like the scan's own diagnostics: the
       // same invalid value would otherwise warn on every file the build compiles.
       const key = `${d.file}\0${d.line}\0${d.message}`;
-      if (reportedScanDiagnostics.has(key)) return;
-      reportedScanDiagnostics.add(key);
+      if (reported.has(key)) return;
+      reported.add(key);
       scanWarnings.push({
         file: d.file,
         line: d.line,
@@ -359,6 +357,7 @@ function compileTagFile(
   config: AngularConfig,
   knownOutputs: Set<string>,
   targets: TargetLookup,
+  reported: Set<string>,
 ): CompileOneResult {
   const outputPath = outputPathFor(mxPath, config.tagExtension, targets);
   const sourceBasename = basename(mxPath);
@@ -371,6 +370,7 @@ function compileTagFile(
     const { customTags, defaultTag, scanWarnings } = customTagsFor(
       mxPath,
       targets,
+      reported,
     );
     const result = compileTagModuleFile(mxPath, {
       customTags,
@@ -478,6 +478,7 @@ function compileNgMxFile(
   config: AngularConfig,
   knownOutputs: Set<string>,
   targets: TargetLookup,
+  reported: Set<string>,
 ): CompileOneResult {
   const outputPath = outputPathFor(mxPath, config.ngExtension, targets);
   const mapPath = `${outputPath}.map`;
@@ -490,6 +491,7 @@ function compileNgMxFile(
     const { customTags, defaultTag, scanWarnings } = customTagsFor(
       mxPath,
       targets,
+      reported,
     );
     const result = compileNgMx(readFileSync(mxPath, "utf8"), mxPath, {
       targets,
@@ -608,16 +610,29 @@ export function compileOne(
   config: AngularConfig,
   knownOutputs: Set<string>,
   targets: TargetLookup = angularOwnTargets,
+  /**
+   * Scan diagnostics already reported, keyed per distinct problem: a
+   * misconfigured `mx.tags` warns once per `build()` or watch session, not once
+   * per compiled file. Owned by the caller; a call without one reports every
+   * diagnostic, so a compile never depends on earlier compiles in the process.
+   */
+  reported: Set<string> = new Set(),
 ): CompileOneResult {
   // A tag file routes through this same entry point (so the watcher, the
   // build and the error policy all share one path) but emits a different
   // artifact: a `.ts` component module, not a template. See the comment on
   // `compileTagFile`.
   if (routed.kind === "tag") {
-    return compileTagFile(routed.path, config, knownOutputs, targets);
+    return compileTagFile(routed.path, config, knownOutputs, targets, reported);
   }
   if (routed.kind === "ngmx") {
-    return compileNgMxFile(routed.path, config, knownOutputs, targets);
+    return compileNgMxFile(
+      routed.path,
+      config,
+      knownOutputs,
+      targets,
+      reported,
+    );
   }
 
   const mxPath = routed.path;
@@ -634,6 +649,7 @@ export function compileOne(
     const { customTags, defaultTag, scanWarnings } = customTagsFor(
       mxPath,
       targets,
+      reported,
     );
     const result = compileFile(mxPath, {
       customTags,
@@ -876,6 +892,7 @@ export function build(
   ];
 
   const knownOutputs = new Set<string>();
+  const reported = new Set<string>();
   for (const routed of files) {
     // Belt and suspenders: discoverFiles() already filters to projectDir,
     // but a build() caller other than the CLI could hand in a file list of
@@ -888,7 +905,7 @@ export function build(
       });
       continue;
     }
-    const result = compileOne(routed, config, knownOutputs, targets);
+    const result = compileOne(routed, config, knownOutputs, targets, reported);
     errors.push(...result.errors);
     warnings.push(...result.warnings);
   }

@@ -1730,6 +1730,40 @@ describe("build: the package's defaultTag", () => {
   });
 });
 
+describe("build: scan diagnostics are per build", () => {
+  const invalid = JSON.stringify({
+    mx: {
+      host: "angular",
+      angular: { include: ["src/**/*.mx"] },
+      "angular-template": { defaultTag: "input" },
+    },
+  });
+
+  it("builds A, B, A report the same diagnostics and output", () => {
+    const other = mkdtempSync(join(tmpdir(), "mx-angular-test-b-"));
+    try {
+      writeProject({ "package.json": invalid, "src/a.mx": "<.x>hi</>" });
+      writeFileSync(join(other, "package.json"), invalid, "utf8");
+      mkdirSync(join(other, "src"));
+      writeFileSync(join(other, "src/a.mx"), "<.x>hi</>", "utf8");
+
+      const own = (r: ReturnType<typeof build>) =>
+        r.warnings
+          .filter((w) => w.message.includes("invalid `defaultTag` value"))
+          .map((w) => w.message);
+      const first = build(projectDir);
+      const html = readFileSync(join(projectDir, "src/a.html"), "utf8");
+      expect(own(first)).toHaveLength(1);
+      expect(own(build(other))).toEqual(own(first));
+      const again = build(projectDir);
+      expect(own(again)).toEqual(own(first));
+      expect(readFileSync(join(projectDir, "src/a.html"), "utf8")).toBe(html);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("build: a contract's invalid defaultTag", () => {
   it("is the one declaration error, through the build's warnings, once for many files", () => {
     writeProject({

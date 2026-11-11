@@ -102,6 +102,8 @@ export function startWatch(
   // (identical bytes, no-op) but still touches the .map sidecar's mtime,
   // which retriggers again, forever.
   const knownOutputs = new Set<string>();
+  /** Scan diagnostics already reported by this watch session (see `compileOne`). */
+  const reportedScan = new Set<string>();
 
   // page path -> tag mx/ts paths it depends on (resolved from usedTags
   // names against that page's own discovered tag index, plus a text-scan
@@ -271,7 +273,13 @@ export function startWatch(
   }
 
   function rebuildOne(routed: RoutedFile, config: AngularConfig): void {
-    const result = compileOne(routed, config, knownOutputs, targets);
+    const result = compileOne(
+      routed,
+      config,
+      knownOutputs,
+      targets,
+      reportedScan,
+    );
     for (const line of result.lines) onLine(line);
     recordDeps(routed.path, result.usedTags);
   }
@@ -374,7 +382,13 @@ export function startWatch(
     dependents.clear();
     for (const f of files) {
       if (f.kind === "tag") {
-        const result = compileOne(f, config, knownOutputs, targets);
+        const result = compileOne(
+          f,
+          config,
+          knownOutputs,
+          targets,
+          reportedScan,
+        );
         for (const line of result.lines) onLine(line);
         continue;
       }
