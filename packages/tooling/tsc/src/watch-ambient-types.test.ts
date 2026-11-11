@@ -103,8 +103,9 @@ it(
     // error goes to stderr and tsc's summary to stdout, two pipes that reach
     // the capture in either order, so a build that should throw is waited for
     // until both are in, and its text runs to the next build's start, not to
-    // its summary. Returns the last of those builds; any before it is checked
-    // below.
+    // its summary. A clean build is waited for by counts instead (see
+    // `settled`). Returns the last build for a throwing one; any before it is
+    // checked below.
     //
     // Removing a root file can take tsc through two builds. The file's own
     // watcher and the directory watcher poll independently: when the file's
@@ -117,25 +118,32 @@ it(
     const untilBuild = async (since: number, count: 0 | 1) => {
       const summary = count === 0 ? "Found 0 errors" : "Found 1 error";
       const done = `${summary}\\. Watching for file changes\\.`;
-      const out = stripVTControlCharacters(
-        await run.until(
-          new RegExp(
-            count === 0 ? done : `^(?=[\\s\\S]*TS80004)[\\s\\S]*${done}`,
-          ),
-          since,
-          WAIT_MS,
-        ),
-      ).slice(since);
+      const strip = (text: string) => stripVTControlCharacters(text);
+      // A clean build is waited for by counts: every missing-root build before
+      // it said the host's error once, and the pipe that carries it can land
+      // after the clean build's own summary, so no line is placed by position.
+      const settled = (text: string) => {
+        const seen = strip(text);
+        if (!new RegExp(done).test(seen)) return false;
+        return count === 1
+          ? seen.includes("TS80004")
+          : lines(seen).length === seen.split("error TS6053").length - 1;
+      };
+      const out = strip(await run.until(settled, since, WAIT_MS)).slice(since);
       const end = out.search(new RegExp(done)) + summary.length;
-      const next = out.indexOf("File change detected", end);
-      const builds = out
-        .slice(0, next < 0 ? out.length : next)
-        .split("File change detected")
-        .slice(1);
+      const builds = out.slice(0, end).split("File change detected").slice(1);
       for (const earlier of builds.slice(0, -1)) {
         expect(earlier).toContain("error TS6053");
       }
-      return builds[builds.length - 1] ?? "";
+      if (count === 0) {
+        expect(lines(out)).toEqual(Array(builds.length - 1).fill(DIAGNOSTIC));
+        return "";
+      }
+      const next = out.indexOf("File change detected", end);
+      return out.slice(
+        out.lastIndexOf("File change detected", end),
+        next < 0 ? out.length : next,
+      );
     };
     const touchIndex = () => appendFileSync(index, "\n");
     try {
@@ -152,15 +160,17 @@ it(
       // `throw.ts` removed: the root list changed, the host is asked, answers.
       let since = run.output().length;
       rmSync(thrower);
-      expect(lines(await untilBuild(since, 0))).toEqual([]);
+      await untilBuild(since, 0);
       since = run.output().length;
       touchIndex();
-      expect(lines(await untilBuild(since, 0))).toEqual([]);
+      await untilBuild(since, 0);
       // Back: the host throws on a rebuild, not only on the first build. The
       // root comes back through a config edit, not by creating `throw.ts`:
       // plain `tsc -w` (no mx-tsc, same polling settings, 24 busy loops on a
       // 10-core machine) builds once after a removed root is created again
-      // and reports it `TS6053` missing for good, in 8 of 8 runs.
+      // and reports it `TS6053` missing for good, in 8 of 8 runs. When TypeScript is
+      // bumped, re-check that with stock `tsc -w`; if it no longer sticks,
+      // restore a re-created `throw.ts` here.
       since = run.output().length;
       writeFileSync(
         project.path("tsconfig.json"),

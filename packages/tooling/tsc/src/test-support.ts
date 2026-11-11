@@ -179,8 +179,15 @@ export const WATCH_ARM_MS = 150_000;
 export interface SpawnedWatch {
   /** Everything the watcher printed so far (stdout and stderr). */
   output(): string;
-  /** Resolves once `output.slice(since)` matches; rejects with the output on timeout or exit. */
-  until(pattern: RegExp, since?: number, timeoutMs?: number): Promise<string>;
+  /**
+   * Resolves once `output.slice(since)` matches (a RegExp, or a predicate of
+   * that slice); rejects with the output on timeout or exit.
+   */
+  until(
+    pattern: RegExp | ((text: string) => boolean),
+    since?: number,
+    timeoutMs?: number,
+  ): Promise<string>;
   /** Kills the watcher and waits for it to close. Idempotent. */
   stop(): Promise<void>;
 }
@@ -262,14 +269,16 @@ export async function spawnWatch(
   const watch: SpawnedWatch = {
     output: () => output,
     async until(pattern, since = 0, timeoutMs = WATCH_FIRST_SUMMARY_MS) {
+      const matches = (text: string) =>
+        typeof pattern === "function" ? pattern(text) : pattern.test(text);
       const deadline = Date.now() + timeoutMs;
       while (Date.now() < deadline) {
-        if (pattern.test(output.slice(since))) return output;
+        if (matches(output.slice(since))) return output;
         assertAlive(`waiting for ${pattern}`);
         await delay(100);
       }
       // A match that arrived during the last delay is not a timeout.
-      if (pattern.test(output.slice(since))) return output;
+      if (matches(output.slice(since))) return output;
       throw new Error(`timed out waiting for ${pattern}:\n${output}`);
     },
     async stop() {
