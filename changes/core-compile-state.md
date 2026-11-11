@@ -2,4 +2,4 @@
 packages: [core]
 kind: Fixed
 ---
-Core's compile helpers no longer carry state across compiles in one process: the template-metadata cache is owned per target lookup, the callee-input resolver ids per lookup partition, and the unstamped contract signature is a per-result token instead of a process-wide counter.
+Core's template-metadata cache now serves an entry only to a compile under the same tag set, declarations and lookup it was derived under, so a compile's output no longer depends on which compile ran before it. The callee-input cache key also names the compile's tag set, and its resolver ids live in each lookup's partition.
