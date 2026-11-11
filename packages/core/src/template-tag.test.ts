@@ -409,59 +409,73 @@ describe("template custom tags as compilation units", () => {
   );
 
   // Same lookup, same tags, same files; only the policy differs. `<Missing/>`
-  // in the callee's template is refused by one policy and lowers as a
-  // component under the other, so reading its metadata fails under one only, and that failure is cached as the callee's
-  // `Input`, so it must not be served to the compile that lowers fine.
-  it.each([
-    ["strict, loose, strict", ["strict", "loose", "strict"]],
-    ["loose, strict, loose", ["loose", "strict", "loose"]],
-  ] as const)(
-    "a callee's cached Input ignores earlier compiles under other policies: %s",
-    (_name, order) => {
-      resetTemplateCache();
-      resetCalleeInputCache();
-      const dir = mkdtempSync(join(tmpdir(), "mx-callee-policy-"));
-      try {
-        writeFileSync(join(dir, "package.json"), "{}");
-        writeFileSync(join(dir, "card.mx"), "<Missing/>\n");
-        const page = join(dir, "page.mx");
-        const policies = {
-          loose: { ...declarations(), isComponent: () => true },
-          strict: {
-            ...declarations(),
-            isComponent: () => true,
-            rejectComponentTag(name: string) {
-              if (name === "Missing") throw new Error("Missing refused");
-            },
-          },
-        } satisfies Record<string, Policy>;
-        const outcome = (name: "strict" | "loose") => {
-          const ctx = newCtx(
-            "",
-            printExpression,
-            policies[name],
-            undefined,
-            page,
-            lookup,
+  // in a template is refused by one policy and lowers as a component under
+  // the other, so reading that template's metadata fails under one only, and
+  // the failure is cached as the callee's `Input`. It must not be served to
+  // the compile that lowers fine, whether the callee is the `.mx` file or a
+  // `.ts` file whose `Input` type is followed into it.
+  describe.each([
+    ["a .mx callee", "card.mx"],
+    ["a .ts callee importing a type from .mx", "card.ts"],
+  ] as const)("%s", (_kind, callee) => {
+    it.each([
+      ["strict, loose, strict", ["strict", "loose", "strict"]],
+      ["loose, strict, loose", ["loose", "strict", "loose"]],
+    ] as const)(
+      "cached Input ignores earlier compiles under other policies: %s",
+      (_name, order) => {
+        resetTemplateCache();
+        resetCalleeInputCache();
+        const dir = mkdtempSync(join(tmpdir(), "mx-callee-policy-"));
+        try {
+          writeFileSync(join(dir, "package.json"), "{}");
+          writeFileSync(
+            join(dir, "card.mx"),
+            'export type Cfg = { as: "renderable" };\n<Missing/>\n',
           );
-          return readCalleeInput(
-            { kind: "name", name: "Card" },
-            {
-              importer: page,
-              imports: new Map([["Card", "./card.mx"]]),
-              ctx,
-              targets: lookup,
+          writeFileSync(
+            join(dir, "card.ts"),
+            'import type { Cfg } from "./card.mx";\nexport interface Input { x?: AttrTag<Cfg> }\n',
+          );
+          const page = join(dir, "page.mx");
+          const policies = {
+            loose: { ...declarations(), isComponent: () => true },
+            strict: {
+              ...declarations(),
+              isComponent: () => true,
+              rejectComponentTag(name: string) {
+                if (name === "Missing") throw new Error("Missing refused");
+              },
             },
-          ).input.kind;
-        };
-        const results = order.map(outcome);
-        expect(results[0]).toBe(results[2]);
-        expect(results[0]).not.toBe(results[1]);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
+          } satisfies Record<string, Policy>;
+          const outcome = (name: "strict" | "loose") => {
+            const ctx = newCtx(
+              "",
+              printExpression,
+              policies[name],
+              undefined,
+              page,
+              lookup,
+            );
+            return readCalleeInput(
+              { kind: "name", name: "Card" },
+              {
+                importer: page,
+                imports: new Map([["Card", `./${callee}`]]),
+                ctx,
+                targets: lookup,
+              },
+            ).input.kind;
+          };
+          const results = order.map(outcome);
+          expect(results[0]).toBe(results[2]);
+          expect(results[0]).not.toBe(results[1]);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  });
 
   it("caches content metadata and preserves the dropped-body warning", () => {
     resetTemplateCache();

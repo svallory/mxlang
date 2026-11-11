@@ -225,7 +225,41 @@ interface CalleeCacheEntry {
     string,
     { mtimeMs: number | undefined; source: string }
   >;
+  /**
+   * Set when the read went through template metadata (the callee is a `.mx`
+   * file, or its `Input` type was followed into one), which is derived under
+   * the compile's tag set and declarations. Only a compile with the same
+   * ones may reuse the entry; an unset scope means the result is the same
+   * under every ctx.
+   */
+  scope?: CalleeScope;
 }
+
+interface CalleeScope {
+  customTags: WeakRef<object> | undefined;
+  declarations: WeakRef<object> | undefined;
+}
+
+function calleeScopeOf(ctx: Ctx | undefined): CalleeScope {
+  return {
+    customTags: ctx?.customTags && new WeakRef(ctx.customTags),
+    declarations: ctx && new WeakRef(ctx.declarations),
+  };
+}
+
+function sameCalleeScope(scope: CalleeScope, ctx: Ctx | undefined): boolean {
+  return (
+    scope.customTags?.deref() === ctx?.customTags &&
+    scope.declarations?.deref() === ctx?.declarations
+  );
+}
+
+/**
+ * Counts reads through template metadata. Only compared before and after one
+ * synchronous analysis to learn whether it touched a template; never read by
+ * a compile, so it cannot change output.
+ */
+let templateMetadataReads = 0;
 
 // Recognised AttrTag packages depend on this exact lookup. Keep the existing
 // path/resolver/snapshot key inside each partition; scan caches stay lookup-free.
@@ -323,23 +357,13 @@ function idOf(partition: CalleePartition, object: object): number {
   return id;
 }
 
-/**
- * A `.mx` callee's `Input` is read through template metadata, which is
- * derived under the compile's tag set and declarations, so both are part of
- * the key (an absent one is `0`), matching the template cache's scope.
- */
 function cacheKey(
   partition: CalleePartition,
   path: string,
   context: ResolveContext,
 ): string {
   const resolver = context.resolveImport;
-  // Only a `.mx` callee is read through metadata; a TS/JS one is the same
-  // under every ctx.
-  const scoped = path.endsWith(".mx") ? context.ctx : undefined;
-  const tags = scoped?.customTags;
-  const declarations = scoped?.declarations;
-  return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}\0tags:${tags ? idOf(partition, tags) : 0}\0decl:${declarations ? idOf(partition, declarations) : 0}`;
+  return `${path}\0${resolver ? `resolver:${idOf(partition, resolver)}` : "default"}`;
 }
 
 /**
@@ -403,6 +427,7 @@ export function readCalleeInput(
     cached &&
     cached.mtimeMs === mtimeMs &&
     cached.source === source &&
+    (!cached.scope || sameCalleeScope(cached.scope, context.ctx)) &&
     snapshotsMatch(cached.dependencySnapshots)
   ) {
     recordDependencies(context.ctx, cached.result.dependencies);
@@ -412,6 +437,7 @@ export function readCalleeInput(
   let result: CalleeInputResult;
   let pending = false;
   let parsedSources = new Map<string, string>([[resolved.path, source]]);
+  const readsBefore = templateMetadataReads;
   try {
     const analyzed = readInputAt(resolved.path, source, mtimeMs, context);
     pending = analyzed.pending === true;
@@ -460,6 +486,10 @@ export function readCalleeInput(
         mtimeMs,
         source,
         result,
+        scope:
+          templateMetadataReads === readsBefore
+            ? undefined
+            : calleeScopeOf(context.ctx),
         dependencySnapshots: snapshotDependencies(
           result.dependencies,
           parsedSources,
@@ -861,6 +891,8 @@ function readInputAt(
     };
   }
   if (path.endsWith(".mx")) {
+    // Whether a ctx is present decides this read too, so count it first.
+    templateMetadataReads++;
     if (!context.ctx) {
       // A `.mx` callee's Input is read through the template-metadata cache,
       // whose compile callback needs a real lowering Ctx. 1b always has one;
@@ -1303,6 +1335,7 @@ class InputAnalyzer {
     this.reexportsSeen.add(reexportKey);
     let code = source;
     if (resolved.endsWith(".mx")) {
+      templateMetadataReads++;
       if (!this.context.ctx) return undefined;
       let mtimeMs: number | undefined;
       try {
