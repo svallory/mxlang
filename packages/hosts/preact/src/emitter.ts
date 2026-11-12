@@ -20,6 +20,7 @@
  * belongs in that object and what does not.
  */
 
+import { parseExpression } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -134,27 +135,117 @@ interface RegionSink {
 }
 
 /**
- * The direct define calls (`<Row(x)/>`) whose name an enclosing scope also
- * binds: a `<for>`, `<define>` or tag param, or a `/var` or `<const>` declared
- * earlier in an enclosing body. Such a call may resolve to the local, so it is
- * emitted under the authored name, not the private function. Every other
- * direct call reaches the private function and its argument as written.
- * Scopes follow the IR: every node with its own `children` is a scope, a
- * binding is visible to the later siblings and what they contain, and a body
- * never leaks into the scope around it. A param is read as every identifier of
- * its text (a superset: a default's identifiers count), only inside its body.
+ * The names a `<define>`, tag-param or catch-param list binds: the identifiers
+ * of each parameter's pattern, never the identifiers of a default's expression
+ * (`{ a = Row }` binds `a`). Text that does not parse falls back to every
+ * identifier it holds, which only ever over-reports.
+ */
+function paramNames(params: readonly string[]): string[] {
+  try {
+    const arrow = parseExpression(`(${params.join(", ")}) => 0`, {
+      plugins: ["typescript", "jsx"],
+    }) as unknown as { params: BindingPattern[] };
+    return arrow.params.flatMap(patternNames);
+  } catch {
+    return params.flatMap((text) => [...readIdentifiers(text)]);
+  }
+}
+
+interface BindingPattern {
+  type: string;
+  name?: string;
+  left?: BindingPattern;
+  argument?: BindingPattern;
+  value?: BindingPattern;
+  properties?: BindingPattern[];
+  elements?: Array<BindingPattern | null>;
+}
+
+function patternNames(pattern: BindingPattern | null | undefined): string[] {
+  if (!pattern) return [];
+  switch (pattern.type) {
+    case "Identifier":
+      return [pattern.name as string];
+    case "AssignmentPattern":
+      return patternNames(pattern.left);
+    case "RestElement":
+      return patternNames(pattern.argument);
+    case "ObjectPattern":
+      return (pattern.properties ?? []).flatMap((property) =>
+        patternNames(property.value ?? property.argument),
+      );
+    case "ArrayPattern":
+      return (pattern.elements ?? []).flatMap(patternNames);
+    default:
+      return [];
+  }
+}
+
+/**
+ * The direct define calls (`<Row(x)/>`) whose name an enclosing JS scope also
+ * binds, so the call may resolve to a local. Such a call is emitted under the
+ * authored name; every other direct call reaches the private function and its
+ * argument as written.
+ *
+ * The scopes are the emitted ones: a `<define>`, a `<for>` (also an
+ * attribute-tag `<for>`), and each body that becomes its own function or `/var`
+ * scope (a tag-param block, an attribute-tag block, a dynamic tag's, `<try>`'s
+ * or `@catch` body). An element or an `<if>` branch is no scope. A `/var` or
+ * `<const>` binds across the whole scope it is declared in (the emitter hoists
+ * its statement to the top of that scope), before and after it, and in every
+ * nested element; a nested scope sees it too. A param binds in its own body.
  */
 export function shadowedCalls(ir: Ir): WeakSet<object> {
   const calls = new WeakSet<object>();
+  if (!holdsDefine(ir.body)) return calls;
   const seen = new WeakSet<object>();
   const skip = new Set([
     "paramNodes",
     "node",
-    "nodes",
     "loc",
     "span",
     "paramSpans",
+    "attrTagProps",
+    "loop",
   ]);
+  const children = (node: Record<string, unknown>) =>
+    Object.entries(node)
+      .filter(([key]) => !skip.has(key))
+      // An expression's `nodes` are parser nodes; the flat attribute-tag list
+      // repeats the tree, so it goes last and only adds what the tree lacks.
+      .filter(([key]) => key !== "nodes" || typeof node.code !== "string")
+      .sort(
+        ([a], [b]) =>
+          Number(a === "attributeTags") - Number(b === "attributeTags"),
+      )
+      .map(([, child]) => child);
+  const opensScope = (node: Record<string, unknown>) =>
+    node.kind === "For" ||
+    node.kind === "Define" ||
+    node.kind === "DelegatedTag" ||
+    node.kind === "AttributeTagFor" ||
+    ("hasParams" in node && Array.isArray(node.children));
+  const declared = (value: unknown, into: Set<string>, root: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) declared(item, into, root);
+      return;
+    }
+    const node = value as Record<string, unknown>;
+    if (value !== root && opensScope(node)) return;
+    if (node.kind === "Component" || node.kind === "Const") {
+      const vars = node.varBindings as Array<{ name: string }> | undefined;
+      const names = vars
+        ? vars.map((binding) => binding.name)
+        : paramNames(
+            [
+              String(node.kind === "Const" ? node.name : (node.var ?? "")),
+            ].filter(Boolean),
+          );
+      for (const name of names) into.add(name);
+    }
+    for (const child of children(node)) declared(child, into, root);
+  };
   const walk = (value: unknown, scope: Set<string>): void => {
     if (value === null || typeof value !== "object") return;
     if (Array.isArray(value)) {
@@ -165,16 +256,18 @@ export function shadowedCalls(ir: Ir): WeakSet<object> {
     seen.add(value);
     const node = value as Record<string, unknown>;
     let inner = scope;
-    if (Array.isArray(node.children)) {
+    if (opensScope(node)) {
       inner = new Set(scope);
-      const own = node.bindings ?? node.params;
-      if (Array.isArray(own)) {
-        for (const text of own) {
-          if (typeof text === "string") {
-            for (const name of readIdentifiers(text)) inner.add(name);
-          }
+      if (node.kind === "For") {
+        for (const name of node.bindings as string[]) inner.add(name);
+      } else if (node.kind === "AttributeTagFor") {
+        for (const name of (node.loop as { bindings: string[] }).bindings) {
+          inner.add(name);
         }
+      } else if (Array.isArray(node.params)) {
+        for (const name of paramNames(node.params as string[])) inner.add(name);
       }
+      declared(node, inner, node);
     }
     const target = node.target as { kind?: string; name?: string } | undefined;
     if (
@@ -185,24 +278,59 @@ export function shadowedCalls(ir: Ir): WeakSet<object> {
     ) {
       calls.add(value);
     }
-    for (const [key, child] of Object.entries(node)) {
-      if (!skip.has(key)) walk(child, inner);
-    }
-    // A `/var` or `<const>` binds in the body it is written in, after it.
-    if (node.kind === "Component" || node.kind === "Const") {
-      const declared = node.varBindings as Array<{ name: string }> | undefined;
-      const names = declared
-        ? declared.map((binding) => binding.name)
-        : [
-            ...readIdentifiers(
-              String(node.kind === "Const" ? node.name : (node.var ?? "")),
-            ),
-          ];
-      for (const name of names) scope.add(name);
-    }
+    for (const child of children(node)) walk(child, inner);
   };
-  walk(ir.body, new Set());
+  const root = new Set<string>();
+  declared(ir.body, root, null);
+  walk(ir.body, root);
   return calls;
+}
+
+/** Whether an IR subtree holds a `<define>` (a region may nest one). */
+function holdsDefine(value: unknown, seen = new WeakSet<object>()): boolean {
+  if (value === null || typeof value !== "object" || seen.has(value))
+    return false;
+  seen.add(value);
+  if (Array.isArray(value))
+    return value.some((item) => holdsDefine(item, seen));
+  const node = value as Record<string, unknown>;
+  if (node.kind === "Define") return true;
+  return Object.entries(node).some(
+    ([key, child]) =>
+      !["node", "nodes", "loc", "span", "paramNodes"].includes(key) &&
+      holdsDefine(child, seen),
+  );
+}
+
+/**
+ * A body whose `/var` statements run ahead of its markup, in one place for
+ * every shape that needs it: `slot` (an expression, called in place), `child`
+ * (a JSX child, called in place), `block` (an arrow body: `{ …; return code; }`)
+ * and `fragmentBlock` (the same returning a fragment, a define's body).
+ */
+function wrapStatements(
+  statements: string,
+  code: MappedCode,
+  form: "slot" | "child" | "block" | "fragmentBlock",
+): MappedCode {
+  switch (form) {
+    case "slot":
+      return concatMapped(`(() => { ${statements} return (`, code, "); })()");
+    case "child":
+      return concatMapped(
+        `{(() => { ${statements} return (<>`,
+        closeFragmentBody(code),
+        "</>); })()}",
+      );
+    case "block":
+      return concatMapped(`{ ${statements} return `, code, "; }");
+    case "fragmentBlock":
+      return concatMapped(
+        `{ ${statements} return (<>`,
+        closeFragmentBody(code),
+        "</>); }",
+      );
+  }
 }
 
 /** The defines a region lifted out of one soft-scoped body (and its parents). */
@@ -249,6 +377,8 @@ export interface DefineParts {
   name: string;
   fn: MappedCode;
   value: MappedCode;
+  /** Evaluates the define's attributes when `value` is not emitted. */
+  effects?: MappedCode;
 }
 
 /**
@@ -275,7 +405,8 @@ export function defineStatements(
       keepAll ||
       base.has(part.name) ||
       values.some((names, other) => other !== index && names.has(part.name));
-    return read ? concatMapped(part.fn, part.value) : part.fn;
+    if (read) return concatMapped(part.fn, part.value);
+    return part.effects ? concatMapped(part.fn, part.effects) : part.fn;
   });
 }
 
@@ -1081,13 +1212,7 @@ export class PreactEmitter implements Emitter<string> {
   ): MappedCode {
     const { code, statements } = this.#scopeOf(build, hard, bindsParams);
     if (statements === "") return code;
-    return slot
-      ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
-      : concatMapped(
-          `{(() => { ${statements} return (<>`,
-          closeFragmentBody(code),
-          "</>); })()}",
-        );
+    return wrapStatements(statements, code, slot ? "slot" : "child");
   }
 
   /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
@@ -2104,11 +2229,17 @@ export class PreactEmitter implements Emitter<string> {
       mapped(own, this.#typeCheck ? null : (node.nameSpan ?? null)),
       " = (",
       params,
+      ") => ",
       bodyVarStatements.length > 0
-        ? `) => { ${bodyVarStatements.join(" ")} return (<>`
-        : ") => (<>",
-      closeFragmentBody(rendered),
-      bodyVarStatements.length > 0 ? "</>); };" : "</>);",
+        ? concatMapped(
+            wrapStatements(
+              bodyVarStatements.join(" "),
+              rendered,
+              "fragmentBlock",
+            ),
+            ";",
+          )
+        : concatMapped("(<>", closeFragmentBody(rendered), "</>);"),
     );
     const wrapped = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
     // The public name maps to the define's name span too, so a go-to-definition
@@ -2125,15 +2256,15 @@ export class PreactEmitter implements Emitter<string> {
       };
     }
     const { open, between } = defineValueWrapper(node.attrs);
+    const props = `{ ${this.#propParts(node.attrs).join(", ")} });`;
     return {
       name: node.name,
       fn,
-      value: concatMapped(
-        ...declared,
-        ` = ${open}${wrapped}`,
-        between,
-        `{ ${this.#propParts(node.attrs).join(", ")} });`,
-      ),
+      value: concatMapped(...declared, ` = ${open}${wrapped}`, between, props),
+      // Marko evaluates a define's attributes where the `<define>` is written,
+      // read or not: with no public binding they still run, once, on the
+      // private function.
+      effects: concatMapped(` void ${open}${own}`, between, props),
     };
   }
 
@@ -2676,7 +2807,16 @@ export class PreactEmitter implements Emitter<string> {
               false,
               node.content?.hasParams === true,
             )
-          : this.#expression(children);
+          : node.content?.hasParams
+            ? // A tag-param body of a unit call is a scope too: a `/var` there is
+              // its own, and a region cannot lift a `<define>` out of it.
+              this.#scoped(
+                false,
+                (scope) => scope.#expression(children),
+                false,
+                true,
+              )
+            : this.#expression(children);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
@@ -2727,7 +2867,11 @@ export class PreactEmitter implements Emitter<string> {
     const close = node.content?.hasParams ? ") as (...args: any[]) => any" : "";
     return statements === ""
       ? concatMapped(`${open} `, body, close)
-      : concatMapped(`${open} { ${statements} return `, body, `; }${close}`);
+      : concatMapped(
+          `${open} `,
+          wrapStatements(statements, body, "block"),
+          close,
+        );
   }
 
   #hostComponentBody(

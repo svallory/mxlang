@@ -521,7 +521,8 @@ export function emitModuleWithMappings(
   source = "",
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
-  const shadowed = shadowedCalls(ir);
+  // The typeCheck projection calls every define through its public name.
+  const shadowed = typeCheck ? new WeakSet<object>() : shadowedCalls(ir);
   const emitter = createEmitter(dialect, names?.handler, source, shadowed);
 
   // Statements first, markup second. Splitting on the top level only: a
@@ -580,16 +581,15 @@ export function emitModuleWithMappings(
   // Every piece of module text that can read a define's public name: the
   // markup, each statement, the core's prelude and the `<return>` value. The
   // static dynamic helper cannot read one, so it is not scanned for defines.
-  const moduleText = (): string =>
-    [
-      body.code,
-      ...statements.map((statement) => statement.code),
-      ...ir.prelude.map((node) => node.code),
-      ...(ir.returnValue ? [ir.returnValue.code] : []),
-    ].join("\n");
+  const moduleText = [
+    body.code,
+    ...statements.map((statement) => statement.code),
+    ...ir.prelude.map((node) => node.code),
+    ...(ir.returnValue ? [ir.returnValue.code] : []),
+  ].join("\n");
   const resolvedDefines = defineStatements(
     defineParts.map((entry) => entry.part),
-    moduleText(),
+    moduleText,
     typeCheck,
   );
   defineParts.forEach((entry, index) => {
@@ -606,8 +606,11 @@ export function emitModuleWithMappings(
   const imports = importLines(emitter.runtimeImports, dialect);
   if (imports.length > 0) lines.push(...imports);
 
+  // The defines' own text is known now: a helper only a define body uses is
+  // still found.
   const helperInput = [
-    moduleText(),
+    moduleText,
+    ...resolvedDefines.map((statement) => statement.code),
     ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
   ].join("\n");
   const attrHelpers = attributeHelpers(helperInput, dialect).map(

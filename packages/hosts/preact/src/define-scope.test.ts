@@ -255,3 +255,24 @@ describe("typedDefineParam", () => {
     expect(typedDefineParam(param)).toBe(typed);
   });
 });
+
+describe.each(HOSTS)("%s: define calls and attributes", (host) => {
+  const compile = async (source: string) =>
+    (await compilerFor(host))(source, "/f/t.mx").code;
+
+  it("a param default that names a define does not shadow it", async () => {
+    const code = await compile(
+      "<define/Row|o|>${o.content}</define><define/Id|{ a = Row }|><Row({ children: 'c' })/></define><Id/>",
+    );
+    expect(code).toContain("__mxDef_Row({ children: 'c' })");
+  });
+
+  it("a define attribute with a side effect runs once when the define is only called directly", async () => {
+    const code = await compile(
+      "<define/Row x=input.track()><p>r</p></define><Row/>",
+    );
+    expect(code.match(/input\.track\(\)/g)).toHaveLength(1);
+    expect(code).toContain("void Object.assign(__mxDef_Row");
+    expect(code).not.toContain("const Row =");
+  });
+});

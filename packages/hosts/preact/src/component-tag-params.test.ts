@@ -156,6 +156,59 @@ export interface Input { items: string[] }
 <p><for|Row| of=input.items>\${Row}</for><Row({ children: "c" })/></p>`,
     html: "<p>abundefined</p>",
   },
+  "a call before the /var that shadows its define": {
+    callee: {
+      file: "fn.mx",
+      source: `export interface Input {}
+<return value=(n: number) => "local" + n/>`,
+    },
+    caller: `import Fn from "./fn.mx"
+export interface Input { items: string[] }
+<define/Row|a|><li>\${a}</li></define>
+<define/Wrap><Row(2)/><Fn/Row/></define>
+<ul><Wrap/></ul>`,
+    html: "<ul>local2</ul>",
+  },
+  "a call nested in an element before the /var that shadows its define": {
+    callee: {
+      file: "fn.mx",
+      source: `export interface Input {}
+<return value=(n: number) => "local" + n/>`,
+    },
+    caller: `import Fn from "./fn.mx"
+export interface Input { items: string[] }
+<define/Row|a|><li>\${a}</li></define>
+<define/Wrap><p><Row(2)/></p><Fn/Row/></define>
+<ul><Wrap/></ul>`,
+    html: "<ul><p>local2</p></ul>",
+  },
+  "a /var inside an element, then a call in the same body": {
+    callee: {
+      file: "fn.mx",
+      source: `export interface Input {}
+<return value=(n: number) => "local" + n/>`,
+    },
+    caller: `import Fn from "./fn.mx"
+export interface Input { items: string[] }
+<define/Row|a|><li>\${a}</li></define>
+<ul><\${"section"}><div><Fn/Row/></div><Row(1)/></></ul>`,
+    html: "<ul><section><div></div>local1</section></ul>",
+  },
+  "an attribute-tag <for> param that shadows a define": {
+    callee: {
+      file: "box.tsx",
+      source: `/** @jsxRuntime automatic @jsxImportSource HOSTJSX */
+export default function Box(props: { item?: any }) {
+  const items: any[] = Array.isArray(props.item) ? props.item : [props.item];
+  return <div>{items.map((i) => (typeof i === "function" ? i() : i)) as never}</div>;
+}`,
+    },
+    caller: `import Box from "./box.tsx"
+export interface Input { items: string[] }
+<define/Row|p|><li>\${p}</li></define>
+<Box><for|Row| of=[(n: number) => "L" + n]><@item><Row(1)/></@item></for></Box>`,
+    html: "<div>L1</div>",
+  },
   "a define called only directly (no unused public binding)": {
     caller: `export interface Input { items: string[] }
 <define/Row|p|><li>\${p}</li></define>

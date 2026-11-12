@@ -168,6 +168,21 @@ describe("region rule", () => {
     },
   );
 
+  it("refuses a <define> in the body of an imported unit call that declares tag params", () => {
+    expect(
+      errorOf(
+        BOX_SOURCE(
+          "<Counter|v| start=1><define/Row>${v}</define><Row/></Counter>",
+        ),
+        COUNTER_FILE,
+      ),
+    ).toEqual({
+      message: LIFT,
+      line: 5,
+      column: 9 + "<Counter|v| start=1>".length,
+    });
+  });
+
   it.each([
     [
       "a /var of the same name as the define",
