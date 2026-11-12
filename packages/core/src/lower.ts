@@ -1491,6 +1491,7 @@ function checkDefineReads(
     block: number[];
     pending: boolean;
     define?: boolean;
+    exited?: boolean;
   },
   here: number[],
   node: Node,
@@ -1498,10 +1499,21 @@ function checkDefineReads(
   const inScope =
     binding.block.length <= here.length &&
     binding.block.every((id, index) => here[index] === id);
-  // A `<define>` is block-scoped by name lookup (§5.4); only the
-  // read-before-declaration rule is checked here, never the block escape.
-  if (!inScope) return;
-  if (!binding.pending) return;
+  if (binding.exited) {
+    // The declaring body has ended. An import or a `static` binding of the
+    // same name is the one the read reaches, as in JS.
+    if (
+      ctx.imports.has(name) ||
+      ctx.importSpecifiers.has(name) ||
+      ctx.staticBindings.has(name)
+    )
+      return;
+  } else {
+    // A `<define>` is block-scoped by name lookup (§5.4); the read-before-
+    // declaration rule applies inside the declaring body's path.
+    if (!inScope) return;
+    if (!binding.pending) return;
+  }
   const { traverse, types } = coreBabel();
   let read: Node | undefined;
   const program =
@@ -1520,6 +1532,13 @@ function checkDefineReads(
     },
   });
   if (!read) return;
+  if (binding.exited) {
+    raise(
+      DEFINE_READ_BEFORE_DECLARATION_CODE,
+      `\`${name}\` is declared by a ${tagText(ctx, "define")} inside another body and is not readable outside it; a ${tagText(ctx, "define")} binds only in the body that declares it. Read it inside that body, or declare it where it is read.`,
+      read,
+    );
+  }
   raise(
     DEFINE_READ_BEFORE_DECLARATION_CODE,
     `\`${name}\` is read before the ${tagText(ctx, "define")} that declares it; a ${tagText(ctx, "define")} is not hoisted. Move the ${tagText(ctx, "define")} above this read.`,
@@ -7618,6 +7637,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       ? T | undefined
       : never
   >();
+  const declaredDefines = new Set<string>();
   const saveTagVar = (name: string, localDefine = false): void => {
     const outer = ctx.tagVars?.get(name);
     if ((localDefine || outer?.define) && !savedTagVars.has(name))
@@ -7647,7 +7667,11 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   };
   for (const child of children) {
     if (!isTagNode(child) || !tagVarOf(child)) continue;
-    for (const name of bindingIdentifiers(tagVarOf(child))) saveTagVar(name);
+    for (const name of bindingIdentifiers(tagVarOf(child))) {
+      saveTagVar(name);
+      // A name this body declares itself is not the exited define's.
+      if (ctx.tagVars?.get(name)?.exited) ctx.tagVars.delete(name);
+    }
     // A `<define>` binds its name the same way for reads *above* it: the
     // binding does not exist yet, so it is pre-registered pending until its
     // own lowering clears the flag, and `checkDefineReads` refuses a read
@@ -7658,6 +7682,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       ctx.tagVars ??= new Map();
       // An outer ordinary binding cannot hide this body's pending define.
       saveTagVar(defineName, true);
+      declaredDefines.add(defineName);
       if (ctx.tagVarShadowed?.has(defineName)) {
         defineShadowed ??= new Set(outerShadowed);
         defineShadowed.delete(defineName);
@@ -7919,7 +7944,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
                 for (const [name, binding] of ctx.tagVars ?? []) {
                   if (
                     binding.define &&
-                    binding.pending &&
+                    (binding.pending || binding.exited) &&
                     !ctx.tagVarShadowed?.has(name)
                   )
                     checkDefineReads(
@@ -8077,6 +8102,14 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     // outer define. Custom `/var` escape tracking keeps its existing lifetime.
     for (const [name, outer] of savedTagVars) {
       if (outer) ctx.tagVars?.set(name, outer);
+      else if (declaredDefines.has(name) && ctx.tagVarBlock?.length)
+        // Not deleted: a read after this body is refused (`checkDefineReads`).
+        ctx.tagVars?.set(name, {
+          block: [...ctx.tagVarBlock],
+          pending: false,
+          define: true,
+          exited: true,
+        });
       else ctx.tagVars?.delete(name);
     }
   }

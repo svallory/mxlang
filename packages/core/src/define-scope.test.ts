@@ -220,3 +220,67 @@ describe("a <define> is scoped to the body that declares it", () => {
     });
   });
 });
+
+/** The first error `lowerSource` raises for `source`, or `undefined`. */
+function refusal(source: string) {
+  try {
+    lowerSource(source);
+  } catch (e) {
+    return e as { message: string; line: number; column: number } & {
+      diagnosticCode?: string;
+    };
+  }
+  return undefined;
+}
+
+describe("a <define> name is not readable outside the body that declares it", () => {
+  const READS: Array<[string, string]> = [
+    ["a placeholder", "<div>${typeof Foo}</div>"],
+    ["a script", "<script>console.log(Foo)</script>"],
+    ["an attribute", "<div attr=Foo/>"],
+  ];
+  const BLOCKS: Array<[string, string]> = [
+    ["an <if>", `<if=input.a>${FOO}</if>`],
+    ["a native element", `<div>${FOO}</div>`],
+    ["a <for>", `<for|i| of=[1]>${FOO}</for>`],
+  ];
+  for (const [block, declared] of BLOCKS) {
+    for (const [read, use] of READS) {
+      it(`${read} after ${block} is refused at the read`, () => {
+        const source = `${declared}\n${use}\n`;
+        const error = refusal(source);
+        expect(error?.diagnosticCode).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
+        expect(error?.message).toMatch(/not readable outside it/);
+        expect(error?.line).toBe(2);
+      });
+    }
+  }
+
+  it("a read inside the declaring body, below the define, still compiles", () => {
+    expect(() =>
+      lowerSource(`<if=input.a>${FOO}<div>\${typeof Foo}</div></if>\n`),
+    ).not.toThrow();
+  });
+
+  it("an import of the same name is the one a read after the body reaches", () => {
+    expect(() =>
+      lowerSource(`${IMPORT}<if=input.a>${FOO}</if>\n<div>\${typeof Foo}</div>\n`),
+    ).not.toThrow();
+  });
+
+  it("a <const> of the same name declared after the body is the one it reaches", () => {
+    expect(() =>
+      lowerSource(
+        `<if=input.a>${FOO}</if>\n<const/Foo=1/>\n<div>\${typeof Foo}</div>\n`,
+      ),
+    ).not.toThrow();
+  });
+
+  it("a second body that declares it again reads its own", () => {
+    expect(() =>
+      lowerSource(
+        `<if=input.a>${FOO}</if>\n<if=input.b>${FOO}<div>\${typeof Foo}</div></if>\n`,
+      ),
+    ).not.toThrow();
+  });
+});

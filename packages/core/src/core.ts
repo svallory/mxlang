@@ -638,11 +638,23 @@ export interface Ctx {
    * than the call — Marko catches the same case by comparing sibling
    * indices (`references.ts:597-602`). A body's `<define>` names are also
    * pre-registered here with `define: true`, for their read-before-declaration
-   * rule; unlike a call's `/var`, their block escape is left to name lookup.
+   * rule; unlike a call's `/var`, a tag name's block escape is left to name
+   * lookup, while a read of the name in code after its body ends is refused
+   * (`exited`).
    */
   tagVars?: Map<
     string,
-    { block: number[]; pending: boolean; define?: boolean }
+    {
+      block: number[];
+      pending: boolean;
+      define?: boolean;
+      /**
+       * A `<define>` whose declaring body has ended: the name stays
+       * registered so a read after that body is refused, as stock Marko
+       * refuses it, instead of reaching the emitted JS as an unbound name.
+       */
+      exited?: boolean;
+    }
   >;
   /**
    * The chain of block ids from the template body down to the block being

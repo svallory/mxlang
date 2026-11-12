@@ -1799,6 +1799,13 @@ same name. The define's own body may read its name, and reads below it remain
 legal, subject to each host's representation limits below. A bare `<D/>` above
 the declaration keeps its unresolved-component diagnostic.
 
+**A `<define>` name is not readable outside its body.** The same reads
+(`${D}`, `<${D}/>`, an initializer, an attribute, a `<script>`) after the body
+that declares `<define/D>` has ended are refused at the read with the same
+code, as Marko 6.4.4 refuses them ("Hoisted values must be functions"): the
+binding exists only inside that body. An `import`, a `static` binding or a
+`<const>` of the same name is the one such a read reaches.
+
 **A `<define>` tag's own attributes are properties of its value.**
 `<define/D a=1 b="s"/>` makes `${D.a}` read `1` and `${D.b}` read `"s"`, as
 Marko 6.4.4 does (`const D = { a: 1, b: "s" }`). The attributes follow the
