@@ -70,7 +70,8 @@ export class MxErrorBoundary extends Component<
    * The error a direct throw in the `<try>` body left, recorded by
    * {@link MxTryBody} while it rendered. An instance field rather than state:
    * a `setState` from a child's render is a React warning, and the next
-   * render of this boundary is all that has to read it. As in Marko, once
+   * render of this boundary is all that has to read it. It is set during
+   * render, so a render React discards can still set it. As in Marko, once
    * `<@catch>` has rendered it stays rendered when the body stops throwing.
    */
   #thrown: { error: unknown } | null = null;
