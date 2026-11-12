@@ -49,6 +49,7 @@ import {
 } from "./dialect-registry.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
+import { namespaceEmits } from "./module-scope.ts";
 import type {
   Dialect,
   SyntaxTable,
@@ -952,6 +953,7 @@ function stripDeclarationSites(
       node.declare === true ||
       node.global ||
       topLevelNamespaces.has(node) ||
+      !namespaceEmits(node) ||
       node.id?.type !== "Identifier" ||
       !node.loc
     ) {
@@ -1022,7 +1024,8 @@ function aliasDuplicateError(
     if (!same.some((site) => site.kind === "TSImportEqualsDeclaration")) {
       continue;
     }
-    const collision = enumeration ?? alias;
+    // An alias that comes first: the error sits at the second site of the name.
+    const collision = enumeration ?? alias ?? same[1];
     if (!collision?.loc) continue;
     const other = same.find((site) => site !== collision);
     const first = other?.loc?.start;
@@ -1118,8 +1121,26 @@ function stripDuplicateError(
  * TypeError (as stock Marko's does). It is refused at the statement instead.
  */
 function rejectExportListInNamespace(program: Node, t: Node): void {
+  // An ambient module (`declare module "m"`, `declare global`, `declare
+  // namespace`) may hold an export list: it emits nothing.
+  const ambient = new Set<Node>();
   t.traverseFast(program, (node: Node) => {
-    if (node.type !== "TSModuleBlock") return;
+    if (
+      node.type !== "TSModuleDeclaration" ||
+      !(
+        node.declare === true ||
+        node.global ||
+        node.id?.type === "StringLiteral"
+      )
+    ) {
+      return;
+    }
+    t.traverseFast(node, (inner: Node) => {
+      if (inner.type === "TSModuleBlock") ambient.add(inner);
+    });
+  });
+  t.traverseFast(program, (node: Node) => {
+    if (node.type !== "TSModuleBlock" || ambient.has(node)) return;
     for (const statement of node.body as Node[]) {
       if (statement.type !== "ExportNamedDeclaration" || statement.declaration)
         continue;

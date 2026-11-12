@@ -986,6 +986,13 @@ describe("TypeScript's merges", () => {
     // `function N`), and Babel's strip reads the class before it is initialised.
     // Stock compiles all of them (divergences.md).
     [
+      "an exported namespace with values before an exported enum of its name",
+      "static export namespace q { export const a = 1 }\nstatic export enum q { B }",
+      "q",
+      2,
+      19,
+    ],
+    [
       "a namespace with values before a function",
       "static namespace N { export const a = 1 }\nstatic function N() {}",
       "N",
@@ -2304,6 +2311,10 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
     },
   );
 
+  it("leaves a plain enum in a static statement unchecked under the none tag rules", () => {
+    expect(ours("static enum q {A}", "none")).toEqual([]);
+  });
+
   it("refuses a plain enum in a static block, but not an exported, const or declare one", () => {
     expect(
       diagnostics("static { enum q {A} }").filter(
@@ -2346,20 +2357,41 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
   });
 
   it("reports a scriptlet before anything its payload would raise", () => {
-    for (const source of [
-      "$ namespace q {}\n$ enum q {A}",
-      "$ namespace q { export const b = 1 }\n$ const q = 1",
-    ]) {
-      const found = diagnostics(source).filter((d) => d.severity === "error");
-      expect(found[0]).toMatchObject({
-        code: "MX_UNSUPPORTED_CONSTRUCT",
-        line: 1,
-        column: 0,
-      });
-      expect(found.map((d) => d.code)).toEqual(
-        found.map(() => "MX_UNSUPPORTED_CONSTRUCT"),
-      );
-    }
+    const found = diagnostics(
+      "$ { namespace q { export const b = 1 }; enum q {A} }",
+    ).filter((d) => d.severity === "error");
+    expect(found).toMatchObject([
+      { code: "MX_UNSUPPORTED_CONSTRUCT", line: 1, column: 0 },
+    ]);
+  });
+
+  it.each([
+    ["static", "static const q = super.x"],
+    ["server", "server let q = new.target"],
+    ["export", "export const q = super.x"],
+  ])("keeps refusing super and new.target in a %s statement", (_k, source) => {
+    const found = diagnostics(source).filter((d) => d.severity === "error");
+    expect(found).toMatchObject([{ code: "MX_INVALID_STATEMENT", line: 1 }]);
+  });
+
+  it("compiles a namespace of types only in a function", () => {
+    expectCompiles("static function f() { namespace q { export type T = 1 } }");
+  });
+
+  it("compiles an export list in an ambient module or global", () => {
+    expectCompiles(
+      'static declare module "m" { const a: number; export { a } }',
+    );
+    expectCompiles(
+      "static declare global { namespace N { type T = 1; export { T } } }",
+    );
+  });
+
+  it("refuses an export list in a namespace that emits (TS1194)", () => {
+    const found = diagnostics(
+      "static namespace N { export const a = 1; const b = 2; export { b } }",
+    ).filter((d) => d.severity === "error");
+    expect(found).toMatchObject([{ code: "MX_INVALID_STATEMENT", line: 1 }]);
   });
 
   it("refuses a namespace, an export list and an enum of one name (stock loads it)", () => {

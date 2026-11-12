@@ -488,7 +488,7 @@ function typeOnlyNamespace(declaration: Node): boolean {
  * of `declare` members, signatures, aliases and types emits nothing, so the
  * namespace binds no name an enum could collide with.
  */
-function namespaceEmits(declaration: Node): boolean {
+export function namespaceEmits(declaration: Node): boolean {
   const body = declaration.body;
   if (!body) return false;
   if (body.type === "TSModuleDeclaration") return namespaceEmits(body);

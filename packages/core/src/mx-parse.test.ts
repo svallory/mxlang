@@ -497,6 +497,12 @@ describe("a namespace with values and an enum of its name in one program", () =>
       "x",
     ],
     [
+      "8bua: alias before a let",
+      "static { import x = Math.PI; let x = 1 }",
+      33,
+      "x",
+    ],
+    [
       "8bua: let before an alias in a function",
       "static function f() { let x = 1; import x = Math.PI }",
       40,

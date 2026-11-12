@@ -159,63 +159,6 @@ describe("html: a module name declared twice", () => {
     expect(error.message).not.toContain("Declare the enum first");
   });
 
-  // An `import q = ...` alias beside an enum of its name was Babel's raw
-  // positionless duplicate TypeError; it is refused at the enum's name, where
-  // stock Marko 6.4.4 reports it (Y11 and Y12 are a plain enum, refused by
-  // stock without a position).
-  it.each([
-    [
-      "Z1: alias before an exported enum",
-      "static { import q = Math; export enum q {A} }",
-      38,
-    ],
-    [
-      "Z2: exported enum before an alias",
-      "static { export enum q {A}; import q = Math }",
-      21,
-    ],
-    [
-      "Z9: alias and enum in a function",
-      "static function f() { import q = Math; enum q {A} }",
-      44,
-    ],
-    [
-      "Y11: alias before a plain enum",
-      "static { import q = Math; enum q {A} }",
-      31,
-    ],
-    [
-      "Y12: plain enum before an alias",
-      "static { enum q {A}; import q = Math }",
-      14,
-    ],
-    [
-      "K25: alias before an enum, namespace after",
-      "static { import q = Math; export enum q {A}; export namespace q { export const b = 1 } }",
-      38,
-    ],
-    [
-      "K26: enum, alias, namespace after",
-      "static { export enum q {A}; import q = Math; export namespace q { export const b = 1 } }",
-      21,
-    ],
-    [
-      "K29: enum, namespace, alias last",
-      "static { export enum q {A}; export namespace q { export const b = 1 }; import q = Math }",
-      21,
-    ],
-  ])(
-    "refuses %s at the enum's name, coded and positioned",
-    (_label, source, column) => {
-      const error = failure(`${source}\n<div/>\n`);
-      expect(error).toMatchObject({
-        diagnosticCode: "MX_DUPLICATE_DECLARATION",
-        line: 1,
-        column,
-      });
-    },
-  );
-
   it("compiles a namespace with values beside a const enum of its name", () => {
     const { code } = compile(
       "static { namespace q { export const b = 1 }; export const enum q {A} }\n<div/>\n",

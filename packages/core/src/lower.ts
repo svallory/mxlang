@@ -4875,9 +4875,12 @@ function rejectInvalidStatement(
   } = {
     sourceType: "module",
     // Stock Marko's own sub-parse options: `client { let q = super.x }` and
-    // `new.target` compile there (to `var q;`), so they parse here too.
-    allowSuperOutsideMethod: true,
-    allowNewTargetOutsideFunction: true,
+    // `new.target` compile there (to `var q;`, the client statement is
+    // dropped), so they parse here too. In `static`, `server` and `export`
+    // the text is emitted at the module's top level, where they are a
+    // SyntaxError on load, so those keep the refusal.
+    allowSuperOutsideMethod: keyword === "client",
+    allowNewTargetOutsideFunction: keyword === "client",
     // This statement is one of the module's, parsed alone: an `export { q }`
     // names a binding an earlier statement or import declares.
     allowUndeclaredExports: true,
