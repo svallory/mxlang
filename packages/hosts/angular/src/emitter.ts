@@ -1124,6 +1124,9 @@ function emitAttrs(
   // A tag call whose callee declares a `class` input: the value goes to that
   // input as written, the way Marko hands it to `input.class`.
   calleeTakesClass = false,
+  // A tag call whose callee declares a `style` input: a static `style="…"`
+  // goes to that input as written, not also onto the callee's host element.
+  calleeTakesStyle = false,
   // A tag module's or `.ng.mx`'s element or tag call: every dynamic `class=`
   // but an object literal is joined by `__mxClass` (those files get the member
   // injected), so a callee that prints the raw
@@ -1153,7 +1156,9 @@ function emitAttrs(
         // would reach the input and also land on the callee's host element,
         // where Marko has none.
         // Tag-call attribute names are case-sensitive: `CLASS` is not `class`.
-        const toInput = attr.name === "class" && calleeTakesClass;
+        const toInput =
+          (attr.name === "class" && calleeTakesClass) ||
+          (attr.name === "style" && calleeTakesStyle);
         const styled =
           toInput ||
           ((styledName === "class" || styledName === "style") &&
@@ -1195,7 +1200,15 @@ function emitAttrs(
       }
       case "boolean":
         out.write(" ");
-        writeAttributeName(out, attr.name, attr.nameSpan);
+        if (attr.name === "class" && calleeTakesClass) {
+          // A bare `class` is `true` for Marko's `input.class`; a plain
+          // attribute would reach the input as `''`.
+          out.write("[");
+          out.writeMapped(attr.name, attr.nameSpan);
+          out.write(']="true"');
+        } else {
+          writeAttributeName(out, attr.name, attr.nameSpan);
+        }
         break;
       // Phase B of `dom-events`: Angular's `(x)` binds a real
       // DOM event name, and core resolved it — `on<Name>` lowercased,
@@ -2706,6 +2719,7 @@ class AngularEmitter implements Emitter<string> {
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
       false,
+      false,
       this.joinElementClass,
     );
     this.out.write(">");
@@ -2843,6 +2857,7 @@ class AngularEmitter implements Emitter<string> {
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
       this.calleeTakesClass(target, node.attrs),
+      this.calleeTakesInput(target, node.attrs, "style", ["static"]),
       this.joinElementClass,
     );
     this.out.write(">");
@@ -2868,11 +2883,30 @@ class AngularEmitter implements Emitter<string> {
     target: Extract<ComponentTarget, { kind: "name" }>,
     attrs: Attr[],
   ): boolean {
+    return this.calleeTakesInput(target, attrs, "class", [
+      "dynamic",
+      "static",
+      "boolean",
+    ]);
+  }
+
+  /**
+   * Whether `attrs` holds an attribute `name` of one of `kinds` and the
+   * callee's `Input` declares `name`. False when it does not, cannot be read,
+   * or the call has no such attribute to place.
+   */
+  private calleeTakesInput(
+    target: Extract<ComponentTarget, { kind: "name" }>,
+    attrs: Attr[],
+    name: "class" | "style",
+    kinds: Array<"dynamic" | "static" | "boolean">,
+  ): boolean {
     if (
       !attrs.some(
         (a) =>
-          (a.kind === "dynamic" && a.name === "class") ||
-          (a.kind === "static" && a.name === "class"),
+          a.kind !== "spread" &&
+          (kinds as string[]).includes(a.kind) &&
+          a.name === name,
       )
     ) {
       return false;
@@ -2886,7 +2920,7 @@ class AngularEmitter implements Emitter<string> {
       resolvedPath ? { ...target, resolvedPath } : target,
       this.ctx,
     );
-    return input.kind === "declared" && input.otherProps.has("class");
+    return input.kind === "declared" && input.otherProps.has(name);
   }
 
   private validateAttributeTagProp(
@@ -3769,7 +3803,11 @@ class AngularEmitter implements Emitter<string> {
                   child.name,
                   {
                     read: renamed,
-                    assignError: `\`${child.name}\` is a \`<define>\`'s value and cannot be assigned`,
+                    assignError: `\`${child.name}\` is a \`<define>\`'s value and cannot be assigned${
+                      child.attrs.length > 0
+                        ? `; read its attributes as \`${child.name}.name\``
+                        : ""
+                    }`,
                   },
                 ],
               ]),
@@ -3930,9 +3968,13 @@ class AngularEmitter implements Emitter<string> {
 
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
     this.scopes.at(-1)?.set(node.name, undefined);
+    const letStart = this.out.length;
     this.out.write(`@let ${node.name} = `);
     this.out.writeMapped(node.init.code, node.init.span);
     this.out.write(";");
+    // Angular reports an unused `@let` (NG8112) on the `@let` node, which no
+    // mapped run covers: anchor it to the authored `<const>` tag.
+    this.out.anchor(letStart, this.out.length, node.span);
   }
 
   hoisted(node: Extract<IrNode, { kind: "Hoisted" }>): void {

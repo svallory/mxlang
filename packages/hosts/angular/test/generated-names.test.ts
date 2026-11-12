@@ -174,3 +174,28 @@ describe("a name another declaration or read shares is renamed", () => {
     expect(template).not.toContain("@let a ");
   });
 });
+
+describe("assigning a renamed define keeps the hint", () => {
+  const HINT =
+    "`D` is a `<define>`'s value and cannot be assigned; read its attributes as `D.name`";
+
+  it("on a define nothing else shares", () => {
+    expect(() => emit("<div><define/D a=1>x</define>${D = 2}</div>")).toThrow(
+      HINT,
+    );
+  });
+
+  it("on a define the rename gave a name of its own", () => {
+    expect(() =>
+      emit(
+        "<define/D>y</define><div><define/D a=1>x</define>${D = 2}</div><D/>",
+      ),
+    ).toThrow(HINT);
+  });
+
+  it("without attributes the message has no hint", () => {
+    expect(() =>
+      emit("<define/D>y</define><div><define/D>x</define>${D = 2}</div><D/>"),
+    ).toThrow(/^`D` is a `<define>`'s value and cannot be assigned$/);
+  });
+});

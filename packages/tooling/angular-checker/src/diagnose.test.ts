@@ -121,6 +121,53 @@ describe("diagnoseNgMx (real ngtsc)", () => {
   });
 });
 
+describe("diagnoseNgMx positions NG8112 at the authored <const>", () => {
+  const UNUSED_LET = -998112;
+  const unused = (template: string) => {
+    const source = ngMx(template);
+    const compiled = compileNgMx(source, "/p/x.component.ng.mx");
+    const checker = createAngularChecker({ projectDir: PROJECT_DIR });
+    try {
+      return {
+        source,
+        found: diagnoseNgMx(compiled, checker, VIRTUAL).filter(
+          (d) => d.code === UNUSED_LET,
+        ),
+      };
+    } finally {
+      checker.dispose();
+    }
+  };
+  const lineColumn = (source: string, offset: number) => {
+    const before = source.slice(0, offset).split("\n");
+    return `${before.length}:${before.at(-1)?.length}`;
+  };
+
+  it("a single-root template: the <const> tag, not the region start", () => {
+    const { source, found } = unused("<section><const/a=1/></section>");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.mapped).toBe("node");
+    expect(lineColumn(source, found[0]?.start ?? -1)).toBe("6:21");
+    expect(
+      source.slice(found[0]?.start, found[0]?.start + (found[0]?.length ?? 0)),
+    ).toBe("<const/a=1/>");
+  });
+
+  it("a renamed (colliding) const: each tag, not the region start", () => {
+    const { source, found } = unused(
+      "<main><div><const/a=1/></div><div><const/a=2/></div></main>",
+    );
+    expect(found.map((d) => lineColumn(source, d.start))).toEqual([
+      "6:23",
+      "6:46",
+    ]);
+    expect(found.map((d) => d.message)).toEqual([
+      expect.stringContaining("@let a is declared"),
+      expect.stringContaining("@let a is declared"),
+    ]);
+  });
+});
+
 describe("diagnoseNgMx (fragment-root region, G9)", () => {
   it("maps a diagnostic in either sibling of a <> fragment back to the .ng.mx", () => {
     // Two roots: a fragment lowers its children as siblings, and both the

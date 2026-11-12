@@ -44,6 +44,12 @@ const DIV_CLASS = [
   "<div class=input.class/>",
   "",
 ].join("\n");
+// A callee that declares a `style` input beside `class`.
+const TAKES_STYLE = [
+  "export interface Input { style?: unknown }",
+  "<pre>{{ class }}</pre>",
+  "",
+].join("\n");
 const NO_CLASS = [
   "export interface Input { label?: string }",
   "<pre>x</pre>",
@@ -85,13 +91,20 @@ beforeAll(() => {
   for (const [name, source] of [
     ["child", TAKES_CLASS],
     ["plain", NO_CLASS],
+    ["styled", TAKES_STYLE],
     ["divchild", DIV_CLASS],
     ["concise", CONCISE_CALLER],
   ] as const) {
     const file = join(dir, "tags", `${name}.mx`);
-    writeFileSync(file, source.replace("{{ class }}", "${input.class}"));
+    writeFileSync(
+      file,
+      source.replace(
+        "{{ class }}",
+        name === "styled" ? "${input.style}" : "${input.class}",
+      ),
+    );
   }
-  for (const name of ["child", "plain", "divchild", "concise"]) {
+  for (const name of ["child", "plain", "styled", "divchild", "concise"]) {
     const file = join(dir, "tags", `${name}.mx`);
     writeModule(
       join(dir, "tags", `${name}.mjs`),
@@ -159,11 +172,16 @@ async function render(
       (d) =>
         d.name === "mx-child" ||
         d.name === "mx-plain" ||
+        d.name === "mx-styled" ||
         d.name === "mx-divchild",
     );
   const inputs = () =>
     tags().map((tag) =>
-      JSON.stringify((tag.componentInstance as { class?: unknown }).class),
+      JSON.stringify(
+        (tag.componentInstance as { class?: unknown; style?: unknown })[
+          tag.name === "mx-styled" ? "style" : "class"
+        ],
+      ),
     );
   const first = {
     inputs: inputs(),
@@ -409,5 +427,19 @@ describe("a static class on a tag call whose callee has no class input", () => {
   ])("%s: the host element takes it", async (_name, call, expected) => {
     const view = await render(call, {});
     expect(set(view.hosts[0] ?? null)).toEqual(set(expected));
+  });
+});
+
+describe("a static style on a tag call whose callee declares a style input", () => {
+  it("the input takes it, not the host element", async () => {
+    const view = await render('<styled style="color:red"/>', {});
+    expect(view.inputs).toEqual([text("color:red")]);
+  });
+});
+
+describe("a bare class on a tag call whose callee declares a class input", () => {
+  it("passes true, as Marko does", async () => {
+    const view = await render("<child class/>", {});
+    expect(view.inputs).toEqual([text(true)]);
   });
 });
