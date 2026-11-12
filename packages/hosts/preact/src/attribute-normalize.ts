@@ -82,11 +82,11 @@ const NORMALIZE_BODY = `
   const lower = name.toLowerCase();
   if ((tag === "select" || tag === "textarea") && name === "value") return value;
   if (name === "class" || name === "className") {
-    if (value === null || value === undefined || value === false || value === 0 || value === "") return undefined;
+    if (value === null || value === undefined || value === false || value === 0 || value === "" || Number.isNaN(value)) return undefined;
     return value === true ? "true" : value;
   }
   if (name === "style") {
-    if (value === null || value === undefined || value === false || value === 0 || value === "") return undefined;
+    if (value === null || value === undefined || value === false || value === 0 || value === "" || Number.isNaN(value)) return undefined;
     return value === true ? "true" : value;
   }
   if (value === null || value === undefined || value === false) return undefined;
