@@ -163,6 +163,14 @@ export interface SyntaxTable {
    * `syntaxHash`. @unstable
    */
   readonly tagShorthands?: boolean;
+  /**
+   * How the parser's `tagShorthands: false` messages name an attribute, with
+   * its article (`an option`); omitted is `an attribute`. Core sets it from
+   * the dialect's `messageVocabulary` (the parser's own `SyntaxTable` declares
+   * the same field); a table a dialect states never needs it. Wording only,
+   * not carried through `syntaxHash`. @unstable
+   */
+  readonly anAttribute?: string;
   readonly expressionTriggers: readonly Trigger[];
   readonly attributeTriggers: readonly Trigger[];
   readonly lineTriggers: readonly Trigger[];

@@ -695,7 +695,7 @@ describe("voicedSyntax", () => {
   it("is one table per (table, voice), so the parser compiles it once", () => {
     const table = defaultSyntax();
     const voiced = voicedSyntax(table, voice);
-    expect((voiced as { anAttribute?: string }).anAttribute).toBe("an option");
+    expect(voiced.anAttribute).toBe("an option");
     expect(voicedSyntax(table, voice)).toBe(voiced);
     expect(voicedSyntax({ ...table }, voice)).not.toBe(voiced);
   });
