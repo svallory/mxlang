@@ -1473,7 +1473,7 @@ derive and is refused with Marko's "Unable to bind to value."
 (`MX_INVALID_BOUND_ATTRIBUTE`, at the value): `<for|i| of=xs><input value:=i/></for>`.
 A field of an object-pattern parameter (`|{ a }|`), a member of a parameter
 (`value:=i.x`) and a `<let>` bind as usual, and a tag variable declared inside
-the loop (`<Counter/x/>`) shadows a parameter of its spelling from the call on.
+the loop body (`<Counter/x/>`) shadows a parameter of its spelling for the whole block, binds and writes above its tag included, as Marko hoists tag variables.
 For example, `<div :="x"/>` errors at structured line 1, column 7
 (printed 1:8), rather than silently rendering `value="x"`. A bound attribute may carry a refinement, `v:fn:=q`: Marko binds `v` and its
 change handler runs `q = fn(next)`. The refinement must be a valid JavaScript
