@@ -362,7 +362,9 @@ describe("attributes", () => {
         : getSourceFile(file, languageVersion, ...rest);
     const program = ts.createProgram([name], options, host);
     expect(
-      program.getSemanticDiagnostics().map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+      program
+        .getSemanticDiagnostics()
+        .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
     ).toEqual([]);
   });
 
