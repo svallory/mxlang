@@ -1,5 +1,5 @@
 ---
-packages: [core, target-html]
+packages: [core, html]
 kind: Fixed
 ---
 
