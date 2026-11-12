@@ -529,6 +529,17 @@ export default () => <div />;
       expect(result?.map).toMatchObject({ version: 3 });
     });
 
+    it("compiles a mixed-case Counter.Solid.MX the same way", async () => {
+      // The plugin claims the name (resolveId) and must also be able to
+      // compile it: the region file kind is read case-insensitively end to end.
+      const path = writeMx("Counter.Solid.MX", COUNTER);
+
+      const result = await transformOf(mx()).call({}, COUNTER, path + MX_SUFFIX);
+
+      expect(result?.code).toContain("<button");
+      expect(result?.code).toContain("{count()}");
+    });
+
     it("names the .solid.mx file, not the .tsx id, in the source map", async () => {
       const path = writeMx("Counter.solid.mx", COUNTER);
       const transform = transformOf(mx());

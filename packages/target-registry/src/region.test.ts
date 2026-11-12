@@ -73,6 +73,20 @@ describe("region file kinds are a capability, not a name", () => {
   });
 });
 
+describe("regionFileKind: letter case", () => {
+  it.each([
+    "/app/x.Solid.MX",
+    "/app/X.SOLID.mx",
+    "/app/x.solid.Mx",
+  ])("%s is a Solid region file, as the editor tools read it", (path) => {
+    expect(regionFileKind(path)?.target).toBe("solid-jsx");
+  });
+
+  it("a name with no file kind stays a whole-file .mx", () => {
+    expect(regionFileKind("/app/Card.MX")).toBeUndefined();
+  });
+});
+
 describe("a registered test host's region file is routed to its own entry", () => {
   it("finds the kind by its suffix in the lookup that registers it", () => {
     const fake = fakeRegionHost(() => ({ code: "null" }));
@@ -163,7 +177,7 @@ describe("a .<word>.mx no region kind registers is not claimed", () => {
     "/app/x.ng.mx",
     "/app/x.astro.mx",
     "/app/x.mx",
-    "/app/x.SOLID.mx",
+    "/app/x.Nope.MX",
   ])("%s has no region kind and no region compile", (file) => {
     expect(regionFileKind(file)).toBeUndefined();
     expect(regionCompileFor(file)).toBeUndefined();

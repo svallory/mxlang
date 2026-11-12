@@ -186,6 +186,18 @@ describe("mxTemplates()", () => {
       );
     });
 
+    it.each(["Base.Astro.MX", "BASE.ASTRO.mx"])(
+      "rewrites %s too: the extension matches in any letter case",
+      async (name) => {
+        const resolved = await resolveIdOf(mxTemplates()).call(
+          makeContext(),
+          `./${name}`,
+          "/root/src/pages/index.astro",
+        );
+        expect(resolved).toBe(`/root/src/pages/${name}${ASTRO_SUFFIX}`);
+      },
+    );
+
     it("keeps the query string on the rewritten id", async () => {
       const context = makeContext();
       const resolveId = resolveIdOf(mxTemplates());

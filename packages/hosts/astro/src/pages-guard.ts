@@ -12,7 +12,7 @@
 import { type Dirent, readdirSync, realpathSync, statSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ASTRO_MX_EXT } from "./vite-templates.ts";
+import { ASTRO_MX_EXT, isAstroMxPath } from "./vite-templates.ts";
 
 /**
  * Whether Astro's route walk looks at `basename` at all. Mirrors the two
@@ -65,7 +65,7 @@ export function findAstroMxPages(pagesDir: string): string[] {
         }
       }
       if (isDir) walk(path);
-      else if (entry.name.toLowerCase().endsWith(ASTRO_MX_EXT)) found.push(path);
+      else if (isAstroMxPath(entry.name)) found.push(path);
     }
     active.delete(real);
   };

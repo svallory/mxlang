@@ -473,6 +473,18 @@ describe("scanCustomTags", () => {
     );
   });
 
+  it("reports a host module file whatever its letter case", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"casekind"}');
+    writeFileSync(join(dir, "tags", "Widget.U.MX"), "export const x = 1;\n");
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
+    expect(Object.keys(result.customTags)).toEqual([]);
+    expect(result.diagnostics.map((d) => d.message)).toEqual([
+      "`Widget.U.MX` is a host module file, not a tag template; tag templates are `.mx`",
+    ]);
+  });
+
   it("reports a second file-kind segment the same way", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });

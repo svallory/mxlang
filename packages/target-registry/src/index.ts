@@ -237,7 +237,7 @@ export function regionFileKind(
   lookup: TargetLookup = builtinLookup(),
 ): RegionFileKind | undefined {
   return regionFileKinds(lookup).find((kind) =>
-    filePath.endsWith(`.${kind.segment}.mx`),
+    filePath.toLowerCase().endsWith(`.${kind.segment}.mx`),
   );
 }
 
@@ -426,7 +426,7 @@ function fileKindTarget(
     .map((name) => lookup.target(name))
     .find((target) =>
       target?.host?.fileKinds?.some((kind) =>
-        filePath.endsWith(`.${kind.segment}.mx`),
+        filePath.toLowerCase().endsWith(`.${kind.segment}.mx`),
       ),
     );
 }

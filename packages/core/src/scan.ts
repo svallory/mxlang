@@ -393,7 +393,7 @@ function rejectUncallableTagFile(
   diagnostics: readonly ScanDiagnostic[],
   dottedTagFiles: DottedTagFile[],
 ): boolean {
-  if (!entry.endsWith(TEMPLATE_SUFFIX)) return false;
+  if (!entry.toLowerCase().endsWith(TEMPLATE_SUFFIX)) return false;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");
   if (dot === -1) return false;
@@ -401,7 +401,7 @@ function rejectUncallableTagFile(
     diagnosticIndex: diagnostics.length + dottedTagFiles.length,
     file: join(dir, entry),
     entry,
-    segment: bare.slice(dot + 1),
+    segment: bare.slice(dot + 1).toLowerCase(),
     line: 1,
     column: 0,
   });
@@ -1787,13 +1787,13 @@ function indexDirectory(
     if (skipClaimedFile(dir, entry, options.routes, diagnostics)) continue;
     if (rejectUncallableTagFile(dir, entry, diagnostics, dottedTagFiles))
       continue;
-    const isTemplate = entry.endsWith(TEMPLATE_SUFFIX);
+    const isTemplate = entry.toLowerCase().endsWith(TEMPLATE_SUFFIX);
 
     if (!isSidecar && !isTemplate) continue;
 
     const bare = isSidecar
       ? basename(entry, SIDECAR_SUFFIX)
-      : basename(entry, TEMPLATE_SUFFIX);
+      : entry.slice(0, -TEMPLATE_SUFFIX.length);
     if (!TAG_NAME_RE.test(bare)) {
       diagnostics.push(invalidTagFileNameDiagnostic(dir, entry, bare));
       continue;

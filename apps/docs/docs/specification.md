@@ -139,6 +139,13 @@ extension selects a compilation model, not a flavour of one language.
 A host file kind's middle segment is the host's name (`.solid.mx`, `.astro.mx`,
 `.react.mx`, `.preact.mx`, `.hono.mx`); Angular's is `.ng.mx`.
 
+File kinds are matched on the lowercased file name, so `Card.Solid.MX` is a
+`.solid.mx` file and `Card.Astro.MX` an `.astro.mx` one. The build (core's tag
+directory scan, the Vite plugin, the Astro template plugin and pages guard,
+the target registry) and the editor tools apply this rule. Not yet covered:
+the `.mx` import-specifier checks inside the Angular host, the extensions a
+dialect claims, and the `.marko` tag extension, which stay case-sensitive.
+
 ### Whole files vs region files
 
 A **whole file** (`.mx`, `.astro.mx`) is parsed by MX's own front end from the first

@@ -76,6 +76,11 @@ import { astroDefaultTag } from "./default-tag.ts";
  */
 export const ASTRO_MX_EXT = ".astro.mx";
 
+/** Whether `path` names an AstroMX template; the extension matches in any letter case, as the editor tools read it. */
+export function isAstroMxPath(path: string): boolean {
+  return path.toLowerCase().endsWith(ASTRO_MX_EXT);
+}
+
 /**
  * Appended to the resolved path so Astro's own plugin claims the module.
  *
@@ -103,7 +108,7 @@ function splitId(id: string): [path: string, suffix: string] {
 function sourcePath(path: string): string | undefined {
   if (!path.endsWith(ASTRO_SUFFIX)) return undefined;
   const real = path.slice(0, -ASTRO_SUFFIX.length);
-  return real.endsWith(ASTRO_MX_EXT) ? real : undefined;
+  return isAstroMxPath(real) ? real : undefined;
 }
 
 /** A one-line code frame: the offending line plus a caret under `column`. */
@@ -220,13 +225,13 @@ export function mxTemplates(
 
       // Already rewritten (a re-resolve of our own id): keep it as is.
       if (sourcePath(path) !== undefined) return id;
-      if (!path.endsWith(ASTRO_MX_EXT)) return null;
+      if (!isAstroMxPath(path)) return null;
 
       const resolved = await this.resolve(id, importer, { skipSelf: true });
       if (!resolved) return null;
 
       const [resolvedPath, resolvedSuffix] = splitId(resolved.id);
-      if (!resolvedPath.endsWith(ASTRO_MX_EXT)) return null;
+      if (!isAstroMxPath(resolvedPath)) return null;
 
       // Carry the query across the rewrite: Vite appends its own (`?t=` on an
       // HMR re-fetch, `?import`), and dropping it turns a cache-busted request
@@ -249,7 +254,7 @@ export function mxTemplates(
      */
     handleHotUpdate(ctx) {
       const [file] = splitId(ctx.file);
-      if (!file.endsWith(ASTRO_MX_EXT)) return;
+      if (!isAstroMxPath(file)) return;
 
       const graph = ctx.server.moduleGraph;
       const mod = graph.getModuleById(file + ASTRO_SUFFIX);
