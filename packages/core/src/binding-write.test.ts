@@ -1327,6 +1327,49 @@ describe("a two-way bind on a parameter with no change handler", () => {
     },
   );
 
+  it('a bind above a <const> array pattern gets the plain-const wording, not "move the <const> above"', () => {
+    const error = attempt("<input value:=a/><const/[a]=input.x/>");
+    expect([error?.diagnosticCode, error?.message]).toEqual([
+      "MX_CONST_WRITE_BEFORE_DECLARATION",
+      constBelowMessage("a"),
+    ]);
+  });
+
+  it("a handler write above a <const> array pattern gets the plain-const wording", () => {
+    const error = attempt("<button onClick() { a = 1 }/><const/[a]=input.x/>");
+    expect(error?.message).toBe(constBelowMessage("a"));
+  });
+
+  it("a /div tag variable in an <if> shadows an outer <let> of its spelling for the block", () => {
+    let error: TranslateError | undefined;
+    try {
+      compileSource(
+        "<let/x=0/><if=input.c><div/x/>${x = 1}</if>",
+        "/page.mx",
+        withVarOnElements,
+        { targets: lookup, tagDiscoveryDirs: [], emitIr: () => "" } as never,
+      );
+    } catch (e) {
+      error = e as TranslateError;
+    }
+    expect(error).toBeUndefined();
+  });
+
+  it("the tag-variable shadow ends with its block: the outer <let> guards again below", () => {
+    let error: TranslateError | undefined;
+    try {
+      compileSource(
+        "<let/x=0/><if=input.c><div/x/></if>${x = 1}",
+        "/page.mx",
+        withVarOnElements,
+        { targets: lookup, tagDiscoveryDirs: [], emitIr: () => "" } as never,
+      );
+    } catch (e) {
+      error = e as TranslateError;
+    }
+    expect(error?.diagnosticCode).toBe("MX_LET_WRITE_IN_RENDER");
+  });
+
   it.each([
     "<for|{a}| of=[{a:1}]><input value:=a/></for>",
     "<define/D|{a}|><input value:=a/></define>",

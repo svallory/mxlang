@@ -292,6 +292,11 @@ describe("the opt-in attribute argument refusal", () => {
       "`<for>` does not support the `a` attribute.",
       14,
     ],
+    [
+      "<for|x| of=a of=b><i/></for>",
+      "`<for>` takes the `of` attribute once.",
+      13,
+    ],
     ["<log a=1/>", "The `<log>` tag only supports the `value=` attribute.", 5],
     [
       "<log a(v)=1/>",

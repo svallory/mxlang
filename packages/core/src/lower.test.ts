@@ -1874,6 +1874,23 @@ describe("one fixture per IR kind", () => {
     expect(hosted.data).toEqual({ seen: "signal" });
   });
 
+  it("a claimed html-comment resolves before its children are lowered, any other tag after", () => {
+    const calls: string[] = [];
+    lowerSource(
+      "<html-comment>a <signal/x=1/></html-comment>\n<signal/y=2>b</signal>\n",
+      fakeDeclarations({
+        isDelegatedTag: (name) => name === "signal" || name === "html-comment",
+        resolveDelegatedTag: (name, node) => {
+          calls.push(name === "signal" ? `signal:${node.var.name}` : name);
+          return null;
+        },
+      }),
+    );
+    // The comment resolves first although it encloses `x`; `x` and `y`
+    // resolve in document order after their own parts.
+    expect(calls).toEqual(["html-comment", "signal:x", "signal:y"]);
+  });
+
   it("Hoisted lands ahead of the construct that produced it", () => {
     const ir = lowerSource(
       "<if=input.on>\n  <signal/count=7/>\n</if>\n<p>x</p>\n",

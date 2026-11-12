@@ -1368,7 +1368,10 @@ function constPlainNamesOf(ctx: Ctx, child: Node): string[] {
   if (!isTagNode(child) || tagNameOf(child) !== "const") return [];
   if (ctx.customTags && Object.hasOwn(ctx.customTags, "const")) return [];
   const tagVar = tagVarOf(child);
-  return tagVar?.type === "Identifier" ? [tagVar.name] : [];
+  if (!tagVar) return [];
+  const plain = new Set<string>();
+  collectPlain(tagVar, true, plain);
+  return [...plain];
 }
 
 /** Drops `names` from the write guards: what a write to them reaches is no longer the guarded declaration. */
@@ -1391,7 +1394,18 @@ function shadowTagVarGuards(ctx: Ctx, child: Node): void {
   if (!isTagNode(child) || !tagVarOf(child)) return;
   if (letNamesOf(ctx, child).length > 0 || constNamesOf(ctx, child).length > 0)
     return;
-  dropGuard(ctx, bindingIdentifiers(tagVarOf(child)));
+  const names = bindingIdentifiers(tagVarOf(child));
+  dropGuard(ctx, names);
+  // The names are no outer `<let>` or `<const>` for the block either: a
+  // write to one reaches the tag variable, not that declaration.
+  const without = (set: Set<string> | undefined) =>
+    set && names.some((name) => set.has(name))
+      ? new Set([...set].filter((name) => !names.includes(name)))
+      : set;
+  ctx.renderLets = without(ctx.renderLets);
+  ctx.laterLets = without(ctx.laterLets);
+  ctx.laterConsts = without(ctx.laterConsts);
+  ctx.laterPlainConsts = without(ctx.laterPlainConsts);
 }
 
 /**
@@ -4108,7 +4122,7 @@ function lowerIfChain(
  */
 function findLoopParamRead(
   value: Node,
-  names: ReadonlySet<string>,
+  names: { has(name: string): boolean },
 ): Node | undefined {
   switch (value.type) {
     case "Identifier":
@@ -4153,11 +4167,10 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
     }
   });
   if (slots.size === 0) return;
-  const names = new Set(slots.keys());
   // Marko scans whatever its parser produced; an MX container the front end
   // could not parse has no payload to scan, and fails later at `exprOf`.
   const value = by.type === "MxAttribute" ? by.value?.node : by.value;
-  const read = findLoopParamRead(value, names);
+  const read = findLoopParamRead(value, slots);
   if (!read) return;
   const name = String(read.name);
   // The loop's parameter shadows a binding of the same spelling that is in
@@ -4290,6 +4303,7 @@ function lowerForHead(
 
   // Marko's `assertAllowedAttributes`: a name the loop does not read is an
   // error at the attribute, with or without arguments.
+  const seenForAttributes = new Set<string>();
   for (const attr of tagAttributesOf(node)) {
     if (isSpreadAttributeNode(attr)) {
       raise(
@@ -4305,6 +4319,14 @@ function lowerForHead(
         attr,
       );
     }
+    if (seenForAttributes.has(attrNameOf(attr))) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `${tagText(ctx, "for", node)} takes the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute} once.`,
+        attr,
+      );
+    }
+    seenForAttributes.add(attrNameOf(attr));
     rejectAttributeArguments(ctx, attr);
   }
 
@@ -5850,8 +5872,11 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
     ctx.declarations.resolveDelegatedTag?.(name, markoViewOf(ctx, node), ctx);
   // Every other tag resolves last, after its attributes and children, as the
   // contract-only delegated path does; only a comment resolves early.
-  const commentData = name === "html-comment" ? resolve() : undefined;
-  if (name === "html-comment") rejectHtmlCommentAttributes(ctx, node);
+  const early = name === "html-comment";
+  const commentData = early ? resolve() : undefined;
+  if (early && (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))) {
+    rejectHtmlCommentAttributes(ctx, node);
+  }
   const target: ComponentTarget =
     name === DYNAMIC_TAG
       ? { kind: "dynamic", expr: exprOf(ctx, tagNameExprOf(node)) }
@@ -5902,7 +5927,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data: name === "html-comment" ? commentData : resolve(),
+      data: early ? commentData : resolve(),
       loc,
     },
     loc,
@@ -8089,10 +8114,14 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // which is registered nowhere else), so a nested define of that name does
   // not hide it.
   const declaredHere = new Set<string>();
+  const entryLater = ctx.laterLets;
+  const entryLaterConsts = ctx.laterConsts;
+  const entryLaterPlainConsts = ctx.laterPlainConsts;
   for (const child of children) {
     if (!isTagNode(child) || !tagVarOf(child)) continue;
     // A tag variable is in scope for the whole block (Marko hoists it), so it
-    // shadows a same-named parameter for a write or bind above its tag too.
+    // shadows a same-named parameter, `<let>` or `<const>` for a write or
+    // bind above its tag too (a block's `<if>`/`<for>` body lowers on its own ctx copy).
     shadowTagVarGuards(ctx, child);
     for (const name of bindingIdentifiers(tagVarOf(child))) {
       saveTagVar(name);
@@ -8454,7 +8483,6 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             if (Array.isArray(lowered)) out.push(...lowered);
             else out.push(lowered);
             declareRenderLet(ctx, child);
-            shadowTagVarGuards(ctx, child);
             break;
           }
           // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.
@@ -8581,9 +8609,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       index++;
     }
   } finally {
-    ctx.laterLets = outerLater;
-    ctx.laterConsts = outerLaterConsts;
-    ctx.laterPlainConsts = outerLaterPlainConsts;
+    ctx.laterLets = entryLater;
+    ctx.laterConsts = entryLaterConsts;
+    ctx.laterPlainConsts = entryLaterPlainConsts;
     ctx.enclosingTagParams = enclosingParams;
     ctx.tagVarShadowed = outerShadowed;
     // Restore define entries shadowed by this body, including a still-pending
