@@ -4870,8 +4870,14 @@ function rejectInvalidStatement(
     allowReturnOutsideFunction: boolean;
     allowImportExportEverywhere?: boolean;
     allowUndeclaredExports: boolean;
+    allowSuperOutsideMethod: boolean;
+    allowNewTargetOutsideFunction: boolean;
   } = {
     sourceType: "module",
+    // Stock Marko's own sub-parse options: `client { let q = super.x }` and
+    // `new.target` compile there (to `var q;`), so they parse here too.
+    allowSuperOutsideMethod: true,
+    allowNewTargetOutsideFunction: true,
     // This statement is one of the module's, parsed alone: an `export { q }`
     // names a binding an earlier statement or import declares.
     allowUndeclaredExports: true,

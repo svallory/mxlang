@@ -65,6 +65,8 @@ describe("html: refused bare top-level forms never reach an emitted module", () 
   it.each([
     "export default function f() {}\n<div/>\n",
     "static const q = 1\nexport { q as default }\n<div/>\n",
+    // Stock Marko refuses this form at 2:1 too.
+    "static const foo = 1;\nexport default foo;\n<div/>\n",
   ])("%j", (source) => {
     expect(() => compile(source, "/f/t.mx")).toThrow(
       /already its own default export/,

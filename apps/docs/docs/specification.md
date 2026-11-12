@@ -328,8 +328,8 @@ scope, so a name they declare twice is a compile error on every host,
 source order: "Duplicate declaration "x": it is already declared at 1:8. …".
 The rule is JavaScript's, applied after the TypeScript strip. `var` with `var`
 merges, and so do the merges TypeScript accepts: an enum with an enum (of the
-same constness), an enum after a namespace without values or across separate
-module statements, overload signatures followed by one more function, a namespace
+same constness) in one module statement, an enum after a namespace that emits
+nothing, overload signatures followed by one more function, a namespace
 after a function, class, enum or namespace, and the same with `declare`. A namespace
 with values followed by an enum of its name in one block, when reported as a duplicate
 binding by the TypeScript strip, is a positioned `MX_DUPLICATE_DECLARATION` at the
@@ -338,7 +338,20 @@ or namespace top level, declare the enum first, or put the namespace's values in
 namespace after an earlier enum of that name. Inside a function, `if` or other
 nested statement body, move the namespace to the top level of the module or of
 another namespace: reordering alone does not make it loadable under Bun and
-esbuild. Forms the strip accepts compile:
+esbuild. Stock Marko strips each
+`static`, `server` and `client` statement on its own, so an exported (non-`const`)
+enum declared again in a later statement, or after a namespace with values in
+an earlier one, is `MX_DUPLICATE_DECLARATION` at the enum's name (two exported
+enums in bare `export` statements are the exception, as in stock); a `const` enum, a `declare`
+enum and the merge inside one block are not. A plain
+(unexported, non-`const`, non-`declare`) enum in a `static` or `server` statement is
+`MX_INVALID_STATEMENT` at its name, since stock reads the statement as a scriptlet that cannot
+hold one: write `static export enum`. A namespace is valid only at the top level of the
+module or of a namespace that is itself at top level: one inside a function, `if` or other block is
+refused with advice to move it, never to reorder. An `export { … }` list inside a namespace body is
+`MX_INVALID_STATEMENT` (TypeScript TS1194). An `import x = A.B` alias beside another declaration of its
+name in one block is `MX_DUPLICATE_DECLARATION`, at the enum's name when the other is an
+enum and at the alias's name otherwise. Forms the strip accepts compile:
 for example, an enum, a namespace of its name and another enum in the same
 block merge without a second binding. This check runs wherever TypeScript
 is stripped, including under `tagRules: "none"`; it does not run when
@@ -389,7 +402,7 @@ and a `client` export of one name stay legal, since each output keeps one side;
 a type export, an `export declare` form, `export *`, function overloads, an
 export list that names a type-only import or a type-only namespace, and an enum
 or namespace that merges into an earlier declaration of its name (a namespace
-into a function, class, enum or namespace; an enum into an enum, or into a
+into a function, class, enum or namespace; an enum into an enum of the same statement, or into a
 namespace that is itself exported) export no second value and compile
 (`divergences.md`). The checks are skipped under the `none` tag
 rules, and a render-only name (above) is reported first.

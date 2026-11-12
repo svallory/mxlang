@@ -289,8 +289,12 @@ describe("html: a `client` enum declares its name the way stock Marko does", () 
   });
 
   it("`static enum` and `server enum` keep the enum", () => {
-    expect(hoisted(`static enum E { A }${TEMPLATE}`)).toBe("enum E { A }");
-    expect(hoisted(`server enum E { A }${TEMPLATE}`)).toBe("enum E { A }");
+    expect(hoisted(`static export enum E { A }${TEMPLATE}`)).toBe(
+      "export enum E { A }",
+    );
+    expect(hoisted(`server export enum E { A }${TEMPLATE}`)).toBe(
+      "export enum E { A }",
+    );
   });
 
   const render = (source: string) => String(mx(source)({}));

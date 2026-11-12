@@ -87,6 +87,7 @@ import {
 } from "./core.ts";
 import {
   DUPLICATE_DECLARATION_CODE,
+  INVALID_STATEMENT_CODE,
   RENDER_ONLY_IN_MODULE_CODE,
   UNDECLARED_EXPORT_CODE,
 } from "./diagnostic-codes.ts";
@@ -428,6 +429,10 @@ interface Declaration {
   readonly isLet: boolean;
   /** `import x = M.N`: a TypeScript alias, which stock's scope does not treat as a value import. */
   readonly importEquals: boolean;
+  /** A namespace whose body emits code (not only types, `declare` members, signatures or aliases). */
+  readonly valued: boolean;
+  /** Written as `export enum` or in an export declaration (an enum's only way to be valid in `static` or `server`). */
+  readonly exported: boolean;
 }
 
 type DeclarationKind =
@@ -463,6 +468,7 @@ interface StatementDeclarations {
 interface BindingError {
   readonly code:
     | typeof DUPLICATE_DECLARATION_CODE
+    | typeof INVALID_STATEMENT_CODE
     | typeof UNDECLARED_EXPORT_CODE;
   readonly message: string;
   readonly at: Node;
@@ -474,6 +480,39 @@ function typeOnlyNamespace(declaration: Node): boolean {
   if (!body) return true;
   if (body.type === "TSModuleDeclaration") return typeOnlyNamespace(body);
   return (body.body as Node[]).every(typeOnlyStatement);
+}
+
+/**
+ * Does a namespace body emit a statement of its own (a value, a function with
+ * a body, a class, a non-const enum, a nested namespace that emits)? A body
+ * of `declare` members, signatures, aliases and types emits nothing, so the
+ * namespace binds no name an enum could collide with.
+ */
+function namespaceEmits(declaration: Node): boolean {
+  const body = declaration.body;
+  if (!body) return false;
+  if (body.type === "TSModuleDeclaration") return namespaceEmits(body);
+  return (body.body as Node[]).some(emitsStatement);
+}
+
+function emitsStatement(statement: Node): boolean {
+  switch (statement.type) {
+    case "ExportNamedDeclaration":
+      return statement.declaration
+        ? emitsStatement(statement.declaration)
+        : false;
+    case "TSInterfaceDeclaration":
+    case "TSTypeAliasDeclaration":
+    case "TSDeclareFunction":
+    case "TSImportEqualsDeclaration":
+      return false;
+    case "TSModuleDeclaration":
+      return statement.declare !== true && namespaceEmits(statement);
+    case "TSEnumDeclaration":
+      return statement.declare !== true && statement.const !== true;
+    default:
+      return statement.declare !== true;
+  }
 }
 
 function typeOnlyStatement(statement: Node): boolean {
@@ -632,10 +671,12 @@ function statementDeclarations(file: Node): StatementDeclarations {
       constEnum: false,
       isLet: false,
       importEquals: false,
+      exported: false,
+      valued: false,
       ...extra,
     });
   };
-  const walk = (statement: Node): void => {
+  const walk = (statement: Node, exported = false): void => {
     switch (statement.type) {
       case "ImportDeclaration": {
         const typeOnly =
@@ -686,6 +727,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
         add("enum", statement.id, {
           ambient: statement.declare === true,
           constEnum: statement.const === true,
+          exported,
         });
         return;
       case "TSModuleDeclaration": {
@@ -695,7 +737,12 @@ function statementDeclarations(file: Node): StatementDeclarations {
         if (typeOnlyNamespace(statement)) {
           names.add(id.name);
           typeNamespaces.add(id.name);
-        } else add("namespace", id, { ambient: statement.declare === true });
+        } else {
+          add("namespace", id, {
+            ambient: statement.declare === true,
+            valued: namespaceEmits(statement),
+          });
+        }
         return;
       }
       case "TSTypeAliasDeclaration":
@@ -704,7 +751,7 @@ function statementDeclarations(file: Node): StatementDeclarations {
         return;
       case "ExportNamedDeclaration":
         if (statement.declaration) {
-          walk(statement.declaration);
+          walk(statement.declaration, true);
           return;
         }
         // A re-export binds nothing locally; a type export is erased.
@@ -737,7 +784,28 @@ function statementDeclarations(file: Node): StatementDeclarations {
   coreBabel().traverse(file, {
     Program(path: Node) {
       for (const binding of Object.values<Node>(path.scope.bindings)) {
-        if (binding.kind !== "var") continue;
+        if (binding.kind !== "var") {
+          // A `var` redeclaring a name Babel registered first as something
+          // else (`import x = Math.PI; var x = 1`) is not a binding of its
+          // own: it is a constant violation of the first. It is still a
+          // declaration, and the emitted module redeclares the name.
+          for (const violation of binding.constantViolations as Node[]) {
+            const declaration = violation.parentPath?.node;
+            if (
+              violation.node.type === "VariableDeclarator" &&
+              declaration?.kind === "var"
+            ) {
+              for (const id of Object.values<Node>(
+                coreBabel().types.getBindingIdentifiers(violation.node.id),
+              )) {
+                if (id.name === binding.identifier.name) {
+                  add("var", id, { ambient: declaration.declare === true });
+                }
+              }
+            }
+          }
+          continue;
+        }
         const declaration = binding.path.parentPath;
         add("var", binding.identifier, {
           ambient: declaration?.node.declare === true,
@@ -908,13 +976,33 @@ function bindingErrors(
     statement,
     parsed: parseStatement(ctx, scope, statement),
   }));
+  // The module statement each value declaration was written in.
+  const ownerOf = new Map<Declaration, Node>();
   for (const { statement, parsed: p } of parsed) {
     if (!p) continue;
+    const keyword = tagNameOf(statement) as string;
     for (const next of p.declared.values) {
       // A bodiless signature, and a `declare`d function, class, enum or
       // namespace, bind nothing and stock accepts them beside anything.
       if (next.signature) continue;
       if (next.ambient && !declaredBinding(next)) continue;
+      ownerOf.set(next, statement);
+      // Stock Marko reads a `static` or `server` statement as a scriptlet,
+      // which cannot hold an unexported enum ("Unexpected enum parent
+      // MarkoScriptlet", with no position). `client` is a documented
+      // divergence (divergences.md) and is not refused here.
+      if (
+        next.kind === "enum" &&
+        !next.exported &&
+        !next.constEnum &&
+        (keyword === "static" || keyword === "server")
+      ) {
+        record(statement, {
+          code: INVALID_STATEMENT_CODE,
+          message: `An enum in a \`${keyword}\` statement must be exported: \`${keyword} export enum ${next.name} { ... }\`. A scriptlet cannot hold a plain enum, so the module would not compile.`,
+          at: next.id,
+        });
+      }
       const earlier = declared.get(next.name);
       if (!earlier) {
         declared.set(next.name, [next]);
@@ -932,8 +1020,28 @@ function bindingErrors(
       );
       // A type-only import is erased: it is never one of the bindings `merges` sees.
       const real = earlier.filter((d) => !d.ambient && d.kind !== "typeImport");
+      // Two enums of a name merge in one statement. Written in separate
+      // statements each one's strip emits its own `export var`, so stock
+      // refuses the second, except between two bare `export` statements.
+      const separateEnums =
+        next.kind === "enum" &&
+        next.exported &&
+        !next.constEnum &&
+        real.some((d) => {
+          const owner = ownerOf.get(d);
+          if (owner === statement) return false;
+          // An enum after a namespace that emits code is two bindings.
+          if (d.kind === "namespace") return d.valued;
+          return (
+            d.kind === "enum" &&
+            d.exported &&
+            !d.constEnum &&
+            !(tagNameOf(owner as Node) === "export" && keyword === "export")
+          );
+        });
       if (
         !clash &&
+        !separateEnums &&
         (declaredBinding(next) ||
           next.kind === "typeImport" ||
           real.length === 0 ||

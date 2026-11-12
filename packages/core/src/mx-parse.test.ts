@@ -240,10 +240,10 @@ describe("a namespace with values and an enum of its name in one program", () =>
       "an enum–exported namespace–enum merge",
       "static { export enum q {A}; export namespace q { export const b = 1 }; export enum q {B = 2} }",
     ],
-    ["an empty namespace", "static { namespace q {}; enum q {A} }"],
+    ["an empty namespace", "static { namespace q {}; export enum q {A} }"],
     [
       "a type-only namespace",
-      "static { namespace q { export type T = 1 }; enum q {A} }",
+      "static { namespace q { export type T = 1 }; export enum q {A} }",
     ],
     [
       "a declare namespace with values, then an exported enum",
@@ -254,8 +254,8 @@ describe("a namespace with values and an enum of its name in one program", () =>
       "static { namespace q { export declare const b: number }; export enum q {A} }",
     ],
     [
-      "a namespace of declare members, then a plain enum",
-      "static { namespace q { export declare const b: number }; enum q {A} }",
+      "a namespace of declare members, then an exported enum",
+      "static { namespace q { export declare const b: number }; export enum q {A} }",
     ],
     [
       "a namespace of a declare function, then an exported enum",
@@ -282,16 +282,16 @@ describe("a namespace with values and an enum of its name in one program", () =>
       "static { namespace q { import y = Math; }; export enum q {A} }",
     ],
     [
-      "a namespace of only an alias, then a plain enum",
-      "static { namespace q { import y = Math; }; enum q {A} }",
+      "a namespace of only an alias, then an exported enum",
+      "static { namespace q { import y = Math; }; export enum q {A} }",
     ],
     [
       "a namespace of only an exported alias, then an exported enum",
       "static { namespace q { export import y = Math; }; export enum q {A} }",
     ],
     [
-      "a namespace of only an exported alias, then a plain enum",
-      "static { namespace q { export import y = Math; }; enum q {A} }",
+      "a namespace of only an exported alias, then an exported enum",
+      "static { namespace q { export import y = Math; }; export enum q {A} }",
     ],
     [
       "a namespace of only an alias of a type-only namespace, then an exported enum",
@@ -439,50 +439,82 @@ describe("a namespace with values and an enum of its name in one program", () =>
     },
   );
 
+  // An `import q = ...` alias beside an enum of its name: Babel's strip throws
+  // a raw positionless duplicate-declaration TypeError, so the error is placed
+  // at the enum's name, where stock Marko 6.4.4 reports it (Y11 and Y12 are a
+  // plain enum, which stock refuses without a position).
   it.each([
     [
       "Z1: alias before an exported enum",
       "static { import q = Math; export enum q {A} }",
+      38,
     ],
     [
       "Z2: exported enum before an alias",
       "static { export enum q {A}; import q = Math }",
+      21,
     ],
     [
       "Z9: alias and enum in a function",
       "static function f() { import q = Math; enum q {A} }",
+      44,
     ],
     [
       "Y11: alias before a plain enum",
       "static { import q = Math; enum q {A} }",
+      31,
     ],
     [
       "Y12: plain enum before an alias",
       "static { enum q {A}; import q = Math }",
+      14,
     ],
     [
       "K25: alias before an enum, namespace after",
       "static { import q = Math; export enum q {A}; export namespace q { export const b = 1 } }",
+      38,
     ],
     [
       "K26: enum, alias, namespace after",
       "static { export enum q {A}; import q = Math; export namespace q { export const b = 1 } }",
+      21,
     ],
     [
       "K29: enum, namespace, alias last",
       "static { export enum q {A}; export namespace q { export const b = 1 }; import q = Math }",
+      21,
     ],
-  ])("keeps %s as the unchanged raw strip error", (_label, source) => {
-    const error = viaCompile(`${source}\n<div/>\n`);
-    expect(error).toBeInstanceOf(TypeError);
-    // The strip's code frame is coloured when the run has a colour mode
-    // (CI, the gate), and plain under NO_COLOR: compare without escapes.
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
-    const plain = (error as Error).message.replace(/\u001b\[[0-9;]*m/g, "");
-    expect(plain).toBe('Duplicate declaration "q"\n> 1 |\n    | ^');
-    expect(error).not.toHaveProperty("diagnosticCode");
-    expect(error).not.toHaveProperty("end");
-  });
+    [
+      "8bua: let before an alias",
+      "static { let x = 1; import x = Math.PI }",
+      27,
+      "x",
+    ],
+    [
+      "8bua: const before an alias",
+      "static { const x = 1; import x = Math }",
+      29,
+      "x",
+    ],
+    [
+      "8bua: let before an alias in a function",
+      "static function f() { let x = 1; import x = Math.PI }",
+      40,
+      "x",
+    ],
+  ] as [string, string, number, string?][])(
+    "refuses %s at its name, coded and positioned",
+    (_label, source, column, name = "q") => {
+      const error = viaCompile(`${source}\n<div/>\n`) as TranslateError;
+      expect(error).toMatchObject({
+        diagnosticCode: "MX_DUPLICATE_DECLARATION",
+        line: 1,
+        column,
+        end: { line: 1, column: column + 1 },
+      });
+      expect(error.message).toContain(`Duplicate declaration "${name}"`);
+    },
+  );
 
   it("uses the failing block, not an earlier legal merge or a later shadow", () => {
     const source = [

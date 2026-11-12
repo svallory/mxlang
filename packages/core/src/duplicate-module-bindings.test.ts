@@ -361,10 +361,10 @@ describe("a module name declared twice is refused at the second declaration", ()
       2,
       7,
     ],
-    // Stock Marko crashes on an enum parent; the rule refuses it.
+    // An unexported enum is refused by stock (an enum parent it cannot hold); an exported one is the enum here.
     [
-      "enum + const (stock crashes)",
-      "static enum E { A }\nstatic const E = 1",
+      "enum + const",
+      "static export enum E { A }\nstatic const E = 1",
       "E",
       2,
       13,
@@ -531,55 +531,57 @@ describe.each(["html", "none"] as const)(
       [
         "Z1: alias before an exported enum",
         "static { import q = Math; export enum q {A} }",
+        38,
       ],
       [
         "Z2: exported enum before an alias",
         "static { export enum q {A}; import q = Math }",
+        21,
       ],
       [
         "Z9: alias and enum in a function",
         "static function f() { import q = Math; enum q {A} }",
+        44,
       ],
       [
         "Y11: alias before a plain enum",
         "static { import q = Math; enum q {A} }",
+        31,
       ],
       [
         "Y12: plain enum before an alias",
         "static { enum q {A}; import q = Math }",
+        14,
       ],
       [
         "K25: alias before an enum, namespace after",
         "static { import q = Math; export enum q {A}; export namespace q { export const b = 1 } }",
+        38,
       ],
       [
         "K26: enum, alias, namespace after",
         "static { export enum q {A}; import q = Math; export namespace q { export const b = 1 } }",
+        21,
       ],
       [
         "K29: enum, namespace, alias last",
         "static { export enum q {A}; export namespace q { export const b = 1 }; import q = Math }",
+        21,
       ],
-    ])("keeps %s as the unchanged raw internal error", (_label, source) => {
-      // The strip's code frame is coloured when the run has a colour mode
-      // (CI, the gate), and plain under NO_COLOR: compare without escapes.
-      expect(
-        diagnostics(source, tagRules).map((d) => ({
-          ...d,
-          // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes
-          message: d.message.replace(/\u001b\[[0-9;]*m/g, ""),
-        })),
-      ).toEqual([
-        {
-          severity: "error",
-          code: "MX_INTERNAL_ERROR",
-          message: 'internal error: Duplicate declaration "q"\n> 1 |\n    | ^',
+    ])(
+      "refuses %s at the enum's name, as stock does",
+      (_label, source, column) => {
+        const found = diagnostics(source, tagRules).filter(
+          (d) => d.severity === "error",
+        );
+        expect(found).toHaveLength(1);
+        expect(found[0]).toMatchObject({
+          code: DUPLICATE,
           line: 1,
-          column: 0,
-          offset: 0,
-        },
-      ]);
-    });
+          column,
+        });
+      },
+    );
 
     it.each([
       [
@@ -809,19 +811,17 @@ describe("what compiles", () => {
 
 describe("TypeScript's merges", () => {
   const merges: [string, string][] = [
-    ["enum + enum", "static enum E { A = 0 }\nstatic enum E { B = 1 }"],
-    ["enum + enum in blocks", "static { enum E { A = 0 }\nenum E { B = 1 } }"],
+    [
+      "enum + enum in blocks",
+      "static { export enum E { A = 0 }\nexport enum E { B = 1 } }",
+    ],
     [
       "const enum + const enum",
       "static const enum E { A = 0 }\nstatic const enum E { B = 1 }",
     ],
     [
       "enum + namespace",
-      "static enum E { A }\nstatic namespace E { export const a = 1 }",
-    ],
-    [
-      "namespace + enum",
-      "static namespace E { export const a = 1 }\nstatic enum E { A }",
+      "static export enum E { A }\nstatic namespace E { export const a = 1 }",
     ],
     [
       "namespace + namespace",
@@ -1015,10 +1015,40 @@ describe("TypeScript's merges", () => {
     ],
     [
       "a const enum + an enum",
-      "static const enum E { A = 0 }\nstatic enum E { B = 1 }",
+      "static const enum E { A = 0 }\nstatic export enum E { B = 1 }",
+      "E",
+      2,
+      19,
+    ],
+    // Each `static` statement is stripped alone, so each exported enum emits
+    // its own `export var`: stock 6.4.4 refuses the second at its name.
+    [
+      "an exported enum in two statements",
+      "static export enum E { A }\nstatic export enum E { B = 1 }",
+      "E",
+      2,
+      19,
+    ],
+    [
+      "an exported enum after a namespace with values (statements)",
+      "static namespace E { export const a = 1 }\nstatic export enum E { A }",
+      "E",
+      2,
+      19,
+    ],
+    [
+      "an exported enum after an exported namespace with values (bare export)",
+      "export namespace E { export const a = 1 }\nexport enum E { A }",
       "E",
       2,
       12,
+    ],
+    [
+      "a bare exported enum, then a server one",
+      "export enum E { A }\nserver export enum E { B = 1 }",
+      "E",
+      2,
+      19,
     ],
     [
       "an implementation + another implementation",
@@ -1041,7 +1071,13 @@ describe("TypeScript's merges", () => {
       3,
       16,
     ],
-    ["an enum + a class", "static enum E { A }\nstatic class E {}", "E", 2, 13],
+    [
+      "an enum + a class",
+      "static export enum E { A }\nstatic class E {}",
+      "E",
+      2,
+      13,
+    ],
     [
       "a class + a function",
       "static class C {}\nstatic function C() {}",
@@ -1056,6 +1092,15 @@ describe("TypeScript's merges", () => {
       "N",
       2,
       13,
+    ],
+    // An `import x = ...` alias is a binding: a `var` after it, in one block,
+    // redeclares it in the emitted module (Bun and esbuild refuse that).
+    [
+      "an alias + a var in one block",
+      "static { import x = Math.PI; var x = 1 }",
+      "x",
+      1,
+      33,
     ],
   ];
   it.each(refused)("%s is refused", (_label, source, name, line, column) => {
@@ -1554,8 +1599,8 @@ describe("an export list names a declared binding", () => {
       "static declare class C {}\nstatic namespace C { export const a = 1 }\nstatic export { C }",
     ],
     [
-      "a function, a class, an enum",
-      "static function f() {}\nstatic class C {}\nstatic enum E { A }\nstatic export { f, C, E }",
+      "a function, a class",
+      "static function f() {}\nstatic class C {}\nstatic export { f, C }",
     ],
     [
       "a namespace",
@@ -1869,11 +1914,6 @@ describe("a name exported twice is refused at the second export", () => {
       "a type-only import, a var of its name, and its list twice",
       'static import type { T } from "./m"\nstatic var T = 1\nstatic export { ‹T› }\nstatic export { «T» }',
     ],
-    // An enum after a namespace emits its own export (Bun's and esbuild's strips fail on the pair with a list).
-    [
-      "a namespace, its list, then an enum of its name",
-      "static namespace q { export const b = 1 }\nstatic export { ‹q› }\nstatic export enum «q» { A }",
-    ],
     // The strip of one block runs as a single program: it must not throw a
     // positionless internal error for these, and the refusal is at the second name.
     [
@@ -2162,19 +2202,6 @@ describe("a name exported twice is refused at the second export", () => {
       "a function, its list, then two namespaces of its name",
       "static function q() {}\nstatic export { q }\nstatic export namespace q { export const a = 1 }\nstatic export namespace q { export const b = 1 }",
     ],
-    // An enum after an exported namespace (or enum) adds no export: the earlier one made it.
-    [
-      "an exported namespace and an exported enum of its name",
-      "static export namespace q { export const a = 1 }\nstatic export enum q { B }",
-    ],
-    [
-      "a namespace and an exported enum of its name",
-      "static namespace q { export const a = 1 }\nstatic export enum q { B }",
-    ],
-    [
-      "an enum, its list, then an enum of its name",
-      "static enum q { A }\nstatic export { q }\nstatic export enum q { B }",
-    ],
     // A list naming a type-only import or namespace exports nothing: the strip drops the specifier.
     [
       "a type-only import named by a list twice",
@@ -2199,11 +2226,6 @@ describe("a name exported twice is refused at the second export", () => {
     [
       "a namespace with only types named by a list twice, in a block",
       "static { namespace N { export type X = 1 }; export { N }; export { N } }",
-    ],
-    // A list naming a plain (unexported) enum is its only export.
-    [
-      "a plain enum and its list, in one block",
-      "static { enum q { A }; export { q } }",
     ],
     [
       "an exported enum and a list of another name, in one block",
@@ -2258,5 +2280,63 @@ describe("a name exported twice is refused at the second export", () => {
       "markup",
     ).filter((d) => d.code === DUPLICATE);
     expect(found).toHaveLength(1);
+  });
+});
+
+describe("module code as stock Marko 6.4.4 reads it", () => {
+  it.each([
+    ["super", "client { let q = super.x }"],
+    ["new.target", "client { let q = new.target }"],
+  ])("compiles %s in a client block", (_name, source) => {
+    expectCompiles(source);
+  });
+
+  it.each(["static", "server"])(
+    "refuses a plain enum in a %s statement, which stock cannot hold",
+    (keyword) => {
+      const found = diagnostics(`${keyword} enum q {A}`).filter(
+        (d) => d.severity === "error",
+      );
+      expect(found).toMatchObject([
+        { code: "MX_INVALID_STATEMENT", line: 1, column: keyword.length + 6 },
+      ]);
+      expect(found[0]?.message).toContain(`${keyword} export enum q`);
+    },
+  );
+
+  it("refuses a plain enum in a static block, but not an exported, const or declare one", () => {
+    expect(
+      diagnostics("static { enum q {A} }").filter(
+        (d) => d.severity === "error",
+      ),
+    ).toMatchObject([{ code: "MX_INVALID_STATEMENT", line: 1, column: 14 }]);
+    expectCompiles("static { export enum q {A} }");
+    expectCompiles("static const enum q {A}");
+    expectCompiles("static declare enum q {A}");
+  });
+
+  it("does not advise reordering a namespace that is not at the top level", () => {
+    for (const source of [
+      "static if (true) { namespace o { declare namespace q { const b: number }; enum q {A} } }",
+      "static function f() { namespace o { declare namespace q { const b: number }; enum q {A} } }",
+    ]) {
+      const found = diagnostics(source).filter((d) => d.severity === "error");
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ code: DUPLICATE, line: 1 });
+      expect(found[0]?.message).toContain("only allowed at the top level");
+      expect(found[0]?.message).not.toContain("Declare the enum first");
+    }
+  });
+
+  it("refuses an export list in a namespace with a coded, positioned diagnostic", () => {
+    for (const tagRules of ["html", "none"] as const) {
+      const found = diagnostics(
+        "static { namespace q { type T = 1; export type { T } } }",
+        tagRules,
+      ).filter((d) => d.severity === "error");
+      expect(found).toMatchObject([
+        { code: "MX_INVALID_STATEMENT", line: 1, column: 35 },
+      ]);
+    }
   });
 });

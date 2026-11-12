@@ -1067,7 +1067,7 @@ describe("compileTagModule: module-level names the template reads", () => {
 
   it("exposes a value `enum` and a value `namespace`, not a types-only namespace", () => {
     const { code } = compileTag(
-      "static enum E { A = 1 }\nstatic namespace NS { export const a = 2; }\nstatic namespace Types { export interface T { a: 1 } }\n<p>${E.A}${NS.a}${Types}</p>\n",
+      "static export enum E { A = 1 }\nstatic namespace NS { export const a = 2; }\nstatic namespace Types { export interface T { a: 1 } }\n<p>${E.A}${NS.a}${Types}</p>\n",
       "enumns.mx",
     );
 

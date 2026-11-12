@@ -32,6 +32,7 @@ import {
   DUPLICATE_DECLARATION_CODE,
   INTERNAL_ERROR_CODE,
   INVALID_SHORTHAND_CODE,
+  INVALID_STATEMENT_CODE,
   isReservedHookCode,
   type MxDiagnosticCode,
   parseDiagnosticCode,
@@ -913,6 +914,30 @@ function stripDeclarationSites(
     program.body[0].type === "BlockStatement"
       ? program.body[0]
       : program;
+  // The namespace bodies that are themselves at the top level: a namespace
+  // is only valid at the top level of the module or of another such
+  // namespace. One inside a function, an `if` or any other block is not, and
+  // neither is anything declared in its body.
+  const topLevelBodies = new Set<Node>();
+  const markBodies = (body: Node): void => {
+    for (const statement of body.body as Node[]) {
+      const declaration = isModuleDeclaration(statement)
+        ? statement.declaration
+        : statement;
+      if (declaration?.type === "TSModuleDeclaration")
+        markNamespace(declaration);
+    }
+  };
+  const markNamespace = (declaration: Node): void => {
+    const body = declaration.body;
+    if (body?.type === "TSModuleDeclaration") markNamespace(body);
+    else if (body?.type === "TSModuleBlock") {
+      topLevelBodies.add(body);
+      markBodies(body);
+    }
+  };
+  markBodies(program);
+  if (moduleBody !== program) markBodies(moduleBody);
   t.traverseFast(program, (node: Node) => {
     if (!Array.isArray(node.body)) return;
     const group: StripDeclaration[] = [];
@@ -941,13 +966,54 @@ function stripDeclarationSites(
       groups.push({
         sites: group,
         namespaceAllowed:
-          node === program ||
-          node === moduleBody ||
-          node.type === "TSModuleBlock",
+          node === program || node === moduleBody || topLevelBodies.has(node),
       });
     }
   });
   return groups;
+}
+
+/**
+ * `let x = 1; import x = Math.PI` throws Babel's raw duplicate-declaration
+ * TypeError: its offending identifier is the strip's generated `var`, which no
+ * authored site matches. Stock Marko refuses at the enum's name when the name
+ * has an enum, else at the alias's name, so the error is placed there: the
+ * first group that holds the name twice with an `import x = ...` alias in it.
+ */
+function aliasDuplicateError(
+  name: string,
+  groups: StripDeclarationGroup[],
+): TranslateError | undefined {
+  for (const { sites } of groups) {
+    const same = sites.filter((site) => site.name === name);
+    if (same.length < 2) continue;
+    const enumeration = same.find((site) => site.kind === "TSEnumDeclaration");
+    const alias = same.find(
+      (site, i) => i > 0 && site.kind === "TSImportEqualsDeclaration",
+    );
+    if (!same.some((site) => site.kind === "TSImportEqualsDeclaration")) {
+      continue;
+    }
+    const collision = enumeration ?? alias;
+    if (!collision?.loc) continue;
+    const other = same.find((site) => site !== collision);
+    const first = other?.loc?.start;
+    const previous = first
+      ? `: it is already declared at ${first.line}:${first.column + 1}.`
+      : ".";
+    const result = codedError(
+      DUPLICATE_DECLARATION_CODE,
+      `Duplicate declaration "${name}"${previous} An \`import ${name} = ...\` alias declares a binding in its block, so the name is declared once. Rename one of them.`,
+      collision.loc.start.line,
+      collision.loc.start.column,
+    );
+    result.end = {
+      line: collision.loc.end.line,
+      column: collision.loc.end.column,
+    };
+    return result;
+  }
+  return undefined;
 }
 
 /**
@@ -969,7 +1035,8 @@ function stripDuplicateError(
   const name = /^Duplicate declaration "([^"\r\n]+)"$/.exec(
     error.message.split("\n", 1)[0] ?? "",
   )?.[1];
-  if (!name || at?.name !== name || !at.loc) return undefined;
+  if (!name) return undefined;
+  if (at?.name !== name || !at.loc) return aliasDuplicateError(name, groups);
   const group = groups.find(({ sites }) =>
     sites.some(
       (site) =>
@@ -978,7 +1045,7 @@ function stripDuplicateError(
         site.loc?.start.column === at.loc.start.column,
     ),
   );
-  if (!group) return undefined;
+  if (!group) return aliasDuplicateError(name, groups);
   const sites = group.sites.filter((site) => site.name === name);
   const collisionIndex = sites.findIndex(
     (site) =>
@@ -994,7 +1061,7 @@ function stripDuplicateError(
     .slice(0, collisionIndex)
     .filter((site) => site.kind === "TSModuleDeclaration");
   if (collision.kind !== "TSEnumDeclaration" || namespaces.length === 0) {
-    return undefined;
+    return aliasDuplicateError(name, groups);
   }
   // A namespace without a source position still proves the collision; it
   // only loses the "already declared at" clause.
@@ -1017,6 +1084,31 @@ function stripDuplicateError(
   return result;
 }
 
+/**
+ * An export list (`export { T }`, `export type { T }`) inside a namespace body
+ * is TypeScript's TS1194, and the strip crashes on it with a raw positionless
+ * TypeError (as stock Marko's does). It is refused at the statement instead.
+ */
+function rejectExportListInNamespace(program: Node, t: Node): void {
+  t.traverseFast(program, (node: Node) => {
+    if (node.type !== "TSModuleBlock") return;
+    for (const statement of node.body as Node[]) {
+      if (statement.type !== "ExportNamedDeclaration" || statement.declaration)
+        continue;
+      const loc = statement.loc;
+      if (!loc) continue;
+      const error = codedError(
+        INVALID_STATEMENT_CODE,
+        "Export declarations are not permitted in a namespace (TS1194). Export each declaration where it is declared: `export const name = ...`.",
+        loc.start.line,
+        loc.start.column,
+      );
+      error.end = { line: loc.end.line, column: loc.end.column };
+      throw error;
+    }
+  });
+}
+
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
 function stripProgram(body: Node[], moduleBlock = false): Node[] {
   // The plugin runs for every payload, TypeScript or not: it is not a no-op
@@ -1027,10 +1119,18 @@ function stripProgram(body: Node[], moduleBlock = false): Node[] {
   const t = babel.types;
   const program = t.program(body, [], "module");
   const sites = stripDeclarationSites(program, t, moduleBlock);
-  const file = new babel.File(
-    { filename: "mx-strip.ts" },
-    { code: "", ast: t.file(program) },
-  );
+  rejectExportListInNamespace(program, t);
+  let file: Node;
+  try {
+    // Building the file crawls its scopes, which registers every declaration:
+    // a `let x` beside an `import x = ...` is a duplicate right here.
+    file = new babel.File(
+      { filename: "mx-strip.ts" },
+      { code: "", ast: t.file(program) },
+    );
+  } catch (error) {
+    throw stripDuplicateError(error, undefined, sites) ?? error;
+  }
   const path = file.path;
   path.state = { file };
   // Retain Babel's offending identifier without changing the raw error. The

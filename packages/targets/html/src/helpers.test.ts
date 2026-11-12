@@ -364,9 +364,10 @@ describe("loadMx(path)", () => {
       const pagePath = join(dir, "page.mx");
       writeFileSync(
         pagePath,
-        ["static enum Color { Red, Green, Blue }", "<p>${Color.Red}</p>"].join(
-          "\n",
-        ),
+        [
+          "static export enum Color { Red, Green, Blue }",
+          "<p>${Color.Red}</p>",
+        ].join("\n"),
       );
 
       expect(() => loadMx(pagePath)).toThrow(

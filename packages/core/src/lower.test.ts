@@ -1769,7 +1769,7 @@ describe("one fixture per IR kind", () => {
       ],
       [
         "local enum",
-        "static enum AttrTag { One }\nexport interface Input { head?: AttrTag }",
+        "static export enum AttrTag { One }\nexport interface Input { head?: AttrTag }",
         false,
       ],
       ["interface heritage", "export interface Input extends AttrTag {}", true],
