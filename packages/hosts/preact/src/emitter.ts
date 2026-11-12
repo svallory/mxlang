@@ -3254,6 +3254,15 @@ export class PreactEmitter implements Emitter<string> {
     const body = this.#expression(children, undefined, true);
     const content = meaningful(children);
     const lone = content.length === 1 && content[0]?.kind === "Interpolation";
+    // `#textValue` already parenthesizes a bare sequence.
+    if (
+      lone &&
+      content[0]?.kind === "Interpolation" &&
+      content[0].expr.node?.type === "SequenceExpression" &&
+      body.code.startsWith("(")
+    ) {
+      return body;
+    }
     return lone &&
       !body.code.startsWith("__mxTextValue(") &&
       !body.code.startsWith("__mxRenderable(") &&
