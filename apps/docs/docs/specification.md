@@ -838,7 +838,7 @@ The html target, the JSX hosts, Solid and Astro write a real `<style>` (the JSX
 hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
 `is:inline` element); Angular keeps its own handling of `<style>`.
 
-An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on every host, positioned at the attribute, because a script element never fires or calls one. A string value (`onclick="…"`) is an ordinary attribute.
+An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on the html target, Preact, React and Hono, positioned at the attribute, because a script element never fires or calls one (Angular refuses `<html-script>` outright). Solid does not refuse them yet (TODO `solid-html-script-event-attr`). A string value (`onclick="…"`) is an ordinary attribute.
 
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
