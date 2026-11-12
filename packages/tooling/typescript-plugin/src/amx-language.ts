@@ -298,6 +298,10 @@ export function createAmxLanguagePlugin(
       return hostPolicies.get(fileName);
     },
 
+    refreshTargetPolicy(fileName) {
+      hostPolicies.refresh(fileName);
+    },
+
     typescript: {
       resolveHiddenExtensions: true,
       extraFileExtensions: [

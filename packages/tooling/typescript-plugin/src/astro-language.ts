@@ -23,7 +23,7 @@ export function createAstroLanguagePlugin(
     astro = (load ?? (() => loadAstroLanguagePlugin(projectDir)))();
   } catch (cause) {
     throw new Error(
-      "@mxlang/typescript-plugin: `astro: true` requires the optional peer dependency `@astrojs/language-server@2.16.16`; install it beside the plugin.",
+      "@mxlang/typescript-plugin: `astro: true` requires the optional peer dependency `@astrojs/language-server@2.16.16`; install it in your project.",
       { cause },
     );
   }
@@ -82,8 +82,13 @@ export function loadAstroLanguagePlugin(
   if (projectDir !== undefined) {
     try {
       module = createRequire(join(projectDir, "package.json"))(entry);
-    } catch {
-      module = undefined;
+    } catch (error) {
+      // Only "the project has no copy" falls back; a copy that is found and
+      // throws on load is the author's problem to see.
+      const missing =
+        (error as { code?: string }).code === "MODULE_NOT_FOUND" &&
+        String((error as Error).message).includes(entry);
+      if (!missing) throw error;
     }
   }
   const resolved =

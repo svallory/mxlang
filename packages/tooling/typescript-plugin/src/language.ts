@@ -46,7 +46,10 @@ import {
   fileKindHostFilter,
   fileKindOf,
 } from "./file-kinds.ts";
-import { createTargetPolicyRecorder } from "./host-policy-diagnostics.ts";
+import {
+  createTargetPolicyRecorder,
+  hostPolicyMessage,
+} from "./host-policy-diagnostics.ts";
 import type {
   AuthoredSpan,
   SpannedVirtualCode,
@@ -123,6 +126,8 @@ export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {
    * it: `.mx`, `.solid.mx`, `.ng.mx` and `.astro.mx`.
    */
   getTargetPolicyDiagnostics?(fileName?: string): TargetPolicyDiagnostic[];
+  /** Re-resolves the file's host policy when a manifest it read changed. */
+  refreshTargetPolicy?(fileName: string): void;
   /**
    * Drops TypeScript's own semantic diagnostics that this plugin's *projection*
    * made spurious — never a real error in the author's source.
@@ -378,6 +383,10 @@ export function createRegionLanguagePlugin(
       return hostPolicies.get(fileName);
     },
 
+    refreshTargetPolicy(fileName) {
+      hostPolicies.refresh(fileName);
+    },
+
     typescript: {
       resolveHiddenExtensions: true,
       extraFileExtensions: [
@@ -470,6 +479,11 @@ export function createNgMxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const reportedScanDiagnostics = new Set<string>();
   const hostPolicies = createTargetPolicyRecorder();
+  // Files whose compile failed on a `package.json` the host policy reports too
+  // (that diagnostic is folded into the compile error), and those of them
+  // whose manifest changed since.
+  const foldedPolicy = new Map<string, string>();
+  const staleConfig = new Set<string>();
 
   return {
     getLanguageId(fileName) {
@@ -485,6 +499,8 @@ export function createNgMxLanguagePlugin(
       // Only for what it reports: this file's host is fixed by its extension.
       hostPolicies.resolve(fileName, source);
       compiled.delete(fileName);
+      foldedPolicy.delete(fileName);
+      staleConfig.delete(fileName);
       const fail = (error: SolidMxSyntaxError, cause?: unknown) => {
         syntaxErrors.set(fileName, error);
         compileDiagnostics.set(fileName, [errorDiagnostic(error, cause)]);
@@ -516,22 +532,24 @@ export function createNgMxLanguagePlugin(
         };
         // A `package.json` that does not parse is also the host policy's
         // `malformed-package-json` diagnostic, which carries the parse error
-        // and its position in the file: that one is the report, so this
-        // failure keeps the empty module and says nothing a second time.
+        // and its position in the file. The compile error stays (this file is
+        // an empty module, and that must fail a run) and says what the policy
+        // says, with the position; the policy entry is then left out of
+        // `getTargetPolicyDiagnostics` so the problem is reported once.
         const file = isTranslateError(cause) ? cause.file : undefined;
-        if (
-          file !== undefined &&
-          hostPolicies
-            .get(fileName)
-            .some(
-              (diagnostic) =>
-                diagnostic.code === "malformed-package-json" &&
-                diagnostic.file === file,
-            )
-        ) {
-          const stub = fail(error);
-          compileDiagnostics.delete(fileName);
-          return stub;
+        const policy =
+          file === undefined
+            ? undefined
+            : hostPolicies
+                .get(fileName)
+                .find(
+                  (diagnostic) =>
+                    diagnostic.code === "malformed-package-json" &&
+                    diagnostic.file === file,
+                );
+        if (policy && file !== undefined) {
+          foldedPolicy.set(fileName, file);
+          return fail({ ...error, message: hostPolicyMessage(policy) });
         }
         return fail(error);
       }
@@ -622,13 +640,37 @@ export function createNgMxLanguagePlugin(
 
     getCompileDiagnostics(fileName) {
       return [
-        ...diagnosticsFrom(compileDiagnostics, fileName),
+        ...diagnosticsFrom(compileDiagnostics, fileName).map((diagnostic) =>
+          staleConfig.has(diagnostic.fileName)
+            ? {
+                ...diagnostic,
+                message: `${diagnostic.message} (the manifest changed since; edit this file to compile it again)`,
+              }
+            : diagnostic,
+        ),
         ...hostPolicies.errors(fileName),
       ];
     },
 
     getTargetPolicyDiagnostics(fileName) {
-      return hostPolicies.get(fileName);
+      const folded =
+        fileName === undefined ? undefined : foldedPolicy.get(fileName);
+      return hostPolicies
+        .get(fileName)
+        .filter(
+          (diagnostic) =>
+            !(
+              folded !== undefined &&
+              diagnostic.code === "malformed-package-json" &&
+              diagnostic.file === folded
+            ),
+        );
+    },
+
+    refreshTargetPolicy(fileName) {
+      if (hostPolicies.refresh(fileName) && foldedPolicy.has(fileName)) {
+        staleConfig.add(fileName);
+      }
     },
 
     typescript: {

@@ -472,6 +472,10 @@ function withSyntaxDiagnostics(
 
       return (fileName: string) => {
         const diagnostics = target.getSyntacticDiagnostics(fileName);
+        // The one place the policy re-reads a changed manifest.
+        for (const plugin of getLanguagePlugins() ?? []) {
+          plugin.refreshTargetPolicy?.(fileName);
+        }
         const compileDiagnostics =
           getLanguagePlugins()?.flatMap((plugin) =>
             plugin.getCompileDiagnostics(fileName),

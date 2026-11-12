@@ -1,6 +1,10 @@
 import { statSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { TargetPolicy, TargetPolicyDiagnostic } from "@mxlang/core";
+import {
+  MX_CONFIG_SEARCH_PLACES,
+  type TargetPolicy,
+  type TargetPolicyDiagnostic,
+} from "@mxlang/core";
 import { resolveTargetPolicyDetailed } from "@mxlang/targets";
 import type { MxCompileDiagnostic } from "./language.ts";
 
@@ -52,6 +56,12 @@ export interface TargetPolicyRecorder {
    * stops being reported).
    */
   resolve(fileName: string, source?: string): TargetPolicy;
+  /**
+   * Re-resolves `fileName` when a manifest or config its policy reads changed
+   * since it was resolved; true when it did. Called once per diagnostics
+   * request by the tsserver entry point, never by `get`/`errors`.
+   */
+  refresh(fileName: string): boolean;
   /** Store authored text without re-resolving (or repeating alias warnings). */
   source(fileName: string, source: string): void;
   /** One file's diagnostics, or every recorded file's. */
@@ -62,26 +72,28 @@ export interface TargetPolicyRecorder {
 
 /**
  * What the policy of `fileName` reads from disk, as a string that changes when
- * any of it does: the modification time and size of each `package.json` and
- * `.mxrc.json` from the file's directory up to and including the nearest
- * `package.json`. A missing file is its own stamp, so creating one counts.
+ * any of it does: the modification time and size of every config spelling core
+ * searches (`MX_CONFIG_SEARCH_PLACES`, `package.json` among them), from the
+ * file's directory up to and including the nearest `package.json`. A missing
+ * file is its own stamp, so creating one counts.
  */
 function manifestStamp(fileName: string): string {
   const parts: string[] = [];
   let dir = dirname(fileName);
   for (;;) {
-    for (const name of [".mxrc.json", "package.json"]) {
+    let hasManifest = false;
+    for (const name of MX_CONFIG_SEARCH_PLACES) {
       const file = join(dir, name);
       try {
         const stat = statSync(file);
         parts.push(`${file}:${stat.mtimeMs}:${stat.size}`);
-        if (name === "package.json") return parts.join("|");
+        if (name === "package.json") hasManifest = true;
       } catch {
         parts.push(`${file}:-`);
       }
     }
     const parent = dirname(dir);
-    if (parent === dir) return parts.join("|");
+    if (hasManifest || parent === dir) return parts.join("|");
     dir = parent;
   }
 }
@@ -90,17 +102,21 @@ export function createTargetPolicyRecorder(): TargetPolicyRecorder {
   const byFile = new Map<string, TargetPolicyDiagnostic[]>();
   const sources = new Map<string, string>();
   const stamps = new Map<string, string>();
-  // The plugin watches no `package.json`: a diagnostic read for a file whose
-  // manifests changed since it was resolved is resolved again, so a fixed
-  // manifest stops being reported without the `.mx` being edited.
-  const refresh = (fileName: string) => {
+  // The plugin watches no `package.json`: the tsserver entry point asks for a
+  // refresh before it reads a file's diagnostics, so a fixed manifest stops
+  // being reported without the `.mx` being edited.
+  const refresh = (fileName: string): boolean => {
     const stamp = stamps.get(fileName);
-    if (stamp === undefined || stamp === manifestStamp(fileName)) return;
+    if (stamp === undefined) return false;
+    const now = manifestStamp(fileName);
+    if (stamp === now) return false;
     const { diagnostics } = resolveTargetPolicyDetailed(fileName);
     byFile.set(fileName, diagnostics);
-    stamps.set(fileName, manifestStamp(fileName));
+    stamps.set(fileName, now);
+    return true;
   };
   return {
+    refresh,
     source(fileName, source) {
       sources.set(fileName, source);
     },
@@ -112,7 +128,6 @@ export function createTargetPolicyRecorder(): TargetPolicyRecorder {
       return policy;
     },
     errors(fileName) {
-      if (fileName !== undefined) refresh(fileName);
       const entries =
         fileName === undefined
           ? [...byFile]
@@ -138,7 +153,6 @@ export function createTargetPolicyRecorder(): TargetPolicyRecorder {
       );
     },
     get(fileName) {
-      if (fileName !== undefined) refresh(fileName);
       return fileName === undefined
         ? [...byFile.values()].flat()
         : (byFile.get(fileName) ?? []);

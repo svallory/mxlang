@@ -442,7 +442,7 @@ describe("a malformed package.json beside an .ng.mx", () => {
     };
   };
 
-  it("reports it once, positioned in the package.json, without a config", async () => {
+  it("reports it once, as a positioned error, without a config", async () => {
     const dir = path.join(root, "bad");
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, "package.json"), "{ nope");
@@ -450,21 +450,56 @@ describe("a malformed package.json beside an .ng.mx", () => {
     try {
       const { compile, policy } = await virtual(dir);
 
-      expect(compile).toEqual([]);
-      expect(policy).toHaveLength(1);
-      expect(policy[0]).toMatchObject({
-        code: "malformed-package-json",
-        file: path.join(dir, "package.json"),
-        line: 1,
-        offset: 2,
-      });
+      expect(policy).toEqual([]);
+      expect(compile).toHaveLength(1);
+      expect(compile[0]?.category).toBe("error");
+      expect(compile[0]?.message).toContain(
+        `${path.join(dir, "package.json")}:1:3: `,
+      );
+      expect(compile[0]?.message).toContain("could not be parsed as JSON");
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it("reports it once with a separate .mxrc.json beside it", async () => {
+  it("compiles the file again, non-empty and clean, once the package.json is fixed", async () => {
+    const { default: ts } = await import("typescript");
+    const { createNgMxLanguagePlugin } = await import("./language.ts");
+    const dir = path.join(root, "fixme");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "package.json"), "{ nope");
+    const plugin = createNgMxLanguagePlugin(ts);
+    const fileName = path.join(dir, "x.component.ng.mx");
+    const compileAgain = () =>
+      plugin.createVirtualCode?.(
+        fileName,
+        "ngmx",
+        ts.ScriptSnapshot.fromString(SOURCE),
+        // biome-ignore lint/suspicious/noExplicitAny: Volar's codegen context is unused here
+        undefined as any,
+      );
+    const empty = compileAgain();
+    expect(plugin.getCompileDiagnostics(fileName)).toHaveLength(1);
+
+    writeFileSync(path.join(dir, "package.json"), "{}");
+    plugin.refreshTargetPolicy?.(fileName);
+    // Until the file compiles again the error stays, and says why.
+    expect(plugin.getCompileDiagnostics(fileName)[0]?.message).toContain(
+      "the manifest changed since",
+    );
+
+    const fixed = compileAgain();
+    expect(plugin.getCompileDiagnostics(fileName)).toEqual([]);
+    expect(plugin.getTargetPolicyDiagnostics?.(fileName)).toEqual([]);
+    const text = (code: typeof fixed) =>
+      code?.snapshot.getText(0, code.snapshot.getLength()) ?? "";
+    expect(text(empty)).toContain("__mx$failed$");
+    expect(text(fixed)).not.toContain("__mx$failed$");
+    expect(text(fixed)).toContain("class XComponent");
+  });
+
+  it("reports it once with a separate .mxrc.json beside it (a warning: the file still compiles)", async () => {
     const dir = path.join(root, "bad2");
     mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, "package.json"), "{ nope");

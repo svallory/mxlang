@@ -1,4 +1,12 @@
-import { rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { fixtures, mxTsc, run, SPAWN_TIMEOUT_MS } from "./test-support.ts";
@@ -129,5 +137,40 @@ describe("mx-tsc", () => {
         SPAWN_TIMEOUT_MS,
       );
     });
+
+    it(
+      "a malformed package.json fails the run with one error, not a silent empty module",
+      () => {
+        const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-tsc-badpkg-")));
+        try {
+          writeFileSync(join(dir, "package.json"), "{ nope");
+          writeFileSync(
+            join(dir, "tsconfig.json"),
+            readFileSync(
+              join(fixtures, "ng-mx-passing", "tsconfig.json"),
+              "utf8",
+            ),
+          );
+          mkdirSync(join(dir, "src"));
+          writeFileSync(
+            join(dir, "src", "x.component.ng.mx"),
+            "export class X { n: number = 1; }\n",
+          );
+
+          const result = run(mxTsc, [
+            "--noEmit",
+            "-p",
+            join(dir, "tsconfig.json"),
+          ]);
+
+          expect(result.status).toBe(1);
+          expect(result.output.match(/error /g)).toHaveLength(1);
+          expect(result.output).toContain("could not be parsed as JSON");
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+      SPAWN_TIMEOUT_MS,
+    );
   });
 });

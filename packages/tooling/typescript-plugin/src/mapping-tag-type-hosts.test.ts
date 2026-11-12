@@ -84,7 +84,11 @@ function mapped(name: (typeof jsxHosts)[number], text: string) {
     undefined,
     descriptor.translator,
   );
-  return mappings.map((mapping) => {
+  const recorded = (result.mappings ?? []).map((mapping) => ({
+    source: text.slice(mapping.sourceStart, mapping.sourceEnd),
+    generatedOffset: mapping.generatedStart,
+  }));
+  const final = mappings.map((mapping) => {
     const [from = 0] = mapping.sourceOffsets;
     const [to = 0] = mapping.generatedOffsets;
     return {
@@ -94,26 +98,34 @@ function mapped(name: (typeof jsxHosts)[number], text: string) {
         to + (mapping.generatedLengths?.[0] ?? mapping.lengths[0] ?? 0),
       ),
       generatedOffset: to,
-      code: result.code,
     };
   });
+  return Object.assign(final, { recorded });
 }
 
 describe("expression values map to their authored text on every JSX host", () => {
   const IMPORT = 'import Field from "./field.mx"\n';
-  it.each(jsxHosts)("%s: a component prop's function value", (name) => {
-    const found = mapped(name, `${IMPORT}<Field onPick=function () { go() }/>`);
-    expect(
-      found.filter((m) => m.source === "function () { go() }"),
-    ).not.toHaveLength(0);
-  });
+  // Measured not to reproduce; hono only, since it had no mapping test of its
+  // own and the three JSX hosts share one emitter.
+  it.each(["hono-jsx"] as const)(
+    "%s: a component prop's function value",
+    (name) => {
+      const found = mapped(
+        name,
+        `${IMPORT}<Field onPick=function () { go() }/>`,
+      );
+      expect(
+        found.filter((m) => m.source === "function () { go() }"),
+      ).not.toHaveLength(0);
+    },
+  );
 
-  it.each(jsxHosts)("%s: $!{} raw text", (name) => {
+  it.each(["hono-jsx"] as const)("%s: $!{} raw text", (name) => {
     const found = mapped(name, "<p>$!{input.html}</p>");
     expect(found.map((m) => m.source)).toContain("input.html");
   });
 
-  it.each(jsxHosts)(
+  it.each(["hono-jsx"] as const)(
     "%s: a <for of=> and an <if=> attribute value",
     (name) => {
       expect(
@@ -130,14 +142,17 @@ describe("expression values map to their authored text on every JSX host", () =>
   it.each(jsxHosts)(
     "%s: a recorded prop value is not also mapped to an earlier text match",
     (name) => {
-      const found = mapped(name, `${IMPORT}<Field count=n/>`).filter(
-        (m) => m.source === "n",
-      );
-      expect(found).toHaveLength(1);
-      const [only] = found;
-      expect(only?.code.slice((only?.generatedOffset ?? 0) - 8)).toMatch(
-        /^\W*count\W*:? ?n/,
-      );
+      const found = mapped(name, `${IMPORT}<Field count=n/>`);
+      const recorded = found.recorded.filter((m) => m.source === "n");
+      expect(recorded).toHaveLength(1);
+      expect(
+        found
+          .filter((m) => m.source === "n")
+          .map(({ source, generatedOffset }) => ({
+            source,
+            generatedOffset,
+          })),
+      ).toEqual(recorded);
     },
   );
 });

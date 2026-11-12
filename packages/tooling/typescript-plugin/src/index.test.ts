@@ -4053,7 +4053,7 @@ describe("Astro language plugin composition", () => {
         throw new Error("Cannot find module");
       }),
     ).toThrowError(
-      "@mxlang/typescript-plugin: `astro: true` requires the optional peer dependency `@astrojs/language-server@2.16.16`; install it beside the plugin.",
+      "@mxlang/typescript-plugin: `astro: true` requires the optional peer dependency `@astrojs/language-server@2.16.16`; install it in your project.",
     );
   });
 
@@ -5641,12 +5641,23 @@ describe("host-policy diagnostics through tsserver", {
     expect(p.diagnostics()).toEqual([]);
   });
 
+  it("clears the warning once a .mxrc.yaml alone is fixed (every config spelling is watched)", () => {
+    const dir = packageDir('{ "name": "t" }');
+    writeFileSync(join(dir, ".mxrc.yaml"), "host: vue\n");
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics()).toHaveLength(1);
+
+    writeFileSync(join(dir, ".mxrc.yaml"), "host: html\n");
+
+    expect(p.diagnostics()).toEqual([]);
+  });
+
   it("clears the warning once package.json alone is fixed, without editing the .mx", () => {
     const dir = packageDir(UNKNOWN);
     const p = project(dir, "page.mx");
     expect(p.diagnostics()).toHaveLength(1);
 
-    writeFileSync(join(dir, "package.json"), `${FIXED}\n`);
+    writeFileSync(join(dir, "package.json"), FIXED);
 
     expect(p.diagnostics()).toEqual([]);
   });

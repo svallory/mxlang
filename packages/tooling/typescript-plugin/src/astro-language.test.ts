@@ -24,4 +24,26 @@ describe("loading Astro's language plugin", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("does not hide a project copy that throws on load behind the plugin's own", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-peer-"));
+    try {
+      const pkg = join(dir, "node_modules", "@astrojs", "language-server");
+      mkdirSync(join(pkg, "dist", "core"), { recursive: true });
+      writeFileSync(
+        join(pkg, "package.json"),
+        JSON.stringify({ name: "@astrojs/language-server", version: "0.0.0" }),
+      );
+      writeFileSync(
+        join(pkg, "dist", "core", "index.js"),
+        'throw new Error("broken project copy");',
+      );
+
+      expect(() => loadAstroLanguagePlugin(dir)).toThrowError(
+        "broken project copy",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

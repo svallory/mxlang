@@ -87,6 +87,8 @@ export interface MxLanguagePlugin extends MxDiagnosticLanguagePlugin {
    * compiled again, so a fixed `package.json` stops being reported.
    */
   getTargetPolicyDiagnostics(fileName?: string): TargetPolicyDiagnostic[];
+  /** Re-resolves the file's host policy when a manifest it read changed. */
+  refreshTargetPolicy(fileName: string): void;
 }
 
 export interface MxLanguagePluginOptions
@@ -307,6 +309,10 @@ export function createMxLanguagePlugin(
 
     getTargetPolicyDiagnostics(fileName) {
       return hostPolicies.get(fileName);
+    },
+
+    refreshTargetPolicy(fileName) {
+      hostPolicies.refresh(fileName);
     },
 
     getCompileDiagnostics(fileName) {
