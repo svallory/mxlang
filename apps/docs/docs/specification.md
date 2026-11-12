@@ -4186,9 +4186,9 @@ host. Without `mx.host` or `mx.target` the default target is non-strict, and
 `mx.strict: true` is a policy **warning** (code `strict-ignored`, "mx.strict is
 ignored without mx.host or mx.target"), positioned at the `strict` value. It is
 raised only when neither key is present (a bad `mx.host` or `mx.target` has its
-own diagnostic) and the resolved target is not strict anyway. The vite plugin
-and the language server report it; the Bun loaders do not print policy
-diagnostics.
+own diagnostic) and the resolved target is not strict anyway. Every tool that
+prints policy diagnostics reports it (the vite plugin, the language server, the
+TypeScript plugin and `mx-tsc`); the Bun loaders do not print them.
 `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
 warns that it is a target and suggests `solid`.
 
