@@ -11,10 +11,13 @@
 import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { coreBabel } from "./babel.ts";
+import { coreBabel, withReasonFirst } from "./babel.ts";
+import { compileSource } from "./compile.ts";
+import type { Policy } from "./declarations.ts";
 import { markoBabel } from "./marko-frontend.ts";
 import { parseMx, stripMxTypes } from "./mx-parse.ts";
 import { defaultSyntax } from "./syntax-table.ts";
+import { lookup } from "./test-targets.ts";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
 
@@ -154,5 +157,61 @@ describe("coreBabel's code frame frames as Marko's did", () => {
     expect(coreBabel().codeFrameColumns(code, loc, options)).toBe(
       markoBabel().codeFrameColumns(code, loc, options),
     );
+  });
+});
+
+describe("withReasonFirst puts a parse error's reason on the first line", () => {
+  const open: Policy = {
+    tags: {},
+    isElement: () => true,
+    isComponent: () => false,
+  };
+
+  function thrown(source: string): Error {
+    try {
+      compileSource(`${source}\n`, "/f/t.mx", open, {
+        targets: lookup,
+        emitIr: () => "",
+      });
+    } catch (error) {
+      return error as Error;
+    }
+    throw new Error(`${source} compiled`);
+  }
+
+  it.each([
+    ["<div x=a +/>", "EOL reached while parsing regular expression"],
+    ["<div>${}</div>", "Invalid placeholder, the expression cannot be missing"],
+    ["<let/x=/>", "Missing value for attribute"],
+    ["<div x=/>", "Missing value for attribute"],
+    ["<div>${a b}</div>", "Expected a single expression"],
+    ["<div x=(/>", "EOL reached while parsing regular expression"],
+    ["<div x=a b=>", "Missing value for attribute"],
+    ["<const/x=1 +/>", "EOL reached while parsing regular expression"],
+    ["<div>${1 +}</div>", "Unexpected token"],
+    ["<div x=[1,/>", "EOL reached while parsing regular expression"],
+    ["<div ...>", "Missing value for attribute"],
+    ["<div x=a.>", "Unexpected token"],
+    ["<if=>x</if>", "Missing value for attribute"],
+    ["<div>${(}</div>", "Mismatched group"],
+  ])("%s", (source, reason) => {
+    const error = thrown(source);
+    // Today's shape: an empty first line, then the position.
+    expect(error.message.split("\n")[0]).toBe("");
+    const fixed = withReasonFirst(error);
+    const first = fixed.message.split("\n")[0] as string;
+    expect(first.trim()).not.toBe("");
+    expect(first).toContain(reason);
+    expect(first).not.toMatch(/\.mx:\d+:\d+/);
+    // The code frame and its position follow, and the original is untouched.
+    expect(fixed.message).toContain(error.message.trim());
+    expect(error.message.split("\n")[0]).toBe("");
+    expect(fixed.name).toBe(error.name);
+    expect(Object.getPrototypeOf(fixed)).toBe(Object.getPrototypeOf(error));
+  });
+
+  it("leaves a message that already starts with text as it is", () => {
+    const error = new Error("plain reason");
+    expect(withReasonFirst(error)).toBe(error);
   });
 });

@@ -21,6 +21,7 @@
  * an expression payload runs, TypeScript or not.
  */
 import { createRequire } from "node:module";
+import { stripVTControlCharacters } from "node:util";
 import type { Node } from "./core.ts";
 
 /** Parser, traverse, types, generator, code frame and the TS strip plugin. */
@@ -111,4 +112,63 @@ export function coreBabel(): Babel {
     File: core.File,
   };
   return loaded;
+}
+
+/** The reason a code frame's caret line carries (`    | ^^^ <reason>`), ANSI-free. */
+const CARET_REASON = /^\s*\|\s*\^+\s+(\S.*)$/;
+
+/**
+ * The reason of a Babel/Marko parse error: its `label` when it has one, else
+ * the text on the first caret line of its code frame (an aggregate's first
+ * error carries it). `undefined` when the message holds neither.
+ */
+function reasonOf(error: Error): string | undefined {
+  const { label, errors } = error as { label?: unknown; errors?: unknown };
+  if (typeof label === "string" && label.trim() !== "") return label.trim();
+  if (Array.isArray(errors) && errors[0] instanceof Error) {
+    const first = reasonOf(errors[0]);
+    if (first !== undefined) return first;
+  }
+  for (const line of stripVTControlCharacters(error.message).split("\n")) {
+    const reason = CARET_REASON.exec(line)?.[1];
+    if (reason !== undefined) return reason.trim();
+  }
+  return undefined;
+}
+
+/**
+ * A parse error whose `.message` starts with its reason.
+ *
+ * Babel and Marko write `<empty line>\n    at <file>:L:C\n<code frame>`, with the
+ * reason on the frame's caret line, so anything that reads the first line of
+ * the message sees nothing or a path. The result is a copy of `error` (same
+ * class, same properties, `error` itself is not touched, and a printer of the
+ * original keeps its text) whose message is the reason, then the old message
+ * without its leading blank line. An error whose message already starts with
+ * text, or that carries no reason, is returned as is.
+ */
+export function withReasonFirst<E extends Error>(error: E): E {
+  if (error.message.split("\n", 1)[0]?.trim() !== "") return error;
+  const reason = reasonOf(error);
+  if (reason === undefined) return error;
+  const message = `${reason}\n${error.message.replace(/^\s*\n/, "")}`;
+  const copy = Object.create(
+    Object.getPrototypeOf(error),
+    Object.getOwnPropertyDescriptors(error),
+  ) as E;
+  Object.defineProperties(copy, {
+    message: {
+      value: message,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    },
+    stack: {
+      value: `${error.name}: ${message}`,
+      enumerable: false,
+      writable: true,
+      configurable: true,
+    },
+  });
+  return copy;
 }

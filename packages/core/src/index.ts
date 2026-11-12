@@ -25,6 +25,7 @@ export {
   ATTRIBUTE_SPREAD_EXPRESSION,
   ATTRIBUTE_VALUE_EXPRESSION,
 } from "./attribute-value.ts";
+export { withReasonFirst } from "./babel.ts";
 export {
   type AttrTagDecl,
   type CalleeInput,
