@@ -127,11 +127,47 @@ interface RegionSink {
   defines: DefineParts[];
   /** Names claimed by lifted defines across every scope of the region. */
   claimed: Map<string, Position>;
+  /** The region's top-level binding table (what `claimed` also covers). */
+  root: Map<string, Position>;
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
 }
 
+/**
+ * Every name a tag param, `<for>` param or catch param of the template binds,
+ * as a superset (each identifier of the param text). A direct call of a
+ * `<define>` whose name is in the set may resolve to such a local, so it is
+ * emitted under the authored name, not the private function.
+ */
+export function shadowedNames(ir: Ir): Set<string> {
+  const names = new Set<string>();
+  const seen = new WeakSet<object>();
+  const skip = new Set(["paramNodes", "node", "loc", "span", "paramSpans"]);
+  const walk = (value: unknown): void => {
+    if (value === null || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if (skip.has(key)) continue;
+      if ((key === "params" || key === "bindings") && Array.isArray(child)) {
+        for (const text of child) {
+          if (typeof text === "string") {
+            for (const name of readIdentifiers(text)) names.add(name);
+          }
+        }
+      } else walk(child);
+    }
+  };
+  walk(ir.body);
+  return names;
+}
+
 /** The defines a region lifted out of one soft-scoped body (and its parents). */
+const NO_NAMES: ReadonlySet<string> = new Set();
+
 interface SoftLift {
   defines: Array<Extract<IrNode, { kind: "Define" }>>;
   parent: SoftLift | null;
@@ -142,9 +178,8 @@ type DelegatedTagData = { kind: "try" };
 
 /**
  * A `<define>` parameter as the arrow declares it. A parameter that carries
- * its own type (`a: string`) or a default (`a = 1`, which TypeScript infers
- * from) is kept as written; any other is typed `any` (`any[]` for a rest
- * parameter), so a strict project (`noImplicitAny`) does not report TS7006 or
+ * its own type (`a: string`) is kept as written; any other, a defaulted one
+ * included (`a: any = 1`), is typed `any` (`any[]` for a rest parameter), so a strict project (`noImplicitAny`) does not report TS7006 or
  * TS7031 on a define whose params the author left untyped.
  */
 export function typedDefineParam(param: string): string {
@@ -161,14 +196,8 @@ export function typedDefineParam(param: string): string {
     else if (ch === ")" || ch === "]" || ch === "}") depth--;
     else if (depth === 0 && ch === ":") return text;
     else if (depth === 0 && ch === "=") {
-      // A default types an identifier, but not a destructure: `{ a } = {}`
-      // still leaves `a` implicitly `any`.
-      // A `null` or `undefined` default widens to implicit `any` without
-      // `strictNullChecks`, so it is typed too; any other default is inferred.
-      const nullish = /^=\s*(null|undefined)\s*$/.test(text.slice(i));
-      return text.startsWith("{") || text.startsWith("[") || nullish
-        ? `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`
-        : text;
+      // A default is not a declared type: the param is `any` all the same.
+      return `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`;
     }
   }
   return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
@@ -219,7 +248,9 @@ export function defineStatements(
  */
 function readIdentifiers(text: string): Set<string> {
   const names = new Set<string>();
-  for (const match of text.matchAll(/(\.{1,3})?\s*([A-Za-z_$][\w$]*)/g)) {
+  for (const match of text.matchAll(
+    /(\.{1,3})?\s*([\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*)/gu,
+  )) {
     if (match[1] === ".") continue;
     names.add(match[2] as string);
   }
@@ -822,6 +853,8 @@ export class PreactEmitter implements Emitter<string> {
    * `/var` (checked when the body ends).
    */
   readonly #softLift: SoftLift | null;
+  /** Names a param of the template binds (`shadowedNames`). */
+  readonly #shadowed: ReadonlySet<string>;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -839,7 +872,9 @@ export class PreactEmitter implements Emitter<string> {
     source?: string,
     scopedBody = false,
     softLift: SoftLift | null = null,
+    shadowed: ReadonlySet<string> = NO_NAMES,
   ) {
+    this.#shadowed = shadowed;
     this.#softLift = softLift;
     this.#scopedBody = scopedBody;
     this.#source = source;
@@ -907,6 +942,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#source,
       overrides.scopedBody ?? this.#scopedBody,
       overrides.softLift === undefined ? this.#softLift : overrides.softLift,
+      this.#shadowed,
     );
   }
 
@@ -961,6 +997,21 @@ export class PreactEmitter implements Emitter<string> {
     table.set(name, at);
   }
 
+  /**
+   * Claims a `/var` name. In a region a name of the top-level scope also lands
+   * in the region's one arrow, where a lifted define's name lives too.
+   */
+  #claimVar(
+    name: string,
+    span: SourceSpan | null | undefined,
+    fallback: Position,
+  ): void {
+    this.#claimName(name, span, fallback);
+    if (this.#region && this.#bindings === this.#region.root) {
+      this.#claimName(name, span, fallback, this.#region.claimed);
+    }
+  }
+
   /** Claim a top-level statement after the markup's own errors are checked. */
   claimBinding(node: Extract<IrNode, { kind: "Const" | "Define" }>): void {
     if (node.kind === "Const") {
@@ -988,8 +1039,9 @@ export class PreactEmitter implements Emitter<string> {
     slot: boolean,
     build: (scope: PreactEmitter) => MappedCode,
     hard = true,
+    bindsParams = false,
   ): MappedCode {
-    const { code, statements } = this.#scopeOf(build, hard);
+    const { code, statements } = this.#scopeOf(build, hard, bindsParams);
     if (statements === "") return code;
     return slot
       ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
@@ -1004,6 +1056,7 @@ export class PreactEmitter implements Emitter<string> {
   #scopeOf(
     build: (scope: PreactEmitter) => MappedCode,
     hard = true,
+    bindsParams = false,
   ): {
     code: MappedCode;
     statements: string;
@@ -1025,9 +1078,9 @@ export class PreactEmitter implements Emitter<string> {
     const code = build(scope);
     const statements = scope.#varStatements.join(" ");
     const lifted = soft?.defines[0];
-    if (lifted && statements !== "") {
+    if (lifted && (statements !== "" || bindsParams)) {
       fail(
-        `\`<define>\` inside the body of an imported tag or a \`<define>\` call that declares a \`/var\` cannot be lifted out of it in a \`.${this.#region?.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside that body`,
+        `\`<define>\` inside the body of an imported tag or a \`<define>\` call that declares a \`/var\` or tag parameters cannot be lifted out of it in a \`.${this.#region?.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside that body`,
         lifted,
       );
     }
@@ -2346,7 +2399,7 @@ export class PreactEmitter implements Emitter<string> {
           );
         }
         for (const { name: bound, span } of node.varBindings ?? []) {
-          this.#claimName(bound, span, node.loc);
+          this.#claimVar(bound, span, node.loc);
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
@@ -2435,7 +2488,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(
         this.#slot(
           mapped(
-            this.#typeCheck
+            this.#typeCheck || this.#shadowed.has(node.target.name)
               ? node.target.name
               : defineFunctionName(node.target.name),
             node.nameSpan,
@@ -2491,7 +2544,7 @@ export class PreactEmitter implements Emitter<string> {
           );
         }
         for (const { name: bound, span } of node.varBindings ?? []) {
-          this.#claimName(bound, span, node.loc);
+          this.#claimVar(bound, span, node.loc);
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         // The unit's render path: `.render` is the compiled unit's own
@@ -2579,7 +2632,12 @@ export class PreactEmitter implements Emitter<string> {
       node.target.kind === "dynamic"
         ? this.#scoped(false, (scope) => scope.#expression(children))
         : node.target.kind === "define"
-          ? this.#scoped(false, (scope) => scope.#expression(children), false)
+          ? this.#scoped(
+              false,
+              (scope) => scope.#expression(children),
+              false,
+              node.content?.hasParams === true,
+            )
           : this.#expression(children);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
@@ -2623,6 +2681,7 @@ export class PreactEmitter implements Emitter<string> {
     const { code: body, statements } = this.#scopeOf(
       (scope) => scope.#hostComponentBody(node, children),
       false,
+      node.content?.hasParams === true,
     );
     const open = node.content?.hasParams
       ? `((${node.content.params.join(", ")}) =>`
@@ -2972,7 +3031,9 @@ export function createRegionEmitter(
   dialect: JsxDialect,
   segment: string,
   positionAt: RegionSink["positionAt"],
+  shadowed: ReadonlySet<string> = NO_NAMES,
 ): PreactEmitter {
+  const root = new Map<string, Position>();
   return new PreactEmitter(
     dialect,
     undefined,
@@ -2982,7 +3043,14 @@ export function createRegionEmitter(
     false,
     undefined,
     true,
-    { segment, defines: [], claimed: new Map(), positionAt },
+    { segment, defines: [], claimed: new Map(), root, positionAt },
+    false,
+    root,
+    undefined,
+    undefined,
+    false,
+    null,
+    shadowed,
   );
 }
 
@@ -2990,6 +3058,7 @@ export function createEmitter(
   dialect: JsxDialect = preactDialect,
   typeCheck?: string,
   source?: string,
+  shadowed: ReadonlySet<string> = NO_NAMES,
 ): PreactEmitter {
   return new PreactEmitter(
     dialect,
@@ -3005,6 +3074,9 @@ export function createEmitter(
     undefined,
     !source ? undefined : (offset) => sourcePosition(source, offset),
     source,
+    false,
+    null,
+    shadowed,
   );
 }
 

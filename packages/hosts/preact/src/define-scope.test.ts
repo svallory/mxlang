@@ -175,6 +175,18 @@ describe.each(HOSTS)(
       },
     );
 
+    it.each([
+      ["a dynamic target", "<define/Ñame a=1>x</define><${Ñame}/>"],
+      ["a spread", "<define/Rowé a=1/><div ...Rowé/>"],
+    ])(
+      "a define with a non-ASCII name read as %s keeps its public binding",
+      async (_label, source) => {
+        const code = await compile(source);
+        expect(code).toMatch(/const (Ñame|Rowé) = Object\.assign\(/);
+        expect(() => parseTsx(code)).not.toThrow();
+      },
+    );
+
     it("a define with attributes whose property is read keeps its binding", async () => {
       const code = await compile(
         "<define/Row x=1><p>r</p></define><Row/>${Row.x}",
@@ -231,7 +243,8 @@ describe("typedDefineParam", () => {
     ["{ a }", "{ a }: any"],
     ["[a, b]", "[a, b]: any"],
     ["a: string", "a: string"],
-    ["a = 1", "a = 1"],
+    ["a = 1", "a: any = 1"],
+    ["xs = []", "xs: any = []"],
     ["a = null", "a: any = null"],
     ["a = undefined", "a: any = undefined"],
     ["{ a = 1 }", "{ a = 1 }: any"],

@@ -54,6 +54,7 @@ import {
   componentAlias,
   createRegionEmitter,
   defineStatements,
+  shadowedNames,
 } from "./emitter.ts";
 import { sourcePosition } from "./source-position.ts";
 
@@ -251,8 +252,11 @@ export function compileJsxRegion(
   // region emitter lifts those outside a callback into `liftedDefines`.
   // The padded source is file-shaped (offset = file offset), so a span's
   // offset maps straight to the file's line and column.
-  const emitter = createRegionEmitter(dialect, segment, (offset) =>
-    sourcePosition(padded, offset),
+  const emitter = createRegionEmitter(
+    dialect,
+    segment,
+    (offset) => sourcePosition(padded, offset),
+    shadowedNames(ir),
   );
   drive(emitter, ir.body);
   const markupCode = emitter.result();

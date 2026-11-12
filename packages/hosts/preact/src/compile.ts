@@ -52,6 +52,7 @@ import {
   type DefineParts,
   defineStatements,
   preactDeclarations,
+  shadowedNames,
 } from "./emitter.ts";
 
 export interface CompilePreactOptions {
@@ -505,7 +506,8 @@ export function emitModuleWithMappings(
   source = "",
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
-  const emitter = createEmitter(dialect, names?.handler, source);
+  const shadowed = shadowedNames(ir);
+  const emitter = createEmitter(dialect, names?.handler, source, shadowed);
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -516,7 +518,7 @@ export function emitModuleWithMappings(
     if (node.kind === "Const") {
       statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
     } else if (node.kind === "Define") {
-      const body = createEmitter(dialect, names?.handler, source);
+      const body = createEmitter(dialect, names?.handler, source, shadowed);
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {

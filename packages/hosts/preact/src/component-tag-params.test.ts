@@ -147,6 +147,27 @@ export interface Input { items: string[] }
     html: "<ul><li>a</li><li>b</li></ul><p>2</p>",
     unusedLocals: true,
   },
+  "a <for> param that shadows a define name": {
+    caller: `export interface Input { items: string[] }
+<define/Row|a|><li>outer:\${a}</li></define>
+<Row(0)/>
+<ul><for|Row| of=[(n: number) => "local" + n] by="name"><Row(1)/></for></ul>`,
+    html: "<li>outer:0</li><ul>local1</ul>",
+  },
+  "a define param that shadows another define name": {
+    caller: `export interface Input { items: string[] }
+<define/Row|a|><li>outer:\${a}</li></define>
+<define/Wrap|Row|><b><Row(2)/></b></define>
+<Row(0)/><Wrap((n: number) => "p" + n)/>`,
+    html: "<li>outer:0</li><b>p2</b>",
+  },
+  "a define whose param defaults to an array": {
+    caller: `export interface Input { items: string[] }
+<define/Row|xs = []|><li>\${xs.push(1)}</li></define>
+<ul><Row(input.items)/></ul>`,
+    html: "<ul><li>3</li></ul>",
+    looseNull: true,
+  },
   "a define whose param defaults to null": {
     caller: `export interface Input { items: string[] }
 <define/Row|p = null|><li>\${p}</li></define>

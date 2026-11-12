@@ -111,7 +111,7 @@ describe("region rule", () => {
       COUNTER_FILE,
     );
     expect(e.message).toBe(
-      "`<define>` inside the body of an imported tag or a `<define>` call that declares a `/var` cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside that body",
+      "`<define>` inside the body of an imported tag or a `<define>` call that declares a `/var` or tag parameters cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside that body",
     );
     expect(e.line).toBe(5);
   });
@@ -123,7 +123,9 @@ describe("region rule", () => {
       ),
       COUNTER_FILE,
     );
-    expect(e.message).toContain("declares a `/var` cannot be lifted");
+    expect(e.message).toContain(
+      "declares a `/var` or tag parameters cannot be lifted",
+    );
   });
 
   it("lifts a <define> in a <define> call's body that binds no /var", () => {
@@ -147,6 +149,39 @@ describe("region rule", () => {
     );
     expect(out.code).toContain("const __mxDef_X = ");
   });
+
+  it.each([
+    ["an imported tag", "<Box|v|><define/Row>${v}</define><Row/></Box>"],
+    [
+      "a <define> call",
+      "<define/Wrap|{ content }|>${content}</define><Wrap|v|><define/Row>${v}</define><Row/></Wrap>",
+    ],
+  ])(
+    "refuses a <define> in the body of %s that declares tag params",
+    (_label, body) => {
+      const e = errorOf(BOX_SOURCE(body), COUNTER_FILE);
+      expect(e.message).toContain("or tag parameters cannot be lifted");
+      expect(e.line).toBe(5);
+    },
+  );
+
+  it.each([
+    [
+      "a /var",
+      "<Counter/Row start=1/><Box><define/Row>hi</define><Row/></Box>",
+    ],
+    [
+      "a /var of another name",
+      "<Counter/x start=1/><Box><define/x><i/></define>${String(x)}</Box>",
+    ],
+  ])(
+    "claims a region-level %s against a define lifted from a tag body",
+    (_label, body) => {
+      const e = errorOf(BOX_SOURCE(body), COUNTER_FILE);
+      expect(e.message).toMatch(/^Duplicate declaration "(Row|x)"$/);
+      expect(e.line).toBe(5);
+    },
+  );
 
   it("claims a lifted define's name across scopes of the region", () => {
     const e = errorOf(
