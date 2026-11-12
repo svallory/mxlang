@@ -274,11 +274,11 @@ that statement's `{ … }` block. This one is inside a nested block, an `if` or
 a function body; move it out to the block's own statements."
 
 The same refusal, with the same code and text, applies to an `import` or
-`export` inside an attribute value, a placeholder, an argument list, a
-parameter list, a pattern or a `$` scriptlet, anywhere below the payload's own
-top level (`<div x=(() => { export { a } })/>`,
-`$ function f() { export { a } }`); it is positioned at the declaration. An
-`export` inside a TypeScript namespace body is not refused.
+`export` below the top level of an attribute value, a placeholder, an argument
+list, a parameter list, a pattern or a `static`, `server` or `client`
+statement (`<div x=(() => { export { a } })/>`,
+`static function f() { export { a } }`); it is positioned at the declaration.
+An `export` inside a TypeScript namespace body is not refused.
 
 **A template module's default export is the template.** A `static`, `server`
 or `client` statement, in a block or without one, cannot add a second default
