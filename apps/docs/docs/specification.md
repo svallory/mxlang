@@ -5825,8 +5825,9 @@ on its own line there is TypeScript, not a row, and so is a decorator at a
 statement start that is followed by `class`, `export`, `abstract`, `default` or
 another decorator (`@dec class B {}`). The scan reads tokens, not a parse: it
 tells blocks from object literals by the construct that opened each brace and
-does not model every TypeScript form (a type literal after a statement-level
-`:` counts as a block), so a form it misreads is found or missed as the
+does not model every TypeScript form (a decorator `@x` after a `(` or `,` in a
+class body counts as a parameter decorator, so a row written there in a field
+initializer's call arguments is not found), so a form it misreads is found or missed as the
 template would not.
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
