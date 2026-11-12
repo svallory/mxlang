@@ -33,32 +33,36 @@ export function rewriterFor(names: BuildResult["authoredNames"]): NameRewriter {
   return createNameRewriter(mergeAuthoredNames(Object.values(names)));
 }
 
-/** `text` with every generated name replaced by its authored one; see {@link rewriterFor}. */
-export function rewriteGeneratedNames(
-  text: string,
-  names: BuildResult["authoredNames"],
-): string {
-  return rewriterFor(names)(text);
-}
-
-/** Whether `line` is an underline under a code-frame line: only spaces, `^` and `~`, and at least one mark. */
+/**
+ * Whether `line` underlines a code-frame line: spaces, `^` and `~` with at
+ * least one mark, behind the `╵` gutter mark esbuild (Angular's application
+ * builder) prints, or with none (tsc's frame).
+ */
 function isCaretLine(line: string): boolean {
-  return /^[ ^~]*[\^~][ ^~]*$/.test(line);
+  return /^ *╵?[ ^~]*[\^~][ ^~]*$/.test(line);
 }
 
 /**
- * `caret` with the columns a rewrite removed taken out, so the underline under
- * a shortened source line still sits under the same text: each replacement
- * drops `removed - added` columns from where its replacement ends. Edits are in
- * input order; they are applied last to first so earlier columns stay valid.
+ * `caret` with its columns kept under the same text after a rewrite changed the
+ * source line's length: a shortened name drops the columns it no longer needs
+ * (so its underline shrinks with it), a lengthened one gets as many back (the
+ * underline's mark where the name was underlined, spaces where it was not).
+ * Edits are in input order; they are applied last to first so earlier columns
+ * stay valid.
  */
 function realignCarets(caret: string, edits: NameEdit[]): string {
   let result = caret;
   for (const edit of [...edits].reverse()) {
     const drop = edit.removed - edit.added;
-    if (drop <= 0) continue;
-    const from = Math.min(edit.index + edit.added, result.length);
-    result = result.slice(0, from) + result.slice(from + drop);
+    if (drop > 0) {
+      const from = Math.min(edit.index + edit.added, result.length);
+      result = result.slice(0, from) + result.slice(from + drop);
+    } else if (drop < 0) {
+      const at = Math.min(edit.index + edit.removed, result.length);
+      const under = result[edit.index];
+      const fill = under === "^" || under === "~" ? under : " ";
+      result = result.slice(0, at) + fill.repeat(-drop) + result.slice(at);
+    }
   }
   return result;
 }
@@ -66,7 +70,11 @@ function realignCarets(caret: string, edits: NameEdit[]): string {
 /**
  * Forwards `source` to `sink` a line at a time, rewritten, so a long build
  * prints as it runs and a name split across two reads is still one name. An
- * underline of `^`/`~` under a rewritten line is realigned to it. Resolves when
+ * underline of `^`/`~` under a rewritten line is realigned to it, in esbuild's
+ * frame (`  3 │ @let …` over `    ╵ ~~~`) and tsc's; a line printed with colour
+ * escapes (`FORCE_COLOR`) is not realigned. A rewritten line waits for its
+ * underline only until the stream is idle, so a diagnostic that ends a
+ * rebuild's output is printed without waiting for the next one. Resolves when
  * `source` ends, closes or errors.
  */
 export function forwardLines(
@@ -83,7 +91,11 @@ export function forwardLines(
       held = undefined;
     };
     const line = (raw: string) => {
-      if (held && isCaretLine(raw.replace(/\r?\n$/, ""))) {
+      if (
+        held &&
+        !held.text.includes("\x1b") &&
+        isCaretLine(raw.replace(/\r?\n$/, ""))
+      ) {
         const ending = /\r?\n$/.exec(raw)?.[0] ?? "";
         sink.write(held.text);
         sink.write(
@@ -116,6 +128,9 @@ export function forwardLines(
         line(pending.slice(0, cut + 1));
         pending = pending.slice(cut + 1);
       }
+      // The underline, if there is one, came in the same read; a line still
+      // held once the loop is idle has none coming soon.
+      if (held) setImmediate(release);
     });
     source.on("end", finish);
     source.on("close", finish);
@@ -124,14 +139,18 @@ export function forwardLines(
 }
 
 /** The command that runs the project's Angular CLI: its `bin/ng.js` under this node, else `ng` on the PATH. */
-function ngCommand(projectDir: string): { command: string; prefix: string[] } {
+function ngCommand(projectDir: string): {
+  command: string;
+  prefix: string[];
+  local: boolean;
+} {
   try {
     const ngJs = createRequire(join(projectDir, "package.json")).resolve(
       "@angular/cli/bin/ng.js",
     );
-    return { command: process.execPath, prefix: [ngJs] };
+    return { command: process.execPath, prefix: [ngJs], local: true };
   } catch {
-    return { command: "ng", prefix: [] };
+    return { command: "ng", prefix: [], local: false };
   }
 }
 
@@ -142,7 +161,14 @@ export function runNg(
   names: BuildResult["authoredNames"],
 ): Promise<number> {
   const rewrite = rewriterFor(names);
-  const { command, prefix } = ngCommand(projectDir);
+  const { command, prefix, local } = ngCommand(projectDir);
+  if (!local && process.platform === "win32") {
+    // A PATH `ng` is `ng.cmd` there, which cannot run without a shell.
+    console.error(
+      `could not run ng: @angular/cli was not found in ${projectDir}; install it in the project`,
+    );
+    return Promise.resolve(1);
+  }
   return new Promise((resolveCode) => {
     // No shell: a path or an argument with a space or `&` reaches `ng` as written.
     const child = spawn(command, [...prefix, "build", ...ngArgs], {

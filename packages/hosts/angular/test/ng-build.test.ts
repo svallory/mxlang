@@ -6,13 +6,9 @@ import { PassThrough } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { build } from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
-import {
-  forwardLines,
-  rewriteGeneratedNames,
-  rewriterFor,
-} from "../src/ng-build.ts";
+import { forwardLines, rewriterFor } from "../src/ng-build.ts";
 
-describe("rewriteGeneratedNames", () => {
+describe("rewriterFor", () => {
   const names = {
     "src/x.html": { __mxConst_a: "a", __mxConst_a1: "a", __mxDefine_D: "D" },
   };
@@ -44,33 +40,33 @@ describe("rewriteGeneratedNames", () => {
       "NG8002: Can't bind to 'x'",
     ],
   ])("%s", (_label, text, expected) => {
-    expect(rewriteGeneratedNames(text, names)).toBe(expected);
+    expect(rewriterFor(names)(text)).toBe(expected);
   });
 
   it("leaves a name that two files give different authored names as printed", () => {
     expect(
-      rewriteGeneratedNames("__mxConst_a", {
+      rewriterFor({
         "one.html": { __mxConst_a: "a" },
         "two.html": { __mxConst_a: "b" },
-      }),
+      })("__mxConst_a"),
     ).toBe("__mxConst_a");
   });
 });
 
-describe("rewriteGeneratedNames and terminal output", () => {
+describe("rewriterFor and terminal output", () => {
   const names = { "src/x.html": { __mxConst_a: "a" } };
 
   it("rewrites a name that ng build colours", () => {
-    expect(
-      rewriteGeneratedNames("@let \x1b[1m__mxConst_a\x1b[0m is unused", names),
-    ).toBe("@let \x1b[1ma\x1b[0m is unused");
+    expect(rewriterFor(names)("@let \x1b[1m__mxConst_a\x1b[0m is unused")).toBe(
+      "@let \x1b[1ma\x1b[0m is unused",
+    );
   });
 
   it("does not rescan a replacement", () => {
     expect(
-      rewriteGeneratedNames("__mxConst_a", {
+      rewriterFor({
         f: { __mxConst_a: "__mxConst_b", __mxConst_b: "z" },
-      }),
+      })("__mxConst_a"),
     ).toBe("__mxConst_b");
   });
 });
@@ -110,15 +106,46 @@ describe("forwardLines", () => {
     expect(await forward(["__mxConst_a1 x\n"], names, "error")).toBe("a x\n");
   });
 
-  it("realigns the underline under a shortened source line", async () => {
+  it("realigns esbuild's underline under a shortened source line", async () => {
     expect(
       await forward(
         [
-          "▲ [ERROR] NG8112: unused\n\n    @let __mxConst_a1 = 2;\n         ~~~~~~~~~~~~\n\n",
+          "    src/x.html:1:5:\n      1 │ @let __mxConst_a1 = 2;\n        ╵      ~~~~~~~~~~~~\n",
         ],
         names,
       ),
-    ).toBe("▲ [ERROR] NG8112: unused\n\n    @let a = 2;\n         ~\n\n");
+    ).toBe("    src/x.html:1:5:\n      1 │ @let a = 2;\n        ╵      ~\n");
+  });
+
+  it("realigns a plain underline (tsc's frame) and what is right of the name", async () => {
+    expect(
+      await forward(
+        ["@let __mxConst_a1 = __mxConst_a1;\n     ^~~~~~~~~~~~~~~~~~~~~~~~\n"],
+        {
+          f: { __mxConst_a1: "a" },
+        },
+      ),
+    ).toBe("@let a = a;\n     ^~~~~\n");
+  });
+
+  it("widens an underline under a lengthened name", async () => {
+    expect(
+      await forward(["@let __mxPattern = o;\n     " + "~".repeat(11) + "\n"], {
+        f: { __mxPattern: "{ first, second }" },
+      }),
+    ).toBe("@let { first, second } = o;\n     " + "~".repeat(17) + "\n");
+  });
+
+  it("prints a held line when the stream goes idle, without waiting for another", async () => {
+    const source = new PassThrough();
+    const sink = new PassThrough();
+    const first = new Promise<string>((resolve) =>
+      sink.once("data", (d) => resolve(String(d))),
+    );
+    void forwardLines(source, sink, rewriterFor(names));
+    source.write("NG8112: @let __mxConst_a1 is declared\n");
+    expect(await first).toBe("NG8112: @let a is declared\n");
+    source.end();
   });
 
   it("leaves a line that is not an underline alone", async () => {
@@ -154,6 +181,10 @@ describe("mx-angular ng-build", () => {
       "<div><const/{ p, q }=obj/>${p}${q}</div>",
     );
     writeFileSync(
+      join(dir, "src/pattern2.mx"),
+      "<div><const/{ r, s }=obj/>${r}${s}</div>",
+    );
+    writeFileSync(
       join(dir, "src/y.component.ng.mx"),
       "declare function Component(options: object): ClassDecorator;\n@Component({ template: <section><div><const/b=1/></div><div><const/b=2/></div></section> })\nexport class YComponent {}\n",
     );
@@ -186,10 +217,11 @@ describe("mx-angular ng-build", () => {
     expect(Object.values(names ?? {})).toEqual(["b", "b"]);
   });
 
-  it("names a destructuring const's holder as the pattern the author wrote", () => {
-    expect(
-      Object.values(built.authoredNames[join(dir, "src/pattern.html")] ?? {}),
-    ).toContain("{ p, q }");
+  // The holder's name is per file and means a different pattern in each, so
+  // no merged map could rewrite it: it is not listed.
+  it("does not list a destructuring const's holder", () => {
+    expect(built.authoredNames[join(dir, "src/pattern.html")]).toBeUndefined();
+    expect(built.authoredNames[join(dir, "src/pattern2.html")]).toBeUndefined();
   });
 
   // Not a process smoke: `build` refuses before anything runs.

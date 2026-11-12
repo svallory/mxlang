@@ -78,9 +78,11 @@ export interface BuildResult {
   /**
    * Per emitted output file (the page `.html`, a tag's or `.ng.mx`'s `.ts`),
    * each generated `<const>`/`<define>` name mapped to the authored one. Only
-   * files whose template has a generated name (a renamed `<const>`/`<define>`,
-   * or a destructuring `<const>`'s holder) appear; a `null` is a name two
-   * regions of one file give different authored names. `mx-angular ng-build` reads it.
+   * files whose template has a generated name (a renamed `<const>`/`<define>`)
+   * appear. A destructuring `<const>`'s `__mxPattern` holder is not listed: its
+   * name is per file and means a different pattern in each. A `null` is a name
+   * two regions of one file give different authored names. `mx-angular
+   * ng-build` reads it.
    */
   authoredNames: Record<string, Record<string, string | null>>;
 }
@@ -923,8 +925,14 @@ export function build(
     const result = compileOne(routed, config, knownOutputs, targets, reported);
     errors.push(...result.errors);
     warnings.push(...result.warnings);
-    const names = result.authoredNames;
-    if (names && Object.keys(names).length > 0 && result.outputs[0]) {
+    // A destructuring `<const>`'s holder (`__mxPattern`) is per file and means
+    // a different pattern in each, so a merged map could not rewrite it.
+    const names = Object.fromEntries(
+      Object.entries(result.authoredNames ?? {}).filter(
+        ([generated]) => !generated.startsWith("__mxPattern"),
+      ),
+    );
+    if (Object.keys(names).length > 0 && result.outputs[0]) {
       authoredNames[result.outputs[0]] = names;
     }
   }

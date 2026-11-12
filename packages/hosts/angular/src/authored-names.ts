@@ -58,7 +58,7 @@ export function createNameRewriter(
     .map((generated) => generated.replace(/[$.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
   const pattern = new RegExp(
-    `(?<![\\w$])(?:${ANSI})?(${alternation})(?![\\w$])`,
+    `(?<![\\w$])${ANSI}(${alternation})(?![\\w$])`,
     "g",
   );
   const byGenerated = new Map(usable);
