@@ -682,6 +682,7 @@ export function createNgMxLanguagePlugin(
         );
       const current = compileDiagnostics.get(fileName);
       if (now && current?.[0]) {
+        staleConfig.delete(fileName);
         compileDiagnostics.set(fileName, [
           { ...current[0], message: hostPolicyMessage(now) },
           ...current.slice(1),

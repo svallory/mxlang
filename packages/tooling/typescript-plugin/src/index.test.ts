@@ -5658,8 +5658,8 @@ describe("host-policy diagnostics through tsserver", {
     expect(p.diagnostics()).toEqual([]);
   });
 
-  it("says so too when the policy refused the target and the config is then fixed", () => {
-    const dir = packageDir('{ "mx": { "target": "no-such-target" } }');
+  it("says so too when the target failed to load and the config is then fixed", () => {
+    const dir = packageDir('{ "mx": { "target": "./targets/missing.js" } }');
     const p = project(dir, "page.mx");
     expect(p.diagnostics().length).toBeGreaterThan(0);
 
@@ -5670,6 +5670,29 @@ describe("host-policy diagnostics through tsserver", {
       "the host config changed since this file was compiled; edit it to recompile",
     ]);
     p.touch();
+    expect(p.diagnostics()).toEqual([]);
+  });
+
+  it("says nothing when an unknown target (compiled under the fallback) is fixed to html", () => {
+    const dir = packageDir('{ "mx": { "target": "no-such-target" } }');
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics().length).toBeGreaterThan(0);
+
+    writeFileSync(join(dir, "package.json"), FIXED);
+
+    expect(p.diagnostics()).toEqual([]);
+  });
+
+  it("drops the host-changed error when the config goes back to what the file was compiled under", () => {
+    const dir = packageDir('{ "name": "t" }');
+    writeFileSync(join(dir, ".mxrc.yaml"), "host: html\n");
+    const p = project(dir, "page.mx");
+    expect(p.diagnostics()).toEqual([]);
+
+    writeFileSync(join(dir, ".mxrc.yaml"), "host: preact\n");
+    expect(p.diagnostics()).toHaveLength(1);
+    writeFileSync(join(dir, ".mxrc.yaml"), "host:  html\n");
+
     expect(p.diagnostics()).toEqual([]);
   });
 

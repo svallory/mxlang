@@ -525,6 +525,19 @@ describe("a malformed package.json beside an .ng.mx", () => {
     expect(rest).toEqual([]);
     expect(only?.message).toContain("package.json:3:");
     expect(only?.message).not.toContain("the manifest changed since");
+
+    // Fixed (the note appears), then broken again with no edit of the .ng.mx:
+    // the position is current, so the note must go.
+    writeFileSync(path.join(dir, "package.json"), "{}");
+    plugin.refreshTargetPolicy?.(fileName);
+    expect(plugin.getCompileDiagnostics(fileName)[0]?.message).toContain(
+      "the manifest changed since",
+    );
+    writeFileSync(path.join(dir, "package.json"), "{ nope again");
+    plugin.refreshTargetPolicy?.(fileName);
+    const [again] = plugin.getCompileDiagnostics(fileName);
+    expect(again?.message).toContain("package.json:1:3: ");
+    expect(again?.message).not.toContain("the manifest changed since");
   });
 
   it("reports it once with a separate .mxrc.json beside it (a warning: the file still compiles)", async () => {

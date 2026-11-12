@@ -133,7 +133,9 @@ export function createMxLanguagePlugin(
     const policy = hostPolicies.resolve(fileName);
     compiledUnder.set(fileName, {
       target: policy.target,
-      failed: hostPolicies.errors(fileName).length > 0,
+      failed: hostPolicies
+        .get(fileName)
+        .some((diagnostic) => LOAD_FAILURE_CODES.has(diagnostic.code)),
     });
     return policy;
   };
@@ -329,9 +331,9 @@ export function createMxLanguagePlugin(
     refreshTargetPolicy(fileName) {
       const next = hostPolicies.refresh(fileName);
       const was = compiledUnder.get(fileName);
-      if (next && was && (was.failed || next.target !== was.target)) {
-        staleHost.add(fileName);
-      }
+      if (!next || !was) return;
+      if (was.failed || next.target !== was.target) staleHost.add(fileName);
+      else staleHost.delete(fileName);
     },
 
     getCompileDiagnostics(fileName) {
