@@ -968,6 +968,13 @@ describe("structural: reject, which construct is named", () => {
     },
   } as const;
 
+  // A tag whose transform returns nothing: its body never reaches the IR.
+  const consuming: Record<string, CustomTag> = {
+    ...customTags,
+    eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
+    leaf: {},
+  };
+
   const first = (source: string) => {
     const result = lowerSource(source, "/t.mx", options);
     return result.diagnostics.map((d) => [d.code, d.line, d.column, d.message]);
@@ -1001,16 +1008,17 @@ describe("structural: reject, which construct is named", () => {
     expect(found[0]?.[0]).toBe("MX_STRUCTURAL_CONSTRUCT");
   });
 
+  it("a contract-only tag holding an `if` with an attribute tag still reports the construct", () => {
+    expect(seen("<box><if=x><@zzz/></if></box>\n", options)).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 5, IF],
+    ]);
+  });
+
   it("an orphan `<else>` in a body the transform consumes still reports", () => {
-    const eater: Record<string, CustomTag> = {
-      ...customTags,
-      eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
-      leaf: {},
-    };
     const result = lowerSource(
       "<eater>\n  <else><leaf/></else>\n</eater>\n",
       "/t.mx",
-      { ...options, structural: "pass", customTags: eater },
+      { ...options, structural: "pass", customTags: consuming },
     );
     expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
       ["MX_NOT_IN_DATA_FILE", 2],
@@ -1018,15 +1026,10 @@ describe("structural: reject, which construct is named", () => {
   });
 
   it("a contract tag's body is lowered even when its transform ignores it", () => {
-    const eater: Record<string, CustomTag> = {
-      ...customTags,
-      eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
-      leaf: {},
-    };
     const result = lowerSource(
       "<eater>\n  <try><leaf/></try>\n</eater>\n",
       "/t.mx",
-      { ...options, customTags: eater },
+      { ...options, customTags: consuming },
     );
     expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
       ["MX_NOT_IN_DATA_FILE", 2],

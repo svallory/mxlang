@@ -844,8 +844,8 @@ function hostRefusesScript(ctx: Ctx): boolean {
  * tag whose body is parsed as tags and text, and its text is
  * whitespace-normalized: it is not code to check, and the tag keeps the
  * attributes of any tag. Nor is it checked where the host declares `script`
- * unsupported: the host's refusal is the only diagnostic for the tag, and a
- * body that is refused whole is not parsed.
+ * as an `unsupported` or an `error` row: the host's refusal is the only
+ * diagnostic for the tag, and a body that is refused whole is not parsed.
  */
 function isRawTextScript(ctx: Ctx, tag: Node): boolean {
   return (
@@ -877,9 +877,10 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  *   template literal the `${…}` is the script's own and is not a placeholder.
  *
  * The attribute and the variable name `<html-script>`, the tag for a native
- * html `<script>` element, as does the placeholder. The head error and the
- * placeholder are reported together. When the walk collects errors they are
- * recorded and the tag keeps lowering; otherwise the first throws.
+ * html `<script>` element, as does the placeholder. It raises the placeholder,
+ * then the body's syntax (`checkScriptBodySyntax`), then the head and
+ * attributes. A collecting walk records all of them and keeps lowering, and
+ * `lowerSource` lists them by position; otherwise the first raised throws.
  */
 function checkScriptShape(ctx: Ctx, tag: Node): void {
   if (!isRawTextScript(ctx, tag)) return;

@@ -239,16 +239,23 @@ export function withRawTextParseOptions(lookup: TagTable): TagTable {
     string,
     { parseOptions?: TagParseOptions } | undefined
   >;
+  // One entry per name, built on first ask and kept, so `getTag(n)` answers the
+  // same object every time. The entry's own options win key by key, as a later
+  // taglib's do in `tagTable`.
+  const patched = new Map<string, TagEntry | undefined>();
   const view: TagTable = {
     getTag(name) {
+      if (patched.has(name)) return patched.get(name);
       const entry = lookup.getTag(name);
-      if (entry?.parseOptions) return entry;
-      const parseOptions = raw[`<${name}>`]?.parseOptions;
-      if (!parseOptions) return entry;
-      return {
-        ...(entry ?? { taglibId: NAMESPACE_TAGLIB_IDS.html }),
-        parseOptions: { ...parseOptions },
-      };
+      const core = raw[`<${name}>`]?.parseOptions;
+      const answer = core
+        ? {
+            ...(entry ?? { taglibId: NAMESPACE_TAGLIB_IDS.html }),
+            parseOptions: { ...core, ...entry?.parseOptions },
+          }
+        : entry;
+      patched.set(name, answer);
+      return answer;
     },
   };
   rawTextViews.set(lookup, view);

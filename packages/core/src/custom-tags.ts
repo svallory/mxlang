@@ -22,7 +22,6 @@ import {
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
   codedError,
-  collectedError,
   endErrorAt,
   isTranslateError,
   TranslateError,
@@ -3864,8 +3863,8 @@ export function markValidatedContracts(
  * sheet to a file that never called it.
  *
  * A tag whose `analyze` throws does not stop the others: every failure is
- * collected and thrown together at the end (the first, carrying the rest; see
- * `collectedError`). Inside one hook the first `ctx.fail` still ends that
+ * collected and thrown together at the end (the earliest failure in the
+ * compiled file, carrying the rest). Inside one hook the first `ctx.fail` still ends that
  * hook, since `fail` never returns.
  */
 export function runAnalyzeHooks(
@@ -3921,12 +3920,32 @@ export function runAnalyzeHooks(
   const [only] = failures;
   if (failures.length === 1 && only) throw only;
   if (failures.length > 1) {
-    // Each failure stands for its own list (related errors a hook carried), and
-    // the first error in the file is the primary, not the first tag by name.
-    const all = [
-      ...new Set(failures.flatMap((e) => (e.errors?.length ? e.errors : [e]))),
-    ].sort((a, b) => a.line - b.line || a.column - b.column);
-    throw collectedError(all);
+    // The primary is the earliest failure in the compiled file: a related
+    // error positioned in another file never leads. The list is the primary,
+    // then every other error (each failure's head and the related errors it
+    // carried) in the compiled file first, then by file, line and column. Only
+    // the primary carries the list, so no member's own `errors` repeats or
+    // cycles through it.
+    const inFile = (e: TranslateError) =>
+      e.file === undefined || e.file === ctx.filename;
+    const byPosition = (a: TranslateError, b: TranslateError) =>
+      a.line - b.line || a.column - b.column;
+    const primary =
+      failures.filter(inFile).sort(byPosition)[0] ??
+      [...failures].sort(byPosition)[0];
+    if (!primary) return;
+    const members = [
+      ...new Set(failures.flatMap((e) => [e, ...(e.errors ?? [])])),
+    ].filter((e) => e !== primary);
+    members.sort(
+      (a, b) =>
+        Number(!inFile(a)) - Number(!inFile(b)) ||
+        (a.file ?? "").localeCompare(b.file ?? "") ||
+        byPosition(a, b),
+    );
+    for (const member of members) delete member.errors;
+    primary.errors = [primary, ...members];
+    throw primary;
   }
 }
 

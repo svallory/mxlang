@@ -306,6 +306,46 @@ describe("analyze hooks of several tags", () => {
     expect((thrown?.errors ?? []).map((e) => e.line)).toEqual([1, 3]);
   });
 
+  it("never leads with a related error from another file, and only the primary carries the list", () => {
+    const COMPILED = "/u.mx";
+    const box = {
+      analyze: (calls: readonly { loc: { line: number } }[]) => {
+        const main = new TranslateError("main box", calls[0]?.loc.line ?? 1, 0);
+        const elsewhere = new TranslateError("elsewhere", 1, 0, "other.mx");
+        main.errors = [main, elsewhere];
+        throw main;
+      },
+    };
+    let thrown: TranslateError | undefined;
+    try {
+      compileSource(
+        "<p/>\n<crate/>\n<p/>\n<p/>\n<box/>\n",
+        COMPILED,
+        { tags: {}, isElement: () => true, isComponent: () => false },
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            box: { transform: () => [], ...box },
+            crate: { transform: () => [], ...failing("crate") },
+            p: { transform: () => [] },
+          } as unknown as Record<string, CustomTag>,
+        },
+      );
+    } catch (error) {
+      thrown = error as TranslateError;
+    }
+    expect(thrown?.line).toBe(2);
+    expect(thrown?.file === undefined || thrown.file === COMPILED).toBe(true);
+    const list = thrown?.errors ?? [];
+    expect(list.map((e) => [e.file, e.line])).toEqual([
+      [undefined, 2],
+      [undefined, 5],
+      ["other.mx", 1],
+    ]);
+    expect(list.slice(1).every((e) => !e.errors?.length)).toBe(true);
+  });
+
   it("keeps the related errors a failing hook carries", () => {
     const related = (line: number) =>
       new TranslateError(`related at ${line}`, line, 0);
