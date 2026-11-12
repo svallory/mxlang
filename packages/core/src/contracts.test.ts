@@ -834,3 +834,47 @@ describe("mx.contracts", () => {
     expect(liveTagMapCount()).toBe(1);
   });
 });
+
+describe("reloading an edited module under Node", () => {
+  // Node keeps an ES module it has loaded for the life of the process:
+  // deleting its `require.cache` entry does not evict it. A `.cjs` module is
+  // re-evaluated. vitest has its own module registry, so this runs in a real
+  // `node` child, once for the file, through the same `loadDefaultExport` a
+  // sidecar and an `mx.contracts` module are loaded with.
+  const probe = (() => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-node-reload-"));
+    const script = join(dir, "probe.mjs");
+    writeFileSync(
+      script,
+      `import { writeFileSync } from "node:fs";
+const { loadDefaultExport } = await import(process.argv[2]);
+const reload = (file, first, second) => {
+  writeFileSync(file, first);
+  const before = loadDefaultExport(file, "contracts module").v;
+  writeFileSync(file, second);
+  return [before, loadDefaultExport(file, "contracts module").v];
+};
+console.log(JSON.stringify({
+  esm: reload(process.argv[3] + "/m.mts", "export default { v: 1 };", "export default { v: 2 };"),
+  cjs: reload(process.argv[3] + "/m.cjs", "module.exports = { default: { v: 1 } };", "module.exports = { default: { v: 2 } };"),
+}));
+`,
+    );
+    const run = spawnSync(
+      process.execPath,
+      [script, join(import.meta.dirname, "scan.ts"), dir],
+      { encoding: "utf8" },
+    );
+    rmSync(dir, { recursive: true, force: true });
+    return run;
+  })();
+
+  it("an ES module or TypeScript module keeps its first evaluation until the process restarts", () => {
+    expect(probe.stderr).toBe("");
+    expect(JSON.parse(probe.stdout).esm).toEqual([1, 1]);
+  });
+
+  it("a CommonJS module is re-evaluated", () => {
+    expect(JSON.parse(probe.stdout).cjs).toEqual([1, 2]);
+  });
+});
