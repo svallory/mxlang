@@ -10,7 +10,7 @@ import html from "./descriptor.ts";
  * Stand-ins for the other built-in targets. This package cannot import the
  * registry (`@mxlang/targets` depends on it), so the Bun loader's default
  * strictness lookup registers one descriptor per built-in target with the
- * same name, package, host and strictness: every selection path the registry
+ * same name, package, host (with its file kinds, as far as registration reads them) and strictness: every selection path the registry
  * honours (`mx.host`, `mx.target`, a dependency on a host package, one or
  * several of them) then resolves the same way here. Only strictness is read
  * from the result. `@mxlang/targets`' `strict-hosts.test.ts` keeps the table
@@ -21,25 +21,66 @@ const STAND_INS: readonly (readonly [
   name: string,
   packageName: string,
   host: string,
+  fileKind: { segment: string; languageIds: readonly string[]; source: string },
   strict?: "always",
 ])[] = [
-  ["astro-html", "@mxlang/host-astro", "astro", "always"],
-  ["solid-jsx", "@mxlang/host-solid", "solid"],
-  ["preact-jsx", "@mxlang/host-preact", "preact"],
-  ["react-jsx", "@mxlang/host-react", "react"],
-  ["hono-jsx", "@mxlang/host-hono", "hono"],
-  ["angular-template", "@mxlang/host-angular", "angular"],
+  [
+    "astro-html",
+    "@mxlang/host-astro",
+    "astro",
+    { segment: "astro", languageIds: ["astromx"], source: "astromx" },
+    "always",
+  ],
+  [
+    "solid-jsx",
+    "@mxlang/host-solid",
+    "solid",
+    { segment: "solid", languageIds: ["solidmx", "solid"], source: "solidmx" },
+  ],
+  [
+    "preact-jsx",
+    "@mxlang/host-preact",
+    "preact",
+    { segment: "preact", languageIds: ["preactmx"], source: "preactmx" },
+  ],
+  [
+    "react-jsx",
+    "@mxlang/host-react",
+    "react",
+    { segment: "react", languageIds: ["reactmx"], source: "reactmx" },
+  ],
+  [
+    "hono-jsx",
+    "@mxlang/host-hono",
+    "hono",
+    { segment: "hono", languageIds: ["honomx"], source: "honomx" },
+  ],
+  [
+    "angular-template",
+    "@mxlang/host-angular",
+    "angular",
+    { segment: "ng", languageIds: ["ngmx"], source: "ngmx" },
+  ],
 ];
 
 /** @internal Exported only for `@mxlang/targets`' cross-package test, `strict-hosts.test.ts`. */
 export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
-  ([name, packageName, host, strict]) => ({
+  ([name, packageName, host, kind, strict]) => ({
     descriptorVersion: 0,
     name,
     packageName,
     defaultTag: html.defaultTag,
     ...(strict ? { strict } : {}),
-    host: { name: host },
+    host: {
+      name: host,
+      fileKinds: [
+        {
+          segment: kind.segment,
+          languageIds: kind.languageIds,
+          diagnosticSource: kind.source,
+        },
+      ],
+    },
   }),
 );
 
@@ -57,14 +98,6 @@ export function withStandIns(htmlOnly: TargetLookup): TargetLookup {
     reservedNames: ["astro-template", "data"],
   });
 }
-
-/**
- * @internal The default html lookup with the stand-ins. Exported for the Bun
- * loader and `strict-hosts.test.ts`.
- */
-export const strictnessTargets: TargetLookup = withStandIns(
-  createTargetLookup([html]),
-);
 
 /**
  * @internal Whether `path` compiles strict under `targets`: the resolved target

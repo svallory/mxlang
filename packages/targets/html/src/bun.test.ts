@@ -24,7 +24,7 @@ import markoPlugin, {
   mxFilter,
   strictFor,
 } from "./bun.ts";
-import { strictnessTargets } from "./foreign-strict.ts";
+import { withStandIns } from "./foreign-strict.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -620,6 +620,7 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
         false,
       ],
     ];
+    const strictTargets = withStandIns(htmlTargets);
     let root = "";
     const projectOf = (index: number): string => join(root, String(index));
 
@@ -641,7 +642,7 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
       "#%i: %s",
       (index, _name, _manifest, strict) => {
         expect(
-          strictFor(join(projectOf(index), "page.mx"), strictnessTargets),
+          strictFor(join(projectOf(index), "page.mx"), strictTargets),
         ).toBe(strict);
       },
     );

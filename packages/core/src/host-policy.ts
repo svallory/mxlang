@@ -536,10 +536,9 @@ function policyOf(
   const targetPackages = Object.keys(deps).filter((name) =>
     lookup.fromPackage(name),
   );
-  const targetDeps = targetPackages.flatMap((name) => {
-    const target = lookup.fromPackage(name);
-    return target ? [target] : [];
-  });
+  const targetDeps = targetPackages.map(
+    (name) => lookup.fromPackage(name) as string,
+  );
   if (targetDeps.length === 1) {
     const target = targetDeps[0] as string;
     return {
@@ -562,7 +561,10 @@ function policyOf(
   };
 }
 
-const verdicts = new WeakMap<TargetDescriptor, Map<string, string | null>>();
+const verdicts = new WeakMap<
+  TargetLookup,
+  WeakMap<TargetDescriptor, string | null>
+>();
 
 /**
  * Why `descriptor` cannot join `lookup`, or `undefined` if it can. A built-in
@@ -570,18 +572,19 @@ const verdicts = new WeakMap<TargetDescriptor, Map<string, string | null>>();
  * wired for a loaded target, and silently accepting it would be a silent
  * no-op. A file-kind segment must be the host's own name,
  * so a loaded host cannot take another host's `.<name>.mx`. The rest is the set
- * rules of `createTargetLookup`, a file-kind segment another host owns included. The verdict is cached per descriptor and per shape
- * of lookup, as resolution runs per file and per keystroke.
+ * rules of `createTargetLookup`, a file-kind segment another host owns included. The verdict is cached per lookup and per descriptor,
+ * as resolution runs per file and per keystroke; two lookups of one shape
+ * never share a verdict, since file kinds and host names differ between them.
  */
 function registrationVerdict(
   lookup: TargetLookup,
   descriptor: TargetDescriptor,
 ): string | undefined {
   const names = lookup.targetNames();
-  const shape = `${names.join(",")}|${lookup.defaultTarget()}|${(lookup.reservedNames?.() ?? []).join(",")}`;
-  const byShape = verdicts.get(descriptor) ?? new Map<string, string | null>();
-  verdicts.set(descriptor, byShape);
-  const known = byShape.get(shape);
+  const byDescriptor =
+    verdicts.get(lookup) ?? new WeakMap<TargetDescriptor, string | null>();
+  verdicts.set(lookup, byDescriptor);
+  const known = byDescriptor.get(descriptor);
   if (known !== undefined) return known ?? undefined;
   let verdict: string | undefined;
   const host = descriptor.host?.name;
@@ -637,7 +640,7 @@ function registrationVerdict(
       verdict = error.message;
     }
   }
-  byShape.set(shape, verdict ?? null);
+  byDescriptor.set(descriptor, verdict ?? null);
   return verdict;
 }
 
