@@ -1249,7 +1249,9 @@ export function reportTargetPolicyDiagnostics(
       );
       return {
         file: text === "" ? undefined : file,
-        start: (file.getLineStarts()[line] ?? 0) + diagnostic.column,
+        start:
+          diagnostic.offset ??
+          (file.getLineStarts()[line] ?? 0) + diagnostic.column,
         length: diagnostic.length ?? 0,
         category:
           diagnostic.severity === "error"

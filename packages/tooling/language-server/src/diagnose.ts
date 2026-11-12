@@ -6,6 +6,7 @@
  * tested directly, as the brief requires, without spawning a process.
  */
 
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
@@ -785,6 +786,40 @@ export function diagnoseDocument(
  * host diagnostics remain warnings; invalid targets and mismatches are errors,
  * with value lengths and the mismatch's related host position.
  */
+/**
+ * An LSP position for `offset` in `file`. LSP's line terminators are LF, CRLF
+ * and CR only, while core's `line` and `column` follow TypeScript's rule (U+2028
+ * and U+2029 break a line too), so a position that carries its offset is
+ * converted here from the file's own text. Without an offset, or when the file
+ * cannot be read, the position core computed stands.
+ */
+function lspPosition(
+  file: string,
+  offset: number | undefined,
+  line: number,
+  column: number,
+): { line: number; character: number } {
+  if (offset === undefined) return { line, character: column };
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return { line, character: column };
+  }
+  const end = Math.min(offset, text.length);
+  let row = 0;
+  let lineStart = 0;
+  for (let i = 0; i < end; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 13 && text.charCodeAt(i + 1) === 10) continue;
+    if (code === 10 || code === 13) {
+      row++;
+      lineStart = i + 1;
+    }
+  }
+  return { line: row, character: end - lineStart };
+}
+
 function scanDiagnosticToLsp(
   diagnostic: ScanDiagnostic | TargetPolicyDiagnostic,
   related?: RelatedDiagnostics[],
@@ -796,12 +831,13 @@ function scanDiagnosticToLsp(
 ): Diagnostic {
   const line = Math.max(0, diagnostic.line - 1);
   const column = Math.max(0, diagnostic.column);
+  const at = lspPosition(diagnostic.file, diagnostic.offset, line, column);
   const range = {
-    start: { line, character: column },
+    start: at,
     end: {
-      line,
+      line: at.line,
       character:
-        column +
+        at.character +
         (("length" in diagnostic ? diagnostic.length : undefined) ?? 1),
     },
   };
@@ -815,13 +851,21 @@ function scanDiagnosticToLsp(
       ? (diagnostic.relatedInformation?.map((entry) => ({
           location: {
             uri: uriOf(entry.file),
-            range: {
-              start: { line: entry.line - 1, character: entry.column },
-              end: {
-                line: entry.line - 1,
-                character: entry.column + entry.length,
-              },
-            },
+            range: (() => {
+              const start = lspPosition(
+                entry.file,
+                entry.offset,
+                entry.line - 1,
+                entry.column,
+              );
+              return {
+                start,
+                end: {
+                  line: start.line,
+                  character: start.character + entry.length,
+                },
+              };
+            })(),
           },
           message: entry.message,
         })) ?? [])

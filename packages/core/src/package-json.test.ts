@@ -33,7 +33,11 @@ describe("positionOfOffset", () => {
     ["after U+2028", "a\u2028bc", 3, { line: 2, column: 1 }],
     ["after U+2029", "a\u2029bc", 3, { line: 2, column: 1 }],
   ])("%s", (_name, text, offset, expected) => {
-    expect(positionOfOffset(text, offset)).toEqual(expected);
+    expect(positionOfOffset(text, offset)).toMatchObject(expected);
+    // ...and carries the clamped offset for a consumer with another line rule.
+    expect(positionOfOffset(text, offset).offset).toBe(
+      Math.min(Math.max(offset, 0), text.length),
+    );
   });
 });
 

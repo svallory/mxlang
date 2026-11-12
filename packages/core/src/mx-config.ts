@@ -58,7 +58,8 @@ import {
 } from "node:path";
 import type { LoaderSync } from "cosmiconfig";
 import {
-  LINE_BREAK,
+  lineStarts,
+  linesOf,
   positionOfOffset,
   positionOfParseError,
   readPackageJsonCached,
@@ -168,6 +169,8 @@ export interface MxConfigLocation {
   line: number;
   column: number;
   length: number;
+  /** The value's UTF-16 offset in the file, for a consumer whose line rule differs. */
+  offset?: number;
 }
 
 /** How the config was written, which decides how positions are found. */
@@ -331,7 +334,8 @@ export function locateYamlPath(
   path: readonly string[],
   options: { key?: boolean } = {},
 ): MxConfigLocation | undefined {
-  const lines = text.split(LINE_BREAK);
+  const starts = lineStarts(text);
+  const lines = linesOf(text, starts);
   let indent = -1;
   let from = 0;
   let hit:
@@ -363,11 +367,21 @@ export function locateYamlPath(
   }
   if (!hit) return undefined;
   if (options.key || hit.rest === "") {
-    return { line: hit.line + 1, column: hit.column, length: hit.key.length };
+    return {
+      line: hit.line + 1,
+      column: hit.column,
+      length: hit.key.length,
+      offset: (starts[hit.line] as number) + hit.column,
+    };
   }
   const lineText = lines[hit.line] as string;
   const column = lineText.indexOf(hit.rest, hit.column + hit.key.length);
-  return { line: hit.line + 1, column, length: hit.rest.length };
+  return {
+    line: hit.line + 1,
+    column,
+    length: hit.rest.length,
+    offset: (starts[hit.line] as number) + column,
+  };
 }
 
 // ---------------------------------------------------------------------------

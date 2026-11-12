@@ -70,30 +70,53 @@ export function clearPackageJsonCache(): void {
   cache.clear();
 }
 
-/** A line break: CRLF, or one of LF, CR, U+2028, U+2029 (the rule `positionOfOffset` counts by). */
-export const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
+/**
+ * The offset each line of `text` starts at. The one line-break rule of config
+ * positions: CRLF is one break, and a lone LF, CR, U+2028 and U+2029 are one
+ * each (the rule TypeScript's `getLineStarts` counts by).
+ */
+export function lineStarts(text: string): number[] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 13 && text.charCodeAt(i + 1) === 10) continue;
+    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
+      starts.push(i + 1);
+    }
+  }
+  return starts;
+}
+
+/** The lines of `text` between its {@link lineStarts}, breaks removed. */
+export function linesOf(text: string, starts = lineStarts(text)): string[] {
+  return starts.map((start, i) => {
+    const next = starts[i + 1];
+    if (next === undefined) return text.slice(start);
+    const crlf =
+      text.charCodeAt(next - 2) === 13 && text.charCodeAt(next - 1) === 10;
+    return text.slice(start, next - (crlf && next - 2 >= start ? 2 : 1));
+  });
+}
 
 /**
- * Converts a character offset in `text` to a 1-based line and 0-based column.
+ * Converts a character offset in `text` to a 1-based line and 0-based column,
+ * and carries the (clamped) offset itself: a consumer whose own line rule
+ * differs (the language server's has no U+2028) converts from the offset.
  */
 export function positionOfOffset(
   text: string,
   offset: number,
-): { line: number; column: number } {
-  let line = 1;
-  let lineStart = 0;
+): { line: number; column: number; offset: number } {
   const end = Math.min(Math.max(offset, 0), text.length);
-  for (let i = 0; i < end; i++) {
-    const code = text.charCodeAt(i);
-    // One rule with `LINE_BREAK`: CRLF is one break, a lone CR, LF, U+2028
-    // and U+2029 are each one.
-    if (code === 13 && text.charCodeAt(i + 1) === 10) continue;
-    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
-      line++;
-      lineStart = i + 1;
-    }
+  const starts = lineStarts(text);
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if ((starts[mid] as number) <= end) low = mid;
+    else high = mid - 1;
   }
-  return { line, column: end - lineStart };
+  return { line: low + 1, column: end - (starts[low] as number), offset: end };
 }
 
 /**
@@ -106,7 +129,7 @@ export function positionOfOffset(
 export function jsonKeyPosition(
   text: string,
   path: readonly string[],
-): { line: number; column: number } {
+): { line: number; column: number; offset: number } {
   const tokens = [
     ...text.matchAll(
       /"(?:\\.|[^"\\])*"|[{}[\]:,]|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g,

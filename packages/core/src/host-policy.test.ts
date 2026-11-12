@@ -878,6 +878,8 @@ describe("mx.<target>.defaultTag", () => {
       line: 6,
       column: 28,
       length: 1,
+      // ...and the offset, for a consumer whose line rule has no U+2028.
+      offset: text.indexOf("1 }"),
     });
   });
 

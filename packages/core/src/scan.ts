@@ -513,6 +513,8 @@ export interface ScanDiagnostic {
   message: string;
   line: number;
   column: number;
+  /** The UTF-16 offset of that position in `file`, for a consumer whose line rule differs from TypeScript's. */
+  offset?: number;
   /**
    * Where the range ends in `file` (exclusive; 1-based line, 0-based column),
    * when the scan knows what the position names: a contract key in a

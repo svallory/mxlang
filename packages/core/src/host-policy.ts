@@ -133,6 +133,8 @@ export interface PolicyLocation {
   line: number;
   column: number;
   length: number;
+  /** UTF-16 offset in the file: a consumer with its own line rule converts from it. */
+  offset?: number;
 }
 
 /** Why a {@link TargetPolicyDiagnostic} was raised. */
@@ -172,6 +174,12 @@ export interface TargetPolicyDiagnostic {
   line: number;
   /** 0-based. */
   column: number;
+  /**
+   * The UTF-16 offset of that position in `file`, when it is known. `line` and
+   * `column` count TypeScript's line breaks (CRLF, LF, CR, U+2028, U+2029); a
+   * consumer that counts differently (LSP has no U+2028) converts from this.
+   */
+  offset?: number;
   /** Absent means warning, preserving existing diagnostics byte-for-byte. */
   severity?: "error" | "warning";
   /** Rejected string value, when an unknown target was authored as a string. */
@@ -184,6 +192,7 @@ export interface TargetPolicyDiagnostic {
     line: number;
     column: number;
     length: number;
+    offset?: number;
   }[];
 }
 
@@ -726,6 +735,7 @@ function readDefaultTagConfig(
       line: at.line,
       column: at.column,
       length: at.length,
+      ...(at.offset !== undefined ? { offset: at.offset } : {}),
     },
   };
 }
@@ -839,7 +849,7 @@ function unknownConfigKeys(
   const diagnostics: TargetPolicyDiagnostic[] = [];
   for (const key of keys) {
     if (known.has(key)) continue;
-    const { line, column } =
+    const { line, column, offset } =
       source.format === "package.json"
         ? jsonKeyPosition(source.text, ["mx", key])
         : source.locate([key], { key: true });
@@ -850,6 +860,7 @@ function unknownConfigKeys(
       message: `\`mx.${key}\` is not a setting: MX's config holds MX's own keys (${LISTED_CONFIG_KEYS.join(", ")}), a target's or host's settings under its name, and a dialect's settings under its id, and no dialect among this project's dependencies has the id \`${key}\``,
       line,
       column,
+      ...(offset !== undefined ? { offset } : {}),
     });
   }
   return diagnostics;
@@ -1001,8 +1012,12 @@ export function resolveTargetPolicyDetailed(
       file,
       message: `unknown mx.host ${shown}; valid hosts: ${validHostsClause(lookup)}.${hint ? ` Did you mean "${hint}"?` : ""} Ignoring it; the host is taken from the @mxlang dependencies instead.`,
       ...(() => {
-        const { line, column } = at("host", resolved.ignoredHost);
-        return { line, column };
+        const { line, column, offset } = at("host", resolved.ignoredHost);
+        return {
+          line,
+          column,
+          ...(offset !== undefined ? { offset } : {}),
+        };
       })(),
     });
   }

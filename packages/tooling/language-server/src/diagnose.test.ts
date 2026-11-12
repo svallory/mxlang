@@ -1037,6 +1037,45 @@ describe("custom tag template positions", () => {
     ]);
   });
 
+  it("places a host-policy diagnostic by its offset: U+2028 does not break an LSP line", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ls-offset-"));
+    try {
+      // U+2028 inside a JSON string breaks a line for TypeScript (core's
+      // `line`, 3) but not for LSP, where the value is still on line 2.
+      const text = '{\n  "note": "a\u2028b", "mx": { "host": "htmll" }\n}';
+      const file = join(dir, "package.json");
+      writeFileSync(file, text);
+      const offset = text.indexOf('"htmll"');
+      const related: RelatedDiagnostics[] = [];
+      diagnoseDocument(
+        "<div>ok</div>\n",
+        "file:///app/page.mx",
+        policy("html"),
+        undefined,
+        "",
+        undefined,
+        related,
+        undefined,
+        [
+          {
+            file,
+            message: 'unknown mx.host "htmll"',
+            line: 3,
+            column: offset - (text.indexOf("\u2028") + 1),
+            offset,
+          },
+        ],
+      );
+      const lspColumn = offset - (text.indexOf("\n") + 1);
+      expect(related[0]?.diagnostics[0]?.range).toEqual({
+        start: { line: 1, character: lspColumn },
+        end: { line: 1, character: lspColumn + 1 },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps host-policy warnings when the compile itself fails", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=1/>\n",
