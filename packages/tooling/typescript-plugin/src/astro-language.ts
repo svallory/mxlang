@@ -78,25 +78,23 @@ export function loadAstroLanguagePlugin(
   projectDir?: string,
 ): AstroLanguagePlugin {
   const entry = "@astrojs/language-server/dist/core/index.js";
-  let module: { getAstroLanguagePlugin(): AstroLanguagePlugin } | undefined;
+  let projectEntry: string | undefined;
   if (projectDir !== undefined) {
     try {
-      module = createRequire(join(projectDir, "package.json"))(entry);
+      projectEntry = createRequire(join(projectDir, "package.json")).resolve(
+        entry,
+      );
     } catch (error) {
-      // Only "the project has no copy" falls back; a copy that is found and
-      // throws on load is the author's problem to see.
-      const missing =
-        (error as { code?: string }).code === "MODULE_NOT_FOUND" &&
-        String((error as Error).message).includes(entry);
-      if (!missing) throw error;
+      // Only "the project has no copy" falls back.
+      if ((error as { code?: string }).code !== "MODULE_NOT_FOUND") throw error;
     }
   }
-  const resolved =
-    module ??
-    (createRequire(import.meta.url)(entry) as {
-      getAstroLanguagePlugin(): AstroLanguagePlugin;
-    });
-  return resolved.getAstroLanguagePlugin();
+  // Loaded outside the try above: a copy that is found and fails to load (a
+  // missing dependency of its own included) is the author's to see.
+  const module = createRequire(import.meta.url)(projectEntry ?? entry) as {
+    getAstroLanguagePlugin(): AstroLanguagePlugin;
+  };
+  return module.getAstroLanguagePlugin();
 }
 
 function toUri(fileName: string): UriLike {

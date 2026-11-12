@@ -499,6 +499,34 @@ describe("a malformed package.json beside an .ng.mx", () => {
     expect(text(fixed)).toContain("class XComponent");
   });
 
+  it("shows the new parse position when the package.json is edited but still malformed", async () => {
+    const { default: ts } = await import("typescript");
+    const { createNgMxLanguagePlugin } = await import("./language.ts");
+    const dir = path.join(root, "stillbad");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "package.json"), "{ nope");
+    const plugin = createNgMxLanguagePlugin(ts);
+    const fileName = path.join(dir, "x.component.ng.mx");
+    plugin.createVirtualCode?.(
+      fileName,
+      "ngmx",
+      ts.ScriptSnapshot.fromString(SOURCE),
+      // biome-ignore lint/suspicious/noExplicitAny: Volar's codegen context is unused here
+      undefined as any,
+    );
+    expect(plugin.getCompileDiagnostics(fileName)[0]?.message).toContain(
+      "package.json:1:3: ",
+    );
+
+    writeFileSync(path.join(dir, "package.json"), '{\n  "a": 1,\n  nope');
+    plugin.refreshTargetPolicy?.(fileName);
+
+    const [only, ...rest] = plugin.getCompileDiagnostics(fileName);
+    expect(rest).toEqual([]);
+    expect(only?.message).toContain("package.json:3:");
+    expect(only?.message).not.toContain("the manifest changed since");
+  });
+
   it("reports it once with a separate .mxrc.json beside it (a warning: the file still compiles)", async () => {
     const dir = path.join(root, "bad2");
     mkdirSync(dir, { recursive: true });

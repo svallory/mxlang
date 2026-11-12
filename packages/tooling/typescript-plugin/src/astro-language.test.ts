@@ -46,4 +46,26 @@ describe("loading Astro's language plugin", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("surfaces a project copy whose own dependency is missing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-peer-"));
+    try {
+      const pkg = join(dir, "node_modules", "@astrojs", "language-server");
+      mkdirSync(join(pkg, "dist", "core"), { recursive: true });
+      writeFileSync(
+        join(pkg, "package.json"),
+        JSON.stringify({ name: "@astrojs/language-server", version: "0.0.0" }),
+      );
+      writeFileSync(
+        join(pkg, "dist", "core", "index.js"),
+        'require("missing-dep-xyz");',
+      );
+
+      expect(() => loadAstroLanguagePlugin(dir)).toThrowError(
+        /missing-dep-xyz/,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

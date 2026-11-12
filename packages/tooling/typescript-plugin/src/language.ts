@@ -668,7 +668,25 @@ export function createNgMxLanguagePlugin(
     },
 
     refreshTargetPolicy(fileName) {
-      if (hostPolicies.refresh(fileName) && foldedPolicy.has(fileName)) {
+      const folded = foldedPolicy.get(fileName);
+      if (!hostPolicies.refresh(fileName) || folded === undefined) return;
+      // Still malformed (maybe differently): the compile error says what the
+      // manifest says now. Only a manifest that parses leaves the old error
+      // standing with a note.
+      const now = hostPolicies
+        .get(fileName)
+        .find(
+          (diagnostic) =>
+            diagnostic.code === "malformed-package-json" &&
+            diagnostic.file === folded,
+        );
+      const current = compileDiagnostics.get(fileName);
+      if (now && current?.[0]) {
+        compileDiagnostics.set(fileName, [
+          { ...current[0], message: hostPolicyMessage(now) },
+          ...current.slice(1),
+        ]);
+      } else {
         staleConfig.add(fileName);
       }
     },

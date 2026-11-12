@@ -123,7 +123,20 @@ export function createMxLanguagePlugin(
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
   const hostPolicies = createTargetPolicyRecorder();
-  const resolveHost = (fileName: string) => hostPolicies.resolve(fileName);
+  // What the last compile of each file was compiled under: the target, and
+  // whether the policy refused it (a failed load compiles to the failed module).
+  const compiledUnder = new Map<string, { target: string; failed: boolean }>();
+  const lastSource = new Map<string, string>();
+  // Files whose host config changed since they were compiled.
+  const staleHost = new Set<string>();
+  const resolveHost = (fileName: string) => {
+    const policy = hostPolicies.resolve(fileName);
+    compiledUnder.set(fileName, {
+      target: policy.target,
+      failed: hostPolicies.errors(fileName).length > 0,
+    });
+    return policy;
+  };
 
   /**
    * The tags callable from one file: everything discovered around it, with an
@@ -183,6 +196,8 @@ export function createMxLanguagePlugin(
 
       const source = snapshot.getText(0, snapshot.getLength());
       hostPolicies.source(fileName, source);
+      lastSource.set(fileName, source);
+      staleHost.delete(fileName);
       let tagsUsed: Record<string, CustomTag> | undefined;
       try {
         const result = compileWithDependencies(
@@ -312,13 +327,33 @@ export function createMxLanguagePlugin(
     },
 
     refreshTargetPolicy(fileName) {
-      hostPolicies.refresh(fileName);
+      const next = hostPolicies.refresh(fileName);
+      const was = compiledUnder.get(fileName);
+      if (next && was && (was.failed || next.target !== was.target)) {
+        staleHost.add(fileName);
+      }
     },
 
     getCompileDiagnostics(fileName) {
+      const source =
+        fileName === undefined ? undefined : lastSource.get(fileName);
       return [
         ...diagnosticsFrom(compileDiagnostics, fileName),
         ...hostPolicies.errors(fileName),
+        ...(fileName !== undefined &&
+        source !== undefined &&
+        staleHost.has(fileName)
+          ? [
+              {
+                fileName,
+                source,
+                offset: 0,
+                category: "error" as const,
+                message:
+                  "the host config changed since this file was compiled; edit it to recompile",
+              },
+            ]
+          : []),
       ];
     },
 

@@ -58,10 +58,11 @@ export interface TargetPolicyRecorder {
   resolve(fileName: string, source?: string): TargetPolicy;
   /**
    * Re-resolves `fileName` when a manifest or config its policy reads changed
-   * since it was resolved; true when it did. Called once per diagnostics
+   * since it was resolved; returns the policy it now resolves to when it did,
+   * else undefined. Called once per diagnostics
    * request by the tsserver entry point, never by `get`/`errors`.
    */
-  refresh(fileName: string): boolean;
+  refresh(fileName: string): TargetPolicy | undefined;
   /** Store authored text without re-resolving (or repeating alias warnings). */
   source(fileName: string, source: string): void;
   /** One file's diagnostics, or every recorded file's. */
@@ -105,15 +106,15 @@ export function createTargetPolicyRecorder(): TargetPolicyRecorder {
   // The plugin watches no `package.json`: the tsserver entry point asks for a
   // refresh before it reads a file's diagnostics, so a fixed manifest stops
   // being reported without the `.mx` being edited.
-  const refresh = (fileName: string): boolean => {
+  const refresh = (fileName: string): TargetPolicy | undefined => {
     const stamp = stamps.get(fileName);
-    if (stamp === undefined) return false;
+    if (stamp === undefined) return undefined;
     const now = manifestStamp(fileName);
-    if (stamp === now) return false;
-    const { diagnostics } = resolveTargetPolicyDetailed(fileName);
+    if (stamp === now) return undefined;
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(fileName);
     byFile.set(fileName, diagnostics);
     stamps.set(fileName, now);
-    return true;
+    return policy;
   };
   return {
     refresh,
