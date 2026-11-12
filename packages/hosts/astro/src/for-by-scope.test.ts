@@ -10,7 +10,7 @@ import { lowerAstroMx } from "./astro-template.ts";
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colour
 const ANSI = /\x1b\[[0-9;]*m/g;
-const FENCE = "---\nconst x = 1;\n---\n"; // 3 fence lines: template starts on line 4
+const FENCE = "---\nconst outer = 1;\n---\n"; // 3 fence lines: template starts on line 4
 
 function failure(source: string): {
   message: string;

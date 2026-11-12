@@ -137,17 +137,14 @@ export function methodFunctionOf(ctx: Ctx, method: Node): Node {
 }
 
 /**
- * Is the value an authored expression (`of=xs`), not a valueless attribute,
- * arguments or a method? Marko tells them apart by the value's `loc`: its
- * synthesized `true` has none.
+ * Is the value an authored expression (`of=xs`), not a valueless attribute or
+ * a method? Marko tells them apart by the value's `loc`: its synthesized
+ * `true` has none. Arguments (`of(v)=xs`) do not matter: stock reads the value
+ * and drops them.
  */
 export function hasExpressionValue(attr: Node): boolean {
   if (attr?.type === "MxAttribute") {
-    return attr.value?.type === "MxExpression" && !attr.args;
+    return attr.value?.type === "MxExpression";
   }
-  return (
-    Boolean(attr?.value?.loc) &&
-    !attr.arguments &&
-    attr.value.type !== "FunctionExpression"
-  );
+  return Boolean(attr?.value?.loc) && attr.value.type !== "FunctionExpression";
 }

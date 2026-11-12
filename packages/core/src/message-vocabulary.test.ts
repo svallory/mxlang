@@ -1046,6 +1046,13 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
     option:
       'The `by=` option is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => key`).',
   },
+  {
+    name: "`for` with a loop parameter in `by=` that shadows an outer binding",
+    source: 'const/x={id:"k"}\nfor|x| of=input.list by=x.id\n  p\n',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => x.id`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => x.id`).',
+  },
 ];
 
 describe("built-in tag names in messages (template files)", () => {

@@ -1239,6 +1239,11 @@ export function createEmitter(
         return;
       }
 
+      // A lone tag argument (`<Panel(a)/>`) is the callee's whole input, as
+      // in stock Marko; core allows it only with no attributes or body, so
+      // `propsObject` is then an empty object nothing reads.
+      const input = node.args.length > 0 ? node.args[0].code : propsObject;
+
       // A tag call passes this unit's sink down, and `/var` binds what the
       // callee's `render` returns. A discovered tag, a unit known to declare
       // `<return>`, or this module's own export (a self-recursive tag) is a
@@ -1255,7 +1260,7 @@ export function createEmitter(
             node.var ? `const ${node.var} = ` : "",
             mapped(callee, node.nameSpan),
             ".render(",
-            propsObject,
+            input,
             `, ${state.sink});`,
           ),
         );
@@ -1267,7 +1272,7 @@ export function createEmitter(
           `__mxRenderTag(${state.sink}, `,
           mapped(callee, node.nameSpan),
           ")(",
-          propsObject,
+          input,
           ");",
         ),
       );

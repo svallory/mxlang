@@ -75,11 +75,18 @@ describe("a named custom tag takes one plain argument (preact)", () => {
     },
   );
 
-  it("takes one plain argument, an empty list and a trailing comma", () => {
-    for (const call of ["<Panel(a)/>", "<Panel()/>", "<Panel(a,)/>"]) {
+  it("takes an empty argument list", () => {
+    expect(() =>
+      compilePreactMx(`${IMPORT}<Panel()/>\n`, "/fixtures/test.mx"),
+    ).not.toThrow();
+  });
+
+  it.each(["<Panel(a)/>", "<Panel(a,)/>"])(
+    "refuses a lone argument on this host instead of dropping it: %j",
+    (call) => {
       expect(() =>
         compilePreactMx(`${IMPORT}${call}\n`, "/fixtures/test.mx"),
-      ).not.toThrow();
-    }
-  });
+      ).toThrow("does not take an argument on this host");
+    },
+  );
 });

@@ -1034,6 +1034,51 @@ describe("a bind on a custom tag is checked before the tag is routed", () => {
     ).toBeUndefined();
   });
 
+  describe("a bind inside a registered tag's attribute tag", () => {
+    const withItem = {
+      "reg-tag": {
+        attributeTags: { item: { attributes: { value: {}, valueChange: {} } } },
+        transform: () => [],
+      },
+    } as never;
+    const bind = (before: string, after = "") =>
+      `${before}<reg-tag><@item value:=x/></reg-tag>\n${after}`;
+
+    it("a bind on a const above is refused as readonly, at the value", () => {
+      const source = bind("<const/x=1/>\n");
+      const error = attemptWith(source, withItem);
+      const at = span(source, "x", "value:=x");
+      expect(error?.diagnosticCode).toBe(READONLY);
+      expect(error?.message).toBe(constMessage("x"));
+      expect([error?.line, error?.column]).toEqual([
+        at.start.line,
+        at.start.column,
+      ]);
+    });
+
+    it("a bind above the `<let>` it targets is refused", () => {
+      const source = bind("", "<let/x=1/>\n");
+      const error = attemptWith(source, withItem);
+      const at = span(source, "x", "value:=x");
+      expect(error?.diagnosticCode).toBe(BELOW);
+      expect(error?.message).toBe(belowMessage("x"));
+      expect([error?.line, error?.column]).toEqual([
+        at.start.line,
+        at.start.column,
+      ]);
+    });
+
+    it("a bind on a let above still compiles", () => {
+      expect(attemptWith(bind("<let/x=1/>\n"), withItem)).toBeUndefined();
+    });
+
+    it("the `<define>` call twin is refused the same way", () => {
+      const source =
+        "<define/D|p|><p/></define>\n<const/x=1/>\n<D><@item value:=x/></D>\n";
+      expect(attemptWith(source, {})?.diagnosticCode).toBe(READONLY);
+    });
+  });
+
   describe("a discovered tag", () => {
     let dir: string;
     beforeEach(() => {
@@ -1077,5 +1122,28 @@ describe("a bind on a custom tag is checked before the tag is routed", () => {
         attemptDiscovered("<let/x=1/>\n<my-tag value:=x/>\n"),
       ).toBeUndefined();
     });
+  });
+});
+
+describe("a two-way bind on a parameter with no change handler", () => {
+  const UNABLE = "MX_INVALID_BOUND_ATTRIBUTE";
+
+  it.each([
+    ["<for|i| of=[1]><input value:=i/></for>", 30],
+    ["<define/D|p|><input value:=p/></define>", 28],
+  ])("refuses %s as Marko does, at the value", (source, column) => {
+    const error = attempt(source);
+    expect(error?.diagnosticCode).toBe(UNABLE);
+    expect(error?.message).toBe("Unable to bind to value.");
+    expect([error?.line, error?.column]).toEqual([1, column - 1]);
+  });
+
+  it.each([
+    "<for|{a}| of=[{a:1}]><input value:=a/></for>",
+    "<define/D|{a}|><input value:=a/></define>",
+    "<for|i| of=[{x:1}]><input value:=i.x/></for>",
+    "<let/n=1/><for|i| of=[1]><input value:=n/></for>",
+  ])("still compiles %s", (source) => {
+    expect(attempt(source)).toBeUndefined();
   });
 });

@@ -55,10 +55,10 @@ for (const [entry, compile] of Object.entries(compilers)) {
       },
     );
 
-    it("retains the existing loop-source argument error", () => {
-      expect(() => compile('<for|x| of=[] by(v)="id"><i/></for>')).toThrow(
-        "`<for by=...>` requires an expression value",
-      );
+    it("accepts and drops a loop-source argument list, as Marko does", () => {
+      expect(() =>
+        compile('<for|x| of=[] by(v)="id"><i/></for>'),
+      ).not.toThrow();
     });
 
     it("keeps the builtin try contract error", () => {
@@ -67,9 +67,9 @@ for (const [entry, compile] of Object.entries(compilers)) {
       );
     });
 
-    it("keeps Solid's comment error", () => {
+    it("refuses attributes on <html-comment> in core, ahead of the host", () => {
       expect(() => compile("<html-comment a(v)=1>text</html-comment>")).toThrow(
-        "an HTML comment (<html-comment>) cannot appear in a Solid component",
+        "The `<html-comment>` tag does not support attributes.",
       );
     });
 

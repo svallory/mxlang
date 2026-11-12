@@ -1139,6 +1139,7 @@ export const policy: Policy = {
   nativeTags: WEB_ELEMENTS,
   attrTags: 2,
   defineCallPassesAttrs: true,
+  namedCallInputArgument: true,
   // The ladder: the parent's contract `defaultTag`, then
   // `mx.<target>.defaultTag`, then the target's built-in (the registry folds
   // the host override into `configured`). This host permits the contract rung:

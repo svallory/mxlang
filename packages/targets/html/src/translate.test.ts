@@ -1976,6 +1976,12 @@ describe("attribute-tag v2 values (executed)", () => {
         expect(() => compile(src(`${IMPORT}${call}`), file)).not.toThrow();
       }
     });
+
+    it("passes a lone argument as the callee's input, as stock does", () => {
+      const { code } = compile(src(`${IMPORT}<Panel(a)/>`), file);
+      expect(code).toContain("__mxRenderTag(__mxOut, Panel)(a);");
+      expect(code).not.toContain("Panel)({");
+    });
   });
 });
 

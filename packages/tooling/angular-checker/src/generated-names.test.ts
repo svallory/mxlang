@@ -55,9 +55,8 @@ const UNUSED_LET = -998112;
 const DUPLICATE_LET = -998017;
 const TWO_WAY_LET = -99998005;
 
-// `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
-// `<for|i|>` or `<define|p|>` parameter", P3); until it is, the two-way
-// binding on a `@let` stays reachable through one. The `<for in>` form
+// Core refuses `:=` on a plain `<for>` parameter, so the two-way binding on a
+// `@let` is reached through an object-pattern parameter. The `<for in>` form
 // cannot be checked here: its emitted `keyvalue` pipe needs `@angular/common`,
 // which this package's project does not resolve, so the object-pattern `<for
 // of>` form — the other `@let`-producing binder — carries the coverage.
@@ -152,9 +151,8 @@ describe("an Angular diagnostic about a <const> names it as written", () => {
     });
 
     it("the two-way binding error on a shadowing binder", () => {
-      // `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
-      // `<for|i|>` or `<define|p|>` parameter", P3): the loop's object-pattern
-      // name shadows the outer `<const>` and its `@let` is the bound target.
+      // The loop's object-pattern name (a plain parameter cannot be bound)
+      // shadows the outer `<const>` and its `@let` is the bound target.
       const source =
         "<main><const/a=title/><for|{a}| of=objs><input value:=a/></for></main>";
       // The loop pattern's `@let` is never renamed, so the bound target is

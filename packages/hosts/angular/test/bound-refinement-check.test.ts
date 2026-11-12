@@ -22,6 +22,7 @@ ${REFINE_HELPER_MEMBERS.join("\n")}
   items = ["a"];
   item = "field";
   sigs = [signal("a")];
+  rows = [{ s: signal("a"), item: "a" }];
   c = true;
 `;
 
@@ -91,8 +92,8 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
   // target, whatever the component's own `item` field is.
   it.each([
     [
-      "a @for item",
-      "<for|item| of=items><div appPick v:fn:=item/></for>",
+      "a destructured @for field",
+      "<for|{item}| of=rows><div appPick v:fn:=item/></for>",
       "item",
     ],
   ])(
@@ -106,16 +107,18 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
     },
   );
 
+  // Core refuses `:=` on a plain `<for>` parameter ("Unable to bind to
+  // value.", as stock does), so a `@for` index never reaches Angular's check.
   it("rejects a @for index before ngtsc runs, as [(v)] does", () => {
     expect(() =>
       check("<for|item, i| of=items><div appPick v:fn:=i/></for>"),
-    ).toThrow(/cannot write `i`.*never a signal/);
+    ).toThrow("Unable to bind to value.");
   });
 
   it("accepts a template variable that holds a signal, as [(v)] does", () => {
-    expect(check("<for|s| of=sigs><div appPick v:fn:=s/></for>").found).toEqual(
-      [],
-    );
+    expect(
+      check("<for|{s}| of=rows><div appPick v:fn:=s/></for>").found,
+    ).toEqual([]);
   });
 
   it("writes a member of a template variable through the object", () => {

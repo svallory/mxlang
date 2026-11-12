@@ -150,6 +150,14 @@ export interface HostDeclarations {
    */
   defineCallPassesAttrs?: true;
   /**
+   * The host passes a named component call's lone tag argument (`<Panel(a)/>`)
+   * as the callee's input, the way stock Marko does. Without it core refuses
+   * that argument at the call with a positioned error, so a host that cannot
+   * carry it never drops it silently. A call that also carries attributes or
+   * a body is refused either way (Marko's own rule).
+   */
+  namedCallInputArgument?: true;
+  /**
    * Per-tag-name dispositions: `inert` (accepted, no output, in a declared
    * shape), `unsupported` (this target cannot express it; core words the
    * refusal and the host adds a hint) or `error` (a refusal in the host's own

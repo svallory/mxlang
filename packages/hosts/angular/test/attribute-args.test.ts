@@ -53,10 +53,10 @@ for (const [entry, compileSource] of Object.entries(compilers)) {
       },
     );
 
-    it("retains the existing loop-source argument error", () => {
+    it("accepts and drops a loop-source argument list, as Marko does", () => {
       expect(() =>
         compileSource('<for|x| of=[] by(v)="id"><i/></for>'),
-      ).toThrow("`<for by=...>` requires an expression value");
+      ).not.toThrow();
     });
 
     it("keeps Angular's unsupported try error", () => {
@@ -65,10 +65,10 @@ for (const [entry, compileSource] of Object.entries(compilers)) {
       );
     });
 
-    it("retains Angular's text-only comment acceptance", () => {
+    it("refuses attributes on <html-comment>, as Marko does", () => {
       expect(() =>
         compileSource("<html-comment a(v)=1>text</html-comment>"),
-      ).not.toThrow();
+      ).toThrow("The `<html-comment>` tag does not support attributes.");
     });
 
     if (entry === "region") {

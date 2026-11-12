@@ -2039,6 +2039,11 @@ function rejectUnwritableBoundTargets(ctx: Ctx, node: Node): void {
         value,
       );
     }
+    // A `<for>` or `<define>` parameter bound as a plain name has no change
+    // handler to derive (Marko: "Unable to bind to value."); a name from an
+    // object pattern is bound through its object and stays allowed.
+    if ((guard?.kind === "for" || guard?.kind === "define") && guard.inFunction)
+      raise(INVALID_BOUND_ATTRIBUTE_CODE, "Unable to bind to value.", value);
   }
 }
 
@@ -2068,6 +2073,21 @@ function validateBuiltinValueAttributes(
       attrs.length > 1 ||
       (checkShape &&
         first &&
+        (!isAttributeNode(first) ||
+          (!isDefaultAttr(first) && attrNameOf(first) !== "value")))
+    ) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
+        node.name,
+      );
+    }
+  } else if (name === "log" || name === "debug") {
+    // Marko: the logged value is the tag's own `value=`, nothing else.
+    const first = attrs[0];
+    if (
+      attrs.length > 1 ||
+      (first &&
         (!isAttributeNode(first) ||
           (!isDefaultAttr(first) && attrNameOf(first) !== "value")))
     ) {
@@ -2908,18 +2928,23 @@ function bodyChildrenWithoutAttributeTags(node: Node): Node[] {
  * content left beside them).
  */
 function bodyMixesAttributeTagsUnderControl(node: Node): boolean {
-  return bodyChildren(node).some((child) => {
+  return controlMixOffender(node) !== undefined;
+}
+
+/** The content child that mixes with attribute tags under a control tag of `node`'s body, if any. */
+function controlMixOffender(node: Node): Node | undefined {
+  for (const child of bodyChildren(node)) {
     const name = tagNameOf(child);
-    if (!isControl(child) && name !== "else" && name !== "else-if")
-      return false;
-    return (
-      (containsAttributeTags(child) &&
-        bodyChildrenWithoutAttributeTags(child).some(
+    if (!isControl(child) && name !== "else" && name !== "else-if") continue;
+    const own = containsAttributeTags(child)
+      ? bodyChildrenWithoutAttributeTags(child).find(
           (sibling) => !isLayout(sibling),
-        )) ||
-      bodyMixesAttributeTagsUnderControl(child)
-    );
-  });
+        )
+      : undefined;
+    const found = own ?? controlMixOffender(child);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 /**
@@ -3425,8 +3450,11 @@ function lowerAuthoredAttributeTag(
   const name = attrName(node);
   const voice = voiceOfCtx(ctx);
   rejectAttributeTagArguments(ctx, node, name);
-  if (schema.customTagContract) rejectBadRefinements(ctx, node);
-  else validateBoundAttributes(ctx, node);
+  if (schema.customTagContract) {
+    rejectBadRefinements(ctx, node);
+    // A registered contract skips the shape check, never the writability one.
+    rejectUnwritableBoundTargets(ctx, node);
+  } else validateBoundAttributes(ctx, node);
   const declaration = declarationFor(ctx, schema, name, node);
   validateParentCollision(ctx, node, schema);
   const attrs = tagAttributesOf(node);
@@ -3829,6 +3857,43 @@ function lowerAttributeTags(
 }
 
 /**
+ * Marko's attribute check on a condition tag: `<if>`/`<else-if>` take the
+ * `value=` attribute alone (the error runs from the second attribute),
+ * `<else>` an `if=` alone (from the first). With or without arguments.
+ */
+function rejectExtraConditionAttributes(
+  ctx: Ctx,
+  node: Node,
+  name: string,
+): void {
+  const attrs = tagAttributesOf(node);
+  const voice = voiceOfCtx(ctx);
+  if (name === "else") {
+    const first = attrs[0];
+    if (
+      first &&
+      (attrs.length > 1 ||
+        isSpreadAttributeNode(first) ||
+        attrNameOf(first) !== "if")
+    ) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `The ${voice.tag(name)} tag only supports an \`if=\` ${voice.attribute}.`,
+        first,
+      );
+    }
+    return;
+  }
+  if (attrs.length > 1) {
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
+      attrs[1],
+    );
+  }
+}
+
+/**
  * `<if>` plus any `<else if>`/`<else>` siblings, grouped into one node.
  *
  * Returns the index of the first sibling it did not consume, so the caller
@@ -3848,6 +3913,7 @@ function lowerIfChain(
   const condition = headOf(() => {
     validateBoundAttributes(ctx, node);
     rejectUnsupportedFields(ctx, node, builtinOwner(ctx, "if", node));
+    rejectExtraConditionAttributes(ctx, node, "if");
     const cond = attrByName(node, "value") ?? tagAttributesOf(node)[0];
     if (!cond) {
       raise(
@@ -3909,6 +3975,7 @@ function lowerIfChain(
           voicedAt(child, () => tagText(ctx, String(childName), child)),
         ),
       );
+      rejectExtraConditionAttributes(ctx, child, String(childName));
       // `<else if=cond>` spells the condition as an `if` attribute; Marko's own
       // `<else-if=cond>` spells it as the tag's first (value) attribute.
       const ifAttr =
@@ -4004,9 +4071,25 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   const value = by.type === "MxAttribute" ? by.value?.node : by.value;
   const read = findLoopParamRead(value, names);
   if (!read) return;
+  const name = String(read.name);
+  // The loop's parameter shadows a binding of the same spelling that is in
+  // scope where the loop starts; `by=` reads that outer one, so "not in scope"
+  // would be false. Still refused: one constant key for every item is a bug.
+  const outer =
+    ctx.writeGuards?.has(name) ||
+    ctx.renderLets?.has(name) ||
+    ctx.laterLets?.has(name) ||
+    ctx.tagVars?.has(name) ||
+    ctx.tagVarShadowed?.has(name) ||
+    ctx.enclosingTagParams?.has(name) ||
+    ctx.imports.has(name) ||
+    ctx.defines.has(name);
+  const attribute = voiceOfCtx(ctx).attribute;
   raise(
     INVALID_FOR_CODE,
-    `The \`by=\` ${voiceOfCtx(ctx).attribute} is evaluated before the loop runs, so \`${read.name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${read.name}) => key\`).`,
+    outer
+      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => ${name}.id\`).`
+      : `The \`by=\` ${attribute} is evaluated before the loop runs, so \`${name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => key\`).`,
     read,
   );
 }
@@ -4019,6 +4102,17 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
  * host (Solid) emits it as the `keyed` prop on `<For>`. Carried in the IR so
  * both paths work from the same tree.
  */
+/** The attributes `<for>` reads (Marko's allowed set across its forms). */
+const FOR_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "of",
+  "in",
+  "from",
+  "to",
+  "until",
+  "step",
+  "by",
+]);
+
 function lowerForHead(
   ctx: Ctx,
   node: Node,
@@ -4076,6 +4170,25 @@ function lowerForHead(
       }.`,
       keyAttr,
     );
+  }
+
+  // Marko's `assertAllowedAttributes`: a name the loop does not read is an
+  // error at the attribute, with or without arguments.
+  for (const attr of tagAttributesOf(node)) {
+    if (isSpreadAttributeNode(attr)) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `${tagText(ctx, "for", node)} does not support spread ${voiceOfCtx(ctx).attributes}.`,
+        attr,
+      );
+    }
+    if (!FOR_ATTRIBUTES.has(attrNameOf(attr))) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `${tagText(ctx, "for", node)} does not support the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
+        attr,
+      );
+    }
   }
 
   const combos = [of, inAttr, attrByName(node, "from") || to || until].filter(
@@ -6368,6 +6481,17 @@ function lowerCustomTagBody(
     );
   }
   if (wildcard) rejectNearExplicitChild(ctx, node, wildcard, label);
+  // Stock reports an attribute tag mixed with body content under a control
+  // tag ahead of the call's argument error.
+  if ((tagArgsOf(node) ?? []).length > 0) {
+    const offending = controlMixOffender(node);
+    if (offending)
+      raise(
+        INVALID_ATTRIBUTE_TAG_CODE,
+        `Cannot have ${voice.attributeTags} and body content under a control flow tag.`,
+        offending,
+      );
+  }
   rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
     params: true,
@@ -6558,6 +6682,20 @@ function lowerComponent(
     // own pass so `<Card(1)><@head>…</@head></Card>` fails here instead of
     // reaching a host emitter, which can only silently drop one side.
     rejectArgsWithProps(ctx, node, target);
+  }
+  // A named component's lone argument is its input in stock Marko. A host
+  // that does not carry it refuses it here, never drops it.
+  if (
+    target.kind === "name" &&
+    (tagArgsOf(node) ?? []).length > 0 &&
+    !ctx.declarations.namedCallInputArgument &&
+    !bodyMixesAttributeTagsUnderControl(node)
+  ) {
+    raise(
+      UNSUPPORTED_TAG_ARGUMENTS_CODE,
+      `${tagText(ctx, targetName(target), node)} does not take an argument on this host: it would be dropped. Pass the value as ${voiceOfCtx(ctx).anAttribute} instead.`,
+      argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
+    );
   }
   // `/var` binds an imported `.mx` unit's `<return>` the way it does a
   // discovered tag's. Any other target (a `.ts` module, a `<define>`, a
@@ -7130,7 +7268,34 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
       (ctx.declarations.isBuiltinTag?.(name, ctx) ??
         !ctx.declarations.isDelegatedTag?.(name, ctx)));
-  if (!fileLocalBinding && compilerValueTag)
+  // `<log>` and `<debug>` take the `value=` attribute alone on every host,
+  // whatever the host then does with the tag (a host that declares a
+  // disposition for it, one that delegates it, or a registered tag of the name
+  // keeps its own reading).
+  const logTag =
+    (name === "log" || name === "debug") &&
+    ctx.tagRules !== "none" &&
+    (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
+    !Object.hasOwn(ctx.declarations.tags, name) &&
+    !ctx.declarations.isDelegatedTag?.(name, ctx);
+  // Marko's `<html-comment>` takes no attributes (`assertNoAttributes`), on a
+  // host that claims the tag too: the claim decides how it renders, not what
+  // it accepts.
+  if (
+    name === "html-comment" &&
+    !fileLocalBinding &&
+    ctx.tagRules !== "none" &&
+    (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))
+  ) {
+    const first = tagAttributesOf(node)[0];
+    if (first)
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `The ${voiceOfCtx(ctx).tag(name)} tag does not support ${voiceOfCtx(ctx).attributes}.`,
+        first,
+      );
+  }
+  if (!fileLocalBinding && (compilerValueTag || logTag))
     validateBuiltinValueAttributes(ctx, node, name);
 
   // Builtin values keep their shape check first. Calls run this guard after

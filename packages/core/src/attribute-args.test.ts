@@ -21,6 +21,7 @@ function compile(
     "/v/test.mx",
     {
       tags: {},
+      attrTags: 2,
       isElement: () => true,
       isComponent: (_name, ctx) => ctx.imports.has(_name),
       resolveAttributeMethod: () => true,
@@ -76,12 +77,26 @@ describe("the opt-in attribute argument refusal", () => {
     },
   );
 
-  it("retains the existing loop-source argument error with the option off or on", () => {
-    for (const option of [undefined, "refuse"] as const) {
-      expect(() =>
-        compile('<for|x| of=[] by(v)="id"><i/></for>', option),
-      ).toThrow("`<for by=...>` requires an expression value");
-    }
+  it.each([
+    '<for|x| of=[] by(v)="id"><i/></for>',
+    "<for|x| of(v)=[]><i/></for>",
+    "<for|x| in(v)=input><i/></for>",
+    "<for|x| to=3 step(v)=1><i/></for>",
+    "<for|x| to(v)=3><i/></for>",
+    "<for|x| from(v)=1 to=3><i/></for>",
+  ])(
+    "reads a loop-source attribute with arguments as stock does, dropping them: %s",
+    (source) => {
+      for (const option of [undefined, "refuse"] as const) {
+        expect(() => compile(source, option)).not.toThrow();
+      }
+    },
+  );
+
+  it("still refuses a loop-source attribute with no value", () => {
+    expect(() => compile("<for|x| of(v)><i/></for>")).toThrow(
+      "`<for of=...>` requires an expression value",
+    );
   });
 
   it("keeps the builtin try contract error", () => {
@@ -90,10 +105,115 @@ describe("the opt-in attribute argument refusal", () => {
     );
   });
 
-  it("keeps the host's comment error", () => {
-    expect(() =>
-      compile("<html-comment a(v)=1>text</html-comment>", "refuse"),
-    ).toThrow("host-owned comment refusal");
+  it.each([
+    "<html-comment a(v)=1>text</html-comment>",
+    "<html-comment a=1>text</html-comment>",
+  ])(
+    "refuses attributes on a claimed comment tag, as Marko does: %s",
+    (source) => {
+      expect(failure(source)).toMatchObject({
+        message: "The `<html-comment>` tag does not support attributes.",
+        line: 1,
+        column: 14,
+      });
+    },
+  );
+
+  // Marko's own attribute checks on its core tags, with or without arguments.
+  // Position is the first attribute stock blames; `[source, message, column]`.
+  it.each([
+    [
+      "<if=x a=1><i/></if>",
+      "The `<if>` tag only supports the `value=` attribute.",
+      6,
+    ],
+    [
+      "<if=x a(v)=1><i/></if>",
+      "The `<if>` tag only supports the `value=` attribute.",
+      6,
+    ],
+    [
+      "<if=x><i/></if><else-if=y a=1><i/></else-if>",
+      "The `<else-if>` tag only supports the `value=` attribute.",
+      26,
+    ],
+    [
+      "<if=x><i/></if><else a=1><i/></else>",
+      "The `<else>` tag only supports an `if=` attribute.",
+      21,
+    ],
+    [
+      "<if=x><i/></if><else a(v)=1><i/></else>",
+      "The `<else>` tag only supports an `if=` attribute.",
+      21,
+    ],
+    [
+      "<for|x| of=[] a=1><i/></for>",
+      "`<for>` does not support the `a` attribute.",
+      14,
+    ],
+    [
+      "<for|x| of=[] a(v)=1><i/></for>",
+      "`<for>` does not support the `a` attribute.",
+      14,
+    ],
+    ["<log a=1/>", "The `<log>` tag only supports the `value=` attribute.", 1],
+    [
+      "<log a(v)=1/>",
+      "The `<log>` tag only supports the `value=` attribute.",
+      1,
+    ],
+    [
+      "<debug a=1/>",
+      "The `<debug>` tag only supports the `value=` attribute.",
+      1,
+    ],
+    [
+      "<debug a(v)=1/>",
+      "The `<debug>` tag only supports the `value=` attribute.",
+      1,
+    ],
+  ])(
+    "refuses an attribute Marko's core tag does not read: %s",
+    (source, message, column) => {
+      for (const option of [undefined, "refuse"] as const) {
+        let error:
+          | { message: string; line: number; column: number }
+          | undefined;
+        try {
+          compile(source, option);
+        } catch (e) {
+          error = e as typeof error;
+        }
+        expect(
+          error && { ...error, message: error.message.replace(ANSI, "") },
+        ).toMatchObject({
+          message,
+          line: 1,
+          column,
+        });
+      }
+    },
+  );
+
+  it.each([
+    "<if=x><i/></if><else if=y><i/></else>",
+    "<if=x><i/></if><else><i/></else>",
+    '<for|x| of=[] by="id"><i/></for>',
+    "<log=1/>",
+    "<debug value=1/>",
+  ])("keeps accepting the attributes Marko's core tag reads: %s", (source) => {
+    expect(() => compile(source, "refuse")).not.toThrow();
+  });
+
+  it("refuses an argument list on an attribute tag's attribute through the opt-in", () => {
+    expect(
+      failure('import C from "./card.js"\n<C><@item a(v)=1/></C>'),
+    ).toMatchObject({
+      message: "Unsupported arguments on the `a` attribute.",
+      line: 2,
+      column: 10,
+    });
   });
 
   it.each([

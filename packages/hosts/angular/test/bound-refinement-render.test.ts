@@ -52,8 +52,8 @@ const MX = [
   "<div appPick v:fn:=sig/>",
   "<div appPick v:fn:=box.v/>",
   "<div appPick v:fn:=box.sig/>",
-  "<for|s| of=sigs><div appPick v:fn:=s/></for>",
-  "<for|item| of=items><div appPick v:fn:=item/></for>",
+  "<for|{s}| of=rows><div appPick v:fn:=s/></for>",
+  "<for|{item}| of=rows><div appPick v:fn:=item/></for>",
   "<for|item, i| of=items><div appPick v:fn:=items[i]/></for>",
 ] as const;
 // The MX compiler needs Node's module resolution, which jsdom's environment
@@ -78,7 +78,7 @@ let pageId = 0;
 interface Page {
   s: string;
   item: string;
-  sigs: Array<() => string>;
+  rows: Array<{ s: () => string; item: string }>;
   items: string[];
   q: string;
   sig: () => string;
@@ -116,7 +116,7 @@ async function render(mx: (typeof MX)[number]): Promise<Rendered> {
     "  box = { v: 'start', sig: signal('start') };",
     "  s = 'field';",
     "  item = 'field';",
-    "  sigs = [signal('start')];",
+    "  rows = [{ s: signal('start'), item: 'start' }];",
     "  items = ['start'];",
     "  fn(next: string): string { return next.toUpperCase() + '!'; }",
     "}",
@@ -172,9 +172,9 @@ describe("a bound attribute's refinement runs on change (Angular's renderer)", (
   });
 
   it("sets a @for variable that holds a signal, never the same-named field", async () => {
-    const r = await render("<for|s| of=sigs><div appPick v:fn:=s/></for>");
+    const r = await render("<for|{s}| of=rows><div appPick v:fn:=s/></for>");
     r.emit("abc");
-    expect(r.page.sigs[0]?.()).toBe("ABC!");
+    expect(r.page.rows[0]?.s()).toBe("ABC!");
     expect(r.page.s).toBe("field");
   });
 
@@ -196,14 +196,14 @@ describe("a bound attribute's refinement runs on change (Angular's renderer)", (
       ],
     });
     const r = await render(
-      "<for|item| of=items><div appPick v:fn:=item/></for>",
+      "<for|{item}| of=rows><div appPick v:fn:=item/></for>",
     );
     r.emit("abc");
     expect(String(reported.find((e) => e instanceof Error))).toMatch(
       /set is not a function/,
     );
     expect(r.page.item).toBe("field");
-    expect(r.page.items).toEqual(["start"]);
+    expect(r.page.rows[0]?.item).toBe("start");
   });
 
   it("writes a loop row through its array: items[i] === fn(next)", async () => {

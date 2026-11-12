@@ -878,3 +878,49 @@ describe("recursive contract registration", () => {
     }
   });
 });
+
+// A registered tag called with a tag argument beside attribute tags: stock
+// reports an attribute tag mixed with body content under a control tag first,
+// and the plain argument forms are refused with a position, never dropped.
+describe("a registered tag's argument beside attribute tags", () => {
+  function failure(source: string) {
+    try {
+      compileSource(source, "/tmp/mx-attrtag-contract/page.mx", declarations, {
+        targets,
+        customTags: {
+          card: {
+            attributeTags: { row: {} },
+            transform: () => [],
+          },
+        },
+        tagDiscoveryDirs: [],
+        warnings: [],
+        emitIr: () => "",
+      });
+    } catch (error) {
+      return error as TranslateError;
+    }
+    return undefined;
+  }
+
+  it.each([
+    "<card(a)><if=c><@row/>text</if></card>",
+    "<card(a, b)><if=c><@row/>text</if></card>",
+  ])("reports the control-tag body mix before the argument: %s", (source) => {
+    const error = failure(source);
+    expect(error?.diagnosticCode).toBe("MX_INVALID_ATTRIBUTE_TAG");
+    expect(error?.message).toContain(
+      "Cannot have attribute tags and body content under a control flow tag.",
+    );
+    expect([error?.line, error?.column]).toEqual([1, source.indexOf("text")]);
+  });
+
+  it.each(["<card(a)><@row/></card>", "<card(a)/>"])(
+    "refuses the argument at its position: %s",
+    (source) => {
+      const error = failure(source);
+      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect([error?.line, error?.column]).toEqual([1, 6]);
+    },
+  );
+});

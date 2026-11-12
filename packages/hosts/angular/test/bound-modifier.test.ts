@@ -90,23 +90,23 @@ describe("a bound attribute's refinement (angular)", () => {
     );
   });
 
+  // `:=` on a plain `<for>` parameter is refused in core, as stock does. A
+  // `<for in>` alias must be a plain name on Angular, so its value has no
+  // destructured form to bind: the `.set()` row it had is a refusal now.
+  it.each([
+    ["a @for item", "<for|item| of=items><div appPick v:fn:=item/></for>"],
+    ["a <for in> value", "<for|k, val| in=obj><div appPick v:fn:=val/></for>"],
+  ])("refuses a bind on %s", (_name, mx) => {
+    expect(() => emit(mx)).toThrow("Unable to bind to value.");
+  });
+
   // A template variable is never written as `this.<name>`: Angular's own
   // `[(v)]="item"` writes it with `.set()` and accepts only a signal there.
   it.each([
     [
-      "a @for item",
-      "<for|item| of=items><div appPick v:fn:=item/></for>",
-      `@for (item of items; track $index) { <div appPick [v]="__mxGet(item)" (vChange)="item.set(fn($event))"></div> }`,
-    ],
-    [
       "a destructured @for field",
       "<for|{v}| of=objs><div appPick v:fn:=v/></for>",
       `@for (__mxRow of objs; track $index) { @let v = __mxRow.v; <div appPick [v]="__mxGet(v)" (vChange)="v.set(fn($event))"></div> }`,
-    ],
-    [
-      "a <for in> value",
-      "<for|k, val| in=obj><div appPick v:fn:=val/></for>",
-      `@for (__mxEntry of (obj | keyvalue: null); track __mxEntry.key) { @let k = __mxEntry.key; @let val = __mxEntry.value; <div appPick [v]="__mxGet(val)" (vChange)="val.set(fn($event))"></div> }`,
     ],
   ])("writes %s with .set(), not this.<name>", (_name, mx, out) => {
     expect(emit(mx)).toBe(out);
@@ -116,6 +116,10 @@ describe("a bound attribute's refinement (angular)", () => {
   // a non-signal variable 'i' in a two-way binding expression"), so the refined
   // form is one too, at the attribute, decided from the IR scope the variable
   // was declared in: an index or a range number is never a signal.
+  // Core refuses `:=` on a plain `<for>` parameter before the emitter sees it,
+  // so the emitter's own "never a signal" refusal for an index or a range
+  // number is unreachable from authored source: the rows below pin the core
+  // refusal for the same inputs.
   describe("a variable that is never a signal", () => {
     function failure(mx: string) {
       try {
@@ -130,25 +134,21 @@ describe("a bound attribute's refinement (angular)", () => {
       const error = failure(
         "<for|item, i| of=items><div appPick v:fn:=i/></for>",
       );
-      expect(error).toMatchObject({ line: 1, column: 36 });
-      expect(error.message).toContain("`v:fn:=i`");
-      expect(error.message).toContain("cannot write `i`");
-      expect(error.message).toContain(
-        "a `@for` index, which is never a signal",
-      );
+      expect(error).toMatchObject({ line: 1, column: 42 });
+      expect(error.message).toBe("Unable to bind to value.");
     });
 
     it("rejects the index under any name, and on a later line", () => {
       const error = failure(
         "<for|item, position| of=items>\n  <div appPick v:fn:=position/>\n</for>",
       );
-      expect(error).toMatchObject({ line: 2, column: 15 });
-      expect(error.message).toContain("cannot write `position`");
+      expect(error).toMatchObject({ line: 2, column: 21 });
+      expect(error.message).toBe("Unable to bind to value.");
     });
 
     it("rejects a <for> range number", () => {
       const error = failure("<for|n| from=0 to=3><div appPick v:fn:=n/></for>");
-      expect(error.message).toContain("a `<for>` range number");
+      expect(error.message).toBe("Unable to bind to value.");
     });
 
     it("decides by scope, not by name: `i` outside the loop is the component's", () => {
@@ -158,13 +158,9 @@ describe("a bound attribute's refinement (angular)", () => {
     });
 
     it("lets the innermost declaration win: a signal-holding variable that shadows the index", () => {
-      // `:=` on a `<for>` parameter is not refused yet (bead "Refuse := on a
-      // `<for|i|>` or `<define|p|>` parameter", P3); when it is, this row is
-      // rebuilt on a binder stock allows to be bound (a nested `<let>` that
-      // shadows an outer one).
       expect(
         emit(
-          "<for|item, i| of=items><for|i| of=sigs><div appPick v:fn:=i/></for></for>",
+          "<for|item, i| of=items><for|{i}| of=sigs><div appPick v:fn:=i/></for></for>",
         ),
       ).toContain(`(vChange)="i.set(fn($event))"`);
     });
@@ -177,8 +173,8 @@ describe("a bound attribute's refinement (angular)", () => {
 
     it("keeps today's .set() for variables that can hold a signal", () => {
       for (const mx of [
-        "<for|s| of=sigs><div appPick v:fn:=s/></for>",
-        "<for|k, val| in=obj><div appPick v:fn:=val/></for>",
+        "<for|{s}| of=sigs><div appPick v:fn:=s/></for>",
+        "<for|{v}| of=objs><div appPick v:fn:=v/></for>",
       ]) {
         expect(emit(mx)).toContain(".set(fn($event))");
       }

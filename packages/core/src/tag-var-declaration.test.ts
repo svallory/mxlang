@@ -8,6 +8,7 @@ import { lookup } from "./test-targets.ts";
 const host: HostDeclarations = {
   name: "tag-var-test",
   attrTags: 2,
+  namedCallInputArgument: true,
   tags: {},
   isElement: (name) => name !== "foo",
   isComponent: (name) => name === "foo",
@@ -199,6 +200,21 @@ describe("named-call argument check order", () => {
     expect(() => compile("<foo(a)/>")).not.toThrow());
   it("keeps refusing an attribute tag beside a single argument", () =>
     refusal("<foo(a)><@x/></foo>", "MX_UNSUPPORTED_TAG_ARGUMENTS"));
+  it("refuses a lone argument on a host that does not carry it as input, at the argument", () => {
+    const { namedCallInputArgument: _carried, ...dropping } = host;
+    expect(() =>
+      compileSource("<foo(a)/>", "/page.mx", dropping, {
+        targets: lookup,
+        emitIr: () => "",
+      } as never),
+    ).toThrow(
+      expect.objectContaining({
+        diagnosticCode: "MX_UNSUPPORTED_TAG_ARGUMENTS",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
 });
 
 describe("const initializer self-write", () => {

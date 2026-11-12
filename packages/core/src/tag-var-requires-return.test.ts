@@ -41,6 +41,7 @@ const policy: Policy = {
   tags: {},
   // Exercise declaration rules on hosts that implement dynamic return binding.
   bindsDynamicTagVar: true,
+  namedCallInputArgument: true,
   isElement: () => true,
   isComponent: (name) => /^[A-Z]/.test(name) || name === "plain",
 };
