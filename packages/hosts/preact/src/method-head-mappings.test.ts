@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
 import { describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
