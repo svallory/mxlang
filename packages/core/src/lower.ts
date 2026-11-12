@@ -6973,7 +6973,6 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
  * another, so no rename is offered for it.
  */
 function scriptAcceptsTheShape(ctx: Ctx, node: Node): boolean {
-  if (hostRefusesScript(ctx)) return false;
   if (scriptShapeRefusals(ctx, node).length > 0) return false;
   for (const child of bodyChildren(node)) {
     if (!isTextNode(child) && !isCommentNode(child)) return false;
