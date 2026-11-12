@@ -106,6 +106,20 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "read-class.mx":
       "client class C { m() { return 1 } }\n<div>${new C().m()}</div>\n",
     "read-block.mx": "client { let q = 1 }\n<div>${q.toFixed(2)}</div>\n",
+    // A `server` name does not exist in the browser: client code reads it
+    // as `undefined`.
+    "srv-let.mx": "server let s = 1;\nclient const n = s.toFixed(1);\n<div/>\n",
+    "srv-const.mx":
+      "server const s = 1;\nclient const n = s.toFixed(1);\n<div/>\n",
+    "srv-import.mx":
+      'server import { one as s } from "./one.ts";\nclient const n = s.toFixed(1);\n<div/>\n',
+    // A `client` import, namespace or `declare` is `undefined` in the template.
+    "cl-import.mx":
+      'client import { one as y } from "./one.ts";\n<div>${y.toFixed(1)}</div>\n',
+    "cl-namespace.mx":
+      "client namespace N { export const a = 1 }\n<div>${N.a.toFixed(1)}</div>\n",
+    "cl-declare.mx":
+      "client declare const d: number;\n<div>${d.toFixed(1)}</div>\n",
     // Pins: reads that stay clean.
     "pin-handler.mx":
       "client let q = 1;\nclient const g = () => q.toFixed(1);\nclient { function h() { return q + 1 } }\n<div/>\n",
@@ -221,6 +235,21 @@ describe("mx-tsc types a client name as undefined for the server view", {
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(
       /^read-block\.mx\(2,8\): error TS18048: 'q' is possibly 'undefined'\.$/,
+    );
+  });
+
+  it.each([
+    ["srv-let.mx", "2,18"],
+    ["srv-const.mx", "2,18"],
+    ["srv-import.mx", "2,18"],
+    ["cl-import.mx", "2,8"],
+    ["cl-namespace.mx", "2,8"],
+    ["cl-declare.mx", "2,8"],
+  ])("%s: the read is undefined, at the read (%s)", (file, position) => {
+    const found = lines(file);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(
+      new RegExp(`${at(file, `(${position})`)}: error TS18048`),
     );
   });
 

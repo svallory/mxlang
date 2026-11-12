@@ -127,6 +127,13 @@ interface State {
   }>;
   /** Under `typeCheck`, every name a `client` statement declares as `undefined`. */
   clientNames: string[];
+  /** Under `typeCheck`, every name a `server` statement declares. */
+  serverDeclared: string[];
+  /**
+   * Under `typeCheck`, the value names `client` imports, namespaces and
+   * `declare` forms bind at module level.
+   */
+  clientHoisted: string[];
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
@@ -176,6 +183,8 @@ export function createEmitter(
     prelude: [],
     moduleHoisted: [],
     clientBody: [],
+    serverDeclared: [],
+    clientHoisted: [],
     clientTypes: [],
     clientTypeExports: [],
     clientNames: [],
@@ -1448,8 +1457,12 @@ export function createEmitter(
         // server module (every name it declares is `undefined`, none is
         // exported) and the client code, kept in a function of its own. The
         // module that runs keeps the `var` of its names.
+        if (options.typeCheck && data.declaredNames) {
+          state.serverDeclared.push(...data.declaredNames());
+        }
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
+          state.clientHoisted.push(...projection.hoistedNames);
           const lines: Array<string | MappedCode> = [];
           if (projection.serverNames.length > 0) {
             // `void` reads the names, so `noUnusedLocals` does not flag a
@@ -1766,14 +1779,34 @@ function placeClientCode(state: State): void {
   const listedValues = [...new Set(state.clientListed)].filter((name) =>
     state.clientNames.includes(name),
   );
+  // The client code runs in the browser, where a `server` name does not
+  // exist: shadow it as `undefined`, so a read is reported at the author's
+  // token. A name the client code binds itself stays typed. (The render
+  // input needs no shadow: core refuses `input` in module level code.)
+  const own = new Set([...state.clientNames, ...state.clientHoisted]);
+  const absent = [...new Set(state.serverDeclared)].filter(
+    (name) => !own.has(name),
+  );
   const body = [
+    ...(absent.length > 0 && (state.clientBody.length > 0 || inScope.length > 0)
+      ? [
+          concatMapped(
+            `var ${absent.map((name) => `${name}: undefined`).join(", ")}; void [${absent.join(", ")}];`,
+          ),
+        ]
+      : []),
     ...inScope,
     ...state.clientBody,
     ...(listedValues.length > 0
       ? [concatMapped(`void [${listedValues.join(", ")}];`)]
       : []),
   ];
-  if (body.length === 0) return;
+  if (
+    state.clientBody.length === 0 &&
+    inScope.length === 0 &&
+    listedValues.length === 0
+  )
+    return;
   state.moduleHoisted.push({
     code: concatMapped(
       "(async () => {\n",
@@ -1889,6 +1922,13 @@ export function emitModuleWithMappings(
     } {`,
     // Hoisted statements precede the body, so a hoisted declaration is in
     // scope for all of it.
+    // The server view does not read a `client` import, namespace or
+    // `declare` name: it is `undefined` there, and typed in the client code.
+    ...(emitter.state.clientHoisted.length > 0
+      ? [
+          `${INDENT}var ${emitter.state.clientHoisted.map((name) => `${name}: undefined`).join(", ")}; void [${emitter.state.clientHoisted.join(", ")}];`,
+        ]
+      : []),
     ...[...ir.prelude.map((node) => node.code), ...emitter.state.prelude].map(
       (code) => INDENT + code,
     ),

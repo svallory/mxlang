@@ -390,6 +390,8 @@ export interface ClientTypeExport {
  * and keeps the client code typed in a scope of its own:
  *
  * - `serverNames` are declared `var q: undefined;` at module level;
+ * - `hoistedNames` are the value names those statements bind, `undefined` in
+ *   the server view's render function;
  * - `hoisted` are the statements a function body cannot hold: `import`s,
  *   `namespace`s and `declare` forms, with any `export` removed (a client
  *   name is not exported by the server module), and the `import` a
@@ -410,6 +412,12 @@ export interface ClientTypeExport {
  */
 export interface ClientProjection {
   serverNames: string[];
+  /**
+   * The value names `hoisted` binds in the server module (`import`s,
+   * `namespace`s and `declare` forms). A template does not read them: the
+   * server view shadows them as `undefined` in the render function.
+   */
+  hoistedNames: string[];
   hoisted: ClientPiece[];
   types: ClientType[];
   typeExports: ClientTypeExport[];
@@ -545,6 +553,28 @@ function topLevelReturns(node: unknown, found: number[] = []): number[] {
     topLevelReturns(value, found);
   }
   return found;
+}
+
+/**
+ * The value names a hoisted `client` statement binds, `declare` forms
+ * included: `clientDeclaredNames` skips those because they declare nothing
+ * at run time, but the projection keeps them at module level, where the
+ * server view would otherwise read them typed.
+ */
+function hoistedValueNames(nodes: Node[]): string[] {
+  const names = new Set<string>();
+  const plain: Node[] = [];
+  for (const node of nodes) {
+    if (node.type === "TSImportEqualsDeclaration") {
+      if (node.importKind !== "type") names.add(node.id.name);
+    } else if (node.type === "TSDeclareFunction") {
+      if (node.id?.name) names.add(node.id.name);
+    } else if (node.type === "TSEnumDeclaration") {
+      if (!node.const && node.id?.name) names.add(node.id.name);
+    } else plain.push(node.declare ? { ...node, declare: false } : node);
+  }
+  for (const name of clientDeclaredNames(plain)) names.add(name);
+  return [...names];
 }
 
 function clientProjection(
@@ -699,6 +729,7 @@ function clientProjection(
     serverNames: clientDeclaredNames(statements).filter(
       (name) => !taken.has(name),
     ),
+    hoistedNames: hoistedValueNames(hoistedNodes),
     hoisted,
     types,
     typeExports,
@@ -909,6 +940,12 @@ export type DelegatedTagData =
       start: number | undefined;
       span: SourceSpan | undefined;
       typeCheck?: ClientProjection;
+      /**
+       * Under `typeCheck`, the names a `server` statement declares, read on
+       * demand: they do not exist in the browser, so the client view
+       * shadows them.
+       */
+      declaredNames?: () => string[];
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -999,6 +1036,14 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
+      declaredNames: () => {
+        try {
+          return clientDeclaredNames(parseClientStatements(code, node));
+        } catch {
+          // Core has checked this text; a name read here only shadows.
+          return [];
+        }
+      },
     };
   }
 
