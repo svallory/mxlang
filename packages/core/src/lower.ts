@@ -6971,6 +6971,8 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
  * not text (a child tag) is refused too, as the renamed `<script>` would read
  * it as text that does not parse. Renaming a refused tag trades one error for
  * another, so no rename is offered for it.
+ * A host's refusal of `<script>` does not count: the region contract offers the
+ * rename, and the fixed tag meets the host's own sentence.
  */
 function scriptAcceptsTheShape(ctx: Ctx, node: Node): boolean {
   if (scriptShapeRefusals(ctx, node).length > 0) return false;
