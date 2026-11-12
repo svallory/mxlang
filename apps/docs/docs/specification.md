@@ -3247,7 +3247,9 @@ Core checks authored children before lowering them, so a child's transform outpu
 Under a contract, a child the host refuses as something a data file cannot hold
 (`<try>`, `<return>`) is that refusal and nothing else: a tag's body is always
 lowered, even when its `transform` ignores the content, so the host's refusal fires and
-the parent's contract does not report the child first as a tag it does not allow. An
+the parent's contract does not report the child first as a tag it does not allow. Such a
+child is absent from `TagCall.childTree`, so an `analyze` or `transform` that counts
+children does not see it. An
 orphan `<else>` or `<else-if>` is not such a name; the contract reports it. Under
 `structural: "reject"` the first `<if>` or `<for>` in source order is the error, at the
 construct, whatever it holds, and a contract does not look inside it; an `<else>`
