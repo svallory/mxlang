@@ -1,5 +1,5 @@
 ---
-packages: [host-preact, host-hono, host-react]
+packages: [preact, react, hono]
 kind: Fixed
 ---
 
