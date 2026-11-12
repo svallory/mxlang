@@ -1148,6 +1148,10 @@ describe("a two-way bind on a parameter with no change handler", () => {
     ["<define/D|...rest|><input value:=rest/></define>", 34],
     ["<for|[a]| of=[[1]]><input value:=a/></for>", 34],
     ["<for|first, ...rest| of=[[1]]><input value:=rest/></for>", 45],
+    ["<for|[a] = []| of=[[1]]><input value:=a/></for>", 39],
+    ["<for|[[a]]| of=[[[1]]]><input value:=a/></for>", 38],
+    ["<define/D|...[a]|><input value:=a/></define>", 33],
+    ["<for|{a: [b]}| of=[{a: [1]}]><input value:=b/></for>", 44],
   ])(
     "refuses %s: a rest element and an array element have no object",
     (source, column) => {
@@ -1157,6 +1161,12 @@ describe("a two-way bind on a parameter with no change handler", () => {
       expect([error?.line, error?.column]).toEqual([1, column - 1]);
     },
   );
+
+  it("allows binding a name inside an object pattern nested in an array, written through its object", () => {
+    expect(
+      attempt("<for|[{a}]| of=[[{a: 1}]]><input value:=a/></for>"),
+    ).toBeUndefined();
+  });
 
   it("allows binding a name inside an object pattern, written through its object", () => {
     expect(

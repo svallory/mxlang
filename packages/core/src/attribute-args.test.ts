@@ -117,6 +117,14 @@ describe("the opt-in attribute argument refusal", () => {
     );
   });
 
+  it("refuses an argument list on the condition attribute under the refuse option", () => {
+    expect(failure("<if value(v)=x><i/></if>")).toMatchObject({
+      message: "Unsupported arguments on the `value` attribute.",
+      line: 1,
+      column: 4,
+    });
+  });
+
   it("keeps the builtin try contract error", () => {
     expect(() => compile("<try a(v)=1><i/></try>", "refuse")).toThrow(
       "`<try>`: accepts no attributes",
@@ -169,6 +177,42 @@ describe("the opt-in attribute argument refusal", () => {
       });
     },
   );
+
+  it("reports a comment tag's attribute error before an error in its body, on a host that renders it", () => {
+    expect(() =>
+      compileSource(
+        "<html-comment a=1><for/></html-comment>",
+        "/v/test.mx",
+        {
+          tags: {},
+          attrTags: 2,
+          isElement: () => true,
+          isComponent: () => false,
+          resolveAttributeMethod: () => true,
+          isDelegatedTag: (name) => name === "html-comment",
+          resolveDelegatedTag: () => ({}),
+        },
+        { targets, emitIr: () => "" },
+      ),
+    ).toThrow("The `<html-comment>` tag does not support attributes.");
+  });
+
+  it("reports a host's disposition refusal of the comment tag before its attributes", () => {
+    expect(() =>
+      compileSource(
+        "<html-comment a=1>text</html-comment>",
+        "/v/test.mx",
+        {
+          tags: { "html-comment": { kind: "unsupported" } },
+          attrTags: 2,
+          isElement: () => true,
+          isComponent: () => false,
+          resolveAttributeMethod: () => true,
+        },
+        { targets, emitIr: () => "" },
+      ),
+    ).toThrow("`<html-comment>` is not supported");
+  });
 
   // Marko's own attribute checks on its core tags, with or without arguments.
   // Position is the first attribute stock blames; `[source, message, column]`.

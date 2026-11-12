@@ -3916,6 +3916,28 @@ function offendingAttribute(
 }
 
 /**
+ * The condition attribute of `<if>`/`<else-if>`/`<else>` never reaches
+ * `lowerAttrs`, so a host that refuses attribute arguments is told here, as
+ * for every other attribute (`<if value(v)=x>`).
+ */
+function rejectConditionArguments(ctx: Ctx, attrs: readonly Node[]): void {
+  if (
+    ctx.declarations.attributeArgs !== "refuse" ||
+    !(ctx.emitsModule || !ctx.moduleScope)
+  )
+    return;
+  const attr = attrs.find(
+    (candidate) => !isSpreadAttributeNode(candidate) && attrArgsOf(candidate),
+  );
+  if (attr)
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
+      attr,
+    );
+}
+
+/**
  * Marko's attribute check on a condition tag: `<if>`/`<else-if>` take the
  * condition (the `value=` attribute) alone, `<else>` an `if=` alone, with or
  * without arguments. The error points at the first attribute that is not the
@@ -3944,6 +3966,7 @@ function rejectExtraConditionAttributes(
         offender,
       );
     }
+    rejectConditionArguments(ctx, attrs);
     return;
   }
   const offender =
@@ -3962,6 +3985,7 @@ function rejectExtraConditionAttributes(
       offender,
     );
   }
+  rejectConditionArguments(ctx, attrs);
 }
 
 /**
@@ -4177,15 +4201,14 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   // The key function takes the loop's own parameters in order: the read name
   // sits at the slot of the param that binds it (a destructuring pattern
   // included), and each param up to it is printed as authored.
-  const slot = slots.get(name);
-  const keyParams =
-    slot === undefined
-      ? undefined
-      : params
-          .slice(0, slot + 1)
-          .map((param: Node) => sliceNode(ctx, param).trim())
-          .join(", ");
-  const keyFunction = `by=(${keyParams ?? name}) => ${keyParams && authored ? authored : "key"}`;
+  // `name` is one of `slots`' keys (the read came from them) and `by=` has a
+  // value, so the slot and the authored expression are always there.
+  const slot = slots.get(name) as number;
+  const keyParams = params
+    .slice(0, slot + 1)
+    .map((param: Node) => sliceNode(ctx, param).trim())
+    .join(", ");
+  const keyFunction = `by=(${keyParams}) => ${authored}`;
   raise(
     INVALID_FOR_CODE,
     outer
@@ -4292,7 +4315,12 @@ function lowerForHead(
     }
     // Stock compiles and drops the arguments; a host that opts into refusing
     // attribute arguments refuses them here too, like every other attribute.
-    if (ctx.declarations.attributeArgs === "refuse" && attrArgsOf(attr)) {
+    // A region's module-statement refusal reports first, as in `lowerAttrs`.
+    if (
+      ctx.declarations.attributeArgs === "refuse" &&
+      (ctx.emitsModule || !ctx.moduleScope) &&
+      attrArgsOf(attr)
+    ) {
       raise(
         INVALID_ATTRIBUTE_CODE,
         `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
@@ -4562,24 +4590,38 @@ function paramGuards(
 ): ReadonlyMap<string, WriteGuard> {
   const guards = new Map<string, WriteGuard>();
   // A name bound with no object behind it: a plain name, a defaulted one, a
-  // rest element, or an element of an array pattern. Stock refuses a write to
-  // each; a name inside an object pattern is written through its object.
-  const plainName = (pattern: Node | null | undefined): string | undefined => {
-    if (pattern?.type === "Identifier") return pattern.name;
-    if (pattern?.type === "AssignmentPattern") return plainName(pattern.left);
-    if (pattern?.type === "RestElement") return plainName(pattern.argument);
-    return undefined;
+  // rest element, or any element of an array pattern, at any depth of
+  // defaults, rests and arrays. Stock refuses a write to each; a name directly
+  // inside an object pattern is written through its object.
+  const collectPlain = (
+    pattern: Node | null | undefined,
+    plain: boolean,
+    into: Set<string>,
+  ): void => {
+    if (!pattern) return;
+    switch (pattern.type) {
+      case "Identifier":
+        if (plain) into.add(pattern.name);
+        return;
+      case "AssignmentPattern":
+        collectPlain(pattern.left, plain, into);
+        return;
+      case "RestElement":
+        collectPlain(pattern.argument, plain, into);
+        return;
+      case "ArrayPattern":
+        for (const element of pattern.elements)
+          collectPlain(element, true, into);
+        return;
+      case "ObjectPattern":
+        for (const property of pattern.properties)
+          collectPlain(property.value ?? property.argument, false, into);
+        return;
+    }
   };
   for (const param of tagParamsOf(node)) {
     const plain = new Set<string>();
-    const own = plainName(param);
-    if (own) plain.add(own);
-    if (param?.type === "ArrayPattern") {
-      for (const element of param.elements) {
-        const name = plainName(element);
-        if (name) plain.add(name);
-      }
-    }
+    collectPlain(param, true, plain);
     for (const name of bindingIdentifiers(param)) {
       guards.set(name, { kind, inFunction: plain.has(name) });
     }
@@ -5814,6 +5856,20 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
 function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   if (ctx.tagRules !== "none") rejectTagVarSelfRead(ctx, node);
   const loc = posOf(ctx, node);
+  // A comment's attribute error is Marko's `assertNoAttributes`, ahead of its
+  // body: raised right after the host has resolved the claim (and had its
+  // chance to refuse the tag), before any child is lowered.
+  let commentData: ReturnType<
+    NonNullable<HostDeclarations["resolveDelegatedTag"]>
+  >;
+  if (name === "html-comment") {
+    commentData = ctx.declarations.resolveDelegatedTag?.(
+      name,
+      markoViewOf(ctx, node),
+      ctx,
+    );
+    rejectHtmlCommentAttributes(ctx, node);
+  }
   const target: ComponentTarget =
     name === DYNAMIC_TAG
       ? { kind: "dynamic", expr: exprOf(ctx, tagNameExprOf(node)) }
@@ -5864,11 +5920,14 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data: ctx.declarations.resolveDelegatedTag?.(
-        name,
-        markoViewOf(ctx, node),
-        ctx,
-      ),
+      data:
+        name === "html-comment"
+          ? commentData
+          : ctx.declarations.resolveDelegatedTag?.(
+              name,
+              markoViewOf(ctx, node),
+              ctx,
+            ),
       loc,
     },
     loc,
@@ -7393,16 +7452,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
     !Object.hasOwn(ctx.declarations.tags, name) &&
     !ctx.declarations.isDelegatedTag?.(name, ctx);
-  // Marko's `<html-comment>` takes no attributes (`assertNoAttributes`). A host
-  // that claims the tag answers first (a JSX host refuses the tag itself), so
-  // the check runs after the claim, below; elsewhere it runs here.
-  if (
-    name === "html-comment" &&
-    !ctx.declarations.isDelegatedTag?.(name, ctx) &&
-    (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))
-  ) {
-    rejectHtmlCommentAttributes(ctx, node);
-  }
   if (!fileLocalBinding && (compilerValueTag || logTag))
     validateBuiltinValueAttributes(ctx, node, name);
 
@@ -7453,6 +7502,16 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       );
     }
     raiseDisposition(ctx, name, disposition, node);
+  }
+  // Marko's `<html-comment>` takes no attributes (`assertNoAttributes`). A host
+  // that refuses the tag (above) or claims it (`lowerDelegatedTag` runs the
+  // check itself, once the host has resolved the claim) answers first.
+  if (
+    name === "html-comment" &&
+    !ctx.declarations.isDelegatedTag?.(name, ctx) &&
+    (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))
+  ) {
+    rejectHtmlCommentAttributes(ctx, node);
   }
   // Module code is checked after a host's refusal of the statement, so a host
   // that has no `server` or `client` block says so first, and before the
@@ -7585,9 +7644,7 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (customTag) return lowerCustomTag(ctx, node, name, customTag);
 
   if (!fileLocalBinding && ctx.declarations.isDelegatedTag?.(name, ctx)) {
-    const lowered = lowerDelegatedTag(ctx, node, name);
-    if (name === "html-comment") rejectHtmlCommentAttributes(ctx, node);
-    return lowered;
+    return lowerDelegatedTag(ctx, node, name);
   }
 
   // `fileLocalBinding` alone is sufficient here for a `<const>`/`<for>`-param/
