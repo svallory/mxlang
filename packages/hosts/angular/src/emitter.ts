@@ -612,7 +612,19 @@ function handlerShape(code: string):
   return { form: "other" };
 }
 
-/** Whether `code` is an optional chain at its root (`q?.a`, `q?.[k]`, `q?.a.b`). */
+/** The error for assigning a `<define>`'s value; names how to read its attributes when it has some. */
+function defineAssignError(name: string, hasAttrs: boolean): string {
+  return `\`${name}\` is a \`<define>\`'s value and cannot be assigned${
+    hasAttrs ? `; read its attributes as \`${name}.name\`` : ""
+  }`;
+}
+
+/**
+ * Whether `code` is an optional chain at its root (`q?.a`, `q?.[k]`,
+ * `q?.a.b`). A `!`, `as`, `satisfies` or `<T>` around it is gone by the time a
+ * bound attribute's value arrives (core's `stripTypes` replaces a top-level
+ * assertion with its operand), so `q?.a!` is this too.
+ */
 function isOptionalChain(code: string): boolean {
   try {
     const babel = babelParser as unknown as {
@@ -1392,7 +1404,7 @@ function emitAttrs(
           writeRefinedWrite(out, attr, attr.refinement, refine);
           out.write('"');
         } else {
-          // Angular's `[(v)]` refuses an optional chain (NG5002, "Unsupported
+          // Angular's `[(v)]` refuses an optional chain ("Unsupported
           // expression in a two-way binding"); Marko accepts it. Refuse it
           // here, at the attribute, like the refined form.
           if (isOptionalChain(attr.value.code)) {
@@ -3827,11 +3839,10 @@ class AngularEmitter implements Emitter<string> {
                   child.name,
                   {
                     read: renamed,
-                    assignError: `\`${child.name}\` is a \`<define>\`'s value and cannot be assigned${
-                      child.attrs.length > 0
-                        ? `; read its attributes as \`${child.name}.name\``
-                        : ""
-                    }`,
+                    assignError: defineAssignError(
+                      child.name,
+                      child.attrs.length > 0,
+                    ),
                   },
                 ],
               ]),
@@ -3945,7 +3956,7 @@ class AngularEmitter implements Emitter<string> {
               node.name,
               {
                 read: DEFINE_READ,
-                assignError: `\`${written}\` is a \`<define>\`'s value and cannot be assigned; read its attributes as \`${written}.name\``,
+                assignError: defineAssignError(written, true),
               },
             ],
           ]);

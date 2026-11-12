@@ -126,3 +126,26 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
     expect(code).toContain("__mxSet(box, 'v', fn($event))");
   });
 });
+
+// Why MX refuses `v:=q?.a` at the attribute: Angular's own compiler rejects the
+// `[(v)]="q?.a"` that the unrefined form would emit, so the refusal is
+// not a stricter rule than Angular's, it is the same one stated at the source.
+describe("Angular's own two-way binding on an optional chain", () => {
+  it("is rejected by the compiler", () => {
+    const source = `import { Component, Directive, EventEmitter, Input, Output } from "@angular/core";
+@Directive({ selector: "[appPick]", standalone: true })
+export class Pick { @Input() v = ""; @Output() vChange = new EventEmitter<string>(); }
+@Component({ selector: "mx-probe", standalone: true, imports: [Pick], template: \`<div appPick [(v)]="q?.a"></div>\` })
+export class Probe { q?: { a: string } }
+`;
+    const checker = createAngularChecker({ projectDir: checkerProject });
+    const diagnostics = checker.check(
+      join(checkerProject, "optional-chain.component.ts"),
+      source,
+    );
+    checker.dispose();
+    expect(diagnostics.map((d) => d.message)).toContain(
+      "Unsupported expression in a two-way binding",
+    );
+  });
+});

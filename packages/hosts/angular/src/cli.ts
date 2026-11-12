@@ -5,7 +5,7 @@
 
 import { resolve } from "node:path";
 import { isTranslateError } from "@mxlang/core";
-import { build } from "./build.ts";
+import { type BuildResult, build } from "./build.ts";
 import { readMap, resolvePosition } from "./map-file.ts";
 import { runNg } from "./ng-build.ts";
 import { positionSuffix } from "./position.ts";
@@ -75,8 +75,16 @@ function parseFlags(args: string[]): { flags: Flags; rest: string[] } {
   return { flags, rest };
 }
 
-function runBuild(args: string[]): number {
-  const { flags } = parseFlags(args);
+/** Reads the project and options, runs `build()`, prints its messages. */
+function buildAndReport(args: string[]): {
+  ok: boolean;
+  projectDir: string;
+  authoredNames: BuildResult["authoredNames"];
+} {
+  const { flags, rest } = parseFlags(args);
+  if (rest.length > 0) {
+    throw new Error(`unexpected argument: ${rest[0]}`);
+  }
   const projectDir = flags.project ? resolve(flags.project) : process.cwd();
   if (flags.config) {
     // Task 1.5a reads package.json#mx.angular only (A3); an explicit
@@ -87,36 +95,30 @@ function runBuild(args: string[]): number {
     );
   }
   const result = build(projectDir);
-
   for (const warning of result.warnings) {
     console.warn(formatMessage("warning", warning));
   }
   for (const error of result.errors) {
     console.error(formatMessage("error", error));
   }
+  return { ok: result.ok, projectDir, authoredNames: result.authoredNames };
+}
 
-  return result.ok ? 0 : 1;
+function runBuild(args: string[]): number {
+  return buildAndReport(args).ok ? 0 : 1;
 }
 
 /**
  * `mx-angular ng-build`: `build`, then `ng build` (arguments after `--` go to
  * it) with generated `<const>`/`<define>` names printed as authored.
  */
-function runNgBuild(args: string[]): number {
+function runNgBuild(args: string[]): number | Promise<number> {
   const split = args.indexOf("--");
   const ownArgs = split === -1 ? args : args.slice(0, split);
   const ngArgs = split === -1 ? [] : args.slice(split + 1);
-  const { flags } = parseFlags(ownArgs);
-  const projectDir = flags.project ? resolve(flags.project) : process.cwd();
-  const result = build(projectDir);
-  for (const warning of result.warnings) {
-    console.warn(formatMessage("warning", warning));
-  }
-  for (const error of result.errors) {
-    console.error(formatMessage("error", error));
-  }
-  if (!result.ok) return 1;
-  return runNg(projectDir, ngArgs, result.authoredNames);
+  const built = buildAndReport(ownArgs);
+  if (!built.ok) return 1;
+  return runNg(built.projectDir, ngArgs, built.authoredNames);
 }
 
 function formatMessage(
@@ -252,7 +254,7 @@ export function runCli(argv: string[]): number | Promise<number> {
       case "build":
         return runBuild(rest);
       case "ng-build":
-        return runNgBuild(rest);
+        return Promise.resolve(runNgBuild(rest)).catch(handleCliError);
       case "watch":
         return runWatch(rest).catch(handleCliError);
       case "map":

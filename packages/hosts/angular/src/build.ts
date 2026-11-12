@@ -80,7 +80,7 @@ export interface BuildResult {
    * each generated `<const>`/`<define>` name mapped to the authored one. Only
    * files that renamed something appear. `mx-angular ng-build` reads it.
    */
-  authoredNames: Record<string, Record<string, string>>;
+  authoredNames: Record<string, Record<string, string | null>>;
 }
 
 export function outputPathFor(
@@ -343,7 +343,7 @@ export interface CompileOneResult {
   /** Every output path this call touched (page `.html`, its `.map`), for `knownOutputs` bookkeeping. */
   outputs: string[];
   /** The generated-to-authored names of the file this call compiled, when it renamed any. */
-  authoredNames?: Record<string, string>;
+  authoredNames?: Record<string, string | null>;
 }
 
 /**

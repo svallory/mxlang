@@ -44,10 +44,10 @@ const DIV_CLASS = [
   "<div class=input.class/>",
   "",
 ].join("\n");
-// A callee that declares a `style` input beside `class`.
+// A callee that declares a `style` input (and no `class` input).
 const TAKES_STYLE = [
   "export interface Input { style?: unknown }",
-  "<pre>{{ class }}</pre>",
+  "<pre>${input.style}</pre>",
   "",
 ].join("\n");
 const NO_CLASS = [
@@ -95,13 +95,9 @@ beforeAll(() => {
     ["divchild", DIV_CLASS],
     ["concise", CONCISE_CALLER],
   ] as const) {
-    const file = join(dir, "tags", `${name}.mx`);
     writeFileSync(
-      file,
-      source.replace(
-        "{{ class }}",
-        name === "styled" ? "${input.style}" : "${input.class}",
-      ),
+      join(dir, "tags", `${name}.mx`),
+      source.replace("{{ class }}", "${input.class}"),
     );
   }
   for (const name of ["child", "plain", "styled", "divchild", "concise"]) {
@@ -129,6 +125,8 @@ async function render(
 ): Promise<{
   inputs: string[];
   hosts: (string | null)[];
+  /** Each called tag's host `style` attribute. */
+  styles: (string | null)[];
   /** The callee's rendered text after `update` is applied and checked again. */
   updated: {
     inputs: string[];
@@ -187,6 +185,9 @@ async function render(
     inputs: inputs(),
     hosts: tags().map((tag) =>
       (tag.nativeElement as HTMLElement).getAttribute("class"),
+    ),
+    styles: tags().map((tag) =>
+      (tag.nativeElement as HTMLElement).getAttribute("style"),
     ),
   };
   if (update) {
@@ -434,6 +435,7 @@ describe("a static style on a tag call whose callee declares a style input", () 
   it("the input takes it, not the host element", async () => {
     const view = await render('<styled style="color:red"/>', {});
     expect(view.inputs).toEqual([text("color:red")]);
+    expect(view.styles).toEqual([null]);
   });
 });
 

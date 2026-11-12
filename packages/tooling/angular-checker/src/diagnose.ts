@@ -13,6 +13,7 @@ import {
   lineColumnAt,
   lookupMapping,
   offsetAt,
+  rewriteAuthoredNames,
   sourceOffsetFor,
 } from "@mxlang/host-angular";
 import type {
@@ -160,19 +161,7 @@ function authoredNamesIn(
       diagnostic.start >= r.generatedStart && diagnostic.start < r.generatedEnd,
   );
   if (!region) return message;
-  let result = message;
-  for (const [generated, authored] of Object.entries(
-    region.authoredNames ?? {},
-  )) {
-    result = result.replace(
-      new RegExp(
-        `(?<![\\w$])${generated.replace(/\$/g, "\\$")}(?![\\w$])`,
-        "g",
-      ),
-      () => authored,
-    );
-  }
-  return result;
+  return rewriteAuthoredNames(message, region.authoredNames ?? {});
 }
 
 /**

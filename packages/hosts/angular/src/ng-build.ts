@@ -8,9 +8,10 @@
  * changing what is emitted (the DOM and the i18n message ids stay as they are).
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { mergeAuthoredNames, rewriteAuthoredNames } from "./authored-names.ts";
 import type { BuildResult } from "./build.ts";
 
 /**
@@ -26,55 +27,64 @@ export function rewriteGeneratedNames(
   text: string,
   names: BuildResult["authoredNames"],
 ): string {
-  const merged = new Map<string, string | null>();
-  for (const file of Object.values(names)) {
-    for (const [generated, authored] of Object.entries(file)) {
-      const known = merged.get(generated);
-      merged.set(
-        generated,
-        known === undefined || known === authored ? authored : null,
-      );
-    }
-  }
-  let result = text;
-  for (const [generated, authored] of merged) {
-    if (authored === null) continue;
-    result = result.replace(
-      new RegExp(
-        `(?<![\\w$])${generated.replace(/\$/g, "\\$")}(?![\\w$])`,
-        "g",
-      ),
-      () => authored,
-    );
-  }
-  return result;
+  return rewriteAuthoredNames(text, mergeAuthoredNames(Object.values(names)));
 }
 
-/** The project's `ng` binary (`node_modules/.bin/ng`, here or above), else `ng` on PATH. */
-export function findNg(projectDir: string): string {
+/** The project's `ng` binary (`node_modules/.bin/ng`, here or above; `ng.cmd` on Windows), else `ng` on PATH. */
+function findNg(projectDir: string): string {
+  const file = process.platform === "win32" ? "ng.cmd" : "ng";
   for (let dir = projectDir; ; dir = dirname(dir)) {
-    const candidate = join(dir, "node_modules", ".bin", "ng");
+    const candidate = join(dir, "node_modules", ".bin", file);
     if (existsSync(candidate)) return candidate;
-    if (dirname(dir) === dir) return "ng";
+    if (dirname(dir) === dir) return file;
   }
 }
 
-/** Runs `ng build <ngArgs>` in `projectDir`, printing its output with generated names rewritten; returns its exit code. */
+/** Forwards `source` to `sink` a line at a time, rewritten, so a long build prints as it runs. */
+function forwardLines(
+  source: NodeJS.ReadableStream,
+  sink: NodeJS.WritableStream,
+  names: BuildResult["authoredNames"],
+): Promise<void> {
+  return new Promise((done) => {
+    let pending = "";
+    source.setEncoding("utf8");
+    source.on("data", (chunk: string) => {
+      pending += chunk;
+      const cut = pending.lastIndexOf("\n");
+      if (cut === -1) return;
+      sink.write(rewriteGeneratedNames(pending.slice(0, cut + 1), names));
+      pending = pending.slice(cut + 1);
+    });
+    source.on("end", () => {
+      if (pending) sink.write(rewriteGeneratedNames(pending, names));
+      done();
+    });
+  });
+}
+
+/** Runs `ng build <ngArgs>` in `projectDir`, streaming its output with generated names rewritten; resolves to its exit code. */
 export function runNg(
   projectDir: string,
   ngArgs: string[],
   names: BuildResult["authoredNames"],
-): number {
-  const run = spawnSync(findNg(projectDir), ["build", ...ngArgs], {
-    cwd: projectDir,
-    encoding: "utf8",
-    maxBuffer: 256 * 1024 * 1024,
+): Promise<number> {
+  return new Promise((resolveCode) => {
+    const child = spawn(findNg(projectDir), ["build", ...ngArgs], {
+      cwd: projectDir,
+      // `.cmd` files only run through a shell on Windows.
+      shell: process.platform === "win32",
+    });
+    const drained = Promise.all([
+      forwardLines(child.stdout, process.stdout, names),
+      forwardLines(child.stderr, process.stderr, names),
+    ]);
+    child.on("error", (error) => {
+      console.error(`could not run ng: ${error.message}`);
+      resolveCode(1);
+    });
+    child.on("close", (code) => {
+      void drained.then(() => resolveCode(code ?? 1));
+    });
   });
-  if (run.error) {
-    console.error(`could not run ng: ${run.error.message}`);
-    return 1;
-  }
-  process.stdout.write(rewriteGeneratedNames(run.stdout ?? "", names));
-  process.stderr.write(rewriteGeneratedNames(run.stderr ?? "", names));
-  return run.status ?? 1;
 }

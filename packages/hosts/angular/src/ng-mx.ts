@@ -30,6 +30,7 @@ import {
   parse,
 } from "@mxlang/tsx-bridge";
 import MagicString from "magic-string";
+import { mergeAuthoredNames } from "./authored-names.ts";
 import { directivesFor } from "./directives.ts";
 import {
   ALL_HELPER_NAMES,
@@ -210,6 +211,12 @@ export interface CompileNgMxResult {
   anchors: NodeAnchor[];
   /** Every warning, across every region. */
   warnings: MxWarning[];
+  /**
+   * Each renamed `<const>`/`<define>` by generated name, merged across regions;
+   * a name two regions give different authored names is `null`. See
+   * `CompileAngularResult.authoredNames`.
+   */
+  authoredNames: Record<string, string | null>;
   /** Every tag called, across every region. */
   usedTags: UsedTag[];
   /** Per-region detail, in source order. */
@@ -1758,6 +1765,7 @@ export function compileNgMx(
     mappings: moduleMappings,
     anchors: moduleAnchors,
     warnings,
+    authoredNames: mergeAuthoredNames(lowered.map((r) => r.authoredNames)),
     usedTags,
     regions: lowered.map(
       (
