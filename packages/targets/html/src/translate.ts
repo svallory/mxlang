@@ -452,9 +452,41 @@ export function moduleDeclaredNames(codes: string[]): Set<string> {
     } catch {
       continue;
     }
-    for (const name of clientDeclaredNames(body)) names.add(name);
+    for (const name of clientDeclaredNames(
+      body.filter((statement) => !isTypeOnlyNamespace(statement)),
+    )) {
+      names.add(name);
+    }
   }
   return names;
+}
+
+/**
+ * A `namespace` holding only types (or `declare`s, or such namespaces) is
+ * erased by TypeScript: it declares no run-time name, so it cannot clash with
+ * a `var` (TypeScript's "instantiated" rule).
+ */
+function isTypeOnlyNamespace(statement: Node): boolean {
+  const node =
+    statement.type === "ExportNamedDeclaration" && statement.declaration
+      ? statement.declaration
+      : statement;
+  if (node.type !== "TSModuleDeclaration" || node.declare) return false;
+  const body = node.body;
+  if (!body) return false;
+  if (body.type === "TSModuleDeclaration") return isTypeOnlyNamespace(body);
+  return (body.body ?? []).every((inner: Node) => {
+    const declaration =
+      inner.type === "ExportNamedDeclaration" && inner.declaration
+        ? inner.declaration
+        : inner;
+    return (
+      declaration.type === "TSTypeAliasDeclaration" ||
+      declaration.type === "TSInterfaceDeclaration" ||
+      declaration.declare === true ||
+      isTypeOnlyNamespace(declaration)
+    );
+  });
 }
 
 /** The leftmost identifier of `A`, `A.B`, `a.b.c`: the name a reference reads. */

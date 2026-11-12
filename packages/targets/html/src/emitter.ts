@@ -177,10 +177,15 @@ export function createEmitter(
   options: {
     typeCheck?: boolean;
     source?: string;
-    /** Names the module's own statements declare; see `moduleDeclaredNames`. */
-    declaredNames?: ReadonlySet<string>;
+    /** The module's own statements' source, for `moduleDeclaredNames`; read only when a `client` statement names something. */
+    declaredCodes?: () => string[];
   } = {},
 ): StringEmitter {
+  let declaredMemo: ReadonlySet<string> | undefined;
+  const declaredNames = (): ReadonlySet<string> => {
+    declaredMemo ??= moduleDeclaredNames(options.declaredCodes?.() ?? []);
+    return declaredMemo;
+  };
   /** Names an earlier `client` statement already declared with a `var`. */
   const declaredByClient = new Set<string>();
   const state: State = {
@@ -1477,9 +1482,12 @@ export function createEmitter(
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
           const lines: Array<string | MappedCode> = [];
-          const declared = projection.serverNames.filter(
-            (name) => !options.declaredNames?.has(name),
-          );
+          const declared =
+            projection.serverNames.length > 0
+              ? projection.serverNames.filter(
+                  (name) => !declaredNames().has(name),
+                )
+              : [];
           if (declared.length > 0) {
             // `void` reads the names, so `noUnusedLocals` does not flag a
             // declaration the author never wrote.
@@ -1541,10 +1549,13 @@ export function createEmitter(
         if (data.clientVars) {
           // A `var q;` beside a declaration of `q` is TS2300, and two
           // `client` statements naming `q` would declare it twice.
-          const names = data.clientVars.filter(
-            (name) =>
-              !options.declaredNames?.has(name) && !declaredByClient.has(name),
-          );
+          const names =
+            data.clientVars.length > 0
+              ? data.clientVars.filter(
+                  (name) =>
+                    !declaredNames().has(name) && !declaredByClient.has(name),
+                )
+              : [];
           for (const name of names) declaredByClient.add(name);
           if (names.length > 0) {
             state.moduleHoisted.push({
@@ -1879,10 +1890,10 @@ export function emitModuleWithMappings(
   const name = moduleExportName(ir, "@mxlang/target-html");
   const emitter = createEmitter(name, {
     ...options,
-    declaredNames: moduleDeclaredNames([
+    declaredCodes: () => [
       ...ir.imports.map((node) => node.code),
       ...ir.hoisted.map((node) => node.code),
-    ]),
+    ],
   });
   drive(emitter, ir.body);
   const body = emitter.done();

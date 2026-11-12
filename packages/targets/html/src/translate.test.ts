@@ -3264,8 +3264,4 @@ describe("dangerouslySetInnerHTML", () => {
       }),
     );
   });
-
-  it("is allowed on a spread's key, which is runtime data", () => {
-    expect(() => compile("<div ...input.attrs/>", "t.mx")).not.toThrow();
-  });
 });

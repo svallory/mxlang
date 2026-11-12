@@ -824,7 +824,7 @@ describe("tag type containers", () => {
     const { code } = compileSolidMx("<p<string>>x</p>", {
       filename: "fixture.solid.mx",
     });
-    expect(code).toContain("x");
+    expect(code).toContain("<p>x</p>");
     expect(code).not.toContain("string");
   });
 
@@ -832,7 +832,7 @@ describe("tag type containers", () => {
     const { code } = compileSolidUnit("<p<string>>x</p>\n", {
       filename: "fixture.mx",
     });
-    expect(code).toContain("x");
+    expect(code).toContain("<p>x</p>");
     expect(code).not.toContain("string");
   });
 });
@@ -848,8 +848,14 @@ describe("<html-style>", () => {
     expect(code).toContain('<style media="print"');
     expect(code).toContain('innerHTML={__mxStyleText("a > b { color: red }")}');
     expect(code).not.toContain("html-style");
-    expect(hoistedDefines.map((define) => define.binding)).toContain(
-      "__mxStyleText",
-    );
+    // The helper is hoisted, and escapes `</style` as Marko does.
+    const helper = hoistedDefines.find(
+      (define) => define.binding === "__mxStyleText",
+    )?.code;
+    expect(helper).toBeDefined();
+    const escape = new Function(
+      `${helper?.replace(/: unknown\[\]/g, "").replace(/\): string/g, ")")}; return __mxStyleText;`,
+    )() as (...parts: unknown[]) => string;
+    expect(escape("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
   });
 });

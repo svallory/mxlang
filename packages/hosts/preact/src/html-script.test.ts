@@ -77,13 +77,20 @@ describe("<html-script> on Preact emits a real <script>", () => {
   // the style escape; an <html-comment> keeps the host's own refusal.
   it("writes <html-style> as a <style> with an escaped raw body, and refuses <html-comment> as before", () => {
     const emitted = compilePreactMx(
-      "<html-style>a { b: c }</html-style>",
+      '<html-style media="print">a { b: c }</html-style>',
       "/x/a.mx",
     ).code;
     expect(emitted).toContain(
-      '<style dangerouslySetInnerHTML={{ __html: __mxStyleText("a { b: c }") }} />',
+      '<style media="print" dangerouslySetInnerHTML={{ __html: __mxStyleText("a { b: c }") }} />',
     );
     expect(emitted).not.toContain("html-style");
+    // The helper is defined in the module, and escapes `</style` as Marko does.
+    const helper = /const __mxStyleText = ([\s\S]*?);\n/.exec(emitted)?.[1];
+    expect(helper).toBeDefined();
+    const escape = new Function(
+      `return ${helper?.replace(/: unknown\[\]/g, "").replace(/\): string/g, ")")}`,
+    )() as (...parts: unknown[]) => string;
+    expect(escape("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
     expect(() =>
       compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
     ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);

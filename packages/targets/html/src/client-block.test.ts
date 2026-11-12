@@ -506,6 +506,11 @@ describe("html typeCheck: the server view and the client code of a `client` stat
   const beforeWrapper = (code: string) =>
     code.slice(0, code.indexOf("(async () => {"));
 
+  it("leaves out `var q: undefined` for a name a static `var` already declares", () => {
+    const { code } = project("static var q = 1\nclient var q = 2\n<div/>\n");
+    expect(beforeWrapper(code)).not.toContain("var q: undefined");
+  });
+
   it("declares each name `undefined` and types the client code in a function", () => {
     const { code } = project("client let q = 1;\n<div>${q}</div>\n");
     expect(code).toContain("var q: undefined; void [q];");
@@ -798,6 +803,14 @@ describe("html: a `client` name the module already declares is not declared agai
         `static function q() {}\nclient export namespace q { export const a = 1 }${TEMPLATE}`,
       ),
     ).toBe("function q() {}");
+  });
+
+  it("a type-only static namespace declares no run-time name, so the client `var` stays", () => {
+    expect(
+      hoisted(
+        `static namespace q { export type T = 1 }\nclient export function q() {}${TEMPLATE}`,
+      ),
+    ).toBe("namespace q { export type T = 1 }\nvar q;");
   });
 
   it("a client function and a client namespace declare the name once", () => {

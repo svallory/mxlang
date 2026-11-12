@@ -1056,6 +1056,12 @@ describe("lowerAstroMx: <html-style>", () => {
       '---\n---\n<html-style media="print">a > b { color: red }</html-style>\n',
       "T.astro.mx",
     );
+    expect(code).toContain("const __mxStyleText =");
+    const helper = /const __mxStyleText = ([\s\S]*?);\n/.exec(code)?.[1];
+    const escape = new Function(
+      `return ${helper?.replace(/: unknown\[\]/g, "").replace(/\): string/g, ")")}`,
+    )() as (...parts: unknown[]) => string;
+    expect(escape("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
     expect(code).toContain('<style is:inline media="print"');
     expect(code).toContain('set:html={__mxStyleText("a > b { color: red }")}');
     expect(code).not.toContain("html-style");

@@ -245,13 +245,20 @@ describe("<html-style> keeps its attributes and escapes its body for style conte
     ).toBe('<style media="print" data-x="a b">a{}</style>');
   });
 
-  it("a placeholder is stringified, not HTML-escaped", () => {
-    expect(
-      render("<html-style>a > b { color: ${input.c} }</html-style>", {
-        c: "red&",
-      }),
-    ).toBe("<style>a > b { color: red& }</style>");
-  });
+  it.each([
+    ["0", 0, "0"],
+    ["null", null, ""],
+    ["a string with `&`", "red&", "red&"],
+  ])(
+    "a placeholder holding %s prints as Marko's text placeholder",
+    (_n, value, text) => {
+      expect(
+        render("<html-style>a { color: [${input.c}] }</html-style>", {
+          c: value,
+        }),
+      ).toBe(`<style>a { color: [${text}] }</style>`);
+    },
+  );
 
   it("`</style` cannot close the element, in text or a placeholder", () => {
     expect(
