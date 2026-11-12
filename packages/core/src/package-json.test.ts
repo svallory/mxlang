@@ -28,6 +28,10 @@ describe("positionOfOffset", () => {
     ["past the end clamps", "ab", 99, { line: 1, column: 2 }],
     ["negative clamps", "ab", -4, { line: 1, column: 0 }],
     ["empty text", "", 0, { line: 1, column: 0 }],
+    ["after a lone CR", "a\rbc", 3, { line: 2, column: 1 }],
+    ["after CRLF, one break", "a\r\nbc", 4, { line: 2, column: 1 }],
+    ["after U+2028", "a\u2028bc", 3, { line: 2, column: 1 }],
+    ["after U+2029", "a\u2029bc", 3, { line: 2, column: 1 }],
   ])("%s", (_name, text, offset, expected) => {
     expect(positionOfOffset(text, offset)).toEqual(expected);
   });

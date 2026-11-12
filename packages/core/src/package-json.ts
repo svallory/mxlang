@@ -70,6 +70,9 @@ export function clearPackageJsonCache(): void {
   cache.clear();
 }
 
+/** A line break: CRLF, or one of LF, CR, U+2028, U+2029 (the rule `positionOfOffset` counts by). */
+export const LINE_BREAK = /\r\n|[\n\r\u2028\u2029]/;
+
 /**
  * Converts a character offset in `text` to a 1-based line and 0-based column.
  */
@@ -81,7 +84,11 @@ export function positionOfOffset(
   let lineStart = 0;
   const end = Math.min(Math.max(offset, 0), text.length);
   for (let i = 0; i < end; i++) {
-    if (text.charCodeAt(i) === 10) {
+    const code = text.charCodeAt(i);
+    // One rule with `LINE_BREAK`: CRLF is one break, a lone CR, LF, U+2028
+    // and U+2029 are each one.
+    if (code === 13 && text.charCodeAt(i + 1) === 10) continue;
+    if (code === 10 || code === 13 || code === 0x2028 || code === 0x2029) {
       line++;
       lineStart = i + 1;
     }

@@ -853,6 +853,34 @@ describe("mx.<target>.defaultTag", () => {
     expect(diagnostics[0]?.message).toContain("mx.page.defaultTag");
   });
 
+  it.each([
+    ["a lone CR", "\r"],
+    ["CRLF", "\r\n"],
+  ])("counts %s as one line break before the value", (_name, brk) => {
+    const text = `{${brk}  "mx": {${brk}    "target": "page",${brk}    "page": { "defaultTag": 1 }${brk}  }${brk}}`;
+    const { diagnostics } = resolveTargetPolicyDetailed(project(text), lookup);
+    expect(diagnostics[0]).toMatchObject({
+      code: "invalid-default-tag",
+      line: 4,
+      column: 28,
+      length: 1,
+    });
+  });
+
+  it.each([
+    ["U+2028", "\u2028"],
+    ["U+2029", "\u2029"],
+  ])("counts %s (legal inside a JSON string) as a line break", (_name, brk) => {
+    const text = `{\n  "note": "a${brk}b",\n  "mx": {\n    "target": "page",\n    "page": { "defaultTag": 1 }\n  }\n}`;
+    const { diagnostics } = resolveTargetPolicyDetailed(project(text), lookup);
+    expect(diagnostics[0]).toMatchObject({
+      code: "invalid-default-tag",
+      line: 6,
+      column: 28,
+      length: 1,
+    });
+  });
+
   it("positions an escaped key at its value, not at a decoy elsewhere", () => {
     const text = `{
   "decoy": { "page": { "defaultTag": 9 } },

@@ -58,6 +58,7 @@ import {
 } from "node:path";
 import type { LoaderSync } from "cosmiconfig";
 import {
+  LINE_BREAK,
   positionOfOffset,
   positionOfParseError,
   readPackageJsonCached,
@@ -330,7 +331,7 @@ export function locateYamlPath(
   path: readonly string[],
   options: { key?: boolean } = {},
 ): MxConfigLocation | undefined {
-  const lines = text.split("\n");
+  const lines = text.split(LINE_BREAK);
   let indent = -1;
   let from = 0;
   let hit:

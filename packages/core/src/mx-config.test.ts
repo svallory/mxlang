@@ -14,6 +14,7 @@ import {
   clearMxConfigCache,
   findMxConfig,
   isMxConfigFile,
+  locateYamlPath,
   MX_CONFIG_SEARCH_PLACES,
   moduleLoadMessage,
   mxConfigSearchPaths,
@@ -1051,5 +1052,27 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
     const root = project({});
     dialectProject(root, { manifest: { id: "Bad" }, mx: { kit: {} } });
     expect(policyOf(root).diagnostics).toEqual([]);
+  });
+});
+
+describe("locateYamlPath counts every line break", () => {
+  it.each([
+    ["LF", "\n"],
+    ["a lone CR", "\r"],
+    ["CRLF", "\r\n"],
+    ["U+2028", "\u2028"],
+    ["U+2029", "\u2029"],
+  ])("%s before the value", (_name, brk) => {
+    const text = `a: 1${brk}mx:${brk}  target: page${brk}`;
+    expect(locateYamlPath(text, ["mx", "target"])).toEqual({
+      line: 3,
+      column: 10,
+      length: 4,
+    });
+    expect(locateYamlPath(text, ["mx", "target"], { key: true })).toEqual({
+      line: 3,
+      column: 2,
+      length: 6,
+    });
   });
 });
