@@ -1398,7 +1398,7 @@ function shadowTagVarGuards(ctx: Ctx, child: Node): void {
   dropGuard(ctx, names);
   // The names are no outer `<let>` or `<const>` for the block either: a
   // write to one reaches the tag variable, not that declaration.
-  const without = (set: Set<string> | undefined) =>
+  const without = (set: ReadonlySet<string> | undefined) =>
     set && names.some((name) => set.has(name))
       ? new Set([...set].filter((name) => !names.includes(name)))
       : set;
