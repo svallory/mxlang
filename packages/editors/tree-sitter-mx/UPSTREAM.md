@@ -271,6 +271,10 @@ is MX's own:
   limit.
 - A parsed-text element unclosed at EOF (`<script>abc`) emits a zero-width
   `ERROR_SENTINEL` (bead mx-xtt1).
+- The `:error` entries added to `test/corpus/errors.txt` pin inputs that
+  must keep reporting an error (they already did on the previous state, as
+  tree-sitter counts a MISSING node); the `error recovery` rows of
+  `test/corpus.bun-test.mts` are the tests that catch the break.
 - `div a=1,\n  /* oops` already gives an `ERROR` (see patch 0012's note on
   the intentionally different range).
 - Atoms in a template placeholder inside an expression (bead

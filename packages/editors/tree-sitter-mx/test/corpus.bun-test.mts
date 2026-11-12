@@ -217,12 +217,15 @@ describe("error recovery", () => {
     tree.delete();
   });
 
-  it("recovers a lone error line at the end of the file", () => {
-    const tree = parseMx("<a/>\n-");
+  it("ends the ERROR at the last char of an error line that ends the file", () => {
+    // The line break joins the ERROR only when more text follows it.
+    const tree = parseMx("<a/>\n-\n");
     assert.ok(tree, "parse timed out");
     const root = tree.rootNode;
     assert.deepEqual(names(root), ["a"], root.toString());
-    assert.equal(root.descendantsOfType("ERROR").length, 1, root.toString());
+    const errors = root.descendantsOfType("ERROR");
+    assert.equal(errors.length, 1, root.toString());
+    assert.equal(errors[0]?.text, "-");
     tree.delete();
   });
 

@@ -2,6 +2,10 @@
  README.md     |  7 +++--
  src/scanner.c | 85 +++++++++++++++++++++++++++++++++++++++++++++++++++--------
 
+---
+ README.md     |  7 +++--
+ src/scanner.c | 86 +++++++++++++++++++++++++++++++++++++++++++++++++++--------
+
 diff --git a/README.md b/README.md
 index 7caee9f4..f3b92a2a 100644
 --- a/README.md
@@ -21,7 +25,7 @@ index 7caee9f4..f3b92a2a 100644
  patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
  The same grammar and `queries/highlights.scm` are what MX's Zed extension
 diff --git a/src/scanner.c b/src/scanner.c
-index 83c5ae1b..64d4083b 100644
+index 83c5ae1b..2a88ce59 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
 @@ -256,6 +256,8 @@ typedef struct {
@@ -134,7 +138,15 @@ index 83c5ae1b..64d4083b 100644
    if (s->fail_next) {
      // INVALID_CHARACTER after a concise comment block: the comment already
      // parsed, the rest of its line is an ERROR node.
-@@ -3904,6 +3951,17 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+@@ -3895,6 +3942,7 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+ 
+ #define WRITE(field)                          \
+   do {                                        \
++    if (n + sizeof(field) > TREE_SITTER_SERIALIZATION_BUFFER_SIZE) return 0; \
+     memcpy(buffer + n, &(field), sizeof(field)); \
+     n += sizeof(field);                       \
+   } while (0)
+@@ -3904,6 +3952,17 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
      n += sizeof(field);                       \
    } while (0)
  
@@ -152,7 +164,7 @@ index 83c5ae1b..64d4083b 100644
  void *tree_sitter_mx_external_scanner_create(void) {
    Scanner *s = (Scanner *)calloc(1, sizeof(Scanner));
    s->cur.line_only_ws = 1;
-@@ -3931,6 +3989,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
+@@ -3931,6 +3990,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
    WRITE(s->suppress_placeholder);
    WRITE(s->fail_next);
    WRITE(s->tag_comma_continue);
@@ -160,7 +172,7 @@ index 83c5ae1b..64d4083b 100644
    WRITE(s->tag_open);
    WRITE(s->tag_name_done);
    WRITE(s->in_shorthand);
-@@ -4005,6 +4064,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
+@@ -4005,6 +4065,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
      READ(s->suppress_placeholder);
      READ(s->fail_next);
      READ(s->tag_comma_continue);
@@ -168,7 +180,7 @@ index 83c5ae1b..64d4083b 100644
      READ(s->tag_open);
      READ(s->tag_name_done);
      READ(s->in_shorthand);
-@@ -4083,6 +4143,7 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -4083,6 +4144,7 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
  #ifdef TSMARKO_DEBUG
    uint32_t col = lexer->get_column(lexer);
    bool ok = scan_main(s, lexer, valid_symbols);
@@ -176,7 +188,7 @@ index 83c5ae1b..64d4083b 100644
    fprintf(stderr, "[scan col=%u eof=%d err=%d] -> %s (buf=%.*s)\n", col,
            at_eof(lexer), valid_symbols[ERROR_SENTINEL],
            ok ? TOKEN_NAMES[lexer->result_symbol] : "(none)",
-@@ -4096,6 +4157,8 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -4096,6 +4158,8 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
    }
    return ok;
  #else

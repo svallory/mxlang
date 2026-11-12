@@ -3942,6 +3942,7 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
 
 #define WRITE(field)                          \
   do {                                        \
+    if (n + sizeof(field) > TREE_SITTER_SERIALIZATION_BUFFER_SIZE) return 0; \
     memcpy(buffer + n, &(field), sizeof(field)); \
     n += sizeof(field);                       \
   } while (0)
