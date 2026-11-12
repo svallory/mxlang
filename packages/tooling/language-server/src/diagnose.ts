@@ -386,6 +386,26 @@ function documentPath(uri: string): string {
 }
 
 /**
+ * The scan files whose content the scan itself read: contracts modules,
+ * sidecars, the dialect module and dialect tag files. A core `.mx` template
+ * tag file is listed by the scan but never read by it (its body matters only
+ * to a caller that uses it, which the compile records), so it is not an
+ * input: editing an unused template must not re-diagnose every open caller.
+ */
+export function scanInputs(scan: {
+  files: readonly { path: string }[];
+  tags: ReadonlyMap<string, { template?: string }>;
+}): string[] {
+  const templates = new Set<string>();
+  for (const tag of scan.tags.values()) {
+    if (tag.template !== undefined) templates.add(tag.template);
+  }
+  return scan.files
+    .map((file) => file.path)
+    .filter((path) => !templates.has(path));
+}
+
+/**
  * Compiles or parses `text` for its document kind and returns the diagnostics
  * to publish for `uri`. Never throws: a positioned error becomes one Error
  * diagnostic; a successful run returns `[]`, which clears any previous
@@ -531,7 +551,8 @@ export function diagnoseDocument(
     // Discovery reads contracts modules, sidecars and tag files independently
     // of the compiler's callee-input dependencies. Record them before compiling
     // so watcher-only edits reach callers even when compilation fails.
-    for (const file of scan.files) dependencies?.add(file.path);
+    if (dependencies)
+      for (const file of scanInputs(scan)) dependencies.add(file);
     scanWarnings = [
       ...scanWarnings,
       // A manifest-parse warning the host policy already says (same broken

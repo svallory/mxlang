@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MX_CONFIG_SEARCH_PLACES } from "@mxlang/core";
-import { builtinFileKinds } from "@mxlang/targets";
+import { builtinFileKinds, resolveTargetPolicyDetailed } from "@mxlang/targets";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
@@ -27,6 +27,7 @@ import {
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
+import { diagnoseDocument } from "./diagnose.ts";
 import { expectQuiet, waitFor } from "./fixtures/wait-for.ts";
 import { globMatcher, isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
@@ -1867,4 +1868,101 @@ describe("stdio server (e2e)", () => {
     expect(params.diagnostics).toHaveLength(1);
     expect(params.diagnostics[0]?.message).toMatch(/let/i);
   }, 15000);
+  describe("scan inputs are not template-body dependencies", () => {
+    const UNUSED = 40;
+    const makeProject = (): string => {
+      const directory = mkdtempSync(join(tmpdir(), "mx-lsp-fanout-"));
+      writeFileSync(
+        join(directory, "package.json"),
+        '{"name":"x","mx":{"host":"html"}}',
+      );
+      mkdirSync(join(directory, "tags"));
+      for (let i = 0; i < UNUSED; i++) {
+        writeFileSync(join(directory, `tags/unused${i}.mx`), "<span/>\n");
+      }
+      writeFileSync(join(directory, "tags/card.mx"), "<section/>\n");
+      return directory;
+    };
+
+    it("records only the called template, not the 40 unused ones", () => {
+      const directory = makeProject();
+      try {
+        const dependencies = new Set<string>();
+        const page = join(directory, "page.mx");
+        diagnoseDocument(
+          "<card/>\n",
+          page,
+          resolveTargetPolicyDetailed(page).policy,
+          () => undefined,
+          undefined,
+          undefined,
+          undefined,
+          dependencies,
+        );
+        const tags = [...dependencies].filter((file) =>
+          file.includes("/tags/"),
+        );
+        expect(tags).toEqual([join(directory, "tags/card.mx")]);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+
+    it("an unused template edit re-publishes neither page; a called one does", async () => {
+      const directory = makeProject();
+      try {
+        const conn = startClient();
+        await conn.sendRequest("initialize", {
+          processId: null,
+          rootUri: null,
+          capabilities: {},
+        });
+        conn.sendNotification("initialized", {});
+        const pages = ["a", "b"].map(
+          (name) => `file://${join(directory, `${name}.mx`)}`,
+        );
+        const log: string[] = [];
+        conn.onNotification(PublishDiagnosticsNotification, (params) => {
+          log.push(params.uri);
+        });
+        for (const uri of pages) {
+          conn.sendNotification("textDocument/didOpen", {
+            textDocument: {
+              uri,
+              languageId: "mx",
+              version: 1,
+              text: uri === pages[0] ? "<div/>\n" : "<card/>\n",
+            },
+          });
+        }
+        await waitFor(
+          () => pages.every((uri) => log.includes(uri)),
+          "both pages published",
+        );
+        const change = (name: string) =>
+          conn.sendNotification("workspace/didChangeWatchedFiles", {
+            changes: [
+              {
+                uri: `file://${join(directory, `tags/${name}.mx`)}`,
+                type: 2,
+              },
+            ],
+          });
+        const before = log.length;
+        change("unused7");
+        await expectQuiet(
+          () => log.slice(before),
+          "publishes after editing an unused template",
+        );
+        change("card");
+        await waitFor(
+          () => log.slice(before).includes(pages[1] as string),
+          "the page calling <card/> re-publishes",
+        );
+        expect(log.slice(before)).not.toContain(pages[0]);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    }, 15000);
+  });
 });
