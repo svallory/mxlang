@@ -1449,7 +1449,8 @@ function operatorNode(ctx: Ctx, trigger: Node, width: number): Node {
   const recorded = trigger.args?.outer?.start;
   let start =
     typeof recorded === "number" ? recorded : spanOf(trigger).sourceEnd;
-  while (start < ctx.source.length && /\s/.test(ctx.source[start] as string)) {
+  // The lexer's own whitespace: every code up to the space.
+  while (start < ctx.source.length && ctx.source.charCodeAt(start) <= 32) {
     start++;
   }
   return { type: "MxTrigger", start, end: start + width } as Node;

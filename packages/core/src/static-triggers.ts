@@ -120,28 +120,35 @@ interface Facts {
   readonly braces: Brace[];
 }
 
+/** What the scan reads: a string, or the masked characters so far. */
+type View = {
+  readonly [index: number]: string | undefined;
+  readonly length: number;
+};
+
 /** The index of the last non-space character before `at`, or -1. */
-function lastIndexBefore(text: string, at: number): number {
+function lastIndexBefore(text: View, at: number): number {
   let i = at - 1;
   while (i >= 0 && isSpace(text[i])) i--;
   return i;
 }
 
 /** The start of the word that ends at `end` (inclusive). */
-function wordStart(text: string, end: number): number {
+function wordStart(text: View, end: number): number {
   let start = end;
   while (start > 0 && isWord(text[start - 1])) start--;
   return start;
 }
 
 /** Whether the word ending at `end` is an operator keyword (not a member name). */
-function isOperatorWord(text: string, end: number): boolean {
+function isOperatorWord(text: View, end: number): boolean {
   const start = wordStart(text, end);
   if (start > 0 && text[start - 1] === ".") {
     // `a.new` is a member; `...new` is a spread of an expression.
     if (!(text[start - 2] === "." && text[start - 3] === ".")) return false;
   }
-  const word = text.slice(start, end + 1);
+  let word = "";
+  for (let k = start; k <= end; k++) word += text[k];
   if (!OPERAND_WORDS.has(word)) return false;
   if (word === "of") {
     // `of` is an operator only after an operand (`for (x of …)`).
@@ -152,7 +159,7 @@ function isOperatorWord(text: string, end: number): boolean {
 }
 
 /** Whether the `>` at `end` closes a type argument list (`Array<T>`). */
-function closesTypeArguments(text: string, end: number): boolean {
+function closesTypeArguments(text: View, end: number): boolean {
   let angles = 0;
   let groups = 0;
   for (let j = end; j >= 0; j--) {
@@ -193,7 +200,7 @@ function closesTypeArguments(text: string, end: number): boolean {
 
 /** Whether the `+`/`-` at `i` ends a postfix `++`/`--`: an operand ends there. */
 function endsPostfixUpdate(
-  text: string,
+  text: View,
   facts: Facts,
   i: number,
   beforePair: boolean,
@@ -212,7 +219,7 @@ function endsPostfixUpdate(
  * before it (an operator, `(`, `[`, `.`, a template tag, `?`, `:`, `,`,
  * `!=`): no semicolon is inserted before it.
  */
-function continuesExpression(text: string, at: number): boolean {
+function continuesExpression(text: View, at: number): boolean {
   const char = text[at];
   if (char === undefined) return false;
   if (char === "!") return text[at + 1] === "=";
@@ -257,11 +264,26 @@ function lineBreakBefore(
  * about.
  */
 function expectsOperand(
-  text: string,
+  text: View,
   facts: Facts,
   at: number,
   beforePair = false,
 ): boolean {
+  // A class body's own `#private` member and decorator (before a member, or
+  // on a parameter) are TypeScript, whatever punctuator precedes them.
+  const first = text[at];
+  if ((first === "#" || first === "@") && inClassBody(facts, at)) {
+    const before = text[lastIndexBefore(text, at)];
+    if (
+      before === undefined ||
+      before === "{" ||
+      before === ";" ||
+      before === "}" ||
+      (first === "@" && (before === "(" || before === ","))
+    ) {
+      return false;
+    }
+  }
   if (scannerExpectsOperand(text, facts, at, beforePair)) return true;
   if (beforePair || !lineBreakBefore(text, at)) return false;
   if (continuesExpression(text, at)) return false;
@@ -278,7 +300,7 @@ function expectsOperand(
  * `text` is the masked statement, `at` the offset asked about.
  */
 function scannerExpectsOperand(
-  text: string,
+  text: View,
   facts: Facts,
   at: number,
   beforePair = false,
@@ -502,8 +524,7 @@ function mask(text: string): { masked: string; facts: Facts } {
     if (before === ":") {
       // A label or a `case`'s `:` takes a block; a ternary's or an object
       // key's takes a value.
-      const inside = scope();
-      return !lastColonTernary && inside.kind === "block" ? "block" : "object";
+      return lastColonLabel ? "block" : "object";
     }
     if (isWord(before[0])) {
       return EXPRESSION_BRACE_WORDS.has(before) ? "object" : "block";
@@ -512,6 +533,9 @@ function mask(text: string): { masked: string; facts: Facts } {
   };
   let lastParenBlockHead = false;
   let lastColonTernary = false;
+  let lastColonLabel = false;
+  // A `case`/`default` whose `:` has not come yet.
+  let inCase = false;
   // Template nesting: the brace depth to return to at each open `${`.
   const braces: number[] = [];
   let depth = 0;
@@ -580,7 +604,7 @@ function mask(text: string): { masked: string; facts: Facts } {
       continue;
     }
     if (char === "/") {
-      if (expectsOperand(current(), facts, i)) {
+      if (expectsOperand(out, facts, i)) {
         // A regular expression literal.
         const from = i + 1;
         let inClass = false;
@@ -612,6 +636,7 @@ function mask(text: string): { masked: string; facts: Facts } {
       push(word, from);
       if (!afterDot) {
         const k = toks.length - 1;
+        if (word === "case" || word === "default") inCase = startsStatement(k);
         if (word === "function") {
           pendingFunction = { depth: parens.length, stmt: startsStatement(k) };
         } else if (word === "class") {
@@ -629,7 +654,9 @@ function mask(text: string): { masked: string; facts: Facts } {
     if (char === "(") {
       const before = last();
       const named = isWord(before[0]);
-      const head = named && HEAD_WORDS.has(before) && last(1) !== ".";
+      const head =
+        (named && HEAD_WORDS.has(before) && last(1) !== ".") ||
+        (before === "await" && last(1) === "for" && last(2) !== ".");
       let body: { stmt: boolean } | null = null;
       if (pendingFunction && pendingFunction.depth === parens.length) {
         body = { stmt: pendingFunction.stmt };
@@ -711,6 +738,7 @@ function mask(text: string): { masked: string; facts: Facts } {
     } else if (char === ";") {
       pendingFunction = pendingBody = pendingClass = undefined;
       pendingBlock = undefined;
+      inCase = false;
       angle = 0;
       scope().ternary = 0;
       push(";", i);
@@ -732,12 +760,36 @@ function mask(text: string): { masked: string; facts: Facts } {
         i += 2;
         continue;
       }
-      if (!chain && !":]),(=;".includes(text[after] ?? ";")) scope().ternary++;
+      // `m?()` is an optional method only right after a member name in a
+      // class or object body; elsewhere `c ? (1) : x` is a ternary.
+      const method =
+        text[after] === "(" &&
+        after === i + 1 &&
+        isWord(last()[0]) &&
+        tokAt[tokAt.length - 1] === i - last().length &&
+        (scope().kind === "class" ||
+          scope().kind === "classExpr" ||
+          scope().kind === "object") &&
+        parens.length === scope().parens &&
+        bracketDepth === scope().brackets &&
+        METHOD_PREFIX.has(last(1));
+      if (!chain && !method && !":]),=;".includes(text[after] ?? ";")) {
+        scope().ternary++;
+      }
       push("?", i);
     } else if (char === ":") {
       const inside = scope();
       lastColonTernary = inside.ternary > 0;
       if (lastColonTernary) inside.ternary--;
+      // A `case`/`default` or label colon at statement level opens a block;
+      // an annotation's, a parameter's or a key's does not.
+      lastColonLabel =
+        !lastColonTernary &&
+        inside.kind === "block" &&
+        parens.length === inside.parens &&
+        bracketDepth === inside.brackets &&
+        (inCase || startsStatement(toks.length - 1));
+      if (!lastColonTernary) inCase = false;
       push(":", i);
     } else if (!isSpace(char)) {
       if (char === "[") bracketDepth++;
@@ -765,18 +817,26 @@ function mask(text: string): { masked: string; facts: Facts } {
  */
 function isDecorator(masked: string, end: number): boolean {
   let j = end;
-  while (isSpace(masked[j])) j++;
-  if (masked[j] === "(") {
+  // `@a.b`, `@a<T>`, `@a(args)`, `@a.b<T>(args)`.
+  while (masked[j] === "." && isWord(masked[j + 1])) {
+    j++;
+    while (isWord(masked[j])) j++;
+  }
+  for (const [open, close] of [
+    ["<", ">"],
+    ["(", ")"],
+  ] as const) {
+    if (masked[j] !== open) continue;
     let level = 0;
     for (; j < masked.length; j++) {
-      if (masked[j] === "(") level++;
-      else if (masked[j] === ")" && --level === 0) {
+      if (masked[j] === open) level++;
+      else if (masked[j] === close && --level === 0) {
         j++;
         break;
       }
     }
-    while (isSpace(masked[j])) j++;
   }
+  while (isSpace(masked[j])) j++;
   return (
     masked[j] === "@" ||
     /^(class|export|abstract|default)(?![\p{L}\p{N}_$])/u.test(

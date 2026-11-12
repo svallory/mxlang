@@ -254,63 +254,92 @@ describe("the matching is the template scanner's", () => {
     expect(hit("f(a, ~zz)")).toEqual(["sigil", "~zz"]);
   });
 
-  it("a statement start after a block's `}` or an inserted semicolon is found", () => {
-    expect(hit("if (a) { b } ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("a = 1\n~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("i++\n~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("a = /x/\n~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("f(x) /*\n*/ ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("function f(): void { } ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("switch (a) { case 1: { b } ~zz }")).toEqual(["sigil", "~zz"]);
-    expect(hit("a: { b } ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("export function f() { } ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("class A { m() { f(x)\n ~zz } }")).toEqual(["sigil", "~zz"]);
-    // A function or class expression's `}`, an `export default` object and
-    // a `satisfies`/`as` literal end an operand; a class body's members are
-    // no statements.
-    expect(hit("const f = function () {} ~zz")).toBeUndefined();
-    expect(hit("a = class {} ~zz")).toBeUndefined();
-    expect(hit("export default { a: 1 } ~zz")).toBeUndefined();
-    expect(hit("x = y as { a: 1 } ~zz")).toBeUndefined();
-    expect(hit("f = () => { a } ~zz")).toBeUndefined();
-    expect(hit("a = c ? 1 : { b } ~zz")).toBeUndefined();
-    expect(hit("a = { k: { b } } ~zz")).toBeUndefined();
-    expect(hit("const f = function () {} / 2 / ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("class A {\n x = 1\n ~zz y = 2\n}")).toBeUndefined();
-    expect(hit("class A {\n x = 1\n #b = 2\n}", [hash])).toBeUndefined();
-    expect(hit("class A {\n x = 1\n @dec y = 2\n}", [at])).toBeUndefined();
-    expect(
-      hit(
+  type Row = [string, [string, string] | undefined, Trigger[]?];
+  const table = (name: string, cases: Row[]) =>
+    it.each(cases)(`${name}: %j`, (text, expected, using) => {
+      expect(hit(text, using)).toEqual(expected);
+    });
+  const ZZ: [string, string] = ["sigil", "~zz"];
+
+  describe("a statement start after a block's `}` or an inserted semicolon", () => {
+    table("is found", [
+      ["if (a) { b } ~zz", ZZ],
+      ["a = 1\n~zz", ZZ],
+      ["i++\n~zz", ZZ],
+      ["a = /x/\n~zz", ZZ],
+      ["f(x) /*\n*/ ~zz", ZZ],
+      ["function f(): void { } ~zz", ZZ],
+      ["switch (a) { case 1: { b } ~zz }", ZZ],
+      ["a: { b } ~zz", ZZ],
+      ["export function f() { } ~zz", ZZ],
+      ["class A { m() { f(x)\n ~zz } }", ZZ],
+      ["const f = function () {} / 2 / ~zz", ZZ],
+      ["for await (const x of xs) { f(x) } ~zz", ZZ],
+      [
         "switch (a) { case 1: let t: [number?] = []; break\n case 2: { b } ~zz }",
-      ),
-    ).toEqual(["sigil", "~zz"]);
-    // A method's, a constructor's or a `static {}` block's `}` in a class body
-    // starts no statement; nor does a decorator after a class declaration.
-    expect(hit("class A {\n m() {}\n @dec y = 2\n}", [at])).toBeUndefined();
-    expect(hit("class A { static {} #b = 2 }", [hash])).toBeUndefined();
-    expect(
-      hit("class A {\n constructor() {}\n #b = 2\n}", [hash]),
-    ).toBeUndefined();
-    expect(hit("class A {}\n@dec class B {}", [at])).toBeUndefined();
-    expect(
-      hit("class A {}\n@dec(1) @other export class B {}", [at]),
-    ).toBeUndefined();
-    expect(hit("class A {} @dec", [at])).toEqual(["at", "@dec"]);
-    // A call after a comma is no method head; a type literal is no body.
-    expect(hit("x = { a: [b, f(c)] }\ny = { q: 1 } ~zz")).toBeUndefined();
-    expect(hit("const f = function (): { a: 1 } { } ~zz")).toBeUndefined();
-    expect(
-      hit("class A<T extends {}> {\n x = 1\n @dec y = 2\n}", [at]),
-    ).toBeUndefined();
-    expect(
-      hit("class X implements B<{ a: 1 }> {\n x = 1\n @dec y = 2\n}", [at]),
-    ).toBeUndefined();
-    // An object literal's `}` ends an operand, and a line that continues
-    // the expression is no statement start.
-    expect(hit("a = { b } ~zz")).toBeUndefined();
-    expect(hit("a = f({ b }) ~zz")).toBeUndefined();
-    expect(hit("a = { b }\n&zz")).toBeUndefined();
-    expect(hit("a.\n~zz")).toBeUndefined();
+        ZZ,
+      ],
+    ]);
+    table("is an operand end, no start", [
+      ["const f = function () {} ~zz", undefined],
+      ["a = class {} ~zz", undefined],
+      ["export default { a: 1 } ~zz", undefined],
+      ["x = y as { a: 1 } ~zz", undefined],
+      ["f = () => { a } ~zz", undefined],
+      ["a = c ? 1 : { b } ~zz", undefined],
+      ["x = c ? (1) : { b } ~zz", undefined],
+      ["a = { k: { b } } ~zz", undefined],
+      ["a = { b } ~zz", undefined],
+      ["a = f({ b }) ~zz", undefined],
+      ["a = { b }\n&zz", undefined],
+      ["a.\n~zz", undefined],
+    ]);
+  });
+
+  describe("a type literal is no block", () => {
+    const amp = row("amp", "&", "&[a-z]+");
+    table("in a type position", [
+      ["let t: { a: 1 } &zz = v", undefined, [amp]],
+      ["function f(a: { b: 1 } &zz) {}", undefined, [amp]],
+      ["const f = function (): { a: 1 } { } ~zz", undefined],
+      ["class A<T extends {}> {\n x = 1\n @dec y = 2\n}", undefined, [at]],
+      [
+        "class X implements B<{ a: 1 }> {\n x = 1\n @dec y = 2\n}",
+        undefined,
+        [at],
+      ],
+    ]);
+  });
+
+  describe("a method head is a key of its own brace", () => {
+    table("a call after a comma is no method", [
+      ["x = { a: [b, f(c)] }\ny = { q: 1 } ~zz", undefined],
+    ]);
+  });
+
+  describe("a class body's members are no statements", () => {
+    table("no row", [
+      ["class A {\n x = 1\n ~zz y = 2\n}", undefined],
+      ["class A {\n x = 1\n #b = 2\n}", undefined, [hash]],
+      ["class A {\n x = 1\n @dec y = 2\n}", undefined, [at]],
+      ["class A {\n m() {}\n @dec y = 2\n}", undefined, [at]],
+      ["class A { static {} #b = 2 }", undefined, [hash]],
+      ["class A {\n constructor() {}\n #b = 2\n}", undefined, [hash]],
+      ["class A {\n  #b = 2\n}", undefined, [hash]],
+      ["class A {\n x = 1;\n #b = 2;\n}", undefined, [hash]],
+      ["class A {\n  @dec\n  m() {}\n}", undefined, [at]],
+      ["class A {\n constructor(@inject b) {}\n}", undefined, [at]],
+    ]);
+  });
+
+  describe("a decorator before a declaration is TypeScript", () => {
+    table("no row", [
+      ["class A {}\n@dec class B {}", undefined, [at]],
+      ["class A {}\n@dec(1) @other export class B {}", undefined, [at]],
+      ["x = y\n@a.b class B {}", undefined, [at]],
+      ["x = y\n@a<T>() class B {}", undefined, [at]],
+    ]);
+    table("a row after a class", [["class A {} @dec", ["at", "@dec"], [at]]]);
   });
 
   it("comments, strings and template-literal text are skipped; a substitution is code", () => {
