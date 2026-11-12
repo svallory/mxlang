@@ -132,7 +132,10 @@ const CASES: Record<string, CaseSpec> = {
   toString: { source: "<p>${input.x}</p>", input: "toString" },
   valueOf: { source: "<p>${input.x}</p>", input: "valueOf" },
   nullProto: { source: "<p>${input.x}</p>", input: "nullProto" },
-  bigints: { source: "<p>${input.a}|${input.b}|${0n}|${1n}</p>", input: "bigints" },
+  bigints: {
+    source: "<p>${input.a}|${input.b}|${0n}|${1n}</p>",
+    input: "bigints",
+  },
   protoGadget: { source: "<p>${input.x}</p>", input: "protoGadget" },
   protoGadgetCtor: { source: "<p>${input.x}</p>", input: "protoGadgetCtor" },
   arrayProtoGadget: { source: "<p>${input.x}</p>", input: "arrayProtoGadget" },

@@ -3442,20 +3442,19 @@ export class PreactEmitter implements Emitter<string> {
     // A lone `<for>` is an array: Hono's string renderer joins an array a
     // function returns with commas, so it is closed as a fragment too.
     const caught =
-      holdsScalar(catchTag.block.children) ||
-      holdsList(catchTag.block.children)
-      ? concatMapped(
-          "<>",
-          closeFragmentBody(
-            this.#scoped(false, (scope) =>
-              scope.#expression(catchTag.block.children),
+      holdsScalar(catchTag.block.children) || holdsList(catchTag.block.children)
+        ? concatMapped(
+            "<>",
+            closeFragmentBody(
+              this.#scoped(false, (scope) =>
+                scope.#expression(catchTag.block.children),
+              ),
             ),
-          ),
-          "</>",
-        )
-      : this.#scoped(true, (scope) =>
-          scope.#expression(catchTag.block.children, undefined, true),
-        );
+            "</>",
+          )
+        : this.#scoped(true, (scope) =>
+            scope.#expression(catchTag.block.children, undefined, true),
+          );
     const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(
