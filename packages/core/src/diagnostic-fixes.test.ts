@@ -91,6 +91,10 @@ const FORMS: Array<[string, string, string[], string[]]> = [
   ],
 ];
 
+/** The forms a rename resolves cleanly, and the forms `<script>` would still refuse. */
+const OFFERED = FORMS.filter(([, , , remaining]) => remaining.length === 0);
+const REFUSED = FORMS.filter(([, , , remaining]) => remaining.length > 0);
+
 function fixesOf(source: string, filename = "/tmp/page.mx"): IrDiagnostic {
   const { diagnostics } = lowerSource(`${source}\n`, filename);
   const found = diagnostics.filter((d) => d.code === CODE);
@@ -99,7 +103,7 @@ function fixesOf(source: string, filename = "/tmp/page.mx"): IrDiagnostic {
 }
 
 describe("the `<effect>` error offers the rename to `<script>`", () => {
-  it.each(FORMS)(
+  it.each(OFFERED)(
     "lowerSource, %s: one fix, edits at the names",
     (_n, source, replaced) => {
       const diagnostic = fixesOf(source);
@@ -147,16 +151,34 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
     ]);
   });
 
-  it.each(FORMS)(
-    "applying the edits resolves the `<effect>` error, and leaves only what `<script>` says: %s",
-    (_n, source, _replaced, remaining) => {
+  it.each(OFFERED)(
+    "applying the edits resolves the `<effect>` error and leaves the file clean: %s",
+    (_n, source) => {
       const [fix] = fixesOf(source).fixes as IrDiagnosticFix[];
       const fixed = applyFix(`${source}\n`, fix as IrDiagnosticFix);
       expect(fixed).not.toContain("effect");
       const { diagnostics } = lowerSource(fixed, "/tmp/page.mx");
-      expect(diagnostics.map((d) => d.code)).toEqual(remaining);
+      expect(diagnostics.map((d) => d.code)).toEqual([]);
     },
   );
+
+  // A rename that `<script>` would itself refuse trades one error for another:
+  // the error stays, and offers no fix.
+  it.each([
+    ...REFUSED.map(([n, source]) => [n, source] as const),
+    ["arguments", "<effect(x)>go()</effect>"],
+    ["parameters", "<effect|x|>go()</effect>"],
+    ["a tag variable, self-closing", "<effect/x/>"],
+    ["a second value", "<effect=a value=b/>"],
+    ["a value beside a body", "<effect=a>go()</effect>"],
+    ["a method beside a body", "<effect() { go() }>x</effect>"],
+  ])("%s: the error is kept and offers no fix", (_n, source) => {
+    expect(fixesOf(source).fixes).toBeUndefined();
+    // ...and the claim holds: the renamed `<script>` is refused.
+    const renamed = source.replace(/effect/g, "script");
+    const { diagnostics } = lowerSource(`${renamed}\n`, "/tmp/page.mx");
+    expect(diagnostics.length).toBeGreaterThan(0);
+  });
 
   it.each([
     ["a space before the close `>`", "<effect>x</effect >"],

@@ -6920,11 +6920,44 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
   }
   const at = tagNameSpanOf(node) ?? node.name ?? node;
   const message = effectTagMessage(ctx, node);
-  const fixes = effectRenameFixes(node, tagText(ctx, "script"));
+  const fixes = scriptTakesTheShape(node)
+    ? effectRenameFixes(node, tagText(ctx, "script"))
+    : undefined;
   if (fixes !== undefined) {
     raiseWithFixes(RESERVED_EFFECT_TAG_CODE, message, at, fixes);
   }
   raise(RESERVED_EFFECT_TAG_CODE, message, at);
+}
+
+/**
+ * Would a `<script>` with the head and body of this `<effect>` be refused by
+ * `checkScriptShape`? Arguments, parameters, a tag variable, an attribute that
+ * is not the one plain value, a second value, a value next to a body, and a
+ * body that is not text (a child tag, a placeholder) are. Renaming such a tag
+ * trades one error for another, so no rename is offered for it.
+ */
+function scriptTakesTheShape(node: Node): boolean {
+  if ((tagArgsOf(node) ?? []).length > 0) return false;
+  if (tagParamsOf(node).length > 0) return false;
+  if (tagVarOf(node)) return false;
+  let values = 0;
+  for (const attr of tagAttributesOf(node)) {
+    const isValue =
+      !isSpreadAttributeNode(attr) &&
+      attr.modifier == null &&
+      !isBoundAttr(attr) &&
+      (attrNameOf(attr) === "value" || isDefaultAttr(attr));
+    if (!isValue) return false;
+    values++;
+  }
+  if (values > 1) return false;
+  let hasBody = false;
+  for (const child of bodyChildren(node)) {
+    if (child.type !== "MarkoText" && child.type !== "MxText") return false;
+    if (typeof child.value === "string" && child.value.trim() === "") continue;
+    hasBody = true;
+  }
+  return !(values === 1 && hasBody);
 }
 
 /**
