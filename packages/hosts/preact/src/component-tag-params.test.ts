@@ -230,6 +230,11 @@ export interface Input { items: string[] }
     html: "<ul><li>a</li><li>b</li></ul>",
     unusedLocals: true,
   },
+  "a define read as a value keeps its arity and name": {
+    caller: `<define/Row|a, b|><li>\${a}</li></define>
+<p>\${Row.length}\${Row.name}</p>`,
+    html: "<p>2Row</p>",
+  },
   "a define whose attribute is spread": {
     caller: `export interface Input { items: string[] }
 <define/Row|p| list=[1, 2]><li>\${p}</li></define>
@@ -420,6 +425,43 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
       }
     },
   );
+
+  it("a define param with a primitive default keeps its inferred type (TS2551 on a typo)", async () => {
+    const { scratch, compile } = scratchFor(host, {
+      caller: "<define/Row|n = 1|>${n.toFixd()}</define>\n<Row(2)/>",
+    });
+    try {
+      await compile();
+      writeFileSync(
+        join(scratch, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            allowImportingTsExtensions: true,
+            jsx: "react-jsx",
+            jsxImportSource: jsxSources[host],
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            noEmit: true,
+            skipLibCheck: true,
+            strict: true,
+            target: "ESNext",
+            types: ["node"],
+          },
+          include: ["*.tsx"],
+        }),
+      );
+      const proc = await strictTsc(
+        join(scratch, "tsconfig.json"),
+        new AbortController().signal,
+      );
+      const errors = (proc.stdout + proc.stderr).split("\n").filter(Boolean);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toContain("TS2551");
+      expect(errors[0]).toContain("toFixd");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
 
   it.each(Object.entries(STRING_CASES))(
     "%s with a params body is a positioned compile error, as in Marko",

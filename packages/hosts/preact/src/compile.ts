@@ -270,6 +270,7 @@ ${contentNormalization("body", 10)}
     return fn(first, ...rest);
   }) as F;
   Object.defineProperty(wrapped, "name", { value: name, configurable: true });
+  Object.defineProperty(wrapped, "length", { value: fn.length, configurable: true });
   return wrapped;
 }`;
 
@@ -522,7 +523,10 @@ export function emitModuleWithMappings(
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
   // The typeCheck projection calls every define through its public name.
-  const shadowed = typeCheck ? new WeakSet<object>() : shadowedCalls(ir);
+  const shadowed =
+    typeCheck || !ir.body.some((node) => node.kind === "Define")
+      ? new WeakSet<object>()
+      : shadowedCalls(ir);
   const emitter = createEmitter(dialect, names?.handler, source, shadowed);
 
   // Statements first, markup second. Splitting on the top level only: a

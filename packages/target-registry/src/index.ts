@@ -249,6 +249,8 @@ export interface RegionCompileOptions {
   warnings?: MxWarning[];
   /** Called with every file a region's compile read. */
   onDependency?: (file: string) => void;
+  /** Tooling projection: forwarded to every region's compile (`HostRegionInput.typeCheck`). */
+  typeCheck?: boolean;
 }
 
 /**
@@ -289,6 +291,7 @@ export function regionKindCompile(
     const result = compileRegion(input.source, {
       ...input,
       ...(options.warnings === undefined ? {} : { warnings: options.warnings }),
+      ...(options.typeCheck ? { typeCheck: true } : {}),
       targets,
     });
     if (options.onDependency)

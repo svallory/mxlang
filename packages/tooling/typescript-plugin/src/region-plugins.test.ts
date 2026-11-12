@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
 /**
  * One region language plugin per region file kind: each claims its own
  * `.<segment>.mx` suffix, a kind that is not built in included, and lowers
@@ -128,6 +129,38 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
   const preact = createRegionLanguagePlugins(ts).find(
     (plugin) => plugin.getLanguageId("/a/x.preact.mx") !== undefined,
   );
+
+  it("projects a define by its public name: the private __mxDef_ name maps to no source", () => {
+    const file = "/a/Page.preact.mx";
+    const source =
+      "export const view = <div><define/Row|a|><li>${a}</li></define><Row(1)/></div>;\n";
+    const virtual = preact?.createVirtualCode?.(
+      file,
+      "preactmx",
+      snapshot(source),
+      noScript,
+    );
+    expect(preact?.getSyntaxError(file)).toBeUndefined();
+    const text =
+      virtual?.snapshot.getText(0, virtual.snapshot.getLength()) ?? "";
+    // A direct call reads the public binding, which a hover names.
+    expect(text).toContain("{Row(1)}");
+    expect(text).not.toContain("__mxDef_Row(");
+    expect(text).toContain("const Row = __mxDefine(");
+    // Nothing in the source maps onto the private declaration, so a diagnostic
+    // on it (noUnusedLocals) has no place to land.
+    const start = text.indexOf("__mxDef_Row");
+    expect(start).toBeGreaterThan(-1);
+    const covered = (virtual?.mappings ?? []).some((mapping) =>
+      mapping.generatedOffsets.some(
+        (offset, i) =>
+          offset < start + "__mxDef_Row".length &&
+          start <
+            offset + (mapping.generatedLengths?.[i] ?? mapping.lengths[i] ?? 0),
+      ),
+    );
+    expect(covered).toBe(false);
+  });
 
   it("claims .preact.mx as preactmx, and no other kind's suffix", () => {
     expect(preact?.getLanguageId("/a/x.preact.mx")).toBe("preactmx");

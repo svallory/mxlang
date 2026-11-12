@@ -212,7 +212,10 @@ export function createRegionLanguagePlugin(
   const extension = `${kind.segment}.mx`;
   const languageId = kind.languageIds?.[0] ?? kind.diagnosticSource;
   // The registry's hook for this kind; warnings travel on each input.
-  const regionCompile = regionKindCompile(kind, { targets: builtinLookup() });
+  const regionCompile = regionKindCompile(kind, {
+    targets: builtinLookup(),
+    typeCheck: true,
+  });
   const suffix = `.${extension}`;
   // Claimed case-insensitively, as this plugin always has (e5dc0f40): Volar
   // keys files case-insensitively where the filesystem is

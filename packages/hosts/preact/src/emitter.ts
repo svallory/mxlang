@@ -137,18 +137,27 @@ interface RegionSink {
  * The names a parameter list binds: the targets of each parameter's pattern
  * (`{ a, b: [c], ...d }`, `x = 1`, `...rest`), never the identifiers of a
  * default's expression (`{ a = Row }` binds `a`) or of a type annotation.
- * A scanner over the text, so the host needs no parser of its own; text it
- * cannot follow can only add or lose a name at the point it stops.
+ * A scanner over the text, so the host needs no parser of its own. It cannot
+ * follow a regex literal or a template literal (a `/` or a backtick may hide a
+ * bracket), so a parameter holding either fails safe: it yields `ALL_NAMES`,
+ * which binds every define name and routes those calls by the authored name.
  */
 export function paramNames(params: readonly string[]): string[] {
   const out: string[] = [];
   for (const text of params) {
+    if (/[/`]/.test(text)) {
+      out.push(ALL_NAMES);
+      continue;
+    }
     let i = skipSpace(text, 0);
     if (text.startsWith("...", i)) i += 3;
     patternTarget(text, i, out);
   }
   return out;
 }
+
+/** A scope entry that stands for every name (`paramNames` could not read a param). */
+const ALL_NAMES = "*";
 
 const NAME = /[\p{ID_Start}$_][\p{ID_Continue}$‌‍]*/uy;
 
@@ -368,7 +377,10 @@ export function shadowedCalls(ir: Ir): WeakSet<object> {
         );
         return;
       case "Component":
-        if (node.target.kind === "define" && scope.has(node.target.name)) {
+        if (
+          node.target.kind === "define" &&
+          (scope.has(node.target.name) || scope.has(ALL_NAMES))
+        ) {
           calls.add(node);
         }
         block(node.content, scope);
@@ -458,10 +470,16 @@ type DelegatedTagData = { kind: "try" };
 
 /**
  * A `<define>` parameter as the arrow declares it. A parameter that carries
- * its own type (`a: string`) is kept as written; any other, a defaulted one
- * included (`a: any = 1`), is typed `any` (`any[]` for a rest parameter), so a strict project (`noImplicitAny`) does not report TS7006 or
- * TS7031 on a define whose params the author left untyped.
+ * its own type (`a: string`) is kept as written, and so is a plain name with
+ * a primitive-literal default (`n = 1`), whose type TypeScript infers from the
+ * default. Any other is typed `any` (`any[]` for a rest parameter): a bare
+ * name, a pattern, a null/undefined/`[]`/`{}`/expression default (inferred
+ * `null`, `never[]`...), so a strict project (`noImplicitAny`) does not report
+ * TS7006 or TS7031 on a define whose params the author left untyped.
  */
+const PRIMITIVE_DEFAULT =
+  /^(?:-?\d[\d_]*(?:\.\d+)?n?|"[^"\\]*"|'[^'\\]*'|true|false)$/;
+
 export function typedDefineParam(param: string): string {
   const text = param.trim();
   let depth = 0;
@@ -476,7 +494,15 @@ export function typedDefineParam(param: string): string {
     else if (ch === ")" || ch === "]" || ch === "}") depth--;
     else if (depth === 0 && ch === ":") return text;
     else if (depth === 0 && ch === "=") {
-      // A default is not a declared type: the param is `any` all the same.
+      const target = text.slice(0, i).trimEnd();
+      const value = text.slice(i + 1).trim();
+      // A plain name with a primitive default infers its type from it.
+      if (
+        PRIMITIVE_DEFAULT.test(value) &&
+        /^[\p{ID_Start}$_][\p{ID_Continue}$]*$/u.test(target)
+      ) {
+        return text;
+      }
       return `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`;
     }
   }
@@ -510,6 +536,7 @@ export function defineStatements(
   otherCode: string,
   keepAll = false,
 ): MappedCode[] {
+  if (parts.length === 0) return [];
   const scanned = [otherCode, ...parts.map((part) => part.fn.code)].join("\n");
   const base = readIdentifiers(scanned);
   const values = parts.map((part) => readIdentifiers(part.value.code));
@@ -1143,6 +1170,12 @@ export class PreactEmitter implements Emitter<string> {
   readonly #softLift: SoftLift | null;
   /** The direct define calls an enclosing scope shadows (`shadowedCalls`). */
   readonly #shadowed: WeakSet<object>;
+  /**
+   * Tooling projection: the define's private name has no span mapping, and
+   * every direct call reads the public name, which a hover or a diagnostic
+   * then names. Set by `typeCheck` and by a region compiled for tooling.
+   */
+  readonly #publicDefines: boolean;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -1161,7 +1194,9 @@ export class PreactEmitter implements Emitter<string> {
     scopedBody = false,
     softLift: SoftLift | null = null,
     shadowed: WeakSet<object> = new WeakSet(),
+    publicDefines = false,
   ) {
+    this.#publicDefines = publicDefines || typeCheck !== undefined;
     this.#shadowed = shadowed;
     this.#softLift = softLift;
     this.#scopedBody = scopedBody;
@@ -1231,6 +1266,7 @@ export class PreactEmitter implements Emitter<string> {
       overrides.scopedBody ?? this.#scopedBody,
       overrides.softLift === undefined ? this.#softLift : overrides.softLift,
       this.#shadowed,
+      this.#publicDefines,
     );
   }
 
@@ -2343,7 +2379,7 @@ export class PreactEmitter implements Emitter<string> {
     const own = defineFunctionName(node.name);
     const fn = concatMapped(
       "const ",
-      mapped(own, this.#typeCheck ? null : (node.nameSpan ?? null)),
+      mapped(own, this.#publicDefines ? null : (node.nameSpan ?? null)),
       " = (",
       params,
       ") => ",
@@ -2774,7 +2810,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(
         this.#slot(
           mapped(
-            this.#typeCheck || this.#shadowed.has(node)
+            this.#publicDefines || this.#shadowed.has(node)
               ? node.target.name
               : defineFunctionName(node.target.name),
             node.nameSpan,
@@ -2912,11 +2948,10 @@ export class PreactEmitter implements Emitter<string> {
     if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
     const children = node.content?.children ?? [];
     // The body of a dynamic tag or a called `<define>` is its own `/var` scope
-    // (Marko compiles it so); the body of a described or called unit keeps the
-    // component's.
-    // A tag-param body is a scope whatever it calls: a `/var` there is its own
-    // and a region cannot lift a `<define>` out of it. A plain body of a unit
-    // call keeps the component's scope.
+    // (Marko compiles it so), and so is a tag-param body whatever it calls: its
+    // `/var`s and params are its own, and a region refuses a lifted `<define>`
+    // there when the body is hard (a dynamic tag) or declares either. A plain
+    // body of a unit call keeps the component's scope.
     const dynamic = node.target.kind === "dynamic";
     const hasParams = node.content?.hasParams === true;
     const rendered =
@@ -2963,8 +2998,9 @@ export class PreactEmitter implements Emitter<string> {
     // Like a dynamic tag's body, the body is a scope of its own: a `/var` in
     // it runs inside the `content` function, when the component renders its
     // children, never in the parent's render.
-    // `scopedBody` stays unset: a region still lifts a `<define>` met in the
-    // body, as it always did (only a dynamic-tag or `<try>` body refuses one).
+    // A region refuses a lifted `<define>` here only when the body declares a
+    // `/var` or tag params (the soft scope, `#scopeOf`); a hard body (a dynamic
+    // tag or `<try>`) is never this kind of body.
     const { code: body, statements } = this.#scopeOf(
       (scope) => scope.#hostComponentBody(node, children),
       { hard: false, bindsParams: node.content?.hasParams === true },
@@ -3322,6 +3358,7 @@ export function createRegionEmitter(
   segment: string,
   positionAt: RegionSink["positionAt"],
   shadowed: WeakSet<object> = new WeakSet(),
+  publicDefines = false,
 ): PreactEmitter {
   const root = new Map<string, Position>();
   return new PreactEmitter(
@@ -3341,6 +3378,7 @@ export function createRegionEmitter(
     false,
     null,
     shadowed,
+    publicDefines,
   );
 }
 

@@ -243,7 +243,11 @@ describe("typedDefineParam", () => {
     ["{ a }", "{ a }: any"],
     ["[a, b]", "[a, b]: any"],
     ["a: string", "a: string"],
-    ["a = 1", "a: any = 1"],
+    ["a = 1", "a = 1"],
+    ["a = -1.5", "a = -1.5"],
+    ["a = 'x'", "a = 'x'"],
+    ["a = true", "a = true"],
+    ["a = 1 + 1", "a: any = 1 + 1"],
     ["xs = []", "xs: any = []"],
     ["a = null", "a: any = null"],
     ["a = undefined", "a: any = undefined"],
@@ -265,6 +269,22 @@ describe.each(HOSTS)("%s: define calls and attributes", (host) => {
       "<define/Row|o|>${o.content}</define><define/Id|{ a = Row }|><Row({ children: 'c' })/></define><Id/>",
     );
     expect(code).toContain("__mxDef_Row({ children: 'c' })");
+  });
+
+  it("a param default holding a regex literal fails safe: the call reaches the shadowing param", async () => {
+    const code = await compile(
+      "<define/Row|x|><li>${x}</li></define><define/List|{ a = /[}]/, Row }|><Row(1)/></define><List(null)/>",
+    );
+    expect(code).toContain("{Row(1)}");
+    expect(code).not.toContain("__mxDef_Row(1)");
+  });
+
+  it("a param default holding a template literal fails safe too", async () => {
+    const code = await compile(
+      "<define/Row|x|><li>${x}</li></define><define/List|{ a = `${'`'}`, Row }|><Row(1)/></define><List(null)/>",
+    );
+    expect(code).toContain("{Row(1)}");
+    expect(code).not.toContain("__mxDef_Row(1)");
   });
 
   it("a define attribute with a side effect is emitted once when the define is only called directly", async () => {
@@ -292,7 +312,10 @@ describe("paramNames", () => {
     [["[a, , [b], ...c]"], ["a", "b", "c"]],
     [["{ a } = { a: Row }"], ["a"]],
     [["x: Map<string, number>"], ["x"]],
-    [["{ 'k-1': k, [`z${1}`]: z }"], ["k", "z"]],
+    [["{ 'k-1': k, [`z${1}`]: z }"], ["*"]],
+    [["{ a = /[}]/, Row }"], ["*"]],
+    [["{ a = 1 / 2, Row }"], ["*"]],
+    [["{ 'k-1': k, [\"z\"]: z }"], ["k", "z"]],
     [["{ Ñame }"], ["Ñame"]],
   ])("%j -> %j", (params, names) => {
     expect(paramNames(params)).toEqual(names);

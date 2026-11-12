@@ -88,6 +88,12 @@ export interface CompileJsxRegionOptions {
   declarations: HostDeclarations;
   /** The file kind's segment (`react` for `.react.mx`), named in region errors. */
   segment: string;
+  /**
+   * Tooling projection (the TS plugin): every define keeps its public binding,
+   * the private name is unmapped and direct calls read the public name, as the
+   * whole-file `typeCheck` projection does.
+   */
+  typeCheck?: boolean;
 }
 
 /** One import a region needs in its surrounding module (Solid's shape). */
@@ -256,7 +262,10 @@ export function compileJsxRegion(
     dialect,
     segment,
     (offset) => sourcePosition(padded, offset),
-    shadowedCalls(ir),
+    options.typeCheck || !/<define\b/.test(source)
+      ? new WeakSet<object>()
+      : shadowedCalls(ir),
+    options.typeCheck === true,
   );
   drive(emitter, ir.body);
   const markupCode = emitter.result();
@@ -271,6 +280,7 @@ export function compileJsxRegion(
         markupCode.code,
         ...varStatements.map((statement) => statement.code),
       ].join("\n"),
+      options.typeCheck === true,
     ),
     ...varStatements,
   ];

@@ -116,6 +116,12 @@ export interface HostRegionInput {
   importSites?: ReadonlyMap<string, { line: number; column: number }>;
   /** Non-import names whose value is not statically a function, arrow or class. */
   unknownModuleBindings: ReadonlySet<string>;
+  /**
+   * Tooling projection (the TypeScript plugin's virtual code), never a build:
+   * the host emits for type-checking, where a name it keeps private in a build
+   * is reachable by its authored name so hovers and diagnostics name that.
+   */
+  typeCheck?: boolean;
 }
 
 /**
