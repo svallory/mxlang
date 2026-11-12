@@ -138,16 +138,33 @@ describe.each(HOSTS)(
       ).rejects.toThrow(/not supported/);
     });
 
-    it("the body of a called, non-dynamic tag keeps the component's /var scope", async () => {
-      await expect(
-        compile(
-          "<define/Row|c|>${c}</define><Row><counter/x/>${x}</Row><counter/x/>",
-        ),
-      ).rejects.toMatchObject({
-        message: 'Duplicate declaration "x"',
-        line: 1,
-        column: 64,
-      });
+    it("the body of a direct define call is its own scope, beside an outer /x", async () => {
+      const code = await compile(
+        "<define/Row|c|>${c}</define><Row><counter/x/>${x}</Row><counter/x/>${x}",
+      );
+      expect(code.match(/const x = /g)).toHaveLength(2);
+      expect(code).toMatch(/\{ const __mxRet0 = \$mx_Counter1\.render\(/);
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("a define read only by <return> keeps its public binding", async () => {
+      const code = await compile(
+        "<define/Row><p>r</p></define><return value=Row/>",
+      );
+      expect(code).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("a define with attributes that is only called directly has no public binding", async () => {
+      const code = await compile("<define/Row x=1><p>r</p></define><Row/>");
+      expect(code).not.toContain("const Row =");
+    });
+
+    it("a define with attributes whose property is read keeps its binding", async () => {
+      const code = await compile(
+        "<define/Row x=1><p>r</p></define><Row/>${Row.x}",
+      );
+      expect(code).toContain("const Row = Object.assign(");
     });
 
     it("an outer /x read before a body that declares its own /x compiles", async () => {
@@ -186,6 +203,8 @@ describe("typedDefineParam", () => {
     ["[a, b]", "[a, b]: any"],
     ["a: string", "a: string"],
     ["a = 1", "a = 1"],
+    ["a = null", "a: any = null"],
+    ["a = undefined", "a: any = undefined"],
     ["{ a = 1 }", "{ a = 1 }: any"],
     ["{ a } = {}", "{ a }: any = {}"],
     ["[a] = []", "[a]: any = []"],

@@ -93,6 +93,21 @@ describe("region rule", () => {
     throw new Error("expected a compile error");
   }
 
+  it("lifts a <define> met in an imported tag's body, as before", () => {
+    const source = `import { Box } from "./box.tsx";\nexport function Panel() {\n  return (\n    <div><Box><define/Row><p>x</p></define><Row/></Box></div>\n  );\n}\n`;
+    const out = print(source, FILE, {
+      mx: true,
+      mxRegionCompile: (input) =>
+        compilePreactRegion(input.source, { ...input, targets }) as ReturnType<
+          NonNullable<
+            NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+          >
+        >,
+    });
+    expect(out.code).toContain("const __mxDef_Row = ");
+    expect(out.code).toContain("__mxDef_Row()");
+  });
+
   it.each([
     ["an import", 'import x from "./x.mx"'],
     ["a static block", "static const n = 1"],

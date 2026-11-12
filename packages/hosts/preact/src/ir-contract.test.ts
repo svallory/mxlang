@@ -141,6 +141,19 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
     ).toThrow("a hoisted statement cannot be emitted inside a JSX expression");
   });
 
+  it("a define read only from a prelude statement keeps its public binding", () => {
+    const position = { line: 1, column: 0 };
+    const out = emitted("<define/Row><p>r</p></define><p>x</p>", (ir) => {
+      ir.prelude.push({
+        kind: "Hoisted",
+        code: "const alias = Row;",
+        end: position,
+        loc: position,
+      } as Ir["prelude"][number]);
+    });
+    expect(out).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
+  });
+
   it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
     const source = "<for|i| from=lowbound to=highbound><b>${i}</b></for>";
     const edited = (change: (range: RangeSource) => void) =>

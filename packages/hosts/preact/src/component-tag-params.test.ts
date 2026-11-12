@@ -76,6 +76,8 @@ interface Case {
   html: string;
   /** Also run with `noUnusedLocals`: no emitted binding may go unread. */
   unusedLocals?: boolean;
+  /** Also run with `strictNullChecks` off, where a null default widens. */
+  looseNull?: boolean;
 }
 
 const CASES: Record<string, Case> = {
@@ -130,6 +132,20 @@ export interface Input { items: string[] }
     html: "<ul><li>a</li><li>b</li></ul>",
     // The public wrapped value is not emitted when nothing reads it.
     unusedLocals: true,
+  },
+  "a define with attributes that is only called directly": {
+    caller: `export interface Input { items: string[] }
+<define/Row|p| x=1><li>\${p}</li></define>
+<ul><for|x| of=input.items><Row(x)/></for></ul>`,
+    html: "<ul><li>a</li><li>b</li></ul>",
+    unusedLocals: true,
+  },
+  "a define whose param defaults to null": {
+    caller: `export interface Input { items: string[] }
+<define/Row|p = null|><li>\${p}</li></define>
+<ul><for|x| of=input.items><Row(x)/></for></ul>`,
+    html: "<ul><li>a</li><li>b</li></ul>",
+    looseNull: true,
   },
   "a define whose destructured param has a default": {
     caller: `export interface Input { items: string[] }
@@ -267,6 +283,7 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
               noUnusedLocals: testCase.unusedLocals === true,
               skipLibCheck: true,
               strict: true,
+              ...(testCase.looseNull ? { strictNullChecks: false } : {}),
               target: "ESNext",
               types: ["node"],
             },

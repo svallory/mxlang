@@ -155,7 +155,10 @@ export function typedDefineParam(param: string): string {
     else if (depth === 0 && ch === "=") {
       // A default types an identifier, but not a destructure: `{ a } = {}`
       // still leaves `a` implicitly `any`.
-      return text.startsWith("{") || text.startsWith("[")
+      // A `null` or `undefined` default widens to implicit `any` without
+      // `strictNullChecks`, so it is typed too; any other default is inferred.
+      const nullish = /^=\s*(null|undefined)\s*$/.test(text.slice(i));
+      return text.startsWith("{") || text.startsWith("[") || nullish
         ? `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`
         : text;
     }
@@ -163,41 +166,40 @@ export function typedDefineParam(param: string): string {
   return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
 }
 
-/** The private binding a `<define>`'s own function is declared under. */
 /**
  * A `<define>` as two statements: the private function direct calls reach,
- * and the wrapped public value. `always` is set for a define with attributes,
- * whose properties are read through the value.
+ * and the wrapped public value (with the define's attributes as properties).
  */
 export interface DefineParts {
   name: string;
   fn: MappedCode;
   value: MappedCode;
-  always: boolean;
 }
 
 /**
  * The statements for a set of defines. The wrapped public `const Row` is
  * emitted only when something reads it (a dynamic target, an author's
- * expression, a define with attributes): `otherCode` is every other emitted
- * text of the same scope, searched for the name as a bare identifier. A
- * name found in a string or in text counts as a read, so a miss only costs an
- * unused wrapper, never a missing binding.
+ * expression, a `Row.attr` property read): `otherCode` is the text of the
+ * whole module outside the defines (markup, statements, prelude, `<return>`
+ * value, helpers), searched for the name as a bare identifier. A name found
+ * in a string or in text counts as a read, so a miss only costs an unused
+ * wrapper, never a missing binding.
  */
 export function defineStatements(
   parts: readonly DefineParts[],
   otherCode: string,
 ): MappedCode[] {
-  const text = [
-    otherCode,
-    ...parts.map((part) => part.fn.code),
-    ...parts.filter((part) => part.always).map((part) => part.value.code),
-  ].join("\n");
-  return parts.map((part) =>
-    part.always || readsName(text, part.name)
+  const text = [otherCode, ...parts.map((part) => part.fn.code)].join("\n");
+  return parts.map((part) => {
+    // Another define's value can read this one through its attributes.
+    const others = parts
+      .filter((other) => other !== part)
+      .map((other) => other.value.code)
+      .join("\n");
+    return readsName(`${text}\n${others}`, part.name)
       ? concatMapped(part.fn, part.value)
-      : part.fn,
-  );
+      : part.fn;
+  });
 }
 
 function readsName(text: string, name: string): boolean {
@@ -205,6 +207,7 @@ function readsName(text: string, name: string): boolean {
   return new RegExp(`(?<![\\w$.])${escaped}(?![\\w$])`).test(text);
 }
 
+/** The private binding a `<define>`'s own function is declared under. */
 function defineFunctionName(name: string): string {
   return `__mxDef_${name}`;
 }
@@ -941,7 +944,9 @@ export class PreactEmitter implements Emitter<string> {
 
   /**
    * Fills a body that is its own scope: a dynamic tag's body or a `<try>`'s
-   * `@placeholder`/`@catch`/body block (as Marko compiles them). `build`
+   * `@placeholder`/`@catch`/body block (as Marko compiles them; a `<try>`
+   * main body with only a `@placeholder` runs its statements during the
+   * parent's render, outside `Suspense`, which Marko does not). `build`
    * renders through a child with its own `/var` statements, serial and name
    * table; when the body bound any `/var`, its statements run in an arrow
    * called in place, so they close over everything the body can see and stay
@@ -965,7 +970,10 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
-  #scopeOf(build: (scope: PreactEmitter) => MappedCode): {
+  #scopeOf(
+    build: (scope: PreactEmitter) => MappedCode,
+    scopedBody = true,
+  ): {
     code: MappedCode;
     statements: string;
   } {
@@ -973,7 +981,7 @@ export class PreactEmitter implements Emitter<string> {
       varStatements: [],
       varSerial: { n: 0 },
       bindings: new Map<string, Position>(),
-      scopedBody: true,
+      scopedBody,
     });
     const code = build(scope);
     return { code, statements: scope.#varStatements.join(" ") };
@@ -1965,12 +1973,17 @@ export class PreactEmitter implements Emitter<string> {
       bodyVarStatements.length > 0 ? "</>); };" : "</>);",
     );
     const wrapped = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
+    // The public name maps to the define's name span too, so a go-to-definition
+    // from a value read reaches the `<define/Row>` tag.
+    const declared = [
+      " const ",
+      mapped(node.name, node.nameSpan ?? null),
+    ] as const;
     if (node.attrs.length === 0) {
       return {
         name: node.name,
         fn,
-        value: concatMapped(` const ${node.name} = ${wrapped};`),
-        always: false,
+        value: concatMapped(...declared, ` = ${wrapped};`),
       };
     }
     const { open, between } = defineValueWrapper(node.attrs);
@@ -1978,11 +1991,11 @@ export class PreactEmitter implements Emitter<string> {
       name: node.name,
       fn,
       value: concatMapped(
-        ` const ${node.name} = ${open}${wrapped}`,
+        ...declared,
+        ` = ${open}${wrapped}`,
         between,
         `{ ${this.#propParts(node.attrs).join(", ")} });`,
       ),
-      always: true,
     };
   }
 
@@ -2507,10 +2520,11 @@ export class PreactEmitter implements Emitter<string> {
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
     const children = node.content?.children ?? [];
-    // Only a dynamic tag's body is its own `/var` scope (Marko compiles it so);
-    // the body of a described or called unit keeps the component's.
+    // The body of a dynamic tag or a called `<define>` is its own `/var` scope
+    // (Marko compiles it so); the body of a described or called unit keeps the
+    // component's.
     const rendered =
-      node.target.kind === "dynamic"
+      node.target.kind === "dynamic" || node.target.kind === "define"
         ? this.#scoped(false, (scope) => scope.#expression(children))
         : this.#expression(children);
     if (!node.content?.hasParams)
@@ -2550,8 +2564,11 @@ export class PreactEmitter implements Emitter<string> {
     // Like a dynamic tag's body, the body is a scope of its own: a `/var` in
     // it runs inside the `content` function, when the component renders its
     // children, never in the parent's render.
-    const { code: body, statements } = this.#scopeOf((scope) =>
-      scope.#hostComponentBody(node, children),
+    // `scopedBody` stays unset: a region still lifts a `<define>` met in the
+    // body, as it always did (only a dynamic-tag or `<try>` body refuses one).
+    const { code: body, statements } = this.#scopeOf(
+      (scope) => scope.#hostComponentBody(node, children),
+      this.#scopedBody,
     );
     const open = node.content?.hasParams
       ? `((${node.content.params.join(", ")}) =>`

@@ -46,7 +46,9 @@ describe("preact: a <define> carries its attributes as properties", () => {
   });
 
   it("a define with a body keeps the body as the function", () => {
-    expect(whole("<define/D|x| a=1><p>${x}</p></define>\n<D(2)/>")).toContain(
+    expect(
+      whole("<define/D|x| a=1><p>${x}</p></define>\n<D(2)/>${D.a}"),
+    ).toContain(
       'const __mxDef_D = (x: any) => (<><p>{__mxRenderable(x)}</p></>); const D = Object.assign(__mxDefine(__mxDef_D, "D"), { "a": 1 });',
     );
   });
@@ -85,7 +87,7 @@ describe("preact: a <define> carries its attributes as properties", () => {
   });
 
   it("an attribute named content next to a body is dropped: the body wins", () => {
-    const code = whole('<define/D a=1 content="x">body</define>');
+    const code = whole('<define/D a=1 content="x">body</define><p>${D.a}</p>');
     expect(code).toContain('{ "a": 1 });');
     expect(code).not.toContain('"content"');
   });
