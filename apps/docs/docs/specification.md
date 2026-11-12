@@ -780,10 +780,12 @@ single `MarkoText`, so the construct there is ordinary text: it stays text, as t
 body's other text does (the html target does not emit a `<script>` body). `<style>a <![CDATA[ b < c ]]></style>` is a stylesheet holding
 the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
 
-`<html-script>` and `<html-style>` are raw text too, on every host: the body of an
-`<html-script>` is one text, not markup, and its edge whitespace is kept. A tag-rules
-preset that states the file's whole tag set (`none`) reads its `<script>` as an
-ordinary tag, so `<script><b>x</b></script>` holds a `<b>` element there.
+`<html-script>` and `<html-style>` are raw text too, on every host under the `html`
+tag rules: the body of an `<html-script>` is one text, not markup, and its edge
+whitespace is kept. The `markup` tag rules keep `<script>` raw but read
+`<html-script>` and `<html-style>` as ordinary tags; the `none` tag rules read
+`<script>` and `<html-script>` as ordinary tags, so `<script><b>x</b></script>`
+holds a `<b>` element there.
 
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
