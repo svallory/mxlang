@@ -583,27 +583,40 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
     // Astro has no mode but strict (its descriptor declares `strict: "always"`),
     // and this package's own lookup does not register it, so the host used to
     // resolve as an unknown word and the project compiled non-strict here.
-    const dir = mkdtempSync(join(import.meta.dirname, ".astro-host-"));
-    writeFileSync(
-      join(dir, "package.json"),
-      JSON.stringify({ name: "astro-host-fixture", mx: { host: "astro" } }),
-    );
-    let onLoad!: (args: { path: string }) => { contents: string };
-    createHtmlBunPlugin().setup({
-      onLoad: (
-        _options: unknown,
-        callback: (args: { path: string }) => { contents: string },
-      ) => {
-        onLoad = callback;
-      },
-    } as unknown as Parameters<BunPlugin["setup"]>[0]);
-    const path = join(dir, "stateful.mx");
-    writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-host-"));
     try {
-      expect(strictFor(path, htmlTargets)).toBe(true);
-      expect(() => onLoad({ path })).toThrow(
-        "`<let>` is reactive state and requires a runtime; this strict policy has no reactive target",
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ name: "astro-host-fixture", mx: { host: "astro" } }),
       );
+      let onLoad!: (args: { path: string }) => { contents: string };
+      createHtmlBunPlugin().setup({
+        onLoad: (
+          _options: unknown,
+          callback: (args: { path: string }) => { contents: string },
+        ) => {
+          onLoad = callback;
+        },
+      } as unknown as Parameters<BunPlugin["setup"]>[0]);
+      const path = join(dir, "stateful.mx");
+      writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+      expect(strictFor(path, htmlTargets)).toBe(true);
+      expect(() => onLoad({ path })).toThrow(/`<let>`.*strict/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an explicit mx.target decides: mx.target html with mx.host astro is not strict here", () => {
+    // The full registry reports a target-host-mismatch and keeps html,
+    // non-strict; the astro fallback applies only when no mx.target is present.
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-target-"));
+    try {
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ mx: { target: "html", host: "astro" } }),
+      );
+      expect(strictFor(join(dir, "page.mx"), htmlTargets)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

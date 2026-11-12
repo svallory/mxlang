@@ -762,6 +762,41 @@ describe("TargetPolicyDiagnostic code", () => {
     expect(selected.policy.strict).toBe(true);
   });
 
+  it("raises strict-ignored for a non-strict dependency target, not for an always-strict one", () => {
+    const strictLookup = createTargetLookup(
+      [
+        fixtureTarget("page", "@t/page"),
+        fixtureTarget("only-strict", "@t/only-strict", {
+          host: { name: "only" },
+          strict: "always",
+        }),
+      ],
+      { defaultTarget: "page" },
+    );
+    const codes = (dependency: string) =>
+      resolveTargetPolicyDetailed(
+        project(
+          JSON.stringify({
+            dependencies: { [dependency]: "1.0.0" },
+            mx: { strict: true },
+          }),
+        ),
+        strictLookup,
+      ).diagnostics.map((d) => d.code);
+    expect(codes("@t/page")).toEqual(["strict-ignored"]);
+    expect(codes("@t/only-strict")).toEqual([]);
+  });
+
+  it("raises no strict-ignored when mx.host or mx.target is present: its own diagnostic says what is wrong", () => {
+    const codes = (mx: object) =>
+      resolveTargetPolicyDetailed(
+        project(JSON.stringify({ mx: { ...mx, strict: true } })),
+        lookup,
+      ).diagnostics.map((d) => d.code);
+    expect(codes({ target: "bogus" })).toEqual(["unknown-target"]);
+    expect(codes({ host: "nonesuch" })).toEqual(["unknown-host"]);
+  });
+
   it.each([
     ["unparseable JSON", "{ not json"],
     ["a non-object manifest", "[]"],

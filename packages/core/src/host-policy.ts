@@ -201,6 +201,13 @@ export interface TargetPolicyDiagnostic {
 export interface TargetPolicyResolution {
   policy: TargetPolicy;
   diagnostics: TargetPolicyDiagnostic[];
+  /**
+   * The `mx.host` word this lookup does not register, when no `mx.target` is
+   * present: a tool whose lookup is narrower than the full registry (a
+   * package's own) can ask whether another lookup would know it. Absent
+   * otherwise.
+   */
+  unregisteredHost?: string;
 }
 
 const START: MxConfigLocation = { line: 1, column: 0, length: 1 };
@@ -987,9 +994,20 @@ export function resolveTargetPolicyDetailed(
       ),
     );
   }
-  if (mx?.strict === true && resolved.policy.strict !== true) {
+  const strictEffective =
+    resolved.policy.strict === true ||
+    (resolved.policy.descriptor ?? lookup.target(resolved.policy.target))
+      ?.strict === "always";
+  if (
+    mx?.strict === true &&
+    mx.host === undefined &&
+    mx.target === undefined &&
+    !strictEffective
+  ) {
     // `mx.strict` accompanies an explicitly selected target only; with none
     // selected the default target is non-strict, and the setting does nothing.
+    // A host or target that is present but unknown or unloadable already has
+    // its own diagnostic, so it gets no second one.
     diagnostics.push({
       code: "strict-ignored",
       severity: "warning",
@@ -1091,7 +1109,12 @@ export function resolveTargetPolicyDetailed(
       ],
     });
   }
-  return finish(resolved.policy);
+  return {
+    ...finish(resolved.policy),
+    ...(typeof resolved.ignoredHost === "string" && mx?.target === undefined
+      ? { unregisteredHost: resolved.ignoredHost }
+      : {}),
+  };
 }
 
 /**

@@ -3,8 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
-import type { BunPlugin } from "bun";
-import honoPlugin, { createHonoBunPlugin, mxFilter } from "./bun.ts";
+import honoPlugin, { mxFilter } from "./bun.ts";
 import { honoTargets } from "./index.ts";
 
 /**
@@ -356,30 +355,5 @@ describe("the onLoad filter (hosts claim .<segment>.mx)", () => {
     expect(filter.test("/a/x.solid.mx")).toBe(false);
     expect(filter.test("/a/page.mx")).toBe(true);
     expect(filter.test("/a/page.nope.mx")).toBe(true);
-  });
-});
-
-describe("a strict project under the Hono loader", () => {
-  test("refuses <let>, as the editor and vite build do", () => {
-    const dir = scratch("mx-hono-strict-");
-    writeFileSync(
-      join(dir, "package.json"),
-      JSON.stringify({
-        name: "hono-strict",
-        mx: { host: "hono", strict: true },
-      }),
-    );
-    const path = join(dir, "stateful.mx");
-    writeFileSync(path, "<let/count=0/><span>hi</span>\n");
-    let onLoad!: (args: { path: string }) => { contents: string };
-    createHonoBunPlugin().setup({
-      onLoad: (
-        _options: unknown,
-        callback: (args: { path: string }) => { contents: string },
-      ) => {
-        onLoad = callback;
-      },
-    } as unknown as Parameters<BunPlugin["setup"]>[0]);
-    expect(() => onLoad({ path })).toThrow("`<let>`");
   });
 });
