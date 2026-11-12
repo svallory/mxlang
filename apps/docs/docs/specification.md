@@ -4747,6 +4747,7 @@ host, a target or a dialect.
 | `MX_STATEMENT_IN_HTML_MODE` | error | a statement keyword where the body is HTML |
 | `MX_RESERVED_TAG_NAME` | error | a tag name the front end reserves |
 | `MX_NO_TAG_SHORTHAND` | error | a `#id` or `.class` shorthand where the dialect turned tag shorthands off |
+| `MX_MERGED_SHORTHAND_CLASS` | error | a shorthand class together with a `class` attribute on one tag, which has no single source range (a dialect's `diagnosticCodes` renames it) |
 | `MX_ATTRIBUTE_TAG_AT_ROOT` | error | an attribute tag at the root of the file |
 | `MX_UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE` | error | an unescaped `${` in a quoted attribute value |
 | `MX_TAG_TYPES_MISMATCH` | error | tag type arguments that do not match the tag's type parameters |

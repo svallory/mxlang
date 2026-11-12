@@ -93,6 +93,12 @@ export interface SyntaxTable {
    * Attribute-position `#x`/`.x` are table rows, not this field. @unstable
    */
   readonly tagShorthands?: boolean;
+  /**
+   * How the `tagShorthands: false` messages name an attribute, with its
+   * article (`an option`); omitted is `an attribute`. Core sets it from the
+   * dialect's message vocabulary. Wording only: it changes no parse. @unstable
+   */
+  readonly anAttribute?: string;
   /** Armed where an operand is expected, in every expression that arms triggers. */
   readonly expressionTriggers: readonly Trigger[];
   /** Armed on the first character of an attribute name. */
@@ -288,6 +294,11 @@ function validate(
     typeof table.tagShorthands !== "boolean"
   )
     fail("tagShorthands", "`tagShorthands` is a boolean");
+  if (
+    table.anAttribute !== undefined &&
+    (typeof table.anAttribute !== "string" || table.anAttribute === "")
+  )
+    fail("anAttribute", "`anAttribute` is a non-empty string");
   if (table.expressionLanguage !== "ts") {
     fail(
       "expressionLanguage",
@@ -742,6 +753,8 @@ export interface CompiledSyntax {
   readonly tagTypes: ReadonlyMap<string, TagTypeValue>;
   /** `tagShorthands`: false reads `.` as part of a tag name and refuses `#` (see `SyntaxTable`). */
   readonly tagShorthands: boolean;
+  /** `anAttribute`: the noun the `tagShorthands: false` messages use; undefined is MX's. */
+  readonly anAttribute: string | undefined;
 }
 
 export interface Delimiters {
@@ -767,6 +780,7 @@ export const DEFAULT_COMPILED: CompiledSyntax = Object.freeze({
   contentStops: Object.freeze([]),
   tagTypes: new Map(),
   tagShorthands: true,
+  anAttribute: undefined,
 });
 compiled.set(DEFAULT_SYNTAX, DEFAULT_COMPILED);
 
@@ -840,6 +854,7 @@ export function compileSyntax(table: SyntaxTable): CompiledSyntax {
     ),
     tagTypes: new Map(Object.entries(table.tagTypes)),
     tagShorthands: table.tagShorthands !== false,
+    anAttribute: table.anAttribute,
   };
   compiled.set(table, result);
   return result;

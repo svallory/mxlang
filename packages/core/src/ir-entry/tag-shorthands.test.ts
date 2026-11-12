@@ -290,6 +290,18 @@ describe("a spaced #id or .class in a tag head, by table", () => {
       );
     });
 
+    it("the parser's own refusals name the attribute in the dialect's words", () => {
+      const refusals = ["events\n  div#a\n", "events\n  .a\n"].map(
+        (source) =>
+          lowerSource(source, "/w.events", voiced({ tagShorthands: false }))
+            .diagnostics[0]?.message,
+      );
+      expect(refusals).toEqual([
+        '`#` is not allowed in a tag name: this file\'s dialect has no `#id` shorthand; write the id as an option (`id="main"`) or drop the `#`',
+        'a tag name cannot start with `.`: this file\'s dialect has no `.class` shorthand and no implicit `div`; name the tag and write the class as an option (`class="x"`)',
+      ]);
+    });
+
     it("shorthands on: the tag examples are spelled by the dialect's formatTag", () => {
       expect(message("events\n  div #a\n", voiced({}))).toBe(
         "Invalid option name `#a` — a `#id` or `.class` shorthand goes on the tag name with no space (`div#a`, `div.cls`); otherwise write `id=` or `class=`",

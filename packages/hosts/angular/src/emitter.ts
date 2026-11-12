@@ -37,6 +37,7 @@ import {
   type TemplateMetadata,
   TranslateError,
   unresolvedCustomTagMessage,
+  voiceOfCtx,
   unsupportedTagMessage,
   warn,
 } from "@mxlang/core";
@@ -100,8 +101,8 @@ function rawFail(message: string, node: { loc?: { start?: Position } }): never {
 }
 
 /** Keep the shared unresolved-tag wording, with Angular's control-flow fix. */
-function unknownTagMessage(name: string): string {
-  const base = unresolvedCustomTagMessage(name);
+function unknownTagMessage(name: string, ctx: Ctx): string {
+  const base = unresolvedCustomTagMessage(name, { voice: voiceOfCtx(ctx) });
   return name === "switch" || name === "case"
     ? `${base} MX has no switch; use \`<if=…>\` / \`<else if=…>\`.`
     : base;
@@ -240,8 +241,8 @@ export const angularDeclarations: HostDeclarations = {
   // the core's unresolved-tag guard rather than this host's old casing-only
   // fallback. The message is core's own constant, shared verbatim with every
   // other Marko-parity host.
-  rejectUnknownTag(name, node) {
-    rawFail(unknownTagMessage(name), node);
+  rejectUnknownTag(name, node, ctx) {
+    rawFail(unknownTagMessage(name, ctx), node);
   },
   isDelegatedTag: (name) =>
     name === "try" || name === "html-comment" || name === DYNAMIC_TAG,
@@ -2692,7 +2693,7 @@ class AngularEmitter implements Emitter<string> {
             ...lineColumnAt(this.ctx.source, node.nameSpan.sourceStart),
           }
         : node.loc;
-      fail(unknownTagMessage(node.name), { loc });
+      fail(unknownTagMessage(node.name, this.ctx), { loc });
     }
     // The tag name stays unmapped (its generated text is the source name
     // verbatim, but a diagnostic lands on the `<`, not the name), so the

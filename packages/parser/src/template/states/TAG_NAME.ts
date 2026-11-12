@@ -154,7 +154,7 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
           return this.emitError(
             { start: this.pos, end: this.pos + 1 },
             ErrorCode.MX_NO_TAG_SHORTHAND,
-            NO_ID_SHORTHAND,
+            noIdShorthand(this.syntax.anAttribute),
           );
         }
 
@@ -162,7 +162,7 @@ export const TAG_NAME: StateDefinition<TagNameMeta> = {
           return this.emitError(
             { start: this.pos, end: this.pos + 1 },
             ErrorCode.MX_NO_TAG_SHORTHAND,
-            NO_CLASS_SHORTHAND,
+            noClassShorthand(this.syntax.anAttribute),
           );
         }
 
@@ -265,10 +265,12 @@ function endsTagName(parser: Parser, code: number, next: number): boolean {
 }
 
 // The messages of `tagShorthands: false`: each states the rule and the fix.
-const NO_ID_SHORTHAND =
-  "`#` is not allowed in a tag name: this file's dialect has no `#id` shorthand; write the id as an attribute (`id=\"main\"`) or drop the `#`";
-const NO_CLASS_SHORTHAND =
-  'a tag name cannot start with `.`: this file\'s dialect has no `.class` shorthand and no implicit `div`; name the tag and write the class as an attribute (`class="x"`)';
+// `anAttribute` is the file's own noun with its article (`an option`), absent
+// for MX's `an attribute`.
+const noIdShorthand = (anAttribute = "an attribute") =>
+  `\`#\` is not allowed in a tag name: this file's dialect has no \`#id\` shorthand; write the id as ${anAttribute} (\`id="main"\`) or drop the \`#\``;
+const noClassShorthand = (anAttribute = "an attribute") =>
+  `a tag name cannot start with \`.\`: this file's dialect has no \`.class\` shorthand and no implicit \`div\`; name the tag and write the class as ${anAttribute} (\`class="x"\`)`;
 const EMPTY_NAME_PART =
   "a tag name cannot have an empty part: a `.` must be followed by a name, as in `billing.InvoiceVoided`, and cannot end the name or follow another `.`";
 const DOT_AFTER_PLACEHOLDER =

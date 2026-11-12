@@ -82,3 +82,71 @@ describe("a member trigger on the html target", () => {
     expect(syntaxErrors(code)).toEqual([]);
   });
 });
+
+describe("a dialect's message vocabulary on the html target's own messages", () => {
+  // Its own project: two dialects with one id cannot share a dependency list.
+  let voiced: string;
+  beforeAll(() => {
+    voiced = realpathSync(mkdtempSync(join(tmpdir(), "mx-html-voiced-")));
+    const pkg = join(voiced, "node_modules", "voiced-dialect");
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(
+      join(pkg, "package.json"),
+      JSON.stringify({
+        name: "voiced-dialect",
+        mx: {
+          dialect: {
+            id: "member",
+            name: "Fixture",
+            extensions: [".voiced.mx"],
+            module: "./index.cjs",
+          },
+        },
+      }),
+    );
+    // The member dialect, speaking of "options" and spelling tags `[[name]]`.
+    writeFileSync(
+      join(pkg, "index.cjs"),
+      `const member = require(${JSON.stringify(MODULE)});
+module.exports = {
+  ...member,
+  default: {
+    ...member.default,
+    messageVocabulary: {
+      attribute: { one: "option", many: "options" },
+      formatTag: (t) => "[[" + t.name + "]]",
+    },
+  },
+};\n`,
+    );
+    writeFileSync(
+      join(voiced, "package.json"),
+      JSON.stringify({
+        name: "app",
+        devDependencies: { "voiced-dialect": "0.0.0" },
+      }),
+    );
+  });
+  afterAll(() => {
+    rmSync(voiced, { recursive: true, force: true });
+  });
+
+  const messageOf = (source: string): string => {
+    try {
+      compile(source, join(voiced, "page.voiced.mx"));
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error("expected the compile to fail");
+  };
+
+  it("an unresolved tag is spelled by formatTag", () => {
+    expect(messageOf("<Foo/>\n")).toContain("custom tag `[[Foo]]`.");
+  });
+
+  it("an attribute tag on an element uses the dialect's nouns and spelling", () => {
+    expect(messageOf("<div><@foo/></div>\n")).toContain(
+      "option tag `@foo` on `[[div]]`; option tags are props",
+    );
+  });
+});

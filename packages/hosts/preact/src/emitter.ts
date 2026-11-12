@@ -45,6 +45,7 @@ import {
   type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
+  voiceOfCtx,
 } from "@mxlang/core";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
@@ -868,6 +869,7 @@ export function createJsxDeclarations(
     rejectUnknownTag(name, node, ctx) {
       failAtNode(
         unresolvedCustomTagMessage(name, {
+          voice: voiceOfCtx(ctx),
           candidates: [...ctx.imports, ...ctx.defines.keys()],
           hint: name.includes(":")
             ? undefined

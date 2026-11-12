@@ -236,3 +236,27 @@ describe("tagShorthands: false, an empty part of a dotted name is refused", () =
     expect(render("<a-${x}-b.c/>", OFF)).toBe("<a-${x}-b.c>");
   });
 });
+
+describe("tagShorthands: false, the refusals use the table's noun", () => {
+  const VOICED: SyntaxTable = { ...OFF, anAttribute: "an option" };
+
+  it.each([
+    ["a#b", NO_ID, "an option"],
+    ["#x", NO_ID, "an option"],
+    [".x", NO_LEAD_DOT, "an option"],
+    ["<.x/>", NO_LEAD_DOT, "an option"],
+  ])("%j says %s", (code, defaultMessage, noun) => {
+    const message = defaultMessage.replace("an attribute", noun);
+    expect(render(code, VOICED)).toContain(` ${message})`);
+    // The default table keeps MX's own wording.
+    expect(render(code, OFF)).toContain(` ${defaultMessage})`);
+  });
+
+  it("anAttribute must be a non-empty string", () => {
+    for (const bad of ["", 1]) {
+      expect(() =>
+        createParser({}, { syntax: { ...OFF, anAttribute: bad } as never }),
+      ).toThrow(/anAttribute/);
+    }
+  });
+});

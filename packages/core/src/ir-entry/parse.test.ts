@@ -1602,7 +1602,7 @@ describe("round 4 (rev-236-r2)", () => {
     // an exception with no position and no tree, where every other bad input
     // gets one positioned diagnostic.
     const MERGED =
-      "a shorthand class (`.a`) together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
+      "a shorthand class together with a `class` attribute is not supported in a data file: write every class in the `class` attribute";
 
     it.each([
       ["html syntax", `<x.a class="b"/>\n`, 1, 0],
@@ -1613,9 +1613,26 @@ describe("round 4 (rev-236-r2)", () => {
     ])(
       "rejects %s as one positioned diagnostic",
       (_case, source, line, column) => {
-        failWith(source, { message: MERGED, line, column });
+        const diagnostic = failWith(source, { message: MERGED, line, column });
+        expect(diagnostic?.code).toBe("MX_MERGED_SHORTHAND_CLASS");
       },
     );
+
+    it("is a core code: a dialect's `diagnosticCodes` map renames it", () => {
+      const diagnostic = failWith(
+        `<x.a class="b"/>\n`,
+        { message: MERGED, line: 1, column: 0 },
+        {
+          dialect: {
+            id: "plain",
+            name: "Plain",
+            table: {},
+            diagnosticCodes: { MX_MERGED_SHORTHAND_CLASS: "PLAIN_TWO_CLASSES" },
+          },
+        },
+      );
+      expect(diagnostic?.code).toBe("PLAIN_TWO_CLASSES");
+    });
 
     it("rejects it on an attribute tag too, at the attribute tag", () => {
       failWith(`<a><@t.c class="d"/></a>\n`, {
@@ -2095,7 +2112,7 @@ describe("a dynamic shorthand class on data", () => {
     [`<a .${D}x}/>`, `Invalid attribute name \`.${D}x}\``],
     [
       `<a.${D}x} class="y"/>`,
-      "a shorthand class (`.a`) together with a `class` attribute",
+      "a shorthand class together with a `class` attribute",
     ],
   ])("%s is a positioned diagnostic, not a throw", (source, expected) => {
     const result = lowerSource(source, "/t.mx");

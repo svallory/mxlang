@@ -39,6 +39,7 @@ import {
   rejectUnsupportedFields,
   type TargetLookup,
   unresolvedCustomTagMessage,
+  voiceOfCtx,
   unsupportedTagMessage,
 } from "@mxlang/core";
 import {
@@ -319,6 +320,7 @@ function colonNameFix(name: string): string {
 function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
   failAt(
     unresolvedCustomTagMessage(name, {
+      voice: voiceOfCtx(ctx),
       candidates: [...ctx.imports, ...ctx.defines.keys()],
       // A colon name is neither a fence import nor a `tags/` file name.
       hint: name.includes(":")

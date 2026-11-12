@@ -48,7 +48,7 @@ import {
   rowKey,
 } from "./dialect-registry.ts";
 import type { SourceSpan } from "./mapping.ts";
-import { MX_VOICE, type Voice } from "./message-vocabulary.ts";
+import { MX_VOICE, type Voice, voiceOf } from "./message-vocabulary.ts";
 import { namespaceEmits } from "./module-scope.ts";
 import type {
   Dialect,
@@ -122,10 +122,17 @@ export function parseMx(
   );
   mxParses.count++;
   const claims = nodeClaims(source, options);
+  // The parser's own refusals (`tagShorthands: false`) name an attribute in
+  // the file's words, so the table it reads carries the dialect's noun.
+  const voice = voiceOf(options.dialect);
+  const syntax =
+    voice === MX_VOICE
+      ? options.syntax
+      : { ...options.syntax, anAttribute: voice.anAttribute };
   const document = mxFrontEndParse(source, {
     statementKeywords,
     tagShape,
-    syntax: options.syntax,
+    syntax,
     ...(options.base ? { base: options.base } : {}),
     ...(claims ? { claim: claims.claim } : {}),
   });

@@ -257,6 +257,13 @@ export const TAG_TYPES_MISMATCH_CODE = "MX_TAG_TYPES_MISMATCH";
  * a `${…}` in such a file, is `MX_INVALID_TAG_NAME`.
  */
 export const NO_TAG_SHORTHAND_CODE = "MX_NO_TAG_SHORTHAND";
+/**
+ * A tag written with a shorthand class (a dialect's `.a`-style class) and an
+ * authored `class` attribute together: the merged value has no single source
+ * range. Positioned at the tag. Raised by the IR entry checks, so a dialect's
+ * `diagnosticCodes` map renames it like any core code.
+ */
+export const MERGED_SHORTHAND_CLASS_CODE = "MX_MERGED_SHORTHAND_CLASS";
 /** Input that ends inside a concise open delimiter. */
 export const INPUT_ENDS_IN_DELIMITER_CODE = "MX_INPUT_ENDS_IN_DELIMITER";
 /** An internal error of the front end. */
@@ -695,6 +702,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
           "a `#id` or `.class` shorthand where the dialect turned tag shorthands off",
         ],
         [
+          MERGED_SHORTHAND_CLASS_CODE,
+          "a shorthand class together with a `class` attribute",
+        ],
+        [
           ATTRIBUTE_TAG_AT_ROOT_CODE,
           "an attribute tag at the root of the file",
         ],
@@ -867,6 +878,7 @@ export type MxDiagnosticCode =
   | typeof STATEMENT_IN_HTML_MODE_CODE
   | typeof RESERVED_TAG_NAME_CODE
   | typeof NO_TAG_SHORTHAND_CODE
+  | typeof MERGED_SHORTHAND_CLASS_CODE
   | typeof ATTRIBUTE_TAG_AT_ROOT_CODE
   | typeof UNESCAPED_PLACEHOLDER_IN_ATTRIBUTE_VALUE_CODE
   | typeof TAG_TYPES_MISMATCH_CODE

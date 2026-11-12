@@ -473,6 +473,7 @@ const ROWS: Row[] = [
   lowerRow("MX_NO_TAG_SHORTHAND", "div\n  p#main\n", 2, 3, {
     dialect: { id: "plain", name: "Plain", table: { tagShorthands: false } },
   }),
+  lowerRow("MX_MERGED_SHORTHAND_CLASS", '<x.a class="b"/>\n', 1, 0),
   lowerRow("MX_STATEMENT_IN_HTML_MODE", "<static const x = 1/>\n", 1, 1),
   lowerRow("MX_INPUT_ENDS_IN_DELIMITER", "div(a\n", 1, 3),
   lowerRow(

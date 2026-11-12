@@ -48,6 +48,7 @@ import {
   type SourceSpan,
   sliceLoc,
   unresolvedCustomTagMessage,
+  voiceOfCtx,
   unwrapStatementBlock,
 } from "@mxlang/core";
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -932,6 +933,7 @@ function rejectModifier(
 function rejectUnknownTag(name: string, node: Node, ctx: Ctx): void {
   fail(
     unresolvedCustomTagMessage(name, {
+      voice: voiceOfCtx(ctx),
       candidates: [...ctx.imports, ...ctx.defines.keys()],
       hint: `Import it (\`import ${name} from "./${name}.mx"\`) or add \`tags/${name}.mx\`.`,
     }),
@@ -1166,11 +1168,12 @@ export const policy: Policy = {
   // target.
   rejectModifier,
   rejectUnknownTag,
-  rejectElementAttributeTags: (name, node) => {
+  rejectElementAttributeTags: (name, node, ctx) => {
     const first = node.attributeTags?.[0];
     const slot = String(first?.name?.value ?? "").replace(/^@/, "");
+    const voice = voiceOfCtx(ctx);
     fail(
-      `attribute tag \`@${slot}\` on \`<${name}>\`; attribute tags are props of components, so they are only valid directly inside a component call`,
+      `${voice.attributeTag} \`@${slot}\` on ${voice.tag(name)}; ${voice.attributeTags} are props of components, so they are only valid directly inside a component call`,
       first ?? node,
     );
   },

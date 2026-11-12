@@ -30,6 +30,7 @@ import { codedError, isTranslateError, type TranslateError } from "../core.ts";
 import {
   DIALECT_HOOK_ERROR_CODE,
   INTERNAL_ERROR_CODE,
+  MERGED_SHORTHAND_CLASS_CODE,
   type MxDiagnosticCode,
   NOT_IN_DATA_FILE_CODE,
   STRUCTURAL_CONSTRUCT_CODE,
@@ -340,7 +341,7 @@ function checkTagName(
  * `valueSpan` and `nameSpan`. TODO `core-shorthand-attr-spans`.
  */
 function mergedShorthandClass(voice: Voice): string {
-  return `a shorthand class (\`.a\`) together with a \`class\` ${voice.attribute} is not supported in ${voice.aFile}: write every class in the \`class\` ${voice.attribute}`;
+  return `a shorthand class together with a \`class\` ${voice.attribute} is not supported in ${voice.aFile}: write every class in the \`class\` ${voice.attribute}`;
 }
 
 /**
@@ -368,7 +369,7 @@ function rejectSpanlessShorthand(
           : attr.value.span;
     if (span) continue;
     fail(
-      DIALECT_HOOK_ERROR_CODE,
+      MERGED_SHORTHAND_CLASS_CODE,
       mergedShorthandClass(activeVoice),
       at,
       nameEndOf(tag),

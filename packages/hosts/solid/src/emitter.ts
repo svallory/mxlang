@@ -32,6 +32,7 @@ import {
   rewriteAccessorReads,
   TranslateError,
   unresolvedCustomTagMessage,
+  voiceOfCtx,
 } from "@mxlang/core";
 import { SOLID_BUILTIN_TAGS } from "@mxlang/tsx-bridge";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
@@ -767,6 +768,7 @@ function rejectUnknownTag(
 ): void {
   failAtNode(
     unresolvedCustomTagMessage(name, {
+      voice: voiceOfCtx(ctx),
       candidates: [...ctx.imports, ...ctx.defines.keys()],
       hint: name.includes(":")
         ? undefined
