@@ -545,7 +545,11 @@ export default () => <div />;
       // compile it: the region file kind is read case-insensitively end to end.
       const path = writeMx("Counter.Solid.MX", COUNTER);
 
-      const result = await transformOf(mx()).call({}, COUNTER, path + MX_SUFFIX);
+      const result = await transformOf(mx()).call(
+        {},
+        COUNTER,
+        path + MX_SUFFIX,
+      );
 
       expect(result?.code).toContain("<button");
       expect(result?.code).toContain("{count()}");

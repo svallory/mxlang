@@ -1537,8 +1537,14 @@ describe("`declares` across contract sources", () => {
 } };`;
 
   it("a claimed `declares` reaches the dialect from the module, `mx.contracts` and a sidecar", () => {
-    write("contracts.ts", 'export default { fromManifest: { declares: "manifest" } };\n');
-    write("tags/fromSidecar.tag.ts", 'export default { declares: "sidecar" };\n');
+    write(
+      "contracts.ts",
+      'export default { fromManifest: { declares: "manifest" } };\n',
+    );
+    write(
+      "tags/fromSidecar.tag.ts",
+      'export default { declares: "sidecar" };\n',
+    );
     lexiProject(MODULE, { mx: { contracts: "./contracts.ts" } });
     (globalThis as Record<string, unknown>).__declSeen = undefined;
     const file = join(dir, "page.lexi.mx");

@@ -74,13 +74,12 @@ describe("region file kinds are a capability, not a name", () => {
 });
 
 describe("regionFileKind: letter case", () => {
-  it.each([
-    "/app/x.Solid.MX",
-    "/app/X.SOLID.mx",
-    "/app/x.solid.Mx",
-  ])("%s is a Solid region file, as the editor tools read it", (path) => {
-    expect(regionFileKind(path)?.target).toBe("solid-jsx");
-  });
+  it.each(["/app/x.Solid.MX", "/app/X.SOLID.mx", "/app/x.solid.Mx"])(
+    "%s is a Solid region file, as the editor tools read it",
+    (path) => {
+      expect(regionFileKind(path)?.target).toBe("solid-jsx");
+    },
+  );
 
   it("a name with no file kind stays a whole-file .mx", () => {
     expect(regionFileKind("/app/Card.MX")).toBeUndefined();

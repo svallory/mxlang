@@ -919,8 +919,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   const isForeign = (file: string): boolean =>
     FOREIGN_EXTENSIONS.some(
       (ext) =>
-      hasExt(file, ext) &&
-      !extensions.some((e) => e.toLowerCase() === ext),
+        hasExt(file, ext) && !extensions.some((e) => e.toLowerCase() === ext),
     );
   /**
    * Which MX modules depend on which compilation *inputs*, so an edit to one
