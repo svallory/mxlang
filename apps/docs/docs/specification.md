@@ -822,6 +822,8 @@ first attribute and the first placeholder of a tag are reported.
 compile that throws reports the placeholder first, then the body's syntax, then the
 head and attributes, as Marko reads the body before it checks the head. An entry that
 lists every diagnostic (`lowerSource`) orders them by position, so the head comes first.
+A `<script>` nested in a `<try>` that has no handler is read first for its body's syntax
+only: a placeholder in it is reported after the `<try>`'s own missing-handler error.
 
 A built-in `<script>` also takes no arguments (`<script(x)>`), no params (`<script|x|>`)
 and no tag variable (`<script/x>`), and its value is written once: a second value
@@ -3250,7 +3252,9 @@ lowered, even when its `transform` ignores the content, so the host's refusal fi
 the parent's contract does not report the child first as a tag it does not allow. Such a
 child is absent from `TagCall.childTree`, so an `analyze` or `transform` that counts
 children does not see it. An
-orphan `<else>` or `<else-if>` is not such a name; the contract reports it. Under
+orphan `<else>` or `<else-if>` is not such a name; the contract reports it. When the
+contract also fails on something else (a missing `required` child, say), the refused
+child is reported beside that failure, in position order. Under
 `structural: "reject"` the first `<if>` or `<for>` in source order is the error, at the
 construct, whatever it holds, and a contract does not look inside it; an `<else>`
 that follows an `<if>` is blamed on that `<if>`.
