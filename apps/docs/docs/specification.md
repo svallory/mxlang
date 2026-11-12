@@ -827,13 +827,6 @@ The html target, the JSX hosts, Solid and Astro write a real `<style>` (the JSX
 hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
 `is:inline` element); Angular keeps its own handling of `<style>`.
 
-A tag's type arguments and parameters (`<p<string>>`) are TypeScript-only
-syntax. The region and unit entry points of the Preact, React, Hono, Solid,
-Astro and Angular hosts erase them, as whole-file compilation does; they are
-not refused there. `dangerouslySetInnerHTML` is refused on a native element on
-the html target too, as on the JSX hosts and Solid: the raw-HTML form is
-`$!{html}`.
-
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
 annotations, an `enum`, `satisfies`, a `namespace` and `declare` are all
@@ -1674,6 +1667,14 @@ emits `<input value=… type=text>`. A browser applies `type` before `value`, an
 some types reinterpret a later `value`. The html target reproduces this, and the
 oracle compares attribute order, so getting it wrong fails the gate.
 
+### `dangerouslySetInnerHTML`
+
+`dangerouslySetInnerHTML` is not an attribute of a native element: stock Marko
+refuses it (``` `dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`? ```),
+and so does every host that renders JSX (Preact, React, Hono, Solid) and the html
+target. The raw-HTML form is `$!{html}`. Only an authored attribute is refused; a
+spread's keys are runtime data.
+
 ### Spread and trust
 
 Spreading an attacker-controlled object whose key is a legitimate handler name
@@ -1693,6 +1694,11 @@ is the construct label, always backticked (`` `<if>` ``, `` `<for>` ``, …):
 | `tag variable \`/${…}\` on ${what} is not supported in a standalone template` |
 | `type arguments on ${what} are not supported in a standalone template` |
 | `tag params \`\|...\|\` on ${what} are not supported in a standalone template` |
+
+Type arguments (`<p<string>>`) are TypeScript-only syntax. Whole-file compilation
+erases them, and so do the region and unit entry points of the Preact, React,
+Hono, Solid, Astro and Angular hosts (they pass `stripTagTypes`); a bare
+`parseFragment` keeps them and then refuses them with the message above.
 
 Event handling is an open question.
 
