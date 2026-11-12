@@ -2717,6 +2717,29 @@ export class PreactEmitter implements Emitter<string> {
         child,
       );
     }
+    // The html target refuses an event handler on a script element: nothing
+    // runs it. Refused at the attribute, in the html target's words, rather
+    // than emitted as a JSX prop that never fires. A lowercase `onclick() {}`
+    // is not an `event` attribute to core (that needs `on` + a capital), but
+    // its method value makes it one.
+    for (const attr of node.attrs) {
+      if (attr.kind === "event") {
+        fail(
+          `\`${attr.name}\` is an event handler and requires a runtime; standalone MX renders once to a string`,
+          attr,
+        );
+      }
+      if (
+        attr.kind === "dynamic" &&
+        attr.value.bodySpan !== undefined &&
+        /^on/i.test(attr.name)
+      ) {
+        fail(
+          `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone MX renders once to a string`,
+          attr,
+        );
+      }
+    }
     const attrs = this.#attrs(node.attrs, true, false, name);
     if (body.length === 0) {
       this.#out.push(concatMapped(`<${name}`, attrs, " />"));

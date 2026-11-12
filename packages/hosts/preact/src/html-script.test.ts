@@ -225,3 +225,41 @@ describe("<html-script> on Preact interpolates its body as script text", () => {
     },
   );
 });
+
+describe("<html-script> refuses an event-handler attribute", () => {
+  // The html target and stock Marko 6.4.4 refuse a method handler here; the
+  // three JSX hosts share one emitter, so each dialect is compiled once.
+  const SOURCE = "<html-script onclick() { go() }>x</html-script>";
+
+  it.each([
+    ["preact", "compilePreactMx"],
+    ["react", "compileReactMx"],
+    ["hono", "compileHonoMx"],
+  ])("on %s, at the attribute", async (host, entry) => {
+    const url = new URL(`../../${host}/src/index.ts`, import.meta.url).href;
+    const compile = ((await import(/* @vite-ignore */ url)) as Record<
+      string,
+      (source: string, file: string) => unknown
+    >)[entry] as (source: string, file: string) => unknown;
+    let error: unknown;
+    try {
+      compile(SOURCE, "/fixtures/script.mx");
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toMatchObject({
+      message: expect.stringMatching(/attribute method `onclick\(\.\.\.\)` is an event handler/),
+      line: 1,
+      column: 13,
+    });
+  });
+
+  it("also refuses the `onClick` event form", () => {
+    expect(() =>
+      compilePreactMx(
+        "<html-script onClick=input.f>x</html-script>",
+        "/fixtures/script.mx",
+      ),
+    ).toThrow(/`onClick` is an event handler/);
+  });
+});
