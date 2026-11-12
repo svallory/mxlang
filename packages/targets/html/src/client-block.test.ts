@@ -870,9 +870,35 @@ describe("html typeCheck: the client arrow shadows the names a server statement 
   });
 
   it("a client label spelled like a server var is not a declared name", () => {
+    const code = typeCheck(
+      "server var x = 1;\nclient x: for (;;) { break x }\n<div/>\n",
+    );
+    const arrow = code.indexOf("(async () => {");
+    expect(code.slice(arrow)).toContain("var x: undefined; void [x];");
+    expect(code.slice(0, arrow)).not.toContain("x: undefined");
+  });
+
+  it("a nested client var is a module-level name of the server view", () => {
+    const code = typeCheck(
+      "client for (var i = 0; i < 3; i++) {}\n<div>${i}</div>\n",
+    );
+    expect(code.slice(0, code.indexOf("(async () => {"))).toContain(
+      "var i: undefined; void [i];",
+    );
+  });
+
+  it("core refuses a server const and a client const enum of one name", () => {
+    expect(() =>
+      typeCheck("server const S = 1;\nclient const enum S { A }\n<div/>\n"),
+    ).toThrow(/Duplicate declaration "S"/);
+  });
+
+  it("a static name a server statement declares too is not shadowed in the client arrow", () => {
     expect(
-      typeCheck("server var x = 1;\nclient x: for (;;) { break x }\n<div/>\n"),
-    ).toContain("var x: undefined; void [x];");
+      typeCheck(
+        "static var s = 1;\nserver var s = 2;\nclient const n = s + 1;\n<div/>\n",
+      ),
+    ).not.toContain("var s: undefined");
   });
 
   it("a var nested in a client statement merges with a server var", () => {

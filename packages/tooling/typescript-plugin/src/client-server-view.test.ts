@@ -164,6 +164,37 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
   });
 
+  it("a client label spelled like a server var checks clean, and a client read is undefined", () => {
+    const label = "server var x = 1;\nclient x: for (;;) { break x }\n<div/>\n";
+    expect(errorsOf({ [FILE]: label }, FILE)).toEqual([]);
+    const read = `${label}client const t = x.toFixed(1);\n`;
+    const found = errorsOf({ [FILE]: read }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found[0]?.start).toBe(read.indexOf("x.toFixed"));
+  });
+
+  it("a nested client var read in the template is undefined, not unknown", () => {
+    const source =
+      "client for (var i = 0; i < 3; i++) {}\n<div>${i.toFixed(1)}</div>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found[0]?.start).toBe(source.indexOf("i.toFixed"));
+  });
+
+  it("definition at a refinement's name reaches the client import's declaration", () => {
+    const source =
+      'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n';
+    const svc = service({
+      [FILE]: source,
+      "/project/fn.ts": "export const clamp = (n: number) => n;\n",
+    });
+    svc.getSemanticDiagnostics(CONSUMER);
+    const found = svc.getDefinitionAtPosition(FILE, source.indexOf("clamp:=q"));
+    expect(found?.map((definition) => definition.fileName)).toContain(
+      "/project/fn.ts",
+    );
+  });
+
   it("KNOWN LIMIT: the body of a client namespace reads a server name typed", () => {
     // A namespace is hoisted to module level, outside the client arrow that
     // shadows server names, so its body is not checked against them.

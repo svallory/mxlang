@@ -146,9 +146,10 @@ type meaning from the client code); a type query (`typeof fetchRows`) of a name
 the shadow covers reads `undefined`, so `ReturnType<typeof fetchRows>` in client
 code is TS2344; the body of a `client` namespace (hoisted to module level, outside
 the client arrow) reads `server` names typed; a refinement of a `client` import
-maps its `__mxRefine_` alias onto the author's token, so go-to-definition and
-rename there reach the alias, not the import (a mapping that is diagnostic-only
-needs a code-information field on core's `GeneratedMapping`); a template read of a client name is not
+maps its `__mxRefine_` alias, and the alias line's right-hand name, onto the
+author's token: go-to-definition there reaches the import's declaration
+(pinned), while rename is not verified to reach the import (a diagnostic-only
+mapping needs a code-information field on core's `GeneratedMapping`); a template read of a client name is not
 linked to its declaration for definition and rename. The
 runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a

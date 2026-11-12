@@ -587,7 +587,10 @@ function valueNames(nodes: Node[]): string[] {
     } else if (inner.type === "TSDeclareFunction") {
       if (inner.id?.name) names.add(inner.id.name);
     } else if (inner.type === "TSEnumDeclaration") {
-      if (!inner.const && inner.id?.name) names.add(inner.id.name);
+      // An unexported `const enum` is erased, as Marko's TypeScript pass does.
+      if ((!inner.const || inner !== node) && inner.id?.name) {
+        names.add(inner.id.name);
+      }
     } else if (inner.type === "TSModuleDeclaration") {
       if (inner.global || inner.kind === "global") continue;
       const name = leftmostName(inner.id);
@@ -787,13 +790,15 @@ function clientProjection(
     if (isHoisted) hoistedNodes.push(inner);
     target.push(piece(inner.start, statement.end));
   });
-  const taken = new Set(clientDeclaredNames(hoistedNodes));
+  const hoistedNames = valueNames(hoistedNodes);
+  const taken = new Set(hoistedNames);
+  const scopeNames = valueNames(statements);
   return {
-    serverNames: clientDeclaredNames(statements).filter(
-      (name) => !taken.has(name),
-    ),
-    hoistedNames: valueNames(hoistedNodes),
-    scopeNames: valueNames(statements),
+    // One rule for the module's `var q: undefined`, the arrow exclusion and the
+    // merges: labels and loop heads are no names, a nested `var` is one.
+    serverNames: scopeNames.filter((name) => !taken.has(name)),
+    hoistedNames,
+    scopeNames,
     hoisted,
     types,
     typeExports,

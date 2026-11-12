@@ -57,6 +57,7 @@ import {
   moduleExportName,
   propKey,
   quote,
+  type SourceSpan,
   TranslateError,
 } from "@mxlang/core";
 import type {
@@ -146,7 +147,7 @@ interface State {
    * `fn` is a client change handler: when it is a `client` import, the module
    * keeps an alias of the real binding for the probe (`refinementAliases`).
    */
-  refinementReads: Set<string>;
+  refinementReads: Map<string, SourceSpan | undefined>;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
@@ -191,7 +192,7 @@ export function createEmitter(
   options: {
     typeCheck?: boolean;
     source?: string;
-    refinementAliases?: ReadonlySet<string>;
+    refinementAliases?: ReadonlyMap<string, SourceSpan | undefined>;
     mergedNames?: ReadonlySet<string>;
   } = {},
 ): StringEmitter {
@@ -204,7 +205,7 @@ export function createEmitter(
     serverDeclared: [],
     clientHoisted: [],
     clientScope: [],
-    refinementReads: new Set(),
+    refinementReads: new Map(),
     clientTypes: [],
     clientTypeExports: [],
     clientNames: [],
@@ -613,7 +614,9 @@ export function createEmitter(
     // is `undefined` in the server view, so the probe reads the alias the
     // module keeps of the real binding (`refinementAliases`).
     const name = attr.refinement.code;
-    state.refinementReads.add(name);
+    if (!state.refinementReads.has(name)) {
+      state.refinementReads.set(name, attr.refinement.span);
+    }
     return concatMapped(
       "(false && ",
       options.refinementAliases?.has(name)
@@ -1750,7 +1753,10 @@ function clientPiece(piece: ClientPiece): MappedCode {
  * that reads a `static` or `server` name declared after it is still reported
  * as used before its declaration.
  */
-function placeClientCode(state: State): void {
+function placeClientCode(
+  state: State,
+  moduleDeclared: ReadonlySet<string>,
+): void {
   const blocked = new Set(state.clientNames);
   const moved = new Set<ClientType>();
   for (let changed = true; changed; ) {
@@ -1822,11 +1828,10 @@ function placeClientCode(state: State): void {
   // enums or namespaces, which core accepts) exists on both sides and is left
   // out. A type query (`typeof s`) reads the shadow, and the body of a `client`
   // namespace (module level, so outside this arrow) does not: known limits.
+  const clientSide = new Set(state.clientScope);
   const absent = undefinedShadow(
     state.serverDeclared.filter(
-      (name) =>
-        !state.clientScope.includes(name) &&
-        !state.clientHoisted.includes(name),
+      (name) => !clientSide.has(name) && !moduleDeclared.has(name),
     ),
   );
   if (absent !== "") body.unshift(concatMapped(absent));
@@ -1842,15 +1847,10 @@ function placeClientCode(state: State): void {
 
 /**
  * Names a shadow in the render function must not redeclare: its parameters
- * (`input`, `__mxOut`) and the implicit render bindings core reserves
- * (`$global`, `$signal`), which core lets a module import under their spelling.
+ * (`input`, `__mxOut`); core lets a module import `input`, which the parameter
+ * already hides.
  */
-const RENDER_NAMES: ReadonlySet<string> = new Set([
-  "input",
-  "$global",
-  "$signal",
-  "__mxOut",
-]);
+const RENDER_NAMES: ReadonlySet<string> = new Set(["input", "__mxOut"]);
 
 /**
  * `var a: undefined, b: undefined; void [a, b];` for the distinct `names`: the
@@ -1940,8 +1940,8 @@ export function emitModuleWithMappings(
   // stay `undefined`. Which names are client imports, and which a server
   // statement declares too, is known once the body has been driven, so the body
   // is driven again with that knowledge.
-  const refinementAliases = new Set(
-    [...emitter.state.refinementReads].filter((read) =>
+  const refinementAliases = new Map(
+    [...emitter.state.refinementReads].filter(([read]) =>
       emitter.state.clientHoisted.includes(read),
     ),
   );
@@ -1971,7 +1971,7 @@ export function emitModuleWithMappings(
   if (ir.needsAttrTagImport) {
     lines.push(`import type { AttrTag } from "${escapeFrom}";`);
   }
-  placeClientCode(emitter.state);
+  placeClientCode(emitter.state, moduleDeclared);
   const hoisted = [
     ...ir.imports.map((node) => node.code),
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
@@ -1991,8 +1991,16 @@ export function emitModuleWithMappings(
     ? "Input & { content?: () => string }"
     : "Input";
   if (hoisted.length > 0) lines.push("", ...hoisted);
-  for (const alias of refinementAliases) {
-    lines.push(`const __mxRefine_${alias} = ${alias};`);
+  // The alias reads the real binding at the refinement's own token, so
+  // definition and rename from the token reach the import.
+  for (const [alias, span] of refinementAliases) {
+    lines.push(
+      concatMapped(
+        `const __mxRefine_${alias} = `,
+        mapped(alias, span ?? null),
+        ";",
+      ),
+    );
   }
   lines.push(
     "",
