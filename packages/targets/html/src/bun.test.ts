@@ -653,12 +653,18 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
       },
     );
 
-    test("a <let> page in an mx.host solid project with strict compiles under the default loader", () => {
-      const dir = mkdtempSync(join(tmpdir(), "mx-solid-strict-"));
+    // A loaded target with no declarations and no host of its own is compiled
+    // through html, which has a strict mode: `mx.strict` holds, as in vite.
+    test("a loaded target without declarations honours mx.strict under the default loader", () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-loaded-strict-"));
       try {
         writeFileSync(
           join(dir, "package.json"),
-          JSON.stringify({ mx: { host: "solid", strict: true } }),
+          JSON.stringify({ mx: { target: "./t.cjs", strict: true } }),
+        );
+        writeFileSync(
+          join(dir, "t.cjs"),
+          'module.exports = { descriptorVersion: 0, name: "kit", packageName: "@t/kit", defaultTag: "div", builtOn: "html" };',
         );
         const path = join(dir, "stateful.mx");
         writeFileSync(path, "<let/count=0/><span>hi</span>\n");
@@ -671,10 +677,54 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
             onLoad = callback;
           },
         } as unknown as Parameters<BunPlugin["setup"]>[0]);
-        expect(() => onLoad({ path })).not.toThrow();
+        expect(() => onLoad({ path })).toThrow(/`<let>`.*strict/);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    });
+
+    // The strict lookup adds stand-ins to the caller's lookup; one the caller's
+    // set refuses is skipped, so a lookup the loader accepted still constructs.
+    test.each([
+      [
+        "a target named astro",
+        () => ({
+          descriptorVersion: 0,
+          name: "astro",
+          packageName: "@t/astro",
+          defaultTag: "div",
+        }),
+      ],
+      [
+        "a host owning the segment ng",
+        () => ({
+          descriptorVersion: 0,
+          name: "kit",
+          packageName: "@t/mine",
+          defaultTag: "div",
+          host: {
+            name: "mine",
+            fileKinds: [
+              { segment: "ng", languageIds: ["mine"], diagnosticSource: "m" },
+            ],
+          },
+        }),
+      ],
+      [
+        "a target named data",
+        () => ({
+          descriptorVersion: 0,
+          name: "data",
+          packageName: "@t/data",
+          defaultTag: "div",
+        }),
+      ],
+    ])("a caller lookup with %s still builds the plugin", (_name, make) => {
+      const own = createTargetLookup([
+        htmlTargets.target(htmlTargets.defaultTarget()) as TargetDescriptor,
+        make() as TargetDescriptor,
+      ]);
+      expect(() => createHtmlBunPlugin(own)).not.toThrow();
     });
 
     // The loader itself, not only the rule: the stand-ins are chosen for the

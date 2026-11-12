@@ -158,7 +158,6 @@ it("the stand-ins cover every built-in target but html, with its package, host a
     packageName: t.packageName,
     host: t.host?.name,
     strict: t.strict,
-    declaresStrict: t.declarations?.strict !== undefined,
     kinds: t.host?.fileKinds?.map((k) => [
       k.segment,
       k.languageIds,

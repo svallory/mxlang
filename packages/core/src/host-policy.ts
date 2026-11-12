@@ -534,12 +534,12 @@ function policyOf(
     ...(isObject(pkg.dependencies) ? pkg.dependencies : undefined),
     ...(isObject(pkg.devDependencies) ? pkg.devDependencies : undefined),
   };
-  const targetPackages = Object.keys(deps).filter((name) =>
-    lookup.fromPackage(name),
-  );
-  const targetDeps = targetPackages.map(
-    (name) => lookup.fromPackage(name) as string,
-  );
+  const pairs = Object.keys(deps).flatMap((name) => {
+    const target = lookup.fromPackage(name);
+    return target ? [[name, target] as const] : [];
+  });
+  const targetPackages = pairs.map((pair) => pair[0]);
+  const targetDeps = pairs.map((pair) => pair[1]);
   if (targetDeps.length === 1) {
     const target = targetDeps[0] as string;
     return {
@@ -581,12 +581,14 @@ function registrationVerdict(
   lookup: TargetLookup,
   descriptor: TargetDescriptor,
 ): string | undefined {
-  const names = lookup.targetNames();
-  const byDescriptor =
-    verdicts.get(lookup) ?? new WeakMap<TargetDescriptor, string | null>();
-  verdicts.set(lookup, byDescriptor);
+  let byDescriptor = verdicts.get(lookup);
+  if (!byDescriptor) {
+    byDescriptor = new WeakMap<TargetDescriptor, string | null>();
+    verdicts.set(lookup, byDescriptor);
+  }
   const known = byDescriptor.get(descriptor);
   if (known !== undefined) return known ?? undefined;
+  const names = lookup.targetNames();
   let verdict: string | undefined;
   const host = descriptor.host?.name;
   if (host !== undefined && names.some((n) => lookup.hostOf(n) === host)) {
