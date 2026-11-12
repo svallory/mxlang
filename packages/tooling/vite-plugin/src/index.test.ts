@@ -426,7 +426,7 @@ describe("mx()", () => {
     });
 
     it("matches a configured extension written in mixed case", async () => {
-      const resolveId = resolveIdOf(mx({ extensions: [".Foo.mx", ".mx"] }));
+      const resolveId = resolveIdOf(mx({ extensions: [".Foo.mx"] }));
       expect(
         await resolveId.call(
           makeContext(),
