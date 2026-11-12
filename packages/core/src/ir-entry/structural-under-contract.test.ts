@@ -1023,6 +1023,17 @@ describe("structural: reject, which construct is named", () => {
     ]);
   });
 
+  it("under reject a `<try>` inside an `<if>` is not looked at: the `<if>` is the one error", () => {
+    const result = lowerSource(
+      "<eater>\n  <if=a>\n    <try>x</try>\n  </if>\n</eater>\n",
+      "/t.mx",
+      { ...options, customTags: consuming },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 2, 2],
+    ]);
+  });
+
   it("a refused `<try>` is reported beside a contract that fails on something else", () => {
     const result = lowerSource(
       "<entity>\n  <try>x</try>\n</entity>\n",
@@ -1069,7 +1080,7 @@ describe("structural: reject, which construct is named", () => {
     const result = lowerSource(
       "<entity>\n  <if=x>\n    <try>x</try>\n  </if>\n</entity>\n",
       "/t.mx",
-      { ...options, customTags: needsItem },
+      { ...options, structural: "pass", customTags: needsItem },
     );
     expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
       ["MX_MISSING_CHILD", 1, 0],

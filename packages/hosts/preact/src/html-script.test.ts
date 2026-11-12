@@ -75,9 +75,11 @@ describe("<html-script> on Preact emits a real <script>", () => {
   // The raw-text view names every raw-text tag, not only <html-script>: the
   // others are native elements on this host too, and keep their own handling.
   it("reads <html-style> and <html-comment> as native elements, with the host's own handling", () => {
-    expect(() =>
-      compilePreactMx("<html-style>a { b: c }</html-style>", "/x/a.mx"),
-    ).not.toThrow();
+    // Emitted as an element with its body text (braces escaped for JSX), not
+    // dropped and not turned into a text child of something else.
+    expect(
+      compilePreactMx("<html-style>a { b: c }</html-style>", "/x/a.mx").code,
+    ).toContain("<html-style>a &#123; b: c &#125;</html-style>");
     expect(() =>
       compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
     ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);

@@ -1193,11 +1193,21 @@ export function withoutCollected(error: unknown): unknown {
   if (!(error instanceof TranslateError) || error.errors === undefined) {
     return error;
   }
+  return cloneError(error);
+}
+
+/**
+ * A copy of `error` with no `errors` list, its tag occurrence and its pending
+ * positioning (an unplaced span, a recorded end offset) carried over. The
+ * original is not touched: a hook may keep an error and rethrow it.
+ */
+function cloneError(error: TranslateError): TranslateError {
   const copy = Object.create(Object.getPrototypeOf(error)) as TranslateError;
   Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
   delete (copy as { errors?: unknown }).errors;
   const occurrence = occurrences.get(error);
   if (occurrence !== undefined) occurrences.set(copy, occurrence);
+  carryPositioning(error, copy);
   return copy;
 }
 
@@ -3923,14 +3933,29 @@ export function runAnalyzeHooks(
     }
   }
   if (failures.length === 0) return;
-  // Every error is positioned before the primary is chosen and the list is
-  // sorted: one a hook rethrew from a span is still a span until now.
-  const compare = byPosition(ctx);
-  for (const failure of failures) {
-    for (const each of [failure, ...(failure.errors ?? [])]) {
-      positionError(ctx, each);
+  // Copies, not the objects the hooks threw: a hook may throw an error it
+  // keeps (a module-level one), and positioning writes a line and a column,
+  // which must not reach the next compile. Each error (every failure, the
+  // `errors` it lists and the related errors it carries) is copied once,
+  // then the copies are positioned and sorted; the originals are never
+  // positioned.
+  const copies = new Map<TranslateError, TranslateError>();
+  const copyOf = (error: TranslateError): TranslateError => {
+    let copy = copies.get(error);
+    if (!copy) {
+      copy = cloneError(error);
+      copies.set(error, copy);
     }
-  }
+    return copy;
+  };
+  const heads = failures.map(copyOf);
+  const everyone = [
+    ...new Set(
+      failures.flatMap((e) => [e, ...(e.errors ?? []), ...relatedErrorsOf(e)]),
+    ),
+  ].map(copyOf);
+  for (const each of everyone) positionError(ctx, each);
+  const compare = byPosition();
   // The primary is the earliest failure in the compiled file: a related
   // error positioned in another file never leads. The list is the primary,
   // then every other error (each failure's head and the related errors it
@@ -3939,34 +3964,17 @@ export function runAnalyzeHooks(
   // cycles through it.
   const fileOf = (e: TranslateError) => e.file ?? ctx.filename;
   const inFile = (e: TranslateError) => fileOf(e) === ctx.filename;
-  const primary =
-    failures.filter(inFile).sort(compare)[0] ?? [...failures].sort(compare)[0];
-  if (!primary) return;
-  const members = [
-    ...new Set(
-      failures.flatMap((e) => [e, ...(e.errors ?? []), ...relatedErrorsOf(e)]),
-    ),
-  ].filter((e) => e !== primary);
+  const lead =
+    heads.filter(inFile).sort(compare)[0] ?? [...heads].sort(compare)[0];
+  if (!lead) return;
+  const members = everyone.filter((e) => e !== lead);
   members.sort(
     (a, b) =>
       Number(!inFile(a)) - Number(!inFile(b)) ||
       fileOf(a).localeCompare(fileOf(b)) ||
       compare(a, b),
   );
-  // Copies, not the objects the hooks threw: a hook may throw an error it
-  // keeps (a module-level one), which this and the positioning after it must
-  // not change for later compiles.
-  const copyOf = (error: TranslateError): TranslateError => {
-    const copy = Object.create(Object.getPrototypeOf(error)) as TranslateError;
-    Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
-    delete (copy as { errors?: unknown }).errors;
-    const occurrence = tagOccurrenceOf(error);
-    if (occurrence !== undefined) occurrences.set(copy, occurrence);
-    carryPositioning(error, copy);
-    return copy;
-  };
-  const lead = copyOf(primary);
-  attachRelatedErrors(lead, members.map(copyOf));
+  attachRelatedErrors(lead, members);
   throw lead;
 }
 

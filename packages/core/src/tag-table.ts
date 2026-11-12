@@ -232,6 +232,12 @@ const rawTextViews = new WeakMap<TagTable, TagTable>();
  * text. The parser and lowering share this one view. A name the table did not
  * define gets an entry under the element taglib id and without `html: true`
  * (the wildcard check names core's own tags built-in before it reads either).
+ *
+ * The merge is key by key: a host entry that sets some `parseOptions` for one
+ * of these names (say `preserveWhitespace`) keeps its own value for that key,
+ * and core's raw-text options still fill the keys it left unset, `text`
+ * included. So `<html-comment>`, `<style>` and `<script>` are raw text on every
+ * table this view wraps, whatever the host entry says about the rest.
  */
 export function withRawTextParseOptions(lookup: TagTable): TagTable {
   const cached = rawTextViews.get(lookup);

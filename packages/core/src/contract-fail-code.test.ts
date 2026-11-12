@@ -386,6 +386,50 @@ describe("analyze hooks of several tags", () => {
     expect((thrown?.errors ?? []).map((e) => e.line)).toEqual([1, 2, 3]);
   });
 
+  it("places the end of a span error a hook keeps and rethrows in each compile, on a copy", () => {
+    let kept: TranslateError | undefined;
+    const box = {
+      transform: () => [],
+      analyze: (_calls: unknown, ctx: { fail: FailFn }) => {
+        if (kept) throw kept;
+        try {
+          ctx.fail("kept", { at: { sourceStart: 8, sourceEnd: 11 } });
+        } catch (error) {
+          kept = error as TranslateError;
+          throw kept;
+        }
+      },
+    };
+    const endOf = (source: string) => {
+      try {
+        compileSource(
+          source,
+          "/u.mx",
+          { tags: {}, isElement: () => true, isComponent: () => false },
+          {
+            targets,
+            emitIr: () => "",
+            customTags: {
+              box,
+              p: { transform: () => [] },
+            } as unknown as Record<string, CustomTag>,
+          },
+        );
+      } catch (error) {
+        const thrown = error as TranslateError;
+        expect(thrown).not.toBe(kept);
+        return thrown.end && [thrown.end.line, thrown.end.column];
+      }
+      throw new Error("did not fail");
+    };
+    // The span ends at offset 11: line 3, column 1 of the first source, line 2,
+    // column 4 of the second. The kept error is never written to, so the second
+    // compile places its own end instead of reading the first one's.
+    expect(endOf("<p/>\n<p/>\n<box/>\n")).toEqual([3, 1]);
+    expect(kept?.end).toBeUndefined();
+    expect(endOf("<box/>\n<p/>\n")).toEqual([2, 4]);
+  });
+
   it("copies the one error a single failing hook threw", () => {
     const kept = new TranslateError("kept", 1, 0);
     let thrown: TranslateError | undefined;

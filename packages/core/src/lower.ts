@@ -5741,7 +5741,7 @@ function validateCustomAttributeTagBodies(
       () => `${ownerText(owner)}: ${voice.attrTag(name)}`,
     );
     if (declaration) {
-      const refusedNodes: Node[] = [];
+      const refusedNodes: RefusedChild[] = [];
       const childTree = authoredChildTree(ctx, bodyChildren(tag), refusedNodes);
       const contract = firstFailure(() =>
         validateCustomTagChildren(
@@ -5982,35 +5982,46 @@ function dataFileRefusal(
 function raiseBodyFailure(
   ctx: Ctx,
   failures: readonly (TranslateError | undefined)[],
-  refusedNodes: readonly Node[],
+  refusedChildren: readonly RefusedChild[],
 ): void {
   const compare = byPosition(ctx);
   const own = failures.filter((error) => error !== undefined).sort(compare)[0];
   if (!own) return;
-  const refused = refusedNodes.flatMap((child) => {
-    const name = tagNameOf(child) as string;
-    const refusal = dataFileRefusal(ctx, name);
-    const error = refusal
-      ? firstFailure(() => raiseDisposition(ctx, name, refusal, child))
-      : undefined;
+  const refused = refusedChildren.flatMap(({ node, refusal }) => {
+    const name = tagNameOf(node) as string;
+    const error = firstFailure(() =>
+      raiseDisposition(ctx, name, refusal, node),
+    );
     return error ? [error] : [];
   });
   const [failure, ...later] = [own, ...refused].sort(compare);
-  if (!failure) return;
+  // The flatten is defensive: no public input gives the body's own failure
+  // related errors beside a refused child today, but one that did would
+  // otherwise lose them when a refusal sorts first and becomes the one thrown.
   attachRelatedErrors(
-    failure,
+    failure as TranslateError,
     later.flatMap((error) => [error, ...relatedErrorsOf(error)]),
   );
   throw failure;
 }
 
+/** A child the host refuses as something a data file cannot hold, and how. */
+type RefusedChild = {
+  node: Node;
+  refusal: NonNullable<ReturnType<typeof dataFileRefusal>>;
+};
+
 /** Retains authored names and groups transparent control flow without lowering its contents. */
 function authoredChildTree(
   ctx: Ctx,
   children: readonly Node[],
-  refused?: Node[],
+  refused: RefusedChild[],
 ): ChildNode[] {
   const tree: ChildNode[] = [];
+  // Under `structural: "reject"` the first `<if>`/`<for>` is the error,
+  // whatever it holds, and a contract does not look inside it: what a
+  // construct holds is collected into a sink nobody reads.
+  const inside: RefusedChild[] = ctx.structural === "reject" ? [] : refused;
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
     const loc = posOf(ctx, node);
@@ -6047,7 +6058,7 @@ function authoredChildTree(
         tree.push(
           ended({
             kind: "ChildFor",
-            nodes: authoredChildTree(ctx, bodyChildren(node), refused),
+            nodes: authoredChildTree(ctx, bodyChildren(node), inside),
             loc,
           }),
         );
@@ -6055,7 +6066,7 @@ function authoredChildTree(
         const branches = [
           {
             unconditional: false,
-            nodes: authoredChildTree(ctx, bodyChildren(node), refused),
+            nodes: authoredChildTree(ctx, bodyChildren(node), inside),
           },
         ];
         let cursor = index + 1;
@@ -6075,7 +6086,7 @@ function authoredChildTree(
             branchName === "else" && !attrByName(branch, "if");
           branches.push({
             unconditional,
-            nodes: authoredChildTree(ctx, bodyChildren(branch), refused),
+            nodes: authoredChildTree(ctx, bodyChildren(branch), inside),
           });
           index = cursor++;
           if (unconditional) break;
@@ -6088,7 +6099,7 @@ function authoredChildTree(
           branches: [
             {
               unconditional: false,
-              nodes: authoredChildTree(ctx, bodyChildren(node), refused),
+              nodes: authoredChildTree(ctx, bodyChildren(node), inside),
             },
           ],
           loc,
@@ -6100,8 +6111,9 @@ function authoredChildTree(
         // always lowered), and the real error wins: the parent's contract does
         // not report it as a tag it does not allow first. `else` and
         // `else-if` are branches, handled above.
-        if (dataFileRefusal(ctx, name)) {
-          refused?.push(node);
+        const refusal = dataFileRefusal(ctx, name);
+        if (refusal) {
+          refused.push({ node, refusal });
           continue;
         }
         rejectEffectTag(ctx, node, name);
@@ -6369,7 +6381,7 @@ function lowerCustomTagBody(
       node,
     );
   }
-  const refusedNodes: Node[] = [];
+  const refusedNodes: RefusedChild[] = [];
   const childTree = authoredChildTree(ctx, children, refusedNodes);
   // A transform may consume its body, so the IR check cannot be left to
   // report a `for` or `if` in it.
