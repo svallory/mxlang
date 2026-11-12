@@ -1074,6 +1074,35 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
     option:
       'The `by=` option is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => f(x)`).',
   },
+  {
+    name: "`for` index read in `by=` that shadows an outer binding",
+    source: "const/i=0\nfor|item, i| of=input.xs by=i\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `i`, not the loop\'s `i` parameter. Key with a property name string (`by="id"`) or a function (`by=(item, i) => i`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `i`, not the loop\'s `i` parameter. Key with a property name string (`by="id"`) or a function (`by=(item, i) => i`).',
+  },
+  {
+    name: "`for in` value read in `by=` that shadows an outer binding",
+    source: "const/v={id:1}\nfor|k, v| in=input.o by=v.id\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `v`, not the loop\'s `v` parameter. Key with a property name string (`by="id"`) or a function (`by=(k, v) => v.id`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `v`, not the loop\'s `v` parameter. Key with a property name string (`by="id"`) or a function (`by=(k, v) => v.id`).',
+  },
+  {
+    name: "`for` with a loop parameter in `by=` and a `define` of that name below",
+    source: "for|item| of=input.xs by=item.id\n  p\ndefine/item\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+  },
+  {
+    name: "`for` with a loop parameter in `by=` and a returning call of that name below",
+    source:
+      'import Card from "./card.mx"\nfor|item| of=input.xs by=item.id\n  p\nCard/item\n',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+  },
 ];
 
 describe("built-in tag names in messages (template files)", () => {

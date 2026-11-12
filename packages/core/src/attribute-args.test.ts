@@ -148,6 +148,11 @@ describe("the opt-in attribute argument refusal", () => {
       21,
     ],
     [
+      "<if=x><i/></if><else if=y a=1><i/></else>",
+      "The `<else>` tag only supports an `if=` attribute.",
+      26,
+    ],
+    [
       "<for|x| of=[] a=1><i/></for>",
       "`<for>` does not support the `a` attribute.",
       14,

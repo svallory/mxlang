@@ -1371,16 +1371,27 @@ function constPlainNamesOf(ctx: Ctx, child: Node): string[] {
   return tagVar?.type === "Identifier" ? [tagVar.name] : [];
 }
 
-/**
- * A tag variable shadows a `<for>`/`<define>` parameter or a `<const>` of its
- * spelling from the call to the end of the block: a write to the name is not
- * one to that parameter any more.
- */
-function shadowWriteGuard(ctx: Ctx, name: string): void {
+/** Drops `names` from the write guards: what a write to them reaches is no longer the guarded declaration. */
+function dropGuard(ctx: Ctx, names: readonly string[]): void {
   const guards = ctx.writeGuards;
-  if (guards?.has(name)) {
-    ctx.writeGuards = new Map([...guards].filter(([key]) => key !== name));
+  if (guards && names.some((name) => guards.has(name))) {
+    ctx.writeGuards = new Map(
+      [...guards].filter(([name]) => !names.includes(name)),
+    );
   }
+}
+
+/**
+ * A tag variable (a returning call's `/var`, an element reference, `<id>`)
+ * shadows a `<for>`/`<define>` parameter of its spelling from the tag to the
+ * end of the block: a write to the name is not one to that parameter any
+ * more. `<let>` and `<const>` manage their own guards.
+ */
+function shadowTagVarGuards(ctx: Ctx, child: Node): void {
+  if (!isTagNode(child) || !tagVarOf(child)) return;
+  if (letNamesOf(ctx, child).length > 0 || constNamesOf(ctx, child).length > 0)
+    return;
+  dropGuard(ctx, bindingIdentifiers(tagVarOf(child)));
 }
 
 /**
@@ -1394,12 +1405,7 @@ function declareRenderLet(ctx: Ctx, child: Node): void {
   if (names.length === 0) return;
   ctx.renderLets = new Set([...(ctx.renderLets ?? []), ...names]);
   // And no `<const>` or parameter of that spelling is what a write reaches.
-  const guards = ctx.writeGuards;
-  if (guards && names.some((name) => guards.has(name))) {
-    ctx.writeGuards = new Map(
-      [...guards].filter(([name]) => !names.includes(name)),
-    );
-  }
+  dropGuard(ctx, names);
   // The `<let>` shadows a declaration below of the same spelling, in this
   // block or an enclosing one, the way `shadowBindings` drops them for a
   // parameter: from here to the end of the block, a write to the name is a
@@ -2009,7 +2015,9 @@ function validateBoundAttributes(ctx: Ctx, node: Node): void {
  * position, where a name from an object pattern stays writable). Runs both
  * from `validateBoundAttributes` and ahead of every tag routing — an
  * element, a built-in, a registered custom-tag contract, a wildcard claim —
- * so no path exempts the check.
+ * so no path exempts the check. A `<for>` or `<define>` parameter bound as a
+ * plain name is refused too, with Marko's "Unable to bind to value."
+ * (`MX_INVALID_BOUND_ATTRIBUTE`): it has no change handler to derive.
  */
 function rejectUnwritableBoundTargets(ctx: Ctx, node: Node): void {
   for (const attr of tagAttributesOf(node)) {
@@ -3892,17 +3900,17 @@ function rejectExtraConditionAttributes(
   const attrs = tagAttributesOf(node);
   const voice = voiceOfCtx(ctx);
   if (name === "else") {
-    const first = attrs[0];
-    if (
-      first &&
-      (attrs.length > 1 ||
-        isSpreadAttributeNode(first) ||
-        attrNameOf(first) !== "if")
-    ) {
+    // Blame the first attribute that is not `if=` (the second, when two
+    // `if=` are written).
+    const offender =
+      attrs.find(
+        (attr) => isSpreadAttributeNode(attr) || attrNameOf(attr) !== "if",
+      ) ?? (attrs.length > 1 ? attrs[1] : undefined);
+    if (offender) {
       raise(
         INVALID_ATTRIBUTE_CODE,
         `The ${voice.tag(name)} tag only supports an \`if=\` ${voice.attribute}.`,
-        first,
+        offender,
       );
     }
     return;
@@ -4100,23 +4108,40 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   // would be false. Still refused: one constant key for every item is a bug.
   // A `<let>` declared below the loop is not one: it is in its temporal dead
   // zone when `by=` runs.
+  // A tag variable or `<define>` declared below the loop is pre-registered as
+  // pending: in its temporal dead zone when `by=` runs, so not an outer binding.
+  const declared = ctx.tagVars?.get(name);
+  const outerTagVar = declared ? !declared.pending : ctx.defines.has(name);
   const outer =
     name === "input" ||
     name === "$global" ||
     ctx.writeGuards?.has(name) ||
     ctx.renderLets?.has(name) ||
-    ctx.tagVars?.has(name) ||
+    outerTagVar ||
     ctx.tagVarShadowed?.has(name) ||
     ctx.enclosingTagParams?.has(name) ||
     ctx.imports.has(name) ||
-    ctx.defines.has(name) ||
     isModuleBinding(ctx, name);
   const attribute = voiceOfCtx(ctx).attribute;
   const authored = by.value ? sliceNode(ctx, by.value).trim() : "";
+  // The key function takes the loop's own parameters in order: the read name
+  // sits at its slot, earlier plain params keep their names, others are `_`.
+  // A name inside a destructuring pattern has no slot of its own.
+  const params = tagParamsOf(node);
+  const slot = params.findIndex((param: Node) => param.name === name);
+  const keyParams =
+    slot < 0
+      ? undefined
+      : params
+          .slice(0, slot + 1)
+          .map((param: Node) =>
+            param.type === "Identifier" ? param.name : "_",
+          )
+          .join(", ");
   raise(
     INVALID_FOR_CODE,
     outer
-      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => ${authored || "key"}\`).`
+      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${keyParams ?? name}) => ${keyParams && authored ? authored : "key"}\`).`
       : `The \`by=\` ${attribute} is evaluated before the loop runs, so \`${name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => key\`).`,
     read,
   );
@@ -6661,7 +6686,6 @@ function lowerCustomTagBody(
   // Marko's rule (`references.ts:556-560`), and the emitted order makes it
   // necessary: the binding is assigned from this call's own result.
   if (call.var) {
-    shadowWriteGuard(ctx, call.var);
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(call.var, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -6794,7 +6818,6 @@ function lowerComponent(
   const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
   if (callVar) {
-    shadowWriteGuard(ctx, callVar);
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(callVar, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -8328,6 +8351,7 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             if (Array.isArray(lowered)) out.push(...lowered);
             else out.push(lowered);
             declareRenderLet(ctx, child);
+            shadowTagVarGuards(ctx, child);
             break;
           }
           // Marko's `<@name>` here is a `MarkoTag`, rejected by `lowerTag`.

@@ -1163,6 +1163,10 @@ describe("a two-way bind on a parameter with no change handler", () => {
     expect(
       run("<for|x| of=[1]><if=x><counter/x/><input value:=x/></if></for>"),
     ).toBeUndefined();
+    // An element reference shadows it the same way.
+    expect(
+      run("<for|x| of=[1]><if=x><div/x/><input value:=x/></if></for>")?.message,
+    ).not.toBe("Unable to bind to value.");
     // Control: the parameter itself is still refused.
     expect(
       run("<for|x| of=[1]><if=x><counter/y/><input value:=x/></if></for>")
