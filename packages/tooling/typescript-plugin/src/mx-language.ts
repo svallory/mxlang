@@ -598,6 +598,14 @@ export function createHtmlMappings(
   const mappedCode = collectMappedCode(ir);
   const sourceLines = lineOffsets(source);
   const mappings: CodeMapping[] = recordedMappings(emittedMappings);
+  // Where the emitter itself recorded an expression's generated span, keyed by
+  // its source range. A text match for the same source range is only a guess
+  // and is kept only when it lands inside what the emitter recorded.
+  const recordedBySource = new Map<string, CodeMapping[]>();
+  for (const mapping of mappings) {
+    const key = `${mapping.sourceOffsets[0]}:${mapping.lengths[0]}`;
+    recordedBySource.set(key, [...(recordedBySource.get(key) ?? []), mapping]);
+  }
   let generatedCursor = 0;
   const generatedCodeCursors = new Map<string, number>();
 
@@ -611,6 +619,21 @@ export function createHtmlMappings(
     );
     const generatedOffset = generated.indexOf(item.code, searchFrom);
     if (generatedOffset < 0) continue;
+    const recordedHere = recordedBySource.get(
+      `${sourceRange.offset}:${sourceRange.length}`,
+    );
+    if (
+      recordedHere &&
+      !recordedHere.some(
+        (mapping) =>
+          generatedOffset >= (mapping.generatedOffsets[0] ?? 0) &&
+          generatedOffset + item.code.length <=
+            (mapping.generatedOffsets[0] ?? 0) +
+              (mapping.generatedLengths?.[0] ?? mapping.lengths[0] ?? 0),
+      )
+    ) {
+      continue;
+    }
     generatedCursor = generatedOffset + item.code.length;
     generatedCodeCursors.set(item.code, generatedCursor);
     mappings.push({

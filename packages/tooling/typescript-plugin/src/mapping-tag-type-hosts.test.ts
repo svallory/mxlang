@@ -3,6 +3,8 @@ import { builtinLookup } from "@mxlang/targets";
 import { describe, expect, it } from "vitest";
 import { createHtmlMappings } from "./mx-language.ts";
 
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX
+
 // All these whole-file targets share the independent IR mapping re-lower.
 const targets = [
   "html",
@@ -54,6 +56,88 @@ describe("tag erasure across mapping targets", () => {
       const mappings = map(source, compiled);
       expect(mappings.length).toBeGreaterThan(0);
       expect(mappings).toEqual(map(padded, baseline));
+    },
+  );
+});
+
+const jsxHosts = ["preact-jsx", "react-jsx", "hono-jsx"] as const;
+
+/** Each final mapping as [authored text, generated text, generated offset]. */
+function mapped(name: (typeof jsxHosts)[number], text: string) {
+  const lookup = builtinLookup();
+  const descriptor = lookup.target(name);
+  if (!descriptor?.load) throw new Error(`missing ${name} compiler`);
+  const fileName = "/project/mapping-values.mx";
+  const result = descriptor
+    .load(core)
+    .compileModule(text, fileName, { typeCheck: true, targets: lookup });
+  const mappings = createHtmlMappings(
+    text,
+    fileName,
+    result.code,
+    false,
+    descriptor.declarations?.default,
+    result.mappings,
+    undefined,
+    [],
+    lookup,
+    undefined,
+    descriptor.translator,
+  );
+  return mappings.map((mapping) => {
+    const [from = 0] = mapping.sourceOffsets;
+    const [to = 0] = mapping.generatedOffsets;
+    return {
+      source: text.slice(from, from + (mapping.lengths[0] ?? 0)),
+      generated: result.code.slice(
+        to,
+        to + (mapping.generatedLengths?.[0] ?? mapping.lengths[0] ?? 0),
+      ),
+      generatedOffset: to,
+      code: result.code,
+    };
+  });
+}
+
+describe("expression values map to their authored text on every JSX host", () => {
+  const IMPORT = 'import Field from "./field.mx"\n';
+  it.each(jsxHosts)("%s: a component prop's function value", (name) => {
+    const found = mapped(name, `${IMPORT}<Field onPick=function () { go() }/>`);
+    expect(
+      found.filter((m) => m.source === "function () { go() }"),
+    ).not.toHaveLength(0);
+  });
+
+  it.each(jsxHosts)("%s: $!{} raw text", (name) => {
+    const found = mapped(name, "<p>$!{input.html}</p>");
+    expect(found.map((m) => m.source)).toContain("input.html");
+  });
+
+  it.each(jsxHosts)(
+    "%s: a <for of=> and an <if=> attribute value",
+    (name) => {
+      expect(
+        mapped(name, "<for|x| of=items><p>${x}</p></for>").map((m) => m.source),
+      ).toContain("items");
+      expect(
+        mapped(name, "<if=cond><p>a</p></if>").map((m) => m.source),
+      ).toContain("cond");
+    },
+  );
+
+  // A text match for an expression the emitter recorded itself is a guess:
+  // `n` is first found in the emitted helper preamble, ahead of its real place.
+  it.each(jsxHosts)(
+    "%s: a recorded prop value is not also mapped to an earlier text match",
+    (name) => {
+      const found = mapped(name, `${IMPORT}<Field count=n/>`).filter(
+        (m) => m.source === "n",
+      );
+      expect(found).toHaveLength(1);
+      const [only] = found;
+      expect(only?.code.slice((only?.generatedOffset ?? 0) - 8)).toMatch(
+        /^\W*count\W*:? ?n/,
+      );
     },
   );
 });
