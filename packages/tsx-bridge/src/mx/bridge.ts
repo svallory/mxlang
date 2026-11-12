@@ -4,6 +4,7 @@ import type {
   MxHooks,
   MxParserHost,
   MxRegionCompile,
+  MxRegionCompileResult,
   MxRegionContext,
   MxRegionPositionCheck,
 } from "@mxlang/babel";
@@ -224,8 +225,14 @@ export function mxParseElementAt(
   let node: unknown;
   try {
     const region = source.slice(inner.start, inner.end);
-    const { code, hoistedImports, hoistedDefines, returnVars, dependencies } =
-      regionCompile({
+    const {
+      code,
+      hoistedImports,
+      hoistedDefines,
+      returnVars,
+      dependencies,
+      mappings: recordedMappings,
+    } = regionCompile({
         source: region,
         filename: parser.options?.sourceFilename ?? "input.mx",
         // The region's syntactic position, already computed for the veto
@@ -259,7 +266,15 @@ export function mxParseElementAt(
       startColumn: startLoc.column,
     });
     node = parsedCode.node;
-    remapExpressionLocations(node, root, parsedCode.code, source, start, end);
+    remapExpressionLocations(
+      node,
+      root,
+      parsedCode.code,
+      source,
+      start,
+      end,
+      recordedMappings,
+    );
     stampRoot(
       node,
       source,
@@ -400,6 +415,8 @@ function noteSiblingRoot(
   hints.push({ start: at, end: sibling.end });
 }
 
+type RecordedMapping = NonNullable<MxRegionCompileResult["mappings"]>[number];
+
 interface ExpressionMapping {
   generatedStart: number;
   generatedEnd: number;
@@ -454,13 +471,20 @@ function remapExpressionLocations(
   source: string,
   regionStart: number,
   regionEnd: number,
+  recorded?: readonly RecordedMapping[],
 ): void {
-  const mappings = matchExpressionRanges(
-    collectExpressionRanges(root),
-    generated,
-    source,
-    regionStart,
-  );
+  // A host that recorded where each emitted expression came from is believed
+  // over a text search: the search cannot find text the host rewrote (an atom
+  // `:a` emitted as `"a"`, a `<for>` read `i` emitted as `i()`) and can match
+  // a later identical occurrence after a skipped one.
+  const mappings = recorded
+    ? recordedExpressionMappings(recorded, regionStart)
+    : matchExpressionRanges(
+        collectExpressionRanges(root),
+        generated,
+        source,
+        regionStart,
+      );
 
   const setSpan = (
     record: Record<string, unknown>,
@@ -530,7 +554,11 @@ function remapExpressionLocations(
         return;
       }
 
-      if (best) {
+      const partial =
+        !best && recorded ? spanAcrossInsertedText(mappings, record) : undefined;
+      if (partial) {
+        setSpan(record, partial[0], partial[1]);
+      } else if (best) {
         const delta = best.sourceStart - best.generatedStart;
         setSpan(
           record,
@@ -552,6 +580,82 @@ function remapExpressionLocations(
   };
 
   visit(node);
+}
+
+/**
+ * The span of a node that begins inside a recorded mapping and runs past it
+ * over text the host only inserted (`i` emitted `i()`: the call's `()` has no
+ * authored text and is unmapped by design). The node starts where its first
+ * mapping maps; it ends where the mapping holding its end maps, or at the end
+ * of the last mapping before its end when that end sits in inserted text.
+ * `undefined` when the node does not begin inside a mapping, so structural
+ * nodes the emitter placed keep their offsets.
+ */
+function spanAcrossInsertedText(
+  mappings: readonly ExpressionMapping[],
+  node: Record<string, unknown>,
+): [number, number] | undefined {
+  const start = node.start;
+  const end = node.end;
+  if (typeof start !== "number" || typeof end !== "number") return undefined;
+  let first: ExpressionMapping | undefined;
+  for (const m of mappings) {
+    if (start >= m.generatedStart && start < m.generatedEnd) {
+      if (
+        !first ||
+        m.generatedEnd - m.generatedStart <
+          first.generatedEnd - first.generatedStart
+      ) {
+        first = m;
+      }
+    }
+  }
+  if (!first) return undefined;
+  const sourceStart = Math.min(
+    first.sourceStart + (start - first.generatedStart),
+    first.sourceEnd,
+  );
+  let sourceEnd = first.sourceEnd;
+  let reach = first.generatedEnd;
+  for (const m of mappings) {
+    if (m.generatedStart >= start && m.generatedEnd <= end && m.generatedEnd > reach) {
+      // A mapping the node wholly spans: its authored end is the furthest.
+      sourceEnd = Math.max(sourceEnd, m.sourceEnd);
+      reach = m.generatedEnd;
+    } else if (m.generatedStart < end && m.generatedEnd > end && m.generatedStart >= start) {
+      // The node ends inside this mapping.
+      sourceEnd = Math.max(
+        sourceEnd,
+        Math.min(m.sourceStart + (end - m.generatedStart), m.sourceEnd),
+      );
+      reach = end;
+    }
+  }
+  return sourceEnd >= sourceStart ? [sourceStart, sourceEnd] : undefined;
+}
+
+/**
+ * The host's recorded mappings as bridge mappings: generated offsets are
+ * relative to the region's emitted code, so they are rebased onto the file;
+ * source offsets are file-absolute already. Empty spans are dropped.
+ */
+function recordedExpressionMappings(
+  recorded: readonly RecordedMapping[],
+  regionStart: number,
+): ExpressionMapping[] {
+  const mappings: ExpressionMapping[] = [];
+  for (const m of recorded) {
+    if (m.generatedEnd <= m.generatedStart || m.sourceEnd <= m.sourceStart) {
+      continue;
+    }
+    mappings.push({
+      generatedStart: regionStart + m.generatedStart,
+      generatedEnd: regionStart + m.generatedEnd,
+      sourceStart: m.sourceStart,
+      sourceEnd: m.sourceEnd,
+    });
+  }
+  return mappings;
 }
 
 /**

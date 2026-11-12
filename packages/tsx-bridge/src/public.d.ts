@@ -129,6 +129,21 @@ declare module "@mxlang/tsx-bridge" {
     returnVars?: string[];
     /** Files read while resolving callees used by this region. */
     dependencies?: string[];
+    /**
+     * Where each emitted expression came from. `generatedStart`/`generatedEnd`
+     * are offsets into `code`; `sourceStart`/`sourceEnd` are file-absolute
+     * offsets of the authored text. When present the bridge maps a
+     * TypeScript node inside an emitted span back to its authored span from
+     * these, so an error in an expression the host rewrote (an atom, a
+     * `<for>` accessor read) reaches the author's text. When absent the
+     * bridge searches the emitted text for each authored expression verbatim.
+     */
+    mappings?: Array<{
+      generatedStart: number;
+      generatedEnd: number;
+      sourceStart: number;
+      sourceEnd: number;
+    }>;
   }
 
   /** Lowers one MX region to text the surrounding grammar can parse. */

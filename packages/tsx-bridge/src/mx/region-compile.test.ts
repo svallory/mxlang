@@ -566,3 +566,79 @@ describe("mxRegionCompile: required when the grammar is on", () => {
     expect(called).toBe(false);
   });
 });
+
+/**
+ * Recorded mappings: a host that rewrote an expression says where each
+ * emitted span came from, and the bridge believes it over a text search.
+ */
+describe("mxRegionCompile: recorded mappings", () => {
+  const source = "const view = <p a=~m b=m c=pick(~m, miss)/>;";
+  const code = '<p a={"m"} b={m} c={pick("m", miss)}/>';
+  const at = (text: string, nth = 0) => {
+    let i = -1;
+    for (let k = 0; k <= nth; k++) i = source.indexOf(text, i + 1);
+    return i;
+  };
+  /** Region-relative offset of the `nth` `text` in the emitted code. */
+  const gen = (text: string, nth = 0) => {
+    let i = -1;
+    for (let k = 0; k <= nth; k++) i = code.indexOf(text, i + 1);
+    return i;
+  };
+  const recorded = [
+    // `~m` -> `"m"` (first), `m` -> `m`, `~m` -> `"m"` (second), `miss`.
+    [gen('"m"'), gen('"m"') + 3, at("~m"), at("~m") + 2],
+    [gen("{m}") + 1, gen("{m}") + 2, at(" m") + 1, at(" m") + 2],
+    [gen('"m"', 1), gen('"m"', 1) + 3, at("~m", 1), at("~m", 1) + 2],
+    [gen("miss"), gen("miss") + 4, at("miss"), at("miss") + 4],
+  ].map(([generatedStart, generatedEnd, sourceStart, sourceEnd]) => ({
+    generatedStart: generatedStart as number,
+    generatedEnd: generatedEnd as number,
+    sourceStart: sourceStart as number,
+    sourceEnd: sourceEnd as number,
+  }));
+
+  function nodes(file: File) {
+    const found: Array<{ type: string; name?: string; value?: string; start: number; end: number }> = [];
+    const walk = (n: unknown) => {
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      const r = n as Record<string, unknown>;
+      if (r.type === "Identifier" || r.type === "StringLiteral") {
+        found.push(r as never);
+      }
+      for (const k of Object.keys(r)) if (k !== "loc" && k !== "extra") walk(r[k]);
+    };
+    walk(file.program);
+    return found;
+  }
+
+  it("maps an atom the host rewrote and the text after a skipped one", () => {
+    const file = parse(source, "x.solid.mx", {
+      mxRegionCompile: () => ({ code, mappings: recorded }),
+    });
+    const all = nodes(file);
+    const atoms = all.filter((n) => n.type === "StringLiteral");
+    expect(atoms.map((n) => [n.start, n.end])).toEqual([
+      [at("~m"), at("~m") + 2],
+      [at("~m", 1), at("~m", 1) + 2],
+    ]);
+    // Without the record the search skips `~m` and lands `m` on the `"m"`.
+    const b = all.find((n) => n.name === "m");
+    expect(b && [b.start, b.end]).toEqual([at(" m") + 1, at(" m") + 2]);
+    const miss = all.find((n) => n.name === "miss");
+    expect(miss && [miss.start, miss.end]).toEqual([at("miss"), at("miss") + 4]);
+  });
+
+  it("falls back to the verbatim search when the host records none", () => {
+    const plain = "const view = <p a=miss/>;";
+    const file = parse(plain, "x.solid.mx", {
+      mxRegionCompile: () => ({ code: "<p a={miss}/>" }),
+    });
+    const miss = nodes(file).find((n) => n.name === "miss");
+    expect(miss && [miss.start, miss.end]).toEqual([
+      plain.indexOf("miss"),
+      plain.indexOf("miss") + 4,
+    ]);
+  });
+});

@@ -679,3 +679,33 @@ describe("mismatched closing tag names the opener's position", () => {
     expect(first).toContain('opening "<>" tag at 1:12');
   });
 });
+
+describe("a rewritten read maps to the authored name", () => {
+  /** The `start`/`end` of every node of `type` in the parsed file. */
+  const spans = (source: string, type: string) => {
+    const out: Array<[number, number]> = [];
+    const walk = (n: unknown) => {
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      const r = n as Record<string, unknown>;
+      if (r.type === type) out.push([r.start as number, r.end as number]);
+      for (const k of Object.keys(r)) {
+        if (k !== "loc" && k !== "extra") walk(r[k]);
+      }
+    };
+    walk(parseSolid(source));
+    return out;
+  };
+
+  it("maps a <for> index read `i` (emitted `i()`) onto the authored `i`", () => {
+    const source = "const v = <for|r, i| of=xs><p>${i}</p></for>;";
+    const at = source.indexOf("${i}") + 2;
+    expect(spans(source, "CallExpression")).toContainEqual([at, at + 1]);
+  });
+
+  it("maps a <for in> key read (emitted `mxEntry()[0]`) onto the authored `k`", () => {
+    const source = "const v = <for|k, x| in=o><p>${k}</p></for>;";
+    const at = source.indexOf("${k}") + 2;
+    expect(spans(source, "MemberExpression")).toContainEqual([at, at + 1]);
+  });
+});

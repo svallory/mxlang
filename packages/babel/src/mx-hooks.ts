@@ -316,6 +316,19 @@ export interface MxRegionCompileResult {
   returnVars?: string[];
   /** Files read while resolving callees used by this region. */
   dependencies?: string[];
+  /**
+   * Where each emitted expression came from: `generatedStart`/`generatedEnd`
+   * are offsets into `code`, `sourceStart`/`sourceEnd` file-absolute offsets of
+   * the authored text. The bridge maps a node inside an emitted span back to
+   * its authored span from these; without them it searches the emitted text
+   * for each authored expression verbatim.
+   */
+  mappings?: Array<{
+    generatedStart: number;
+    generatedEnd: number;
+    sourceStart: number;
+    sourceEnd: number;
+  }>;
 }
 
 /**
