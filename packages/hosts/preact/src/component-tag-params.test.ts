@@ -56,7 +56,7 @@ export default function List(props: Input) {
  * `jsx-mx-input-typed-content-ts2322`).
  */
 const MX_BODY = "(item: string, i: number) => unknown";
-const MX_LIST = `export interface Input { items: string[]; content?: unknown; children?: ${MX_BODY} }
+const MX_LIST = `export interface Input { items: string[]; content?: ${MX_BODY}; children?: ${MX_BODY} }
 <ul>
   <for|x, i| of=input.items>
     <li><\${input.content}(x, i)/></li>

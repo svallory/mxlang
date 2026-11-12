@@ -585,7 +585,7 @@ export function emitModuleWithMappings(
     "  const __mxBody =",
     "    (props as { content?: unknown }).content ??",
     "    (props as { children?: unknown }).children;",
-    "  const input: Input & { content?: unknown } = {",
+    "  const input = {",
     "    ...props,",
     "    content:",
     '      typeof __mxBody === "string" || typeof __mxBody === "number"',
@@ -593,7 +593,7 @@ export function emitModuleWithMappings(
     "          ? undefined",
     "          : <>{String(__mxBody)}</>",
     "        : __mxBody,",
-    "  };",
+    "  } as Input & { content?: unknown };",
   );
   // A statement lifted by the core's own hoist hook precedes the author's, so
   // a binding it introduces is in scope for everything that follows.

@@ -57,12 +57,12 @@ const GREETING = "hi";                // the author's `static` blocks
 export interface Input { title: string }
 
 export default function (props: Input) {
-  const input: Input & { content?: unknown } = {
+  const input = {
     ...props,
     content:
       (props as { content?: unknown }).content ??
       (props as { children?: unknown }).children,
-  };
+  } as Input & { content?: unknown };
   // <const> and <define> bindings, in source order
   return (<><h1>{input.title}</h1></>);
 }

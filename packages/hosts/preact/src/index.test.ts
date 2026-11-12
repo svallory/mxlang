@@ -241,7 +241,7 @@ describe("module shape", () => {
     // The template's own expressions read `input`; the JSX parameter is
     // `props`, and the bridge between them also maps JSX's `children` onto
     // Marko's `content`.
-    expect(code).toContain("const input: Input & { content?: unknown }");
+    expect(code).toContain("const input = {");
   });
 
   it("keeps the author's own `export interface Input`", () => {
