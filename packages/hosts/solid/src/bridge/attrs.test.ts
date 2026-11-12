@@ -322,14 +322,14 @@ describe("namespaced attributes", () => {
     );
   });
 
-  it.each([
-    "oncapture:click",
-    "attr:title",
-    "bool:open",
-    "use:tooltip",
-    "x:foo",
-    "data:x",
-  ])(
+  it("keeps the ordinary colon name oncapture:click as a key of a validated spread", () => {
+    // A JSX `oncapture:` prop is dropped or bound as a listener by Solid's
+    // compilers, so the attribute is written through the spread view.
+    const attrs = attrsOf(`const el = <div oncapture:click=input.x>x</div>;`);
+    expect(attrs[0]?.type).toBe("JSXSpreadAttribute");
+  });
+
+  it.each(["attr:title", "bool:open", "use:tooltip", "x:foo", "data:x"])(
     "preserves the ordinary colon name %s rather than treating it as a removed namespace",
     (name) => {
       const attrs = attrsOf(`const el = <div ${name}=input.x>x</div>;`);
