@@ -599,7 +599,13 @@ describe("mxRegionCompile: recorded mappings", () => {
   }));
 
   function nodes(file: File) {
-    const found: Array<{ type: string; name?: string; value?: string; start: number; end: number }> = [];
+    const found: Array<{
+      type: string;
+      name?: string;
+      value?: string;
+      start: number;
+      end: number;
+    }> = [];
     const walk = (n: unknown) => {
       if (n === null || typeof n !== "object") return;
       if (Array.isArray(n)) return n.forEach(walk);
@@ -607,7 +613,8 @@ describe("mxRegionCompile: recorded mappings", () => {
       if (r.type === "Identifier" || r.type === "StringLiteral") {
         found.push(r as never);
       }
-      for (const k of Object.keys(r)) if (k !== "loc" && k !== "extra") walk(r[k]);
+      for (const k of Object.keys(r))
+        if (k !== "loc" && k !== "extra") walk(r[k]);
     };
     walk(file.program);
     return found;
@@ -627,7 +634,10 @@ describe("mxRegionCompile: recorded mappings", () => {
     const b = all.find((n) => n.name === "m");
     expect(b && [b.start, b.end]).toEqual([at(" m") + 1, at(" m") + 2]);
     const miss = all.find((n) => n.name === "miss");
-    expect(miss && [miss.start, miss.end]).toEqual([at("miss"), at("miss") + 4]);
+    expect(miss && [miss.start, miss.end]).toEqual([
+      at("miss"),
+      at("miss") + 4,
+    ]);
   });
 
   it("rebases recorded offsets when the bridge unwraps a brace-wrapped region", () => {
@@ -639,7 +649,12 @@ describe("mxRegionCompile: recorded mappings", () => {
       mxRegionCompile: () => ({
         code: wrapped,
         mappings: [
-          { generatedStart: g, generatedEnd: g + 1, sourceStart: at, sourceEnd: at + 1 },
+          {
+            generatedStart: g,
+            generatedEnd: g + 1,
+            sourceStart: at,
+            sourceEnd: at + 1,
+          },
         ],
       }),
     });
@@ -656,11 +671,19 @@ describe("mxRegionCompile: recorded mappings", () => {
         code: "<p a={x} b={y}/>",
         // Only `y` is recorded; `x` is found by text.
         mappings: [
-          { generatedStart: gy, generatedEnd: gy + 1, sourceStart: ay, sourceEnd: ay + 1 },
+          {
+            generatedStart: gy,
+            generatedEnd: gy + 1,
+            sourceStart: ay,
+            sourceEnd: ay + 1,
+          },
         ],
       }),
     });
     const x = nodes(file).find((n) => n.name === "x");
-    expect(x && [x.start, x.end]).toEqual([plain.indexOf("x b"), plain.indexOf("x b") + 1]);
+    expect(x && [x.start, x.end]).toEqual([
+      plain.indexOf("x b"),
+      plain.indexOf("x b") + 1,
+    ]);
   });
 });

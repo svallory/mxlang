@@ -233,31 +233,31 @@ export function mxParseElementAt(
       dependencies,
       mappings: recordedMappings,
     } = regionCompile({
-        source: region,
-        filename: parser.options?.sourceFilename ?? "input.mx",
-        // The region's syntactic position, already computed for the veto
-        // above. Handed over so a host that needs it downstream — to shape
-        // its emit, not merely to accept or reject — needs no side channel
-        // back into the parser. Undefined when no position check ran, since
-        // the stack is only tracked then.
-        context: regionContext,
-        fragment,
-        baseOffset: inner.start,
-        baseLine: startLoc.line - 1,
-        baseColumn: startLoc.column + (fragment ? 2 : 0),
-        // Registered custom tags reach a host only through here, for the same
-        // reason the hook itself does.
-        customTags: parser.options?.mxCustomTags,
-        defaultTag: parser.options?.mxDefaultTag,
-        importSpecifiers: visibleImportSpecifiers(parser),
-        moduleBindings: moduleBindings(parser),
-        importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),
-        importSites:
-          (parser.options?.mxImportSites as
-            | ReadonlyMap<string, { line: number; column: number }>
-            | undefined) ?? new Map(),
-        unknownModuleBindings: unknownModuleBindings(parser),
-      });
+      source: region,
+      filename: parser.options?.sourceFilename ?? "input.mx",
+      // The region's syntactic position, already computed for the veto
+      // above. Handed over so a host that needs it downstream — to shape
+      // its emit, not merely to accept or reject — needs no side channel
+      // back into the parser. Undefined when no position check ran, since
+      // the stack is only tracked then.
+      context: regionContext,
+      fragment,
+      baseOffset: inner.start,
+      baseLine: startLoc.line - 1,
+      baseColumn: startLoc.column + (fragment ? 2 : 0),
+      // Registered custom tags reach a host only through here, for the same
+      // reason the hook itself does.
+      customTags: parser.options?.mxCustomTags,
+      defaultTag: parser.options?.mxDefaultTag,
+      importSpecifiers: visibleImportSpecifiers(parser),
+      moduleBindings: moduleBindings(parser),
+      importDefaultFromMarkoOrMx: visibleImportDefaultFromMarkoOrMx(parser),
+      importSites:
+        (parser.options?.mxImportSites as
+          | ReadonlyMap<string, { line: number; column: number }>
+          | undefined) ?? new Map(),
+      unknownModuleBindings: unknownModuleBindings(parser),
+    });
     const parsedCode = parseRegionCode(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,
@@ -570,7 +570,9 @@ function remapExpressionLocations(
       }
 
       const partial =
-        !best && recorded ? spanAcrossInsertedText(mappings, record) : undefined;
+        !best && recorded
+          ? spanAcrossInsertedText(mappings, record)
+          : undefined;
       if (partial) {
         setSpan(record, partial[0], partial[1]);
       } else if (best) {
