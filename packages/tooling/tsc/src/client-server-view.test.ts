@@ -113,6 +113,17 @@ describe("mx-tsc types a client name as undefined for the server view", {
       "server const s = 1;\nclient const n = s.toFixed(1);\n<div/>\n",
     "srv-import.mx":
       'server import { one as s } from "./one.ts";\nclient const n = s.toFixed(1);\n<div/>\n',
+    // The importers of a page whose client code reads its own server export.
+    "srv-page.mx":
+      "server export const sx = 2;\nclient const n = sx.toFixed(1);\n<div/>\n",
+    "srv-imp-plain.mx":
+      'import { sx } from "./srv-page.mx";\n<div>${sx.toFixed(1)}</div>\n',
+    "srv-imp-static.mx":
+      'static import { sx } from "./srv-page.mx";\n<div>${sx.toFixed(1)}</div>\n',
+    "srv-imp-server.mx":
+      'server import { sx } from "./srv-page.mx";\n<div>${sx.toFixed(1)}</div>\n',
+    "srv-imp-ts.ts":
+      'import { sx } from "./srv-page.mx";\nexport const y: number = sx;\n',
     // A `client` import, namespace or `declare` is `undefined` in the template.
     "cl-import.mx":
       'client import { one as y } from "./one.ts";\n<div>${y.toFixed(1)}</div>\n',
@@ -242,6 +253,7 @@ describe("mx-tsc types a client name as undefined for the server view", {
     ["srv-let.mx", "2,18"],
     ["srv-const.mx", "2,18"],
     ["srv-import.mx", "2,18"],
+    ["srv-page.mx", "2,18"],
     ["cl-import.mx", "2,8"],
     ["cl-namespace.mx", "2,8"],
     ["cl-declare.mx", "2,8"],
@@ -273,6 +285,10 @@ describe("mx-tsc types a client name as undefined for the server view", {
     "edge-enum.mx",
     "edge-two-statements.mx",
     "edge-return-nested.mx",
+    "srv-imp-plain.mx",
+    "srv-imp-static.mx",
+    "srv-imp-server.mx",
+    "srv-imp-ts.ts",
     "pin-handler.mx",
     "pin-server-name.mx",
     "pin-static-name.mx",

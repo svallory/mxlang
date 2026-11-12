@@ -556,21 +556,31 @@ function topLevelReturns(node: unknown, found: number[] = []): number[] {
 }
 
 /**
- * The value names a hoisted `client` statement binds, `declare` forms
- * included: `clientDeclaredNames` skips those because they declare nothing
- * at run time, but the projection keeps them at module level, where the
- * server view would otherwise read them typed.
+ * The value names a statement list binds at its top level, `declare` forms and
+ * `import x = require()` included: `clientDeclaredNames` skips those because
+ * they declare nothing at run time, but the projection keeps them in a scope
+ * where the other view would otherwise read them typed. A `declare global`
+ * and an ambient `declare module "x"` bind nothing; a qualified namespace
+ * (`namespace A.B {}`) binds its leftmost name.
  */
-function hoistedValueNames(nodes: Node[]): string[] {
+function valueNames(nodes: Node[]): string[] {
   const names = new Set<string>();
   const plain: Node[] = [];
   for (const node of nodes) {
-    if (node.type === "TSImportEqualsDeclaration") {
-      if (node.importKind !== "type") names.add(node.id.name);
-    } else if (node.type === "TSDeclareFunction") {
-      if (node.id?.name) names.add(node.id.name);
-    } else if (node.type === "TSEnumDeclaration") {
-      if (!node.const && node.id?.name) names.add(node.id.name);
+    const inner =
+      node.type === "ExportNamedDeclaration" && node.declaration
+        ? node.declaration
+        : node;
+    if (inner.type === "TSImportEqualsDeclaration") {
+      if (inner.importKind !== "type") names.add(inner.id.name);
+    } else if (inner.type === "TSDeclareFunction") {
+      if (inner.id?.name) names.add(inner.id.name);
+    } else if (inner.type === "TSEnumDeclaration") {
+      if (!inner.const && inner.id?.name) names.add(inner.id.name);
+    } else if (inner.type === "TSModuleDeclaration") {
+      if (inner.global || inner.kind === "global") continue;
+      const name = leftmostName(inner.id);
+      if (name) names.add(name);
     } else plain.push(node.declare ? { ...node, declare: false } : node);
   }
   for (const name of clientDeclaredNames(plain)) names.add(name);
@@ -729,7 +739,7 @@ function clientProjection(
     serverNames: clientDeclaredNames(statements).filter(
       (name) => !taken.has(name),
     ),
-    hoistedNames: hoistedValueNames(hoistedNodes),
+    hoistedNames: valueNames(hoistedNodes),
     hoisted,
     types,
     typeExports,
@@ -1036,14 +1046,7 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
-      declaredNames: () => {
-        try {
-          return clientDeclaredNames(parseClientStatements(code, node));
-        } catch {
-          // Core has checked this text; a name read here only shadows.
-          return [];
-        }
-      },
+      declaredNames: () => valueNames(parseClientStatements(code, node)),
     };
   }
 

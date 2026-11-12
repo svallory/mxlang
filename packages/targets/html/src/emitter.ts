@@ -134,6 +134,12 @@ interface State {
    * `declare` forms bind at module level.
    */
   clientHoisted: string[];
+  /**
+   * Under `typeCheck`, the leftmost names of bound-attribute refinements
+   * (`v:fn:=q`): `fn` is a client change handler, so the probe that checks it
+   * reads the client binding, not the server view's `undefined`.
+   */
+  refinementReads: Set<string>;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
   /** Under `typeCheck`, where the last `client` statement stands. */
@@ -185,6 +191,7 @@ export function createEmitter(
     clientBody: [],
     serverDeclared: [],
     clientHoisted: [],
+    refinementReads: new Set(),
     clientTypes: [],
     clientTypeExports: [],
     clientNames: [],
@@ -585,8 +592,14 @@ export function createEmitter(
    * so `fn` applied to the bound value's type is checked and mapped to the
    * modifier.
    */
-  const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode =>
-    options.typeCheck && attr.kind === "bound" && attr.refinement
+  const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
+    if (options.typeCheck && attr.kind === "bound" && attr.refinement) {
+      const read = /^[\p{ID_Start}$_][\p{ID_Continue}$]*/u.exec(
+        attr.refinement.code.trim(),
+      );
+      if (read) state.refinementReads.add(read[0]);
+    }
+    return options.typeCheck && attr.kind === "bound" && attr.refinement
       ? concatMapped(
           "(false && ",
           mappedExpr(attr.refinement),
@@ -595,6 +608,7 @@ export function createEmitter(
           ")",
         )
       : mappedExpr(attr.value);
+  };
 
   const attribute = (attr: Attr, tag = ""): void => {
     // Spreads are written by `elementAttributes`, never one at a time.
@@ -1465,11 +1479,7 @@ export function createEmitter(
           state.clientHoisted.push(...projection.hoistedNames);
           const lines: Array<string | MappedCode> = [];
           if (projection.serverNames.length > 0) {
-            // `void` reads the names, so `noUnusedLocals` does not flag a
-            // declaration the author never wrote.
-            lines.push(
-              `var ${projection.serverNames.map((name) => `${name}: undefined`).join(", ")}; void [${projection.serverNames.join(", ")}];`,
-            );
+            lines.push(undefinedShadow(projection.serverNames));
           }
           for (const hoisted of projection.hoisted) {
             lines.push(clientPiece(hoisted));
@@ -1779,34 +1789,20 @@ function placeClientCode(state: State): void {
   const listedValues = [...new Set(state.clientListed)].filter((name) =>
     state.clientNames.includes(name),
   );
-  // The client code runs in the browser, where a `server` name does not
-  // exist: shadow it as `undefined`, so a read is reported at the author's
-  // token. A name the client code binds itself stays typed. (The render
-  // input needs no shadow: core refuses `input` in module level code.)
-  const own = new Set([...state.clientNames, ...state.clientHoisted]);
-  const absent = [...new Set(state.serverDeclared)].filter(
-    (name) => !own.has(name),
-  );
   const body = [
-    ...(absent.length > 0 && (state.clientBody.length > 0 || inScope.length > 0)
-      ? [
-          concatMapped(
-            `var ${absent.map((name) => `${name}: undefined`).join(", ")}; void [${absent.join(", ")}];`,
-          ),
-        ]
-      : []),
     ...inScope,
     ...state.clientBody,
     ...(listedValues.length > 0
       ? [concatMapped(`void [${listedValues.join(", ")}];`)]
       : []),
   ];
-  if (
-    state.clientBody.length === 0 &&
-    inScope.length === 0 &&
-    listedValues.length === 0
-  )
-    return;
+  if (body.length === 0) return;
+  // The client code runs in the browser, where a `server` name does not
+  // exist: the arrow declares each as `undefined`, so a read is reported at the
+  // author's token. (Core refuses a client statement that declares a name a
+  // `server` statement does, so the shadow cannot clash with the code.)
+  const absent = undefinedShadow(state.serverDeclared);
+  if (absent !== "") body.unshift(concatMapped(absent));
   state.moduleHoisted.push({
     code: concatMapped(
       "(async () => {\n",
@@ -1815,6 +1811,18 @@ function placeClientCode(state: State): void {
     ),
     start: state.clientStart,
   });
+}
+
+/**
+ * `var a: undefined, b: undefined; void [a, b];` for the distinct `names`: the
+ * type-check view of a name that does not exist where it is read. `void` reads
+ * them, so `noUnusedLocals` does not flag a declaration the author never wrote.
+ * Empty when there is no name.
+ */
+function undefinedShadow(names: string[]): string {
+  const distinct = [...new Set(names)];
+  if (distinct.length === 0) return "";
+  return `var ${distinct.map((name) => `${name}: undefined`).join(", ")}; void [${distinct.join(", ")}];`;
 }
 
 /**
@@ -1894,6 +1902,11 @@ export function emitModuleWithMappings(
     ...ir.imports.map((node) => node.code),
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
   ];
+  const shadowed = undefinedShadow(
+    emitter.state.clientHoisted.filter(
+      (name) => !emitter.state.refinementReads.has(name),
+    ),
+  );
   const inputType = ir.tagMetadata.readsContent
     ? "Input & { content?: () => string }"
     : "Input";
@@ -1922,13 +1935,12 @@ export function emitModuleWithMappings(
     } {`,
     // Hoisted statements precede the body, so a hoisted declaration is in
     // scope for all of it.
-    // The server view does not read a `client` import, namespace or
-    // `declare` name: it is `undefined` there, and typed in the client code.
-    ...(emitter.state.clientHoisted.length > 0
-      ? [
-          `${INDENT}var ${emitter.state.clientHoisted.map((name) => `${name}: undefined`).join(", ")}; void [${emitter.state.clientHoisted.join(", ")}];`,
-        ]
-      : []),
+    // A template read of a `client` import, namespace or `declare` name is
+    // `undefined`, typed in the client code. (Core refuses a tag variable
+    // spelled like a module level name, so the shadow has nothing to clash
+    // with.) A bound attribute's refinement names a client handler, so it
+    // keeps the binding.
+    ...(shadowed === "" ? [] : [`${INDENT}${shadowed}`]),
     ...[...ir.prelude.map((node) => node.code), ...emitter.state.prelude].map(
       (code) => INDENT + code,
     ),

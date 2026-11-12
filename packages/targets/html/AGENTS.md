@@ -115,13 +115,26 @@ becomes an `import` of the module and the asked names, bound to `_mxReexport…`
 names nothing reads (the `_` keeps `noUnusedLocals` quiet), mapped piece by
 piece; `export {..}` of values and `export default` are dropped. A top-level
 `return` is repeated after the module, mapped to the keyword, because the arrow
-would hide its TS1108. Known limits: a `client import` of another module's
-client export is TS2614 (that module's one projection is its server view); a
-top-level type (`Input`) cannot name a client class or enum; a namespace body
-reading a client value is `undefined`; a `client` statement reading a `static` or
-`server` name declared after it but before a later `client` statement is not
-reported; a template read of a
-client name is not linked to its declaration for definition and rename. The
+would hide its TS1108. Two shadows keep each view to the names it has at run
+time. In the client code, an outer arrow declares every name a `server`
+statement binds (`let`/`const`/`function`/`class`, `import`, `declare` forms) as
+`var s: undefined` at the head of the client arrow, so a read is reported at the
+author's token (core refuses a client statement that declares the same name). In the server view, the render function declares
+the value names of `client` imports, namespaces and `declare` forms (a qualified
+namespace by its leftmost name; `declare global` and ambient modules bind none)
+as `undefined` at the head of the render, so a template read is reported (core
+refuses a tag variable spelled like a module level name, so nothing clashes).
+A bound attribute's refinement (`v:fn:=q`) names a client handler: a name used
+as a refinement is left out of that shadow. Known limits: a `client` import of
+another module's client export is TS2614 (that module's one projection is its
+server view); a top-level type (`Input`) cannot name a client class or enum; a
+namespace body reading a client value is `undefined`; a `client` statement
+reading a `static` or `server` name declared after it but before a later
+`client` statement is not reported; a `server` or `static` statement reading a
+`client` import, namespace or `declare` name is typed (the import is one
+module-level binding, and a module-level shadow of the same name would hide its
+type meaning from the client code); a template read of a client name is not
+linked to its declaration for definition and rename. The
 runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
 recorded mapping, so `mx-tsc` and the editor report an error inside one at the

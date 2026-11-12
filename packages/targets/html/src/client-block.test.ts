@@ -789,3 +789,28 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     expect(beforeWrapper(code)).not.toMatch(/export type \{[^}]*Q/);
   });
 });
+
+describe("html typeCheck: the render function shadows the value names a client statement hoists", () => {
+  const shadow = (source: string) => {
+    const { code } = compile(source, "/f/t.mx", { typeCheck: true });
+    return /var ([^;]*): undefined; void/.exec(
+      code.slice(code.indexOf("function __mxRender")),
+    )?.[1];
+  };
+
+  it("`declare global` and an ambient module name bind nothing", () => {
+    expect(
+      shadow(
+        'client declare global { var g: number }\nclient declare module "m" { export const a: number }\n<div/>\n',
+      ),
+    ).toBeUndefined();
+  });
+
+  it("a qualified namespace binds its leftmost name, once for a merged one", () => {
+    expect(
+      shadow(
+        "client namespace A.B { export const x = 1 }\nclient namespace A.C { export const y = 1 }\n<div/>\n",
+      ),
+    ).toBe("A");
+  });
+});

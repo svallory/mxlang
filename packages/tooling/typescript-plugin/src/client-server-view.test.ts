@@ -167,10 +167,45 @@ describe("a client import, namespace or declare in the server view", {
         { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
         FILE,
       );
-      expect(found).toHaveLength(1);
+      expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
       expect(found[0]?.start).toBe(source.indexOf(needle));
     },
   );
+
+  it("a qualified client namespace is undefined at its leftmost name", () => {
+    const source =
+      "client namespace A.B { export const x = 1 }\n<div>${A.B.x.toFixed(1)}</div>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found[0]?.start).toBe(source.indexOf("A.B.x"));
+  });
+
+  it("a refinement from a client import checks against the client binding", () => {
+    const source =
+      'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n';
+    expect(
+      errorsOf(
+        {
+          [FILE]: source,
+          "/project/fn.ts": "export const clamp = (n: number) => n;\n",
+        },
+        FILE,
+      ),
+    ).toEqual([]);
+  });
+
+  it("KNOWN LIMIT: a server statement still reads a client import typed", () => {
+    // The import is one module-level binding; the server statement is module
+    // level too, so the shadow the render function uses is not available there.
+    const source =
+      'client import { one as y } from "./one.ts";\nserver const z = y.toFixed(1);\n<div/>\n';
+    expect(
+      errorsOf(
+        { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
+        FILE,
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe("client code keeps its own scope and order", {
