@@ -87,9 +87,25 @@ describe("the opt-in attribute argument refusal", () => {
   ])(
     "reads a loop-source attribute with arguments as stock does, dropping them: %s",
     (source) => {
-      for (const option of [undefined, "refuse"] as const) {
-        expect(() => compile(source, option)).not.toThrow();
-      }
+      expect(() => compile(source)).not.toThrow();
+    },
+  );
+
+  it.each([
+    ['<for|x| of=[] by(v)="id"><i/></for>', "by", 14],
+    ["<for|x| of(v)=[]><i/></for>", "of", 8],
+    ["<for|x| in(v)=input><i/></for>", "in", 8],
+    ["<for|x| to=3 step(v)=1><i/></for>", "step", 13],
+    ["<for|x| to(v)=3><i/></for>", "to", 8],
+    ["<for|x| from(v)=1 to=3><i/></for>", "from", 8],
+  ])(
+    "refuses a loop-source attribute with arguments under the refuse option: %s",
+    (source, name, column) => {
+      expect(failure(source)).toMatchObject({
+        message: `Unsupported arguments on the \`${name}\` attribute.`,
+        line: 1,
+        column,
+      });
     },
   );
 
@@ -151,6 +167,11 @@ describe("the opt-in attribute argument refusal", () => {
       "<if=x><i/></if><else if=y a=1><i/></else>",
       "The `<else>` tag only supports an `if=` attribute.",
       26,
+    ],
+    [
+      "<if a=1 value=x><i/></if>",
+      "The `<if>` tag only supports the `value=` attribute.",
+      4,
     ],
     [
       "<for|x| of=[] a=1><i/></for>",

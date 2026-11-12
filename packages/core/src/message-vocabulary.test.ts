@@ -1075,6 +1075,20 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
       'The `by=` option is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => f(x)`).',
   },
   {
+    name: "`for` destructured read in `by=` that shadows an outer binding",
+    source: "const/id=1\nfor|{id}| of=input.xs by=id\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `id`, not the loop\'s `id` parameter. Key with a property name string (`by="id"`) or a function (`by=({id}) => id`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `id`, not the loop\'s `id` parameter. Key with a property name string (`by="id"`) or a function (`by=({id}) => id`).',
+  },
+  {
+    name: "`for` defaulted index read in `by=` that shadows an outer binding",
+    source: "const/i=0\nfor|item = 0, i = 1| of=input.xs by=i\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `i`, not the loop\'s `i` parameter. Key with a property name string (`by="id"`) or a function (`by=(item = 0, i = 1) => i`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `i`, not the loop\'s `i` parameter. Key with a property name string (`by="id"`) or a function (`by=(item = 0, i = 1) => i`).',
+  },
+  {
     name: "`for` index read in `by=` that shadows an outer binding",
     source: "const/i=0\nfor|item, i| of=input.xs by=i\n  p\n",
     mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `i`, not the loop\'s `i` parameter. Key with a property name string (`by="id"`) or a function (`by=(item, i) => i`).',

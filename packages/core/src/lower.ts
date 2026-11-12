@@ -2109,12 +2109,12 @@ function validateBuiltinValueAttributes(
   } else if (name === "log" || name === "debug") {
     // Marko: the logged value is the tag's own `value=`, nothing else. Blame
     // the first attribute that is not it (the second, when both read as it).
-    const offender =
-      attrs.find(
-        (attr) =>
-          !isAttributeNode(attr) ||
-          (!isDefaultAttr(attr) && attrNameOf(attr) !== "value"),
-      ) ?? (attrs.length > 1 ? attrs[1] : undefined);
+    const offender = offendingAttribute(
+      attrs,
+      (attr) =>
+        isAttributeNode(attr) &&
+        (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
+    );
     if (offender) {
       raise(
         INVALID_ATTRIBUTE_CODE,
@@ -2948,8 +2948,11 @@ function bodyChildrenWithoutAttributeTags(node: Node): Node[] {
  * Stock reports an attribute tag mixed with body content under a control tag
  * of a call's body ahead of the call's argument errors: the same condition
  * `lowerAttributeTags` checks (attribute tags present, and non-layout content
- * left beside them), raised early for a call that has arguments. Every call
- * kind passes through here once, so the body is walked once per call.
+ * left beside them), raised early for a call that has arguments. Both
+ * `rejectArgsWithProps` (dynamic, define and delegated calls) and
+ * `lowerCustomTagBody` (named calls) run it; a call reaches one of them, and
+ * a second walk of the same body only happens for a call no earlier check
+ * refused, so the cost is a body walk per call, not per path.
  */
 function rejectControlMixBesideArguments(ctx: Ctx, node: Node): void {
   if ((tagArgsOf(node) ?? []).length === 0) return;
@@ -3892,6 +3895,20 @@ function lowerAttributeTags(
  * `value=` attribute alone (the error runs from the second attribute),
  * `<else>` an `if=` alone (from the first). With or without arguments.
  */
+/**
+ * The attribute an "only supports X" error points at: the first one `allowed`
+ * rejects, else the second (X written twice).
+ */
+function offendingAttribute(
+  attrs: readonly Node[],
+  allowed: (attr: Node) => boolean,
+): Node | undefined {
+  return (
+    attrs.find((attr) => !allowed(attr)) ??
+    (attrs.length > 1 ? attrs[1] : undefined)
+  );
+}
+
 function rejectExtraConditionAttributes(
   ctx: Ctx,
   node: Node,
@@ -3902,10 +3919,10 @@ function rejectExtraConditionAttributes(
   if (name === "else") {
     // Blame the first attribute that is not `if=` (the second, when two
     // `if=` are written).
-    const offender =
-      attrs.find(
-        (attr) => isSpreadAttributeNode(attr) || attrNameOf(attr) !== "if",
-      ) ?? (attrs.length > 1 ? attrs[1] : undefined);
+    const offender = offendingAttribute(
+      attrs,
+      (attr) => !isSpreadAttributeNode(attr) && attrNameOf(attr) === "if",
+    );
     if (offender) {
       raise(
         INVALID_ATTRIBUTE_CODE,
@@ -3915,11 +3932,17 @@ function rejectExtraConditionAttributes(
     }
     return;
   }
-  if (attrs.length > 1) {
+  const offender = offendingAttribute(
+    attrs,
+    (attr) =>
+      !isSpreadAttributeNode(attr) &&
+      (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
+  );
+  if (offender) {
     raise(
       INVALID_ATTRIBUTE_CODE,
       `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
-      attrs[1],
+      offender,
     );
   }
 }
@@ -4125,18 +4148,18 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   const attribute = voiceOfCtx(ctx).attribute;
   const authored = by.value ? sliceNode(ctx, by.value).trim() : "";
   // The key function takes the loop's own parameters in order: the read name
-  // sits at its slot, earlier plain params keep their names, others are `_`.
-  // A name inside a destructuring pattern has no slot of its own.
+  // sits at the slot of the param that binds it (a destructuring pattern
+  // included), and each param up to it is printed as authored.
   const params = tagParamsOf(node);
-  const slot = params.findIndex((param: Node) => param.name === name);
+  const slot = params.findIndex((param: Node) =>
+    Object.keys(types.getBindingIdentifiers(param)).includes(name),
+  );
   const keyParams =
     slot < 0
       ? undefined
       : params
           .slice(0, slot + 1)
-          .map((param: Node) =>
-            param.type === "Identifier" ? param.name : "_",
-          )
+          .map((param: Node) => sliceNode(ctx, param).trim())
           .join(", ");
   raise(
     INVALID_FOR_CODE,
@@ -4239,6 +4262,15 @@ function lowerForHead(
       raise(
         INVALID_ATTRIBUTE_CODE,
         `${tagText(ctx, "for", node)} does not support the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
+        attr,
+      );
+    }
+    // Stock compiles and drops the arguments; a host that opts into refusing
+    // attribute arguments refuses them here too, like every other attribute.
+    if (ctx.declarations.attributeArgs === "refuse" && attrArgsOf(attr)) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
         attr,
       );
     }

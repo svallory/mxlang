@@ -1164,9 +1164,15 @@ describe("a two-way bind on a parameter with no change handler", () => {
       run("<for|x| of=[1]><if=x><counter/x/><input value:=x/></if></for>"),
     ).toBeUndefined();
     // An element reference shadows it the same way.
-    expect(
-      run("<for|x| of=[1]><if=x><div/x/><input value:=x/></if></for>")?.message,
-    ).not.toBe("Unable to bind to value.");
+    for (const tag of ["div", "id"]) {
+      const error = run(
+        `<for|x| of=[1]><if=x><${tag}/x/><input value:=x/></if></for>`,
+      );
+      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+      expect(error?.message).toBe(
+        `tag variable \`/x\` on \`<${tag}>\` is not supported in a standalone template`,
+      );
+    }
     // Control: the parameter itself is still refused.
     expect(
       run("<for|x| of=[1]><if=x><counter/y/><input value:=x/></if></for>")
