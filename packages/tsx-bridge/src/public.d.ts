@@ -137,6 +137,8 @@ declare module "@mxlang/tsx-bridge" {
      * these, so an error in an expression the host rewrote (an atom, a
      * `<for>` accessor read) reaches the author's text. When absent the
      * bridge searches the emitted text for each authored expression verbatim.
+     * An authored expression no mapping covers is still searched for, so a
+     * host need not record every expression, only the ones it rewrote.
      */
     mappings?: Array<{
       generatedStart: number;

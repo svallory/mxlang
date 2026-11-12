@@ -1,5 +1,5 @@
 ---
-packages: [tsx-bridge]
+packages: [tsx-bridge, babel]
 kind: Fixed
 ---
 

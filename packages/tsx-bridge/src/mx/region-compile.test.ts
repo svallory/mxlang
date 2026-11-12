@@ -630,15 +630,37 @@ describe("mxRegionCompile: recorded mappings", () => {
     expect(miss && [miss.start, miss.end]).toEqual([at("miss"), at("miss") + 4]);
   });
 
-  it("falls back to the verbatim search when the host records none", () => {
-    const plain = "const view = <p a=miss/>;";
+  it("rebases recorded offsets when the bridge unwraps a brace-wrapped region", () => {
+    const plain = "const view = <p a=m/>;";
+    const wrapped = "{<p a={m}/>}";
+    const g = wrapped.indexOf("{m}") + 1;
+    const at = plain.indexOf("m/>");
     const file = parse(plain, "x.solid.mx", {
-      mxRegionCompile: () => ({ code: "<p a={miss}/>" }),
+      mxRegionCompile: () => ({
+        code: wrapped,
+        mappings: [
+          { generatedStart: g, generatedEnd: g + 1, sourceStart: at, sourceEnd: at + 1 },
+        ],
+      }),
     });
-    const miss = nodes(file).find((n) => n.name === "miss");
-    expect(miss && [miss.start, miss.end]).toEqual([
-      plain.indexOf("miss"),
-      plain.indexOf("miss") + 4,
-    ]);
+    const m = nodes(file).find((n) => n.name === "m");
+    expect(m && [m.start, m.end]).toEqual([at, at + 1]);
+  });
+
+  it("keeps the verbatim search for an expression the host did not record", () => {
+    const plain = "const view = <p a=x b=y/>;";
+    const gy = "<p a={x} b={y}/>".indexOf("{y}") + 1;
+    const ay = plain.indexOf("y/>");
+    const file = parse(plain, "x.solid.mx", {
+      mxRegionCompile: () => ({
+        code: "<p a={x} b={y}/>",
+        // Only `y` is recorded; `x` is found by text.
+        mappings: [
+          { generatedStart: gy, generatedEnd: gy + 1, sourceStart: ay, sourceEnd: ay + 1 },
+        ],
+      }),
+    });
+    const x = nodes(file).find((n) => n.name === "x");
+    expect(x && [x.start, x.end]).toEqual([plain.indexOf("x b"), plain.indexOf("x b") + 1]);
   });
 });

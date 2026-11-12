@@ -274,6 +274,9 @@ export function mxParseElementAt(
       start,
       end,
       recordedMappings,
+      // `parseRegionCode` may have stripped a `{...}` wrapper: node offsets
+      // then count from the unwrapped text, one character into `code`.
+      code.length - parsedCode.code.length > 0 ? 1 : 0,
     );
     stampRoot(
       node,
@@ -472,19 +475,31 @@ function remapExpressionLocations(
   regionStart: number,
   regionEnd: number,
   recorded?: readonly RecordedMapping[],
+  strippedFromCode = 0,
 ): void {
   // A host that recorded where each emitted expression came from is believed
   // over a text search: the search cannot find text the host rewrote (an atom
   // `:a` emitted as `"a"`, a `<for>` read `i` emitted as `i()`) and can match
   // a later identical occurrence after a skipped one.
+  const searched = (ranges: MxRange[]) =>
+    matchExpressionRanges(ranges, generated, source, regionStart);
+  const all = collectExpressionRanges(root);
+  // Recorded mappings are believed; an authored expression none of them
+  // covers (a host emitted it without recording it) keeps the verbatim
+  // search it always had.
   const mappings = recorded
-    ? recordedExpressionMappings(recorded, regionStart)
-    : matchExpressionRanges(
-        collectExpressionRanges(root),
-        generated,
-        source,
-        regionStart,
-      );
+    ? [
+        ...recordedExpressionMappings(recorded, regionStart - strippedFromCode),
+        ...searched(
+          all.filter(
+            (range) =>
+              !recorded.some(
+                (m) => m.sourceStart < range.end && range.start < m.sourceEnd,
+              ),
+          ),
+        ),
+      ]
+    : searched(all);
 
   const setSpan = (
     record: Record<string, unknown>,
@@ -615,20 +630,23 @@ function spanAcrossInsertedText(
     first.sourceStart + (start - first.generatedStart),
     first.sourceEnd,
   );
+  // The furthest authored end among the mappings the node covers; order of
+  // `mappings` does not matter. Host-unmapped trailing punctuation (the `)`
+  // of `pick("m", miss)`) is not covered, so the end clamps to the last
+  // mapped token.
   let sourceEnd = first.sourceEnd;
-  let reach = first.generatedEnd;
   for (const m of mappings) {
-    if (m.generatedStart >= start && m.generatedEnd <= end && m.generatedEnd > reach) {
-      // A mapping the node wholly spans: its authored end is the furthest.
+    if (m.generatedStart >= start && m.generatedEnd <= end) {
       sourceEnd = Math.max(sourceEnd, m.sourceEnd);
-      reach = m.generatedEnd;
-    } else if (m.generatedStart < end && m.generatedEnd > end && m.generatedStart >= start) {
-      // The node ends inside this mapping.
+    } else if (
+      m.generatedStart >= start &&
+      m.generatedStart < end &&
+      m.generatedEnd > end
+    ) {
       sourceEnd = Math.max(
         sourceEnd,
         Math.min(m.sourceStart + (end - m.generatedStart), m.sourceEnd),
       );
-      reach = end;
     }
   }
   return sourceEnd >= sourceStart ? [sourceStart, sourceEnd] : undefined;

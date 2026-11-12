@@ -321,7 +321,8 @@ export interface MxRegionCompileResult {
    * are offsets into `code`, `sourceStart`/`sourceEnd` file-absolute offsets of
    * the authored text. The bridge maps a node inside an emitted span back to
    * its authored span from these; without them it searches the emitted text
-   * for each authored expression verbatim.
+   * for each authored expression verbatim. An authored expression no mapping
+   * covers is still searched for.
    */
   mappings?: Array<{
     generatedStart: number;

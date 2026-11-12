@@ -1,5 +1,16 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { decode } from "@jridgewell/sourcemap-codec";
 import { collectMxRegions, print } from "@mxlang/tsx-bridge";
-import { describe, expect, it } from "vitest";
+import ts from "typescript";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseSolid, solidRegionCompile } from "./test-helpers.ts";
 
 /** Walks the AST collecting every node of a given type. */
@@ -707,5 +718,124 @@ describe("a rewritten read maps to the authored name", () => {
     const source = "const v = <for|k, x| in=o><p>${k}</p></for>;";
     const at = source.indexOf("${k}") + 2;
     expect(spans(source, "MemberExpression")).toContainEqual([at, at + 1]);
+  });
+});
+
+/**
+ * A TypeScript diagnostic inside a rewritten region expression lands on the
+ * authored text. The region is lowered by the real Solid host, printed with
+ * its source map, type-checked as the TSX it became, and each diagnostic's
+ * generated start is mapped back through the map to an authored offset.
+ */
+describe("a TypeScript error inside a rewritten expression is reported on the authored text", () => {
+  const PRELUDE = [
+    'type Mode = "strict" | "lose";',
+    "function Field(props: { modes?: Mode[]; count?: number; onPick?: () => void }): unknown { return props; }",
+    "declare function pick(a: string, b: number): number;",
+    "",
+  ].join("\n");
+  const ATOM_MODULE = join(
+    import.meta.dirname,
+    "../../../../core/src/fixtures/syntax/atom-fixture.ts",
+  );
+
+  let dir: string;
+  beforeAll(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-solid-diag-")));
+    const dialect = join(dir, "node_modules", "atom-dialect");
+    mkdirSync(dialect, { recursive: true });
+    writeFileSync(
+      join(dialect, "package.json"),
+      JSON.stringify({
+        name: "atom-dialect",
+        mx: {
+          dialect: {
+            id: "atom",
+            name: "Fixture",
+            extensions: [".atom.mx"],
+            module: "./index.cjs",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(dialect, "index.cjs"),
+      `module.exports = require(${JSON.stringify(ATOM_MODULE)});\n`,
+    );
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "app",
+        devDependencies: { "atom-dialect": "0.0.0" },
+      }),
+    );
+  });
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** `[code, authored offset]` of every semantic diagnostic in the printed region file. */
+  function diagnose(source: string, filename: string): Array<[number, number]> {
+    const printed = print(source, filename, {
+      mx: true,
+      mxRegionCompile: solidRegionCompile,
+    });
+    const virtual = "/virtual/page.tsx";
+    const options: ts.CompilerOptions = {
+      jsx: ts.JsxEmit.Preserve,
+      strict: false,
+      noEmit: true,
+      lib: ["lib.esnext.d.ts"],
+      types: [],
+    };
+    const host = ts.createCompilerHost(options);
+    const read = host.getSourceFile.bind(host);
+    host.getSourceFile = (name, lang, ...rest) =>
+      name === virtual
+        ? ts.createSourceFile(name, printed.code, lang, true, ts.ScriptKind.TSX)
+        : read(name, lang, ...rest);
+    host.fileExists = (name) => name === virtual || ts.sys.fileExists(name);
+    const program = ts.createProgram([virtual], options, host);
+    const lines = decode(printed.map.mappings);
+    const authoredLines = source.split("\n");
+    const lineStart = (line: number) =>
+      authoredLines.slice(0, line).reduce((n, l) => n + l.length + 1, 0);
+    return program.getSemanticDiagnostics().flatMap((d) => {
+      if (d.start === undefined) return [];
+      const before = printed.code.slice(0, d.start).split("\n");
+      const line = before.length - 1;
+      const column = before[line]?.length ?? 0;
+      const segment = (lines[line] ?? [])
+        .filter((seg) => seg.length >= 4 && (seg[0] as number) <= column)
+        .at(-1);
+      if (!segment || segment[0] !== column) return [[d.code, -1]];
+      return [
+        [d.code, lineStart(segment[2] as number) + (segment[3] as number)],
+      ];
+    });
+  }
+
+  it("puts an atom's wrong-type error on the authored atom", () => {
+    const source = `${PRELUDE}export const v = <Field modes=[~strict, ~bogus]/>;\n`;
+    const file = join(dir, "page.atom.mx");
+    const at = source.indexOf("~bogus");
+    expect(diagnose(source, file)).toContainEqual([2322, at]);
+  });
+
+  it("puts an unknown name inside a call with an atom on the authored name", () => {
+    const source = `${PRELUDE}export const v = <Field count=pick(~a, missingCount)/>;\n`;
+    const file = join(dir, "page.atom.mx");
+    expect(diagnose(source, file)).toContainEqual([
+      2304,
+      source.indexOf("missingCount"),
+    ]);
+  });
+
+  it("puts an unknown name inside an attribute method body on the authored name", () => {
+    const source = `${PRELUDE}export const v = <Field onPick() { missing() }/>;\n`;
+    expect(diagnose(source, "page.solid.mx")).toContainEqual([
+      2304,
+      source.indexOf("missing"),
+    ]);
   });
 });
