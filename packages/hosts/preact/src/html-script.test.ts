@@ -248,7 +248,7 @@ describe("<html-script> refuses an event-handler attribute", () => {
       error = thrown;
     }
     expect(error).toMatchObject({
-      message: expect.stringMatching(/attribute method `onclick\(\.\.\.\)` is an event handler/),
+      message: expect.stringMatching(/`onclick\(\.\.\.\)` on `<html-script>` is an event handler/),
       line: 1,
       column: 13,
     });
@@ -260,6 +260,15 @@ describe("<html-script> refuses an event-handler attribute", () => {
         "<html-script onClick=input.f>x</html-script>",
         "/fixtures/script.mx",
       ),
-    ).toThrow(/`onClick` is an event handler/);
+    ).toThrow(/`onClick` on `<html-script>` is an event handler/);
+  });
+
+  it("also refuses a method that is not an event name", () => {
+    expect(() =>
+      compilePreactMx(
+        "<html-script foo() { go() }>x</html-script>",
+        "/fixtures/script.mx",
+      ),
+    ).toThrow(/`foo\(\.\.\.\)` on `<html-script>` is a method/);
   });
 });

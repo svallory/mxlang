@@ -2717,28 +2717,20 @@ export class PreactEmitter implements Emitter<string> {
         child,
       );
     }
-    // The html target refuses an event handler on a script element: nothing
-    // runs it. Refused at the attribute, in the html target's words, rather
-    // than emitted as a JSX prop that never fires. A lowercase `onclick() {}`
-    // is not an `event` attribute to core (that needs `on` + a capital), but
-    // its method value makes it one.
+    // A script element never fires a handler or calls a method, and the html
+    // target refuses one, so it is refused here at the attribute rather than
+    // emitted as a prop that does nothing. A lowercase `onclick() {}` is not
+    // an `event` attribute to core (that needs `on` + a capital); its method
+    // value is what marks it.
     for (const attr of node.attrs) {
-      if (attr.kind === "event") {
-        fail(
-          `\`${attr.name}\` is an event handler and requires a runtime; standalone MX renders once to a string`,
-          attr,
-        );
-      }
-      if (
-        attr.kind === "dynamic" &&
-        attr.value.bodySpan !== undefined &&
-        /^on/i.test(attr.name)
-      ) {
-        fail(
-          `attribute method \`${attr.name}(...)\` is an event handler and requires a runtime; standalone MX renders once to a string`,
-          attr,
-        );
-      }
+      const method =
+        attr.kind === "dynamic" && attr.value.bodySpan !== undefined;
+      if (attr.kind !== "event" && !method) continue;
+      const handler = attr.kind === "event" || /^on/i.test(attr.name);
+      fail(
+        `\`${attr.name}${method ? "(...)" : ""}\` on \`<html-script>\` is ${handler ? "an event handler" : "a method"}, and a script element never ${handler ? "fires" : "calls"} it`,
+        attr,
+      );
     }
     const attrs = this.#attrs(node.attrs, true, false, name);
     if (body.length === 0) {
@@ -2923,8 +2915,7 @@ export class PreactEmitter implements Emitter<string> {
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
         // `varStatements` is plain strings, while `payload` and `content` are
-        // `MappedCode` whenever tag arguments are present (the no-args shape
-        // is a plain props-object string from `#propsObject`). Interpolating
+        // `MappedCode` (`#propsObject` returns one). Interpolating
         // the mapped form emitted "[object Object]" — a syntax error in the
         // generated module — so their code text is taken explicitly.
         const payloadCode = payload.code;
@@ -2974,7 +2965,9 @@ export class PreactEmitter implements Emitter<string> {
       // attribute tags and `content` travel as ONE object bound to the first
       // param, `{}` when the call carries none (measured on 6.4.4; `|p|` and
       // `|{ n }|` both read it). A define with no params ignores them.
-      const argList = node.args.map((arg: Expr) => arg.code);
+      const argList: Array<string | MappedCode> = node.args.map(
+        (arg: Expr) => arg.code,
+      );
       // A rest param is never padded: Marko leaves it `[]` when nothing
       // fills it, and an `undefined` here would make it `[undefined]`.
       const fixedParamCount = node.target.params.filter(
@@ -2986,7 +2979,7 @@ export class PreactEmitter implements Emitter<string> {
         (hasRestParam || node.args.length < fixedParamCount) &&
         (node.attrTagProps.length > 0 ||
           (node.content?.children.length ?? 0) > 0);
-      if (takesObject) argList.push(this.#propsObject(node).code);
+      if (takesObject) argList.push(this.#propsObject(node));
       if (node.args.length > 0) {
         argList.push(
           ...Array.from(
@@ -2997,11 +2990,15 @@ export class PreactEmitter implements Emitter<string> {
           ),
         );
       }
-      const args =
+      const args: string | MappedCode =
         node.args.length > 0
-          ? argList.join(", ")
+          ? concatMapped(
+              ...argList.flatMap((arg, index) =>
+                index === 0 ? [arg] : [", ", arg],
+              ),
+            )
           : node.target.params.length > 0
-            ? this.#propsObject(node).code
+            ? this.#propsObject(node)
             : "";
       this.#out.push(
         this.#slot(
@@ -3017,7 +3014,9 @@ export class PreactEmitter implements Emitter<string> {
                   ")",
                 )
               : mapped(defineFunctionName(node.target.name), node.nameSpan),
-          `(${args})`,
+          "(",
+          args,
+          ")",
         ),
       );
       return;
@@ -3051,7 +3050,7 @@ export class PreactEmitter implements Emitter<string> {
     // statements above the `return` and renders its output half here; without
     // one only the output is wanted, and the call can stay an expression.
     if (node.returnsValue) {
-      const props = this.#propsObject(node).code;
+      const props = this.#propsObject(node);
       if (node.var) {
         // Every structural kind on this target is an *expression*, so a
         // callback scope has no statement position of its own. Hoisting the
@@ -3074,14 +3073,14 @@ export class PreactEmitter implements Emitter<string> {
         // The unit's render path: `.render` is the compiled unit's own
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
-        this.#varStatements.push(`const ${temp} = ${name}.render(${props});`);
+        this.#varStatements.push(`const ${temp} = ${name}.render(${props.code});`);
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
       // No `/var`: only the output is wanted, and the default export already
       // returns it, so the call stays an expression.
-      this.#out.push(this.#slot(`${name}(${props})`));
+      this.#out.push(this.#slot(name, "(", props, ")"));
       return;
     }
     const rawHtml = raw

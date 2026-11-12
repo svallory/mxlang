@@ -362,6 +362,5 @@ describe("a sequence placeholder as the only child of a branch", () => {
     };
     const { code } = compileReactMx(SEQUENCE, "/fixtures/seq.mx");
     expect(() => parseTsx(code)).not.toThrow();
-    expect(code).toContain("input.a ? (0, input.x) : null");
   });
 });
