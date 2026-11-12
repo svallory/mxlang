@@ -44,7 +44,19 @@ beforeAll(() => {
   );
   writeFileSync(
     join(dialect, "index.cjs"),
-    `module.exports = require(${JSON.stringify(MODULE)});\n`,
+    // The member dialect speaking of "options" and spelling tags `[[name]]`,
+    // for the messages of the last describe.
+    `const member = require(${JSON.stringify(MODULE)});
+module.exports = {
+  ...member,
+  default: {
+    ...member.default,
+    messageVocabulary: {
+      attribute: { one: "option", many: "options" },
+      formatTag: (t) => "[[" + t.name + "]]",
+    },
+  },
+};\n`,
   );
   writeFileSync(
     join(dir, "package.json"),
@@ -84,56 +96,9 @@ describe("a member trigger on the html target", () => {
 });
 
 describe("a dialect's message vocabulary on the html target's own messages", () => {
-  // Its own project: two dialects with one id cannot share a dependency list.
-  let voiced: string;
-  beforeAll(() => {
-    voiced = realpathSync(mkdtempSync(join(tmpdir(), "mx-html-voiced-")));
-    const pkg = join(voiced, "node_modules", "voiced-dialect");
-    mkdirSync(pkg, { recursive: true });
-    writeFileSync(
-      join(pkg, "package.json"),
-      JSON.stringify({
-        name: "voiced-dialect",
-        mx: {
-          dialect: {
-            id: "member",
-            name: "Fixture",
-            extensions: [".voiced.mx"],
-            module: "./index.cjs",
-          },
-        },
-      }),
-    );
-    // The member dialect, speaking of "options" and spelling tags `[[name]]`.
-    writeFileSync(
-      join(pkg, "index.cjs"),
-      `const member = require(${JSON.stringify(MODULE)});
-module.exports = {
-  ...member,
-  default: {
-    ...member.default,
-    messageVocabulary: {
-      attribute: { one: "option", many: "options" },
-      formatTag: (t) => "[[" + t.name + "]]",
-    },
-  },
-};\n`,
-    );
-    writeFileSync(
-      join(voiced, "package.json"),
-      JSON.stringify({
-        name: "app",
-        devDependencies: { "voiced-dialect": "0.0.0" },
-      }),
-    );
-  });
-  afterAll(() => {
-    rmSync(voiced, { recursive: true, force: true });
-  });
-
   const messageOf = (source: string): string => {
     try {
-      compile(source, join(voiced, "page.voiced.mx"));
+      compile(source, join(dir, "page.member.mx"));
     } catch (error) {
       return (error as Error).message;
     }

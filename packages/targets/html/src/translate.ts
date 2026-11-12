@@ -48,8 +48,8 @@ import {
   type SourceSpan,
   sliceLoc,
   unresolvedCustomTagMessage,
-  voiceOfCtx,
   unwrapStatementBlock,
+  voiceOfCtx,
 } from "@mxlang/core";
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
 

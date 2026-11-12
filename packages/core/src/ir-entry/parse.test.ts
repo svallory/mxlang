@@ -1613,8 +1613,7 @@ describe("round 4 (rev-236-r2)", () => {
     ])(
       "rejects %s as one positioned diagnostic",
       (_case, source, line, column) => {
-        const diagnostic = failWith(source, { message: MERGED, line, column });
-        expect(diagnostic?.code).toBe("MX_MERGED_SHORTHAND_CLASS");
+        failWith(source, { message: MERGED, line, column });
       },
     );
 

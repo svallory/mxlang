@@ -294,7 +294,7 @@ export {
  * lookup (PR 6 slice S3b).
  */
 export { type MarkoCompiler, markoCompiler } from "./marko-frontend.ts";
-export { type Voice, voiceOfCtx } from "./message-vocabulary.ts";
+export { voiceOfCtx } from "./message-vocabulary.ts";
 export {
   clearMxConfigCache,
   findMxConfig,

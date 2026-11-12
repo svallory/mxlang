@@ -37,8 +37,8 @@ import {
   type TemplateMetadata,
   TranslateError,
   unresolvedCustomTagMessage,
-  voiceOfCtx,
   unsupportedTagMessage,
+  voiceOfCtx,
   warn,
 } from "@mxlang/core";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";

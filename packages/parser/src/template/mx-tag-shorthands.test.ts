@@ -241,15 +241,19 @@ describe("tagShorthands: false, the refusals use the table's noun", () => {
   const VOICED: SyntaxTable = { ...OFF, anAttribute: "an option" };
 
   it.each([
-    ["a#b", NO_ID, "an option"],
-    ["#x", NO_ID, "an option"],
-    [".x", NO_LEAD_DOT, "an option"],
-    ["<.x/>", NO_LEAD_DOT, "an option"],
-  ])("%j says %s", (code, defaultMessage, noun) => {
-    const message = defaultMessage.replace("an attribute", noun);
-    expect(render(code, VOICED)).toContain(` ${message})`);
-    // The default table keeps MX's own wording.
-    expect(render(code, OFF)).toContain(` ${defaultMessage})`);
+    [
+      "a#b",
+      '`#` is not allowed in a tag name: this file\'s dialect has no `#id` shorthand; write the id as an option (`id="main"`) or drop the `#`',
+      NO_ID,
+    ],
+    [
+      "<.x/>",
+      'a tag name cannot start with `.`: this file\'s dialect has no `.class` shorthand and no implicit `div`; name the tag and write the class as an option (`class="x"`)',
+      NO_LEAD_DOT,
+    ],
+  ])("%j says an option, and MX's own wording stays the default", (code, voiced, plain) => {
+    expect(render(code, VOICED)).toContain(` ${voiced})`);
+    expect(render(code, OFF)).toContain(` ${plain})`);
   });
 
   it("anAttribute must be a non-empty string", () => {

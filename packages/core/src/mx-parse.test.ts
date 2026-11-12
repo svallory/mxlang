@@ -5,7 +5,9 @@ import { type Node, newCtx, TranslateError } from "./core.ts";
 import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import { lower } from "./lower.ts";
-import { stripMxTypes } from "./mx-parse.ts";
+import { MX_VOICE, voiceOf } from "./message-vocabulary.ts";
+import { stripMxTypes, voicedSyntax } from "./mx-parse.ts";
+import { defaultSyntax } from "./syntax-table.ts";
 import { lookup } from "./test-targets.ts";
 
 /**
@@ -679,5 +681,27 @@ describe("a namespace with values and an enum of its name in one program", () =>
         ],
       }),
     ).toThrow(TypeError);
+  });
+});
+
+describe("voicedSyntax", () => {
+  const voice = voiceOf({
+    id: "v",
+    name: "V",
+    table: {},
+    messageVocabulary: { attribute: { one: "option", many: "options" } },
+  });
+
+  it("is one table per (table, voice), so the parser compiles it once", () => {
+    const table = defaultSyntax();
+    const voiced = voicedSyntax(table, voice);
+    expect((voiced as { anAttribute?: string }).anAttribute).toBe("an option");
+    expect(voicedSyntax(table, voice)).toBe(voiced);
+    expect(voicedSyntax({ ...table }, voice)).not.toBe(voiced);
+  });
+
+  it("MX's own voice leaves the table as it is", () => {
+    const table = defaultSyntax();
+    expect(voicedSyntax(table, MX_VOICE)).toBe(table);
   });
 });

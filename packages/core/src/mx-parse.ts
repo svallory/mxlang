@@ -125,10 +125,7 @@ export function parseMx(
   // The parser's own refusals (`tagShorthands: false`) name an attribute in
   // the file's words, so the table it reads carries the dialect's noun.
   const voice = voiceOf(options.dialect);
-  const syntax =
-    voice === MX_VOICE
-      ? options.syntax
-      : { ...options.syntax, anAttribute: voice.anAttribute };
+  const syntax = voicedSyntax(options.syntax, voice);
   const document = mxFrontEndParse(source, {
     statementKeywords,
     tagShape,
@@ -139,6 +136,28 @@ export function parseMx(
   // A claimed node is frozen once the front end has set its trigger fields.
   if (claims) for (const node of claims.placed) Object.freeze(node);
   return document;
+}
+
+const voicedTables = new WeakMap<SyntaxTable, WeakMap<Voice, SyntaxTable>>();
+
+/**
+ * `table` carrying `voice`'s attribute noun, one object per (table, voice):
+ * the parser caches its compiled form by table identity, so a fresh copy per
+ * parse would compile the table again for every file.
+ */
+export function voicedSyntax(table: SyntaxTable, voice: Voice): SyntaxTable {
+  if (voice === MX_VOICE) return table;
+  let byVoice = voicedTables.get(table);
+  if (!byVoice) {
+    byVoice = new WeakMap();
+    voicedTables.set(table, byVoice);
+  }
+  let voiced = byVoice.get(voice);
+  if (!voiced) {
+    voiced = Object.freeze({ ...table, anAttribute: voice.anAttribute });
+    byVoice.set(voice, voiced);
+  }
+  return voiced;
 }
 
 /** The answer for an expression row that names no node type: core's own `MxTrigger`. */
