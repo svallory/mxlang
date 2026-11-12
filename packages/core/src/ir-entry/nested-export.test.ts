@@ -123,7 +123,7 @@ describe("import or export below the top level", () => {
 
   it("an export in a namespace body is not refused", () => {
     const { diagnostics } = lowerSource(
-      "<div x=(() => { namespace N { export const a = 1 } })/>",
+      "static { namespace N { export const a = 1 } }\n<div/>",
       "/v/e.mx",
       {},
     );
