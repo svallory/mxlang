@@ -136,41 +136,65 @@ describe("a block without an import or export keeps its module code", () => {
 });
 
 describe("an import or export below the block's statements is still refused", () => {
-  /** [source, line, column] of the refused declaration: 1-based line, 0-based column. */
+  /** [source, line, column, endLine, endColumn] of the refused declaration: 1-based line, 0-based column. */
   it.each([
-    ["a nested block", 'static { { import x from "./x" } }\n<div/>', 1, 11],
-    ["an if body", "static { if (a) { export const q = 1 } }\n<div/>", 1, 18],
+    [
+      "a nested block",
+      'static { { import x from "./x" } }\n<div/>',
+      1,
+      11,
+      1,
+      30,
+    ],
+    [
+      "an if body",
+      "static { if (a) { export const q = 1 } }\n<div/>",
+      1,
+      18,
+      1,
+      36,
+    ],
     [
       "a function body",
       'static { function f() { import x from "./x" } }\n<div/>',
       1,
       24,
+      1,
+      43,
     ],
     [
       "a second block",
       'static { import x from "./x" } { import y from "./y" }\n<div/>',
       1,
       9,
+      1,
+      28,
     ],
     [
       "a server block nested",
       'server { { import x from "./x" } }\n<div/>',
       1,
       11,
+      1,
+      30,
     ],
     [
       "a client block nested",
       'client { { import x from "./x" } }\n<div/>',
       1,
       11,
+      1,
+      30,
     ],
     [
       "the second line of a block",
       'static {\n  { import x from "./x" }\n}\n<div/>',
       2,
       4,
+      2,
+      23,
     ],
-  ])("%s", (_name, source, line, column) => {
+  ])("%s", (_name, source, line, column, endLine, endColumn) => {
     const { ir, diagnostics } = lower(source);
     expect(ir).toBeUndefined();
     expect(diagnostics).toHaveLength(1);
@@ -180,6 +204,7 @@ describe("an import or export below the block's statements is still refused", ()
       message: PLACEMENT,
       line,
       column,
+      end: { line: endLine, column: endColumn },
     });
   });
 

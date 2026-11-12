@@ -27,6 +27,7 @@ describe("import or export below the top level", () => {
       undefined,
       1,
       16,
+      28,
     ],
     [
       "a trigger armed",
@@ -34,6 +35,7 @@ describe("import or export below the top level", () => {
       memberSyntax,
       1,
       16,
+      28,
     ],
     [
       "a trigger operand",
@@ -41,17 +43,33 @@ describe("import or export below the top level", () => {
       memberSyntax,
       1,
       16,
+      29,
     ],
     // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder
-    ["a placeholder", "<p>${(() => { export { a } })()}</p>", undefined, 1, 14],
-    ["a pattern", "<let/{ a = () => { export { b } } }=x/>", undefined, 1, 19],
-    ["arguments", "<foo(() => { export { a } })/>", undefined, 1, 13],
+    [
+      "a placeholder",
+      "<p>${(() => { export { a } })()}</p>",
+      undefined,
+      1,
+      14,
+      26,
+    ],
+    [
+      "a pattern",
+      "<let/{ a = () => { export { b } } }=x/>",
+      undefined,
+      1,
+      19,
+      31,
+    ],
+    ["arguments", "<foo(() => { export { a } })/>", undefined, 1, 13, 25],
     [
       "parameters",
       "<for|x = () => { export { a } }| of=y></for>",
       undefined,
       1,
       17,
+      29,
     ],
     [
       "a static function",
@@ -59,6 +77,7 @@ describe("import or export below the top level", () => {
       undefined,
       1,
       22,
+      34,
     ],
     [
       "a static block with an if",
@@ -66,6 +85,7 @@ describe("import or export below the top level", () => {
       undefined,
       1,
       18,
+      30,
     ],
     [
       "a static block after an import",
@@ -73,15 +93,22 @@ describe("import or export below the top level", () => {
       undefined,
       1,
       43,
+      55,
     ],
-  ])("%s", (_name, source, dialect, line, column) => {
+  ])("%s", (_name, source, dialect, line, column, endColumn) => {
     const { diagnostics } = lowerSource(
       source,
       "/v/e.mx",
       dialect ? { dialect } : {},
     );
     expect(diagnostics).toMatchObject([
-      { code: "MX_INVALID_STATEMENT", message: MESSAGE, line, column },
+      {
+        code: "MX_INVALID_STATEMENT",
+        message: MESSAGE,
+        line,
+        column,
+        end: { line, column: endColumn },
+      },
     ]);
   });
 
