@@ -1084,7 +1084,7 @@ class (a shorthand merge, or one written as `class=["a", y]`) is joined by a
 `__mxClass` member the same way and bound as `[class]`, because `[ngClass]`
 throws on any array entry that is not a string; a plain object `class={…}`
 stays `[ngClass]`. In a `.ng.mx` or a tag module, which own their class and get `__mxClass` injected, every dynamic non-object `class=` is joined that way, so a number or a runtime array renders; a plain `.mx` page keeps the plain `[class]` binding for a non-array value (see divergences.md). Angular may reorder the words of a `[class]` string, so the
-class set matches Marko's and the word order may not. A repeated word collapses to one, and a class that becomes empty after an update leaves `class=""` rather than no attribute.
+class set matches Marko's and the word order may not. On an Angular tag call whose callee declares a `class` input, the input receives the class (a static class or shorthand as a string, a bare `class` as `true`, as Marko hands `input.class`) and the callee's host element does not also carry a static one; a callee that declares a `style` input receives a static `style="…"` the same way and the host element carries no `style` attribute; a callee that declares neither keeps the attribute on its host element. A repeated word collapses to one, and a class that becomes empty after an update leaves `class=""` rather than no attribute.
 
 | Written | Result |
 |---|---|
@@ -1419,7 +1419,10 @@ expression language reads ASCII identifiers only); html renders once and emits
 no handler (Marko's is client-only, so its server output is the same) but
 type-checks `fn` against the bound value in the tooling projection only; the IR records it as
 `refinement`; the hosts that refuse `:=` report their own error on the
-attribute. A non-bound `v:fn=q` is the attribute named `v:fn`.
+attribute. On Angular the target of any bound attribute, refined or not, must be
+a name or a member of one: `v:=q?.a` (also `q?.a!`, `q?.a as T`) is a positioned
+error at the attribute, since Angular's `[(v)]` rejects an optional chain
+("Unsupported expression in a two-way binding"). A non-bound `v:fn=q` is the attribute named `v:fn`.
 Host-specific binding
 support is unchanged. Validation precedes control-flow lowering, including
 controls containing attribute tags, so an invalid binding cannot be discarded.
@@ -3866,7 +3869,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `class={…}` | inlined `__mxClassValue()` | native `class={{…}}` | `__mxClass(…)` | `__mxClass(…)` | `__mxClass(…)` | `class:list` | `[ngClass]` + warning |
 | `style={…}` | inlined `__mxStyleValue()` | `style={{…}}` | `style={{…}}` | same | same | `style={{…}}` | `[ngStyle]` + warning |
 | spread | merged into attrs | `{...o}` | `{...o}` | same | same | `{...o}` | **error** — Angular binds statically named inputs only |
-| `:=` | **initial value only, silently one-way** | **error** | **error** | error | error | **error** | `[(value)]` — **genuinely two-way** |
+| `:=` | **initial value only, silently one-way** | **error** | **error** | error | error | **error** | `[(value)]` — **genuinely two-way**; **error** on an optional chain (`q?.a`), which `[(value)]` rejects |
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
 | dynamic tag | `__mxRenderDynamic()` | `<Dynamic component>` | `__mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
