@@ -3431,7 +3431,8 @@ body declares its own `/x` (`/var` bound inside a nested block), where Marko
 compiles it; reading the outer `/x` before the body compiles. This is a gap in
 core's binding table, not a rule of the language (see `divergences.md`). A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
-`<define>` inside a dynamic-tag or `<try>` body, and a `/var` in a `<define>`
+`<define>` inside a dynamic-tag or `<try>` body, inside the body of an imported
+tag or of a `<define>` call that declares a `/var`, and a `/var` in a `<define>`
 body (`<define>` is lifted to the region's one arrow, outside those scopes).
 
 **`/var` is top-level-only in a callback on the JSX hosts and Solid.** Every
