@@ -780,6 +780,11 @@ single `MarkoText`, so the construct there is ordinary text: it stays text, as t
 body's other text does (the html target does not emit a `<script>` body). `<style>a <![CDATA[ b < c ]]></style>` is a stylesheet holding
 the literal text `<![CDATA[ b < c ]]>`, not a CDATA section.
 
+`<html-script>` and `<html-style>` are raw text too, on every host: the body of an
+`<html-script>` is one text, not markup, and its edge whitespace is kept. A tag-rules
+preset that states the file's whole tag set (`none`) reads its `<script>` as an
+ordinary tag, so `<script><b>x</b></script>` holds a `<b>` element there.
+
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
 annotations, an `enum`, `satisfies`, a `namespace` and `declare` are all
@@ -811,6 +816,12 @@ placeholder it says to use the value directly (`x`, not `${x}`), to write it thr
 template literal inside a string, or to use `<html-script>`. A `${…}` inside a template
 literal in the body (`` `${x}` ``) is the script's own and is not a placeholder. The
 first attribute and the first placeholder of a tag are reported.
+
+**Which error is first.** A host that refuses `<script>`, as an `unsupported` or an
+`error` row of its tag table, makes that refusal the tag's only error. Otherwise a
+compile that throws reports the placeholder first, then the body's syntax, then the
+head and attributes, as Marko reads the body before it checks the head. An entry that
+lists every diagnostic (`lowerSource`) orders them by position, so the head comes first.
 
 A built-in `<script>` also takes no arguments (`<script(x)>`), no params (`<script|x|>`)
 and no tag variable (`<script/x>`), and its value is written once: a second value
@@ -3131,6 +3142,12 @@ Six invariants:
    `{ readsContent, attributeTags }` plus `returnsValue` and the return value's
    source text — **and nothing else**.
 
+**A failing `analyze` is reported per tag.** Every tag's `analyze` runs, and the
+failure of one does not hide another's: each is a diagnostic of the file. A failure
+that carries related errors stands for all of them. The file's first error, in
+position order and not in tag-name order, is the one a throwing compile reports, and
+the rest follow it in position order.
+
 **`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
 where `options` is a plain `{ at?, code? }` object or a bare position, which is
 the same as `{ at }`. `at` is a `Position` or a `{ sourceStart, sourceEnd }`
@@ -3226,6 +3243,15 @@ Errors stop at the first in check order, not source order: authored children are
 **Allowed authored children (MX addition).** `CustomTag.children` is a record of `{ required?, repeatable? }`, closed once present; omitted, children remain open. The reserved contract-vocabulary key `"#text"` allows non-whitespace text and `${…}` / `$!{…}`. Each non-whitespace text node or interpolation is one occurrence; whitespace-only text never counts. `required` means at least one occurrence on every path; `repeatable: true` permits more than one, including inside a loop. `<if>`, `<else-if>`, `<else if>` / `<else>` and `<for>` are transparent: the minimum is the minimum over branches (an absent final `<else>` supplies an empty branch), and a child inside `<for>` has minimum 0 and maximum infinity. Comments, `<const>` and `<define>` declarations are ignored; a `<define>` call counts by its authored name. Ordinary child tags count once by name, without descending into their own bodies (`<script>` and `<style>` count by name as well).
 
 Core checks authored children before lowering them, so a child's transform output does not change its name or count. The rule applies to transform tags, template tags with declaration-only sidecars, and contract-only delegated tags on every target. A dynamic child is an error in a closed contract. `TagCall.childTree?: ChildNode[]` exposes this authored shape to `analyze` and `transform`: named `ChildTag`, `ChildText`, `ChildDynamic`, `ChildFor.nodes`, and `ChildIf.branches` (each branch has `unconditional` and `nodes`), each node positioned with `loc`. It is syntax metadata, not emitted IR. Contracts report the first error of a tag; the tag is then skipped with its subtree and the file's other tags are still checked (IR spec §13).
+
+Under a contract, a child the host refuses as something a data file cannot hold
+(`<try>`, `<return>`) is that refusal and nothing else: a tag's body is always
+lowered, even when its `transform` ignores the content, so the host's refusal fires and
+the parent's contract does not report the child first as a tag it does not allow. An
+orphan `<else>` or `<else-if>` is not such a name; the contract reports it. Under
+`structural: "reject"` the first `<if>` or `<for>` in source order is the error, at the
+construct, whatever it holds, and a contract does not look inside it; an `<else>`
+that follows an `<if>` is blamed on that `<if>`.
 
 **Wildcard children (MX addition).** `children["*"]` is an entry or an ordered list of entries `{ pattern?, contract }` or `{ pattern?, attributes?, attributeTags?, children?, defaultTag? }`. `pattern` is a JavaScript regex source, anchored by core as `^(?:pattern)$` with no flags; an entry with no `pattern` is a catch-all. `contract: "<tag>"` validates the child with that tag's whole contract (E1 attributes, E4 attribute tags, E2 children, 145 `defaultTag`) and the IR node's `name` is that canonical tag; an inline entry is a contract of its own, its `name` is the authored name, and it admits only `attributes`, `attributeTags`, `children` and `defaultTag`. In both forms `alias = { authored, span, groups }` records the match, `groups` being the pattern's named capture groups. The IR `lowerSource` returns (§13.7.2) is the same: a consumer that dispatches on the contract reads `name`, and the authored spelling is in `alias.authored`. The key works on a tag's `children` and on an attribute-tag declaration's `children`.
 
