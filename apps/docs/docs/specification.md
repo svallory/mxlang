@@ -2567,9 +2567,12 @@ error (`MX: tag params |…| cannot be passed to a native element`). This is a
 deliberate divergence: Marko renders the element with the body. A `<define>`
 used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>` or `<${R}>`)
 receives the body as its `content`, as a direct call does (the args form,
-`<${R}("a")>…</>`, does not receive it yet): a define's function
+`<${R}("a")>…</>`, hands it over as the object after the args): a define's function
 reads a props object that carries `children` and no `content` the way a
-component's module preamble does.
+component's module preamble does. A define read as a value therefore
+normalizes any first argument that carries `children` and no `content` (a shallow
+copy with `content` added); a direct call `<Row(x)/>` does not, so `x` arrives
+as written.
 
 **Params come right after the tag name, before any attribute or `=value`**:
 `<for|it, i| of=xs()>`, `<Show|user| when=currentUser>` (§5.2).
@@ -3422,9 +3425,10 @@ independent compilations have separate scopes.
 `<@placeholder>` and `<@catch>` bodies are scopes of their own. Their `/var`
 statements run inside the define's function, or inside a function called in
 place in the body, so a `/x` there sits beside an outer `/x` without a
-duplicate. The outer `/x` must be declared after the body: a body that declares
-its own `/x` after an outer `/x` is refused (`/var` bound inside a nested block),
-which Marko compiles. A define body's parameters share the body's scope with its `/var`,
+duplicate. An outer `/x` that is *read* after such a body is refused when the
+body declares its own `/x` (`/var` bound inside a nested block), where Marko
+compiles it; reading the outer `/x` before the body compiles. This is a gap in
+core's binding table, not a rule of the language (see `divergences.md`). A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
 `<define>` inside a dynamic-tag or `<try>` body, and a `/var` in a `<define>`
 body (`<define>` is lifted to the region's one arrow, outside those scopes).
