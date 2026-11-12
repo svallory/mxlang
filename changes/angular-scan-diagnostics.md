@@ -1,5 +1,5 @@
 ---
-packages: [host-angular]
+packages: [angular]
 kind: Fixed
 ---
 
