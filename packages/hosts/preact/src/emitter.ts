@@ -3073,7 +3073,9 @@ export class PreactEmitter implements Emitter<string> {
         // The unit's render path: `.render` is the compiled unit's own
         // function returning the `{ value, output }` pair; the default
         // export returns only the output.
-        this.#varStatements.push(`const ${temp} = ${name}.render(${props.code});`);
+        this.#varStatements.push(
+          `const ${temp} = ${name}.render(${props.code});`,
+        );
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(this.#slot(`${temp}.output`));
         return;

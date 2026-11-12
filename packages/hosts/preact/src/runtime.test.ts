@@ -301,7 +301,10 @@ describe("MxErrorBoundary", () => {
       const host = document.createElement("div");
       clientRender(view(throwing), host);
       rerender();
-      clientRender(view(() => "fine"), host);
+      clientRender(
+        view(() => "fine"),
+        host,
+      );
       rerender();
       return host.innerHTML;
     });

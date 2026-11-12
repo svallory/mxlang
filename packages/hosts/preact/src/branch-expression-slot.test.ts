@@ -349,18 +349,3 @@ describe("preact: the bare define call renders the HTML the HTML target renders 
     expect(await renderWhole(source, props)).toBe(html);
   });
 });
-
-describe("a sequence placeholder as the only child of a branch", () => {
-  const SEQUENCE = "<if=input.a>${0, input.x}</if>";
-
-  // React has no placeholder guard, so nothing else wraps the sequence: bare,
-  // `c ? 0, x : null` is a syntax error.
-  it("parses on the React dialect", async () => {
-    const url = new URL("../../react/src/index.ts", import.meta.url).href;
-    const { compileReactMx } = (await import(/* @vite-ignore */ url)) as {
-      compileReactMx: typeof compilePreactMx;
-    };
-    const { code } = compileReactMx(SEQUENCE, "/fixtures/seq.mx");
-    expect(() => parseTsx(code)).not.toThrow();
-  });
-});
