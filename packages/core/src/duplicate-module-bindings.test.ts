@@ -2399,17 +2399,20 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
     );
   });
 
-  it.each(["html", "none"] as const)(
-    "refuses an export list in a declare namespace inside a namespace that emits (%s)",
+  describe.each(["html", "none"] as const)(
+    "an export list in a declare namespace inside a namespace that emits (%s)",
     (tagRules) => {
-      const source =
-        "static namespace A { declare namespace B { const a: number; export { a } } }";
-      const found = diagnostics(source, tagRules).filter(
-        (d) => d.severity === "error",
-      );
-      expect(found).toMatchObject([
-        { code: "MX_INVALID_STATEMENT", line: 1, column: 60 },
-      ]);
+      it.each([
+        "static namespace A { declare namespace B { const a: number; export { a } } }",
+        "export namespace A { declare namespace B { const a: number; export { a } } }",
+      ])("is refused at the export: %s", (source) => {
+        const found = diagnostics(source, tagRules).filter(
+          (d) => d.severity === "error",
+        );
+        expect(found).toMatchObject([
+          { code: "MX_INVALID_STATEMENT", line: 1, column: 60 },
+        ]);
+      });
     },
   );
 
