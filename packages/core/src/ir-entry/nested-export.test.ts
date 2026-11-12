@@ -1,6 +1,6 @@
 /**
  * An `import` or `export` below the top level of an expression, pattern,
- * argument, parameter or `$` scriptlet payload is a positioned diagnostic,
+ * argument, parameter or `static`/`server`/`client` statement payload is a positioned diagnostic,
  * with the member trigger armed or not, never an internal error from the
  * TypeScript strip (which finds no program scope for it).
  */
@@ -74,27 +74,6 @@ describe("import or export below the top level", () => {
       1,
       43,
     ],
-    [
-      "a server function",
-      "server function f() { export { a } }\n<div/>",
-      undefined,
-      1,
-      22,
-    ],
-    [
-      "a scriptlet function",
-      "$ function f() { export { a } }\n<div/>",
-      undefined,
-      1,
-      17,
-    ],
-    [
-      "a scriptlet block",
-      "$ { if (a) { export { b } } }\n<div/>",
-      undefined,
-      1,
-      13,
-    ],
   ])("%s", (_name, source, dialect, line, column) => {
     const { diagnostics } = lowerSource(
       source,
@@ -121,8 +100,6 @@ describe("import or export below the top level", () => {
       "/v/e.mx",
       {},
     );
-    expect(diagnostics.map((d) => d.code)).not.toContain(
-      "MX_INVALID_STATEMENT",
-    );
+    expect(diagnostics).toEqual([]);
   });
 });
