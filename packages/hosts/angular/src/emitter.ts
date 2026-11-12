@@ -620,20 +620,24 @@ function defineAssignError(name: string, hasAttrs: boolean): string {
 }
 
 /**
- * Whether `code` is an optional chain at its root (`q?.a`, `q?.[k]`,
- * `q?.a.b`). A `!`, `as`, `satisfies` or `<T>` around it is gone by the time a
- * bound attribute's value arrives (core's `stripTypes` replaces a top-level
- * assertion with its operand), so `q?.a!` is this too.
+ * Whether `code` has an optional link anywhere along its member/call chain
+ * (`q?.a`, `q?.[k]`, `q?.a.b`, `(q?.a).b`, `q?.a()`). A `!`, `as`,
+ * `satisfies` or `<T>` around it is gone by the time a bound attribute's value
+ * arrives (core's `stripTypes` replaces a top-level assertion with its
+ * operand).
  */
 function isOptionalChain(code: string): boolean {
   try {
     const babel = babelParser as unknown as {
       parseExpression(source: string, options: unknown): HandlerNode;
     };
-    const type = babel.parseExpression(code, {
-      plugins: [["typescript", {}]],
-    }).type;
-    return type === "OptionalMemberExpression";
+    let node: (HandlerNode & { callee?: HandlerNode }) | undefined =
+      babel.parseExpression(code, { plugins: [["typescript", {}]] });
+    while (node) {
+      if (node.type.startsWith("Optional")) return true;
+      node = node.object ?? node.callee;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -4004,12 +4008,16 @@ class AngularEmitter implements Emitter<string> {
   constant(node: Extract<IrNode, { kind: "Const" }>): void {
     this.scopes.at(-1)?.set(node.name, undefined);
     const letStart = this.out.length;
-    this.out.write(`@let ${node.name} = `);
+    this.out.write(`@let ${node.name}`);
+    // Only `@let name` is anchored: that is where NG8112 starts. The ` = `, the
+    // init's punctuation and the `;` stay unmapped, as they were.
+    const letEnd = this.out.length;
+    this.out.write(" = ");
     this.out.writeMapped(node.init.code, node.init.span);
     this.out.write(";");
     // Angular reports an unused `@let` (NG8112) on the `@let` node, which no
     // mapped run covers: anchor it to the authored `<const>` tag.
-    this.out.anchor(letStart, this.out.length, node.span);
+    this.out.anchor(letStart, letEnd, node.span);
   }
 
   hoisted(node: Extract<IrNode, { kind: "Hoisted" }>): void {

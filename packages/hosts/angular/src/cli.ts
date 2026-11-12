@@ -136,7 +136,8 @@ function formatMessage(
  * `SIGINT`/`SIGTERM` (`Ctrl-C`, exit 0, A3).
  */
 function runWatch(args: string[]): Promise<number> {
-  const { flags } = parseFlags(args);
+  const { flags, rest } = parseFlags(args);
+  if (rest.length > 0) throw new Error(`unexpected argument: ${rest[0]}`);
   const projectDir = flags.project ? resolve(flags.project) : process.cwd();
   if (flags.config) {
     console.warn(

@@ -117,17 +117,23 @@ describe("forwardLines", () => {
     ).toBe("    src/x.html:1:5:\n      1 │ @let a = 2;\n        ╵      ~\n");
   });
 
-  it("realigns a plain underline (tsc's frame) and what is right of the name", async () => {
+  it("realigns an underline across two names on one line", async () => {
+    const gutter = `      1 │ `;
+    const under = `        ╵ `;
     expect(
       await forward(
         [
-          "1 @let __mxConst_a1 = __mxConst_a1;\n       ^~~~~~~~~~~~~~~~~~~~~~~~\n",
+          `${gutter}@let __mxConst_a1 = __mxConst_a1;\n${under}     ${"~".repeat(12)}   ${"~".repeat(12)}\n`,
         ],
-        {
-          f: { __mxConst_a1: "a" },
-        },
+        names,
       ),
-    ).toBe("1 @let a = a;\n       ^~~~~\n");
+    ).toBe(`${gutter}@let a = a;\n${under}     ~   ~\n`);
+  });
+
+  it("leaves a rule after a numbered message line alone", async () => {
+    expect(await forward(["2 errors __mxConst_a1\n~~~~\n"], names)).toBe(
+      "2 errors a\n~~~~\n",
+    );
   });
 
   it("leaves an underline-looking line after a message line alone", async () => {
@@ -137,16 +143,56 @@ describe("forwardLines", () => {
     ).toBe(`Hint: a is unused\n${rule}\n`);
   });
 
-  it("prints a held line when the stream goes idle, without waiting for another", async () => {
-    const source = new PassThrough();
-    const sink = new PassThrough();
-    const first = new Promise<string>((resolve) =>
-      sink.once("data", (d) => resolve(String(d))),
-    );
-    void forwardLines(source, sink, rewriterFor(names));
-    source.write("NG8112: @let __mxConst_a1 is declared\n");
-    expect(await first).toBe("NG8112: @let a is declared\n");
-    source.end();
+  describe("on a stream that stays open", () => {
+    const FRAME = "      1 │ @let __mxConst_a1 = 2;\n";
+    const UNDER = `        ╵      ${"~".repeat(12)}\n`;
+    const open = () => {
+      const source = new PassThrough();
+      const sink = new PassThrough();
+      const received: string[] = [];
+      sink.on("data", (d) => received.push(String(d)));
+      const done = forwardLines(source, sink, rewriterFor(names));
+      /** Resolves once the sink has received exactly `text`. */
+      const until = (text: string) =>
+        new Promise<void>((resolve) => {
+          const check = () => {
+            if (received.join("") === text) resolve();
+          };
+          sink.on("data", check);
+          check();
+        });
+      return { source, received, done, until };
+    };
+
+    it("prints a held source line when the stream goes idle, without another line", async () => {
+      const { source, until, done } = open();
+      source.write(FRAME);
+      await until("      1 │ @let a = 2;\n");
+      source.end();
+      await done;
+    });
+
+    it("realigns an underline written separately in the same tick", async () => {
+      const { source, received, done } = open();
+      source.write("    src/x.html:1:5:\n");
+      source.write(FRAME);
+      source.write(UNDER);
+      source.end();
+      await done;
+      expect(received.join("")).toBe(
+        "    src/x.html:1:5:\n      1 │ @let a = 2;\n        ╵      ~\n",
+      );
+    });
+
+    it("prints an underline that comes after the idle cut-off as it is, after the line", async () => {
+      const { source, received, done, until } = open();
+      source.write(FRAME);
+      await until("      1 │ @let a = 2;\n");
+      source.write(UNDER);
+      source.end();
+      await done;
+      expect(received.join("")).toBe(`      1 │ @let a = 2;\n${UNDER}`);
+    });
   });
 
   it("leaves a line that is not an underline alone", async () => {

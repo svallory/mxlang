@@ -33,6 +33,12 @@ describe("a bound attribute's refinement (angular)", () => {
     );
   });
 
+  it("refuses an optional link under a member of a parenthesised chain", () => {
+    expect(() => emit("<input value:=(q?.a).b/>")).toThrow(
+      "must be bound to a name or a member",
+    );
+  });
+
   it("still binds a plain member as [(name)]", () => {
     expect(emit("<input value:=q.a/>")).toBe('<input [(value)]="q.a">');
   });

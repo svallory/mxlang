@@ -36,19 +36,15 @@ export function rewriterFor(names: BuildResult["authoredNames"]): NameRewriter {
 /**
  * Whether `line` underlines a code-frame line: spaces, `^` and `~` with at
  * least one mark, behind the `╵` gutter mark esbuild (Angular's application
- * builder) prints, or with none (tsc's frame).
+ * builder) prints.
  */
 function isCaretLine(line: string): boolean {
-  return /^ *╵?[ ^~]*[\^~][ ^~]*$/.test(line);
+  return /^ *╵[ ^~]*[\^~][ ^~]*$/.test(line);
 }
 
-/**
- * Whether `line` is a code-frame source line, the only kind an underline
- * follows: esbuild's (`  1 │ code`) or tsc's (`1 code`), each led by its line
- * number.
- */
+/** Whether `line` is a code-frame source line, the only kind an underline follows: esbuild's `  1 │ code`. */
 function isFrameLine(line: string): boolean {
-  return /^\s*\d+ (?:│ | *\S)/.test(line);
+  return /^\s*\d+ │ /.test(line);
 }
 
 /**
@@ -74,7 +70,7 @@ function realignCarets(caret: string, edits: NameEdit[]): string {
  * Forwards `source` to `sink` a line at a time, rewritten, so a long build
  * prints as it runs and a name split across two reads is still one name. An
  * underline of `^`/`~` under a rewritten line is realigned to it, in esbuild's
- * frame (`  3 │ @let …` over `    ╵ ~~~`) and tsc's; a line printed with colour
+ * frame (`  3 │ @let …` over `    ╵ ~~~`); a line printed with colour
  * escapes (`FORCE_COLOR`) is not realigned. A rewritten line waits for its
  * underline only until the stream is idle, so a diagnostic that ends a
  * rebuild's output is printed without waiting for the next one. Resolves when
@@ -149,7 +145,10 @@ export function forwardLines(
   });
 }
 
-/** The command that runs the project's Angular CLI: its `bin/ng.js` under this node, else `ng` on the PATH. */
+/** The node that runs `ng.js`: this process, unless it is bun (launched through `bunx`), then `node` from the PATH. */
+const nodeBinary = process.versions.bun ? "node" : process.execPath;
+
+/** The command that runs the project's Angular CLI: its `bin/ng.js` under node, else `ng` on the PATH. */
 function ngCommand(projectDir: string): {
   command: string;
   prefix: string[];
@@ -159,7 +158,7 @@ function ngCommand(projectDir: string): {
     const ngJs = createRequire(join(projectDir, "package.json")).resolve(
       "@angular/cli/bin/ng.js",
     );
-    return { command: process.execPath, prefix: [ngJs], local: true };
+    return { command: nodeBinary, prefix: [ngJs], local: true };
   } catch {
     return { command: "ng", prefix: [], local: false };
   }

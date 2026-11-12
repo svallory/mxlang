@@ -10,10 +10,10 @@
 import {
   anchorFor,
   type CompileNgMxResult,
+  createNameRewriter,
   lineColumnAt,
   lookupMapping,
   offsetAt,
-  createNameRewriter,
   sourceOffsetFor,
 } from "@mxlang/host-angular";
 import type {
@@ -143,6 +143,9 @@ function eventHandlerHint(
   return `Handler \`${handler}\` expects \`(number, number)\`; MX passes \`(event, element)\`. Use \`${name}=(() => ${handler}(1, 2))\`.`;
 }
 
+const rewriters = new WeakMap<object, (text: string) => string>();
+const NO_NAMES: Record<string, string | null> = {};
+
 /**
  * Angular's message with each name MX generated for a `<const>` or `<define>`
  * (`__mxConst_a`) printed as the name the author wrote (`a`).
@@ -151,9 +154,6 @@ function eventHandlerHint(
  * template, and two regions may give the same generated name to different
  * authored ones. A diagnostic outside every region quotes none of them.
  */
-const rewriters = new WeakMap<object, (text: string) => string>();
-const NO_NAMES: Record<string, string | null> = {};
-
 function authoredNamesIn(
   compiled: CompileNgMxResult,
   diagnostic: Diagnostic,
