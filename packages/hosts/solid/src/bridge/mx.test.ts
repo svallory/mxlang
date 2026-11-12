@@ -741,6 +741,16 @@ describe("a TypeScript error inside a rewritten expression is reported on the au
 
   let dir: string;
   beforeAll(() => {
+    // A module-graph edge to the fixture the dialect below loads at runtime
+    // by path, so `vitest related` on the fixture selects this file. An
+    // `import` would make `tsc` pull core's sources under this package's
+    // `rootDir` (TS6059), which `import.meta.glob` does not.
+    // @ts-expect-error `import.meta.glob` is Vite's, not in this package's types
+    const edge = import.meta.glob(
+      "../../../../core/src/fixtures/syntax/atom-fixture.ts",
+      { eager: true },
+    );
+    expect(Object.keys(edge)).toHaveLength(1);
     dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-solid-diag-")));
     const dialect = join(dir, "node_modules", "atom-dialect");
     mkdirSync(dialect, { recursive: true });

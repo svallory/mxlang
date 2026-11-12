@@ -276,7 +276,7 @@ export function mxParseElementAt(
       recordedMappings,
       // `parseRegionCode` may have stripped a `{...}` wrapper: node offsets
       // then count from the unwrapped text, one character into `code`.
-      code.length - parsedCode.code.length > 0 ? 1 : 0,
+      parsedCode.stripped,
     );
     stampRoot(
       node,
@@ -1010,14 +1010,18 @@ function parseRegionCode(
   code: string,
   // biome-ignore lint/suspicious/noExplicitAny: the vendored options bag
   options: any,
-): { node: unknown; code: string } {
+): { node: unknown; code: string; stripped: 0 | 1 } {
   try {
-    return { node: parseExpression(code, options), code };
+    return { node: parseExpression(code, options), code, stripped: 0 };
   } catch (firstError) {
     if (code.startsWith("{") && code.endsWith("}")) {
       const unwrapped = code.slice(1, -1);
       try {
-        return { node: parseExpression(unwrapped, options), code: unwrapped };
+        return {
+          node: parseExpression(unwrapped, options),
+          code: unwrapped,
+          stripped: 1,
+        };
       } catch {
         // Fall through to the original error: unwrapping did not help, so
         // the original failure is the more useful one to report.
