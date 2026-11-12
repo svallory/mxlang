@@ -150,6 +150,26 @@ describe.each(HOSTS)(
       });
     });
 
+    it("an outer /x read before a body that declares its own /x compiles", async () => {
+      const code = await compile(
+        "<counter/x/>${x}<${input.tag}><counter/x/>${x}</>",
+      );
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("an imported value tag's body is its own scope, beside an outer /x", async () => {
+      const code = await compile(
+        'import { Box } from "./box.tsx";\n<Box><counter/x/>${x}</Box><counter/x/>${x}',
+      );
+      // The body's /var runs inside its content function, not in the render
+      // of the component that calls Box.
+      expect(code).toMatch(
+        /content: \(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(/,
+      );
+      expect(code.match(/const x = /g)).toHaveLength(2);
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
     it("an outer /x declared before a body's own /x is refused by core (only body-first compiles)", async () => {
       await expect(
         compile("<counter/x/><${input.tag}><counter/x/>${x}</>${x}"),

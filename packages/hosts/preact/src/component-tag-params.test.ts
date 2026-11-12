@@ -74,6 +74,8 @@ interface Case {
   callee?: { file: string; source: string };
   caller: string;
   html: string;
+  /** Also run with `noUnusedLocals`: no emitted binding may go unread. */
+  unusedLocals?: boolean;
 }
 
 const CASES: Record<string, Case> = {
@@ -120,6 +122,14 @@ export interface Input { items: string[] }
 </define>
 <ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li>x<b>r</b></li></ul>",
+  },
+  "a define called only directly (no unused public binding)": {
+    caller: `export interface Input { items: string[] }
+<define/Row|p|><li>\${p}</li></define>
+<ul><for|x| of=input.items><Row(x)/></for></ul>`,
+    html: "<ul><li>a</li><li>b</li></ul>",
+    // The public wrapped value is not emitted when nothing reads it.
+    unusedLocals: true,
   },
   "a define whose destructured param has a default": {
     caller: `export interface Input { items: string[] }
@@ -254,6 +264,7 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
               module: "ESNext",
               moduleResolution: "Bundler",
               noEmit: true,
+              noUnusedLocals: testCase.unusedLocals === true,
               skipLibCheck: true,
               strict: true,
               target: "ESNext",

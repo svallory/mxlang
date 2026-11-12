@@ -76,6 +76,11 @@ calls the JSX way so a hand-written Preact component can be called from MX.
 Without the bridge, `<Card><p/></Card>` compiles cleanly and renders an empty
 card.
 
+The bridge is a type assertion (`as`), not an annotation: a component whose
+`Input.content` is a function type-checks in its own file. The trade-off is
+that a call from hand-written JSX with text children hands that component a
+vnode where its type promises a function, and `tsc` does not report it.
+
 An import is emitted only when the template's output actually references it,
 so a template using no `<try>` and no structured `class` imports nothing.
 
@@ -100,7 +105,7 @@ so a template using no `<try>` and no structured `class` imports nothing.
 | `<Comp|item|>…</Comp>` | a render-prop child: `{(item) => …}` |
 | `<@name>body</@name>` | the prop `name={body}`; with params, `name={(p) => body}`; **repeated, an array** |
 | `<const/x=expr/>` (top level) | `const x = expr;` in the component body |
-| `<define/R|p|>…</define>` (top level) | `const R = (p) => (<>…</>);` |
+| `<define/R|p|>…</define>` (top level) | `const __mxDef_R = (p: any) => (<>…</>);` — direct calls `<R(x)/>` call it as written. A wrapped public value `const R = __mxDefine(__mxDef_R, "R");` is emitted only when something reads `R` as a value (a dynamic target, an expression, a define with attributes); it reads a body handed over as `children` as `content` |
 | `<try>` + `<@catch>`/`<@placeholder>` | `<MxErrorBoundary>` / `<MxPlaceholder>` (see below) |
 | `import`, `static`, `export` | hoisted verbatim to module scope |
 | `<${expr}>` (dynamic tag) | `mxDynamic(expr, props)` — JSX's tag position is static, so the target can't be written there directly |

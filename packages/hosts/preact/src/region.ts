@@ -53,6 +53,7 @@ import {
   closeFragmentBody,
   componentAlias,
   createRegionEmitter,
+  defineStatements,
 } from "./emitter.ts";
 import { sourcePosition } from "./source-position.ts";
 
@@ -256,9 +257,18 @@ export function compileJsxRegion(
   drive(emitter, ir.body);
   const markupCode = emitter.result();
   // Defines first, then the `/var` calls, as a whole-file module orders them.
+  const varStatements = emitter.varStatements.map((statement) =>
+    concatMapped(statement),
+  );
   const statements: MappedCode[] = [
-    ...emitter.liftedDefines,
-    ...emitter.varStatements.map((statement) => concatMapped(statement)),
+    ...defineStatements(
+      emitter.liftedDefines,
+      [
+        markupCode.code,
+        ...varStatements.map((statement) => statement.code),
+      ].join("\n"),
+    ),
+    ...varStatements,
   ];
 
   const hoistedImports: JsxHoistedImport[] = [];

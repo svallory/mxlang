@@ -71,10 +71,17 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("a define with no attributes is unchanged", () => {
     const code = whole("<define/D><p>x</p></define>\n<D/>");
-    expect(code).toContain(
-      'const __mxDef_D = () => (<><p>x</p></>); const D = __mxDefine(__mxDef_D, "D");',
-    );
+    expect(code).toContain("const __mxDef_D = () => (<><p>x</p></>);");
     expect(code).not.toContain("Object.assign");
+    // Nothing reads the public value, so no wrapper (and no helper) is emitted.
+    expect(code).not.toContain("__mxDefine");
+    expect(code).not.toContain("const D =");
+  });
+
+  it("a define read as a value keeps its wrapped public binding", () => {
+    const code = whole("<define/D><p>x</p></define>\n<${D}/>");
+    expect(code).toContain('const D = __mxDefine(__mxDef_D, "D");');
+    expect(code).toContain("function __mxDefine<");
   });
 
   it("an attribute named content next to a body is dropped: the body wins", () => {

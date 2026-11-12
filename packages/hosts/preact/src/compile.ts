@@ -49,6 +49,8 @@ import {
   closeFragmentBody,
   componentAlias,
   createEmitter,
+  type DefineParts,
+  defineStatements,
   preactDeclarations,
 } from "./emitter.ts";
 
@@ -508,6 +510,7 @@ export function emitModuleWithMappings(
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
   const statements: MappedCode[] = [];
+  const defineParts: { slot: number; part: DefineParts }[] = [];
   const markup: IrNode[] = [];
   for (const node of ir.body) {
     if (node.kind === "Const") {
@@ -519,9 +522,14 @@ export function emitModuleWithMappings(
       for (const name of body.runtimeImports) {
         emitter.runtimeImports.add(name);
       }
-      statements.push(
-        emitter.defineStatement(node, rendered, body.varStatements),
-      );
+      // The slot keeps the define's place among the statements; its text
+      // (with or without the wrapped value) is settled once the markup is
+      // known (`defineStatements`).
+      defineParts.push({
+        slot: statements.length,
+        part: emitter.defineStatement(node, rendered, body.varStatements),
+      });
+      statements.push(concatMapped(""));
     } else {
       markup.push(node);
     }
@@ -551,6 +559,18 @@ export function emitModuleWithMappings(
   for (const statement of emitter.varStatements) {
     statements.push(concatMapped(statement));
   }
+
+  const resolvedDefines = defineStatements(
+    defineParts.map((entry) => entry.part),
+    [
+      body.code,
+      ...statements.map((statement) => statement.code),
+      ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
+    ].join("\n"),
+  );
+  defineParts.forEach((entry, index) => {
+    statements[entry.slot] = resolvedDefines[index] as MappedCode;
+  });
 
   const lines: string[] = [
     `/** @jsxImportSource ${dialect.jsxImportSource} */`,

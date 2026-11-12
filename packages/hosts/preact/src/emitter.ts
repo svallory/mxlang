@@ -124,7 +124,7 @@ interface RegionSink {
   /** The file kind's segment, named in region-only errors. */
   segment: string;
   /** Lifted `<define>` statements, in source order. */
-  defines: MappedCode[];
+  defines: DefineParts[];
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
 }
@@ -164,6 +164,47 @@ export function typedDefineParam(param: string): string {
 }
 
 /** The private binding a `<define>`'s own function is declared under. */
+/**
+ * A `<define>` as two statements: the private function direct calls reach,
+ * and the wrapped public value. `always` is set for a define with attributes,
+ * whose properties are read through the value.
+ */
+export interface DefineParts {
+  name: string;
+  fn: MappedCode;
+  value: MappedCode;
+  always: boolean;
+}
+
+/**
+ * The statements for a set of defines. The wrapped public `const Row` is
+ * emitted only when something reads it (a dynamic target, an author's
+ * expression, a define with attributes): `otherCode` is every other emitted
+ * text of the same scope, searched for the name as a bare identifier. A
+ * name found in a string or in text counts as a read, so a miss only costs an
+ * unused wrapper, never a missing binding.
+ */
+export function defineStatements(
+  parts: readonly DefineParts[],
+  otherCode: string,
+): MappedCode[] {
+  const text = [
+    otherCode,
+    ...parts.map((part) => part.fn.code),
+    ...parts.filter((part) => part.always).map((part) => part.value.code),
+  ].join("\n");
+  return parts.map((part) =>
+    part.always || readsName(text, part.name)
+      ? concatMapped(part.fn, part.value)
+      : part.fn,
+  );
+}
+
+function readsName(text: string, name: string): boolean {
+  const escaped = name.replace(/[$]/g, "\\$&");
+  return new RegExp(`(?<![\\w$.])${escaped}(?![\\w$])`).test(text);
+}
+
 function defineFunctionName(name: string): string {
   return `__mxDef_${name}`;
 }
@@ -792,7 +833,7 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** `<define>` statements lifted out of a region's markup, in source order. */
-  get liftedDefines(): MappedCode[] {
+  get liftedDefines(): DefineParts[] {
     return this.#region?.defines ?? [];
   }
 
@@ -912,15 +953,8 @@ export class PreactEmitter implements Emitter<string> {
     slot: boolean,
     build: (scope: PreactEmitter) => MappedCode,
   ): MappedCode {
-    const scope = this.#derive({
-      varStatements: [],
-      varSerial: { n: 0 },
-      bindings: new Map<string, Position>(),
-      scopedBody: true,
-    });
-    const code = build(scope);
-    if (scope.#varStatements.length === 0) return code;
-    const statements = scope.#varStatements.join(" ");
+    const { code, statements } = this.#scopeOf(build);
+    if (statements === "") return code;
     return slot
       ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
       : concatMapped(
@@ -928,6 +962,21 @@ export class PreactEmitter implements Emitter<string> {
           closeFragmentBody(code),
           "</>); })()}",
         );
+  }
+
+  /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
+  #scopeOf(build: (scope: PreactEmitter) => MappedCode): {
+    code: MappedCode;
+    statements: string;
+  } {
+    const scope = this.#derive({
+      varStatements: [],
+      varSerial: { n: 0 },
+      bindings: new Map<string, Position>(),
+      scopedBody: true,
+    });
+    const code = build(scope);
+    return { code, statements: scope.#varStatements.join(" ") };
   }
 
   #render(
@@ -1893,18 +1942,21 @@ export class PreactEmitter implements Emitter<string> {
     node: Extract<IrNode, { kind: "Define" }>,
     rendered: MappedCode,
     bodyVarStatements: readonly string[] = [],
-  ): MappedCode {
+  ): DefineParts {
     const params = node.params.map(typedDefineParam).join(", ");
     // The function itself keeps a private name: a direct call from MX
     // (`<Row(x)/>`) calls it as written, so an argument reaches the body
-    // untouched. Only the value `Row`, which a dynamic tag can reach, is
-    // wrapped by `__mxDefine`, which reads a body handed over as `children`
-    // as `content`. A `/var` inside the body is the body's own: its statements
-    // run inside the function ahead of the markup that reads the binding, so
-    // each call evaluates them in its own scope (as Marko does).
+    // untouched. Only the value `Row`, which a dynamic tag or an author's
+    // expression can reach, is wrapped by `__mxDefine`, which reads a body
+    // handed over as `children` as `content`; `defineStatements` emits it only
+    // when something reads it. A `/var` inside the body is the body's own: its
+    // statements run inside the function ahead of the markup that reads the
+    // binding, so each call evaluates them in its own scope (as Marko does).
     const own = defineFunctionName(node.name);
     const fn = concatMapped(
-      `const ${own} = (`,
+      "const ",
+      mapped(own, node.nameSpan ?? null),
+      " = (",
       params,
       bodyVarStatements.length > 0
         ? `) => { ${bodyVarStatements.join(" ")} return (<>`
@@ -1912,17 +1964,26 @@ export class PreactEmitter implements Emitter<string> {
       closeFragmentBody(rendered),
       bodyVarStatements.length > 0 ? "</>); };" : "</>);",
     );
-    const value = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
+    const wrapped = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
     if (node.attrs.length === 0) {
-      return concatMapped(fn, ` const ${node.name} = ${value};`);
+      return {
+        name: node.name,
+        fn,
+        value: concatMapped(` const ${node.name} = ${wrapped};`),
+        always: false,
+      };
     }
     const { open, between } = defineValueWrapper(node.attrs);
-    return concatMapped(
+    return {
+      name: node.name,
       fn,
-      ` const ${node.name} = ${open}${value}`,
-      between,
-      `{ ${this.#propParts(node.attrs).join(", ")} });`,
-    );
+      value: concatMapped(
+        ` const ${node.name} = ${open}${wrapped}`,
+        between,
+        `{ ${this.#propParts(node.attrs).join(", ")} });`,
+      ),
+      always: true,
+    };
   }
 
   /**
@@ -2486,13 +2547,26 @@ export class PreactEmitter implements Emitter<string> {
     node: Extract<IrNode, { kind: "Component" }>,
   ): MappedCode {
     const children = node.content?.children ?? [];
-    if (node.content?.hasParams) {
-      return concatMapped(
-        `((${node.content.params.join(", ")}) => `,
-        this.#arrowBody(children),
-        ") as (...args: any[]) => any",
-      );
-    }
+    // Like a dynamic tag's body, the body is a scope of its own: a `/var` in
+    // it runs inside the `content` function, when the component renders its
+    // children, never in the parent's render.
+    const { code: body, statements } = this.#scopeOf((scope) =>
+      scope.#hostComponentBody(node, children),
+    );
+    const open = node.content?.hasParams
+      ? `((${node.content.params.join(", ")}) =>`
+      : "() =>";
+    const close = node.content?.hasParams ? ") as (...args: any[]) => any" : "";
+    return statements === ""
+      ? concatMapped(`${open} `, body, close)
+      : concatMapped(`${open} { ${statements} return `, body, `; }${close}`);
+  }
+
+  #hostComponentBody(
+    node: Extract<IrNode, { kind: "Component" }>,
+    children: IrNode[],
+  ): MappedCode {
+    if (node.content?.hasParams) return this.#arrowBody(children);
     const content = meaningful(children);
     const only = content.length === 1 ? content[0] : undefined;
     if (
@@ -2504,10 +2578,10 @@ export class PreactEmitter implements Emitter<string> {
         only.kind === "For" ||
         only.kind === "DelegatedTag")
     ) {
-      return concatMapped("() => ", this.#arrowBody(children));
+      return this.#arrowBody(children);
     }
     return concatMapped(
-      "() => (<>",
+      "(<>",
       this.#render(content),
       "</> as any).props.children",
     );

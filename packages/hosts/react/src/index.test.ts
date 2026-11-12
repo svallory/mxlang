@@ -173,7 +173,7 @@ describe("whole-file duplicate lifted bindings", () => {
     const code = compileReactMx(source, "/fixtures/page.mx", {
       customTags: { counter },
     }).code;
-    expect(code).toContain("const Row = ");
+    expect(code).toContain("const __mxDef_Row = ");
     expect(code).toContain("const x = __mxRet0.value;");
   });
 

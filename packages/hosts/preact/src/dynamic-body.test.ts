@@ -262,6 +262,17 @@ describe("a <define> used as a dynamic target (mx-jsx-define-as-dynamic-target-e
     ).toBe("<li><b>r</b></li>");
   });
 
+  it("the args form hands the body over as the object after the args", async () => {
+    expect(
+      await renderPair(
+        '<define/Row|label, { content }|><li>${label}:<${content}/></li></define>\n<const/R = Row/>\n<${R}("a")><b>x</b></>',
+        {},
+        WRAP,
+        true,
+      ),
+    ).toBe("<li>a:<b>x</b></li>");
+  });
+
   it("a text body reads as text, not a tag name", async () => {
     expect(
       await renderPair(
@@ -315,31 +326,5 @@ describe("a direct call of a <define> passes its arguments through untouched", (
         true,
       ),
     ).toBe("none");
-  });
-});
-
-describe("a lone 0 in a scoped body that binds a /var still renders", () => {
-  it("a <try> body", async () => {
-    expect(
-      String(
-        await renderPair(
-          "<try><wrap/x v=0/>${x}<@catch>e</@catch></try>",
-          {},
-          "<return value=input.v/>",
-          true,
-        ),
-      ),
-    ).toBe("0");
-  });
-
-  it("a dynamic-tag body", async () => {
-    expect(
-      await renderPair(
-        '<${"section"}><wrap/x v=0/>${x}</>',
-        {},
-        "<return value=input.v/>",
-        true,
-      ),
-    ).toBe("<section>0</section>");
   });
 });

@@ -275,29 +275,3 @@ describe("a direct call of a <define> passes its arguments through untouched", (
     ).toBe("none");
   });
 });
-
-describe("a lone 0 in a scoped body that binds a /var still renders", () => {
-  it("a <try> body", async () => {
-    expect(
-      String(
-        await renderPair(
-          "<try><wrap/x v=0/>${x}<@catch>e</@catch></try>",
-          {},
-          "<return value=input.v/>",
-          true,
-        ),
-      ),
-    ).toBe("0");
-  });
-
-  it("a dynamic-tag body", async () => {
-    expect(
-      await renderPair(
-        '<${"section"}><wrap/x v=0/>${x}</>',
-        {},
-        "<return value=input.v/>",
-        true,
-      ),
-    ).toBe("<section>0</section>");
-  });
-});

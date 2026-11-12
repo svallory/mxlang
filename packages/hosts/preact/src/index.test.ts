@@ -193,7 +193,7 @@ describe("whole-file duplicate lifted bindings", () => {
       const code = compilePreactMx(source, "/fixtures/page.mx", {
         customTags: { counter },
       }).code;
-      expect(code).toContain("const Row = ");
+      expect(code).toContain("const __mxDef_Row = ");
       expect(code).toContain("const x = __mxRet0.value;");
     },
   );
@@ -1218,7 +1218,7 @@ describe("<define> and <const>", () => {
       "<define/Row|label|><li>${label}</li></define>\n<Row('a')/>",
     );
     expect(code).toContain(
-      'const __mxDef_Row = (label: any) => (<><li>{__mxRenderable(label)}</li></>); const Row = __mxDefine(__mxDef_Row, "Row");',
+      "const __mxDef_Row = (label: any) => (<><li>{__mxRenderable(label)}</li></>);",
     );
     expect(code).toContain("{__mxDef_Row('a')}");
   });
