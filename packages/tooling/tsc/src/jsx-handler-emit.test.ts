@@ -142,4 +142,61 @@ describe.each(HOSTS)("mx-tsc emit on $host", ({ host, jsxImportSource }) => {
     },
     SPAWN_TIMEOUT_MS,
   );
+
+  it(
+    "emits a direct define call that hands its argument to the body untouched",
+    async () => {
+      const root = mkdtempSync(join(fixtures, `.define-emit-${host}-`));
+      roots.push(root);
+      mkdirSync(join(root, "src"));
+      writeFileSync(
+        join(root, "src", "Emit.mx"),
+        "<define/Row|n: any|>${n === globalThis.__mxArg ? 'same' : 'copy'}</define>\n<Row(globalThis.__mxArg)/>\n",
+      );
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ mx: { host } }),
+      );
+      writeFileSync(
+        join(root, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: {
+            strict: false,
+            module: "esnext",
+            moduleResolution: "bundler",
+            target: "esnext",
+            lib: ["esnext", "dom"],
+            jsx: "react-jsx",
+            jsxImportSource,
+            types: [],
+            noEmit: false,
+            rootDir: "src",
+            outDir: "out",
+            baseUrl: ".",
+            paths: {
+              "@mxlang/core": [
+                join(repoRoot, "packages", "core", "src", "index.ts"),
+              ],
+            },
+            ignoreDeprecations: "6.0",
+          },
+          include: ["src/Emit.mx"],
+        }),
+      );
+      const result = run(mxTsc, ["-p", root]);
+      expect(result.output).toBe("");
+      const out = join(root, "out", "Emit.mx.js");
+      expect(readFileSync(out, "utf8")).toMatch(/__mxDef_Row\)?\(/);
+      // An argument with `children` and no `content` is what `__mxDefine`
+      // rewrites; a direct call must hand it over as the same object.
+      (globalThis as Record<string, unknown>).__mxArg = { children: "c" };
+      try {
+        const module = await import(pathToFileURL(out).href);
+        expect(JSON.stringify(module.default({}))).toContain("same");
+      } finally {
+        delete (globalThis as Record<string, unknown>).__mxArg;
+      }
+    },
+    SPAWN_TIMEOUT_MS,
+  );
 });

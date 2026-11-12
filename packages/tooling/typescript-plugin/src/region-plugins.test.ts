@@ -144,7 +144,7 @@ describe(".preact.mx: the Preact region kind's own plugin", () => {
     const text =
       virtual?.snapshot.getText(0, virtual.snapshot.getLength()) ?? "";
     // A direct call reads the public binding, which a hover names.
-    expect(text).toContain("{Row(1)}");
+    expect(text).toContain("{(__mxDef_Row as typeof Row)(1)}");
     expect(text).not.toContain("__mxDef_Row(");
     expect(text).toContain("const Row = __mxDefine(");
     // Nothing in the source maps onto the private declaration, so a diagnostic

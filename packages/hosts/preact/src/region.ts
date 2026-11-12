@@ -262,9 +262,7 @@ export function compileJsxRegion(
     dialect,
     segment,
     (offset) => sourcePosition(padded, offset),
-    options.typeCheck || !/<define\b/.test(source)
-      ? new WeakSet<object>()
-      : shadowedCalls(ir),
+    /<define\b/.test(source) ? shadowedCalls(ir) : new WeakSet<object>(),
     options.typeCheck === true,
   );
   drive(emitter, ir.body);

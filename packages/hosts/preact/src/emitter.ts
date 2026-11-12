@@ -157,25 +157,17 @@ export function paramNames(params: readonly string[]): string[] {
 }
 
 /**
- * Does `text` hold a template literal or a regex literal? A `/` starts a regex
- * only where an expression may begin (at the start, or after `=(,:[!&|?{;`);
- * after a name, number or closer it is division, and `/*` after such a
- * position is a comment the scan treats as a regex (it only fails safe).
+ * Does `text` hold a template literal, a regex literal or a comment? None of
+ * them can be followed by the scans below (each may hide a bracket), and
+ * `skipLiteral` is the one place that recognizes them.
  */
 function unreadable(text: string): boolean {
-  let previous = "";
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i] as string;
-    if (ch === '"' || ch === "'") {
-      i = skipQuoted(text, i) - 1;
-      previous = ch;
-    } else if (ch === "`") {
-      return true;
-    } else if (ch === "/" && startsRegex(previous)) {
-      return true;
-    } else if (!/\s/.test(ch)) {
-      previous = ch;
-    }
+    const end = skipLiteral(text, i);
+    if (end === i) continue;
+    // A string is read by the scans; a template, regex or comment is not.
+    if (text[i] !== '"' && text[i] !== "'") return true;
+    i = end - 1;
   }
   return false;
 }
@@ -186,6 +178,7 @@ const ALL_NAMES = "*";
 /** One identifier, as every scan in this file reads it. */
 const IDENT = "[\\p{ID_Start}$_][\\p{ID_Continue}$\\u200c\\u200d]*";
 const NAME = new RegExp(IDENT, "uy");
+const IDENT_READ = new RegExp(`(\\.{1,3})?[ \\t]*(${IDENT})`, "gu");
 
 function skipSpace(text: string, from: number): number {
   let i = from;
@@ -207,8 +200,9 @@ function skipExpression(text: string, from: number, closer: string): number {
   let i = from;
   while (i < text.length) {
     const ch = text[i] as string;
-    if (ch === '"' || ch === "'" || ch === "`") {
-      i = skipQuoted(text, i);
+    const end = skipLiteral(text, i);
+    if (end > i) {
+      i = end;
       continue;
     }
     if (depth === 0 && (ch === "," || ch === closer)) return i;
@@ -520,16 +514,44 @@ const PRIMITIVE_DEFAULT =
   /^(?:-?\d[\d_]*(?:\.\d+)?n?|"[^"\\]*"|'[^'\\]*'|true|false)$/;
 const PLAIN_NAME = new RegExp(`^${IDENT}$`, "u");
 
-/** Is a `/` after `previous` (the last non-space character, "" at the start) a regex start? */
-const startsRegex = (previous: string): boolean =>
-  previous === "" || "=(,:[!&|?{;".includes(previous);
+/** Keywords after which a `/` starts a regex literal rather than dividing. */
+const REGEX_KEYWORDS = new Set([
+  "typeof",
+  "void",
+  "in",
+  "of",
+  "return",
+  "delete",
+  "instanceof",
+  "new",
+  "await",
+  "yield",
+]);
+const IDENT_PART = /[\p{ID_Continue}$\u200c\u200d]/u;
+
+/**
+ * Does the `/` at `from` start a regex literal? After a value (a name, number,
+ * string, or a closing `)`, `]`, `}`) it divides; after any other punctuator,
+ * a keyword like `typeof`, or at the start, it starts a regex. A guess that
+ * errs toward a regex only fails safe.
+ */
+function startsRegex(text: string, from: number): boolean {
+  let i = from - 1;
+  while (i >= 0 && /\s/.test(text[i] as string)) i--;
+  if (i < 0) return true;
+  const last = text[i] as string;
+  if (")]}\"'`".includes(last)) return false;
+  if (!IDENT_PART.test(last)) return true;
+  let start = i;
+  while (start > 0 && IDENT_PART.test(text[start - 1] as string)) start--;
+  return REGEX_KEYWORDS.has(text.slice(start, i + 1));
+}
 
 /**
  * The index after the comment, string, template or regex literal that starts
- * at `from`, or `from` when none does. `previous` is the last non-space
- * character before it, which decides between a regex and a division.
+ * at `from`, or `from` when none does.
  */
-function skipLiteral(text: string, from: number, previous: string): number {
+function skipLiteral(text: string, from: number): number {
   const ch = text[from];
   if (ch === '"' || ch === "'") return skipQuoted(text, from);
   if (ch === "`") return skipTemplate(text, from);
@@ -542,7 +564,7 @@ function skipLiteral(text: string, from: number, previous: string): number {
     const end = text.indexOf("\n", from);
     return end < 0 ? text.length : end;
   }
-  if (!startsRegex(previous)) return from;
+  if (!startsRegex(text, from)) return from;
   let inClass = false;
   let i = from + 1;
   while (i < text.length) {
@@ -565,19 +587,16 @@ function skipTemplate(text: string, from: number): number {
     else if (c === "`") return i + 1;
     else if (c === "$" && text[i + 1] === "{") {
       let depth = 1;
-      let previous = "{";
       i += 2;
       while (i < text.length && depth > 0) {
-        const end = skipLiteral(text, i, previous);
+        const end = skipLiteral(text, i);
         if (end > i) {
-          previous = text[end - 1] as string;
           i = end;
           continue;
         }
         const d = text[i] as string;
         if (d === "{") depth++;
         else if (d === "}") depth--;
-        if (!/\s/.test(d)) previous = d;
         i++;
       }
     } else i++;
@@ -599,11 +618,9 @@ function skipTemplate(text: string, from: number): number {
 export function typedDefineParam(param: string): string {
   const text = param.trim();
   let depth = 0;
-  let previous = "";
   for (let i = 0; i < text.length; i++) {
-    const end = skipLiteral(text, i, previous);
+    const end = skipLiteral(text, i);
     if (end > i) {
-      previous = text[end - 1] as string;
       i = end - 1;
       continue;
     }
@@ -622,7 +639,6 @@ export function typedDefineParam(param: string): string {
       }
       return `${target}: any ${text.slice(i)}`;
     }
-    if (!/\s/.test(ch)) previous = ch;
   }
   return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
 }
@@ -681,9 +697,7 @@ export function defineStatements(
  */
 function readIdentifiers(text: string): Set<string> {
   const names = new Set<string>();
-  for (const match of text.matchAll(
-    new RegExp(`(\\.{1,3})?[ \\t]*(${IDENT})`, "gu"),
-  )) {
+  for (const match of text.matchAll(IDENT_READ)) {
     if (match[1] === ".") continue;
     names.add(match[2] as string);
   }
@@ -2917,12 +2931,18 @@ export class PreactEmitter implements Emitter<string> {
             : "";
       this.#out.push(
         this.#slot(
-          mapped(
-            this.#publicDefines || this.#shadowed.has(node)
-              ? node.target.name
-              : defineFunctionName(node.target.name),
-            node.nameSpan,
-          ),
+          this.#shadowed.has(node)
+            ? mapped(node.target.name, node.nameSpan)
+            : this.#publicDefines
+              ? // The private function runs (so an argument arrives as written,
+                // as in a build); the cast types it and maps the hover and
+                // go-to-definition by the public name.
+                concatMapped(
+                  `(${defineFunctionName(node.target.name)} as typeof `,
+                  mapped(node.target.name, node.nameSpan),
+                  ")",
+                )
+              : mapped(defineFunctionName(node.target.name), node.nameSpan),
           `(${args})`,
         ),
       );

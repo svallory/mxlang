@@ -237,7 +237,7 @@ describe("the typeCheck projection reads the public define name", () => {
         typeCheck: true,
       },
     ).code;
-    expect(code).toContain("{Row('a')}");
+    expect(code).toContain("{(__mxDef_Row as typeof Row)('a')}");
     expect(code).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
   });
 });
@@ -266,6 +266,10 @@ describe("typedDefineParam", () => {
     ["{ a = `${'}'}`, b }", "{ a = `${'}'}`, b }: any"],
     ["{ a = 1 /* } */, b } = {}", "{ a = 1 /* } */, b }: any = {}"],
     ["n = total / 2", "n: any = total / 2"],
+    [
+      "{ a = 1 + /}/.source.length, b } = {}",
+      "{ a = 1 + /}/.source.length, b }: any = {}",
+    ],
     ["a\u200cb = 1", "a\u200cb = 1"],
     ["...r: string[]", "...r: string[]"],
   ])("%s -> %s", (param, typed) => {
@@ -312,6 +316,15 @@ describe("paramNames", () => {
     [["{ 'k-1': k, [`z${1}`]: z }"], ["*"]],
     [["{ a = /[}]/, Row }"], ["*"]],
     [["{ a = 1 / 2, Row }"], ["a", "Row"]],
+    [["{ a = 1 /* } */, Row }"], ["*"]],
+    [["{ a = 1 // }\n, Row }"], ["*"]],
+    [["{ a = 1 + /}/.source.length, Row }"], ["*"]],
+    [["{ a = () => /]/, Row }"], ["*"]],
+    [["{ a = typeof /}/, Row }"], ["*"]],
+    [
+      ["{ a = (1) / 2, b = [1][0] / 2, c = x / 2, Row }"],
+      ["a", "b", "c", "Row"],
+    ],
     [["n = total / 2"], ["n"]],
     [["{ a = /x/ }"], ["*"]],
     [["a = (b) / 2, c = /x/"], ["*"]],
