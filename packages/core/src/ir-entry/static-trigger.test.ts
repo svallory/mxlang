@@ -318,6 +318,34 @@ describe("the matching is the template scanner's", () => {
     ]);
   });
 
+  describe("`class` as a property key opens no class body", () => {
+    table("found", [
+      ['const a = { class: "b" }\nif (x) {\n f()\n ~zz\n}', ZZ],
+      ["o.x = { class: 1 }\nif (x) { @zz }", ["at", "@zz"], [at]],
+    ]);
+  });
+
+  describe("a comma in a header's tuple or generic does not end the header", () => {
+    table("is found", [
+      ["function f(): [number, string] { return g() } ~zz", ZZ],
+      ["function f(): Map<a, b> { } ~zz", ZZ],
+    ]);
+    table("no row", [
+      [
+        "class A extends (b < c ? X : Y) {\n x = 1\n @dec y = 2\n}",
+        undefined,
+        [at],
+      ],
+    ]);
+  });
+
+  describe("a ternary survives a line break inside brackets", () => {
+    table("ternary", [
+      ["x = c ? g(\n y\n) : {} / 2; z = ~zz", ZZ],
+      ["a = c ? [\n 1\n] : { b } ~zz", undefined],
+    ]);
+  });
+
   describe("a method head is a key of its own brace", () => {
     table("a call after a comma is no method", [
       ["x = { a: [b, f(c)] }\ny = { q: 1 } ~zz", undefined],
@@ -336,6 +364,10 @@ describe("the matching is the template scanner's", () => {
       ["class A {\n x = 1;\n #b = 2;\n}", undefined, [hash]],
       ["class A {\n  @dec\n  m() {}\n}", undefined, [at]],
       ["class A {\n constructor(@inject b) {}\n}", undefined, [at]],
+      ["class A {\n x = 1\n constructor(@inject b) {}\n}", undefined, [at]],
+      ["class A {\n x: number\n m(@a b) {}\n}", undefined, [at]],
+      ["class A {\n abstract m(): void\n #b = 1\n}", undefined, [hash]],
+      ["class A {\n x: void\n #b = 1\n}", undefined, [hash]],
     ]);
   });
 
@@ -353,6 +385,10 @@ describe("the matching is the template scanner's", () => {
       ["x = y\n@a.b class B {}", undefined, [at]],
       ["x = y\n@a<T>() class B {}", undefined, [at]],
       ["x = y\n@a (1) class B {}", undefined, [at]],
+    ]);
+    table("in an operand position it is a row", [
+      ["const a = @zz\nclass B {}", ["at", "@zz"], [at]],
+      ["class A {\n m(a = f(@zz)) {}\n}", ["at", "@zz"], [at]],
     ]);
     table("a row after a class", [["class A {} @dec", ["at", "@dec"], [at]]]);
   });

@@ -1416,13 +1416,19 @@ function lowerExpressionTriggers(
     // text becomes the replacement's printed code. A node's replacement is
     // its forward: the splice carries the node, so the expression records
     // it where the forward is printed.
-    pushSplice(ctx, trigger, run.splices, {
-      ...spanRange(trigger),
-      text: printed(ctx, replacement, trigger),
-      ...(claimed
-        ? { node: recordForward(claimed as DialectNode, replacement) }
-        : {}),
-    });
+    pushSplice(
+      ctx,
+      trigger,
+      run.splices,
+      {
+        ...spanRange(trigger),
+        text: printed(ctx, replacement, trigger),
+        ...(claimed
+          ? { node: recordForward(claimed as DialectNode, replacement) }
+          : {}),
+      },
+      [],
+    );
     lowered.add(trigger);
     lowered.add(entry);
   }
@@ -1475,21 +1481,19 @@ function refuseUnplaceable(ctx: Ctx, trigger: Node): void {
   }
 }
 
-/** The splices each trigger has pushed, to refuse a second over the same text. */
-const pushedSplices = new WeakMap<Node, TriggerSplice[]>();
-
 /**
  * Push a trigger's splice into `into`. Two values spliced over overlapping
  * text would each get both splices applied to their `code`, so a splice that
- * overlaps one the same trigger already pushed is a positioned error.
+ * overlaps one `mine` (this hook result's own splices) already holds is a
+ * positioned error.
  */
 function pushSplice(
   ctx: Ctx,
   trigger: Node,
   into: TriggerSplice[] | undefined,
   splice: TriggerSplice,
+  mine: TriggerSplice[],
 ): void {
-  const mine = pushedSplices.get(trigger) ?? [];
   if (mine.some((each) => splice.start < each.end && each.start < splice.end)) {
     raise(
       DIALECT_HOOK_ERROR_CODE,
@@ -1498,7 +1502,6 @@ function pushSplice(
     );
   }
   mine.push(splice);
-  pushedSplices.set(trigger, mine);
   into?.push(splice);
 }
 
@@ -1568,7 +1571,12 @@ function literal(ctx: Ctx, value: string, start: number, end: number): Node {
  * default-attribute convention). A string value spans its occurrence in the
  * trigger's text when it has one (`title` in `&title`), else the text.
  */
-function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
+function attributeNode(
+  ctx: Ctx,
+  trigger: Node,
+  attr: TriggerAttribute,
+  mine: TriggerSplice[],
+): Node {
   // The part of the trigger's text that spells this attribute (`at`), else
   // all of it.
   const text = attr.options?.at ?? spanOf(trigger);
@@ -1617,11 +1625,17 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       end: text.sourceEnd,
       loc: locOf(ctx, text.sourceStart, text.sourceEnd),
     });
-    pushSplice(ctx, trigger, ctx.triggerSplices, {
-      start: text.sourceStart,
-      end: text.sourceEnd,
-      text: printed(ctx, node, trigger),
-    });
+    pushSplice(
+      ctx,
+      trigger,
+      ctx.triggerSplices,
+      {
+        start: text.sourceStart,
+        end: text.sourceEnd,
+        text: printed(ctx, node, trigger),
+      },
+      mine,
+    );
     container = containerOf(ctx, node, text.sourceStart, text.sourceEnd);
   } else {
     // A node of a registered type lowers through its type's `lower` in value
@@ -1630,7 +1644,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
     const given = value as { type: string; span?: SourceSpan };
     const span = given.span ?? text;
     const node = Object.freeze({ ...given, span }) as unknown as DialectNode;
-    const lowered = lowerValueNode(ctx, trigger, node);
+    const lowered = lowerValueNode(ctx, trigger, node, mine);
     if (typeof lowered === "string") {
       // The string spans its occurrence in the text (`email` in `:email`),
       // as a string value does; the node keeps the whole token.
@@ -1785,9 +1799,13 @@ function lowerAttributeTrigger(
     return [badKind(trigger, row.node)];
   }
   lowered.add(trigger);
+  // This hook result's own splices: only they can overlap each other.
+  const mine: TriggerSplice[] = [];
   let from = 0;
   return results.map((item) => {
-    if (item.kind === "attribute") return attributeNode(ctx, trigger, item);
+    if (item.kind === "attribute") {
+      return attributeNode(ctx, trigger, item, mine);
+    }
     const placed = shorthandNode(trigger, item, from);
     from = placed.end;
     return placed.node;
@@ -1903,7 +1921,7 @@ function lowerValueAttribute(
       args: null,
       claimed: node,
     };
-    const lowered = lowerValueNode(ctx, trigger, node as DialectNode);
+    const lowered = lowerValueNode(ctx, trigger, node as DialectNode, []);
     container =
       typeof lowered === "string"
         ? containerOf(ctx, literal(ctx, lowered, start, end), start, end)
@@ -1934,6 +1952,7 @@ function lowerValueNode(
   ctx: Ctx,
   trigger: Node,
   node: DialectNode,
+  mine: TriggerSplice[],
 ): string | Node {
   const { sourceStart: start, sourceEnd: end } = node.span;
   const result = callHook(
@@ -1963,12 +1982,18 @@ function lowerValueNode(
     end,
     loc: locOf(ctx, start, end),
   });
-  pushSplice(ctx, trigger, ctx.triggerSplices, {
-    start,
-    end,
-    text: printed(ctx, expression, trigger),
-    node: recordForward(node, expression),
-  });
+  pushSplice(
+    ctx,
+    trigger,
+    ctx.triggerSplices,
+    {
+      start,
+      end,
+      text: printed(ctx, expression, trigger),
+      node: recordForward(node, expression),
+    },
+    mine,
+  );
   return containerOf(ctx, expression, start, end);
 }
 
@@ -2012,6 +2037,7 @@ function lowerLineTrigger(
   const hook = hookFor(dialect, trigger, row.node);
   if (!hook) return badKind(trigger, row.node as string);
   const value = triggerValue(trigger);
+  const mine: TriggerSplice[] = [];
   const result = callHook(ctx, hook, trigger, value);
   if (Array.isArray(result) || (result as { kind: string }).kind !== "child")
     wrongResult(trigger, "ctx.child(tagName, attrs)");
@@ -2034,7 +2060,9 @@ function lowerLineTrigger(
     typeParams: null,
     params: null,
     shorthands: [],
-    attributes: child.attrs.map((attr) => attributeNode(ctx, trigger, attr)),
+    attributes: child.attrs.map((attr) =>
+      attributeNode(ctx, trigger, attr, mine),
+    ),
     body: [],
     bodyMode: "html",
     selfClosed: false,
