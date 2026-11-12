@@ -104,8 +104,6 @@ export function entryDeclarations(
       name: "tree",
       nativeTags,
       attrTags: 2,
-      // The tree reads each call's IR itself, `args` included.
-      namedCallInputArgument: true,
       builtinTags: BUILTIN_TAGS,
       // The ladder: the parent's contract `defaultTag`, then the caller's
       // `defaultTag`, then the built-in `object`.

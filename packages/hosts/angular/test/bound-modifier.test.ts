@@ -160,7 +160,7 @@ describe("a bound attribute's refinement (angular)", () => {
     it("lets the innermost declaration win: a signal-holding variable that shadows the index", () => {
       expect(
         emit(
-          "<for|item, i| of=items><for|{i}| of=sigs><div appPick v:fn:=i/></for></for>",
+          "<for|item, i| of=items><for|{i}| of=rows><div appPick v:fn:=i/></for></for>",
         ),
       ).toContain(`(vChange)="i.set(fn($event))"`);
     });
@@ -173,7 +173,7 @@ describe("a bound attribute's refinement (angular)", () => {
 
     it("keeps today's .set() for variables that can hold a signal", () => {
       for (const mx of [
-        "<for|{s}| of=sigs><div appPick v:fn:=s/></for>",
+        "<for|{s}| of=rows><div appPick v:fn:=s/></for>",
         "<for|{v}| of=objs><div appPick v:fn:=v/></for>",
       ]) {
         expect(emit(mx)).toContain(".set(fn($event))");

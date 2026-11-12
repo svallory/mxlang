@@ -178,3 +178,15 @@ describe("arguments next to attributes on a dynamic tag", () => {
     });
   }
 });
+
+describe("a lone named-tag argument reaches the tree", () => {
+  it("lowers `<foo(a)/>` to a tag node that carries `a`, with no refusal", () => {
+    const result = lower("<foo(a)/>\n");
+    expect(result.diagnostics.map((d) => d.code)).not.toContain(ARGUMENTS);
+    const call = result.ir?.body.find((node) => node.kind === "DelegatedTag");
+    expect(call).toMatchObject({
+      kind: "DelegatedTag",
+      tag: { args: [{ code: "a" }] },
+    });
+  });
+});

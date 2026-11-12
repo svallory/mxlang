@@ -915,12 +915,16 @@ describe("a registered tag's argument beside attribute tags", () => {
     expect([error?.line, error?.column]).toEqual([1, source.indexOf("text")]);
   });
 
-  it.each(["<card(a)><@row/></card>", "<card(a)/>"])(
-    "refuses the argument at its position: %s",
-    (source) => {
-      const error = failure(source);
-      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
-      expect([error?.line, error?.column]).toEqual([1, 6]);
-    },
-  );
+  // Controls: a registered tag already refused these before the opt-in
+  // pass-through existed; they pin that the refusal stays, positioned.
+  it.each([
+    ["<card(a)><@row/></card>", 1, 6],
+    ["card(a)\n  @row\n", 1, 5],
+    ["<card(a)/>", 1, 6],
+  ])("refuses the argument at its position: %j", (source, line, column) => {
+    const error = failure(source);
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect(error?.message).toContain("Tag does not support arguments.");
+    expect([error?.line, error?.column]).toEqual([line, column]);
+  });
 });

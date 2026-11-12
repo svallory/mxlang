@@ -1138,6 +1138,38 @@ describe("a two-way bind on a parameter with no change handler", () => {
     expect([error?.line, error?.column]).toEqual([1, column - 1]);
   });
 
+  it("a returning tag's variable shadows a plain parameter of its spelling", () => {
+    // `/x` declares a new `x` below the call; binding it is no bind to the
+    // `<for>` parameter.
+    const counter = {
+      template: {
+        filename: "/tags/counter.mx",
+        source: "<let/n=0/>\n<return value=n/>\n",
+      },
+    } as never;
+    const run = (source: string) => {
+      try {
+        compileSource(source, "/page.mx", withLet, {
+          targets: lookup,
+          customTags: { counter },
+          tagDiscoveryDirs: [],
+          emitIr: () => "",
+        } as never);
+      } catch (error) {
+        return error as TranslateError;
+      }
+      return undefined;
+    };
+    expect(
+      run("<for|x| of=[1]><if=x><counter/x/><input value:=x/></if></for>"),
+    ).toBeUndefined();
+    // Control: the parameter itself is still refused.
+    expect(
+      run("<for|x| of=[1]><if=x><counter/y/><input value:=x/></if></for>")
+        ?.message,
+    ).toBe("Unable to bind to value.");
+  });
+
   it.each([
     "<for|{a}| of=[{a:1}]><input value:=a/></for>",
     "<define/D|{a}|><input value:=a/></define>",

@@ -266,6 +266,12 @@ function moduleBindings(ctx: Ctx, scope: ModuleScope): ReadonlySet<string> {
   return all;
 }
 
+/** Does a module statement (`static`, `server`, `import`, ...) of the file declare `name`? */
+export function isModuleBinding(ctx: Ctx, name: string): boolean {
+  const scope = ctx.moduleScope;
+  return scope ? moduleBindings(ctx, scope).has(name) : false;
+}
+
 /**
  * Is `path` an ambient declaration (`declare const x: number`, `declare
  * function f(): void`) or a type-only import? It declares a type-level name,

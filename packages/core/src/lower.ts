@@ -242,7 +242,11 @@ import {
   voiceOfCtx,
   writesMxSyntax as voiceWritesMxSyntax,
 } from "./message-vocabulary.ts";
-import { checkModuleScope, scanModuleScope } from "./module-scope.ts";
+import {
+  checkModuleScope,
+  isModuleBinding,
+  scanModuleScope,
+} from "./module-scope.ts";
 import {
   commonJsFormOf,
   endOfInputError,
@@ -1368,6 +1372,18 @@ function constPlainNamesOf(ctx: Ctx, child: Node): string[] {
 }
 
 /**
+ * A tag variable shadows a `<for>`/`<define>` parameter or a `<const>` of its
+ * spelling from the call to the end of the block: a write to the name is not
+ * one to that parameter any more.
+ */
+function shadowWriteGuard(ctx: Ctx, name: string): void {
+  const guards = ctx.writeGuards;
+  if (guards?.has(name)) {
+    ctx.writeGuards = new Map([...guards].filter(([key]) => key !== name));
+  }
+}
+
+/**
  * Records the `<let>` a lowered child tag declares, for the writes after it
  * in the same block and the blocks below. Under the `none` tag rules
  * `let` is an ordinary tag, and a name a caller registered as a custom tag
@@ -2083,18 +2099,19 @@ function validateBuiltinValueAttributes(
       );
     }
   } else if (name === "log" || name === "debug") {
-    // Marko: the logged value is the tag's own `value=`, nothing else.
-    const first = attrs[0];
-    if (
-      attrs.length > 1 ||
-      (first &&
-        (!isAttributeNode(first) ||
-          (!isDefaultAttr(first) && attrNameOf(first) !== "value")))
-    ) {
+    // Marko: the logged value is the tag's own `value=`, nothing else. Blame
+    // the first attribute that is not it (the second, when both read as it).
+    const offender =
+      attrs.find(
+        (attr) =>
+          !isAttributeNode(attr) ||
+          (!isDefaultAttr(attr) && attrNameOf(attr) !== "value"),
+      ) ?? (attrs.length > 1 ? attrs[1] : undefined);
+    if (offender) {
       raise(
         INVALID_ATTRIBUTE_CODE,
         `The ${voice.tag(name)} tag only supports the \`value=\` ${voice.attribute}.`,
-        node.name,
+        offender,
       );
     }
   } else if (name === "let" || name === "return") {
@@ -2920,15 +2937,21 @@ function bodyChildrenWithoutAttributeTags(node: Node): Node[] {
 }
 
 /**
- * Whether one of `node`'s body children is a control flow tag whose own body
- * mixes attribute tags with content — the case `lowerAttributeTags` refuses
- * with "Cannot have attribute tags and body content under a control flow
- * tag.", which stock reports ahead of an argument error on the call (the same
- * condition that lowering checks: attribute tags present, and non-layout
- * content left beside them).
+ * Stock reports an attribute tag mixed with body content under a control tag
+ * of a call's body ahead of the call's argument errors: the same condition
+ * `lowerAttributeTags` checks (attribute tags present, and non-layout content
+ * left beside them), raised early for a call that has arguments. Every call
+ * kind passes through here once, so the body is walked once per call.
  */
-function bodyMixesAttributeTagsUnderControl(node: Node): boolean {
-  return controlMixOffender(node) !== undefined;
+function rejectControlMixBesideArguments(ctx: Ctx, node: Node): void {
+  if ((tagArgsOf(node) ?? []).length === 0) return;
+  const offending = controlMixOffender(node);
+  if (offending)
+    raise(
+      INVALID_ATTRIBUTE_TAG_CODE,
+      `Cannot have ${voiceOfCtx(ctx).attributeTags} and body content under a control flow tag.`,
+      offending,
+    );
 }
 
 /** The content child that mixes with attribute tags under a control tag of `node`'s body, if any. */
@@ -2966,6 +2989,7 @@ function rejectArgsWithProps(
   target?: ComponentTarget,
 ): void {
   if ((tagArgsOf(node) ?? []).length === 0) return;
+  rejectControlMixBesideArguments(ctx, node);
   const lenient =
     !target || target.kind === "dynamic" || target.kind === "define";
   if (lenient) {
@@ -2976,8 +3000,6 @@ function rejectArgsWithProps(
       argumentsBlame(ctx, tagArgsOf(node) ?? [], node),
     );
   }
-  // Let the body-mix check run before either named-call argument check.
-  if (bodyMixesAttributeTagsUnderControl(node)) return;
   if (
     tagAttributesOf(node).length === 0 &&
     !hasContent(bodyChildrenWithoutAttributeTags(node))
@@ -3610,6 +3632,7 @@ function lowerAttributeIf(
     const name = String(tagNameOf(branch) ?? "").replace(/^@/, "");
     if (cursor > index && name !== "else" && name !== "else-if") break;
     validateBoundAttributes(ctx, branch);
+    rejectExtraConditionAttributes(ctx, branch, name);
     const conditionAttr =
       name === "if"
         ? (attrByName(branch, "value") ?? tagAttributesOf(branch)[0])
@@ -4075,33 +4098,30 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   // The loop's parameter shadows a binding of the same spelling that is in
   // scope where the loop starts; `by=` reads that outer one, so "not in scope"
   // would be false. Still refused: one constant key for every item is a bug.
+  // A `<let>` declared below the loop is not one: it is in its temporal dead
+  // zone when `by=` runs.
   const outer =
+    name === "input" ||
+    name === "$global" ||
     ctx.writeGuards?.has(name) ||
     ctx.renderLets?.has(name) ||
-    ctx.laterLets?.has(name) ||
     ctx.tagVars?.has(name) ||
     ctx.tagVarShadowed?.has(name) ||
     ctx.enclosingTagParams?.has(name) ||
     ctx.imports.has(name) ||
-    ctx.defines.has(name);
+    ctx.defines.has(name) ||
+    isModuleBinding(ctx, name);
   const attribute = voiceOfCtx(ctx).attribute;
+  const authored = by.value ? sliceNode(ctx, by.value).trim() : "";
   raise(
     INVALID_FOR_CODE,
     outer
-      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => ${name}.id\`).`
+      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => ${authored || "key"}\`).`
       : `The \`by=\` ${attribute} is evaluated before the loop runs, so \`${name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => key\`).`,
     read,
   );
 }
 
-/**
- * All of `<for>`'s forms, normalized to the three a host emits.
- *
- * `by=` names which item a DOM node belongs to across re-renders. A one-shot
- * string host has no reconciliation, so it safely ignores the field. A reactive
- * host (Solid) emits it as the `keyed` prop on `<For>`. Carried in the IR so
- * both paths work from the same tree.
- */
 /** The attributes `<for>` reads (Marko's allowed set across its forms). */
 const FOR_ATTRIBUTES: ReadonlySet<string> = new Set([
   "of",
@@ -4113,6 +4133,14 @@ const FOR_ATTRIBUTES: ReadonlySet<string> = new Set([
   "by",
 ]);
 
+/**
+ * All of `<for>`'s forms, normalized to the three a host emits.
+ *
+ * `by=` names which item a DOM node belongs to across re-renders. A one-shot
+ * string host has no reconciliation, so it safely ignores the field. A reactive
+ * host (Solid) emits it as the `keyed` prop on `<For>`. Carried in the IR so
+ * both paths work from the same tree.
+ */
 function lowerForHead(
   ctx: Ctx,
   node: Node,
@@ -6483,15 +6511,7 @@ function lowerCustomTagBody(
   if (wildcard) rejectNearExplicitChild(ctx, node, wildcard, label);
   // Stock reports an attribute tag mixed with body content under a control
   // tag ahead of the call's argument error.
-  if ((tagArgsOf(node) ?? []).length > 0) {
-    const offending = controlMixOffender(node);
-    if (offending)
-      raise(
-        INVALID_ATTRIBUTE_TAG_CODE,
-        `Cannot have ${voice.attributeTags} and body content under a control flow tag.`,
-        offending,
-      );
-  }
+  rejectControlMixBesideArguments(ctx, node);
   rejectUnsupportedFields(ctx, node, label, {
     attributeTags: true,
     params: true,
@@ -6641,6 +6661,7 @@ function lowerCustomTagBody(
   // Marko's rule (`references.ts:556-560`), and the emitted order makes it
   // necessary: the binding is assigned from this call's own result.
   if (call.var) {
+    shadowWriteGuard(ctx, call.var);
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(call.var, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -6688,8 +6709,7 @@ function lowerComponent(
   if (
     target.kind === "name" &&
     (tagArgsOf(node) ?? []).length > 0 &&
-    !ctx.declarations.namedCallInputArgument &&
-    !bodyMixesAttributeTagsUnderControl(node)
+    !ctx.declarations.namedCallInputArgument
   ) {
     raise(
       UNSUPPORTED_TAG_ARGUMENTS_CODE,
@@ -6774,6 +6794,7 @@ function lowerComponent(
   const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
   if (callVar) {
+    shadowWriteGuard(ctx, callVar);
     ctx.tagVars ??= new Map();
     ctx.tagVars.set(callVar, {
       block: [...(ctx.tagVarBlock ?? [])],
@@ -7268,10 +7289,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
       (ctx.declarations.isBuiltinTag?.(name, ctx) ??
         !ctx.declarations.isDelegatedTag?.(name, ctx)));
-  // `<log>` and `<debug>` take the `value=` attribute alone on every host,
-  // whatever the host then does with the tag (a host that declares a
-  // disposition for it, one that delegates it, or a registered tag of the name
-  // keeps its own reading).
+  // `<log>` and `<debug>` take the `value=` attribute alone on hosts that do
+  // not declare or delegate the tag; a host that does, or a registered tag of
+  // the name, keeps its own shape check.
   const logTag =
     (name === "log" || name === "debug") &&
     ctx.tagRules !== "none" &&
@@ -7283,7 +7303,6 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // it accepts.
   if (
     name === "html-comment" &&
-    !fileLocalBinding &&
     ctx.tagRules !== "none" &&
     (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))
   ) {

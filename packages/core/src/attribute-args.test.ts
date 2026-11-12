@@ -157,21 +157,26 @@ describe("the opt-in attribute argument refusal", () => {
       "`<for>` does not support the `a` attribute.",
       14,
     ],
-    ["<log a=1/>", "The `<log>` tag only supports the `value=` attribute.", 1],
+    ["<log a=1/>", "The `<log>` tag only supports the `value=` attribute.", 5],
     [
       "<log a(v)=1/>",
       "The `<log>` tag only supports the `value=` attribute.",
-      1,
+      5,
+    ],
+    [
+      "<log=1 foo=2/>",
+      "The `<log>` tag only supports the `value=` attribute.",
+      7,
     ],
     [
       "<debug a=1/>",
       "The `<debug>` tag only supports the `value=` attribute.",
-      1,
+      7,
     ],
     [
       "<debug a(v)=1/>",
       "The `<debug>` tag only supports the `value=` attribute.",
-      1,
+      7,
     ],
   ])(
     "refuses an attribute Marko's core tag does not read: %s",
@@ -215,6 +220,24 @@ describe("the opt-in attribute argument refusal", () => {
       column: 10,
     });
   });
+
+  it.each([
+    [
+      'import C from "./card.js"\n<C><if=x foo=1><@a/></if></C>',
+      "The `<if>` tag only supports the `value=` attribute.",
+      9,
+    ],
+    [
+      'import C from "./card.js"\n<C><if=x><@a/></if><else bar=2><@b/></else></C>',
+      "The `<else>` tag only supports an `if=` attribute.",
+      25,
+    ],
+  ])(
+    "refuses an attribute on a condition wrapping an attribute tag: %s",
+    (source, message, column) => {
+      expect(failure(source)).toMatchObject({ message, line: 2, column });
+    },
+  );
 
   it.each([
     ["<div a()/>", "a", 5],

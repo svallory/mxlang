@@ -1053,6 +1053,27 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
     option:
       'The `by=` option is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => x.id`).',
   },
+  {
+    name: "`for` with a loop parameter named `input` in `by=`",
+    source: "for|input| of=input.items by=input.id\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `input`, not the loop\'s `input` parameter. Key with a property name string (`by="id"`) or a function (`by=(input) => input.id`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `input`, not the loop\'s `input` parameter. Key with a property name string (`by="id"`) or a function (`by=(input) => input.id`).',
+  },
+  {
+    name: "`for` with a loop parameter in `by=` and a `let` of that name below",
+    source: "for|x| of=input.list by=x.id\n  p\nlet/x=1\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => key`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => key`).',
+  },
+  {
+    name: "`for` with a loop parameter in `by=` that shadows an outer binding, keyed by a call",
+    source: "const/x=1\nfor|x| of=input.list by=f(x)\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => f(x)`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so it reads the outer `x`, not the loop\'s `x` parameter. Key with a property name string (`by="id"`) or a function (`by=(x) => f(x)`).',
+  },
 ];
 
 describe("built-in tag names in messages (template files)", () => {

@@ -1982,6 +1982,16 @@ describe("attribute-tag v2 values (executed)", () => {
       expect(code).toContain("__mxRenderTag(__mxOut, Panel)(a);");
       expect(code).not.toContain("Panel)({");
     });
+
+    it("maps the lone argument back to its source", () => {
+      const source = src(`${IMPORT}<Panel(a.wrong)/>`);
+      const { code, mappings } = compile(source, file);
+      const pairs = mappings.map((m) => [
+        code.slice(m.generatedStart, m.generatedEnd),
+        source.slice(m.sourceStart, m.sourceEnd),
+      ]);
+      expect(pairs).toContainEqual(["a.wrong", "a.wrong"]);
+    });
   });
 });
 
