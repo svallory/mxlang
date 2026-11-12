@@ -663,6 +663,44 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
 }
 
 /**
+ * The type text of a binding's `: T` annotation node, colon left out, and
+ * where it stands in the source. `undefined` for none.
+ */
+export function annotationOf(
+  ctx: Ctx,
+  annotation: Node,
+): { code: string; span: SourceSpan } | undefined {
+  if (typeof annotation?.start !== "number") return undefined;
+  if (typeof annotation.end !== "number") return undefined;
+  const text = ctx.source.slice(annotation.start, annotation.end);
+  const colon = /^:\s*/.exec(text)?.[0].length ?? 0;
+  return {
+    code: text.slice(colon),
+    span: {
+      sourceStart: annotation.start + colon,
+      sourceEnd: annotation.end,
+    },
+  };
+}
+
+/**
+ * `node` as an `Expr`, with none of `exprOf`'s binding checks: for a host
+ * that lowers a tag of its own (`<let>`, whose initial value and
+ * `valueChange` are expressions it prints) and needs the code with its
+ * authored span, so the mapping of what it prints is exact.
+ */
+export function exprValue(ctx: Ctx, node: Node): Expr {
+  const { code, nodes } = exprWithNodes(ctx, node);
+  return {
+    code,
+    shape: expressionShape(node),
+    node,
+    span: exprSpan(ctx, node),
+    ...(nodes.length > 0 ? { nodes } : {}),
+  };
+}
+
+/**
  * The authored `{ … }` body of an attribute method shorthand
  * (`onClick() { … }`, `async onClick<T>(…) { … }`), read from the parser
  * node's own body position. `code` prints the method as a `function`
@@ -4550,9 +4588,12 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
     ]);
   }
 
+  const annotation = tagVarOf(node)?.typeAnnotation;
+  const varType = ctx.keepTypes ? annotationOf(ctx, annotation) : undefined;
   return {
     kind: "Const",
     name,
+    ...(varType ? { varType } : {}),
     varBindings: varBindingsOf(ctx, tagVarOf(node)),
     init,
     span: exprSpan(ctx, node),
@@ -7526,8 +7567,19 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (disposition) {
     rejectInertShape(ctx, node, name, disposition);
     checkTagValueWrites(ctx, node);
-    // Inert: accepted, contributes nothing to the IR.
-    return { kind: "Text", value: "", loc: posOf(ctx, node) };
+    // Inert: accepted, contributes nothing to the output. Its default value
+    // is still an authored expression, handed on to a host that checks.
+    const value = attrByName(node, "value");
+    const checked =
+      ctx.keepTypes && value?.value && !isSpreadAttributeNode(value)
+        ? exprValue(ctx, attrValueOf(ctx, value))
+        : undefined;
+    return {
+      kind: "Text",
+      value: "",
+      loc: posOf(ctx, node),
+      ...(checked ? { check: checked } : {}),
+    };
   }
 
   switch (name) {
@@ -8965,6 +9017,7 @@ const SCRATCH_HANDOFF: Record<keyof Ctx, "inherit" | "fresh" | "explicit"> = {
   emitsModule: "inherit",
   unsupportedIn: "inherit",
   productName: "inherit",
+  keepTypes: "inherit",
   voice: "inherit",
   dialect: "inherit",
   tagShorthands: "inherit",

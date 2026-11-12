@@ -3281,3 +3281,41 @@ describe("dangerouslySetInnerHTML", () => {
     );
   });
 });
+
+describe("`<for>` parameter annotations", () => {
+  it.each([
+    [
+      "an array loop",
+      "<for|x: number, i: number| of=list><p>${i}:${x}</p></for>",
+      "for (const [i, x] of [...",
+    ],
+    [
+      "a `in` loop",
+      "<for|k: string, v: number| in=obj><p>${k}</p></for>",
+      "for (const [k, v] of Object.entries(",
+    ],
+    [
+      "a range loop",
+      "<for|i: number| from=0 to=3><p>${i}</p></for>",
+      "for (let i = ",
+    ],
+  ])("%s prints a loop head without the annotation", (_name, source, head) => {
+    for (const typeCheck of [false, true]) {
+      const { code } = compile(source, "/f/t.mx", { typeCheck });
+      expect(code).toContain(head);
+      expect(code).not.toMatch(/for \([^)]*: (number|string)/);
+    }
+  });
+
+  it("renders a loop whose parameters carry annotations", async () => {
+    expect(
+      await renderModules(
+        {
+          "page.mx":
+            "<for|x: number, i: number| of=[10, 20]><p>${i}:${x}</p></for>",
+        },
+        "page.mx",
+      ),
+    ).toBe("<p>0:10</p><p>1:20</p>");
+  });
+});

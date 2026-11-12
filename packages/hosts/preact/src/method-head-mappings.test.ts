@@ -108,3 +108,22 @@ describe("method shorthand in a dynamic tag's props and an attribute tag", () =>
     }
   });
 });
+
+describe("the type-check projection of a `<const>`", () => {
+  it("keeps the annotation and maps the type and the initializer", () => {
+    const source = "<const/c: string = n/>\n<p>${c}</p>";
+    const { code, mappings } = compile(source);
+    expect(code).toContain("const c: string = n;");
+    const pairs = mappings.map((m) => [
+      source.slice(m.sourceStart, m.sourceEnd),
+      code.slice(m.generatedStart, m.generatedEnd),
+    ]);
+    expect(pairs).toContainEqual(["string", "string"]);
+    expect(pairs).toContainEqual(["n", "n"]);
+  });
+
+  it("prints an angle assertion as `as`", () => {
+    const { code } = compile("<const/y=(<string>x).length/>\n<p>${y}</p>");
+    expect(code).toContain("const y = ((x as string)).length;");
+  });
+});

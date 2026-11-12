@@ -326,14 +326,50 @@ describe("html: a `client` enum declares its name the way stock Marko does", () 
   });
 });
 
-describe("html: known gap, an unexported `client const enum` member read", () => {
-  // Stock Marko replaces `E.A` with the member's value (`<div>0</div>`); this
-  // target declares nothing for the enum and does not substitute, so the read
-  // throws. Pinned so closing the gap is a deliberate change.
-  it("`${E.A}` throws a ReferenceError where stock prints the value", () => {
-    expect(() =>
-      String(mx("client const enum E { A }\n<div>${E.A}</div>\n")({})),
-    ).toThrow(ReferenceError);
+describe("html: an unexported const enum's member reads are inlined, as stock Marko does", () => {
+  const render = (source: string) => String(mx(source)({}));
+
+  it.each([
+    ["a dot read", "client const enum E { A }", "${E.A}", "0"],
+    ["a string-key read", "client const enum E { A = 7 }", '${E["A"]}', "7"],
+    ["a block", "client { const enum E { A, B } }", "${E.B}", "1"],
+    ["a string member", 'client const enum E { A = "a-1" }', "${E.A}", "a-1"],
+    [
+      "a computed member",
+      "client const enum E { A = 2, B = A * 3 + 1 }",
+      "${E.B}",
+      "7",
+    ],
+    ["a static enum", "static const enum E { A = 5 }", "${E.A}", "5"],
+    ["a server enum", "server const enum E { A = 5 }", "${E.A}", "5"],
+  ])("%s", (_name, statement, read, expected) => {
+    expect(render(`${statement}\n<div>${read}</div>\n`)).toBe(
+      `<div>${expected}</div>`,
+    );
+  });
+
+  it("a static const enum is removed: `typeof E` is `undefined`, as on stock", () => {
+    expect(render("static const enum E { A }\n<div>${typeof E}</div>\n")).toBe(
+      "<div>undefined</div>",
+    );
+  });
+
+  it("an exported const enum keeps its declaration", () => {
+    const { code } = compile(
+      "static export const enum E { A }\n<div>${E.A}</div>\n",
+      "/f/t.mx",
+    );
+    expect(code).toContain("export const enum E");
+  });
+
+  it("the type-check projection keeps the enum for tsc", () => {
+    const { code } = compile(
+      "static const enum E { A }\n<div>${E.A}</div>\n",
+      "/f/t.mx",
+      { typeCheck: true },
+    );
+    expect(code).toContain("const enum E");
+    expect(code).toContain("E.A");
   });
 });
 

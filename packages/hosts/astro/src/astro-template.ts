@@ -70,8 +70,12 @@ const ATTRIBUTE_OUT_EXPRESSION = "__mxAttrOut";
  * outside Astro's boolean list, where `""` is falsy and omitted, so those names
  * get `true`: presence is equal to Marko's, but the value text (`disabled="0"`)
  * cannot be printed by `addAttribute`.
+ *
+ * The result is `any`, not `unknown`: it is an attribute value of whichever
+ * type the element's prop declares, and `unknown` would make `<p title=s/>`
+ * with `s: string` a false TS2322 under the type check.
  */
-export const ATTRIBUTE_OUT_SOURCE = `((name: string, value: unknown): unknown => {
+export const ATTRIBUTE_OUT_SOURCE = `((name: string, value: unknown): any => {
   if (value == null) return null;
   if (name === "class" || name === "style") return value === true ? "true" : value === false || value === 0 || value === "" || value !== value ? null : value;
   if (/^(?:allowfullscreen|async|autofocus|autoplay|checked|controls|default|defer|disabled|disablepictureinpicture|disableremoteplayback|formnovalidate|inert|loop|muted|nomodule|novalidate|open|playsinline|readonly|required|reversed|scoped|seamless|selected|itemscope)$/i.test(name)) return value === false ? null : true;

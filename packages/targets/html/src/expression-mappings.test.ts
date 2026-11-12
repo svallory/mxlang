@@ -120,3 +120,95 @@ describe("html expression values", () => {
     ]);
   });
 });
+
+/**
+ * The type-check projection (`typeCheck: true`, compiled for tooling and
+ * never run) puts every authored expression in the module and maps it to the
+ * text the author wrote, so an error in it is reported there and not at
+ * "MX-generated code". An angle assertion (`<T>x`) is printed `(x as T)`: a
+ * tool checking the module as TSX would read `<T>` as a JSX tag.
+ */
+function checked(source: string): { code: string; pairs: string[][] } {
+  const { code, mappings } = compile(source, "/fixtures/checked.mx", {
+    typeCheck: true,
+  });
+  return {
+    code,
+    pairs: mappings.map((m) => [
+      source.slice(m.sourceStart, m.sourceEnd),
+      code.slice(m.generatedStart, m.generatedEnd),
+    ]),
+  };
+}
+
+describe("html type-check projection", () => {
+  it.each([
+    ["an inert tag's default value", "<id=x/>", "x"],
+    [
+      "an inert tag's default value with an angle assertion",
+      "<id=(<string>x)/>",
+      "x",
+    ],
+    ["a `<log>` expression", "<log=missing/>", "missing"],
+    [
+      "a `<let valueChange>` expression",
+      "<let/v=1 valueChange=missing/>",
+      "missing",
+    ],
+    ["a `<let>` initial value", "<let/v=initial/>", "initial"],
+    ["a `<const>` initial value", "<const/y=input.zzg/>${y}", "input.zzg"],
+    [
+      "a `<const>` initial value under an angle assertion",
+      "<const/y=(<string>input.zzg)/>${y}",
+      "input.zzg",
+    ],
+  ])("maps %s to its authored text", (_name, source, expression) => {
+    expect(checked(source).pairs).toContainEqual([expression, expression]);
+  });
+
+  it("prints an inert tag's default value once, without changing the build", () => {
+    const source = "<id=x/>";
+    expect(checked(source).code).toContain("void (x);");
+    expect(compile(source, "/fixtures/checked.mx").code).not.toContain(
+      "void (x)",
+    );
+  });
+
+  it.each([
+    ["f(<string>x)", "f((x as string))"],
+    ["(<string>x).length", "((x as string)).length"],
+    [
+      "(<number>(<unknown>x)).toFixed()",
+      "(((x as unknown) as number)).toFixed()",
+    ],
+  ])("prints the angle assertion in `%s` as `as`", (expression, printed) => {
+    const result = checked(`<const/y=${expression}/>\${y}`);
+    expect(result.code).toContain(`const y = ${printed};`);
+    expect(result.pairs).toContainEqual([expression, printed]);
+  });
+
+  it.each([
+    ["a `<const>`", "<const/c: string = n/>${c}", "const c: string = n;"],
+    ["a `<let>`", "<let/c: string = n/>${c}", "const c: string = n;"],
+  ])(
+    "keeps the annotation of %s, mapped to the type",
+    (_name, source, line) => {
+      const result = checked(source);
+      expect(result.code).toContain(line);
+      expect(result.pairs).toContainEqual(["string", "string"]);
+      expect(compile(source, "/fixtures/checked.mx").code).toContain(
+        "const c = n;",
+      );
+    },
+  );
+
+  it("reads a lone spread's values as `any`, so the `=== false` guard is not a TS2367", () => {
+    const source = "<div ...rest/>";
+    const result = checked(source);
+    expect(result.code).toContain("Object.entries((rest ?? {}) as object)");
+    expect(result.pairs).toContainEqual(["rest", "rest"]);
+    expect(compile(source, "/fixtures/checked.mx").code).toContain(
+      "Object.entries(rest ?? {})",
+    );
+  });
+});

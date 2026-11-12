@@ -231,6 +231,7 @@ let current: {
   defaultTag?: string;
   warnings?: MxWarning[];
   productName?: string;
+  keepTypes?: boolean;
   resolveImport?: (specifier: string, importer: string) => string | undefined;
   targets: TargetLookup;
   dependencies: string[];
@@ -315,6 +316,7 @@ function translatorClaiming(
           ctx.defaultTag = state.defaultTag;
           ctx.warnings = state.warnings;
           ctx.productName = state.productName;
+          ctx.keepTypes = state.keepTypes;
           ctx.resolveImport = state.resolveImport;
           // Every host reaching `compileSource` emits a whole module with a
           // default export, so the file has a declaration to name and a tag
@@ -570,6 +572,7 @@ export function compileSource(
     defaultTag: host.defaultTag,
     warnings: host.warnings,
     productName: host.productName,
+    keepTypes: host.stripTypes === false,
     resolveImport: host.resolveImport,
     targets: host.targets,
     dependencies: [] as string[],

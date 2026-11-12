@@ -32,6 +32,7 @@
  *   line array and pushing in the same order.
  */
 
+import * as babelParser from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -57,6 +58,7 @@ import {
   moduleExportName,
   propKey,
   quote,
+  type SourceSpan,
   TranslateError,
 } from "@mxlang/core";
 import type {
@@ -464,7 +466,7 @@ export function createEmitter(
     const serial = state.attrTagTemp++;
     const result = `__mxAttrTags${serial}`;
     const sourceName = `__mxAttrTagSource${serial}`;
-    const [first = "__mxItem", second] = node.loop.params;
+    const [first = "__mxItem", second] = node.loop.params.map(loopBinding);
     const body = arraySourceValue(node.nodes, as, valueType);
 
     if (source.kind === "of") {
@@ -763,10 +765,19 @@ export function createEmitter(
 
     push("{");
     state.indent++;
-    let entries: string;
+    let entries: string | MappedCode;
     const only = head.length === 1 ? head[0] : undefined;
     if (only?.kind === "spread") {
-      entries = `Object.entries(${only.value.code} ?? {})`;
+      // The projection reads each value as `unknown`-like (`any`): a spread
+      // typed `Record<string, string>` would make the `=== false` guard below
+      // a TS2367 on generated code. `Object.entries(object)` is `any`-valued.
+      entries = options.typeCheck
+        ? concatMapped(
+            "Object.entries((",
+            mappedExpr(only.value),
+            " ?? {}) as object)",
+          )
+        : `Object.entries(${only.value.code} ?? {})`;
     } else {
       push("const __mxRaw = Symbol();");
       const parts = head.map((attr): MappedCode => {
@@ -809,7 +820,7 @@ export function createEmitter(
       push(concatMapped("const __mxAttrs = { ", joinParts(parts), " };"));
       entries = "Object.entries(__mxAttrs)";
     }
-    push(`for (const [__mxKey, __mxValue] of ${entries}) {`);
+    push(concatMapped("for (const [__mxKey, __mxValue] of ", entries, ") {"));
     state.indent++;
     if (written.length > 0) {
       push(
@@ -1048,6 +1059,11 @@ export function createEmitter(
       // Marko's own `onText` dropped newline-bearing whitespace runs and
       // collapsed the rest before the lowerer saw them.
       literal(node.value);
+      // An inert tag's default value renders nothing; the projection still
+      // evaluates it, so a type error in it is reported at the authored text.
+      if (options.typeCheck && node.check) {
+        push(concatMapped("void (", mappedExpr(node.check), ");"));
+      }
     },
 
     interpolation(node) {
@@ -1323,7 +1339,7 @@ export function createEmitter(
         return temp;
       };
 
-      const [first = "__mxItem", second] = node.params;
+      const [first = "__mxItem", second] = node.params.map(loopBinding);
       const source = node.source;
 
       if (source.kind === "of") {
@@ -1376,7 +1392,7 @@ export function createEmitter(
     },
 
     constant(node) {
-      push(`const ${node.name} = ${node.init.code};`);
+      push(bindingStatement(node.name, node.varType, mappedExpr(node.init)));
     },
 
     hoisted(node) {
@@ -1472,7 +1488,18 @@ export function createEmitter(
         // an ordinary expression Marko's own server render evaluates and
         // renders. With no update path in a one-shot render, binding it as a
         // `const` reproduces Marko's output exactly.
-        push(`const ${tag.var} = ${data.init};`);
+        push(
+          bindingStatement(
+            tag.var ?? "",
+            data.varType,
+            data.init ? mappedExpr(data.init) : "undefined",
+          ),
+        );
+        // `valueChange` is never called by a one-shot render; the projection
+        // still evaluates it, so an error inside it is reported.
+        if (options.typeCheck && data.valueChange) {
+          push(concatMapped("void (", mappedExpr(data.valueChange), ");"));
+        }
         return;
       }
       case "statement": {
@@ -1736,6 +1763,56 @@ function declaresBinding(node: IrNode): boolean {
     default:
       return false;
   }
+}
+
+/**
+ * A `<for>` parameter as a loop binding. A parameter keeps the annotation the
+ * author wrote (`x: number`, `{ a }: Row`), which a `for (const [i, x] of …)`
+ * head cannot hold, so the annotation is cut and the rest kept: a default
+ * (`x: number = 0`) and a destructuring pattern stay as written.
+ */
+function loopBinding(param: string): string {
+  if (!param.includes(":")) return param;
+  let target: { start?: number | null; end?: number | null } | undefined;
+  try {
+    const arrow = babelParser.parseExpression(`(${param}) => 0`, {
+      plugins: ["typescript"],
+    });
+    if (arrow.type !== "ArrowFunctionExpression") return param;
+    const first = arrow.params[0];
+    target = first?.type === "AssignmentPattern" ? first.left : first;
+    const annotation = (
+      target as {
+        typeAnnotation?: { start?: number | null; end?: number | null };
+      }
+    )?.typeAnnotation;
+    if (typeof annotation?.start !== "number") return param;
+    if (typeof annotation.end !== "number") return param;
+    // `(` shifts every offset by one.
+    return (
+      param.slice(0, annotation.start - 1) + param.slice(annotation.end - 1)
+    );
+  } catch {
+    return param;
+  }
+}
+
+/**
+ * `const name: T = init;`, the annotation and the initializer mapped to the
+ * text the author wrote. The annotation exists only under `typeCheck`.
+ */
+function bindingStatement(
+  name: string,
+  varType: { code: string; span?: SourceSpan } | undefined,
+  init: string | MappedCode,
+): MappedCode {
+  return concatMapped(
+    `const ${name}`,
+    ...(varType ? [": ", mapped(varType.code, varType.span ?? null)] : []),
+    " = ",
+    init,
+    ";",
+  );
 }
 
 /** One slice of a `client` statement's code, mapped to where the author wrote it. */

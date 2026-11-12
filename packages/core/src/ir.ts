@@ -668,6 +668,13 @@ export type IrNode =
        * disposition or `<return>` leaves behind, or a builder-produced node.
        */
       span?: SourceSpan;
+      /**
+       * An inert tag's default value (`<id=x/>`, `<log=x/>`): it renders
+       * nothing, but a host that checks its output for tools evaluates it
+       * once, so a type error in it has an authored position. A host that
+       * only renders ignores it.
+       */
+      check?: Expr;
     } & IrBase)
   /** `${expr}` / `$!{expr}`; `escaped` is false for the raw form. */
   | ({
@@ -832,6 +839,12 @@ export type IrNode =
        * emitter that ignores it needs no change.
        */
       varBindings?: Array<{ name: string; span?: SourceSpan }>;
+      /**
+       * The type the author annotated the binding with (`<const/c: string=…/>`,
+       * without the colon). Set only when the host keeps TypeScript wrappers
+       * for its tools (`stripTypes: false`); a build drops it.
+       */
+      varType?: { code: string; span?: SourceSpan };
       init: Expr;
       /** File-absolute UTF-16 code-unit span of the whole `<const/…/>` tag. */
       span?: SourceSpan;

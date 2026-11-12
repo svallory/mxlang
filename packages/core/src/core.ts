@@ -34,7 +34,7 @@
  */
 
 import { attrArgsOf, attrNameOf, isDefaultAttr } from "./attr-fields.ts";
-import { coreBabel } from "./babel.ts";
+import { coreBabel, coreParser } from "./babel.ts";
 import type { CalleeInput } from "./callee-input.ts";
 import type { ContractFact, DerivedDeclaration } from "./contract-facts.ts";
 import type { CustomTag, TagCall } from "./custom-tags.ts";
@@ -552,6 +552,13 @@ export interface Ctx {
    * bare, so the default lives in one place.
    */
   productName?: string;
+  /**
+   * The host keeps TypeScript wrappers for its tools to check
+   * (`stripTypes: false`). An angle-bracket assertion (`<T>x`) in an
+   * expression is then printed as `(x as T)`: a tool checking the output
+   * as TSX would read `<T>` as a JSX tag.
+   */
+  keepTypes?: boolean;
   /**
    * The words this file's messages use (`Dialect.messageVocabulary`), set
    * by the trigger pass from the file's dialect. Read through
@@ -1449,7 +1456,63 @@ export function exprWithNodes(
     const at = printed.get(splice);
     nodes.push({ ...splice.node, ...(at ? { code: at } : {}) });
   }
+  // A dialect node's printed range is measured in `code`; leave such an
+  // expression as written rather than move it.
+  if (ctx.keepTypes && nodes.length === 0) {
+    return { code: printAngleAssertions(code), nodes };
+  }
   return { code, nodes };
+}
+
+/**
+ * `code` with every angle-bracket assertion (`<T>x`) printed as `(x as T)`.
+ * `code` is returned as it came when it holds none, or when it does not parse
+ * as a TypeScript expression (a statement-shaped payload).
+ */
+export function printAngleAssertions(code: string): string {
+  if (!code.includes("<")) return code;
+  const print = (text: string): string => {
+    let root: Node;
+    try {
+      root = coreParser().parseExpression(text, { plugins: ["typescript"] });
+    } catch {
+      return text;
+    }
+    const found: Node[] = [];
+    const walk = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+        return;
+      }
+      const record = value as Node;
+      if (record.type === "TSTypeAssertion") {
+        found.push(record);
+        return;
+      }
+      for (const [key, field] of Object.entries(record)) {
+        if (key === "loc" || key === "extra") continue;
+        walk(field);
+      }
+    };
+    walk(root);
+    if (found.length === 0) return text;
+    found.sort((a, b) => a.start - b.start);
+    let out = "";
+    let at = 0;
+    for (const assertion of found) {
+      const inner = print(
+        text.slice(assertion.expression.start, assertion.expression.end),
+      );
+      out += `${text.slice(at, assertion.start)}(${inner} as ${text.slice(
+        assertion.typeAnnotation.start,
+        assertion.typeAnnotation.end,
+      )})`;
+      at = assertion.end;
+    }
+    return out + text.slice(at);
+  };
+  return print(code);
 }
 
 type Splice = { start: number; end: number; text: string } & Partial<

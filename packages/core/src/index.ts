@@ -261,7 +261,13 @@ export {
   type Spanned,
   type SpannedIr,
 } from "./ir-entry/index.ts";
-export { expressionShape, lower, lowerChildren } from "./lower.ts";
+export {
+  annotationOf,
+  expressionShape,
+  exprValue,
+  lower,
+  lowerChildren,
+} from "./lower.ts";
 export type {
   ContractAncestor,
   ContractAttr,

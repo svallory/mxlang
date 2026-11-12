@@ -11,7 +11,11 @@ const OUT = (guarded: string, name: string): string =>
 const SPREAD = "__mxAttrSpread";
 
 import { describe, expect, it } from "vitest";
-import { AstroTemplateError, lowerAstroMx } from "./astro-template.ts";
+import {
+  AstroTemplateError,
+  ATTRIBUTE_OUT_SOURCE,
+  lowerAstroMx,
+} from "./astro-template.ts";
 
 const require = createRequire(import.meta.url);
 const astroRequire = createRequire(
@@ -336,6 +340,17 @@ describe("<for>", () => {
 });
 
 describe("attributes", () => {
+  it("types a dynamic attribute's value as `any`, so a prop typed `string` accepts it", () => {
+    // `unknown` made `<p title=s/>` with `s: string` a false TS2322 under
+    // `mx-tsc --astro`: the helper's result is assigned to the element's prop.
+    expect(ATTRIBUTE_OUT_SOURCE).toMatch(
+      /^\(\(name: string, value: unknown\): any =>/,
+    );
+    expect(lower("<p title=s>x</p>")).toContain(
+      `title={${OUT(`${ATTR}("title", (s), "p")`, "title")}}`,
+    );
+  });
+
   it("passes a static attribute through", () => {
     expect(lower('<p class="card">x</p>')).toBe('<p class="card">x</p>');
   });

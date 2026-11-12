@@ -28,8 +28,10 @@ import {
   type TargetLookup,
   type Translator,
 } from "@mxlang/core";
+import { inlineConstEnums } from "./const-enum.ts";
 import { emitModuleWithMappings } from "./emitter.ts";
 import {
+  constEnumsOf,
   escapeFrom,
   finalizeModule,
   finalizeModuleWithMappings,
@@ -156,12 +158,25 @@ export function compileHtml(
       // This host emits from the core's IR. `postEmit` still appends the
       // helpers a template actually calls and brands the default export,
       // both of which are properties of this target rather than of the core.
-      emitIr: (ir) => {
+      emitIr: (ir, ctx) => {
         emitted = emitModuleWithMappings(
           ir,
           options.runtimeFrom ?? escapeFrom,
           { typeCheck: options.typeCheck, source },
         );
+        // Stock Marko replaces a const enum's member reads with their values
+        // and drops the declaration. The projection keeps the enum: tsc checks
+        // `E.A` against it, and the mappings stay exact.
+        const known = constEnumsOf(ctx);
+        if (
+          !options.typeCheck &&
+          (known.size > 0 || /\bconst\s+enum\b/.test(emitted.code))
+        ) {
+          const inlined = inlineConstEnums(emitted.code, known);
+          if (inlined !== emitted.code) {
+            emitted = { code: inlined, mappings: [] };
+          }
+        }
         return emitted.code;
       },
       postEmit: (code) => {

@@ -31,6 +31,8 @@ import {
   importedNames,
   type MappedCode,
   type MxWarning,
+  mapped,
+  mappedExpr,
   moduleExportName,
   type TargetLookup,
   TranslateError,
@@ -540,7 +542,19 @@ export function emitModuleWithMappings(
   const markup: IrNode[] = [];
   for (const node of ir.body) {
     if (node.kind === "Const") {
-      statements.push(concatMapped(`const ${node.name} = ${node.init.code};`));
+      // Under `typeCheck` the annotation stays (`<const/c: string = n/>`), and
+      // the initializer maps to what the author wrote.
+      statements.push(
+        concatMapped(
+          `const ${node.name}`,
+          ...(node.varType
+            ? [": ", mapped(node.varType.code, node.varType.span ?? null)]
+            : []),
+          " = ",
+          mappedExpr(node.init),
+          ";",
+        ),
+      );
     } else if (node.kind === "Define") {
       const body = createEmitter(dialect, names?.handler, source, shadowed);
       drive(body, node.children);

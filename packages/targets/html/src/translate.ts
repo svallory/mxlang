@@ -30,6 +30,7 @@
 import * as babelParser from "@babel/parser";
 import {
   ATTRIBUTE_VALUE_EXPRESSION,
+  annotationOf,
   attrByName,
   type Ctx,
   concatMapped,
@@ -39,6 +40,7 @@ import {
   type Expr,
   expr,
   expressionShape,
+  exprValue,
   fail,
   type MappedCode,
   type Node,
@@ -52,6 +54,7 @@ import {
   voiceOfCtx,
 } from "@mxlang/core";
 import { isWebElement, WEB_ELEMENTS } from "@mxlang/web-elements";
+import { type ConstEnums, collectConstEnums } from "./const-enum.ts";
 
 export { TranslateError } from "@mxlang/core";
 
@@ -154,6 +157,18 @@ function rejectInputShadowing(target: Node, what: string): void {
   );
 }
 
+const constEnumsByCtx = new WeakMap<object, ConstEnums>();
+
+/** The `client` const enums the compile of `ctx` has seen so far. */
+export function constEnumsOf(ctx: object): ConstEnums {
+  let enums = constEnumsByCtx.get(ctx);
+  if (!enums) {
+    enums = new Map();
+    constEnumsByCtx.set(ctx, enums);
+  }
+  return enums;
+}
+
 /** The `var E = …` Marko's TypeScript pass turns an enum into, as a node the name walk reads. */
 function enumAsVar(node: Node): Node {
   return {
@@ -250,8 +265,8 @@ function parseClientStatements(code: string, at: Node): Node[] {
  * TypeScript pass keeps an exported `const enum` as `var E = {…}` and, for an
  * unexported one, replaces `E.A` in the whole file with the member's value and
  * removes the declaration. This target declares nothing for it too but does
- * not substitute member reads, so `${E.A}` throws a ReferenceError where
- * Marko prints the value. `declare` enums are skipped like every `declare`
+ * substitute member reads in the compiled module (`inlineConstEnums`), as
+ * Marko does. `declare` enums are skipped like every `declare`
  * form. A plain `enum` declares its name
  * where stock Marko refuses to compile it.
  */
@@ -959,7 +974,15 @@ export const DYNAMIC = DYNAMIC_TAG;
  */
 export type DelegatedTagData =
   /** `<let>`/`<const>`: bind the initial value at render scope. */
-  | { kind: "binding"; init: string }
+  | {
+      kind: "binding";
+      /** `undefined`: a binding with no value, rendered as `undefined`. */
+      init: Expr | undefined;
+      /** The authored `: T`, under `typeCheck` only. */
+      varType?: { code: string; span?: SourceSpan };
+      /** `<let valueChange=…>`; only evaluated by the type-check projection. */
+      valueChange?: Expr;
+    }
   /**
    * A module statement this host hoists: a `server` block, which runs exactly
    * as `static` does, or the `var` a `client` block leaves behind (names only).
@@ -1055,9 +1078,17 @@ function resolveDelegatedTag(
     const value = attrByName(node, "value") ?? node.attributes?.[0];
     // `<let/x/>` with no value is a declared-but-unset binding, which Marko
     // renders as the empty string.
+    const change = attrByName(node, "valueChange");
+    const varType = ctx.keepTypes
+      ? annotationOf(ctx, node.var.typeAnnotation)
+      : undefined;
     return {
       kind: "binding",
-      init: value?.value ? expr(ctx, value.value) : "undefined",
+      init: value?.value ? exprValue(ctx, value.value) : undefined,
+      ...(varType ? { varType } : {}),
+      ...(ctx.keepTypes && change?.value
+        ? { valueChange: exprValue(ctx, change.value) }
+        : {}),
     };
   }
 
@@ -1082,6 +1113,7 @@ function resolveDelegatedTag(
     const own = unwrapStatementBlock(text.trim().replace(/^client\s*/, ""));
     const statements = parseClientStatements(own, node);
     const names = clientDeclaredNames(statements);
+    collectConstEnums(statements, constEnumsOf(ctx));
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
