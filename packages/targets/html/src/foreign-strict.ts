@@ -17,12 +17,19 @@ import html from "./descriptor.ts";
  * equal to the real descriptors and compares the two lookups' answers.
  * Bun-free: tests import it.
  */
+/** Stands for a strict mode's policy table; only its presence is read. */
+const STRICT_MODE = {
+  default: {},
+  strict: {},
+} as unknown as TargetDescriptor["declarations"];
+
 const STAND_INS: readonly (readonly [
   name: string,
   packageName: string,
   host: string,
   fileKind: { segment: string; languageIds: readonly string[]; source: string },
   strict?: "always",
+  declaresStrict?: boolean,
 ])[] = [
   [
     "astro-html",
@@ -30,6 +37,7 @@ const STAND_INS: readonly (readonly [
     "astro",
     { segment: "astro", languageIds: ["astromx"], source: "astromx" },
     "always",
+    true,
   ],
   [
     "solid-jsx",
@@ -65,12 +73,15 @@ const STAND_INS: readonly (readonly [
 
 /** @internal Exported only for `@mxlang/targets`' cross-package test, `strict-hosts.test.ts`. */
 export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
-  ([name, packageName, host, kind, strict]) => ({
+  ([name, packageName, host, kind, strict, declaresStrict]) => ({
     descriptorVersion: 0,
     name,
     packageName,
     defaultTag: html.defaultTag,
     ...(strict ? { strict } : {}),
+    // `declarations.strict` is read for its presence only: whether the target
+    // has a strict mode at all (astro, as html; the JSX hosts and Angular do not).
+    ...(declaresStrict ? { declarations: STRICT_MODE } : {}),
     host: {
       name: host,
       fileKinds: [
@@ -85,29 +96,51 @@ export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
 );
 
 /**
- * `htmlOnly` (a lookup that registers the html target alone) plus
- * {@link standInTargets}, for strictness only, with the registry's reserved
- * names so a descriptor loaded from a package path is accepted or refused
- * exactly as there (`strict-hosts.test.ts` checks the two lists match). The
- * caller's own html descriptor is kept, so its strictness still counts.
+ * `lookup` plus a stand-in ({@link standInTargets}) for each built-in target
+ * it lacks, for strictness only, with the registry's reserved names so a
+ * descriptor loaded from a package path is accepted or refused exactly as
+ * there (`strict-hosts.test.ts` checks the two lists match). The caller's own
+ * descriptors are kept, so their strictness still counts, and a stand-in whose
+ * name, package or host the lookup already has is skipped.
  */
-export function withStandIns(htmlOnly: TargetLookup): TargetLookup {
-  const own = htmlOnly.target("html") ?? html;
-  return createTargetLookup([own, ...standInTargets], {
-    defaultTarget: own.name,
-    reservedNames: ["astro-template", "data"],
+export function withStandIns(lookup: TargetLookup): TargetLookup {
+  const own = lookup
+    .targetNames()
+    .map((name) => lookup.target(name) as TargetDescriptor);
+  const missing = standInTargets.filter(
+    (stand) =>
+      !own.some(
+        (t) =>
+          t.name === stand.name ||
+          t.packageName === stand.packageName ||
+          (t.host !== undefined && t.host.name === stand.host?.name),
+      ),
+  );
+  const reserved = new Set([
+    ...(lookup.reservedNames?.() ?? []),
+    "astro-template",
+    "data",
+  ]);
+  return createTargetLookup([...own, ...missing], {
+    defaultTarget: lookup.defaultTarget(),
+    reservedNames: [...reserved],
   });
 }
 
 /**
  * @internal Whether `path` compiles strict under `targets`: the resolved target
  * descriptor declares `strict: "always"`, or the resolved policy carries
- * `mx.strict: true`. Resolved quietly (no deprecation warning per file).
+ * `mx.strict: true` and the target declares a strict mode. Resolved quietly (no deprecation warning per file).
  */
 export function strictFor(path: string, targets: TargetLookup): boolean {
   const { policy } = resolveTargetPolicyDetailed(path, targets, {
     quiet: true,
   });
   const descriptor = policy.descriptor ?? targets.target(policy.target);
-  return descriptor?.strict === "always" || policy.strict === true;
+  // `mx.strict` counts only for a target that has a strict mode: the JSX hosts
+  // and Angular have none and ignore it, as the other tools do.
+  return (
+    descriptor?.strict === "always" ||
+    (policy.strict === true && descriptor?.declarations?.strict !== undefined)
+  );
 }

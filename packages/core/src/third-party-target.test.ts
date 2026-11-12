@@ -698,3 +698,51 @@ describe("a target installed after a miss loads without a restart", () => {
     expect(after.policy.target).toBe("fake-ok");
   });
 });
+
+describe("a registration verdict is per lookup, not per lookup shape", () => {
+  // Two lookups with the same target names, default and reserved names, of
+  // which only one has a host that owns segment `fk`.
+  const target = (host: string, segment?: string): core.TargetDescriptor => ({
+    descriptorVersion: 0,
+    name: "other",
+    packageName: "@t/other",
+    defaultTag: "node",
+    host: {
+      name: host,
+      ...(segment ? { fileKinds: [{ segment, diagnosticSource: "x" }] } : {}),
+    },
+  });
+  const page: core.TargetDescriptor = {
+    descriptorVersion: 0,
+    name: "page",
+    packageName: "@t/page",
+    defaultTag: "node",
+  };
+  const owns = core.createTargetLookup([page, target("ha", "fk")], {
+    defaultTarget: "page",
+  });
+  const free = core.createTargetLookup([page, target("hb")], {
+    defaultTarget: "page",
+  });
+
+  it.each([
+    ["owner first", [owns, free]],
+    ["free first", [free, owns]],
+  ])("the verdicts differ, %s", (_name, order) => {
+    const project = fakeProject({
+      mx: { target: specifier("file-kinds") },
+      install: ["file-kinds"],
+    });
+    const codes = new Map(
+      order.map((source) => [
+        source,
+        resolveTargetPolicyDetailed(
+          project.path("a.mx"),
+          source as core.TargetLookup,
+        ).diagnostics.map((d) => d.code),
+      ]),
+    );
+    expect(codes.get(owns)).toEqual(["target-invalid-descriptor"]);
+    expect(codes.get(free)).toEqual([]);
+  });
+});

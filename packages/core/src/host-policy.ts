@@ -23,8 +23,9 @@
  *    manifest is always the nearest `package.json`, wherever the config
  *    came from.
  * 3. Otherwise, fall back to the lookup's default target, non-strict.
- *    `mx.strict: true` here is a `strict-ignored` warning unless the default
- *    target is always strict.
+ *
+ * Under rules 2 and 3 `mx.strict` does not apply: `mx.strict: true` is a
+ * `strict-ignored` warning unless the selected target is always strict.
  *
  * Edge cases of the walk (each pinned in `host-policy.test.ts`):
  *

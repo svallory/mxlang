@@ -613,6 +613,12 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
         { mx: { host: "solid" }, dependencies: { "@mxlang/host-astro": "1" } },
         false,
       ],
+      // A target with no strict mode ignores mx.strict, as the other tools do.
+      [
+        "mx.host solid with strict",
+        { mx: { host: "solid", strict: true } },
+        false,
+      ],
       // An explicit mx.target html keeps html (target-host-mismatch), non-strict.
       [
         "mx.target html with mx.host astro",
@@ -646,6 +652,30 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
         ).toBe(strict);
       },
     );
+
+    test("a <let> page in an mx.host solid project with strict compiles under the default loader", () => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-solid-strict-"));
+      try {
+        writeFileSync(
+          join(dir, "package.json"),
+          JSON.stringify({ mx: { host: "solid", strict: true } }),
+        );
+        const path = join(dir, "stateful.mx");
+        writeFileSync(path, "<let/count=0/><span>hi</span>\n");
+        let onLoad!: (args: { path: string }) => { contents: string };
+        createHtmlBunPlugin().setup({
+          onLoad: (
+            _options: unknown,
+            callback: (args: { path: string }) => { contents: string },
+          ) => {
+            onLoad = callback;
+          },
+        } as unknown as Parameters<BunPlugin["setup"]>[0]);
+        expect(() => onLoad({ path })).not.toThrow();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
 
     // The loader itself, not only the rule: the stand-ins are chosen for the
     // default lookup and for any lookup that registers html alone.

@@ -27,6 +27,11 @@ const NG_TARGETS = ["ng-a", "ng-b"] as const;
 const manifests: [string, object, registryFirst?: boolean][] = [
   ["no config", {}],
   ["mx.strict alone", { mx: { strict: true } }],
+  ["mx.host solid with strict", { mx: { host: "solid", strict: true } }],
+  [
+    "mx.target preact-jsx with strict",
+    { mx: { target: "preact-jsx", strict: true } },
+  ],
   ["mx.host html with strict", { mx: { host: "html", strict: true } }],
   ["mx.target html with host astro", { mx: { target: "html", host: "astro" } }],
   ["an unknown host", { mx: { host: "nonesuch", strict: true } }],
@@ -153,6 +158,7 @@ it("the stand-ins cover every built-in target but html, with its package, host a
     packageName: t.packageName,
     host: t.host?.name,
     strict: t.strict,
+    declaresStrict: t.declarations?.strict !== undefined,
     kinds: t.host?.fileKinds?.map((k) => [
       k.segment,
       k.languageIds,
