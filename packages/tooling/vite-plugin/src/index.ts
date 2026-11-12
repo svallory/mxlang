@@ -302,6 +302,15 @@ const TAG_EXT = ".marko";
 const FOREIGN_EXTENSIONS: string[] = [".astro.mx"];
 
 /**
+ * Whether `file` ends in the MX extension `ext` (registered lowercase), ignoring
+ * case: `Card.Astro.MX` is an Astro template as the editor tools already read it
+ * (they lowercase the name first), and `Card.Solid.MX` a Solid one.
+ */
+function hasExt(file: string, ext: string): boolean {
+  return file.toLowerCase().endsWith(ext);
+}
+
+/**
  * Appended to the resolved path so the rest of the pipeline sees a JS-family
  * module. See the note on `resolveId` below for why this is necessary.
  *
@@ -909,7 +918,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   // explicitly, so an opt-in `extensions: [".astro.mx"]` still works.
   const isForeign = (file: string): boolean =>
     FOREIGN_EXTENSIONS.some(
-      (ext) => file.endsWith(ext) && !extensions.includes(ext),
+      (ext) => hasExt(file, ext) && !extensions.includes(ext),
     );
   /**
    * Which MX modules depend on which compilation *inputs*, so an edit to one
@@ -1188,7 +1197,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   const dependencyCallers = new Map<string, Set<string>>();
 
   const matchExt = (file: string): string | undefined =>
-    isForeign(file) ? undefined : extensions.find((ext) => file.endsWith(ext));
+    isForeign(file) ? undefined : extensions.find((ext) => hasExt(file, ext));
   /**
    * An id this plugin rewrote: an MX module, or a `tags/*.marko` tag that an
    * MX module imports (see `resolveId`). The tag's extension is `.marko`, but
@@ -1197,7 +1206,7 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
    * asked for it.
    */
   const isMxModule = (file: string): string | undefined =>
-    extensions.find((ext) => file.endsWith(ext + suffixFor(ext))) ??
+    extensions.find((ext) => hasExt(file, ext + suffixFor(ext))) ??
     (file.endsWith(TAG_EXT + suffixFor(TAG_EXT)) ? TAG_EXT : undefined);
   /** A file this plugin compiles from disk: matched by extension, or a tag. */
   const sourceExt = (file: string): string | undefined =>

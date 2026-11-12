@@ -54,6 +54,18 @@ describe("findAstroMxPages", () => {
     ]);
   });
 
+  it("finds the extension in any letter case, as the editor tools read it", () => {
+    const { pagesDir } = project([
+      "pages/About.Astro.MX",
+      "pages/blog/INDEX.ASTRO.mx",
+      "pages/plain.Mx",
+    ]);
+    expect(findAstroMxPages(pagesDir)).toEqual([
+      join(pagesDir, "About.Astro.MX"),
+      join(pagesDir, "blog", "INDEX.ASTRO.mx"),
+    ]);
+  });
+
   it("leaves .mx and .astro pages alone", () => {
     const { pagesDir } = project([
       "pages/index.mx",

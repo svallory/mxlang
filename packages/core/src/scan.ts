@@ -327,11 +327,11 @@ export function hostModuleSegment(
   entry: string,
   targets: TargetLookup,
 ): string | undefined {
-  if (!entry.endsWith(TEMPLATE_SUFFIX)) return undefined;
+  if (!entry.toLowerCase().endsWith(TEMPLATE_SUFFIX)) return undefined;
   const bare = entry.slice(0, -TEMPLATE_SUFFIX.length);
   const dot = bare.lastIndexOf(".");
   if (dot === -1) return undefined;
-  const segment = bare.slice(dot + 1);
+  const segment = bare.slice(dot + 1).toLowerCase();
   return targets.moduleSegments().includes(segment) ? segment : undefined;
 }
 

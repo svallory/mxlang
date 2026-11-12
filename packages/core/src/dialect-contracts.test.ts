@@ -1521,3 +1521,65 @@ describe("the merge is memoized per dialect and `customTags` map", () => {
     expect(dialectCustomTags(tags, undefined, false)).toBe(tags);
   });
 });
+
+describe("`declares` across contract sources", () => {
+  const MODULE = `module.exports = { default: {
+  table: {},
+  contractFields: { tag: ["declares"] },
+  checkContract(tag, contract) {
+    (globalThis.__declSeen ??= {})[tag] = contract.declares;
+  },
+  contracts: { fromModule: { declares: "module" } },
+} };`;
+
+  it("a claimed `declares` reaches the dialect from the module, `mx.contracts` and a sidecar", () => {
+    write("contracts.ts", 'export default { fromManifest: { declares: "manifest" } };\n');
+    write("tags/fromSidecar.tag.ts", 'export default { declares: "sidecar" };\n');
+    lexiProject(MODULE, { mx: { contracts: "./contracts.ts" } });
+    (globalThis as Record<string, unknown>).__declSeen = undefined;
+    const file = join(dir, "page.lexi.mx");
+    const scan = scanCustomTags(file, { targets });
+    const result = lowerSource(
+      "<fromModule/><fromManifest/><fromSidecar/>\n",
+      file,
+      { customTags: scan.customTags },
+    );
+    expect(scan.diagnostics).toEqual([]);
+    expect(result.diagnostics).toEqual([]);
+    expect((globalThis as Record<string, unknown>).__declSeen).toEqual({
+      fromModule: "module",
+      fromManifest: "manifest",
+      fromSidecar: "sidecar",
+    });
+  });
+
+  it("without a claim, every source refuses it in the same words", () => {
+    const refusal =
+      "`declares` is not allowed: no syntax module claims it (`contractFields`)";
+    const unclaimed = "module.exports = { default: { table: {} } };";
+    const messages = (mx: unknown, tag: string): string[] => {
+      lexiProject(unclaimed, { mx });
+      const file = join(dir, "page.lexi.mx");
+      try {
+        const scan = scanCustomTags(file, { targets });
+        const lowered = lowerSource(`<${tag}/>\n`, file, {
+          customTags: scan.customTags,
+        });
+        return [...scan.diagnostics, ...lowered.diagnostics].map(
+          (d) => d.message,
+        );
+      } catch (cause) {
+        if (!isTranslateError(cause)) throw cause;
+        return [cause.message];
+      }
+    };
+    write("contracts.ts", "export default { man: { declares: 1 } };\n");
+    expect(messages({ contracts: "./contracts.ts" }, "man")).toEqual([
+      `\`<man>\`: ${refusal}`,
+    ]);
+    write("tags/side.tag.ts", "export default { declares: 1 };\n");
+    const sidecar = messages(undefined, "side");
+    expect(sidecar).toHaveLength(1);
+    expect(sidecar[0]).toContain(refusal);
+  });
+});

@@ -65,7 +65,7 @@ export function findAstroMxPages(pagesDir: string): string[] {
         }
       }
       if (isDir) walk(path);
-      else if (entry.name.endsWith(ASTRO_MX_EXT)) found.push(path);
+      else if (entry.name.toLowerCase().endsWith(ASTRO_MX_EXT)) found.push(path);
     }
     active.delete(real);
   };

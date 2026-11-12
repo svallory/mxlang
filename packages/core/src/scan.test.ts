@@ -22,6 +22,7 @@ import { mxConfigSearchPaths } from "./mx-config.ts";
 import {
   clearManifestCache,
   discoverProjectTags,
+  hostModuleSegment,
   hostRestrictionDiagnostics,
   normalizeMxTags,
   readParseOptions,
@@ -1530,3 +1531,17 @@ function flattenElements(nodes: IrNode[]): string[] {
   });
   return names;
 }
+
+describe("hostModuleSegment: file-kind case", () => {
+  it.each([
+    ["card.u.mx", "u"],
+    ["Card.U.MX", "u"],
+    ["Card.V.mx", "v"],
+    ["CARD.v.Mx", "v"],
+    ["Card.MX", undefined],
+    ["my.Icon.MX", undefined],
+    ["Card.U.mxx", undefined],
+  ])("%s -> %s", (name, segment) => {
+    expect(hostModuleSegment(name, testTargetLookup())).toBe(segment);
+  });
+});

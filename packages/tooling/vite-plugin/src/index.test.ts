@@ -392,6 +392,25 @@ describe("mx()", () => {
       expect(context.calls).toHaveLength(0);
     });
 
+    it.each([
+      ["./Base.Astro.MX", null],
+      ["./Base.ASTRO.mx", null],
+      ["./Counter.Solid.MX", `/root/src/Counter.Solid.MX${MX_SUFFIX}`],
+      ["./Card.MX", `/root/src/Card.MX${MX_SUFFIX}`],
+    ])(
+      "matches a host file kind without regard to case: %s",
+      async (specifier, expected) => {
+        // The editor tools lowercase the name before matching a file kind;
+        // the build does the same, so `Base.Astro.MX` is the foreign Astro
+        // kind and `Counter.Solid.MX` a Solid one.
+        const context = makeContext();
+        const resolveId = resolveIdOf(mx());
+        expect(
+          await resolveId.call(context, specifier, "/root/src/index.tsx"),
+        ).toBe(expected);
+      },
+    );
+
     it("declines a multi-dot extension owned by another host", async () => {
       // The collision the foreign-extension guard defends against is a
       // property of the `endsWith` matching rule rather than of any one
