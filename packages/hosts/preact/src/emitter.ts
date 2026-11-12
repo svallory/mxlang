@@ -171,7 +171,7 @@ function unreadable(text: string): boolean {
       previous = ch;
     } else if (ch === "`") {
       return true;
-    } else if (ch === "/" && true) {
+    } else if (ch === "/" && startsRegex(previous)) {
       return true;
     } else if (!/\s/.test(ch)) {
       previous = ch;
