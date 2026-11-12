@@ -60,14 +60,17 @@ describe("<html-script> on Hono", () => {
     ["an element inside a string", 'x = "<b>hi</b>"; go();'],
     ["an <if>", "x(); <if=input.c>y();</if>"],
     ["a comment", "a(); <!-- c --> b();"],
-  ])("keeps markup-looking text in the body as script text: %s", (_name, body) => {
-    const emitted = compileHonoMx(
-      `<html-script>${body}</html-script>`,
-      "/x/App.mx",
-    ).code;
-    expect(emitted).toContain("dangerouslySetInnerHTML");
-    expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
-  });
+  ])(
+    "keeps markup-looking text in the body as script text: %s",
+    (_name, body) => {
+      const emitted = compileHonoMx(
+        `<html-script>${body}</html-script>`,
+        "/x/App.mx",
+      ).code;
+      expect(emitted).toContain("dangerouslySetInnerHTML");
+      expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
+    },
+  );
   it("emits a real <script>, never a literal <html-script>", () => {
     const code = compileHonoMx(
       '<html-script type="module">go();</html-script>',

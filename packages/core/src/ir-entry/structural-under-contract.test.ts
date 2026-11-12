@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { CustomTag } from "../custom-tags.ts";
-import memberSyntax from "../fixtures/syntax/member-fixture.ts";
 import { compileSource } from "../compile.ts";
 import type { TranslateError } from "../core.ts";
+import type { CustomTag } from "../custom-tags.ts";
+import memberSyntax from "../fixtures/syntax/member-fixture.ts";
 import { lookup as targets } from "../test-targets.ts";
 import { entryDeclarations } from "./declarations.ts";
 import { lowerSource } from "./index.ts";
@@ -1045,6 +1045,25 @@ describe("structural: reject, which construct is named", () => {
     entity: { children: { item: { required: true } } },
     item: {},
   };
+
+  it("a refused `<return>` in an attribute tag is reported beside that tag's failing contract, in position order", () => {
+    const result = lowerSource(
+      "<card>\n  <@item>\n    <return=x/>\n    <box/>\n  </@item>\n</card>\n",
+      "/t.mx",
+      {
+        ...options,
+        customTags: {
+          card: { attributeTags: { item: { children: { string: {} } } } },
+          string: {},
+          box: {},
+        },
+      },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_NOT_IN_DATA_FILE", 3, 4],
+      ["MX_TAG_NOT_ALLOWED", 4, 4],
+    ]);
+  });
 
   it("a refused `<try>` inside an `<if>` is reported beside a failing contract", () => {
     const result = lowerSource(

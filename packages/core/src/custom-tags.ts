@@ -27,6 +27,7 @@ import {
   codedError,
   endErrorAt,
   isTranslateError,
+  positionError,
   relatedErrorsOf,
   TranslateError,
   warn,
@@ -3921,6 +3922,37 @@ export function runAnalyzeHooks(
       );
     }
   }
+  if (failures.length === 0) return;
+  // Every error is positioned before the primary is chosen and the list is
+  // sorted: one a hook rethrew from a span is still a span until now.
+  const compare = byPosition(ctx);
+  for (const failure of failures) {
+    for (const each of [failure, ...(failure.errors ?? [])]) {
+      positionError(ctx, each);
+    }
+  }
+  // The primary is the earliest failure in the compiled file: a related
+  // error positioned in another file never leads. The list is the primary,
+  // then every other error (each failure's head and the related errors it
+  // carried) in the compiled file first, then by file, line and column. Only
+  // the primary carries the list, so no member's own `errors` repeats or
+  // cycles through it.
+  const fileOf = (e: TranslateError) => e.file ?? ctx.filename;
+  const inFile = (e: TranslateError) => fileOf(e) === ctx.filename;
+  const primary =
+    failures.filter(inFile).sort(compare)[0] ?? [...failures].sort(compare)[0];
+  if (!primary) return;
+  const members = [
+    ...new Set(
+      failures.flatMap((e) => [e, ...(e.errors ?? []), ...relatedErrorsOf(e)]),
+    ),
+  ].filter((e) => e !== primary);
+  members.sort(
+    (a, b) =>
+      Number(!inFile(a)) - Number(!inFile(b)) ||
+      fileOf(a).localeCompare(fileOf(b)) ||
+      compare(a, b),
+  );
   // Copies, not the objects the hooks threw: a hook may throw an error it
   // keeps (a module-level one), which this and the positioning after it must
   // not change for later compiles.
@@ -3933,41 +3965,9 @@ export function runAnalyzeHooks(
     carryPositioning(error, copy);
     return copy;
   };
-  const [only] = failures;
-  if (failures.length === 1 && only) {
-    const copy = copyOf(only);
-    attachRelatedErrors(copy, relatedErrorsOf(only));
-    if (only.errors) {
-      copy.errors = only.errors.map((each) => (each === only ? copy : each));
-    }
-    throw copy;
-  }
-  if (failures.length > 1) {
-    // The primary is the earliest failure in the compiled file: a related
-    // error positioned in another file never leads. The list is the primary,
-    // then every other error (each failure's head and the related errors it
-    // carried) in the compiled file first, then by file, line and column. Only
-    // the primary carries the list, so no member's own `errors` repeats or
-    // cycles through it.
-    const fileOf = (e: TranslateError) => e.file ?? ctx.filename;
-    const inFile = (e: TranslateError) => fileOf(e) === ctx.filename;
-    const primary =
-      failures.filter(inFile).sort(byPosition)[0] ??
-      [...failures].sort(byPosition)[0];
-    if (!primary) throw failures[0];
-    const members = [
-      ...new Set(failures.flatMap((e) => [e, ...(e.errors ?? [])])),
-    ].filter((e) => e !== primary);
-    members.sort(
-      (a, b) =>
-        Number(!inFile(a)) - Number(!inFile(b)) ||
-        fileOf(a).localeCompare(fileOf(b)) ||
-        byPosition(a, b),
-    );
-    const lead = copyOf(primary);
-    lead.errors = [lead, ...members.map(copyOf)];
-    throw lead;
-  }
+  const lead = copyOf(primary);
+  attachRelatedErrors(lead, members.map(copyOf));
+  throw lead;
 }
 
 /**

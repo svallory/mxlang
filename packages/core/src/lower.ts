@@ -67,6 +67,7 @@ import {
   bindingIdentifiers,
   blameEnd,
   bodyChildren,
+  byPosition,
   type Ctx,
   codedError,
   collectedError,
@@ -97,7 +98,6 @@ import {
   newCtx,
   positionAtOffset,
   positionError,
-  byPosition,
   productOf,
   raise,
   raiseWithFixes,
@@ -5741,18 +5741,19 @@ function validateCustomAttributeTagBodies(
       () => `${ownerText(owner)}: ${voice.attrTag(name)}`,
     );
     if (declaration) {
-      validateCustomTagChildren(
-        declaration,
-        {
-          name: `@${name}`,
-          loc: posOf(ctx, tag),
-          childTree: authoredChildTree(ctx, bodyChildren(tag)),
-        },
-        nestedOwner,
-        blameEndOffset(tag),
-        voice,
-        ctx.structural === "reject",
+      const refusedNodes: Node[] = [];
+      const childTree = authoredChildTree(ctx, bodyChildren(tag), refusedNodes);
+      const contract = firstFailure(() =>
+        validateCustomTagChildren(
+          declaration,
+          { name: `@${name}`, loc: posOf(ctx, tag), childTree },
+          nestedOwner,
+          blameEndOffset(tag),
+          voice,
+          ctx.structural === "reject",
+        ),
       );
+      raiseBodyFailure(ctx, [contract], refusedNodes);
     }
     validateCustomAttributeTagBodies(
       ctx,
@@ -5966,6 +5967,41 @@ function dataFileRefusal(
     refusal.code === NOT_IN_DATA_FILE_CODE
     ? refusal
     : undefined;
+}
+
+/**
+ * Throws the first of a body's own failures (`failures`, the checks the
+ * contract and the structural rules ran), carrying the host-refused children
+ * (`refusedNodes`, what `authoredChildTree` left out of the tree) beside it.
+ * A refused child is its own error, so a contract failing on something else
+ * does not hide it; every error is positioned before the position order is
+ * taken, and the related errors each one carries travel with the one thrown.
+ * Does nothing when no check failed: the body is lowered then and raises the
+ * refusal itself.
+ */
+function raiseBodyFailure(
+  ctx: Ctx,
+  failures: readonly (TranslateError | undefined)[],
+  refusedNodes: readonly Node[],
+): void {
+  const compare = byPosition(ctx);
+  const own = failures.filter((error) => error !== undefined).sort(compare)[0];
+  if (!own) return;
+  const refused = refusedNodes.flatMap((child) => {
+    const name = tagNameOf(child) as string;
+    const refusal = dataFileRefusal(ctx, name);
+    const error = refusal
+      ? firstFailure(() => raiseDisposition(ctx, name, refusal, child))
+      : undefined;
+    return error ? [error] : [];
+  });
+  const [failure, ...later] = [own, ...refused].sort(compare);
+  if (!failure) return;
+  attachRelatedErrors(
+    failure,
+    later.flatMap((error) => [error, ...relatedErrorsOf(error)]),
+  );
+  throw failure;
 }
 
 /** Retains authored names and groups transparent control flow without lowering its contents. */
@@ -6352,34 +6388,7 @@ function lowerCustomTagBody(
       ctx.structural === "reject",
     ),
   );
-  // A child the host refuses as something a data file cannot hold is left out
-  // of the contract's tree, and it is its own error: raised beside the
-  // contract's, so the contract failing on something else does not hide it.
-  // When nothing else fails the body is lowered and raises it there.
-  const refused = (rejected || contract ? refusedNodes : []).flatMap((child) => {
-    const refusal = dataFileRefusal(ctx, tagNameOf(child) as string);
-    const error = refusal
-      ? firstFailure(() =>
-          raiseDisposition(ctx, tagNameOf(child) as string, refusal, child),
-        )
-      : undefined;
-    // Positioned here: a refusal on an MX node carries only a span, and the
-    // sort below compares lines.
-    if (error) positionError(ctx, error);
-    return error ? [error] : [];
-  });
-  // Of the body's own checks the one written first is the one reported; a
-  // refused child is reported beside it, in position order.
-  const own = [rejected, contract]
-    .filter((error) => error !== undefined)
-    .sort(byPosition)[0];
-  if (own) {
-    const [failure, ...later] = [own, ...refused].sort(byPosition);
-    if (failure) {
-      attachRelatedErrors(failure, later);
-      throw failure;
-    }
-  }
+  raiseBodyFailure(ctx, [rejected, contract], refusedNodes);
   const handsToHost =
     !isBuiltin &&
     !definition.transform &&

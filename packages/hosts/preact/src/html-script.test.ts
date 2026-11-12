@@ -61,13 +61,26 @@ describe("<html-script> on Preact emits a real <script>", () => {
     ["an element inside a string", 'x = "<b>hi</b>"; go();'],
     ["an <if>", "x(); <if=input.c>y();</if>"],
     ["a comment", "a(); <!-- c --> b();"],
-  ])("keeps markup-looking text in the body as script text: %s", (_name, body) => {
-    const emitted = compilePreactMx(
-      `<html-script>${body}</html-script>`,
-      "/x/App.mx",
-    ).code;
-    expect(emitted).toContain("dangerouslySetInnerHTML");
-    expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
+  ])(
+    "keeps markup-looking text in the body as script text: %s",
+    (_name, body) => {
+      const emitted = compilePreactMx(
+        `<html-script>${body}</html-script>`,
+        "/x/App.mx",
+      ).code;
+      expect(emitted).toContain("dangerouslySetInnerHTML");
+      expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
+    },
+  );
+  // The raw-text view names every raw-text tag, not only <html-script>: the
+  // others are native elements on this host too, and keep their own handling.
+  it("reads <html-style> and <html-comment> as native elements, with the host's own handling", () => {
+    expect(() =>
+      compilePreactMx("<html-style>a { b: c }</html-style>", "/x/a.mx"),
+    ).not.toThrow();
+    expect(() =>
+      compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
+    ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);
   });
   it("writes a script element, not a literal <html-script>", () => {
     const emitted = code('<html-script async src="/a.js"/>');

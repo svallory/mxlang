@@ -41,7 +41,7 @@ describe("attachRelatedErrors", () => {
 describe("byPosition", () => {
   it("orders by line, then column", () => {
     const errors = [at("c", 2, 1), at("b", 2, 0), at("a", 1, 9)];
-    expect(errors.sort(byPosition).map((e) => e.message)).toEqual([
+    expect(errors.sort(byPosition()).map((e) => e.message)).toEqual([
       "a",
       "b",
       "c",

@@ -474,6 +474,11 @@ describe("where `<script>` is not a raw-text tag", () => {
       { tagRules: "markup", structural: "pass" },
     );
     expect(JSON.stringify(ordinary.ir)).toContain('"name":"b"');
+    const style = lowerSource("<html-style><b>x</b></html-style>", "/f/t.mx", {
+      tagRules: "markup",
+      structural: "pass",
+    });
+    expect(JSON.stringify(style.ir)).toContain('"name":"b"');
   });
 
   it("parses `<b>` in a `<script>` as a tag under the `none` tag rules", () => {

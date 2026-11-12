@@ -889,7 +889,9 @@ const relatedErrors = new WeakMap<TranslateError, readonly TranslateError[]>();
 /**
  * Attaches `related` to `error`: a recovering walk records them right after
  * it, and a lone throw carries them in `errors`, so each becomes a diagnostic
- * of its own, in its own `file`.
+ * of its own, in its own `file`. Additive: what the error already carries
+ * stays, so `error` must be one created in this compile, never an error a hook
+ * keeps and rethrows (it would grow on every compile): copy such an error first.
  */
 export function attachRelatedErrors(
   error: TranslateError,
@@ -910,9 +912,22 @@ export function attachRelatedErrors(
   }
 }
 
-/** Orders errors by position: line, then column. Position them first. */
-export function byPosition(a: TranslateError, b: TranslateError): number {
-  return a.line - b.line || a.column - b.column;
+/**
+ * Orders errors by position: line, then column. With `ctx` each operand is
+ * positioned first, so an error raised on an MX node (a span until the
+ * boundary fills its line) sorts by where it is. Without it the errors must
+ * be positioned already (what `recover` records is).
+ */
+export function byPosition(
+  ctx?: Ctx,
+): (a: TranslateError, b: TranslateError) => number {
+  return (a, b) => {
+    if (ctx) {
+      positionError(ctx, a);
+      positionError(ctx, b);
+    }
+    return a.line - b.line || a.column - b.column;
+  };
 }
 
 /** The errors attached to `error` with {@link attachRelatedErrors}. */
@@ -931,7 +946,7 @@ export function collectedError(
 ): TranslateError {
   const [first, ...rest] = errors;
   if (!first) throw new Error("@mxlang/core: no recorded error to throw");
-  rest.sort(byPosition);
+  rest.sort(byPosition());
   first.errors = [first, ...rest];
   return first;
 }
