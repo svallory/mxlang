@@ -3213,14 +3213,17 @@ function occurrenceRange(
 
 /**
  * Where a `<for>` between attribute tags ends for a diagnostic: the end of its
- * `<for`, as a whole-tag error ends at its name. `undefined` when the loop
+ * `for` name, as a whole-tag error ends at its name. `undefined` when the loop
  * carries no span.
  */
 function forNameEnd(ctx: Ctx, loop: AttributeTagNode): Position | undefined {
   const span = loop.kind === "AttributeTagFor" ? loop.span : undefined;
-  return span
-    ? positionAtOffset(ctx, span.sourceStart + "<for".length)
-    : undefined;
+  if (!span) return undefined;
+  // The span starts at the `<` of a tag-syntax loop and at the name itself in
+  // an indent dialect, which has no `<`.
+  const nameStart =
+    span.sourceStart + (ctx.source[span.sourceStart] === "<" ? 1 : 0);
+  return positionAtOffset(ctx, nameStart + "for".length);
 }
 
 function firstNodeOfKind(
