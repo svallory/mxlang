@@ -100,6 +100,14 @@ function compile(rows: readonly Trigger[]): Compiled[] {
   return compiled;
 }
 
+/** A `{ … }`: where it opens and closes, whether it is a class body, its enclosing brace (-1 for none). */
+interface Brace {
+  readonly start: number;
+  end: number;
+  readonly cls: boolean;
+  readonly parent: number;
+}
+
 /** What the text before a position says about an operand: read on masked text. */
 interface Facts {
   /** Offsets just past a regular expression literal (flags included). */
@@ -108,8 +116,8 @@ interface Facts {
   readonly headEnds: Set<number>;
   /** Offsets of a `}` that closes a block (a statement list), not an object literal. */
   readonly blockEnds: Set<number>;
-  /** Every `{ … }` of the statement: where it opens and closes, and whether it is a class body. */
-  readonly braces: { start: number; end: number; cls: boolean }[];
+  /** Every `{ … }` of the statement, in opening order. */
+  readonly braces: Brace[];
 }
 
 /** The index of the last non-space character before `at`, or -1. */
@@ -195,9 +203,7 @@ function endsPostfixUpdate(
   while (first > 0 && text[first - 1] === char) first--;
   if (i - first !== 1 || beforePair) return false;
   // A line break before the pair makes it a prefix update.
-  for (let j = first - 1; j >= 0 && isSpace(text[j]); j--) {
-    if (isLineBreak(text[j])) return false;
-  }
+  if (lineBreakBefore(text, first)) return false;
   return !expectsOperand(text, facts, first, true);
 }
 
@@ -215,21 +221,29 @@ function continuesExpression(text: string, at: number): boolean {
 
 /** Whether the innermost `{ … }` around `at` is a class body. */
 function inClassBody(facts: Facts, at: number): boolean {
-  let inner: { start: number; cls: boolean } | undefined;
-  for (const each of facts.braces) {
-    if (
-      each.start < at &&
-      at < each.end &&
-      (!inner || each.start > inner.start)
-    ) {
-      inner = each;
-    }
+  const { braces } = facts;
+  // The last brace opened before `at`, then outward until one still open.
+  let low = 0;
+  let high = braces.length - 1;
+  let found = -1;
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    if ((braces[mid] as Brace).start < at) {
+      found = mid;
+      low = mid + 1;
+    } else high = mid - 1;
   }
-  return inner?.cls === true;
+  while (found >= 0 && (braces[found] as Brace).end <= at) {
+    found = (braces[found] as Brace).parent;
+  }
+  return found >= 0 && (braces[found] as Brace).cls;
 }
 
 /** Whether a line break lies between the last token before `at` and `at`. */
-function lineBreakBefore(text: string, at: number): boolean {
+function lineBreakBefore(
+  text: { readonly [index: number]: string | undefined },
+  at: number,
+): boolean {
   for (let j = at - 1; j >= 0 && isSpace(text[j]); j--) {
     if (isLineBreak(text[j])) return true;
   }
@@ -414,11 +428,21 @@ function mask(text: string): { masked: string; facts: Facts } {
   let pendingBlock: number | undefined;
   // Open braces: the kind, and how many `?` still wait for their `:`.
   // The first entry is the statement itself.
-  const scopes: { kind: ScopeKind; ternary: number; range: number }[] = [
-    { kind: "block", ternary: 0, range: -1 },
+  interface Scope {
+    readonly kind: ScopeKind;
+    ternary: number;
+    readonly range: number;
+    /** The paren and bracket depth the brace opened at: its own keys sit there. */
+    readonly parens: number;
+    readonly brackets: number;
+  }
+  const scopes: Scope[] = [
+    { kind: "block", ternary: 0, range: -1, parens: 0, brackets: 0 },
   ];
-  const scope = (): { kind: ScopeKind; ternary: number } =>
-    scopes[scopes.length - 1] as { kind: ScopeKind; ternary: number };
+  const scope = (): Scope => scopes[scopes.length - 1] as Scope;
+  let bracketDepth = 0;
+  // `<` depth inside a declaration's header (`class A<T extends {}>`).
+  let angle = 0;
   // Whether the keyword at token index `k` starts a statement.
   const startsStatement = (k: number): boolean => {
     let j = k - 1;
@@ -432,12 +456,30 @@ function mask(text: string): { masked: string; facts: Facts } {
     if (before === "else" || before === "do") return true;
     if (before === ")" && facts.headEnds.has(tokAt[j] as number)) return true;
     // A line break after a token that ends an operand splits the statement.
-    return (
-      endsOperandToken(before) && lineBreakBefore(current(), tokAt[k] as number)
-    );
+    return endsOperandToken(before) && lineBreakBefore(out, tokAt[k] as number);
   };
   // What the `{` at `at` opens.
   const kindOfBrace = (): ScopeKind => {
+    const here = parens.length;
+    const waiting =
+      pendingBody?.depth === here ||
+      pendingClass?.depth === here ||
+      pendingFunction?.depth === here ||
+      pendingBlock === here;
+    // A type literal in a header (`: { a: 1 }` after the parameters, a type
+    // argument) is no body: keep waiting for the body's own `{`.
+    if (waiting) {
+      const prev = last();
+      const typePosition =
+        angle > 0 ||
+        !(
+          prev === "" ||
+          isWord(prev[0]) ||
+          prev === "lit" ||
+          ")]}>".includes(prev)
+        );
+      if (typePosition) return "object";
+    }
     if (pendingBody && pendingBody.depth === parens.length) {
       const body = pendingBody;
       pendingBody = undefined;
@@ -498,6 +540,17 @@ function mask(text: string): { masked: string; facts: Facts } {
   while (i < text.length) {
     const char = text[i] as string;
     const next = text[i + 1];
+    // A line break that ends a statement ends its pending ternaries too.
+    if (
+      toks.length > 0 &&
+      !isSpace(char) &&
+      scope().ternary > 0 &&
+      endsOperandToken(last()) &&
+      lineBreakBefore(out, i) &&
+      !continuesExpression(text, i)
+    ) {
+      scope().ternary = 0;
+    }
     if (char === "/" && next === "/") {
       const from = i;
       while (i < text.length && !isLineBreak(text[i])) i++;
@@ -586,6 +639,9 @@ function mask(text: string): { masked: string; facts: Facts } {
         (scope().kind === "class" ||
           scope().kind === "classExpr" ||
           scope().kind === "object") &&
+        // The name is a key of this brace, not inside a nested `(`/`[`.
+        parens.length === scope().parens &&
+        bracketDepth === scope().brackets &&
         METHOD_PREFIX.has(last(1))
       ) {
         body = { stmt: true };
@@ -600,6 +656,14 @@ function mask(text: string): { masked: string; facts: Facts } {
       const info = parens.pop();
       if (info?.head === true) facts.headEnds.add(i);
       lastParenBlockHead = info?.blockHead === true;
+      // A header whose parens closed below it was a call, not a declaration.
+      for (const wait of [pendingFunction, pendingBody, pendingClass]) {
+        if (wait && parens.length < wait.depth) {
+          if (wait === pendingFunction) pendingFunction = undefined;
+          if (wait === pendingBody) pendingBody = undefined;
+          if (wait === pendingClass) pendingClass = undefined;
+        }
+      }
       if (info?.body) {
         pendingBody = { depth: parens.length, stmt: info.body.stmt };
       }
@@ -611,8 +675,15 @@ function mask(text: string): { masked: string; facts: Facts } {
         start: i,
         end: Number.POSITIVE_INFINITY,
         cls: kind === "class" || kind === "classExpr",
+        parent: scope().range,
       });
-      scopes.push({ kind, ternary: 0, range: facts.braces.length - 1 });
+      scopes.push({
+        kind,
+        ternary: 0,
+        range: facts.braces.length - 1,
+        parens: parens.length,
+        brackets: bracketDepth,
+      });
       push("{", i);
     } else if (char === "}") {
       if (depth === 0 && braces.length > 0) {
@@ -625,7 +696,14 @@ function mask(text: string): { masked: string; facts: Facts } {
       const closed = scopes.length > 1 ? scopes.pop() : undefined;
       if (closed) {
         (facts.braces[closed.range] as { end: number }).end = i;
-        if (closed.kind === "block" || closed.kind === "class") {
+        // A class body's members are no statements: a `}` inside one (a
+        // method, a constructor, a `static {}` block) starts none.
+        const outer = scope().kind;
+        if (
+          (closed.kind === "block" || closed.kind === "class") &&
+          outer !== "class" &&
+          outer !== "classExpr"
+        ) {
           facts.blockEnds.add(i);
         }
       }
@@ -633,6 +711,8 @@ function mask(text: string): { masked: string; facts: Facts } {
     } else if (char === ";") {
       pendingFunction = pendingBody = pendingClass = undefined;
       pendingBlock = undefined;
+      angle = 0;
+      scope().ternary = 0;
       push(";", i);
     } else if (
       char === ">" &&
@@ -642,8 +722,9 @@ function mask(text: string): { masked: string; facts: Facts } {
       toks[toks.length - 1] = "=>";
     } else if (char === "?") {
       // A ternary's `?` waits for its `:`; `?.`, `??` and TypeScript's
-      // `x?:` do not.
-      const after = text.slice(i + 1).trimStart()[0];
+      // optional markers (`x?:`, `[T?]`, `m?()`, `f(a?)`) do not.
+      let after = i + 1;
+      while (isSpace(text[after])) after++;
       const chain = next === "." && !/\d/.test(text[i + 2] ?? "");
       if (next === "?") {
         push("?", i);
@@ -651,7 +732,7 @@ function mask(text: string): { masked: string; facts: Facts } {
         i += 2;
         continue;
       }
-      if (!chain && after !== ":") scope().ternary++;
+      if (!chain && !":]),(=;".includes(text[after] ?? ";")) scope().ternary++;
       push("?", i);
     } else if (char === ":") {
       const inside = scope();
@@ -659,11 +740,49 @@ function mask(text: string): { masked: string; facts: Facts } {
       if (lastColonTernary) inside.ternary--;
       push(":", i);
     } else if (!isSpace(char)) {
+      if (char === "[") bracketDepth++;
+      else if (char === "]" && bracketDepth > 0) bracketDepth--;
+      else if (char === "<" && (pendingClass || pendingFunction || pendingBody))
+        angle++;
+      else if (char === ">" && angle > 0) angle--;
+      else if (
+        char === "," &&
+        angle === 0 &&
+        pendingBody?.depth === parens.length
+      )
+        pendingBody = undefined;
       push(char, i);
     }
     i++;
   }
   return { masked: current(), facts };
+}
+
+/**
+ * Whether what follows an `@name` at `end` makes it a TypeScript decorator
+ * (`@dec class B {}`, `@dec @other export class`, `@dec(args) class`), not a
+ * row: another decorator, or `class`/`export`/`abstract`/`default`.
+ */
+function isDecorator(masked: string, end: number): boolean {
+  let j = end;
+  while (isSpace(masked[j])) j++;
+  if (masked[j] === "(") {
+    let level = 0;
+    for (; j < masked.length; j++) {
+      if (masked[j] === "(") level++;
+      else if (masked[j] === ")" && --level === 0) {
+        j++;
+        break;
+      }
+    }
+    while (isSpace(masked[j])) j++;
+  }
+  return (
+    masked[j] === "@" ||
+    /^(class|export|abstract|default)(?![\p{L}\p{N}_$])/u.test(
+      masked.slice(j, j + 9),
+    )
+  );
 }
 
 /** The first dialect expression row `text` writes outside comments and strings, if any. */
@@ -692,6 +811,7 @@ export function firstRowIn(
               masked[end] === "."));
         if (
           !continues &&
+          !(armed.row.chars.includes("@") && isDecorator(masked, end)) &&
           !(i > 0 && isWord(masked[i - 1])) &&
           !(i > 0 && masked[i - 1] === masked[i]) &&
           expectsOperand(masked, facts, i)

@@ -1441,12 +1441,14 @@ function valueFormOf(trigger: Node): TriggerValueForm {
 }
 
 /**
- * A node over the operator after a trigger's text (`:=`, or the `(` of its
- * arguments): the lexer skips whitespace between them, so the offset is
- * searched forward from the text's end.
+ * A node over the operator after a trigger's text: the `(` of its arguments
+ * (recorded by the parser), or the `:=` the lexer reaches by skipping the
+ * whitespace after the text.
  */
 function operatorNode(ctx: Ctx, trigger: Node, width: number): Node {
-  let start = trigger.start + String(trigger.text).length;
+  const recorded = trigger.args?.outer?.start;
+  let start =
+    typeof recorded === "number" ? recorded : spanOf(trigger).sourceEnd;
   while (start < ctx.source.length && /\s/.test(ctx.source[start] as string)) {
     start++;
   }

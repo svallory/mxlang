@@ -279,6 +279,32 @@ describe("the matching is the template scanner's", () => {
     expect(hit("class A {\n x = 1\n ~zz y = 2\n}")).toBeUndefined();
     expect(hit("class A {\n x = 1\n #b = 2\n}", [hash])).toBeUndefined();
     expect(hit("class A {\n x = 1\n @dec y = 2\n}", [at])).toBeUndefined();
+    expect(
+      hit(
+        "switch (a) { case 1: let t: [number?] = []; break\n case 2: { b } ~zz }",
+      ),
+    ).toEqual(["sigil", "~zz"]);
+    // A method's, a constructor's or a `static {}` block's `}` in a class body
+    // starts no statement; nor does a decorator after a class declaration.
+    expect(hit("class A {\n m() {}\n @dec y = 2\n}", [at])).toBeUndefined();
+    expect(hit("class A { static {} #b = 2 }", [hash])).toBeUndefined();
+    expect(
+      hit("class A {\n constructor() {}\n #b = 2\n}", [hash]),
+    ).toBeUndefined();
+    expect(hit("class A {}\n@dec class B {}", [at])).toBeUndefined();
+    expect(
+      hit("class A {}\n@dec(1) @other export class B {}", [at]),
+    ).toBeUndefined();
+    expect(hit("class A {} @dec", [at])).toEqual(["at", "@dec"]);
+    // A call after a comma is no method head; a type literal is no body.
+    expect(hit("x = { a: [b, f(c)] }\ny = { q: 1 } ~zz")).toBeUndefined();
+    expect(hit("const f = function (): { a: 1 } { } ~zz")).toBeUndefined();
+    expect(
+      hit("class A<T extends {}> {\n x = 1\n @dec y = 2\n}", [at]),
+    ).toBeUndefined();
+    expect(
+      hit("class X implements B<{ a: 1 }> {\n x = 1\n @dec y = 2\n}", [at]),
+    ).toBeUndefined();
     // An object literal's `}` ends an operand, and a line that continues
     // the expression is no statement start.
     expect(hit("a = { b } ~zz")).toBeUndefined();
