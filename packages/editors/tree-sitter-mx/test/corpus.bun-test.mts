@@ -23,7 +23,7 @@ describe("tree-sitter-mx corpus", () => {
 
   it("keeps the error cases in errors.txt and nowhere else", () => {
     const errors = CASES.filter((c) => c.error);
-    assert.strictEqual(errors.length, 14);
+    assert.strictEqual(errors.length, 19);
     for (const c of errors) assert.strictEqual(c.file, "errors.txt");
   });
 
@@ -93,14 +93,15 @@ describe("unterminated comments", () => {
     });
   }
 
-  // Known shape, bead mx-r6fj: a sentinel combined with any other error in
-  // one parse, in either order, ends the parse. Here an ordinary placeholder
-  // (or scriptlet) error comes first and the new comment sentinel follows,
-  // so the root becomes an ERROR that starts at 0 and holds the completed
-  // `<before/>`; the ERROR stops before the comment. The front end reports
-  // MALFORMED_COMMENT for both inputs. The same collapse already holds on
-  // main for a concise `-` line and for `<!--`. Pinned as it is, not as it
-  // should be: when mx-r6fj lands these rows change.
+  // Known shape (tree-sitter limit), bead mx-r6fj: an error line the scanner
+  // recovers from keeps the rest of the document (see "error recovery"
+  // below). An unfinished enclosing construct combined with an unterminated
+  // comment does not: the comment runs to EOF, so no later content exists,
+  // and the parser has an open placeholder (or scriptlet) it can only close
+  // by wrapping everything in one root ERROR that starts at 0 and holds the
+  // completed `<before/>`; the ERROR stops before the comment. The front end
+  // reports MALFORMED_COMMENT for both inputs. Pinned as it is: no token the
+  // scanner could emit makes the open construct end earlier.
   for (const [source, end] of [
     ["<before/>\n<p>${y /* oops", 15],
     ["<before/>\n$ /* oops", 11],
@@ -181,4 +182,72 @@ describe("unterminated comments", () => {
       tree.delete();
     });
   }
+});
+
+describe("error recovery", () => {
+  // The scanner used to return false while tree-sitter was recovering, which
+  // ends the parse: the rest of the document vanished (beads mx-r6fj and
+  // mx-scanner-error-recovery-truncates-body). It now swallows the rest of
+  // the failing line as part of the ERROR and scans on from the next line.
+  const names = (root: { namedChildren: { type: string; namedChildren: { type: string; text: string }[] }[] }) =>
+    root.namedChildren
+      .filter((n) => n.type === "element")
+      .map((n) => n.namedChildren.find((c) => c.type === "tag_name")?.text);
+
+  it("keeps the elements after an error line in a concise body", () => {
+    const tree = parseMx("div\n  - foo\nspan\np");
+    assert.ok(tree, "parse timed out");
+    const root = tree.rootNode;
+    assert.deepEqual(names(root), ["div", "span", "p"], root.toString());
+    const errors = root.descendantsOfType("ERROR");
+    assert.equal(errors.length, 1, root.toString());
+    assert.equal(errors[0]?.text, "- foo\n");
+    tree.delete();
+  });
+
+  it("keeps the elements between and after two error lines", () => {
+    const source = "<a/>\n-\n<b/>\n-\n<c/>";
+    const tree = parseMx(source);
+    assert.ok(tree, "parse timed out");
+    const root = tree.rootNode;
+    assert.equal(root.type, "document", root.toString());
+    assert.deepEqual(names(root), ["a", "b", "c"], root.toString());
+    assert.equal(root.descendantsOfType("ERROR").length, 2, root.toString());
+    tree.delete();
+  });
+
+  it("recovers a lone error line at the end of the file", () => {
+    const tree = parseMx("<a/>\n-");
+    assert.ok(tree, "parse timed out");
+    const root = tree.rootNode;
+    assert.deepEqual(names(root), ["a"], root.toString());
+    assert.equal(root.descendantsOfType("ERROR").length, 1, root.toString());
+    tree.delete();
+  });
+
+  // EOF failures emit an ERROR node, not just a MISSING element_end.
+  for (const [source, end] of [
+    ["<script>abc", 11],
+    ["<script>x${/* oops", 11],
+  ] as const) {
+    it(`reports an ERROR node for ${JSON.stringify(source)}`, () => {
+      const tree = parseMx(source);
+      assert.ok(tree, "parse timed out");
+      const root = tree.rootNode;
+      const errors = [root, ...root.descendantsOfType("ERROR")].filter(
+        (n) => n.type === "ERROR",
+      );
+      assert.equal(errors.length >= 1, true, root.toString());
+      assert.equal(errors[0]?.endIndex, end);
+      assert.equal(root.descendantsOfType("MISSING").length, 0);
+      tree.delete();
+    });
+  }
+
+  it("reports an ERROR node for an attribute comma then an unterminated comment", () => {
+    const tree = parseMx("div a=1,\n  /* oops");
+    assert.ok(tree, "parse timed out");
+    assert.equal(tree.rootNode.descendantsOfType("ERROR").length, 1);
+    tree.delete();
+  });
 });

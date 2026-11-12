@@ -136,3 +136,56 @@ open-tag-block-comment-eof
 ---------------
 
 (document (ERROR (open_tag_start) (tag_name_fragment)))
+
+===============
+parsed-text-eof-unclosed
+:error
+===============
+<script>abc
+---------------
+
+(ERROR)
+
+===============
+parsed-text-template-comment-eof
+:error
+===============
+<script>x${/* oops
+---------------
+
+(ERROR)
+
+===============
+attr-comma-block-comment-eof
+:error
+===============
+div a=1,
+  /* oops
+---------------
+
+(document (ERROR))
+
+===============
+repeated-line-start-hyphen
+:error
+===============
+<a/>
+-
+<b/>
+-
+<c/>
+---------------
+
+(document (element) (ERROR) (element) (ERROR) (element))
+
+===============
+error-line-in-concise-body
+:error
+===============
+div
+  - foo
+span
+p
+---------------
+
+(document (element (ERROR)) (element) (element))

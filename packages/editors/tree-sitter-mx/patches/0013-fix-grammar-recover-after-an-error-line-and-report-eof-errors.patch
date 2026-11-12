@@ -1,0 +1,173 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Saulo Vallory <me@saulo.engineer>
+Date: Thu, 12 Nov 2026 12:00:00 -0300
+Subject: [PATCH] fix(grammar): recover after an error line and report EOF errors
+---
+ README.md     |  6 +++--
+ src/scanner.c | 74 ++++++++++++++++++++++++++++++++++++++++++++++++++---------
+
+diff --git a/README.md b/README.md
+index 7caee9f4..8755edf7 100644
+--- a/README.md
++++ b/README.md
+@@ -13,8 +13,10 @@ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
+ Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute
+ arguments and method bodies. One known limit: an atom inside a `${}` of a
+ template literal that is itself inside an expression (`` x=`a ${:c}` ``) is
+-not recognised and stays plain text there (TODO
+-`tree-sitter-atoms-template-placeholder`). The grammar is a vendored snapshot of
++not recognised and stays plain text there. Recognising it needs the scanner
++to carry a stack of expression frames across tokens, and the serialized
++scanner state (tree-sitter's 1024-byte buffer) has no room for a second
++frame at the scanner's maximum tag and content depth. The grammar is a vendored snapshot of
+ [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
+ patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
+ The same grammar and `queries/highlights.scm` are what MX's Zed extension
+diff --git a/src/scanner.c b/src/scanner.c
+index 83c5ae1b..b6fe2978 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -256,6 +256,8 @@ typedef struct {
+   uint8_t suppress_placeholder;  // next "${" is literal text (escaped)
+   uint8_t fail_next;  // emit an error on the next scan (comment trailing)
+   uint8_t tag_comma_continue;  // concise open tag continues after , at EOL
++  uint8_t after_sentinel;  // the last token was an ERROR_SENTINEL: recovery
++                           // may resynchronise on lines (scan_recovery)
+ 
+   // open tag state (only one tag can be open at a time)
+   uint8_t tag_open;
+@@ -1293,10 +1295,8 @@ static void es_consume_line_comment(EStream *es) {
+ 
+ // Consumes the rest of the line (to, not past, the newline) as the span of an
+ // ERROR node: the caller emits it as ERROR_SENTINEL, which no state accepts
+-// outside recovery (see the indentation case in scan_concise_line). A lone
+-// sentinel leaves the preceding siblings in place; a sentinel combined with
+-// any other error in the same parse, in either order, ends the parse (root
+-// ERROR, earlier siblings inside it; bead mx-r6fj).
++// outside recovery (see the indentation case in scan_concise_line). The
++// preceding siblings stay in place and scan_recovery resumes on the next line.
+ static void es_error_line(EStream *es) {
+   while (es_peek(es, 0) >= 0 && !is_line(es_peek(es, 0))) es_next_mark(es);
+ }
+@@ -1426,6 +1426,7 @@ static uint8_t block_content_kind(Scanner *s) {
+ // --------------------------------------------------------------------------
+ 
+ static bool scan_content(Scanner *s, TSLexer *lexer, const bool *valid);
++static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid);
+ static bool scan_open_tag(Scanner *s, TSLexer *lexer, const bool *valid);
+ static bool scan_open_tag_es(Scanner *s, TSLexer *lexer, const bool *valid,
+                              EStream *es);
+@@ -2677,9 +2678,7 @@ static bool scan_concise(Scanner *s, TSLexer *lexer, const bool *valid,
+     // an indented line, parsed clean). Emit the offending line as
+     // ERROR_SENTINEL instead: no state accepts it outside error recovery, so
+     // the parser wraps it in an ERROR node. A lone sentinel recovers
+-    // locally; a sentinel combined with any other error in the same parse,
+-    // in either order, ends the parse (root ERROR, earlier siblings inside
+-    // it; bead mx-r6fj).
++    // locally and scan_recovery resumes on the next line.
+     while (!at_eof(lexer) && !is_line(lexer->lookahead)) {
+       cursor_advance(&s->cur, lexer->lookahead);
+       lexer->advance(lexer, false);
+@@ -3704,8 +3703,14 @@ static bool scan_content(Scanner *s, TSLexer *lexer, const bool *valid) {
+       return true;
+     }
+     if (f->content == CONTENT_PARSED_TEXT) {
+-      // <script> etc reached EOF: MISSING_END_TAG
+-      return false;
++      // <script> etc reached EOF: MISSING_END_TAG. A zero-width sentinel at
++      // EOF makes it an ERROR node instead of a silent MISSING element_end.
++      // Not after a sentinel that already reported this EOF (an unterminated
++      // comment in the text), nor during recovery: that ERROR is the one.
++      if (valid[ERROR_SENTINEL] || s->after_sentinel) return false;
++      mark(s, lexer);
++      lexer->result_symbol = ERROR_SENTINEL;
++      return true;
+     }
+     // mixed html line at EOF: pop silently and continue.
+     s->begin_mixed_mode = 0;
+@@ -3815,8 +3820,50 @@ static bool scan_atom_piece(Scanner *s, TSLexer *lexer, const bool *valid) {
+   return true;
+ }
+ 
++// Error recovery (tree-sitter offers every external token, ERROR_SENTINEL
++// among them, while it recovers). Giving up here ends the parse and drops the
++// rest of the document, so resynchronise on lines instead: the rest of the
++// current line is swallowed as part of the ERROR (the newline with it), and at
++// a line start the ordinary scan runs again with no open-tag or atom state, as
++// if the parser were between two lines of content. The scanner's tag and
++// content stacks are kept: they hold the indentation of every open concise
++// tag, which is what decides where the following lines belong. At EOF there is
++// nothing left to recover.
++static bool scan_recovery(Scanner *s, TSLexer *lexer, const bool *valid) {
++  // Only the line the scanner itself reported as an error is resynchronised;
++  // any other error keeps ending the parse (the old behaviour).
++  if (!s->after_sentinel) return false;
++  if (at_eof(lexer)) return false;
++  s->tag_open = 0;
++  s->atom_state = 0;
++  s->fail_next = 0;
++  uint8_t pc = s->cur.prev_char;
++  bool line_start = s->started && (pc == '\n' || pc == '\r');
++  if (line_start) {
++    bool clean[ERROR_SENTINEL + 1];
++    for (int i = 0; i < ERROR_SENTINEL; i++) clean[i] = valid[i];
++    clean[ERROR_SENTINEL] = false;
++    return scan_main(s, lexer, clean);
++  }
++  EStream es;
++  es_init(&es, s, lexer, false);
++  mark(s, lexer);
++  es_error_line(&es);
++  // The line break joins the ERROR only when more text follows it: a file
++  // that ends on the failed line keeps its ERROR to the line's last char.
++  uint32_t eol = es_peek(&es, 0) == '\r' && es_peek(&es, 1) == '\n' ? 2 : 1;
++  if (is_line(es_peek(&es, 0)) && es_peek(&es, eol) >= 0) {
++    for (uint32_t i = 0; i < eol; i++) es_next_mark(&es);
++  }
++  bool progressed = s->buf_len > 0;
++  es_free(&es);
++  if (!progressed) return false;
++  lexer->result_symbol = ERROR_SENTINEL;
++  return true;
++}
++
+ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+-  if (valid[ERROR_SENTINEL]) return false;  // error recovery: give up
++  if (valid[ERROR_SENTINEL]) return scan_recovery(s, lexer, valid);
+   if (s->fail_next) {
+     // INVALID_CHARACTER after a concise comment block: the comment already
+     // parsed, the rest of its line is an ERROR node.
+@@ -3931,6 +3978,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
+   WRITE(s->suppress_placeholder);
+   WRITE(s->fail_next);
+   WRITE(s->tag_comma_continue);
++  WRITE(s->after_sentinel);
+   WRITE(s->tag_open);
+   WRITE(s->tag_name_done);
+   WRITE(s->in_shorthand);
+@@ -4005,6 +4053,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
+     READ(s->suppress_placeholder);
+     READ(s->fail_next);
+     READ(s->tag_comma_continue);
++    READ(s->after_sentinel);
+     READ(s->tag_open);
+     READ(s->tag_name_done);
+     READ(s->in_shorthand);
+@@ -4083,6 +4132,7 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+ #ifdef TSMARKO_DEBUG
+   uint32_t col = lexer->get_column(lexer);
+   bool ok = scan_main(s, lexer, valid_symbols);
++  if (ok) s->after_sentinel = lexer->result_symbol == ERROR_SENTINEL;
+   fprintf(stderr, "[scan col=%u eof=%d err=%d] -> %s (buf=%.*s)\n", col,
+           at_eof(lexer), valid_symbols[ERROR_SENTINEL],
+           ok ? TOKEN_NAMES[lexer->result_symbol] : "(none)",
+@@ -4096,6 +4146,8 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+   }
+   return ok;
+ #else
+-  return scan_main(s, lexer, valid_symbols);
++  bool ok = scan_main(s, lexer, valid_symbols);
++  if (ok) s->after_sentinel = lexer->result_symbol == ERROR_SENTINEL;
++  return ok;
+ #endif
+ }

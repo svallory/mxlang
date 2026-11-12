@@ -253,6 +253,33 @@ is MX's own:
   terminator-edge and terminated-comment controls in
   `test/corpus.bun-test.mts` (MX's own files, not vendored).
 
+`patches/0013-fix-grammar-recover-after-an-error-line-and-report-eof-errors.patch`
+is MX's own:
+
+- `src/scanner.c`: while tree-sitter recovers, the scanner used to return
+  false, which ends the parse. After a line the scanner itself reported as
+  `ERROR_SENTINEL` (a serialized `after_sentinel` flag) it now swallows the
+  rest of that line into the ERROR (the line break too when text follows)
+  and resumes the ordinary scan at the next line, with open-tag and atom
+  state cleared and the tag and content stacks kept. `div\n  - foo\nspan\np`
+  and `<a/>\n-\n<b/>\n-\n<c/>` keep every element (beads
+  mx-scanner-error-recovery-truncates-body, mx-r6fj). Any other recovery
+  (an unterminated placeholder or comment combined with an error, for
+  example `<before/>\n<p>${y /* oops`) still ends the parse in a root
+  `ERROR`: the comment runs to EOF and the open placeholder can only be
+  closed by that ERROR; pinned in `test/corpus.bun-test.mts` as a tree-sitter
+  limit.
+- A parsed-text element unclosed at EOF (`<script>abc`) emits a zero-width
+  `ERROR_SENTINEL` (bead mx-xtt1).
+- `div a=1,\n  /* oops` already gives an `ERROR` (see patch 0012's note on
+  the intentionally different range).
+- Atoms in a template placeholder inside an expression (bead
+  mx-tree-sitter-atoms-template-placeholder) stay a documented limit: the
+  serialized scanner state is up to about 1020 bytes at the maximum tag and
+  content depth (24 tag frames of 28 bytes, 12 content frames of 12 bytes,
+  one 160-byte expression state) against tree-sitter's 1024-byte buffer, so a
+  second expression frame does not fit.
+
 ## Tests
 
 `bun run test` (`scripts/test.sh`, also `moon run tree-sitter-mx:test` and

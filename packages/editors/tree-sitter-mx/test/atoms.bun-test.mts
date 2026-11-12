@@ -233,6 +233,9 @@ const POSITIONS: [name: string, src: string, atoms: string[]][] = [
   ["`[a :b]` is not an atom", "<t x=[a :b]/>", []],
   ["string", '<t x="a :b"/>', []],
   ["template text", "<t x=`a :b`/>", []],
+  // Known limit: the scanner keeps no expression frame across tokens inside a
+  // template literal's `${}` (the 1024-byte serialized state has no room).
+  ["known limit: atom in a template placeholder", "<t x=`a ${:c}`/>", []],
   ["regex", "<t x=/:b/ />", []],
   ["static stays TypeScript", "static const a = :b", []],
   ["scriptlet stays TypeScript", "$ const a = :b", []],

@@ -24,7 +24,9 @@ describe("extra indentation at the root", () => {
     [
       "after a root tag and a comment, then another tag",
       "x\n// c\n  b\ny\n",
-      "b",
+      // The line break joins the ERROR when more text follows (recovery
+      // resumes on the next line); at the end of the file it does not.
+      "b\n",
     ],
   ];
   for (const [name, src, covered] of BAD) {
