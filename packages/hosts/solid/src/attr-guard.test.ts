@@ -853,9 +853,9 @@ describe("<html-style>", () => {
       (define) => define.binding === "__mxStyleText",
     )?.code;
     expect(helper).toBeDefined();
-    const escape = new Function(
+    const escapeStyle = new Function(
       `${helper?.replace(/: unknown\[\]/g, "").replace(/\): string/g, ")")}; return __mxStyleText;`,
     )() as (...parts: unknown[]) => string;
-    expect(escape("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
+    expect(escapeStyle("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
   });
 });

@@ -87,10 +87,10 @@ describe("<html-script> on Preact emits a real <script>", () => {
     // The helper is defined in the module, and escapes `</style` as Marko does.
     const helper = /const __mxStyleText = ([\s\S]*?);\n/.exec(emitted)?.[1];
     expect(helper).toBeDefined();
-    const escape = new Function(
+    const escapeStyle = new Function(
       `return ${helper?.replace(/: unknown\[\]/g, "").replace(/\): string/g, ")")}`,
     )() as (...parts: unknown[]) => string;
-    expect(escape("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
+    expect(escapeStyle("a</STYLE>b", 0, null)).toBe("a\\3C/STYLE>b0");
     expect(() =>
       compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
     ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);
