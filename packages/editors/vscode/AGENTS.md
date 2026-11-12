@@ -24,7 +24,7 @@ vsce must walk dependencies itself (`npm list --production`, a vsce internal, no
 
 `bun run tsserver-load` (`scripts/tsserver-load.ts`, also a CI step) is the real proof: it unpacks the VSIX and runs the plugin's `src/tsserver-load.test.ts` against `extension/` (`MX_VSIX_EXTENSION_DIR`), starting ONE real tsserver the way VS Code does (`--globalPlugins @mxlang/typescript-plugin --pluginProbeLocations <extension dir>`), with a request timeout and a kill on hang or exit. It needs no VS Code and no installed VSIX.
 
-Known limitation: `{ astro: true }` composition for `.astro.mx` does not work from the VSIX, because the plugin's `createRequire(import.meta.url)("@astrojs/language-server/...")` resolves from the plugin's location and the optional peer is not shipped. Fixing it means resolving the peer from the project.
+`{ astro: true }` composition for `.astro.mx` resolves the optional `@astrojs/language-server` peer from the project directory first (`loadAstroLanguagePlugin(projectDir)`), then from the plugin's own location, so it works from the VSIX when the project installs the peer.
 
 ### The language server
 

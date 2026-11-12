@@ -5641,17 +5641,14 @@ describe("host-policy diagnostics through tsserver", {
     expect(p.diagnostics()).toEqual([]);
   });
 
-  it("pins a known limit: fixing package.json alone leaves the warning until the .mx is edited", () => {
-    // The plugin does not watch package.json (the host choice itself is as
-    // stale), so the warning lingers. A package.json watch is a follow-up;
-    // when it lands, this test is meant to flip to `toEqual([])`.
+  it("clears the warning once package.json alone is fixed, without editing the .mx", () => {
     const dir = packageDir(UNKNOWN);
     const p = project(dir, "page.mx");
     expect(p.diagnostics()).toHaveLength(1);
 
-    writeFileSync(join(dir, "package.json"), FIXED);
+    writeFileSync(join(dir, "package.json"), `${FIXED}\n`);
 
-    expect(p.diagnostics()).toHaveLength(1);
+    expect(p.diagnostics()).toEqual([]);
   });
 });
 

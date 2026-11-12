@@ -508,20 +508,48 @@ export function createNgMxLanguagePlugin(
           ? readAngularConfig(projectDir).tagSelectorPrefix
           : DEFAULT_TAG_SELECTOR_PREFIX;
       } catch (cause) {
-        return fail({
+        const error = {
           fileName,
           message: configErrorMessage(cause),
           offset: 0,
           source,
-        });
+        };
+        // A `package.json` that does not parse is also the host policy's
+        // `malformed-package-json` diagnostic, which carries the parse error
+        // and its position in the file: that one is the report, so this
+        // failure keeps the empty module and says nothing a second time.
+        const file = isTranslateError(cause) ? cause.file : undefined;
+        if (
+          file !== undefined &&
+          hostPolicies
+            .get(fileName)
+            .some(
+              (diagnostic) =>
+                diagnostic.code === "malformed-package-json" &&
+                diagnostic.file === file,
+            )
+        ) {
+          const stub = fail(error);
+          compileDiagnostics.delete(fileName);
+          return stub;
+        }
+        return fail(error);
       }
 
       try {
         const scan = scanCached(fileName, {
           host: fileKindHostFilter(fileKindForPipeline("ng-template")),
         });
-        reportScanDiagnostics(scan.diagnostics, reportedScanDiagnostics, (d) =>
-          console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
+        // The manifest-parse warning the host policy already reports as one
+        // positioned diagnostic (TS80003) is not logged a second time.
+        reportScanDiagnostics(
+          scanDiagnosticsNotSaidByPolicy(
+            hostPolicies.get(fileName),
+            scan.diagnostics,
+          ),
+          reportedScanDiagnostics,
+          (d) =>
+            console.warn(`@mxlang/typescript-plugin: ${d.file}: ${d.message}`),
         );
         const result = compileNgMx(source, fileName, {
           customTags: scan.customTags,

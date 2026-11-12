@@ -153,6 +153,7 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
         info.config?.astro === true,
         undefined,
         languagePlugins,
+        projectDirectory(typescript, info),
       ),
       setup: (volarLanguage) => {
         language = volarLanguage;
@@ -330,6 +331,7 @@ export function createConfiguredLanguagePlugins(
   mxPlugins: Array<AnyMxLanguagePlugin> = createBuiltinLanguagePlugins(
     typescript,
   ),
+  projectDir?: string,
 ) {
   return [
     ...mxPlugins,
@@ -341,7 +343,7 @@ export function createConfiguredLanguagePlugins(
     )
       ? [createAmxLanguagePlugin(typescript)]
       : []),
-    ...(astro ? [createAstroLanguagePlugin(loadAstro)] : []),
+    ...(astro ? [createAstroLanguagePlugin(loadAstro, projectDir)] : []),
     createCompoundExtensionResolver(typescript),
   ];
 }

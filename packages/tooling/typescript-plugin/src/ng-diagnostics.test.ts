@@ -422,3 +422,62 @@ describe("open files only", () => {
     expect(workers.get(dir)?.checks).toHaveLength(1);
   });
 });
+
+describe("a malformed package.json beside an .ng.mx", () => {
+  const virtual = async (dir: string) => {
+    const { default: ts } = await import("typescript");
+    const { createNgMxLanguagePlugin } = await import("./language.ts");
+    const plugin = createNgMxLanguagePlugin(ts);
+    const fileName = path.join(dir, "x.component.ng.mx");
+    plugin.createVirtualCode?.(
+      fileName,
+      "ngmx",
+      ts.ScriptSnapshot.fromString(SOURCE),
+      // biome-ignore lint/suspicious/noExplicitAny: Volar's codegen context is unused here
+      undefined as any,
+    );
+    return {
+      compile: plugin.getCompileDiagnostics(fileName),
+      policy: plugin.getTargetPolicyDiagnostics?.(fileName) ?? [],
+    };
+  };
+
+  it("reports it once, positioned in the package.json, without a config", async () => {
+    const dir = path.join(root, "bad");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "package.json"), "{ nope");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { compile, policy } = await virtual(dir);
+
+      expect(compile).toEqual([]);
+      expect(policy).toHaveLength(1);
+      expect(policy[0]).toMatchObject({
+        code: "malformed-package-json",
+        file: path.join(dir, "package.json"),
+        line: 1,
+        offset: 2,
+      });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("reports it once with a separate .mxrc.json beside it", async () => {
+    const dir = path.join(root, "bad2");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "package.json"), "{ nope");
+    writeFileSync(path.join(dir, ".mxrc.json"), "{}");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { compile, policy } = await virtual(dir);
+
+      expect(compile).toEqual([]);
+      expect(policy).toHaveLength(1);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

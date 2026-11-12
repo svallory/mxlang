@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import type { LanguagePlugin, VirtualCode } from "@volar/language-core";
 
 interface UriLike {
@@ -14,11 +15,12 @@ export type AstroLanguagePluginLoader = () => AstroLanguagePlugin;
  * then adapts its URI-keyed API to the file-name keys tsserver uses.
  */
 export function createAstroLanguagePlugin(
-  load: AstroLanguagePluginLoader = loadAstroLanguagePlugin,
+  load?: AstroLanguagePluginLoader,
+  projectDir?: string,
 ): LanguagePlugin<string> {
   let astro: AstroLanguagePlugin;
   try {
-    astro = load();
+    astro = (load ?? (() => loadAstroLanguagePlugin(projectDir)))();
   } catch (cause) {
     throw new Error(
       "@mxlang/typescript-plugin: `astro: true` requires the optional peer dependency `@astrojs/language-server@2.16.16`; install it beside the plugin.",
@@ -66,12 +68,30 @@ export function createAstroLanguagePlugin(
   return adapted;
 }
 
-function loadAstroLanguagePlugin(): AstroLanguagePlugin {
-  const require = createRequire(import.meta.url);
-  const module = require("@astrojs/language-server/dist/core/index.js") as {
-    getAstroLanguagePlugin(): AstroLanguagePlugin;
-  };
-  return module.getAstroLanguagePlugin();
+/**
+ * The peer is resolved from the project first: an installed VSIX ships the
+ * plugin from the extension's own directory, where the project's
+ * `@astrojs/language-server` is not reachable. The plugin's own location is
+ * the fallback (a source checkout, `mx-tsc` run beside its peer).
+ */
+export function loadAstroLanguagePlugin(
+  projectDir?: string,
+): AstroLanguagePlugin {
+  const entry = "@astrojs/language-server/dist/core/index.js";
+  let module: { getAstroLanguagePlugin(): AstroLanguagePlugin } | undefined;
+  if (projectDir !== undefined) {
+    try {
+      module = createRequire(join(projectDir, "package.json"))(entry);
+    } catch {
+      module = undefined;
+    }
+  }
+  const resolved =
+    module ??
+    (createRequire(import.meta.url)(entry) as {
+      getAstroLanguagePlugin(): AstroLanguagePlugin;
+    });
+  return resolved.getAstroLanguagePlugin();
 }
 
 function toUri(fileName: string): UriLike {
