@@ -1416,19 +1416,13 @@ function lowerExpressionTriggers(
     // text becomes the replacement's printed code. A node's replacement is
     // its forward: the splice carries the node, so the expression records
     // it where the forward is printed.
-    pushSplice(
-      ctx,
-      trigger,
-      run.splices,
-      {
-        ...spanRange(trigger),
-        text: printed(ctx, replacement, trigger),
-        ...(claimed
-          ? { node: recordForward(claimed as DialectNode, replacement) }
-          : {}),
-      },
-      [],
-    );
+    pushSplice(ctx, trigger, run.splices, {
+      ...spanRange(trigger),
+      text: printed(ctx, replacement, trigger),
+      ...(claimed
+        ? { node: recordForward(claimed as DialectNode, replacement) }
+        : {}),
+    });
     lowered.add(trigger);
     lowered.add(entry);
   }
@@ -1485,23 +1479,25 @@ function refuseUnplaceable(ctx: Ctx, trigger: Node): void {
  * Push a trigger's splice into `into`. Two values spliced over overlapping
  * text would each get both splices applied to their `code`, so a splice that
  * overlaps one `mine` (this hook result's own splices) already holds is a
- * positioned error.
+ * positioned error. A caller with a single splice per result omits `mine`.
  */
 function pushSplice(
   ctx: Ctx,
   trigger: Node,
   into: TriggerSplice[] | undefined,
   splice: TriggerSplice,
-  mine: TriggerSplice[],
+  mine?: TriggerSplice[],
 ): void {
-  if (mine.some((each) => splice.start < each.end && each.start < splice.end)) {
+  if (
+    mine?.some((each) => splice.start < each.end && each.start < splice.end)
+  ) {
     raise(
       DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: two values would be written over the same text of \`${trigger.text}\`; build one \`ctx.expression\` or registered node per trigger text and give the other attributes a string, \`true\` or the trigger's own value`,
       trigger,
     );
   }
-  mine.push(splice);
+  mine?.push(splice);
   into?.push(splice);
 }
 
@@ -1921,7 +1917,7 @@ function lowerValueAttribute(
       args: null,
       claimed: node,
     };
-    const lowered = lowerValueNode(ctx, trigger, node as DialectNode, []);
+    const lowered = lowerValueNode(ctx, trigger, node as DialectNode);
     container =
       typeof lowered === "string"
         ? containerOf(ctx, literal(ctx, lowered, start, end), start, end)
@@ -1952,7 +1948,7 @@ function lowerValueNode(
   ctx: Ctx,
   trigger: Node,
   node: DialectNode,
-  mine: TriggerSplice[],
+  mine?: TriggerSplice[],
 ): string | Node {
   const { sourceStart: start, sourceEnd: end } = node.span;
   const result = callHook(

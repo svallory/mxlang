@@ -64,14 +64,6 @@ describe("a dialect expression row in a static statement", () => {
       21,
       "~zz",
     ],
-    ["after a block's `}`", "static { f(x) } ~zz\n<div/>", 1, 16, "~zz"],
-    [
-      "after a line break that ends a statement",
-      "static {\n f(x)\n ~zz\n}\n<div/>",
-      3,
-      1,
-      "~zz",
-    ],
   ];
 
   it.each(cases)(
@@ -220,10 +212,8 @@ describe("the matching is the template scanner's", () => {
   const mark = row("mark", "%", "%\\.[a-z]+");
   const set = row("set", "@#", "[@#][a-z]+");
   const rows = [sigil, mark, set];
-  const hash = row("hash", "#", "#[a-z]+");
-  const at = row("at", "@", "@[a-z]+");
-  const hit = (text: string, using: Trigger[] = rows) => {
-    const found = firstRowIn(text, using);
+  const hit = (text: string) => {
+    const found = firstRowIn(text, rows);
     return found && [found.row.id, text.slice(found.start, found.end)];
   };
 
@@ -248,149 +238,10 @@ describe("the matching is the template scanner's", () => {
   it("never inside a word, after the same character, or where no operand stands", () => {
     expect(hit("a~zz")).toBeUndefined();
     expect(hit("a ~~zz")).toBeUndefined();
-    expect(hit("f(x)\n&zz")).toBeUndefined();
+    expect(hit("f(x)\n~zz")).toBeUndefined();
     expect(hit("a[0] ~zz")).toBeUndefined();
     expect(hit("return ~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("f(a, ~zz)")).toEqual(["sigil", "~zz"]);
-  });
-
-  type Row = [string, [string, string] | undefined, Trigger[]?];
-  const table = (name: string, cases: Row[]) =>
-    it.each(cases)(`${name}: %j`, (text, expected, using) => {
-      expect(hit(text, using)).toEqual(expected);
-    });
-  const ZZ: [string, string] = ["sigil", "~zz"];
-
-  describe("a statement start after a block's `}` or an inserted semicolon", () => {
-    table("is found", [
-      ["if (a) { b } ~zz", ZZ],
-      ["a = 1\n~zz", ZZ],
-      ["i++\n~zz", ZZ],
-      ["a = /x/\n~zz", ZZ],
-      ["f(x) /*\n*/ ~zz", ZZ],
-      ["function f(): void { } ~zz", ZZ],
-      ["switch (a) { case 1: { b } ~zz }", ZZ],
-      ["a: { b } ~zz", ZZ],
-      ["export function f() { } ~zz", ZZ],
-      ["class A { m() { f(x)\n ~zz } }", ZZ],
-      ["const f = function () {} / 2 / ~zz", ZZ],
-      ["for await (const x of xs) { f(x) } ~zz", ZZ],
-      ["switch (a) { case 1: case 2: { b } ~zz }", ZZ],
-      ["switch (a) { case 1:\n default: { b } ~zz }", ZZ],
-      ["switch (a) { case b: c: { d } ~zz }", ZZ],
-      ["f = () => { lbl: { b } ~zz }", ZZ],
-      [
-        "switch (a) { case 1: let t: [number?] = []; break\n case 2: { b } ~zz }",
-        ZZ,
-      ],
-    ]);
-    table("is an operand end, no start", [
-      ["const f = function () {} ~zz", undefined],
-      ["a = class {} ~zz", undefined],
-      ["export default { a: 1 } ~zz", undefined],
-      ["x = y as { a: 1 } ~zz", undefined],
-      ["f = () => { a } ~zz", undefined],
-      ["a = c ? 1 : { b } ~zz", undefined],
-      ["x = c ? (1) : { b } ~zz", undefined],
-      ["a = { k: { b } } ~zz", undefined],
-      ["a = { b } ~zz", undefined],
-      ["a = f({ b }) ~zz", undefined],
-      ["a = { b }\n&zz", undefined],
-      ["a.\n~zz", undefined],
-    ]);
-  });
-
-  describe("a type literal is no block", () => {
-    const amp = row("amp", "&", "&[a-z]+");
-    table("in a type position", [
-      ["let t: { a: 1 } &zz = v", undefined, [amp]],
-      ["function f(a: { b: 1 } &zz) {}", undefined, [amp]],
-      ["interface I { a: { b: 1 } &zz }", undefined, [amp]],
-      ["class A { default() { let t: { a: 1 } &zz = v } }", undefined, [amp]],
-      ["function f(x): x is { a: 1 } &zz {}", undefined, [amp]],
-      ["const f = function (): { a: 1 } { } ~zz", undefined],
-      ["class A<T extends {}> {\n x = 1\n @dec y = 2\n}", undefined, [at]],
-      [
-        "class X implements B<{ a: 1 }> {\n x = 1\n @dec y = 2\n}",
-        undefined,
-        [at],
-      ],
-    ]);
-  });
-
-  describe("`class` as a property key opens no class body", () => {
-    table("found", [
-      ['const a = { class: "b" }\nif (x) {\n f()\n ~zz\n}', ZZ],
-      ["o.x = { class: 1 }\nif (x) { @zz }", ["at", "@zz"], [at]],
-    ]);
-  });
-
-  describe("a comma in a header's tuple or generic does not end the header", () => {
-    table("is found", [
-      ["function f(): [number, string] { return g() } ~zz", ZZ],
-      ["function f(): Map<a, b> { } ~zz", ZZ],
-    ]);
-    table("no row", [
-      [
-        "class A extends (b < c ? X : Y) {\n x = 1\n @dec y = 2\n}",
-        undefined,
-        [at],
-      ],
-    ]);
-  });
-
-  describe("a ternary survives a line break inside brackets", () => {
-    table("ternary", [
-      ["x = c ? g(\n y\n) : {} / 2; z = ~zz", ZZ],
-      ["a = c ? [\n 1\n] : { b } ~zz", undefined],
-    ]);
-  });
-
-  describe("a method head is a key of its own brace", () => {
-    table("a call after a comma is no method", [
-      ["x = { a: [b, f(c)] }\ny = { q: 1 } ~zz", undefined],
-    ]);
-  });
-
-  describe("a class body's members are no statements", () => {
-    table("no row", [
-      ["class A {\n x = 1\n ~zz y = 2\n}", undefined],
-      ["class A {\n x = 1\n #b = 2\n}", undefined, [hash]],
-      ["class A {\n x = 1\n @dec y = 2\n}", undefined, [at]],
-      ["class A {\n m() {}\n @dec y = 2\n}", undefined, [at]],
-      ["class A { static {} #b = 2 }", undefined, [hash]],
-      ["class A {\n constructor() {}\n #b = 2\n}", undefined, [hash]],
-      ["class A {\n  #b = 2\n}", undefined, [hash]],
-      ["class A {\n x = 1;\n #b = 2;\n}", undefined, [hash]],
-      ["class A {\n  @dec\n  m() {}\n}", undefined, [at]],
-      ["class A {\n constructor(@inject b) {}\n}", undefined, [at]],
-      ["class A {\n x = 1\n constructor(@inject b) {}\n}", undefined, [at]],
-      ["class A {\n x: number\n m(@a b) {}\n}", undefined, [at]],
-      ["class A {\n abstract m(): void\n #b = 1\n}", undefined, [hash]],
-      ["class A {\n x: void\n #b = 1\n}", undefined, [hash]],
-    ]);
-  });
-
-  describe("a row in a class field initializer is a row", () => {
-    table("found", [
-      ["class A { x = f(@b) }", ["at", "@b"], [at]],
-      ["class A { x = [1, @b] }", ["at", "@b"], [at]],
-    ]);
-  });
-
-  describe("a decorator before a declaration is TypeScript", () => {
-    table("no row", [
-      ["class A {}\n@dec class B {}", undefined, [at]],
-      ["class A {}\n@dec(1) @other export class B {}", undefined, [at]],
-      ["x = y\n@a.b class B {}", undefined, [at]],
-      ["x = y\n@a<T>() class B {}", undefined, [at]],
-      ["x = y\n@a (1) class B {}", undefined, [at]],
-    ]);
-    table("in an operand position it is a row", [
-      ["const a = @zz\nclass B {}", ["at", "@zz"], [at]],
-      ["class A {\n m(a = f(@zz)) {}\n}", ["at", "@zz"], [at]],
-    ]);
-    table("a row after a class", [["class A {} @dec", ["at", "@dec"], [at]]]);
   });
 
   it("comments, strings and template-literal text are skipped; a substitution is code", () => {
