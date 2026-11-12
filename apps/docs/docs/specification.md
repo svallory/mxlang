@@ -775,6 +775,15 @@ than a loud one (jsx-text-entities review, 2026-10-04; the same policy as
 `<!doctype>` on those hosts). Write the comment in the HTML shell that mounts
 the app.
 
+`<html-comment>` takes no attributes, with or without an argument list, on
+every host that claims the tag, as in Marko: "The `<html-comment>` tag does not
+support attributes." (`MX_INVALID_ATTRIBUTE`, at the first attribute).
+
+`<log>` and `<debug>` take the `value=` attribute alone: "The `<log>` tag only
+supports the `value=` attribute." (`MX_INVALID_ATTRIBUTE`, at the first
+attribute that is not `value=`), on every host that neither declares nor
+delegates the tag. A host that does keeps its own shape check.
+
 ### Scriptlets
 
 Scriptlets (`$ statement`) are not part of MX, in any file kind and on any
@@ -1457,7 +1466,13 @@ same terms: a `<let>` or a plain-name `<const>` declared below the binding is
 refused (`MX_LET_WRITE_BEFORE_DECLARATION`,
 `MX_CONST_WRITE_BEFORE_DECLARATION`) with the write-above-declaration
 message, while an object-pattern name of a `<const>` declared below stays
-writable where a binding writes. For example, `<div :="x"/>` errors at structured line 1, column 7
+writable where a binding writes. A `<for>` or `<define>` parameter bound as a plain name has no change handler to
+derive and is refused with Marko's "Unable to bind to value."
+(`MX_INVALID_BOUND_ATTRIBUTE`, at the value): `<for|i| of=xs><input value:=i/></for>`.
+A field of an object-pattern parameter (`|{ a }|`), a member of a parameter
+(`value:=i.x`) and a `<let>` bind as usual, and a tag variable declared inside
+the loop (`<Counter/x/>`) shadows a parameter of its spelling from the call on.
+For example, `<div :="x"/>` errors at structured line 1, column 7
 (printed 1:8), rather than silently rendering `value="x"`. A bound attribute may carry a refinement, `v:fn:=q`: Marko binds `v` and its
 change handler runs `q = fn(next)`. The refinement must be a valid JavaScript
 identifier, else core reports Marko's `Bound attribute refinement shorthand
@@ -1466,9 +1481,10 @@ the empty `x::=q`), at the modifier's first character as Marko does. Only a
 target with an update path applies it: Angular writes
 `[v]="__mxGet(q)" (vChange)="__mxSet(this, 'q', fn($event))"`, where the two
 helper members read and write a `WritableSignal` (`()` and `.set()`) or a
-plain property exactly as Angular's own `[(v)]` does (a bare template
-variable, such as a `@for` item, is written with `.set()`, as
-Angular accepts only a signal there; a `<for of>` index or a `<for>` range number, which is never a signal, is a positioned Angular error at the attribute, as Angular's own `[(v)]` rejects it), and `fn` maps to the
+plain property exactly as Angular's own `[(v)]` does (a template variable
+that names a destructured `@for` field is written with `.set()`, as Angular
+accepts only a signal there; a plain `<for>` parameter, an index or a range
+number cannot be bound at all, above), and `fn` maps to the
 modifier (a non-ASCII refinement name is a positioned Angular error, since its
 expression language reads ASCII identifiers only); html renders once and emits
 no handler (Marko's is client-only, so its server output is the same) but
@@ -1737,6 +1753,8 @@ not make `<if|u|>` legal.
 |---|---|
 | `\`<if>\` without a condition` | No value attribute and no first positional attribute with a value. |
 | `\`<${label}>\` without a preceding \`<if>\`` | An `<else>`/`<else-if>` not consumed by a preceding chain. `label` is `else if` when an `if` attribute is present, else `else`. |
+| `The \`<if>\` tag only supports the \`value=\` attribute.` (`<else-if>` likewise) | The tag has a second attribute, with or without an argument list (`<if=x a=1>`, `<if=x a(v)=1>`). `MX_INVALID_ATTRIBUTE`, at the second attribute. Applies to a condition wrapping attribute tags too (`<C><if=x foo=1><@a/></if></C>`). |
+| `The \`<else>\` tag only supports an \`if=\` attribute.` | An `<else>` has an attribute other than `if=`, with or without arguments. `MX_INVALID_ATTRIBUTE`, at that attribute. |
 
 ### 5.2 `<for>`
 
@@ -1769,6 +1787,15 @@ Four iteration shapes, chosen by attribute.
   Marko redirects it to `by=` before anything else, with the fix-it for the loop's
   own form (`by="propName"`, `by=(key, value) => key`, `by=(num) => key`), and MX
   refuses it at the attribute with the same wording.
+- **`by=` reading a name the loop also declares** is refused (one constant key for
+  every item is a bug). When the name is an outer binding the loop's parameter
+  shadows (an earlier `<const>`, `<let>` or tag variable, an import, a
+  `<define>`, a module binding, `input` or `$global`), the message says so:
+  "The `by=` attribute is evaluated before the loop runs, so it reads the outer
+  `x`, not the loop's `x` parameter. Key with a property name string (`by="id"`)
+  or a function (`by=(x) => <the authored expression>`)." A `<let>` declared
+  below the loop is not in scope there, and gets the "`x` is not in scope"
+  wording. `MX_INVALID_FOR`, at the name.
 
 **Params come before `=value`** — `<for|item, i| of=xs>`, and by the same rule
 `<if|u|=cond>` would be the spelling were it legal. `notes/solidmx-spec.md` §5.1
@@ -1786,7 +1813,9 @@ hits the temporal dead zone and throws at render time.
 | `` `<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=` `` | More than one source form. |
 | `` `<for>` with both `to=` and `until=` `` | Both present. |
 | `` `<for step=...>` is only valid on a range `` | `step` without `to`/`until`. |
-| `` `<for ${label}=...>` requires an expression value `` | The attribute has no value, has arguments, or is a function expression. `label` ∈ `of in from to until step by`. |
+| `` `<for ${label}=...>` requires an expression value `` | The attribute has no value or is a function expression. `label` ∈ `of in from to until step by`. An argument list on the attribute (`by(v)="id"`, `of(v)=xs`, `to=3 step(v)=1`) is accepted and dropped, as Marko does. |
+| `` `<for>` does not support the `x` attribute. `` | An attribute other than `of in from to until step by` (`<for|x| of=xs a=1>`), with or without arguments. `MX_INVALID_ATTRIBUTE`, at the attribute. |
+| `` `<for>` does not support spread attributes. `` | A spread attribute on `<for>`. `MX_INVALID_ATTRIBUTE`. |
 | `` `<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=` `` | No source form at all. |
 
 ### 5.3 `<const>`
@@ -2578,6 +2607,22 @@ target the call passes the arguments and then one trailing props object
 (`renderer(...args, props)`, the attribute tags by name plus `content`).
 html, Preact, React, Hono and Solid express this shape; Angular and Astro give
 a positioned error naming their own constraint.
+
+**A named custom tag's argument beside attribute tags.** `<foo(a)><@x/></foo>`
+(and the concise `foo(a)` with `@x`) is a positioned error, "Tag does not
+support arguments when attributes or body present." (`MX_UNSUPPORTED_TAG_ARGUMENTS`
+for a tag the file imports, `MX_UNSUPPORTED_CONSTRUCT` for a registered or
+discovered one); stock compiles it and drops `<@x/>`, so this is a recorded
+divergence. An attribute tag mixed with body content under a control tag
+(`<foo(a)><if=c><@x/>text</if></foo>`) is reported first, as stock orders them:
+"Cannot have attribute tags and body content under a control flow tag."
+(`MX_INVALID_ATTRIBUTE_TAG`). A lone `<foo(a)/>` is the callee's input where the
+host passes it: html calls the template with `a` as its input
+(`Panel.render(a, …)`), as stock does. Every other host refuses it with
+"`<foo>` does not take an argument on this host: it would be dropped. Pass the
+value as an attribute instead." (`MX_UNSUPPORTED_TAG_ARGUMENTS`, over the
+argument), never dropping it silently. A host opts in with
+`HostDeclarations.namedCallInputArgument`.
 
 **A string-target dynamic tag called with arguments uses `args[0]` as its
 input**, on every host, Solid included: `<${expr}(a, b)/>` where `expr` is a
