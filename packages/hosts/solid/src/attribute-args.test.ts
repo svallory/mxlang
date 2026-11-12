@@ -55,10 +55,10 @@ for (const [entry, compile] of Object.entries(compilers)) {
       },
     );
 
-    it("accepts and drops a loop-source argument list, as Marko does", () => {
-      expect(() =>
-        compile('<for|x| of=[] by(v)="id"><i/></for>'),
-      ).not.toThrow();
+    it("refuses a loop-source argument list like any attribute's", () => {
+      expect(() => compile('<for|x| of=[] by(v)="id"><i/></for>')).toThrow(
+        "Unsupported arguments on the `by` attribute.",
+      );
     });
 
     it("keeps the builtin try contract error", () => {

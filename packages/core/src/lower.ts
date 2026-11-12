@@ -3932,12 +3932,17 @@ function rejectExtraConditionAttributes(
     }
     return;
   }
-  const offender = offendingAttribute(
-    attrs,
-    (attr) =>
-      !isSpreadAttributeNode(attr) &&
-      (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
-  );
+  // A lone attribute is the condition's own (a missing one is reported
+  // elsewhere); the extra one is what this refuses.
+  const offender =
+    attrs.length > 1
+      ? offendingAttribute(
+          attrs,
+          (attr) =>
+            !isSpreadAttributeNode(attr) &&
+            (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
+        )
+      : undefined;
   if (offender) {
     raise(
       INVALID_ATTRIBUTE_CODE,

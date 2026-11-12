@@ -53,10 +53,10 @@ for (const [entry, compileSource] of Object.entries(compilers)) {
       },
     );
 
-    it("accepts and drops a loop-source argument list, as Marko does", () => {
+    it("refuses a loop-source argument list like any attribute's", () => {
       expect(() =>
         compileSource('<for|x| of=[] by(v)="id"><i/></for>'),
-      ).not.toThrow();
+      ).toThrow("Unsupported arguments on the `by` attribute.");
     });
 
     it("keeps Angular's unsupported try error", () => {
