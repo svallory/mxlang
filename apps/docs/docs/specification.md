@@ -3413,18 +3413,29 @@ calls inside sibling native elements. A second declaration of a name is a
 positioned compile error: `Duplicate declaration "x"` (at the later authored
 name when its span is available, otherwise at the declaration). A region's
 arrow has the same uniqueness rule for `<define>` and `/var`; `<const>` is
-not allowed in regions. Rename one binding and its uses; a `<define>` body
-and its parameters, two regions, or two independent compilations have separate
-scopes. Dynamic-tag bodies and `<try>` placeholder/catch bodies currently
-hoist `/var` to the component scope instead of keeping Marko's local scope;
-see the **JSX body-scope lifted bindings** row in `divergences.md`.
+not allowed in regions. Rename one binding and its uses; two regions or two
+independent compilations have separate scopes.
 
-**`/var` is top-level-only on the JSX hosts and Solid.** Every structural kind
+**A body that is its own scope keeps its `/var` to itself.** As in Marko
+6.4.4, a whole-file `<define>` body, a dynamic tag's body and a `<try>`'s body,
+`<@placeholder>` and `<@catch>` bodies are scopes of their own. Their `/var`
+statements run inside the define's function, or inside a function called in
+place in the body, so a `/x` there sits beside an outer `/x` without a
+duplicate. A define body's parameters share the body's scope with its `/var`,
+so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
+`<define>` inside a dynamic-tag or `<try>` body, and a `/var` in a `<define>`
+body (`<define>` is lifted to the region's one arrow, outside those scopes).
+
+**`/var` is top-level-only in a callback on the JSX hosts and Solid.** Every
+structural kind
 lowers to an *expression* there — a ternary, a `.map` callback, a `<For>` render
 prop — so a callback scope has no statement position for the binding. Hoisting
 the call to the component body took it out of the scope it was written in (it
 read row bindings that did not exist there, and ran once for a body rendered N
-times), so the escape is rejected rather than silently relocated. **html** keeps
+times), so the escape is rejected rather than silently relocated. A body that is
+its own scope (above) has a statement position of its own, but the rule still
+applies to the callback that holds it: a dynamic-tag or `<try>` body inside a
+`<for>` keeps the refusal. **html** keeps
 supporting the nested case, where the temp lands inside the emitted `for`/`if`
 block. **Angular** rejects `/var` entirely.
 
