@@ -190,7 +190,12 @@ describe("error recovery", () => {
   // ends the parse: the rest of the document vanished (beads mx-r6fj and
   // mx-scanner-error-recovery-truncates-body). It now swallows the rest of
   // the failing line as part of the ERROR and scans on from the next line.
-  const names = (root: { namedChildren: { type: string; namedChildren: { type: string; text: string }[] }[] }) =>
+  const names = (root: {
+    namedChildren: {
+      type: string;
+      namedChildren: { type: string; text: string }[];
+    }[];
+  }) =>
     root.namedChildren
       .filter((n) => n.type === "element")
       .map((n) => n.namedChildren.find((c) => c.type === "tag_name")?.text);
