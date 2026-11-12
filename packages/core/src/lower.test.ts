@@ -4382,6 +4382,7 @@ describe("tag arguments are blamed over the whole list", () => {
   describe("a named custom tag takes one plain argument", () => {
     const panel = fakeDeclarations({
       isComponent: (name) => name === "Panel",
+      namedCallInputArgument: true,
     });
     const IMPORT = 'import Panel from "./panel.mx"\n';
     const MULTIPLE = "Tag does not support multiple arguments.";

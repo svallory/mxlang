@@ -1242,7 +1242,7 @@ export function createEmitter(
       // A lone tag argument (`<Panel(a)/>`) is the callee's whole input, as
       // in stock Marko; core allows it only with no attributes or body, so
       // `propsObject` is then an empty object nothing reads.
-      const input = node.args.length > 0 ? node.args[0].code : propsObject;
+      const input = node.args[0]?.code ?? propsObject;
 
       // A tag call passes this unit's sink down, and `/var` binds what the
       // callee's `render` returns. A discovered tag, a unit known to declare
