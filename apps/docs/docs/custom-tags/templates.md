@@ -208,7 +208,7 @@ A template can arrange markup and use MX's structural language, but it cannot ex
 - **`<@content>`.** Reserved for the same reason.
 - **Content on an `openTagOnly` tag.** The tag declared that it takes no body.
 - **`<x>` does not return a value.** A `/var` on a tag whose template declares no `<return>`.
-- **A `/var` read out of scope**, or read before the call that binds it.
+- **A `/var` read out of scope**, or read before the call that binds it. The call's own body and attribute tags run after the call has returned, so an imported call's `/var` is readable there (`<Foo/x>${x}</Foo>`); its named attributes are evaluated first, so a read there is still refused.
 - **`/var` inside `<for>`/`<if>` on a JSX host or Solid**, where those constructs are expressions with no statement position; bind it at the top level.
 - **A hook in a returning unit** on a JSX host, where the unit is called as a plain function.
 - **`<return>` must be at the top level**, and there may be only one per template.
