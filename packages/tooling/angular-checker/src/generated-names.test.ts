@@ -391,18 +391,17 @@ describe("mapNgMxDiagnostics prints the authored name", () => {
 
   it("maps a <define> reference name", () => {
     const withDefine = ngMx(
-      "<main><define/D>x</define><div><define/D>y</define></div></main>",
+      "<main><input #D/><div><define/D>y</define></div></main>",
     );
     const compiled = compileNgMx(withDefine, "/p/x.component.ng.mx");
     const region = compiled.regions[0];
     expect(region?.authoredNames).toEqual({
       __mxDefine_D: "D",
-      __mxDefine_D1: "D",
     });
     const [mapped] = mapNgMxDiagnostics(compiled, [
       record(
         (region?.generatedStart ?? 0) + 1,
-        "Reference #__mxDefine_D1 is unused",
+        "Reference #__mxDefine_D is unused",
       ),
     ]);
     expect(mapped?.message).toBe("Reference #D is unused");

@@ -104,6 +104,7 @@ lower.ts :: lowerConst :: (write `<const/name=value/>`) -- example: the suggeste
 lower.ts :: lowerDefineChecked :: (write `<define/name>`) -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: addReturnHint :: add `<return value=…/>` to -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: lowerAuthoredTag :: `<else if>` -- example: the MX spelling of an `else` with a condition, shown only when the file spells `else` as MX does
+lower.ts :: lowerComponent :: write `<${ -- example: the suggested dynamic-tag rewrite is written in MX's syntax
 tag-names.ts :: reservedNameMessage :: ==`<${…}>` -- register: the default spelling of the registration checks, which name MX's own tags
 tag-names.ts :: dialectReservedMessage :: `<${…}>` cannot be defined -- register: a registration refusal addressed to the author of the tag file
 attribute-value.ts :: <top> :: ` attribute cannot be -- runtime: the message of the generated check, which runs with no dialect
