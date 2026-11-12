@@ -80,9 +80,6 @@ describe("solid mx-tsc printed method heads", () => {
         [4, 29, 2304, "MissingConstraint"],
         [5, 32, 2304, "MissingReturn"],
       ] as const) {
-        // The region generic gap lives in the plugin's host matrix, with
-        // one CLI print smoke below.
-        if (region && message === "MissingConstraint") continue;
         const diagnostic = lines.find(
           (entry) =>
             entry.includes(
@@ -96,17 +93,4 @@ describe("solid mx-tsc printed method heads", () => {
       }
     },
   );
-  it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
-    const lines = output
-      .split("\n")
-      .filter(
-        (line) =>
-          line.includes("Region.solid.mx(") &&
-          line.includes("MissingConstraint"),
-      );
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain(
-      `Region.solid.mx(5,11): error TS2304: Cannot find name 'MissingConstraint'. (position approximate: generated 4:74)`,
-    );
-  });
 });

@@ -58,7 +58,7 @@ function diagnostics(host: string, region: boolean) {
 type Diagnostic = ReturnType<typeof diagnostics>[number];
 
 // Real tsserver plugin wiring: exact head diagnostics survive Volar without
-// approximate fallbacks. The region generic gap is pinned separately below.
+// approximate fallbacks, in a region too.
 describe.each(["solid", "preact", "react", "hono"])(
   "%s method heads in the editor",
   (host) => {
@@ -85,34 +85,19 @@ describe.each(["solid", "preact", "react", "hono"])(
       ]);
     });
 
-    it("keeps exact region parameter, default and authored function return positions", () => {
-      const exact = region.filter(
-        (d) => !d.message.includes("MissingConstraint"),
-      );
-      for (const d of exact) {
+    it("keeps exact region parameter, default, generic constraint and return positions", () => {
+      for (const d of region) {
         expect(d.message).not.toMatch(
           /position approximate|MX-generated code|position unknown/,
         );
       }
       expect(
-        exact.map(({ code, line, column }) => [code, line, column]),
+        region.map(({ code, line, column }) => [code, line, column]),
       ).toEqual([
         [2304, 3, 22],
         [2322, 4, 19],
+        [2304, 5, 29],
         [2304, 6, 32],
-      ]);
-    });
-
-    it("known gap, see bead mx-oasj: region generic constraints have an approximate position", () => {
-      expect(
-        region.filter((d) => d.message.includes("MissingConstraint")),
-      ).toEqual([
-        {
-          code: 2304,
-          line: 5,
-          column: 11,
-          message: `Cannot find name 'MissingConstraint'. (position approximate: generated 4:${host === "solid" ? 74 : 69})`,
-        },
       ]);
     });
   },
