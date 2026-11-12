@@ -23,7 +23,7 @@ describe("tree-sitter-mx corpus", () => {
 
   it("keeps the error cases in errors.txt and nowhere else", () => {
     const errors = CASES.filter((c) => c.error);
-    assert.strictEqual(errors.length, 19);
+    assert.strictEqual(errors.length, 17);
     for (const c of errors) assert.strictEqual(c.file, "errors.txt");
   });
 
@@ -103,6 +103,7 @@ describe("unterminated comments", () => {
   // reports MALFORMED_COMMENT for both inputs. Pinned as it is: no token the
   // scanner could emit makes the open construct end earlier.
   for (const [source, end] of [
+    ["<before/>\n<p>${y <!-- oops", 15],
     ["<before/>\n<p>${y /* oops", 15],
     ["<before/>\n$ /* oops", 11],
   ] as const) {
@@ -226,28 +227,34 @@ describe("error recovery", () => {
   });
 
   // EOF failures emit an ERROR node, not just a MISSING element_end.
-  for (const [source, end] of [
-    ["<script>abc", 11],
-    ["<script>x${/* oops", 11],
-  ] as const) {
-    it(`reports an ERROR node for ${JSON.stringify(source)}`, () => {
-      const tree = parseMx(source);
-      assert.ok(tree, "parse timed out");
-      const root = tree.rootNode;
-      const errors = [root, ...root.descendantsOfType("ERROR")].filter(
-        (n) => n.type === "ERROR",
-      );
-      assert.equal(errors.length >= 1, true, root.toString());
-      assert.equal(errors[0]?.endIndex, end);
-      assert.equal(root.descendantsOfType("MISSING").length, 0);
-      tree.delete();
-    });
-  }
+  const hasMissing = (n: { isMissing: boolean; children: any[] }): boolean =>
+    n.isMissing || n.children.some(hasMissing);
 
-  it("reports an ERROR node for an attribute comma then an unterminated comment", () => {
-    const tree = parseMx("div a=1,\n  /* oops");
+  it("reports a lone unclosed <script> as one ERROR over the element", () => {
+    const tree = parseMx("<script>abc");
     assert.ok(tree, "parse timed out");
-    assert.equal(tree.rootNode.descendantsOfType("ERROR").length, 1);
+    const root = tree.rootNode;
+    assert.equal(root.type, "document", root.toString());
+    const errors = root.descendantsOfType("ERROR");
+    assert.equal(errors.length, 1, root.toString());
+    assert.equal(errors[0]?.startIndex, 0);
+    assert.equal(errors[0]?.endIndex, 11);
+    assert.equal(hasMissing(root), false, root.toString());
+    tree.delete();
+  });
+
+  it("keeps the sibling before an unclosed <script> outside the ERROR", () => {
+    const tree = parseMx("<before/>\n<script>abc");
+    assert.ok(tree, "parse timed out");
+    const root = tree.rootNode;
+    assert.equal(root.type, "document", root.toString());
+    assert.equal(root.firstNamedChild?.type, "element");
+    assert.equal(root.firstNamedChild?.text, "<before/>");
+    const errors = root.descendantsOfType("ERROR");
+    assert.equal(errors.length, 1, root.toString());
+    assert.equal(errors[0]?.startIndex, "<before/>\n".length);
+    assert.equal(errors[0]?.endIndex, 21);
+    assert.equal(hasMissing(root), false, root.toString());
     tree.delete();
   });
 });

@@ -1,16 +1,12 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Saulo Vallory <me@saulo.engineer>
-Date: Thu, 12 Nov 2026 12:00:00 -0300
-Subject: [PATCH] fix(grammar): recover after an error line and report EOF errors
 ---
- README.md     |  6 +++--
- src/scanner.c | 74 ++++++++++++++++++++++++++++++++++++++++++++++++++---------
+ README.md     |  7 +++--
+ src/scanner.c | 85 +++++++++++++++++++++++++++++++++++++++++++++++++++--------
 
 diff --git a/README.md b/README.md
-index 7caee9f4..8755edf7 100644
+index 7caee9f4..f3b92a2a 100644
 --- a/README.md
 +++ b/README.md
-@@ -13,8 +13,10 @@ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
+@@ -13,8 +13,11 @@ MX is Marko's syntax plus the decision 146 name sugar (`#id`, `.class` and
  Atoms are `atom` nodes inside attribute values, placeholders, tag and attribute
  arguments and method bodies. One known limit: an atom inside a `${}` of a
  template literal that is itself inside an expression (`` x=`a ${:c}` ``) is
@@ -19,12 +15,13 @@ index 7caee9f4..8755edf7 100644
 +not recognised and stays plain text there. Recognising it needs the scanner
 +to carry a stack of expression frames across tokens, and the serialized
 +scanner state (tree-sitter's 1024-byte buffer) has no room for a second
-+frame at the scanner's maximum tag and content depth. The grammar is a vendored snapshot of
++frame at the scanner's maximum tag and content depth. The grammar is a
++vendored snapshot of
  [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
  patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
  The same grammar and `queries/highlights.scm` are what MX's Zed extension
 diff --git a/src/scanner.c b/src/scanner.c
-index 83c5ae1b..b6fe2978 100644
+index 83c5ae1b..64d4083b 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
 @@ -256,6 +256,8 @@ typedef struct {
@@ -137,7 +134,25 @@ index 83c5ae1b..b6fe2978 100644
    if (s->fail_next) {
      // INVALID_CHARACTER after a concise comment block: the comment already
      // parsed, the rest of its line is an ERROR node.
-@@ -3931,6 +3978,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
+@@ -3904,6 +3951,17 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
+     n += sizeof(field);                       \
+   } while (0)
+ 
++// The serialized state must fit tree-sitter's buffer, or serialize overwrites
++// memory. Worst case: the saved cursor, 35 bytes of flags (the WRITEs below,
++// atom_state, atom_owner and atom_pre included), the atom's expression state
++// with a full group, tag_len and content_len, and every tag and content frame.
++// Update the byte count when serialize gains a field.
++#define SERIALIZED_MAX                                                     \
++  (sizeof(Cursor) + 35 + sizeof(ExprCfg) + 4 + 128 + 4 + 4 + 3 + 2 +       \
++   MAX_TAGS * sizeof(TagFrame) + MAX_CONTENTS * sizeof(ContentFrame))
++_Static_assert(SERIALIZED_MAX <= TREE_SITTER_SERIALIZATION_BUFFER_SIZE,
++               "serialized scanner state exceeds tree-sitter's buffer");
++
+ void *tree_sitter_mx_external_scanner_create(void) {
+   Scanner *s = (Scanner *)calloc(1, sizeof(Scanner));
+   s->cur.line_only_ws = 1;
+@@ -3931,6 +3989,7 @@ unsigned tree_sitter_mx_external_scanner_serialize(void *payload,
    WRITE(s->suppress_placeholder);
    WRITE(s->fail_next);
    WRITE(s->tag_comma_continue);
@@ -145,7 +160,7 @@ index 83c5ae1b..b6fe2978 100644
    WRITE(s->tag_open);
    WRITE(s->tag_name_done);
    WRITE(s->in_shorthand);
-@@ -4005,6 +4053,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
+@@ -4005,6 +4064,7 @@ void tree_sitter_mx_external_scanner_deserialize(void *payload,
      READ(s->suppress_placeholder);
      READ(s->fail_next);
      READ(s->tag_comma_continue);
@@ -153,7 +168,7 @@ index 83c5ae1b..b6fe2978 100644
      READ(s->tag_open);
      READ(s->tag_name_done);
      READ(s->in_shorthand);
-@@ -4083,6 +4132,7 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -4083,6 +4143,7 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
  #ifdef TSMARKO_DEBUG
    uint32_t col = lexer->get_column(lexer);
    bool ok = scan_main(s, lexer, valid_symbols);
@@ -161,7 +176,7 @@ index 83c5ae1b..b6fe2978 100644
    fprintf(stderr, "[scan col=%u eof=%d err=%d] -> %s (buf=%.*s)\n", col,
            at_eof(lexer), valid_symbols[ERROR_SENTINEL],
            ok ? TOKEN_NAMES[lexer->result_symbol] : "(none)",
-@@ -4096,6 +4146,8 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -4096,6 +4157,8 @@ bool tree_sitter_mx_external_scanner_scan(void *payload, TSLexer *lexer,
    }
    return ok;
  #else

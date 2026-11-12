@@ -16,7 +16,8 @@ template literal that is itself inside an expression (`` x=`a ${:c}` ``) is
 not recognised and stays plain text there. Recognising it needs the scanner
 to carry a stack of expression frames across tokens, and the serialized
 scanner state (tree-sitter's 1024-byte buffer) has no room for a second
-frame at the scanner's maximum tag and content depth. The grammar is a vendored snapshot of
+frame at the scanner's maximum tag and content depth. The grammar is a
+vendored snapshot of
 [`marko-js/tree-sitter`](https://github.com/marko-js/tree-sitter) with local
 patches; [`UPSTREAM.md`](./UPSTREAM.md) records the pin, every patch and why.
 The same grammar and `queries/highlights.scm` are what MX's Zed extension

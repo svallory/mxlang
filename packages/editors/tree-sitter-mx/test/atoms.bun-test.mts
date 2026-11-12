@@ -236,6 +236,11 @@ const POSITIONS: [name: string, src: string, atoms: string[]][] = [
   // Known limit: the scanner keeps no expression frame across tokens inside a
   // template literal's `${}` (the 1024-byte serialized state has no room).
   ["known limit: atom in a template placeholder", "<t x=`a ${:c}`/>", []],
+  [
+    "known limit: atom in a nested template placeholder",
+    "<t x=`a ${`b ${:d}`}`/>",
+    [],
+  ],
   ["regex", "<t x=/:b/ />", []],
   ["static stays TypeScript", "static const a = :b", []],
   ["scriptlet stays TypeScript", "$ const a = :b", []],

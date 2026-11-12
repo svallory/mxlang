@@ -3951,6 +3951,17 @@ static bool scan_main(Scanner *s, TSLexer *lexer, const bool *valid) {
     n += sizeof(field);                       \
   } while (0)
 
+// The serialized state must fit tree-sitter's buffer, or serialize overwrites
+// memory. Worst case: the saved cursor, 35 bytes of flags (the WRITEs below,
+// atom_state, atom_owner and atom_pre included), the atom's expression state
+// with a full group, tag_len and content_len, and every tag and content frame.
+// Update the byte count when serialize gains a field.
+#define SERIALIZED_MAX                                                     \
+  (sizeof(Cursor) + 35 + sizeof(ExprCfg) + 4 + 128 + 4 + 4 + 3 + 2 +       \
+   MAX_TAGS * sizeof(TagFrame) + MAX_CONTENTS * sizeof(ContentFrame))
+_Static_assert(SERIALIZED_MAX <= TREE_SITTER_SERIALIZATION_BUFFER_SIZE,
+               "serialized scanner state exceeds tree-sitter's buffer");
+
 void *tree_sitter_mx_external_scanner_create(void) {
   Scanner *s = (Scanner *)calloc(1, sizeof(Scanner));
   s->cur.line_only_ws = 1;

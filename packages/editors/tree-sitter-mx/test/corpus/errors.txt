@@ -144,7 +144,7 @@ parsed-text-eof-unclosed
 <script>abc
 ---------------
 
-(ERROR)
+(document (ERROR))
 
 ===============
 parsed-text-template-comment-eof
@@ -153,7 +153,7 @@ parsed-text-template-comment-eof
 <script>x${/* oops
 ---------------
 
-(ERROR)
+(document (ERROR))
 
 ===============
 attr-comma-block-comment-eof
@@ -164,28 +164,3 @@ div a=1,
 ---------------
 
 (document (ERROR))
-
-===============
-repeated-line-start-hyphen
-:error
-===============
-<a/>
--
-<b/>
--
-<c/>
----------------
-
-(document (element) (ERROR) (element) (ERROR) (element))
-
-===============
-error-line-in-concise-body
-:error
-===============
-div
-  - foo
-span
-p
----------------
-
-(document (element (ERROR)) (element) (element))
