@@ -93,17 +93,18 @@ export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
  * it lacks, for strictness only, with the registry's reserved names so a
  * descriptor loaded from a package path is accepted or refused exactly as
  * there (`strict-hosts.test.ts` checks the two lists match). The caller's own
- * descriptors are kept (a target it registers but masks from selection is
+ * descriptors are kept (a target it registers but masks from selection, `allTargetNames`, is
  * rebuilt unmasked, which strictness does not read), so their strictness still
  * counts. Stand-ins are added one at a time and a stand-in the rebuilt set
  * would refuse (a name, package, host or segment the caller's lookup already
  * uses, or any other set rule) is skipped: a lookup the loader accepted
- * before never makes it throw.
+ * before never makes it throw (a set the rebuild still cannot hold falls back to
+ * the caller's lookup).
  */
 export function withStandIns(lookup: TargetLookup): TargetLookup {
-  const own = lookup
-    .targetNames()
-    .map((name) => lookup.target(name) as TargetDescriptor);
+  const own = (lookup.allTargetNames?.() ?? lookup.targetNames()).flatMap(
+    (name) => lookup.target(name) ?? [],
+  );
   for (const t of [...own]) {
     for (
       let base = t.builtOn === undefined ? undefined : lookup.target(t.builtOn);
@@ -134,7 +135,14 @@ export function withStandIns(lookup: TargetLookup): TargetLookup {
       if (!(error instanceof TargetLookupError)) throw error;
     }
   }
-  return createTargetLookup([...own, ...kept], options);
+  try {
+    return createTargetLookup([...own, ...kept], options);
+  } catch (error) {
+    // A caller's set the rebuild cannot hold: resolve strictness against it as
+    // it stands, as before stand-ins existed.
+    if (!(error instanceof TargetLookupError)) throw error;
+    return lookup;
+  }
 }
 
 /**

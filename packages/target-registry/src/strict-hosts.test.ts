@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTargetLookup } from "@mxlang/core";
+import { createTargetLookup, type TargetDescriptor } from "@mxlang/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import {
   standInTargets,
@@ -174,4 +174,26 @@ it("the stand-in lookup reserves the registry's names", () => {
   expect(strictnessTargets.reservedNames?.()).toEqual(
     builtinLookup().reservedNames?.(),
   );
+});
+
+it("a lookup that masks its default target from targetNames still gets a strict lookup", () => {
+  const html = htmlTarget;
+  const hidden = {
+    descriptorVersion: 0,
+    name: "hidden",
+    packageName: "@t/hidden",
+    defaultTag: "div",
+  } as TargetDescriptor;
+  const base = createTargetLookup([html, hidden]);
+  const masked = {
+    ...base,
+    targetNames: () => [html.name],
+    allTargetNames: () => [html.name, hidden.name],
+    defaultTarget: () => hidden.name,
+  } as typeof base;
+  expect(() => withStandIns(masked)).not.toThrow();
+  // Rebuilt, not the fallback: the masked default and the stand-ins are both in.
+  const rebuilt = withStandIns(masked);
+  expect(rebuilt.target("hidden")).toBeDefined();
+  expect(rebuilt.target("astro-html")).toBeDefined();
 });
