@@ -286,6 +286,26 @@ describe("MxErrorBoundary", () => {
     });
   });
 
+  it("stays on the catch when the body stops throwing, as Marko does", async () => {
+    const throwing = (): never => {
+      throw new Error("boom");
+    };
+    const view = (f: () => string): VNode =>
+      tryOf(
+        () => "caught",
+        () => createElement("p", null, f()),
+      );
+    const html = await withDom(async () => {
+      const host = document.createElement("div");
+      clientRender(view(throwing), host);
+      await new Promise((r) => setTimeout(r, 20));
+      clientRender(view(() => "fine"), host);
+      await new Promise((r) => setTimeout(r, 20));
+      return host.innerHTML;
+    });
+    expect(html).toBe("caught");
+  });
+
   it("selects a plain fallback node over a function one", () => {
     // The branch `<@catch>` (no params) takes, exercised directly on the
     // component rather than through a render, since the render half cannot

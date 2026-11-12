@@ -143,7 +143,6 @@ export class MxErrorBoundary extends Component<
     return typeof children === "function"
       ? createElement(MxTryBody, {
           render: children as () => ComponentChildren,
-          fallback,
         })
       : children;
   }
@@ -160,24 +159,18 @@ function callFallback(
 
 interface MxTryBodyProps {
   render: () => ComponentChildren;
-  fallback: MxErrorBoundaryProps["fallback"];
 }
 
 /**
  * Evaluates the `<try>` body thunk inside its own component, so a throw
- * written directly in the body is caught here with the real error and none of
- * the partial body, as Marko discards the body's output and renders `<@catch>`.
- * A function component, so hooks written inline in the body stay legal.
+ * written directly in the body happens under the boundary and not in the
+ * parent's render, where nothing could catch it. The error is left to the
+ * boundary (`getDerivedStateFromError`), which records it: as in Marko, once
+ * `<@catch>` has rendered it stays rendered when the input later changes. A
+ * function component, so hooks written inline in the body stay legal.
  */
-function MxTryBody({ render, fallback }: MxTryBodyProps): ComponentChildren {
-  try {
-    return render();
-  } catch (error) {
-    // A suspension is not an error: a thrown promise must reach the nearest
-    // `Suspense` (`<@placeholder>`'s, or an outer one), not `<@catch>`.
-    if (isThenable(error)) throw error;
-    return callFallback(fallback, error);
-  }
+function MxTryBody({ render }: MxTryBodyProps): ComponentChildren {
+  return render();
 }
 
 function isThenable(value: unknown): boolean {
