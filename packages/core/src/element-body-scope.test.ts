@@ -108,3 +108,64 @@ describe("an element body scopes its tag variables for write checks", () => {
     });
   }
 });
+
+/** The first error `lowerSource` reports, from the diagnostic list. */
+function duplicates(source: string) {
+  return lowered(source).filter((d) => d.code === "MX_DUPLICATE_DECLARATION");
+}
+
+describe("a <define> in a native element body is declared in the body around it", () => {
+  const FOO = "<define/Foo>a</define>";
+  const REFUSED_DEFINES: Array<[string, string]> = [
+    ["two sibling elements", `<div>${FOO}</div><div>${FOO}</div>`],
+    ["an element and a define of the body", `${FOO}<div>${FOO}</div>`],
+    ["a define of the body after an element", `<div>${FOO}</div>${FOO}`],
+    [
+      "through nested elements",
+      `<div><span>${FOO}</span></div><section>${FOO}</section>`,
+    ],
+  ];
+  for (const [name, source] of REFUSED_DEFINES) {
+    it(`refuses: ${name}`, () => {
+      const found = duplicates(source);
+      expect(found).toHaveLength(1);
+      expect(found[0]?.message).toMatch(
+        /^Duplicate declaration of `Foo`: it is already declared in this body at 1:\d+/,
+      );
+    });
+  }
+
+  it("refuses inside a <define> body too", () => {
+    const error = attempt(`<define/Box><div>${FOO}</div>${FOO}</define>`);
+    expect(error?.diagnosticCode).toBe("MX_DUPLICATE_DECLARATION");
+  });
+
+  it("blames the second define's name", () => {
+    const source = `<div>${FOO}</div><div>${FOO}</div>`;
+    const found = duplicates(source)[0];
+    expect(found?.column).toBe(source.lastIndexOf("Foo"));
+  });
+
+  const ACCEPTED_DEFINES: Array<[string, string]> = [
+    [
+      "an <if> branch beside an element",
+      `<div>${FOO}</div><if=input.a>${FOO}</if>`,
+    ],
+    ["an <if> inside an element", `<div><if=input.a>${FOO}</if></div>${FOO}`],
+    ["<if> and <else> branches", `<if=input.a>${FOO}</if><else>${FOO}</else>`],
+    [
+      "a <define> body beside an element",
+      `<div>${FOO}</div><define/Box>${FOO}</define>`,
+    ],
+    [
+      "a <const> of the same name beside the element",
+      `<div>${FOO}</div><const/Foo=1/>`,
+    ],
+    ["different names", `<div>${FOO}</div><div><define/Bar>b</define></div>`],
+  ];
+  for (const [name, source] of ACCEPTED_DEFINES) {
+    it(`compiles: ${name}`, () => {
+      expect(duplicates(source)).toEqual([]);
+    });
+  }
+});

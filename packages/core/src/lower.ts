@@ -7625,6 +7625,27 @@ function ifChainEnd(children: readonly Node[], index: number): number {
   return i;
 }
 
+/**
+ * The names of the `<define>`s a native element's body declares, through
+ * nested native elements only: a body of any other kind is its own scope.
+ */
+function elementBodyDefineNodes(ctx: Ctx, element: Node): Node[] {
+  const name = tagNameOf(element);
+  if (
+    typeof name !== "string" ||
+    !hasStaticName(element) ||
+    !isNativeElementName(ctx, name) ||
+    isCoreTaglibTag(ctx, name)
+  )
+    return [];
+  return bodyChildren(element).flatMap((child: Node) => {
+    if (!isTagNode(child)) return [];
+    if (tagNameOf(child) === "define" && tagVarOf(child))
+      return bindingIdentifierNodes(tagVarOf(child));
+    return elementBodyDefineNodes(ctx, child);
+  });
+}
+
 /** The names of every `<define>` declared below `children`, at any depth. */
 function nestedDefineNames(
   ctx: Ctx,
@@ -7791,6 +7812,27 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             ? bindingIdentifierNodes(tagVarOf(child))
             : [];
         });
+  // Stock hoists a `<define>` out of a native element's body into the body
+  // around the element for the duplicate rule (`<div><define/Foo/></div>`
+  // beside another one, or beside a `<define/Foo>` of this body, is "Duplicate
+  // declaration"), though not a `<const>`/`<let>`, and not out of an `<if>`,
+  // `<for>`, `<define>` or component body. Only a define collides with one.
+  const definesAt =
+    ctx.tagRules === "none"
+      ? []
+      : children.map((child) => {
+          if (!isTagNode(child)) return [];
+          if (tagNameOf(child) === "define" && tagVarOf(child))
+            return bindingIdentifierNodes(tagVarOf(child));
+          return elementBodyDefineNodes(ctx, child);
+        });
+  const firstDefineIndex = new Map<string, number>();
+  definesAt.forEach((names, at) => {
+    for (const binding of names) {
+      if (!firstDefineIndex.has(binding.name))
+        firstDefineIndex.set(binding.name, at);
+    }
+  });
   const firstDeclaredIndex = new Map<string, number>();
   declaredNames.forEach((names, at) => {
     for (const binding of names) {
@@ -7824,6 +7866,19 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
           binding,
         );
       }
+    }
+    for (const binding of definesAt[index] ?? []) {
+      const first = firstDefineIndex.get(binding.name);
+      if (first === undefined || first >= index) continue;
+      const earlier = definesAt[first]?.find(
+        (declared) => declared.name === binding.name,
+      );
+      const at = posOf(ctx, earlier ?? children[first]);
+      raise(
+        DUPLICATE_DECLARATION_CODE,
+        `Duplicate declaration of \`${binding.name}\`: it is already declared in this body at ${at.line}:${at.column + 1}, where a ${tagText(ctx, "define")} inside a native element belongs to the body around the element. Rename one of them.`,
+        binding,
+      );
     }
   };
 

@@ -264,7 +264,9 @@ describe("a <define> name is not readable outside the body that declares it", ()
 
   it("an import of the same name is the one a read after the body reaches", () => {
     expect(() =>
-      lowerSource(`${IMPORT}<if=input.a>${FOO}</if>\n<div>\${typeof Foo}</div>\n`),
+      lowerSource(
+        `${IMPORT}<if=input.a>${FOO}</if>\n<div>\${typeof Foo}</div>\n`,
+      ),
     ).not.toThrow();
   });
 

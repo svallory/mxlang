@@ -1789,6 +1789,14 @@ it calls an `import` of the same name, and with no such binding it is an
 unresolved tag. Inside the body the define wins over an import of the same
 name. A top-level `<define>` is visible in every body after it.
 
+**A `<define>` in a native element's body is declared in the body around the
+element.** For the duplicate rule only, `<div><define/Foo>…</define></div>`
+declares `Foo` in the body that holds the `<div>` (through nested native
+elements): a second `<define/Foo>` there, in that body or in another native
+element's body, is refused at its name with `MX_DUPLICATE_DECLARATION`, as
+Marko 6.4.4 refuses it. A `<const>`/`<let>` of the same name does not collide,
+and an `<if>`, `<for>`, `<define>` or component body is its own scope.
+
 **A `<define>` is not readable above its declaration.** A dynamic tag
 (`<${D}/>` or `<${D.content}/>`), placeholder (`${D}`), initializer
 (`<const/s=D/>`) or attribute (`<div attr=D/>`) that reads a later
