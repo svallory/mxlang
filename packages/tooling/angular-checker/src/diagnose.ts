@@ -13,7 +13,7 @@ import {
   lineColumnAt,
   lookupMapping,
   offsetAt,
-  rewriteAuthoredNames,
+  createNameRewriter,
   sourceOffsetFor,
 } from "@mxlang/host-angular";
 import type {
@@ -151,6 +151,9 @@ function eventHandlerHint(
  * template, and two regions may give the same generated name to different
  * authored ones. A diagnostic outside every region quotes none of them.
  */
+const rewriters = new WeakMap<object, (text: string) => string>();
+const NO_NAMES: Record<string, string | null> = {};
+
 function authoredNamesIn(
   compiled: CompileNgMxResult,
   diagnostic: Diagnostic,
@@ -161,7 +164,14 @@ function authoredNamesIn(
       diagnostic.start >= r.generatedStart && diagnostic.start < r.generatedEnd,
   );
   if (!region) return message;
-  return rewriteAuthoredNames(message, region.authoredNames ?? {});
+  // One rewriter per region's map, not one per diagnostic.
+  const names = region.authoredNames ?? NO_NAMES;
+  let rewrite = rewriters.get(names);
+  if (!rewrite) {
+    rewrite = createNameRewriter(names);
+    rewriters.set(names, rewrite);
+  }
+  return rewrite(message);
 }
 
 /**

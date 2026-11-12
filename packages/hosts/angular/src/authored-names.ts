@@ -73,11 +73,3 @@ export function createNameRewriter(
       return whole.replace(generated, () => authored);
     });
 }
-
-/** `text` with each generated name replaced by its authored one; see {@link createNameRewriter}. */
-export function rewriteAuthoredNames(
-  text: string,
-  names: Record<string, string | null>,
-): string {
-  return createNameRewriter(names)(text);
-}

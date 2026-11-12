@@ -32,6 +32,7 @@ import {
   HELPER_ADVICE_CODES,
   helperMembersFor,
   helperNamesFor,
+  PATTERN_HOLDER_BASE,
 } from "./emitter.ts";
 import { buildHeader, hasGeneratedHeader } from "./header.ts";
 import { compileFile } from "./index.ts";
@@ -929,7 +930,7 @@ export function build(
     // a different pattern in each, so a merged map could not rewrite it.
     const names = Object.fromEntries(
       Object.entries(result.authoredNames ?? {}).filter(
-        ([generated]) => !generated.startsWith("__mxPattern"),
+        ([generated]) => !generated.startsWith(PATTERN_HOLDER_BASE),
       ),
     );
     if (Object.keys(names).length > 0 && result.outputs[0]) {

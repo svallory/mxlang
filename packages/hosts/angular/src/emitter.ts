@@ -2213,6 +2213,12 @@ function bakeRange(
   return result;
 }
 
+/**
+ * The gensym base of a destructuring `<const>`'s holder. The name is per file
+ * (`__mxPattern1` in each), so a map merged across files cannot rewrite it.
+ */
+export const PATTERN_HOLDER_BASE = "__mxPattern";
+
 class AngularEmitter implements Emitter<string> {
   private readonly out = new TemplateWriter();
   private readonly ctx: Ctx;
@@ -3729,7 +3735,7 @@ class AngularEmitter implements Emitter<string> {
   ): Array<Extract<IrNode, { kind: "Const" }>> {
     const { text: written, start } = this.patternSource(node);
     const temp = (): string => {
-      const name = this.gensym("__mxPattern");
+      const name = this.gensym(PATTERN_HOLDER_BASE);
       this.authoredNames.set(name, node.name);
       return name;
     };

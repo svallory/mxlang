@@ -41,7 +41,7 @@ export type AttrTag<
   C extends AttrTagConfig = {},
 > = C extends AttrTagConfig ? never : never;
 
-export { rewriteAuthoredNames } from "./authored-names.ts";
+export { createNameRewriter } from "./authored-names.ts";
 export {
   type AngularConfig,
   type AngularDiagnosticsMode,

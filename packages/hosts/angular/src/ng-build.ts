@@ -43,12 +43,20 @@ function isCaretLine(line: string): boolean {
 }
 
 /**
- * `caret` with its columns kept under the same text after a rewrite changed the
- * source line's length: a shortened name drops the columns it no longer needs
- * (so its underline shrinks with it), a lengthened one gets as many back (the
- * underline's mark where the name was underlined, spaces where it was not).
- * Edits are in input order; they are applied last to first so earlier columns
- * stay valid.
+ * Whether `line` is a code-frame source line, the only kind an underline
+ * follows: esbuild's (`  1 │ code`) or tsc's (`1 code`), each led by its line
+ * number.
+ */
+function isFrameLine(line: string): boolean {
+  return /^\s*\d+ (?:│ | *\S)/.test(line);
+}
+
+/**
+ * `caret` with its columns kept under the same text after a rewrite shortened
+ * the source line: a shortened name drops the columns it no longer needs
+ * (so its underline shrinks with it). Every generated name is longer than the
+ * one the author wrote, so an edit never lengthens a line. Edits are in input
+ * order; they are applied last to first so earlier columns stay valid.
  */
 function realignCarets(caret: string, edits: NameEdit[]): string {
   let result = caret;
@@ -57,11 +65,6 @@ function realignCarets(caret: string, edits: NameEdit[]): string {
     if (drop > 0) {
       const from = Math.min(edit.index + edit.added, result.length);
       result = result.slice(0, from) + result.slice(from + drop);
-    } else if (drop < 0) {
-      const at = Math.min(edit.index + edit.removed, result.length);
-      const under = result[edit.index];
-      const fill = under === "^" || under === "~" ? under : " ";
-      result = result.slice(0, at) + fill.repeat(-drop) + result.slice(at);
     }
   }
   return result;
@@ -86,7 +89,11 @@ export function forwardLines(
     let pending = "";
     // A rewritten line waits for the next one, which may be its underline.
     let held: { text: string; edits: NameEdit[] } | undefined;
+    // One idle release at a time: a later hold replaces the earlier one's.
+    let idle: NodeJS.Immediate | undefined;
     const release = () => {
+      if (idle) clearImmediate(idle);
+      idle = undefined;
       if (held) sink.write(held.text);
       held = undefined;
     };
@@ -108,7 +115,8 @@ export function forwardLines(
       release();
       const edits: NameEdit[] = [];
       const text = rewrite(raw, (edit) => edits.push(edit));
-      if (edits.length > 0) held = { text, edits };
+      // Only a frame's source line can be followed by its underline.
+      if (edits.length > 0 && isFrameLine(raw)) held = { text, edits };
       else sink.write(text);
     };
     const finish = () => {
@@ -130,7 +138,10 @@ export function forwardLines(
       }
       // The underline, if there is one, came in the same read; a line still
       // held once the loop is idle has none coming soon.
-      if (held) setImmediate(release);
+      if (held) {
+        if (idle) clearImmediate(idle);
+        idle = setImmediate(release);
+      }
     });
     source.on("end", finish);
     source.on("close", finish);

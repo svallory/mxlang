@@ -120,20 +120,21 @@ describe("forwardLines", () => {
   it("realigns a plain underline (tsc's frame) and what is right of the name", async () => {
     expect(
       await forward(
-        ["@let __mxConst_a1 = __mxConst_a1;\n     ^~~~~~~~~~~~~~~~~~~~~~~~\n"],
+        [
+          "1 @let __mxConst_a1 = __mxConst_a1;\n       ^~~~~~~~~~~~~~~~~~~~~~~~\n",
+        ],
         {
           f: { __mxConst_a1: "a" },
         },
       ),
-    ).toBe("@let a = a;\n     ^~~~~\n");
+    ).toBe("1 @let a = a;\n       ^~~~~\n");
   });
 
-  it("widens an underline under a lengthened name", async () => {
+  it("leaves an underline-looking line after a message line alone", async () => {
+    const rule = "~".repeat(30);
     expect(
-      await forward(["@let __mxPattern = o;\n     " + "~".repeat(11) + "\n"], {
-        f: { __mxPattern: "{ first, second }" },
-      }),
-    ).toBe("@let { first, second } = o;\n     " + "~".repeat(17) + "\n");
+      await forward([`Hint: __mxConst_a1 is unused\n${rule}\n`], names),
+    ).toBe(`Hint: a is unused\n${rule}\n`);
   });
 
   it("prints a held line when the stream goes idle, without waiting for another", async () => {
