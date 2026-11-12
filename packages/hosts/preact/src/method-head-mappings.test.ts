@@ -84,3 +84,26 @@ describe("printed method head mappings", () => {
     }
   });
 });
+
+describe("method shorthand in a dynamic tag's props and an attribute tag", () => {
+  it.each([
+    ["a dynamic tag's prop", "<${'div'} onClick(e: Missing) { go() }/>"],
+    [
+      "an attribute-tag attribute",
+      'import Foo from "./foo.mx"\n<Foo><@item onClick(e: Missing) { go() }/></Foo>',
+    ],
+  ])("maps the head and the body of %s exactly", (_name, source) => {
+    const { code, mappings } = compile(source);
+    for (const token of ["Missing", "go()"]) {
+      const at = code.indexOf(token, code.indexOf("onClick"));
+      const m = mappings.find(
+        (item) =>
+          item.generatedStart <= at && at + token.length <= item.generatedEnd,
+      );
+      expect(m, token).toBeDefined();
+      expect(m && m.sourceStart + at - m.generatedStart).toBe(
+        source.indexOf(token, source.indexOf("onClick")),
+      );
+    }
+  });
+});

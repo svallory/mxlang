@@ -2221,12 +2221,7 @@ export class PreactEmitter implements Emitter<string> {
         parts.push(
           mapped(JSON.stringify(attr.name), attr.nameSpan),
           ": ",
-          mapped(
-            this.#attrValue(attr),
-            "value" in attr && typeof attr.value === "object"
-              ? (attr.value.span ?? attr.nameSpan)
-              : attr.nameSpan,
-          ),
+          this.#mappedAttrValue(attr),
         );
       }
     }
@@ -2478,14 +2473,40 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /** The object-literal entries of a tag's attributes, spreads included. */
-  #propParts(attrs: readonly Attr[]): string[] {
+  #propParts(attrs: readonly Attr[]): MappedCode[] {
     return attrs.map((attr) =>
       attr.kind === "spread"
-        ? `...${attr.value.code}`
+        ? concatMapped("...", mappedExpr(attr.value))
         : // A component's props are its author's `Input` contract, so names
           // are never renamed here — the same rule `#attrName(name, true)`
           // applies.
-          `${JSON.stringify(attr.name)}: ${this.#attrValue(attr)}`,
+          concatMapped(
+            `${JSON.stringify(attr.name)}: `,
+            this.#mappedAttrValue(attr),
+          ),
+    );
+  }
+
+  /**
+   * An attribute's value as {@link #attrValue} writes it, with its authored
+   * mapping: a value written as authored (a method shorthand's printed
+   * function included) keeps its exact per-token mappings through
+   * `mappedValue`; a rewritten one (a structured `class`) maps as one run.
+   */
+  #mappedAttrValue(attr: Attr): MappedCode {
+    const value = this.#attrValue(attr);
+    if (
+      (attr.kind === "dynamic" || attr.kind === "event") &&
+      value === attr.value.code
+    ) {
+      return mappedValue(attr.value, this.#source);
+    }
+    if (attr.kind === "spread") return mapped(value, attr.value.span ?? null);
+    return mapped(
+      value,
+      "value" in attr && typeof attr.value === "object"
+        ? (attr.value.span ?? attr.nameSpan)
+        : attr.nameSpan,
     );
   }
 
@@ -2544,7 +2565,13 @@ export class PreactEmitter implements Emitter<string> {
       };
     }
     const { open, between } = defineValueWrapper(node.attrs);
-    const props = `{ ${this.#propParts(node.attrs).join(", ")} });`;
+    const props = concatMapped(
+      "{ ",
+      ...this.#propParts(node.attrs).flatMap((part, index) =>
+        index === 0 ? [part] : [", ", part],
+      ),
+      " });",
+    );
     return {
       name: node.name,
       fn,
@@ -2571,8 +2598,8 @@ export class PreactEmitter implements Emitter<string> {
    * `#attrValue`, so a structured `class`, a rejected `:=`, and the `style`
    * object rule cannot drift between a called unit and a described one.
    */
-  #propsObject(node: Extract<IrNode, { kind: "Component" }>): string {
-    const parts: string[] = [];
+  #propsObject(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+    const parts: Array<string | MappedCode> = [];
     // A dynamic target routed from a value import (`valueImportBinding` set) still
     // names a real, in-scope import — the emitted call is
     // `mxDynamic(Row, ...)`, with `Row` imported verbatim — so `owner` can
@@ -2602,7 +2629,11 @@ export class PreactEmitter implements Emitter<string> {
       parts.push(`content: ${this.#contentFn(node).code}`);
     }
 
-    return `{ ${parts.join(", ")} }`;
+    return concatMapped(
+      "{ ",
+      ...parts.flatMap((part, index) => (index === 0 ? [part] : [", ", part])),
+      " }",
+    );
   }
 
   text(node: Extract<IrNode, { kind: "Text" }>): void {
@@ -2873,8 +2904,7 @@ export class PreactEmitter implements Emitter<string> {
         // is a plain props-object string from `#propsObject`). Interpolating
         // the mapped form emitted "[object Object]" — a syntax error in the
         // generated module — so their code text is taken explicitly.
-        const payloadCode =
-          typeof payload === "string" ? payload : payload.code;
+        const payloadCode = payload.code;
         const contentCode =
           typeof content === "string" ? content : (content?.code ?? "");
         this.#varStatements.push(
@@ -2933,7 +2963,7 @@ export class PreactEmitter implements Emitter<string> {
         (hasRestParam || node.args.length < fixedParamCount) &&
         (node.attrTagProps.length > 0 ||
           (node.content?.children.length ?? 0) > 0);
-      if (takesObject) argList.push(this.#propsObject(node));
+      if (takesObject) argList.push(this.#propsObject(node).code);
       if (node.args.length > 0) {
         argList.push(
           ...Array.from(
@@ -2948,7 +2978,7 @@ export class PreactEmitter implements Emitter<string> {
         node.args.length > 0
           ? argList.join(", ")
           : node.target.params.length > 0
-            ? this.#propsObject(node)
+            ? this.#propsObject(node).code
             : "";
       this.#out.push(
         this.#slot(
@@ -2998,7 +3028,7 @@ export class PreactEmitter implements Emitter<string> {
     // statements above the `return` and renders its output half here; without
     // one only the output is wanted, and the call can stay an expression.
     if (node.returnsValue) {
-      const props = this.#propsObject(node);
+      const props = this.#propsObject(node).code;
       if (node.var) {
         // Every structural kind on this target is an *expression*, so a
         // callback scope has no statement position of its own. Hoisting the
