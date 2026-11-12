@@ -3428,7 +3428,12 @@ export class PreactEmitter implements Emitter<string> {
     const params = catchTag.block.params.join(", ");
     // A lone value in the catch body would be the arrow's bare result, which
     // Hono drops when it is `0` or `NaN`: write it as a closed fragment.
-    const caught = holdsScalar(catchTag.block.children)
+    // A lone `<for>` is an array: Hono's string renderer joins an array a
+    // function returns with commas, so it is closed as a fragment too.
+    const catchContent = meaningful(catchTag.block.children);
+    const caught =
+      holdsScalar(catchTag.block.children) ||
+      (catchContent.length === 1 && catchContent[0]?.kind === "For")
       ? concatMapped(
           "<>",
           closeFragmentBody(

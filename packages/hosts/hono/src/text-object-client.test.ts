@@ -2,7 +2,8 @@
 /**
  * A `${expr}` placeholder holding JSON-shaped data on the Hono client.
  *
- * Stock Marko 6.4.4 prints a plain object in text as `[object Object]`.
+ * Stock Marko 6.4.4 prints a plain object in text as `[object Object]` (and
+ * throws for a null-prototype one).
  * `hono/jsx/dom` instead reads a plain `{ tag, props }` object as an element,
  * with its `onerror` and `dangerouslySetInnerHTML`. The emitter wraps a
  * placeholder in `__mxTextValue`, which stringifies a plain object and leaves
@@ -41,6 +42,7 @@ const inputs = {
   arrayProtoGadget: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":[],"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
   arrayProtoGadgetDeep: () => ({ x: Object.assign({}, JSON.parse('{"__proto__":{"__proto__":[]},"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}')) }),
   arrayHoldingArrayProtoGadget: () => ({ x: [Object.assign({}, JSON.parse('{"__proto__":[],"tag":"img","type":"img","props":{"src":"x","onerror":"alert(1)"},"key":null,"ref":null}'))] }),
+  bigints: () => ({ a: 0n, b: 1n }),
   primitives: () => ({ a: "s<", b: 0, c: null, d: undefined, e: false, f: [1, "x"] }),
   node: () => ({ x: jsx("i", {}, "node") }),
   nodes: () => ({ x: [jsx("i", {}, "a"), "-", jsx("b", {}, jsx("u", {}, "c"))] }),
@@ -130,6 +132,7 @@ const CASES: Record<string, CaseSpec> = {
   toString: { source: "<p>${input.x}</p>", input: "toString" },
   valueOf: { source: "<p>${input.x}</p>", input: "valueOf" },
   nullProto: { source: "<p>${input.x}</p>", input: "nullProto" },
+  bigints: { source: "<p>${input.a}|${input.b}|${0n}|${1n}</p>", input: "bigints" },
   protoGadget: { source: "<p>${input.x}</p>", input: "protoGadget" },
   protoGadgetCtor: { source: "<p>${input.x}</p>", input: "protoGadgetCtor" },
   arrayProtoGadget: { source: "<p>${input.x}</p>", input: "arrayProtoGadget" },
@@ -296,8 +299,14 @@ describe("JSON-shaped data in a text placeholder (Hono client and server)", () =
     expect(at("valueOf").client).toBe("<p>&lt;u&gt;v&lt;/u&gt;</p>");
     expect(html(at("valueOf").server)).toBe("<p>&lt;u>v&lt;/u></p>");
   });
-  it("stringifies a null-prototype object", () => {
-    expect(at("nullProto").client).toBe("<p>[object Object]</p>");
+  it("throws on a null-prototype object, as Marko does (String() of an object with no toString)", () => {
+    // The message is the engine's (Bun and Node word it differently).
+    expect(at("nullProto").errors).toHaveLength(2);
+  });
+  it("prints a bigint as Marko does: 1n as 1, 0n as nothing", () => {
+    expect(at("bigints").errors).toEqual([]);
+    expect(at("bigints").client).toBe("<p>|1||1</p>");
+    expect(html(at("bigints").server)).toBe("<p>|1||1</p>");
   });
   it("stringifies a copy whose prototype is attacker data (Object.assign of a __proto__ key)", () => {
     expect(at("protoGadget").client).toBe("<p>[object Object]</p>");

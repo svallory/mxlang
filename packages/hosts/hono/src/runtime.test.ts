@@ -1,6 +1,11 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { Fragment, jsx as honoJsx } from "hono/jsx";
 import { HtmlEscapedCallbackPhase, resolveCallback } from "hono/utils/html";
 import { describe, expect, it } from "vitest";
+import { compileHonoMx } from "./index.ts";
 import { MxErrorBoundary, mxClass } from "./runtime.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: loosely typed so tests can build trees directly
@@ -111,5 +116,40 @@ describe("MxErrorBoundary", () => {
         )) as never),
     );
     expect(out).toBe("<a>1</a><i>3</i><u>4</u>");
+  });
+});
+
+describe("a compiled <@catch> body", () => {
+  it("renders a <for> body's rows joined without commas, as html does", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-hono-catch-for-"));
+    try {
+      let nodeModules = dirname(require.resolve("hono/jsx"));
+      while (!nodeModules.endsWith("node_modules")) {
+        nodeModules = dirname(nodeModules);
+      }
+      symlinkSync(nodeModules, join(dir, "node_modules"), "dir");
+      writeFileSync(
+        join(dir, "package.json"),
+        JSON.stringify({ type: "module" }),
+      );
+      writeFileSync(
+        join(dir, "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { jsx: "react-jsx", jsxImportSource: "hono" },
+        }),
+      );
+      const entry = join(dir, "App.tsx");
+      writeFileSync(
+        entry,
+        compileHonoMx(
+          "<try><div>${input.boom()}</div><@catch|e|><for|i| of=[0, 1]>${i}</for></@catch></try>",
+          join(dir, "App.mx"),
+        ).code,
+      );
+      const module = (await import(entry)) as { default: unknown };
+      expect(await html(jsx(module.default, { boom: missing }))).toBe("01");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

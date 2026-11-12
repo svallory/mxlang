@@ -84,6 +84,17 @@ describe("a spread key that names raw HTML is an escaped attribute", () => {
     expect(html).toMatch(new RegExp(`^<div ${written}="&lt;b[^"]*"></div>$`));
   });
 
+  it("textContent and innerText (Marko prints both as escaped attributes)", async () => {
+    const html = await renderMx("<div ...input.attrs/>", {
+      attrs: { textContent: "<b>x</b>", innerText: "<i>y</i>" },
+    });
+    expect(html).not.toContain("<b>");
+    expect(html).not.toContain("<i>");
+    expect(html).toMatch(
+      /^<div textcontent="&lt;b[^"]*" innertext="&lt;i[^"]*"><\/div>$/,
+    );
+  });
+
   it("keeps the element's body and its other attributes", async () => {
     const html = await renderMx("<div ...input.attrs>body</div>", {
       attrs: { dangerouslySetInnerHTML: RAW, id: "a" },

@@ -117,7 +117,10 @@ export function jsxAttrValueExpression(reactBooleans: boolean): string {
  * with an escaped value; as props every JSX renderer reads them as raw HTML
  * (or, on the client, as a DOM property write). A lowercase name is no such
  * prop, so every renderer writes it as the plain attribute Marko does, and an
- * HTML parser reads the same attribute name.
+ * HTML parser reads the same attribute name. `textContent` and `innerText` get
+ * the same treatment: Marko prints them as ordinary escaped attributes, while
+ * Preact would hyphenate one and the client renderers would assign it as a DOM
+ * property that replaces the element's text.
  */
 export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | undefined,>(attrs: T, tag = "", props: readonly string[] = [], events = false): T => {
   const values = { ...attrs } as Record<string, unknown>;
@@ -131,7 +134,7 @@ export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | unde
       if (raw && error instanceof Error) error.message += " To write raw HTML, make \`$!{html}\` the element's only child.";
       throw error;
     }
-    if (raw) {
+    if (raw || name === "textContent" || name === "innerText") {
       delete values[name];
       if (next !== undefined) values[name.toLowerCase()] = next;
     } else if (next === undefined) delete values[name]; else values[name] = next;
@@ -173,8 +176,9 @@ const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && 
  * instead reads a plain `{ tag, props }` object as an element, with its event
  * handlers and `dangerouslySetInnerHTML`, so JSON from a request could become
  * markup. A plain-prototype object is stringified as Marko does; a
- * null-prototype one, which Marko fails on, prints `[object Object]`, unless
- * Hono's own runtime made it. A prototype that is itself data
+ * null-prototype one throws, as it does in Marko (no `toString`), unless
+ * Hono's own runtime made it. A bigint prints as Marko prints it: `1n` as `1`,
+ * `0n` as nothing (Hono's own renderer drops every bigint). A prototype that is itself data
  * (`Object.assign({}, JSON.parse('{"__proto__":{…}}'))` sets the copy's
  * prototype to the parsed object, or to an array) does not make an object a class instance: only
  * a prototype whose `constructor` is a function other than `Object` or `Array` does. `hono/jsx` elements are class
@@ -194,6 +198,7 @@ const HONO_DOM_NODE_CHECK = `own("key") && own("ref") && item.props !== null && 
  */
 export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
   const text = (item: any): any => {
+    if (typeof item === "bigint") return item ? item + "" : "";
     if (item === null || typeof item !== "object") return item;
     if (Array.isArray(item)) return item.some((entry: any) => entry !== null && typeof entry === "object") ? item.map(text) : item;
     const proto = Object.getPrototypeOf(item);
@@ -201,7 +206,7 @@ export const JSX_TEXT_VALUE_EXPRESSION = `(value: any): any => {
     const own = (name: string): boolean => Object.prototype.hasOwnProperty.call(item, name);
     if (${HONO_PORTAL_CHECK}) return item;
     if (${HONO_DOM_NODE_CHECK}) return item;
-    try { return item + ""; } catch { return "[object Object]"; }
+    return item + "";
   };
   return text(value);
 }`;

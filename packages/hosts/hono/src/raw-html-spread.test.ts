@@ -86,6 +86,17 @@ describe("a spread key that names raw HTML is an escaped attribute", () => {
     expect(html).toMatch(new RegExp(`^<div ${written}="&lt;b[^"]*"></div>$`));
   });
 
+  it("textContent and innerText (Marko prints both as escaped attributes)", async () => {
+    const html = await renderMx("<div ...input.attrs/>", {
+      attrs: { textContent: "<b>x</b>", innerText: "<i>y</i>" },
+    });
+    expect(html).not.toContain("<b>");
+    expect(html).not.toContain("<i>");
+    expect(html).toMatch(
+      /^<div textcontent="&lt;b[^"]*" innertext="&lt;i[^"]*"><\/div>$/,
+    );
+  });
+
   it("keeps the element's body and its other attributes", async () => {
     const html = await renderMx("<div ...input.attrs>body</div>", {
       attrs: { dangerouslySetInnerHTML: RAW, id: "a" },
@@ -307,11 +318,9 @@ describe("a plain object in a text interpolation prints as Marko prints it", () 
     expect(html).toMatch(/^<p>&lt;b(&gt;|>)x&lt;\/b(&gt;|>)<\/p>$/);
   });
 
-  it("stringifies a null-prototype object", async () => {
+  it("throws on a null-prototype object, as Marko does", async () => {
     const x = Object.assign(Object.create(null), { a: 1 });
-    expect(await renderMx("<p>${input.x}</p>", { x })).toBe(
-      "<p>[object Object]</p>",
-    );
+    await expect(renderMx("<p>${input.x}</p>", { x })).rejects.toThrow();
   });
 
   it("maps an array that holds an object", async () => {
