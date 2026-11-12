@@ -15,13 +15,13 @@ describe("hono: a <define> carries its attributes as properties", () => {
     expect(
       emit('<define/D a=1 b="s"><p>x</p></define>\n<p>${D.a}${D.b}</p>'),
     ).toContain(
-      'const D = Object.assign(() => (<><p>x</p></>), { "a": 1, "b": "s" });',
+      'const D = Object.assign(__mxDefine(() => (<><p>x</p></>)), { "a": 1, "b": "s" });',
     );
   });
 
   it("makes name and length writable first when they could be set", () => {
     expect(emit('<define/D name="n"/>\n<p>${D.name}</p>')).toContain(
-      'Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "n" });',
+      'Object.assign(Object.defineProperties(__mxDefine(() => (<></>)), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "n" });',
     );
   });
 });

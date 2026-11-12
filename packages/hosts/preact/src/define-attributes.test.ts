@@ -41,13 +41,13 @@ describe("preact: a <define> carries its attributes as properties", () => {
         '<define/D a=1 b="s" c d=input.x/>\n<p>${D.a} ${D.b}${D.c}${D.d}</p>',
       ),
     ).toContain(
-      'const D = Object.assign(() => (<></>), { "a": 1, "b": "s", "c": true, "d": input.x });',
+      'const D = Object.assign(__mxDefine(() => (<></>)), { "a": 1, "b": "s", "c": true, "d": input.x });',
     );
   });
 
   it("a define with a body keeps the body as the function", () => {
     expect(whole("<define/D|x| a=1><p>${x}</p></define>\n<D(2)/>")).toContain(
-      'const D = Object.assign((x) => (<><p>{__mxRenderable(x)}</p></>), { "a": 1 });',
+      'const D = Object.assign(__mxDefine((x: any) => (<><p>{__mxRenderable(x)}</p></>)), { "a": 1 });',
     );
   });
 
@@ -59,7 +59,7 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("an attribute named name or a spread makes name/length writable first", () => {
     expect(whole('<define/F name="email"/>\n<p>${F.name}</p>')).toContain(
-      'const F = Object.assign(Object.defineProperties(() => (<></>), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "email" });',
+      'const F = Object.assign(Object.defineProperties(__mxDefine(() => (<></>)), { name: { writable: true }, length: { writable: true }, caller: { writable: true }, arguments: { writable: true } }), { "name": "email" });',
     );
     expect(whole('<define/F caller="c"/>\n<p>${F.caller}</p>')).toContain(
       '{ "caller": "c" });',
@@ -71,7 +71,7 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("a define with no attributes is unchanged", () => {
     const code = whole("<define/D><p>x</p></define>\n<D/>");
-    expect(code).toContain("const D = () => (<><p>x</p></>);");
+    expect(code).toContain("const D = __mxDefine(() => (<><p>x</p></>));");
     expect(code).not.toContain("Object.assign");
   });
 
@@ -83,7 +83,7 @@ describe("preact: a <define> carries its attributes as properties", () => {
 
   it("a define lifted out of a region carries them too", () => {
     expect(region('<define/D a=1 b="s"/><p>${D.a}</p>')).toContain(
-      'const D = Object.assign(() => <></>, { "a": 1, "b": "s" });',
+      'const D = Object.assign(__mxDefine(() => <></>), { "a": 1, "b": "s" });',
     );
   });
 });

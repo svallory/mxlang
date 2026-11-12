@@ -219,11 +219,40 @@ export function attributeHelpers(
       binding: "__mxTextarea",
       code: `const __mxTextarea = ${jsxTextareaPropsExpression(dialect.textareaContent)};`,
     });
+  if (text.includes("__mxDefine("))
+    helpers.push({ binding: "__mxDefine", code: MX_DEFINE });
   return helpers;
 }
 
 /**
- * `mxDynamic`'s source, inlined into a module rather than imported.
+ * Wraps a `<define>`'s function so a call through the dynamic route reads its
+ * body as `content`. A define is called as `Row({ content })`; `__mxDynamic`
+ * calls any function target as a component, handing the body over as
+ * `children` (the render function itself when the call has tag params). The
+ * first argument is read the way the module preamble reads a component's
+ * props, so the define body's `content` is the same slot either way. An
+ * argument that already carries `content` is left alone.
+ */
+export const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {
+  return ((first?: any, ...rest: any[]) => {
+    if (first !== null && typeof first === "object" && first.content === undefined && first.children !== undefined) {
+      const body = first.children;
+      first = {
+        ...first,
+        content:
+          typeof body === "string" || typeof body === "number"
+            ? body === ""
+              ? undefined
+              : <>{String(body)}</>
+            : body,
+      };
+    }
+    return fn(first, ...rest);
+  }) as F;
+}`;
+
+/**
+ * \`mxDynamic\`'s source, inlined into a module rather than imported.
  *
  * Marko's own dynamic tag is polymorphic at run time — the target can be a
  * tag-name string, a render function, or already-rendered content (a
@@ -486,7 +515,9 @@ export function emitModuleWithMappings(
       for (const name of body.runtimeImports) {
         emitter.runtimeImports.add(name);
       }
-      statements.push(emitter.defineStatement(node, rendered));
+      statements.push(
+        emitter.defineStatement(node, rendered, body.varStatements),
+      );
     } else {
       markup.push(node);
     }

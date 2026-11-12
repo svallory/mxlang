@@ -2565,8 +2565,10 @@ does. A literal string target
 Marko's own. A string that only arrives at run time throws an MX run-time
 error (`MX: tag params |…| cannot be passed to a native element`). This is a
 deliberate divergence: Marko renders the element with the body. A `<define>`
-used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>`) does not
-receive the body yet on these hosts.
+used as a dynamic target value (`<const/R = Row/>` then `<${R}|n|>` or `<${R}>`)
+receives the body as its `content`, as a direct call does: a define's function
+reads a props object that carries `children` and no `content` the way a
+component's module preamble does.
 
 **Params come right after the tag name, before any attribute or `=value`**:
 `<for|it, i| of=xs()>`, `<Show|user| when=currentUser>` (§5.2).

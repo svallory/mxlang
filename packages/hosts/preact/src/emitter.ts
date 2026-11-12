@@ -132,6 +132,30 @@ interface RegionSink {
 /** What `resolveDelegatedTag` records for a claimed tag. */
 type DelegatedTagData = { kind: "try" };
 
+/**
+ * A `<define>` parameter as the arrow declares it. A parameter that carries
+ * its own type (`a: string`) or a default (`a = 1`, which TypeScript infers
+ * from) is kept as written; any other is typed `any` (`any[]` for a rest
+ * parameter), so a strict project (`noImplicitAny`) does not report TS7006 or
+ * TS7031 on a define whose params the author left untyped.
+ */
+function typedDefineParam(param: string): string {
+  const text = param.trim();
+  let depth = 0;
+  let quote = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] as string;
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = "";
+    } else if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") depth--;
+    else if (depth === 0 && (ch === ":" || ch === "=")) return text;
+  }
+  return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
+}
+
 function fail(message: string, node: { loc: Position }): never {
   throw new TranslateError(message, node.loc.line, node.loc.column);
 }
@@ -798,8 +822,8 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * Claims a lifted name in the shared JavaScript scope, refusing a second
    * `const` at the authored name with the region path's diagnostic text.
-   * Dynamic-tag and try bodies still share this scope (mx-m682); do not
-   * silently emit duplicate declarations while their local scopes are missing.
+   * Dynamic-tag and try bodies are scopes of their own (`#scoped`) and
+   * claim into a table of their own.
    */
   #claimName(
     name: string,
@@ -835,6 +859,43 @@ export class PreactEmitter implements Emitter<string> {
     } else {
       this.#claimName(node.name, node.nameSpan, node.loc);
     }
+  }
+
+  /**
+   * Fills a body that is its own scope: a dynamic tag's body or a `<try>`'s
+   * `@placeholder`/`@catch`/body block (as Marko compiles them). `build`
+   * renders through a child with its own `/var` statements, serial and name
+   * table; when the body bound any `/var`, its statements run in an arrow
+   * called in place, so they close over everything the body can see and stay
+   * out of the component's scope (a `/x` there can sit beside an outer `/x`).
+   * `slot` says the result fills an expression slot, otherwise it is a JSX
+   * child.
+   */
+  #scoped(
+    slot: boolean,
+    build: (scope: PreactEmitter) => MappedCode,
+  ): MappedCode {
+    const scope = new PreactEmitter(
+      this.#dialect,
+      this.#runtimeImports,
+      this.#aliases,
+      [],
+      { n: 0 },
+      false,
+      this.#typeCheck,
+      this.#decodeText,
+      this.#region,
+      this.#bare,
+      new Map<string, Position>(),
+      this.#positionAt,
+      this.#source,
+    );
+    const code = build(scope);
+    if (scope.#varStatements.length === 0) return code;
+    const statements = scope.#varStatements.join(" ");
+    return slot
+      ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
+      : concatMapped(`{(() => { ${statements} return (<>`, code, "</>); })()}");
   }
 
   #render(
@@ -1799,11 +1860,22 @@ export class PreactEmitter implements Emitter<string> {
   defineStatement(
     node: Extract<IrNode, { kind: "Define" }>,
     rendered: MappedCode,
+    bodyVarStatements: readonly string[] = [],
   ): MappedCode {
+    const params = node.params.map(typedDefineParam).join(", ");
+    // A `/var` inside the body is the body's own: its statements run inside
+    // the define's function, ahead of the markup that reads the binding, so
+    // each call of the define evaluates them in its own scope (as Marko does).
+    // `__mxDefine` makes a call through the dynamic route (`<${R}>`, which
+    // hands the body over as `children`) read it as `content`.
     const fn = concatMapped(
-      `(${node.params.join(", ")}) => (<>`,
+      "__mxDefine((",
+      params,
+      bodyVarStatements.length > 0
+        ? `) => { ${bodyVarStatements.join(" ")} return (<>`
+        : ") => (<>",
       closeFragmentBody(rendered),
-      "</>)",
+      bodyVarStatements.length > 0 ? "</>); })" : "</>))",
     );
     if (node.attrs.length === 0) {
       return concatMapped(`const ${node.name} = `, fn, ";");
@@ -2334,7 +2406,9 @@ export class PreactEmitter implements Emitter<string> {
    */
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
-    const rendered = this.#expression(node.content?.children ?? []);
+    const rendered = this.#scoped(false, (scope) =>
+      scope.#expression(node.content?.children ?? []),
+    );
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
@@ -2601,17 +2675,17 @@ export class PreactEmitter implements Emitter<string> {
       (tag) => tag.name === "placeholder",
     );
 
-    let inner = this.#render(node.tag.children);
+    let inner = this.#scoped(false, (scope) =>
+      scope.#render(node.tag.children),
+    );
     if (placeholder) {
       // `<@placeholder>` is what renders while the body is suspended, which on
       // this target means the body threw a promise (a `lazy()` child). Preact
       // gives that through `Suspense`; the package re-exports it under one
       // name so the emitted text is dialect-independent.
       this.#runtimeImports.add(this.#dialect.suspenseName);
-      const fallback = this.#expression(
-        placeholder.block.children,
-        undefined,
-        true,
+      const fallback = this.#scoped(true, (scope) =>
+        scope.#expression(placeholder.block.children, undefined, true),
       );
       // Hono's `Suspense` returns the fallback when its children are falsy,
       // so a lone `0` body would show the placeholder: close it like a
@@ -2645,10 +2719,16 @@ export class PreactEmitter implements Emitter<string> {
     const caught = holdsScalar(catchTag.block.children)
       ? concatMapped(
           "<>",
-          closeFragmentBody(this.#expression(catchTag.block.children)),
+          closeFragmentBody(
+            this.#scoped(false, (scope) =>
+              scope.#expression(catchTag.block.children),
+            ),
+          ),
           "</>",
         )
-      : this.#expression(catchTag.block.children, undefined, true);
+      : this.#scoped(true, (scope) =>
+          scope.#expression(catchTag.block.children, undefined, true),
+        );
     const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(

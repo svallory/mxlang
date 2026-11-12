@@ -51,9 +51,8 @@ export default function List(props: Input) {
  * The same callee written in MX: it calls `input.content` with the item. It
  * types `children` (the slot a described call fills) as a function, as a TSX
  * component does, so the caller's params take their types from it under
- * strict tsc. `content` stays `unknown`: the module preamble assigns the
- * normalized body to it (space TODO.md,
- * `jsx-mx-input-typed-content-ts2322`).
+ * strict tsc. `content` is typed as a function too: the module preamble casts
+ * the normalized body instead of assigning it.
  */
 const MX_BODY = "(item: string, i: number) => unknown";
 const MX_LIST = `export interface Input { items: string[]; content?: ${MX_BODY}; children?: ${MX_BODY} }
@@ -75,15 +74,6 @@ interface Case {
   callee?: { file: string; source: string };
   caller: string;
   html: string;
-  /**
-   * A `<define>`'s own declared params are emitted unannotated
-   * (`const Row = (p) => …`), so strict tsc reports them whether or not the
-   * call has tag params (space TODO.md, `jsx-define-params-implicit-any`). A
-   * param written as a destructure (`|a, { content }|`, the trailing-object
-   * binding) is reported on its binding element instead. Listed here
-   * so the strict test still proves the body's params are bound and typed.
-   */
-  untypedDefineParams?: Array<string | { bindingElement: string }>;
 }
 
 const CASES: Record<string, Case> = {
@@ -122,7 +112,6 @@ export interface Input { items: string[] }
 </define>
 <ul><Row|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li><b>r</b></li></ul>",
-    untypedDefineParams: ["p"],
   },
   "a define called with args and a params body": {
     caller: `export interface Input { items: string[] }
@@ -131,7 +120,6 @@ export interface Input { items: string[] }
 </define>
 <ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li>x<b>r</b></li></ul>",
-    untypedDefineParams: ["a", { bindingElement: "content" }],
   },
   "a <return> unit": {
     callee: {
@@ -273,13 +261,8 @@ describe.each(hosts)("%s: tag params on a component call", (host) => {
           .split("\n")
           .filter(Boolean)
           .map((line) => line.replace(/^.*?: error /, ""));
-        const expected = (testCase.untypedDefineParams ?? []).map((entry) =>
-          typeof entry === "string"
-            ? `TS7006: Parameter '${entry}' implicitly has an 'any' type.`
-            : `TS7031: Binding element '${entry.bindingElement}' implicitly has an 'any' type.`,
-        );
-        expect(errors).toEqual(expected);
-        expect(proc.status).toBe(expected.length === 0 ? 0 : 2);
+        expect(errors).toEqual([]);
+        expect(proc.status).toBe(0);
       } finally {
         rmSync(scratch, { recursive: true, force: true });
       }

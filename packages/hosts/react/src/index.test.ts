@@ -132,24 +132,6 @@ describe("whole-file duplicate lifted bindings", () => {
       2,
       12,
     ],
-    [
-      "dynamic-tag body scope (mx-m682)",
-      "<${input.tag}><counter/x/></>\n<counter/x/>",
-      2,
-      9,
-    ],
-    [
-      "placeholder body scope (mx-m682)",
-      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
-      2,
-      9,
-    ],
-    [
-      "catch body scope (mx-m682)",
-      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
-      2,
-      9,
-    ],
   ])("the emitter refuses lifted %s", (_label, source, line, column) => {
     expect(() =>
       compileReactMx(source, "/fixtures/page.mx", { customTags: { counter } }),

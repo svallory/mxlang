@@ -134,7 +134,7 @@ describe("react: a lone value child is closed with a null child", () => {
   it("closes a <define> body that is a lone placeholder", () => {
     const code = compile(`<define/Z|n|>${D}{n}</define>\n<Z(0)/>`);
     expect(line(code, /^ {2}const Z = /)).toBe(
-      "const Z = (n) => (<>{n}{null}</>);",
+      "const Z = __mxDefine((n: any) => (<>{n}{null}</>));",
     );
     expect(returned(code)).toBe("return (<>{Z(0)}</>);");
     expect(() => parseTsx(code)).not.toThrow();

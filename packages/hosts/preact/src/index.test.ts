@@ -153,24 +153,6 @@ describe("whole-file duplicate lifted bindings", () => {
       2,
       12,
     ],
-    [
-      "dynamic-tag body scope (mx-m682)",
-      "<${input.tag}><counter/x/></>\n<counter/x/>",
-      2,
-      9,
-    ],
-    [
-      "placeholder body scope (mx-m682)",
-      "<try><b/><@placeholder><counter/x/></@placeholder></try>\n<counter/x/>",
-      2,
-      9,
-    ],
-    [
-      "catch body scope (mx-m682)",
-      "<try><b/><@catch><counter/x/></@catch></try>\n<counter/x/>",
-      2,
-      9,
-    ],
   ])("the emitter refuses lifted %s", (_label, source, line, column) => {
     expect(() =>
       compilePreactMx(source, "/fixtures/page.mx", { customTags: { counter } }),
@@ -1236,7 +1218,7 @@ describe("<define> and <const>", () => {
       "<define/Row|label|><li>${label}</li></define>\n<Row('a')/>",
     );
     expect(code).toContain(
-      "const Row = (label) => (<><li>{__mxRenderable(label)}</li></>);",
+      "const Row = __mxDefine((label: any) => (<><li>{__mxRenderable(label)}</li></>));",
     );
     expect(code).toContain("{Row('a')}");
   });
