@@ -1755,8 +1755,8 @@ not make `<if|u|>` legal.
 |---|---|
 | `\`<if>\` without a condition` | No value attribute and no first positional attribute with a value. |
 | `\`<${label}>\` without a preceding \`<if>\`` | An `<else>`/`<else-if>` not consumed by a preceding chain. `label` is `else if` when an `if` attribute is present, else `else`. |
-| `The \`<if>\` tag only supports the \`value=\` attribute.` (`<else-if>` likewise) | The tag has a second attribute, with or without an argument list (`<if=x a=1>`, `<if=x a(v)=1>`). `MX_INVALID_ATTRIBUTE`, at the second attribute. Applies to a condition wrapping attribute tags too (`<C><if=x foo=1><@a/></if></C>`). |
-| `The \`<else>\` tag only supports an \`if=\` attribute.` | An `<else>` has an attribute other than `if=`, with or without arguments. `MX_INVALID_ATTRIBUTE`, at that attribute. |
+| `The \`<if>\` tag only supports the \`value=\` attribute.` (`<else-if>` likewise) | The tag has an attribute besides its condition, with or without an argument list (`<if=x a=1>`, `<if=x a(v)=1>`, `<if a=1 value=x>`). `MX_INVALID_ATTRIBUTE`, at the first attribute that is not `value=` (the second when `value=` is written twice). A lone spread (`<if ...x>`) is refused the same way, at the spread. Applies to a condition wrapping attribute tags too (`<C><if=x foo=1><@a/></if></C>`). |
+| `The \`<else>\` tag only supports an \`if=\` attribute.` | An `<else>` has an attribute other than `if=`, with or without arguments. `MX_INVALID_ATTRIBUTE`, at the first attribute that is not `if=` (the second when `if=` is written twice); a spread is refused the same way. |
 
 ### 5.2 `<for>`
 
