@@ -1,30 +1,62 @@
 import {
   createTargetLookup,
+  resolveTargetPolicyDetailed,
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
 import html from "./descriptor.ts";
 
 /**
- * Stand-in for the astro target, which has no mode but strict (its descriptor
- * declares `strict: "always"`). This package cannot import `@mxlang/host-astro`
- * (it depends on this one), so the Bun loader's default lookup registers this
- * descriptor of the same name, package and host: every selection path the full
- * registry honours (`mx.host`, `mx.target`, a dependency on the package) then
- * resolves to a strict target here too. `@mxlang/targets`' `strict-hosts.test.ts`
- * keeps it equal to the real descriptor. Bun-free: tests import it.
+ * Stand-ins for the other built-in targets. This package cannot import the
+ * registry (`@mxlang/targets` depends on it), so the Bun loader's default
+ * strictness lookup registers one descriptor per built-in target with the
+ * same name, package, host and strictness: every selection path the registry
+ * honours (`mx.host`, `mx.target`, a dependency on a host package, one or
+ * several of them) then resolves the same way here. Only strictness is read
+ * from the result. `@mxlang/targets`' `strict-hosts.test.ts` keeps the table
+ * equal to the real descriptors and compares the two lookups' answers.
+ * Bun-free: tests import it.
  */
-export const astroStrictStandIn: TargetDescriptor = {
-  descriptorVersion: 0,
-  name: "astro-html",
-  packageName: "@mxlang/host-astro",
-  defaultTag: html.defaultTag,
-  strict: "always",
-  host: { name: "astro" },
-};
+const STAND_INS: readonly (readonly [
+  name: string,
+  packageName: string,
+  host: string,
+  strict?: "always",
+])[] = [
+  ["astro-html", "@mxlang/host-astro", "astro", "always"],
+  ["solid-jsx", "@mxlang/host-solid", "solid"],
+  ["preact-jsx", "@mxlang/host-preact", "preact"],
+  ["react-jsx", "@mxlang/host-react", "react"],
+  ["hono-jsx", "@mxlang/host-hono", "hono"],
+  ["angular-template", "@mxlang/host-angular", "angular"],
+];
 
-/** This package's own lookup plus {@link astroStrictStandIn}, for strictness only. */
+export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
+  ([name, packageName, host, strict]) => ({
+    descriptorVersion: 0,
+    name,
+    packageName,
+    defaultTag: html.defaultTag,
+    ...(strict ? { strict } : {}),
+    host: { name: host },
+  }),
+);
+
+/** This package's own lookup plus {@link standInTargets}, for strictness only. */
 export const strictnessTargets: TargetLookup = createTargetLookup(
-  [html, astroStrictStandIn],
+  [html, ...standInTargets],
   { defaultTarget: html.name },
 );
+
+/**
+ * Whether `path` compiles strict under `targets`: the resolved target
+ * descriptor declares `strict: "always"`, or the resolved policy carries
+ * `mx.strict: true`. Resolved quietly (no deprecation warning per file).
+ */
+export function strictFor(path: string, targets: TargetLookup): boolean {
+  const { policy } = resolveTargetPolicyDetailed(path, targets, {
+    quiet: true,
+  });
+  const descriptor = policy.descriptor ?? targets.target(policy.target);
+  return descriptor?.strict === "always" || policy.strict === true;
+}

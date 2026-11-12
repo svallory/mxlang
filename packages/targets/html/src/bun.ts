@@ -12,7 +12,7 @@ import {
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
-import { strictnessTargets } from "./foreign-strict.ts";
+import { strictFor, strictnessTargets } from "./foreign-strict.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -70,32 +70,13 @@ export function mxFilter(targets: TargetLookup): RegExp {
 }
 
 /**
- * Whether `path` compiles strict here: the resolved target descriptor
- * declares `strict: "always"`, or the resolved policy carries
- * `mx.strict: true`. The same rule as the editor tools and
- * `@mxlang/vite-plugin`'s `compileMarko` (which has a third leg, the
- * caller's explicit `strict` option — this loader takes no options, so the
- * policy is the whole rule). Resolved quietly: the resolver also prints the
- * deprecation warning for a legacy `mx.host` value, and one resolution per
- * loaded file would repeat it once per file — under Bun the loader printed
- * nothing before this resolution existed, so it stays silent (the editor
- * tools and `vite build` still print it). Exported for its tests.
+ * Whether `path` compiles strict here: the rule in `foreign-strict.ts`, the
+ * same as the editor tools and `@mxlang/vite-plugin`'s `compileMarko` (which
+ * has a third leg, the caller's explicit `strict` option; this loader takes no
+ * options). Under `bun` the loader printed no policy diagnostics before this
+ * resolution existed, so it stays silent. Re-exported for its tests.
  */
-export function strictFor(path: string, targets: TargetLookup): boolean {
-  // The package's own lookup does not register the astro target; resolve
-  // through one that does, so every way of selecting it agrees with the tools.
-  const { policy } = resolveTargetPolicyDetailed(
-    path,
-    targets === htmlTargets ? strictnessTargets : targets,
-    { quiet: true },
-  );
-  const descriptor =
-    policy.descriptor ??
-    (targets === htmlTargets ? strictnessTargets : targets).target(
-      policy.target,
-    );
-  return descriptor?.strict === "always" || policy.strict === true;
-}
+export { strictFor };
 
 /**
  * Builds the loader over `targets`: the registered targets it scans and
@@ -110,6 +91,10 @@ export function createHtmlBunPlugin(
 ): BunPlugin {
   /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
   const reportedScanDiagnostics = new Set<string>();
+  // The default lookup knows only html, so strictness resolves through it plus
+  // stand-ins for the other built-ins; a lookup the caller passes is already
+  // the registry's. Chosen once, for the default only.
+  const strictLookup = targets === htmlTargets ? strictnessTargets : targets;
 
   return {
     name: "mxlang-translator",
@@ -150,7 +135,7 @@ export function createHtmlBunPlugin(
             // Strictness follows the resolved policy, as in the editor tools
             // and `@mxlang/vite-plugin`'s `compileMarko`, so a Bun build
             // never compiles what the editor and `vite build` flag.
-            strict: strictFor(path, targets),
+            strict: strictFor(path, strictLookup),
             unwired: (identity) =>
               `the ${identity} is not wired into @mxlang/target-html/bun yet`,
             customTags: scan.customTags,

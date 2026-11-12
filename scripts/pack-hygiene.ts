@@ -102,6 +102,7 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       "dist/descriptor.d.ts",
       "dist/descriptor.js",
       "dist/emitter.d.ts",
+      "dist/foreign-strict.d.ts",
       "dist/helpers.d.ts",
       "dist/index.d.ts",
       "dist/index.js",

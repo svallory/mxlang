@@ -991,19 +991,22 @@ export function resolveTargetPolicyDetailed(
     mx?.strict === true &&
     mx.host === undefined &&
     mx.target === undefined &&
-    resolved.policy.strict !== true &&
-    (resolved.policy.descriptor ?? lookup.target(resolved.policy.target))
-      ?.strict !== "always"
+    lookup.target(resolved.policy.target)?.strict !== "always"
   ) {
-    // `mx.strict` accompanies an explicitly selected target only; with none
-    // selected the default target is non-strict, and the setting does nothing.
-    // A host or target that is present but unknown or unloadable already has
-    // its own diagnostic, so it gets no second one.
+    // `mx.strict` accompanies an explicitly selected target only, so with none
+    // selected the policy never carries it (nor a loaded descriptor): the
+    // setting does nothing. A host or target that is present but unknown or
+    // unloadable already has its own diagnostic, so it gets no second one.
+    const target = resolved.policy.target;
     diagnostics.push({
       code: "strict-ignored",
       severity: "warning",
       file,
-      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. Add mx.target "${resolved.policy.target}" to compile strict.`,
+      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. ${
+        lookup.target(target)?.declarations?.strict
+          ? `Add mx.target "${target}" to compile strict.`
+          : `The resolved target "${target}" has no strict mode.`
+      }`,
       ...at("strict"),
     });
   }

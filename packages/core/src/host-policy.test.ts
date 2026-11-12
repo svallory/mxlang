@@ -762,10 +762,16 @@ describe("TargetPolicyDiagnostic code", () => {
     expect(selected.policy.strict).toBe(true);
   });
 
+  // Only the presence of `declarations.strict` is read, so empty tables do.
+  const withStrictMode = {
+    default: {},
+    strict: {},
+  } as unknown as TargetDescriptor["declarations"];
+
   it("raises strict-ignored for a non-strict dependency target, not for an always-strict one", () => {
     const strictLookup = createTargetLookup(
       [
-        fixtureTarget("page", "@t/page"),
+        fixtureTarget("page", "@t/page", { declarations: withStrictMode }),
         fixtureTarget("only-strict", "@t/only-strict", {
           host: { name: "only" },
           strict: "always",
@@ -788,6 +794,24 @@ describe("TargetPolicyDiagnostic code", () => {
     // The hint names the resolved target, not a fixed one.
     expect(ignored[0]?.message).toContain('mx.target "page"');
     expect(resolveWith("@t/only-strict")).toEqual([]);
+    // A target with no strict mode says so instead of advising a no-op key.
+    const noMode = resolveTargetPolicyDetailed(
+      project(
+        JSON.stringify({
+          dependencies: { "@t/no-mode": "1.0.0" },
+          mx: { strict: true },
+        }),
+      ),
+      createTargetLookup(
+        [
+          fixtureTarget("page", "@t/page", { declarations: withStrictMode }),
+          fixtureTarget("no-mode", "@t/no-mode", { host: { name: "nm" } }),
+        ],
+        { defaultTarget: "page" },
+      ),
+    ).diagnostics[0]?.message;
+    expect(noMode).toContain('target "no-mode" has no strict mode');
+    expect(noMode).not.toContain("to compile strict");
   });
 
   it("raises no strict-ignored when mx.host or mx.target is present: its own diagnostic says what is wrong", () => {

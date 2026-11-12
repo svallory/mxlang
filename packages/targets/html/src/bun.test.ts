@@ -16,6 +16,7 @@ import markoPlugin, {
   mxFilter,
   strictFor,
 } from "./bun.ts";
+import { strictnessTargets } from "./foreign-strict.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -600,7 +601,7 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
       } as unknown as Parameters<BunPlugin["setup"]>[0]);
       const path = join(dir, "stateful.mx");
       writeFileSync(path, "<let/count=0/><span>hi</span>\n");
-      expect(strictFor(path, htmlTargets)).toBe(true);
+      expect(strictFor(path, strictnessTargets)).toBe(true);
       expect(() => onLoad({ path })).toThrow(/`<let>`.*strict/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -617,22 +618,49 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
     const dir = mkdtempSync(join(tmpdir(), "mx-astro-select-"));
     try {
       writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
-      expect(strictFor(join(dir, "page.mx"), htmlTargets)).toBe(true);
+      expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
+  test.each([
+    [
+      "two host dependencies",
+      {
+        dependencies: {
+          "@mxlang/host-astro": "1",
+          "@mxlang/host-preact": "1",
+        },
+      },
+    ],
+    [
+      "mx.host solid with an astro dependency",
+      { mx: { host: "solid" }, dependencies: { "@mxlang/host-astro": "1" } },
+    ],
+  ])(
+    "the default lookup keeps %s non-strict, as the registry does",
+    (_name, manifest) => {
+      const dir = mkdtempSync(join(tmpdir(), "mx-astro-others-"));
+      try {
+        writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
+        expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("an explicit mx.target decides: mx.target html with mx.host astro is not strict here", () => {
-    // The full registry reports a target-host-mismatch and keeps html,
-    // non-strict; the astro fallback applies only when no mx.target is present.
+    // As in the full registry: an explicit mx.target html keeps html
+    // (target-host-mismatch), non-strict.
     const dir = mkdtempSync(join(tmpdir(), "mx-astro-target-"));
     try {
       writeFileSync(
         join(dir, "package.json"),
         JSON.stringify({ mx: { target: "html", host: "astro" } }),
       );
-      expect(strictFor(join(dir, "page.mx"), htmlTargets)).toBe(false);
+      expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
