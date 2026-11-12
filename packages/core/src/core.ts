@@ -1469,7 +1469,7 @@ export function exprWithNodes(
  * `code` is returned as it came when it holds none, or when it does not parse
  * as a TypeScript expression (a statement-shaped payload).
  */
-export function printAngleAssertions(code: string): string {
+function printAngleAssertions(code: string): string {
   if (!code.includes("<")) return code;
   const print = (text: string): string => {
     let root: Node;

@@ -115,6 +115,13 @@ export interface CompileOptions {
 }
 
 export interface CompileHtmlResult extends CompileResult {
+  /**
+   * Generated-to-authored mappings. Empty for a runtime (non-`typeCheck`)
+   * compile of a module that holds an unexported `const enum`: the member reads
+   * are rewritten to their values after emit, which shifts every offset, so the
+   * pre-rewrite mappings would be wrong. The `typeCheck` projection keeps the
+   * enum and keeps exact mappings.
+   */
   mappings: GeneratedMapping[];
 }
 

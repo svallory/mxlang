@@ -10,6 +10,7 @@ const OUT = (guarded: string, name: string): string =>
   `__mxAttrOut(${JSON.stringify(name)}, ${guarded})`;
 const SPREAD = "__mxAttrSpread";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   AstroTemplateError,
@@ -343,12 +344,26 @@ describe("attributes", () => {
   it("types a dynamic attribute's value as `any`, so a prop typed `string` accepts it", () => {
     // `unknown` made `<p title=s/>` with `s: string` a false TS2322 under
     // `mx-tsc --astro`: the helper's result is assigned to the element's prop.
-    expect(ATTRIBUTE_OUT_SOURCE).toMatch(
-      /^\(\(name: string, value: unknown\): any =>/,
-    );
-    expect(lower("<p title=s>x</p>")).toContain(
-      `title={${OUT(`${ATTR}("title", (s), "p")`, "title")}}`,
-    );
+    const code = `declare const s: string;\nconst title: string = ${ATTRIBUTE_OUT_SOURCE}("title", s);\nexport {};\n`;
+    const name = "/virtual/check.ts";
+    const options: ts.CompilerOptions = {
+      noEmit: true,
+      strict: true,
+      target: ts.ScriptTarget.ES2022,
+      lib: ["lib.es2022.d.ts"],
+      types: [],
+      skipLibCheck: true,
+    };
+    const host = ts.createCompilerHost(options);
+    const getSourceFile = host.getSourceFile.bind(host);
+    host.getSourceFile = (file, languageVersion, ...rest) =>
+      file === name
+        ? ts.createSourceFile(file, code, languageVersion)
+        : getSourceFile(file, languageVersion, ...rest);
+    const program = ts.createProgram([name], options, host);
+    expect(
+      program.getSemanticDiagnostics().map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n")),
+    ).toEqual([]);
   });
 
   it("passes a static attribute through", () => {

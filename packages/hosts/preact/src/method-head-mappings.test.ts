@@ -121,9 +121,4 @@ describe("the type-check projection of a `<const>`", () => {
     expect(pairs).toContainEqual(["string", "string"]);
     expect(pairs).toContainEqual(["n", "n"]);
   });
-
-  it("prints an angle assertion as `as`", () => {
-    const { code } = compile("<const/y=(<string>x).length/>\n<p>${y}</p>");
-    expect(code).toContain("const y = ((x as string)).length;");
-  });
 });

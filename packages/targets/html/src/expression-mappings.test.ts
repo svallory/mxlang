@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import ts from "typescript";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compile } from "./index.ts";
 
@@ -141,6 +142,27 @@ function checked(source: string): { code: string; pairs: string[][] } {
   };
 }
 
+/** Semantic diagnostics (codes) of `code` as one in-memory module. */
+function diagnosticCodes(code: string): number[] {
+  const name = "/virtual/check.ts";
+  const options: ts.CompilerOptions = {
+    noEmit: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+    lib: ["lib.es2022.d.ts"],
+    types: [],
+    skipLibCheck: true,
+  };
+  const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, languageVersion, ...rest) =>
+    file === name
+      ? ts.createSourceFile(file, code, languageVersion)
+      : getSourceFile(file, languageVersion, ...rest);
+  const program = ts.createProgram([name], options, host);
+  return program.getSemanticDiagnostics().map((d) => d.code);
+}
+
 describe("html type-check projection", () => {
   it.each([
     ["an inert tag's default value", "<id=x/>", "x"],
@@ -202,11 +224,16 @@ describe("html type-check projection", () => {
     },
   );
 
-  it("reads a lone spread's values as `any`, so the `=== false` guard is not a TS2367", () => {
+  it("does not report TS2367 on the lone-spread guard when the values are not booleans", () => {
     const source = "<div ...rest/>";
     const result = checked(source);
-    expect(result.code).toContain("Object.entries((rest ?? {}) as object)");
     expect(result.pairs).toContainEqual(["rest", "rest"]);
+    // The projection's `=== false` guard over a `Record<string, string>`'s
+    // values is a TS2367 unless the entries are read as `any`.
+    const codes = diagnosticCodes(
+      `declare const rest: Record<string, string>;\n${result.code.replace(/^export default[^\n]*\n?/, "")}`,
+    );
+    expect(codes).not.toContain(2367);
     expect(compile(source, "/fixtures/checked.mx").code).toContain(
       "Object.entries(rest ?? {})",
     );

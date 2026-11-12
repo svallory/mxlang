@@ -3299,23 +3299,16 @@ describe("`<for>` parameter annotations", () => {
       "<for|i: number| from=0 to=3><p>${i}</p></for>",
       "for (let i = ",
     ],
+    [
+      "an attribute-tag array loop",
+      "<define/Foo|{ item }|><p>${item}</p></define>\n<Foo><for|x: number, i: number| of=list><@item>${x}</@item></for></Foo>",
+      "for (const [i, x] of [...",
+    ],
   ])("%s prints a loop head without the annotation", (_name, source, head) => {
     for (const typeCheck of [false, true]) {
       const { code } = compile(source, "/f/t.mx", { typeCheck });
       expect(code).toContain(head);
       expect(code).not.toMatch(/for \([^)]*: (number|string)/);
     }
-  });
-
-  it("renders a loop whose parameters carry annotations", async () => {
-    expect(
-      await renderModules(
-        {
-          "page.mx":
-            "<for|x: number, i: number| of=[10, 20]><p>${i}:${x}</p></for>",
-        },
-        "page.mx",
-      ),
-    ).toBe("<p>0:10</p><p>1:20</p>");
   });
 });
