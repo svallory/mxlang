@@ -286,3 +286,60 @@ describe("a /var in a dynamic-tag body is its own scope", () => {
     ).toBe("<section>2</section>1");
   });
 });
+
+describe("a direct call of a <define> passes its arguments through untouched", () => {
+  class TreeNode {
+    children = ["a"];
+    label() {
+      return "node";
+    }
+  }
+
+  it("a positional argument keeps its identity and prototype", async () => {
+    expect(
+      await renderPair(
+        "<define/Row|item|>${item.label()}:${item.children.length}</define>\n<Row(input.node)/>",
+        { node: new TreeNode() },
+        WRAP,
+        true,
+      ),
+    ).toBe("node:1");
+  });
+
+  it("an attribute named children is not read as the body", async () => {
+    expect(
+      await renderPair(
+        "<define/Row|{ children, content }|><if=content>has body</if><else>none</else></define>\n<Row children=input.list/>",
+        { list: ["x"] },
+        WRAP,
+        true,
+      ),
+    ).toBe("none");
+  });
+});
+
+describe("a lone 0 in a scoped body that binds a /var still renders", () => {
+  it("a <try> body", async () => {
+    expect(
+      String(
+        await renderPair(
+          "<try><wrap/x v=0/>${x}<@catch>e</@catch></try>",
+          {},
+          "<return value=input.v/>",
+          true,
+        ),
+      ),
+    ).toBe("0");
+  });
+
+  it("a dynamic-tag body", async () => {
+    expect(
+      await renderPair(
+        '<${"section"}><wrap/x v=0/>${x}</>',
+        {},
+        "<return value=input.v/>",
+        true,
+      ),
+    ).toBe("<section>0</section>");
+  });
+});

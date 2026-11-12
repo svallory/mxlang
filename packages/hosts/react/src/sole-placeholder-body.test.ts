@@ -124,7 +124,7 @@ const CASES: Array<[string, string, string]> = [
   [
     "a define call with a lone placeholder body",
     `${DEF}<Box>${D}{input.y}</Box>`,
-    "return (<>{Box({ content: () => <>{input.y}{null}</> })}</>);",
+    "return (<>{__mxDef_Box({ content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body",

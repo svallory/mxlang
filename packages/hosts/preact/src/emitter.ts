@@ -151,9 +151,21 @@ export function typedDefineParam(param: string): string {
     } else if (ch === '"' || ch === "'" || ch === "`") quote = ch;
     else if (ch === "(" || ch === "[" || ch === "{") depth++;
     else if (ch === ")" || ch === "]" || ch === "}") depth--;
-    else if (depth === 0 && (ch === ":" || ch === "=")) return text;
+    else if (depth === 0 && ch === ":") return text;
+    else if (depth === 0 && ch === "=") {
+      // A default types an identifier, but not a destructure: `{ a } = {}`
+      // still leaves `a` implicitly `any`.
+      return text.startsWith("{") || text.startsWith("[")
+        ? `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`
+        : text;
+    }
   }
   return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
+}
+
+/** The private binding a `<define>`'s own function is declared under. */
+function defineFunctionName(name: string): string {
+  return `__mxDef_${name}`;
 }
 
 function fail(message: string, node: { loc: Position }): never {
@@ -794,28 +806,44 @@ export class PreactEmitter implements Emitter<string> {
     return this.#runtimeImports;
   }
 
-  /** A child emitter sharing this one's dialect and import collection. */
+  /**
+   * An emitter sharing this one's dialect, import collection and region
+   * sink. Everything not overridden is inherited.
+   */
+  #derive(overrides: {
+    varStatements?: string[];
+    varSerial?: { n: number };
+    callbackScope?: boolean;
+    decodeText?: boolean;
+    bare?: boolean;
+    bindings?: Map<string, Position>;
+    scopedBody?: boolean;
+  }): PreactEmitter {
+    return new PreactEmitter(
+      this.#dialect,
+      this.#runtimeImports,
+      this.#aliases,
+      overrides.varStatements ?? this.#varStatements,
+      overrides.varSerial ?? this.#varSerial,
+      overrides.callbackScope ?? this.#callbackScope,
+      this.#typeCheck,
+      overrides.decodeText ?? this.#decodeText,
+      this.#region,
+      overrides.bare ?? this.#bare,
+      overrides.bindings ?? this.#bindings,
+      this.#positionAt,
+      this.#source,
+      overrides.scopedBody ?? this.#scopedBody,
+    );
+  }
+
+  /** A child emitter: same scope, text decoding and slot reset unless given. */
   #child(
     callbackScope = this.#callbackScope,
     decodeText = true,
     bare = false,
   ): PreactEmitter {
-    return new PreactEmitter(
-      this.#dialect,
-      this.#runtimeImports,
-      this.#aliases,
-      this.#varStatements,
-      this.#varSerial,
-      callbackScope,
-      this.#typeCheck,
-      decodeText,
-      this.#region,
-      bare,
-      this.#bindings,
-      this.#positionAt,
-      this.#source,
-      this.#scopedBody,
-    );
+    return this.#derive({ callbackScope, decodeText, bare });
   }
 
   /**
@@ -884,28 +912,22 @@ export class PreactEmitter implements Emitter<string> {
     slot: boolean,
     build: (scope: PreactEmitter) => MappedCode,
   ): MappedCode {
-    const scope = new PreactEmitter(
-      this.#dialect,
-      this.#runtimeImports,
-      this.#aliases,
-      [],
-      { n: 0 },
-      this.#callbackScope,
-      this.#typeCheck,
-      this.#decodeText,
-      this.#region,
-      this.#bare,
-      new Map<string, Position>(),
-      this.#positionAt,
-      this.#source,
-      true,
-    );
+    const scope = this.#derive({
+      varStatements: [],
+      varSerial: { n: 0 },
+      bindings: new Map<string, Position>(),
+      scopedBody: true,
+    });
     const code = build(scope);
     if (scope.#varStatements.length === 0) return code;
     const statements = scope.#varStatements.join(" ");
     return slot
       ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
-      : concatMapped(`{(() => { ${statements} return (<>`, code, "</>); })()}");
+      : concatMapped(
+          `{(() => { ${statements} return (<>`,
+          closeFragmentBody(code),
+          "</>); })()}",
+        );
   }
 
   #render(
@@ -1873,27 +1895,31 @@ export class PreactEmitter implements Emitter<string> {
     bodyVarStatements: readonly string[] = [],
   ): MappedCode {
     const params = node.params.map(typedDefineParam).join(", ");
-    // A `/var` inside the body is the body's own: its statements run inside
-    // the define's function, ahead of the markup that reads the binding, so
-    // each call of the define evaluates them in its own scope (as Marko does).
-    // `__mxDefine` makes a call through the dynamic route (`<${R}>`, which
-    // hands the body over as `children`) read it as `content`.
+    // The function itself keeps a private name: a direct call from MX
+    // (`<Row(x)/>`) calls it as written, so an argument reaches the body
+    // untouched. Only the value `Row`, which a dynamic tag can reach, is
+    // wrapped by `__mxDefine`, which reads a body handed over as `children`
+    // as `content`. A `/var` inside the body is the body's own: its statements
+    // run inside the function ahead of the markup that reads the binding, so
+    // each call evaluates them in its own scope (as Marko does).
+    const own = defineFunctionName(node.name);
     const fn = concatMapped(
-      "__mxDefine((",
+      `const ${own} = (`,
       params,
       bodyVarStatements.length > 0
         ? `) => { ${bodyVarStatements.join(" ")} return (<>`
         : ") => (<>",
       closeFragmentBody(rendered),
-      bodyVarStatements.length > 0 ? "</>); })" : "</>))",
+      bodyVarStatements.length > 0 ? "</>); };" : "</>);",
     );
+    const value = `__mxDefine(${own}, ${JSON.stringify(node.name)})`;
     if (node.attrs.length === 0) {
-      return concatMapped(`const ${node.name} = `, fn, ";");
+      return concatMapped(fn, ` const ${node.name} = ${value};`);
     }
     const { open, between } = defineValueWrapper(node.attrs);
     return concatMapped(
-      `const ${node.name} = ${open}`,
       fn,
+      ` const ${node.name} = ${open}${value}`,
       between,
       `{ ${this.#propParts(node.attrs).join(", ")} });`,
     );
@@ -2286,7 +2312,10 @@ export class PreactEmitter implements Emitter<string> {
             ? this.#propsObject(node)
             : "";
       this.#out.push(
-        this.#slot(mapped(node.target.name, node.nameSpan), `(${args})`),
+        this.#slot(
+          mapped(defineFunctionName(node.target.name), node.nameSpan),
+          `(${args})`,
+        ),
       );
       return;
     }
@@ -2655,7 +2684,7 @@ export class PreactEmitter implements Emitter<string> {
     }
     fail(
       this.#region
-        ? `\`<define>\` inside \`<for>\`, \`<if>\`, an attribute-tag body or a \`<define>\` body cannot be lifted out of it in a \`.${this.#region.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside those bodies`
+        ? `\`<define>\` inside \`<for>\`, \`<if>\`, an attribute-tag body, a dynamic-tag body, a \`<try>\` body or a \`<define>\` body cannot be lifted out of it in a \`.${this.#region.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside those bodies`
         : "`<define>` must appear at the top level of the template; a block declared inside markup cannot be lifted without changing its scope",
       node,
     );

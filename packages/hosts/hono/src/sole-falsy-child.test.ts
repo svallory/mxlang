@@ -115,12 +115,12 @@ const CASES: Array<[string, string, string]> = [
   [
     "a define call with a lone placeholder body",
     `${DEF}<Box>${D}{input.x}</Box>`,
-    "return (<>{Box({ content: () => <>{input.x}{null}</> })}</>);",
+    "return (<>{__mxDef_Box({ content: () => <>{input.x}{null}</> })}</>);",
   ],
   [
     "a define call with tag params and a lone placeholder body",
     `${EACH}<Each|n|>${D}{n}</Each>`,
-    "return (<>{Each({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
+    "return (<>{__mxDef_Each({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body",
@@ -190,7 +190,7 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a define call with an element body",
     `${DEF}<Box><i>${D}{input.x}</i></Box>`,
-    "return (<>{Box({ content: () => <><i>{input.x}</i></> })}</>);",
+    "return (<>{__mxDef_Box({ content: () => <><i>{input.x}</i></> })}</>);",
   ],
   [
     "an <if> with an empty body",
@@ -219,10 +219,10 @@ describe("hono: a lone value child is closed with a null child", () => {
 
   it("closes a <define> body that is a lone placeholder", () => {
     const code = compile(`<define/Z|n|>${D}{n}</define>\n<Z(0)/>`);
-    expect(line(code, /^ {2}const Z = /)).toBe(
-      "const Z = __mxDefine((n: any) => (<>{n}{null}</>));",
+    expect(line(code, /^ {2}const __mxDef_Z = /)).toBe(
+      'const __mxDef_Z = (n: any) => (<>{n}{null}</>); const Z = __mxDefine(__mxDef_Z, "Z");',
     );
-    expect(returned(code)).toBe("return (<>{Z(0)}</>);");
+    expect(returned(code)).toBe("return (<>{__mxDef_Z(0)}</>);");
     expect(() => parseTsx(code)).not.toThrow();
   });
 

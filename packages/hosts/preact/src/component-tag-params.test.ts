@@ -121,6 +121,12 @@ export interface Input { items: string[] }
 <ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li>x<b>r</b></li></ul>",
   },
+  "a define whose destructured param has a default": {
+    caller: `export interface Input { items: string[] }
+<define/Row|{ a } = {}|><li>\${a}</li></define>
+<ul><Row/></ul>`,
+    html: "<ul><li></li></ul>",
+  },
   "a <return> unit": {
     callee: {
       file: "unit.mx",

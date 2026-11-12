@@ -1218,9 +1218,9 @@ describe("<define> and <const>", () => {
       "<define/Row|label|><li>${label}</li></define>\n<Row('a')/>",
     );
     expect(code).toContain(
-      "const Row = __mxDefine((label: any) => (<><li>{__mxRenderable(label)}</li></>));",
+      'const __mxDef_Row = (label: any) => (<><li>{__mxRenderable(label)}</li></>); const Row = __mxDefine(__mxDef_Row, "Row");',
     );
-    expect(code).toContain("{Row('a')}");
+    expect(code).toContain("{__mxDef_Row('a')}");
   });
 
   it("accepts a `<define>` call mixing tag-argument form with an attribute tag (Marko parity)", async () => {

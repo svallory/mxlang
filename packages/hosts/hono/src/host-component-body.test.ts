@@ -188,7 +188,7 @@ const MX_OWN: Array<[string, string, string]> = [
   [
     "a define call",
     `<define/D|{ content }|><${D}{content}/></define>\n<D>${D}{input.count}</D>`,
-    "return (<>{D({ content: () => <>{input.count}{null}</> })}</>);",
+    "return (<>{__mxDef_D({ content: () => <>{input.count}{null}</> })}</>);",
   ],
   [
     "an authored dynamic tag with tag params",

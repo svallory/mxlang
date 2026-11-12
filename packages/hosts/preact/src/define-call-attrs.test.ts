@@ -103,7 +103,7 @@ describe("preact: a <define> call passes its attributes as the first param", () 
       "<define/Row|p|><li>${p.n}</li></define>\n<ul><Row n=1/></ul>",
       "/fixtures/row.mx",
     ).code;
-    expect(code).toContain('{Row({ "n": 1 })}');
+    expect(code).toContain('{__mxDef_Row({ "n": 1 })}');
     expect(code).not.toContain("Row(undefined)");
   });
 

@@ -231,10 +231,12 @@ export function attributeHelpers(
  * `children` (the render function itself when the call has tag params). The
  * first argument is read the way the module preamble reads a component's
  * props, so the define body's `content` is the same slot either way. An
- * argument that already carries `content` is left alone.
+ * argument that already carries `content` is left alone. Only the define's
+ * value is wrapped: a direct MX call (`<Row(x)/>`) calls the function under
+ * its private name, so its arguments reach the body untouched.
  */
-const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {
-  return ((first?: any, ...rest: any[]) => {
+const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F, name: string): F {
+  const wrapped = ((first?: any, ...rest: any[]) => {
     if (first !== null && typeof first === "object" && first.content == null && first.children != null) {
       const body = first.children;
       first = {
@@ -249,6 +251,8 @@ const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F)
     }
     return fn(first, ...rest);
   }) as F;
+  Object.defineProperty(wrapped, "name", { value: name, configurable: true });
+  return wrapped;
 }`;
 
 /**
@@ -515,7 +519,6 @@ export function emitModuleWithMappings(
       for (const name of body.runtimeImports) {
         emitter.runtimeImports.add(name);
       }
-      for (const name of body.aliases) emitter.aliases.add(name);
       statements.push(
         emitter.defineStatement(node, rendered, body.varStatements),
       );

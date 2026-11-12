@@ -41,9 +41,9 @@ describe("preact: a <define> is scoped to the body that declares it", () => {
     );
     // One call per block: bare in the `<if>` arm (an expression slot), a JSX
     // child in the element and at the top level.
-    expect(code).toContain("{input.a ? Foo() : null}");
-    expect(code).toContain("<div>{Foo()}</div>");
-    expect(code.match(/Foo\(\)/g)).toHaveLength(3);
+    expect(code).toContain("{input.a ? __mxDef_Foo() : null}");
+    expect(code).toContain("<div>{__mxDef_Foo()}</div>");
+    expect(code.match(/__mxDef_Foo\(\)/g)).toHaveLength(3);
   });
 });
 
@@ -84,10 +84,10 @@ describe.each(HOSTS)(
       const code = await compile(
         "<define/Row><counter/x/>${x}</define><counter/x/><Row/>",
       );
-      const define = code.slice(code.indexOf("const Row"));
+      const define = code.slice(code.indexOf("const __mxDef_Row"));
       // Inside the define's function, ahead of the markup that reads `x`.
       expect(define).toMatch(
-        /const Row = __mxDefine\(\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(<>/,
+        /const __mxDef_Row = \(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(<>/,
       );
       // The component's own `/x` has its own temp, outside the define.
       expect(code.match(/const x = /g)).toHaveLength(2);
@@ -100,8 +100,8 @@ describe.each(HOSTS)(
         "<define/A><counter/x/>${x}</define><define/B><counter/y/>${y}</define><A/><B/>",
       );
       expect(code.match(/const __mxRet0 = /g)).toHaveLength(2);
-      expect(code).toMatch(/const A = __mxDefine\(\(\) => \{ const __mxRet0/);
-      expect(code).toMatch(/const B = __mxDefine\(\(\) => \{ const __mxRet0/);
+      expect(code).toMatch(/const __mxDef_A = \(\) => \{ const __mxRet0/);
+      expect(code).toMatch(/const __mxDef_B = \(\) => \{ const __mxRet0/);
       expect(() => parseTsx(code)).not.toThrow();
     });
 
@@ -143,7 +143,17 @@ describe.each(HOSTS)(
         compile(
           "<define/Row|c|>${c}</define><Row><counter/x/>${x}</Row><counter/x/>",
         ),
-      ).rejects.toThrow(/Duplicate declaration|not in scope|not supported/);
+      ).rejects.toMatchObject({
+        message: 'Duplicate declaration "x"',
+        line: 1,
+        column: 64,
+      });
+    });
+
+    it("an outer /x declared before a body's own /x is refused by core (only body-first compiles)", async () => {
+      await expect(
+        compile("<counter/x/><${input.tag}><counter/x/>${x}</>${x}"),
+      ).rejects.toThrow("not in scope here");
     });
   },
 );
@@ -157,7 +167,8 @@ describe("typedDefineParam", () => {
     ["a: string", "a: string"],
     ["a = 1", "a = 1"],
     ["{ a = 1 }", "{ a = 1 }: any"],
-    ["{ a } = {}", "{ a } = {}"],
+    ["{ a } = {}", "{ a }: any = {}"],
+    ["[a] = []", "[a]: any = []"],
     ["...r: string[]", "...r: string[]"],
   ])("%s -> %s", (param, typed) => {
     expect(typedDefineParam(param)).toBe(typed);

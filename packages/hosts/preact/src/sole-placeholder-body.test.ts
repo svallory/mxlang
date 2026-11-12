@@ -126,27 +126,27 @@ const CASES: Array<[string, string, string]> = [
   [
     "a define call with a lone placeholder body",
     `${DEF}<Box>${D}{input.y}</Box>`,
-    "return (<>{Box({ content: () => <>{input.y}{null}</> })}</>);",
+    "return (<>{__mxDef_Box({ content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a define call with a lone placeholder body and tag params",
     `${DEF_ARGS}<Box|n|>${D}{n}</Box>`,
-    "return (<>{Box({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
+    "return (<>{__mxDef_Box({ content: ((n) => <>{n}{null}</>) as (...args: any[]) => any })}</>);",
   ],
   [
     "a define call with tag params and a comment-only body (no content)",
     `${DEF_ARGS}<Box|n|><!-- c --></Box>`,
-    "return (<>{Box({  })}</>);",
+    "return (<>{__mxDef_Box({  })}</>);",
   ],
   [
     "a define call with arguments and a lone placeholder body",
     `<define/Row|n, { content }|><b><${D}{content}/></b></define>\n<Row(1)>${D}{input.y}</Row>`,
-    "return (<>{Row(1, { content: () => <>{input.y}{null}</> })}</>);",
+    "return (<>{__mxDef_Row(1, { content: () => <>{input.y}{null}</> })}</>);",
   ],
   [
     "a define call with a lone placeholder body in an <if>",
     `${DEF}<if=input.a><Box>${D}{input.y}</Box></if>`,
-    "return (<>{input.a ? Box({ content: () => <>{input.y}{null}</> }) : null}</>);",
+    "return (<>{input.a ? __mxDef_Box({ content: () => <>{input.y}{null}</> }) : null}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body",
@@ -198,7 +198,7 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a placeholder next to text in a define call body",
     `${DEF}<Box>${D}{input.y} x</Box>`,
-    "return (<>{Box({ content: () => <><>{input.y} x</></> })}</>);",
+    "return (<>{__mxDef_Box({ content: () => <><>{input.y} x</></> })}</>);",
   ],
   [
     "a lone placeholder as the only child of an <if> (an expression slot)",

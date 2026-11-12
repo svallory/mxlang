@@ -162,7 +162,7 @@ describe("region rule", () => {
       ),
     ).toEqual({
       message:
-        "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
+        "`<define>` inside `<for>`, `<if>`, an attribute-tag body, a dynamic-tag body, a `<try>` body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
       line: 6,
       column: 8,
     });
@@ -311,7 +311,7 @@ describe("region rule", () => {
         ),
       ).toEqual({
         message:
-          "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
+          "`<define>` inside `<for>`, `<if>`, an attribute-tag body, a dynamic-tag body, a `<try>` body or a `<define>` body cannot be lifted out of it in a `.react.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
         line: 5,
         column: 18,
       });
