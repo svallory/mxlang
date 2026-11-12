@@ -97,6 +97,7 @@ import {
   newCtx,
   positionAtOffset,
   positionError,
+  byPosition,
   productOf,
   raise,
   raiseWithFixes,
@@ -5968,7 +5969,11 @@ function dataFileRefusal(
 }
 
 /** Retains authored names and groups transparent control flow without lowering its contents. */
-function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
+function authoredChildTree(
+  ctx: Ctx,
+  children: readonly Node[],
+  refused?: Node[],
+): ChildNode[] {
   const tree: ChildNode[] = [];
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
@@ -6006,7 +6011,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         tree.push(
           ended({
             kind: "ChildFor",
-            nodes: authoredChildTree(ctx, bodyChildren(node)),
+            nodes: authoredChildTree(ctx, bodyChildren(node), refused),
             loc,
           }),
         );
@@ -6014,7 +6019,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         const branches = [
           {
             unconditional: false,
-            nodes: authoredChildTree(ctx, bodyChildren(node)),
+            nodes: authoredChildTree(ctx, bodyChildren(node), refused),
           },
         ];
         let cursor = index + 1;
@@ -6034,7 +6039,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
             branchName === "else" && !attrByName(branch, "if");
           branches.push({
             unconditional,
-            nodes: authoredChildTree(ctx, bodyChildren(branch)),
+            nodes: authoredChildTree(ctx, bodyChildren(branch), refused),
           });
           index = cursor++;
           if (unconditional) break;
@@ -6047,7 +6052,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           branches: [
             {
               unconditional: false,
-              nodes: authoredChildTree(ctx, bodyChildren(node)),
+              nodes: authoredChildTree(ctx, bodyChildren(node), refused),
             },
           ],
           loc,
@@ -6059,7 +6064,10 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         // always lowered), and the real error wins: the parent's contract does
         // not report it as a tag it does not allow first. `else` and
         // `else-if` are branches, handled above.
-        if (dataFileRefusal(ctx, name)) continue;
+        if (dataFileRefusal(ctx, name)) {
+          refused?.push(node);
+          continue;
+        }
         rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
@@ -6325,7 +6333,8 @@ function lowerCustomTagBody(
       node,
     );
   }
-  const childTree = authoredChildTree(ctx, children);
+  const refusedNodes: Node[] = [];
+  const childTree = authoredChildTree(ctx, children, refusedNodes);
   // A transform may consume its body, so the IR check cannot be left to
   // report a `for` or `if` in it.
   const rejected = firstFailure(() => {
@@ -6347,27 +6356,25 @@ function lowerCustomTagBody(
   // of the contract's tree, and it is its own error: raised beside the
   // contract's, so the contract failing on something else does not hide it.
   // When nothing else fails the body is lowered and raises it there.
-  const refused = (rejected || contract ? children : []).flatMap((child) => {
-    const refusal = isTagNode(child)
-      ? dataFileRefusal(ctx, tagNameOf(child) as string)
-      : undefined;
+  const refused = (rejected || contract ? refusedNodes : []).flatMap((child) => {
+    const refusal = dataFileRefusal(ctx, tagNameOf(child) as string);
     const error = refusal
       ? firstFailure(() =>
           raiseDisposition(ctx, tagNameOf(child) as string, refusal, child),
         )
       : undefined;
+    // Positioned here: a refusal on an MX node carries only a span, and the
+    // sort below compares lines.
+    if (error) positionError(ctx, error);
     return error ? [error] : [];
   });
   // Of the body's own checks the one written first is the one reported; a
   // refused child is reported beside it, in position order.
   const own = [rejected, contract]
     .filter((error) => error !== undefined)
-    .sort((a, b) => a.line - b.line || a.column - b.column)[0];
+    .sort(byPosition)[0];
   if (own) {
-    const all = [own, ...refused].sort(
-      (a, b) => a.line - b.line || a.column - b.column,
-    );
-    const [failure, ...later] = all;
+    const [failure, ...later] = [own, ...refused].sort(byPosition);
     if (failure) {
       attachRelatedErrors(failure, later);
       throw failure;

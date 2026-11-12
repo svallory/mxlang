@@ -354,6 +354,66 @@ describe("analyze hooks of several tags", () => {
     ]);
   });
 
+  it("sorts an error that names the compiled file with one that does not by position", () => {
+    const COMPILED = "/u.mx";
+    const box = {
+      analyze: () => {
+        const main = new TranslateError("main box", 1, 0);
+        const named = new TranslateError("named", 2, 0, COMPILED);
+        main.errors = [main, named];
+        throw main;
+      },
+    };
+    let thrown: TranslateError | undefined;
+    try {
+      compileSource(
+        "<box/>\n<p/>\n<crate/>\n",
+        COMPILED,
+        { tags: {}, isElement: () => true, isComponent: () => false },
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            box: { transform: () => [], ...box },
+            crate: { transform: () => [], ...failing("crate") },
+            p: { transform: () => [] },
+          } as unknown as Record<string, CustomTag>,
+        },
+      );
+    } catch (error) {
+      thrown = error as TranslateError;
+    }
+    expect((thrown?.errors ?? []).map((e) => e.line)).toEqual([1, 2, 3]);
+  });
+
+  it("copies the one error a single failing hook threw", () => {
+    const kept = new TranslateError("kept", 1, 0);
+    let thrown: TranslateError | undefined;
+    try {
+      compileSource(
+        "<box/>\n",
+        "/u.mx",
+        { tags: {}, isElement: () => true, isComponent: () => false },
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            box: {
+              transform: () => [],
+              analyze: () => {
+                throw kept;
+              },
+            },
+          } as unknown as Record<string, CustomTag>,
+        },
+      );
+    } catch (error) {
+      thrown = error as TranslateError;
+    }
+    expect(thrown?.message).toContain("kept");
+    expect(thrown).not.toBe(kept);
+  });
+
   it("keeps the related errors a failing hook carries", () => {
     const related = (line: number) =>
       new TranslateError(`related at ${line}`, line, 0);

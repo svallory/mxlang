@@ -459,6 +459,23 @@ describe("where `<script>` is not a raw-text tag", () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it("reads a `<script>` body as script text under the `markup` tag rules", () => {
+    // Unlike `none`, `markup` keeps `<script>` raw: the body is TypeScript, so
+    // markup in it is the JSX error. `<html-script>` is an ordinary tag there.
+    const { diagnostics } = lowerSource(
+      "<script><b>x</b></script>",
+      "/f/t.mx",
+      { tagRules: "markup", structural: "pass" },
+    );
+    expect(diagnostics.map((d) => d.code)).toEqual(["MX_INVALID_STATEMENT"]);
+    const ordinary = lowerSource(
+      "<html-script><b>x</b></html-script>",
+      "/f/t.mx",
+      { tagRules: "markup", structural: "pass" },
+    );
+    expect(JSON.stringify(ordinary.ir)).toContain('"name":"b"');
+  });
+
   it("parses `<b>` in a `<script>` as a tag under the `none` tag rules", () => {
     // Raw text would keep `<b>x</b>` as the script's text: a tag it is not.
     const { ir, diagnostics } = lowerSource(

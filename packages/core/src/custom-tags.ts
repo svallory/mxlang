@@ -21,9 +21,13 @@ import {
 } from "./contract-fields.ts";
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
+  attachRelatedErrors,
+  byPosition,
+  carryPositioning,
   codedError,
   endErrorAt,
   isTranslateError,
+  relatedErrorsOf,
   TranslateError,
   warn,
 } from "./core.ts";
@@ -3917,8 +3921,27 @@ export function runAnalyzeHooks(
       );
     }
   }
+  // Copies, not the objects the hooks threw: a hook may throw an error it
+  // keeps (a module-level one), which this and the positioning after it must
+  // not change for later compiles.
+  const copyOf = (error: TranslateError): TranslateError => {
+    const copy = Object.create(Object.getPrototypeOf(error)) as TranslateError;
+    Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
+    delete (copy as { errors?: unknown }).errors;
+    const occurrence = tagOccurrenceOf(error);
+    if (occurrence !== undefined) occurrences.set(copy, occurrence);
+    carryPositioning(error, copy);
+    return copy;
+  };
   const [only] = failures;
-  if (failures.length === 1 && only) throw only;
+  if (failures.length === 1 && only) {
+    const copy = copyOf(only);
+    attachRelatedErrors(copy, relatedErrorsOf(only));
+    if (only.errors) {
+      copy.errors = only.errors.map((each) => (each === only ? copy : each));
+    }
+    throw copy;
+  }
   if (failures.length > 1) {
     // The primary is the earliest failure in the compiled file: a related
     // error positioned in another file never leads. The list is the primary,
@@ -3926,10 +3949,8 @@ export function runAnalyzeHooks(
     // carried) in the compiled file first, then by file, line and column. Only
     // the primary carries the list, so no member's own `errors` repeats or
     // cycles through it.
-    const inFile = (e: TranslateError) =>
-      e.file === undefined || e.file === ctx.filename;
-    const byPosition = (a: TranslateError, b: TranslateError) =>
-      a.line - b.line || a.column - b.column;
+    const fileOf = (e: TranslateError) => e.file ?? ctx.filename;
+    const inFile = (e: TranslateError) => fileOf(e) === ctx.filename;
     const primary =
       failures.filter(inFile).sort(byPosition)[0] ??
       [...failures].sort(byPosition)[0];
@@ -3940,21 +3961,9 @@ export function runAnalyzeHooks(
     members.sort(
       (a, b) =>
         Number(!inFile(a)) - Number(!inFile(b)) ||
-        (a.file ?? "").localeCompare(b.file ?? "") ||
+        fileOf(a).localeCompare(fileOf(b)) ||
         byPosition(a, b),
     );
-    // Copies, not the objects the hooks threw: a hook may throw an error it
-    // keeps (a module-level one), which this must not change for later compiles.
-    const copyOf = (error: TranslateError): TranslateError => {
-      const copy = Object.create(
-        Object.getPrototypeOf(error),
-      ) as TranslateError;
-      Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
-      delete (copy as { errors?: unknown }).errors;
-      const occurrence = tagOccurrenceOf(error);
-      if (occurrence !== undefined) occurrences.set(copy, occurrence);
-      return copy;
-    };
     const lead = copyOf(primary);
     lead.errors = [lead, ...members.map(copyOf)];
     throw lead;

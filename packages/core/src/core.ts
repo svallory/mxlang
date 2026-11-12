@@ -896,8 +896,23 @@ export function attachRelatedErrors(
   related: readonly TranslateError[],
 ): void {
   if (related.length === 0) return;
-  relatedErrors.set(error, related);
-  if (error.errors === undefined) error.errors = [error, ...related];
+  // Additive: what an error already carries stays, in order, and a late
+  // arrival is appended once.
+  const merged = [...(relatedErrors.get(error) ?? [])];
+  for (const each of related) if (!merged.includes(each)) merged.push(each);
+  relatedErrors.set(error, merged);
+  if (error.errors === undefined) {
+    error.errors = [error, ...merged];
+  } else {
+    const list = [...error.errors];
+    for (const each of merged) if (!list.includes(each)) list.push(each);
+    error.errors = list;
+  }
+}
+
+/** Orders errors by position: line, then column. Position them first. */
+export function byPosition(a: TranslateError, b: TranslateError): number {
+  return a.line - b.line || a.column - b.column;
 }
 
 /** The errors attached to `error` with {@link attachRelatedErrors}. */
@@ -916,7 +931,7 @@ export function collectedError(
 ): TranslateError {
   const [first, ...rest] = errors;
   if (!first) throw new Error("@mxlang/core: no recorded error to throw");
-  rest.sort((a, b) => a.line - b.line || a.column - b.column);
+  rest.sort(byPosition);
   first.errors = [first, ...rest];
   return first;
 }
@@ -1190,6 +1205,20 @@ export function endErrorAt(
   if (offset === undefined || !Number.isFinite(offset)) return;
   if (error.end !== undefined) return;
   spanEnds.set(error, offset);
+}
+
+/**
+ * Hands `from`'s pending positioning (an unplaced span, a recorded end offset)
+ * to `to`, a copy of it, so `positionError` places the copy as it would have
+ * the original. Internal.
+ */
+export function carryPositioning(
+  from: TranslateError,
+  to: TranslateError,
+): void {
+  if (unpositioned.has(from)) unpositioned.add(to);
+  const end = spanEnds.get(from);
+  if (end !== undefined) spanEnds.set(to, end);
 }
 
 /** `endErrorAt`'s offset as `error.end`, when the error is in this file. */

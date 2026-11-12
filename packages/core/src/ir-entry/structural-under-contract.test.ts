@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { CustomTag } from "../custom-tags.ts";
 import memberSyntax from "../fixtures/syntax/member-fixture.ts";
+import { compileSource } from "../compile.ts";
+import type { TranslateError } from "../core.ts";
+import { lookup as targets } from "../test-targets.ts";
+import { entryDeclarations } from "./declarations.ts";
 import { lowerSource } from "./index.ts";
 
 /**
@@ -1031,9 +1035,71 @@ describe("structural: reject, which construct is named", () => {
         },
       },
     );
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_MISSING_CHILD", 1, 0],
+      ["MX_NOT_IN_DATA_FILE", 2, 2],
+    ]);
+  });
+
+  const needsItem = {
+    entity: { children: { item: { required: true } } },
+    item: {},
+  };
+
+  it("a refused `<try>` inside an `<if>` is reported beside a failing contract", () => {
+    const result = lowerSource(
+      "<entity>\n  <if=x>\n    <try>x</try>\n  </if>\n</entity>\n",
+      "/t.mx",
+      { ...options, customTags: needsItem },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["MX_MISSING_CHILD", 1, 0],
+      ["MX_NOT_IN_DATA_FILE", 3, 4],
+    ]);
+  });
+
+  it("a refused `<try>` in a `<for>` and a `<return>` in an `<else>` are reported too", () => {
+    const result = lowerSource(
+      "<entity>\n  <for|i| of=xs>\n    <try>x</try>\n  </for>\n  <if=x/>\n  <else>\n    <return/>\n  </else>\n</entity>\n",
+      "/t.mx",
+      { ...options, structural: "pass", customTags: needsItem },
+    );
     expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
       ["MX_MISSING_CHILD", 1],
-      ["MX_NOT_IN_DATA_FILE", 2],
+      ["MX_NOT_IN_DATA_FILE", 3],
+      ["MX_NOT_IN_DATA_FILE", 7],
+    ]);
+  });
+
+  it("the error a compile throws is the contract's; the refusal follows in `errors`", () => {
+    let thrown: TranslateError | undefined;
+    try {
+      compileSource(
+        "<entity>\n  <try>x</try>\n</entity>\n",
+        "/t.mx",
+        entryDeclarations(new Map()),
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            entity: {
+              transform: () => [],
+              children: { item: { required: true } },
+            },
+            item: { transform: () => [] },
+          } as unknown as Record<string, CustomTag>,
+        },
+      );
+    } catch (error) {
+      thrown = error as TranslateError;
+    }
+    expect(thrown?.diagnosticCode).toBe("MX_MISSING_CHILD");
+    expect(thrown?.line).toBe(1);
+    expect(
+      (thrown?.errors ?? []).map((e) => [e.diagnosticCode, e.line, e.column]),
+    ).toEqual([
+      ["MX_MISSING_CHILD", 1, 0],
+      ["MX_NOT_IN_DATA_FILE", 2, 2],
     ]);
   });
 

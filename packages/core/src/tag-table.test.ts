@@ -315,11 +315,20 @@ describe("withRawTextParseOptions", () => {
     expect(view.getTag("nothing")).toBeUndefined();
   });
 
-  it("keeps html-script a built-in for the wildcard check, as the bare table does", () => {
-    for (const lookup of [base, view]) {
+  it("reads html-script as a native element on a real translator's table, bare or viewed", () => {
+    const translator = createTranslator({ emitIr: () => "" } as never);
+    const bare = tagTable(translator, WEB_ELEMENTS);
+    const viewed = withRawTextParseOptions(bare);
+    // The bare table does not know the name; the view makes it an element.
+    expect(bare.getTag("html-script")).toBeUndefined();
+    expect(
+      ELEMENT_TAGLIB_IDS.has(viewed.getTag("html-script")?.taglibId ?? ""),
+    ).toBe(true);
+    for (const lookup of [bare, viewed]) {
       expect(
         wildcardIneligibility("html-script", { tagTable: lookup } as never),
       ).toBe("built-in");
     }
+    expect(viewed.getTag("html-script")?.parseOptions).toEqual(coreOptions);
   });
 });
