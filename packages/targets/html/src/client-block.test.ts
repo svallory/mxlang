@@ -7,7 +7,8 @@
  * source (probed with `stockMarkoCompile` in `packages/stock-marko`; the
  * `client-block-hoisted` fixture in `fixtures-marko` locks the render).
  */
-import { describe, expect, it } from "vitest";
+import * as babelParser from "@babel/parser";
+import { describe, expect, it, vi } from "vitest";
 import { compile, mx } from "./index.ts";
 
 /** The hoisted module code: what sits between the runtime import and `export interface Input`. */
@@ -935,6 +936,52 @@ describe("html typeCheck: the client arrow shadows the names a server statement 
     const code = typeCheck(source);
     expect(code).toContain("(false && fmt(q), q)");
     expect(code).not.toContain("__mxRefine_fmt");
+  });
+
+  it("a namespace holding only a non-exported import alias gets no refinement alias", () => {
+    const code = typeCheck(
+      "client namespace N { import T = Other.T }\n<let/q=1/>\n<input value:N:=q/>\n",
+    );
+    expect(code).not.toContain("const __mxRefine_N");
+  });
+
+  it("only a typeCheck compile parses the names a server statement declares", () => {
+    // The projection's own parse is the one that allows a top-level `return`.
+    const projectionParses = (spy: { mock: { calls: unknown[][] } }) =>
+      spy.mock.calls.filter(
+        ([, options]) =>
+          (options as { allowReturnOutsideFunction?: boolean } | undefined)
+            ?.allowReturnOutsideFunction,
+      ).length;
+    const parse = vi.spyOn(babelParser, "parse");
+    try {
+      compile("server const s = 1;\n<div>${s}</div>\n", "/f/t.mx");
+      expect(projectionParses(parse)).toBe(0);
+      compile("server const s = 1;\n<div>${s}</div>\n", "/f/t.mx", {
+        typeCheck: true,
+      });
+      expect(projectionParses(parse)).toBe(1);
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  it("a server const and a client loop head of one name are not merged", () => {
+    const code = typeCheck(
+      "server const item = 1;\nclient for (const item of [1]) {}\n<div/>\n",
+    );
+    expect(code.slice(0, code.indexOf("(async () => {"))).toContain(
+      "var item: undefined",
+    );
+  });
+
+  it("a server var and a client loop head of one name are merged", () => {
+    const code = typeCheck(
+      "server var item = 1;\nclient for (const item of [1]) {}\n<div/>\n",
+    );
+    expect(code.slice(0, code.indexOf("(async () => {"))).not.toContain(
+      "var item: undefined",
+    );
   });
 
   it("a type-only namespace gets no refinement alias", () => {

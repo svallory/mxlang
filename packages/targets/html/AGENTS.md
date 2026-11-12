@@ -123,7 +123,10 @@ name a `client` statement declares too (two `var`s, a `for (var …)` or a `var`
 a nested block, merged enums or namespaces, which core accepts, with a `server`,
 `static` or `export` statement) exists on both sides and is not shadowed, nor is
 the `var q: undefined` of the module's server view when a `server`, `static`
-or `export` statement declares it. The module's `var q: undefined` mirrors the
+or `export` statement declares it as a `var`, enum or instantiated namespace (the
+runtime's `var q;` is a SyntaxError next to a `const`, `let`, `class`,
+`function` or `import` of that name, so the view keeps its shadow and reports
+the clash). The module's `var q: undefined` mirrors the
 runtime's own `var` list (top-level loop heads and labels included, nested
 `var`s not); the arrow's exclusion follows value scope (labels and loop heads
 are not names, a nested `var` is one). At the head of the render

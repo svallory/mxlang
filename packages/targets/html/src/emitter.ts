@@ -72,6 +72,7 @@ import {
   escapeComment,
   escapeScript,
   moduleValueNames,
+  serverDeclaredNames,
 } from "./translate.ts";
 
 const INDENT = "  ";
@@ -136,6 +137,8 @@ interface State {
   clientNames: string[];
   /** Under `typeCheck`, every name a `server` statement declares. */
   serverDeclared: string[];
+  /** Under `typeCheck`, the `var`-kind names a `server` statement declares. */
+  serverVars: string[];
   /**
    * Under `typeCheck`, the value names `client` imports, namespaces and
    * `declare` forms bind at module level.
@@ -210,6 +213,7 @@ export function createEmitter(
     moduleHoisted: [],
     clientBody: [],
     serverDeclared: [],
+    serverVars: [],
     clientHoisted: [],
     clientScope: [],
     clientRuntime: [],
@@ -603,26 +607,11 @@ export function createEmitter(
   };
 
   /**
-   * One attribute into the open tag.
-   *
-   * Static values are baked into the literal and escaped at compile time, so
-   * the emitted double-quoted style is independent of the author's quoting — a
-   * single-quoted `title='a" onerror="…'` cannot close the attribute early.
-   * A spread emits a runtime loop that validates each key.
-   */
-  /**
-   * An attribute's value expression. A refined bound attribute (`v:fn:=q`)
-   * renders as the unrefined one: Marko's change handler (`q = fn(next)`) is
-   * client-only and this target renders once. Under `typeCheck` (the tooling
-   * projection; never the module that runs) the value is `(false && fn(q), q)`,
-   * so `fn` applied to the bound value's type is checked and mapped to the
-   * modifier.
-   */
-  /**
    * Notes the names a parameter list or pattern binds, so a refinement of one
    * reads the template's own binding, not a `client` import of that name.
    */
   const bindNames = (text: string): void => {
+    if (!options.typeCheck) return;
     for (const name of boundNames(text)) state.templateBindings.add(name);
   };
 
@@ -632,6 +621,14 @@ export function createEmitter(
     return `const ${name} = `;
   };
 
+  /**
+   * An attribute's value expression. A refined bound attribute (`v:fn:=q`)
+   * renders as the unrefined one: Marko's change handler (`q = fn(next)`) is
+   * client-only and this target renders once. Under `typeCheck` (the tooling
+   * projection; never the module that runs) the value is `(false && fn(q), q)`,
+   * so `fn` applied to the bound value's type is checked and mapped to the
+   * modifier.
+   */
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
     if (!options.typeCheck || attr.kind !== "bound" || !attr.refinement) {
       return mappedExpr(attr.value);
@@ -645,7 +642,7 @@ export function createEmitter(
     }
     return concatMapped(
       "(false && ",
-      options.refinementAliases?.has(name) && !state.templateBindings.has(name)
+      options.refinementAliases?.has(name)
         ? mapped(`__mxRefine_${name}`, attr.refinement.span ?? null)
         : mappedExpr(attr.refinement),
       `(${attr.value.code}), `,
@@ -654,6 +651,14 @@ export function createEmitter(
     );
   };
 
+  /**
+   * One attribute into the open tag.
+   *
+   * Static values are baked into the literal and escaped at compile time, so
+   * the emitted double-quoted style is independent of the author's quoting — a
+   * single-quoted `title='a" onerror="…'` cannot close the attribute early.
+   * A spread emits a runtime loop that validates each key.
+   */
   const attribute = (attr: Attr, tag = ""): void => {
     // Spreads are written by `elementAttributes`, never one at a time.
     if (attr.kind === "spread") return;
@@ -1519,8 +1524,11 @@ export function createEmitter(
         // server module (every name it declares is `undefined`, none is
         // exported) and the client code, kept in a function of its own. The
         // module that runs keeps the `var` of its names.
-        if (options.typeCheck && data.declaredNames) {
-          state.serverDeclared.push(...data.declaredNames);
+        if (options.typeCheck && !data.typeCheck) {
+          // A `server` statement (a `client` one carries its projection).
+          const names = serverDeclaredNames(data.code, data.span);
+          state.serverDeclared.push(...names.all);
+          state.serverVars.push(...names.vars);
         }
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
@@ -1961,13 +1969,19 @@ export function emitModuleWithMappings(
   // The names the `static` and `export` statements declare: a `client`
   // statement of the same name merges with them, so the name exists in both
   // views.
-  const moduleDeclared = new Set(
-    options.typeCheck
-      ? ir.hoisted.flatMap((node) =>
-          node.code === "" ? [] : moduleValueNames(node.code, node.span),
-        )
-      : [],
-  );
+  const moduleNames = options.typeCheck
+    ? ir.hoisted.map((node) =>
+        node.code === ""
+          ? { all: [], vars: [] }
+          : moduleValueNames(
+              node.code,
+              node.span,
+              node.kind === "Export" ? "export" : "static",
+            ),
+      )
+    : [];
+  const moduleDeclared = new Set(moduleNames.flatMap((names) => names.all));
+  const moduleVars = new Set(moduleNames.flatMap((names) => names.vars));
   let emitter = createEmitter(name, options);
   drive(emitter, ir.body);
   // A refinement that names a `client` import reads an alias of the real
@@ -1985,9 +1999,12 @@ export function emitModuleWithMappings(
   );
   const mergedNames = new Set(
     emitter.state.clientRuntime.filter(
+      // The runtime's `var q;` merges only with another `var`-kind
+      // declaration (a `var`, enum or instantiated namespace): next to a
+      // `const`, `let`, `class`, `function` or `import` it is a SyntaxError,
+      // and the server view keeps its `var q: undefined` to report the clash.
       (client) =>
-        emitter.state.serverDeclared.includes(client) ||
-        moduleDeclared.has(client),
+        emitter.state.serverVars.includes(client) || moduleVars.has(client),
     ),
   );
   if (refinementAliases.size > 0 || mergedNames.size > 0) {

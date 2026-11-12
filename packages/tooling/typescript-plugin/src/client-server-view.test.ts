@@ -212,6 +212,12 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     ).toEqual([]);
   });
 
+  it("a server const and a client loop head of one name report the redeclaration", () => {
+    const source =
+      "server const item = 1;\nclient for (const item of [1]) {}\n<div/>\n";
+    expect(errorsOf({ [FILE]: source }, FILE).length).toBeGreaterThan(0);
+  });
+
   it("KNOWN LIMIT: a refinement naming a client-body function reads undefined", () => {
     const source =
       "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";

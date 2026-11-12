@@ -626,7 +626,8 @@ function instantiated(ns: Node): boolean {
       case "TSModuleDeclaration":
         return instantiated(inner);
       case "TSImportEqualsDeclaration":
-        return inner.importKind !== "type";
+        // An alias that is not exported does not instantiate the namespace.
+        return inner.isExport === true && inner.importKind !== "type";
       default:
         return !(inner.type === "TSEnumDeclaration" && inner.const);
     }
@@ -686,14 +687,69 @@ function varScopedNames(node: unknown, found: string[] = []): string[] {
  * server view's merges with `client` statements (core lets two `var`s, enums
  * and namespaces of different statements merge).
  */
-export function moduleValueNames(code: string, span?: SourceSpan): string[] {
+export function moduleValueNames(
+  code: string,
+  span?: SourceSpan,
+  keyword: "static" | "export" | "server" = "static",
+): DeclaredNames {
   // The emitter has no Marko node: a stub carrying the statement's span makes
   // a parse failure (a gap between core's check and this parse) a positioned
-  // TranslateError at the statement.
+  // TranslateError at the statement. No input is known that core's parser
+  // accepts and this one rejects, so no row pins the error.
   const at = (
     span ? { span: { start: span.sourceStart, end: span.sourceEnd } } : {}
   ) as Node;
-  return valueNames(parseClientStatements(code, at, "static"));
+  const nodes = parseClientStatements(code, at, keyword);
+  return { all: valueNames(nodes), vars: varKindNames(nodes) };
+}
+
+/**
+ * The names a `server` statement declares, or none when its text does not
+ * parse here. Only the typeCheck view reads them (the emitter calls this under
+ * `typeCheck` alone), for its merges and shadows; core's parser (the MX Babel
+ * fork) may accept text this stock parse rejects, and a failure must only lose
+ * a merge exclusion, never fail a build.
+ */
+export function serverDeclaredNames(
+  code: string,
+  span?: SourceSpan,
+): DeclaredNames {
+  try {
+    return moduleValueNames(code, span, "server");
+  } catch {
+    return { all: [], vars: [] };
+  }
+}
+
+/** Every value name a module statement list declares, and those of `var` kind. */
+export interface DeclaredNames {
+  all: string[];
+  /**
+   * The names that merge with the runtime's `var q;` of a `client` statement:
+   * `var`s (nested ones too), enums and instantiated namespaces. Next to a
+   * `const`, `let`, `class`, `function` or `import` the runtime's `var` is a
+   * SyntaxError, so those names are not merged.
+   */
+  vars: string[];
+}
+
+function varKindNames(nodes: Node[]): string[] {
+  const names = new Set(varScopedNames(nodes));
+  for (const node of nodes) {
+    const inner =
+      node.type === "ExportNamedDeclaration" && node.declaration
+        ? node.declaration
+        : node;
+    if (inner.declare) continue;
+    if (inner.type === "TSEnumDeclaration" && inner.id?.name) {
+      names.add(inner.id.name);
+    } else if (inner.type === "TSModuleDeclaration") {
+      if (inner.global || inner.kind === "global") continue;
+      const name = leftmostName(inner.id);
+      if (name && instantiated(inner)) names.add(name);
+    }
+  }
+  return [...names];
 }
 
 /**
@@ -707,20 +763,6 @@ export function boundNames(text: string): string[] {
       plugins: [["typescript", { dts: false }]],
     }) as Node;
     return (fn.params ?? []).flatMap((param: Node) => bindingNames(param));
-  } catch {
-    return [];
-  }
-}
-
-/**
- * The names a `server` statement declares, or none when its text does not
- * parse here. The names only feed the typeCheck view's merges, and core's
- * parser (the MX Babel fork) may accept text this stock parse rejects: a
- * failure here must never fail a build, it only loses a merge exclusion.
- */
-function tryValueNames(code: string, node: Node): string[] {
-  try {
-    return valueNames(parseClientStatements(code, node, "server"));
   } catch {
     return [];
   }
@@ -1098,12 +1140,6 @@ export type DelegatedTagData =
       start: number | undefined;
       span: SourceSpan | undefined;
       typeCheck?: ClientProjection;
-      /**
-       * The names a `server` statement declares, read while the statement is
-       * resolved: they do not exist in the browser, so the client view
-       * shadows them.
-       */
-      declaredNames?: string[];
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -1194,11 +1230,6 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
-      // Parsed on every compile, though only the typeCheck projection reads
-      // it: the resolve context carries no typeCheck flag. A parse failure
-      // yields no names and never fails a build (`tryValueNames`); no input
-      // is known that core's parser accepts and this one rejects.
-      declaredNames: tryValueNames(code, node),
     };
   }
 
