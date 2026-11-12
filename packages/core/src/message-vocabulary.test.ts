@@ -645,6 +645,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     option: [
       "`card`: option tag `head` may not appear inside `for`; registered custom tags cannot preserve option-tag control flow",
     ],
+    structural: "pass",
   },
   {
     name: "an attribute tag inside `if`",
@@ -655,6 +656,7 @@ const BUILTIN_ROWS: readonly BuiltinRow[] = [
     option: [
       "`card`: option tag `head` may not appear inside `if`; registered custom tags cannot preserve option-tag control flow",
     ],
+    structural: "pass",
   },
 ];
 

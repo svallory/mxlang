@@ -1,7 +1,7 @@
 /**
- * A host that declares `<script>` unsupported refuses the tag, and that
- * refusal is the tag's only diagnostic: the body is not parsed, and the head
- * and placeholder checks do not run. A host without the row keeps every
+ * A host that declares `<script>` unsupported or an error refuses the tag, and
+ * that refusal is the tag's only diagnostic: the body is not parsed, and the
+ * head and placeholder checks do not run. A host without the row keeps every
  * body error as it was.
  */
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
@@ -94,11 +94,15 @@ describe("a host without the unsupported row", () => {
   });
 });
 
-describe("a host whose <script> row is `error`, not `unsupported`", () => {
-  it("keeps the body error ahead of the refusal", () => {
-    const error = attempt(BAD_BODY, erroring);
-    expect(error?.diagnosticCode).not.toBe("MX_UNSUPPORTED_CONSTRUCT");
-    expect(error?.message).toContain("Unexpected token");
-    expect([error?.line, error?.column]).toEqual([1, 14]);
+describe("a host whose <script> row is `error`", () => {
+  it.each([
+    ["a body that does not parse", BAD_BODY],
+    ["a head the tag has no use for", "<script(x)>go()</script>"],
+    ["a placeholder in the body", "<script>go(${x})</script>"],
+  ])("%s: the host refusal is the only error", (_name, source) => {
+    const error = attempt(source, erroring);
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect(error?.message).toBe("No script here.");
+    expect([error?.line, error?.column]).toEqual([1, 0]);
   });
 });

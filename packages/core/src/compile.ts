@@ -77,6 +77,7 @@ import {
   type NativeTags,
   type TagTable,
   tagTable,
+  withRawTextParseOptions,
 } from "./tag-table.ts";
 import type { TargetLookup } from "./target-descriptor.ts";
 import { registerSyntax } from "./triggers.ts";
@@ -579,7 +580,12 @@ export function compileSource(
     // defaults to true for a build). `@marko/compiler` no longer parses.
     const document = parseMx(source, {
       syntax,
-      lookup,
+      // A tag-rules preset (`statementTags: false`) states the file's whole tag
+      // set itself, `none` among them: its `<script>` is an ordinary tag.
+      lookup:
+        rules || host.statementTags === false
+          ? lookup
+          : withRawTextParseOptions(lookup),
       dialect: resolvedSyntax.dialect,
     });
     const tableError = tableParseError(

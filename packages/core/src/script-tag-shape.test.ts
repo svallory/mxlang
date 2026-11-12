@@ -17,9 +17,12 @@
  * positions are 0-based columns, as here.
  */
 import { describe, expect, it } from "vitest";
+import { compileSource } from "./compile.ts";
+import type { TranslateError } from "./core.ts";
 import memberSyntax from "./fixtures/syntax/member-fixture.ts";
 import { lowerSource } from "./ir-entry/index.ts";
 import type { Dialect } from "./syntax-table.ts";
+import { lookup } from "./test-targets.ts";
 
 const CODE = "MX_INERT_TAG_SHAPE";
 
@@ -1061,5 +1064,66 @@ describe("a built-in <script> with a value or a body, not both, is not refused",
     ],
   ])("%s", (_label, source) => {
     expect(lower(source).diagnostics).toEqual([]);
+  });
+});
+
+/**
+ * A walk that throws stops at its first error, and stock Marko 6.4.4 reads the
+ * body before it checks the head: the placeholder, then the body's syntax, then
+ * the head and the attributes. Probed on the stock parser
+ * (`stockMarkoCompile`), 0-based columns as here. A walk that collects reports
+ * the head first and then the placeholder (see above).
+ */
+describe("the first error of a throwing compile follows stock's order", () => {
+  const declarations = {
+    tags: {},
+    isElement: () => true,
+    isComponent: () => false,
+  };
+
+  function thrown(source: string): TranslateError {
+    try {
+      compileSource(source, "/f/t.mx", declarations, {
+        targets: lookup,
+        emitIr: () => "",
+      });
+    } catch (error) {
+      return error as TranslateError;
+    }
+    throw new Error("expected an error");
+  }
+
+  it.each([
+    ["arguments and a placeholder", "<div/>\n<script(x)>a(${y})</script>", 13],
+    ["a variable and a placeholder", "<div/>\n<script/v>a(${y})</script>", 12],
+    [
+      "an attribute and a placeholder",
+      "<div/>\n<script async>a(${y})</script>",
+      16,
+    ],
+  ])("%s: the placeholder", (_label, source, column) => {
+    const error = thrown(source);
+    expect(error.diagnosticCode).toBe(CODE);
+    expect(error.message).toContain("`${…}` placeholder");
+    expect([error.line, error.column]).toEqual([2, column]);
+  });
+
+  it.each([
+    ["arguments", "<div/>\n<script(x)>const = 1;</script>", 17],
+    ["a variable", "<div/>\n<script/v>const = 1;</script>", 16],
+    ["an attribute", "<div/>\n<script async>const = 1;</script>", 20],
+  ])(
+    "%s and a body that does not parse: the body",
+    (_label, source, column) => {
+      const error = thrown(source);
+      expect(error.diagnosticCode).toBe("MX_INVALID_STATEMENT");
+      expect([error.line, error.column]).toEqual([2, column]);
+    },
+  );
+
+  it("the head alone is still the head", () => {
+    const error = thrown("<div/>\n<script(x)>a()</script>");
+    expect(error.diagnosticCode).toBe(CODE);
+    expect([error.line, error.column]).toEqual([2, 8]);
   });
 });

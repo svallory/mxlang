@@ -827,12 +827,15 @@ function isBuiltinScript(ctx: Ctx, tag: Node): boolean {
   );
 }
 
-/** Does the host declare `<script>` unsupported? Its refusal is then the tag's only diagnostic. */
+/**
+ * Does the host refuse `<script>`: a row of kind `unsupported` or `error`? Both
+ * rows say the tag is not accepted (`raiseDisposition` raises either one at the
+ * tag), so the refusal is the tag's only diagnostic.
+ */
 function hostRefusesScript(ctx: Ctx): boolean {
-  return (
-    Object.hasOwn(ctx.declarations.tags, "script") &&
-    ctx.declarations.tags.script?.kind === "unsupported"
-  );
+  if (!Object.hasOwn(ctx.declarations.tags, "script")) return false;
+  const kind = ctx.declarations.tags.script?.kind;
+  return kind === "unsupported" || kind === "error";
 }
 
 /**
@@ -948,6 +951,17 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     (child: Node) =>
       child.type === "MarkoPlaceholder" || child.type === "MxPlaceholder",
   );
+  const refusePlaceholder = (at: Node) =>
+    refuse(
+      `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`,
+      at,
+    );
+  // The first error a walk raises is the one a throwing compile reports, and
+  // stock Marko reads the body before it checks the head: the placeholder,
+  // then the body's syntax, then the head and attributes. A walk that
+  // collects still reports every one of them, in position order, head first.
+  if (placeholder) refusePlaceholder(placeholder);
+  checkScriptBodySyntax(ctx, tag);
   // The body is the tag's value when it holds statements or comments, as stock
   // counts it: whitespace and a directive (`'use strict'`) alone are none, and
   // a body that does not parse or holds a placeholder is refused for that.
@@ -1017,10 +1031,6 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
             },
       );
     }
-  }
-  if (placeholder) {
-    const message = `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`;
-    refuse(message, placeholder);
   }
 }
 
@@ -5662,6 +5672,7 @@ function validateCustomAttributeTagBodies(
   declarations: CustomTag["attributeTags"],
   allowUncontractedTags: boolean,
   controlName?: string,
+  outermostControl?: Node,
 ): void {
   const voice = voiceOfCtx(ctx);
   const children = bodyChildren(node);
@@ -5682,6 +5693,7 @@ function validateCustomAttributeTagBodies(
         declarations,
         allowUncontractedTags,
         attrName(tag) === "for" ? "for" : "if",
+        outermostControl ?? tag,
       );
       continue;
     }
@@ -5690,6 +5702,16 @@ function validateCustomAttributeTagBodies(
     const extended = hasAttributeTagContract(declaration);
     if (!allowUncontractedTags && !extended) {
       if (controlName) {
+        // Under `structural: "reject"` the construct is the error, whatever it
+        // holds: the outermost `<if>`/`<for>`, as when it holds anything else.
+        if (ctx.structural === "reject" && outermostControl) {
+          throw structuralConstructError(
+            attrName(outermostControl) === "for" ? "for" : "if",
+            posOf(ctx, outermostControl),
+            voice,
+            blameEndOffset(outermostControl),
+          );
+        }
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
           `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside ${tagText(ctx, controlName, node)}; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
@@ -5760,6 +5782,7 @@ function validateCustomAttributeTagBodies(
         declarations,
         allowUncontractedTags,
         tagNameOf(child) === "for" ? "for" : "if",
+        outermostControl ?? child,
       );
     }
   }
@@ -5969,6 +5992,18 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
       }
       const name = tagNameOf(node) as string;
       if (name === "const" || name === "define" || name.startsWith("@"))
+        continue;
+      // A name the host refuses as something a data file cannot hold (`try`,
+      // `return`) is that refusal when the child lowers, and the real error
+      // wins: the parent's contract does not report it as a tag it does not
+      // allow first.
+      const refusal = Object.hasOwn(ctx.declarations.tags, name)
+        ? ctx.declarations.tags[name]
+        : undefined;
+      if (
+        (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
+        refusal.code === NOT_IN_DATA_FILE_CODE
+      )
         continue;
       if (name === "for") {
         tree.push(
@@ -7808,8 +7843,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
             const errorsBefore = keepsPartialIr(ctx)
               ? ctx.errors?.length
               : undefined;
+            // Reads the body too: a placeholder, then its syntax, then the head.
             checkScriptShape(ctx, child);
-            checkScriptBodySyntax(ctx, child);
             if (ctx.tagRules !== "none" && isBuiltinScript(ctx, child)) {
               const program = scriptProgramOf(ctx, child);
               if (program) {

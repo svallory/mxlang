@@ -22,6 +22,7 @@ import {
 import type { Ctx, MxWarning, Node } from "./core.ts";
 import {
   codedError,
+  collectedError,
   endErrorAt,
   isTranslateError,
   TranslateError,
@@ -3861,6 +3862,11 @@ export function markValidatedContracts(
  * icons" are the same state to a `finalize` that reads an absent key, and
  * skipping keeps the store untouched so a tag cannot accidentally prepend a
  * sheet to a file that never called it.
+ *
+ * A tag whose `analyze` throws does not stop the others: every failure is
+ * collected and thrown together at the end (the first, carrying the rest; see
+ * `collectedError`). Inside one hook the first `ctx.fail` still ends that
+ * hook, since `fail` never returns.
  */
 export function runAnalyzeHooks(
   ctx: Ctx,
@@ -3870,6 +3876,7 @@ export function runAnalyzeHooks(
   const names = [...calls.keys()].sort((left, right) =>
     left.localeCompare(right),
   );
+  const failures: TranslateError[] = [];
   for (const name of names) {
     const definition = customTags[name];
     const analyze = definition?.analyze;
@@ -3903,9 +3910,17 @@ export function runAnalyzeHooks(
     try {
       analyze(tagCalls, analyzeContext);
     } catch (error) {
-      throw wrapHookError(error, name, "analyze", first.loc, voiceOfCtx(ctx));
+      // One tag's failure does not hide another's: the file has one
+      // diagnostic per error, and each tag's `analyze` is independent of the
+      // others' (it sees only its own calls and store).
+      failures.push(
+        wrapHookError(error, name, "analyze", first.loc, voiceOfCtx(ctx)),
+      );
     }
   }
+  const [only] = failures;
+  if (failures.length === 1 && only) throw only;
+  if (failures.length > 1) throw collectedError(failures);
 }
 
 /**

@@ -896,3 +896,63 @@ describe("structural: reject, an orphan else or else-if is the if construct", ()
     });
   });
 });
+
+describe("an attribute tag under a control construct in a registered tag", () => {
+  const card: Record<string, CustomTag> = {
+    card: { children: { a: { repeatable: true } } },
+    a: { parents: ["card"] },
+  };
+  const at = (source: string, structural: "reject" | "pass") =>
+    lowerSource(source, "/t.mx", {
+      customTags: card,
+      tagRules: "html",
+      structural,
+    }).diagnostics.map((d) => [d.code, d.line, d.column]);
+
+  it.each([
+    ["if", "<card>\n  <if=x>\n    <@a/>\n  </if>\n</card>\n", 2],
+    ["for", "<card>\n  <for|i| of=[1]>\n    <@a/>\n  </for>\n</card>\n", 2],
+    [
+      "an if in a for: the outer one",
+      "<card>\n  <for|i| of=[1]>\n    <if=x>\n      <@a/>\n    </if>\n  </for>\n</card>\n",
+      2,
+    ],
+  ])(
+    "reject: %s is the construct error, at the construct",
+    (_label, source, line) => {
+      expect(at(source, "reject")).toEqual([
+        ["MX_STRUCTURAL_CONSTRUCT", line, 2],
+      ]);
+    },
+  );
+
+  it("pass: the attribute-tag rule stands", () => {
+    expect(
+      at("<card>\n  <if=x>\n    <@a/>\n  </if>\n</card>\n", "pass"),
+    ).toEqual([["MX_INVALID_ATTRIBUTE_TAG", 3, 5]]);
+  });
+});
+
+describe("<try> and <return> under a tag with a contract", () => {
+  const diagnostics = (source: string) =>
+    lowerSource(source, "/t.mx", {
+      customTags,
+      tagRules: "html",
+    }).diagnostics.map((d) => [d.code, d.line, d.column]);
+
+  it.each([
+    ["<try>", "<entity>\n  <try>x</try>\n</entity>\n"],
+    ["<return>", "<entity>\n  <return=1/>\n</entity>\n"],
+  ])(
+    "%s: the data file's refusal wins over the contract's",
+    (_label, source) => {
+      expect(diagnostics(source)).toEqual([["MX_NOT_IN_DATA_FILE", 2, 2]]);
+    },
+  );
+
+  it("a tag the contract does not allow is still reported as such", () => {
+    expect(diagnostics("<entity>\n  <box/>\n</entity>\n")).toEqual([
+      ["MX_TAG_NOT_ALLOWED", 2, 2],
+    ]);
+  });
+});

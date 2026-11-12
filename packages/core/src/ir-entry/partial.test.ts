@@ -313,7 +313,8 @@ describe("opt-in partial IR", () => {
     expect(plain.ir).toBeUndefined();
     expect(plain).not.toHaveProperty("partial");
     expect(plain.diagnostics.map((d) => d.code)).toEqual(["PROBE_AN"]);
-    expect(calls).toEqual(["checked.analyze"]);
+    // A failing analyze does not stop the other tags' analyze hooks.
+    expect(calls).toEqual(["checked.analyze", "healthy.analyze"]);
     calls.length = 0;
     const result = validPartial(source, { customTags });
     // Successful transforms may emit nothing; the authored siblings keep spans.

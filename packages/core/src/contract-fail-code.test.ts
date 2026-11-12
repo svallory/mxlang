@@ -243,3 +243,41 @@ describe.each(["analyze", "transform"] as const)(
     });
   },
 );
+
+describe("analyze hooks of several tags", () => {
+  const failing = (name: string) => ({
+    analyze: (
+      calls: readonly { loc: { line: number; column: number } }[],
+      ctx: { fail: FailFn },
+    ) => ctx.fail(`bad ${name}`, { at: calls[0]?.loc }),
+  });
+  const customTags = {
+    box: failing("box"),
+    crate: failing("crate"),
+  } as unknown as Record<string, CustomTag>;
+
+  it("one tag's failure does not hide another tag's", () => {
+    const { diagnostics } = lowerSource("<box/>\n<crate/>\n", "/u.mx", {
+      customTags,
+    });
+    expect(diagnostics.map((d) => d.message.replace(/^.*: /, ""))).toEqual([
+      expect.stringContaining("bad box"),
+      expect.stringContaining("bad crate"),
+    ]);
+    expect(diagnostics.map((d) => d.line)).toEqual([1, 2]);
+  });
+
+  it("a hook that passes is not blamed", () => {
+    const { diagnostics } = lowerSource("<box/>\n<ok/>\n<crate/>\n", "/u.mx", {
+      customTags: { ...customTags, ok: { analyze: () => {} } } as never,
+    });
+    expect(diagnostics.map((d) => d.line)).toEqual([1, 3]);
+  });
+
+  it("one failing tag is reported once", () => {
+    const { diagnostics } = lowerSource("<box/>\n<box/>\n", "/u.mx", {
+      customTags: { box: customTags.box as CustomTag },
+    });
+    expect(diagnostics).toHaveLength(1);
+  });
+});

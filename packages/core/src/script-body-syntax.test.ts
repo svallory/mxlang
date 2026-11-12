@@ -12,7 +12,10 @@
  * `script-body-syntax-extra-stock-6.4.4.txt`.
  */
 import { describe, expect, it } from "vitest";
+import { compileSource } from "./compile.ts";
+import type { Ir, IrNode } from "./ir.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import { lookup } from "./test-targets.ts";
 
 const CODE = "MX_INVALID_STATEMENT";
 
@@ -458,5 +461,44 @@ describe("more than one error", () => {
       [CODE, 3, 6],
       [CODE, 6, 0],
     ]);
+  });
+});
+
+/**
+ * `<html-script>` is a raw-text tag on every host path. A host that registers
+ * no taglib of its own (the shared JSX hosts) reads the body as markup unless
+ * core registers the parse option itself: `</script>` then mismatched the close
+ * tag, and the body lost its edge whitespace.
+ */
+describe("an <html-script> body on a host with no taglib of its own", () => {
+  const declarations = {
+    tags: {},
+    isElement: () => true,
+    isComponent: () => false,
+  };
+
+  function bodyOf(source: string): IrNode[] {
+    let ir: Ir | undefined;
+    compileSource(source, "/page.mx", declarations, {
+      targets: lookup,
+      emitIr: (lowered) => {
+        ir = lowered;
+        return "";
+      },
+    });
+    const element = ir?.body.find((node) => node.kind === "Element");
+    if (element?.kind !== "Element") throw new Error("no element");
+    return element.children;
+  }
+
+  it.each([
+    ["a closing script tag", "if (a) { x('</script>') }"],
+    ["a comment opener", "const a = '<!--'"],
+    ["a tag-like <", "if (a <b> c) x()"],
+    ["edge whitespace", "\n  go()\n"],
+  ])("keeps %s as script text", (_label, text) => {
+    const children = bodyOf(`<html-script>${text}</html-script>`);
+    expect(children).toHaveLength(1);
+    expect(children[0]).toMatchObject({ kind: "Text", value: text });
   });
 });
