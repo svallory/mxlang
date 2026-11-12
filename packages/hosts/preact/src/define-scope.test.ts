@@ -10,7 +10,7 @@
 import { parse } from "@babel/parser";
 import type { CustomTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
-import { typedDefineParam } from "./emitter.ts";
+import { paramNames, typedDefineParam } from "./emitter.ts";
 import { compilePreactMx } from "./index.ts";
 
 const FOO = "<define/Foo><p>inner</p></define>";
@@ -267,12 +267,34 @@ describe.each(HOSTS)("%s: define calls and attributes", (host) => {
     expect(code).toContain("__mxDef_Row({ children: 'c' })");
   });
 
-  it("a define attribute with a side effect runs once when the define is only called directly", async () => {
+  it("a define attribute with a side effect is emitted once when the define is only called directly", async () => {
     const code = await compile(
       "<define/Row x=input.track()><p>r</p></define><Row/>",
     );
     expect(code.match(/input\.track\(\)/g)).toHaveLength(1);
     expect(code).toContain("void Object.assign(__mxDef_Row");
     expect(code).not.toContain("const Row =");
+  });
+});
+
+describe("paramNames", () => {
+  it.each([
+    [["p"], ["p"]],
+    [
+      ["a", "b"],
+      ["a", "b"],
+    ],
+    [["...rest"], ["rest"]],
+    [["a = Row"], ["a"]],
+    [["{ a = Row }"], ["a"]],
+    [["{ a, b: c, ...d }"], ["a", "c", "d"]],
+    [["{ a: { b = [1, 2] } }"], ["b"]],
+    [["[a, , [b], ...c]"], ["a", "b", "c"]],
+    [["{ a } = { a: Row }"], ["a"]],
+    [["x: Map<string, number>"], ["x"]],
+    [["{ 'k-1': k, [`z${1}`]: z }"], ["k", "z"]],
+    [["{ Ñame }"], ["Ñame"]],
+  ])("%j -> %j", (params, names) => {
+    expect(paramNames(params)).toEqual(names);
   });
 });

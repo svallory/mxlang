@@ -20,7 +20,6 @@
  * belongs in that object and what does not.
  */
 
-import { parseExpression } from "@babel/parser";
 import {
   type Attr,
   type AttributeTag,
@@ -135,51 +134,109 @@ interface RegionSink {
 }
 
 /**
- * The names a `<define>`, tag-param or catch-param list binds: the identifiers
- * of each parameter's pattern, never the identifiers of a default's expression
- * (`{ a = Row }` binds `a`). Text that does not parse falls back to every
- * identifier it holds, which only ever over-reports.
+ * The names a parameter list binds: the targets of each parameter's pattern
+ * (`{ a, b: [c], ...d }`, `x = 1`, `...rest`), never the identifiers of a
+ * default's expression (`{ a = Row }` binds `a`) or of a type annotation.
+ * A scanner over the text, so the host needs no parser of its own; text it
+ * cannot follow can only add or lose a name at the point it stops.
  */
-function paramNames(params: readonly string[]): string[] {
-  try {
-    const arrow = parseExpression(`(${params.join(", ")}) => 0`, {
-      plugins: ["typescript", "jsx"],
-    }) as unknown as { params: BindingPattern[] };
-    return arrow.params.flatMap(patternNames);
-  } catch {
-    return params.flatMap((text) => [...readIdentifiers(text)]);
+export function paramNames(params: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const text of params) {
+    let i = skipSpace(text, 0);
+    if (text.startsWith("...", i)) i += 3;
+    patternTarget(text, i, out);
   }
+  return out;
 }
 
-interface BindingPattern {
-  type: string;
-  name?: string;
-  left?: BindingPattern;
-  argument?: BindingPattern;
-  value?: BindingPattern;
-  properties?: BindingPattern[];
-  elements?: Array<BindingPattern | null>;
+const NAME = /[\p{ID_Start}$_][\p{ID_Continue}$‌‍]*/uy;
+
+function skipSpace(text: string, from: number): number {
+  let i = from;
+  while (i < text.length && /\s/.test(text[i] as string)) i++;
+  return i;
 }
 
-function patternNames(pattern: BindingPattern | null | undefined): string[] {
-  if (!pattern) return [];
-  switch (pattern.type) {
-    case "Identifier":
-      return [pattern.name as string];
-    case "AssignmentPattern":
-      return patternNames(pattern.left);
-    case "RestElement":
-      return patternNames(pattern.argument);
-    case "ObjectPattern":
-      return (pattern.properties ?? []).flatMap((property) =>
-        patternNames(property.value ?? property.argument),
-      );
-    case "ArrayPattern":
-      return (pattern.elements ?? []).flatMap(patternNames);
-    default:
-      return [];
-  }
+/** The index after the string or template literal opening at `from`. */
+function skipQuoted(text: string, from: number): number {
+  const quote = text[from] as string;
+  let i = from + 1;
+  while (i < text.length && text[i] !== quote) i += text[i] === "\\" ? 2 : 1;
+  return i + 1;
 }
+
+/** The index of the first top-level `,` or `closer` at or after `from`. */
+function skipExpression(text: string, from: number, closer: string): number {
+  let depth = 0;
+  let i = from;
+  while (i < text.length) {
+    const ch = text[i] as string;
+    if (ch === '"' || ch === "'" || ch === "`") {
+      i = skipQuoted(text, i);
+      continue;
+    }
+    if (depth === 0 && (ch === "," || ch === closer)) return i;
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") depth--;
+    i++;
+  }
+  return i;
+}
+
+/** Reads one binding target at `from`, pushing its names; returns the index after it. */
+function patternTarget(text: string, from: number, out: string[]): number {
+  const i = skipSpace(text, from);
+  const ch = text[i];
+  if (ch === "{" || ch === "[") {
+    const closer = ch === "{" ? "}" : "]";
+    let at = i + 1;
+    while (at < text.length) {
+      at = skipSpace(text, at);
+      if (text[at] === closer) return at + 1;
+      if (text[at] === ",") {
+        at++;
+        continue;
+      }
+      if (text.startsWith("...", at)) at += 3;
+      let key: string | null = null;
+      if (ch === "{") {
+        // A key: a name, a string, or a computed `[expr]`; a `:` then names the
+        // target, otherwise the key is itself the shorthand binding.
+        if (text[at] === "[") {
+          at = skipExpression(text, at + 1, "]") + 1;
+        } else if (text[at] === '"' || text[at] === "'") {
+          at = skipQuoted(text, at);
+        } else {
+          NAME.lastIndex = at;
+          const match = NAME.exec(text);
+          if (match) {
+            key = match[0];
+            at += key.length;
+          }
+        }
+        const colon = skipSpace(text, at);
+        if (text[colon] === ":") at = patternTarget(text, colon + 1, out);
+        else if (key) out.push(key);
+        else at = Math.max(at, colon) + (key === null && colon === at ? 1 : 0);
+      } else {
+        const next = patternTarget(text, at, out);
+        at = next > at ? next : at + 1;
+      }
+      at = skipSpace(text, at);
+      if (text[at] === "=") at = skipExpression(text, at + 1, closer);
+    }
+    return at;
+  }
+  NAME.lastIndex = i;
+  const match = NAME.exec(text);
+  if (!match) return i;
+  out.push(match[0]);
+  return i + match[0].length;
+}
+
+type ComponentNode = Extract<IrNode, { kind: "Component" }>;
+type Block = NonNullable<ComponentNode["content"]>;
 
 /**
  * The direct define calls (`<Row(x)/>`) whose name an enclosing JS scope also
@@ -194,111 +251,160 @@ function patternNames(pattern: BindingPattern | null | undefined): string[] {
  * `<const>` binds across the whole scope it is declared in (the emitter hoists
  * its statement to the top of that scope), before and after it, and in every
  * nested element; a nested scope sees it too. A param binds in its own body.
+ *
+ * Every IR kind is named below, so a kind added to the IR is a type error here
+ * rather than a silent hole; a kind that still arrives unhandled at run time
+ * (a transform-built node) throws.
  */
 export function shadowedCalls(ir: Ir): WeakSet<object> {
   const calls = new WeakSet<object>();
-  if (!holdsDefine(ir.body)) return calls;
-  const seen = new WeakSet<object>();
-  const skip = new Set([
-    "paramNodes",
-    "node",
-    "loc",
-    "span",
-    "paramSpans",
-    "attrTagProps",
-    "loop",
-  ]);
-  const children = (node: Record<string, unknown>) =>
-    Object.entries(node)
-      .filter(([key]) => !skip.has(key))
-      // An expression's `nodes` are parser nodes; the flat attribute-tag list
-      // repeats the tree, so it goes last and only adds what the tree lacks.
-      .filter(([key]) => key !== "nodes" || typeof node.code !== "string")
-      .sort(
-        ([a], [b]) =>
-          Number(a === "attributeTags") - Number(b === "attributeTags"),
-      )
-      .map(([, child]) => child);
-  const opensScope = (node: Record<string, unknown>) =>
-    node.kind === "For" ||
-    node.kind === "Define" ||
-    node.kind === "DelegatedTag" ||
-    node.kind === "AttributeTagFor" ||
-    ("hasParams" in node && Array.isArray(node.children));
-  const declared = (value: unknown, into: Set<string>, root: unknown): void => {
-    if (value === null || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) declared(item, into, root);
-      return;
-    }
-    const node = value as Record<string, unknown>;
-    if (value !== root && opensScope(node)) return;
-    if (node.kind === "Component" || node.kind === "Const") {
-      const vars = node.varBindings as Array<{ name: string }> | undefined;
-      const names = vars
-        ? vars.map((binding) => binding.name)
-        : paramNames(
-            [
-              String(node.kind === "Const" ? node.name : (node.var ?? "")),
-            ].filter(Boolean),
-          );
-      for (const name of names) into.add(name);
-    }
-    for (const child of children(node)) declared(child, into, root);
-  };
-  const walk = (value: unknown, scope: Set<string>): void => {
-    if (value === null || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item, scope);
-      return;
-    }
-    if (seen.has(value)) return;
-    seen.add(value);
-    const node = value as Record<string, unknown>;
-    let inner = scope;
-    if (opensScope(node)) {
-      inner = new Set(scope);
-      if (node.kind === "For") {
-        for (const name of node.bindings as string[]) inner.add(name);
-      } else if (node.kind === "AttributeTagFor") {
-        for (const name of (node.loop as { bindings: string[] }).bindings) {
-          inner.add(name);
-        }
-      } else if (Array.isArray(node.params)) {
-        for (const name of paramNames(node.params as string[])) inner.add(name);
+
+  /** What `nodes` declare in their own scope: each `/var` and `<const>`, not those of nested scopes. */
+  const declared = (
+    nodes: readonly IrNode[],
+    into: Set<string>,
+  ): Set<string> => {
+    for (const node of nodes) {
+      switch (node.kind) {
+        case "Element":
+          declared(node.children, into);
+          break;
+        case "IfChain":
+          for (const branch of node.branches) declared(branch.children, into);
+          break;
+        case "Component":
+          for (const name of node.varBindings?.map((b) => b.name) ??
+            paramNames(node.var ? [node.var] : [])) {
+            into.add(name);
+          }
+          break;
+        case "Const":
+          for (const name of node.varBindings?.map((b) => b.name) ??
+            paramNames([node.name])) {
+            into.add(name);
+          }
+          break;
+        default:
+          break;
       }
-      declared(node, inner, node);
     }
-    const target = node.target as { kind?: string; name?: string } | undefined;
-    if (
-      node.kind === "Component" &&
-      target?.kind === "define" &&
-      typeof target.name === "string" &&
-      scope.has(target.name)
-    ) {
-      calls.add(value);
-    }
-    for (const child of children(node)) walk(child, inner);
+    return into;
   };
-  const root = new Set<string>();
-  declared(ir.body, root, null);
-  walk(ir.body, root);
+
+  const scopeOf = (
+    outer: ReadonlySet<string>,
+    names: readonly string[],
+    children: readonly IrNode[],
+  ): Set<string> => declared(children, new Set([...outer, ...names]));
+
+  const block = (
+    value: Block | null | undefined,
+    outer: ReadonlySet<string>,
+  ) => {
+    if (!value) return;
+    list(
+      value.children,
+      scopeOf(outer, paramNames(value.params), value.children),
+    );
+  };
+
+  const attributeTag = (tag: AttributeTag, outer: ReadonlySet<string>) => {
+    block(tag.block, outer);
+    attributeTags(tag.attributeTagTree, outer);
+  };
+
+  const attributeTags = (
+    nodes: readonly AttributeTagNode[],
+    outer: ReadonlySet<string>,
+  ) => {
+    for (const node of nodes) {
+      switch (node.kind) {
+        case "AttributeTag":
+          attributeTag(node.tag, outer);
+          break;
+        case "AttributeTagIf":
+          for (const branch of node.branches)
+            attributeTags(branch.nodes, outer);
+          break;
+        case "AttributeTagFor":
+          attributeTags(node.nodes, new Set([...outer, ...node.loop.bindings]));
+          break;
+        default:
+          unhandled(node);
+      }
+    }
+  };
+
+  const list = (nodes: readonly IrNode[], scope: ReadonlySet<string>) => {
+    for (const node of nodes) visit(node, scope);
+  };
+
+  const visit = (node: IrNode, scope: ReadonlySet<string>): void => {
+    switch (node.kind) {
+      case "Text":
+      case "Interpolation":
+      case "Const":
+      case "Static":
+      case "Import":
+      case "Export":
+      case "InputInterface":
+      case "Hoisted":
+      case "DocumentType":
+      case "Comment":
+        return;
+      case "Element":
+        list(node.children, scope);
+        return;
+      case "IfChain":
+        for (const branch of node.branches) list(branch.children, scope);
+        return;
+      case "For":
+        list(node.children, scopeOf(scope, node.bindings, node.children));
+        return;
+      case "Define":
+        list(
+          node.children,
+          scopeOf(scope, paramNames(node.params), node.children),
+        );
+        return;
+      case "Component":
+        if (node.target.kind === "define" && scope.has(node.target.name)) {
+          calls.add(node);
+        }
+        block(node.content, scope);
+        // The flat list repeats the tree; it is read only when the tree is
+        // empty (a call a transform rebuilt).
+        if (node.attributeTagTree.length > 0) {
+          attributeTags(node.attributeTagTree, scope);
+        } else {
+          for (const tag of node.attributeTags) attributeTag(tag, scope);
+        }
+        return;
+      case "DelegatedTag": {
+        const { tag } = node;
+        list(
+          tag.children,
+          scopeOf(scope, paramNames(tag.params), tag.children),
+        );
+        if (tag.attributeTagTree.length > 0) {
+          attributeTags(tag.attributeTagTree, scope);
+        } else {
+          for (const nested of tag.attributeTags) attributeTag(nested, scope);
+        }
+        return;
+      }
+      default:
+        unhandled(node);
+    }
+  };
+
+  list(ir.body, declared(ir.body, new Set()));
   return calls;
 }
 
-/** Whether an IR subtree holds a `<define>` (a region may nest one). */
-function holdsDefine(value: unknown, seen = new WeakSet<object>()): boolean {
-  if (value === null || typeof value !== "object" || seen.has(value))
-    return false;
-  seen.add(value);
-  if (Array.isArray(value))
-    return value.some((item) => holdsDefine(item, seen));
-  const node = value as Record<string, unknown>;
-  if (node.kind === "Define") return true;
-  return Object.entries(node).some(
-    ([key, child]) =>
-      !["node", "nodes", "loc", "span", "paramNodes"].includes(key) &&
-      holdsDefine(child, seen),
+function unhandled(node: never): never {
+  throw new Error(
+    `shadowedCalls: unhandled IR node kind ${JSON.stringify((node as { kind?: string }).kind)}`,
   );
 }
 
@@ -337,6 +443,14 @@ function wrapStatements(
 interface SoftLift {
   defines: Array<Extract<IrNode, { kind: "Define" }>>;
   parent: SoftLift | null;
+}
+
+/** How a body scope behaves (`#scoped`). */
+interface ScopeOptions {
+  /** A dynamic tag's or `<try>`'s body: a region refuses a lifted `<define>` in it. */
+  hard?: boolean;
+  /** The body declares tag params, which a lifted `<define>` could not see. */
+  bindsParams?: boolean;
 }
 
 /** What `resolveDelegatedTag` records for a claimed tag. */
@@ -396,13 +510,18 @@ export function defineStatements(
   otherCode: string,
   keepAll = false,
 ): MappedCode[] {
-  const base = readIdentifiers(
-    [otherCode, ...parts.map((part) => part.fn.code)].join("\n"),
-  );
+  const scanned = [otherCode, ...parts.map((part) => part.fn.code)].join("\n");
+  const base = readIdentifiers(scanned);
   const values = parts.map((part) => readIdentifiers(part.value.code));
+  // An identifier written with a Unicode escape (`\u0052ow`) is invisible to
+  // the token scan, so any escape keeps every public binding.
+  const escaped =
+    scanned.includes("\\u") ||
+    parts.some((part) => part.value.code.includes("\\u"));
   return parts.map((part, index) => {
     const read =
       keepAll ||
+      escaped ||
       base.has(part.name) ||
       values.some((names, other) => other !== index && names.has(part.name));
     if (read) return concatMapped(part.fn, part.value);
@@ -1207,10 +1326,9 @@ export class PreactEmitter implements Emitter<string> {
   #scoped(
     slot: boolean,
     build: (scope: PreactEmitter) => MappedCode,
-    hard = true,
-    bindsParams = false,
+    options: ScopeOptions = {},
   ): MappedCode {
-    const { code, statements } = this.#scopeOf(build, hard, bindsParams);
+    const { code, statements } = this.#scopeOf(build, options);
     if (statements === "") return code;
     return wrapStatements(statements, code, slot ? "slot" : "child");
   }
@@ -1218,8 +1336,7 @@ export class PreactEmitter implements Emitter<string> {
   /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
   #scopeOf(
     build: (scope: PreactEmitter) => MappedCode,
-    hard = true,
-    bindsParams = false,
+    { hard = true, bindsParams = false }: ScopeOptions = {},
   ): {
     code: MappedCode;
     statements: string;
@@ -2797,26 +2914,18 @@ export class PreactEmitter implements Emitter<string> {
     // The body of a dynamic tag or a called `<define>` is its own `/var` scope
     // (Marko compiles it so); the body of a described or called unit keeps the
     // component's.
+    // A tag-param body is a scope whatever it calls: a `/var` there is its own
+    // and a region cannot lift a `<define>` out of it. A plain body of a unit
+    // call keeps the component's scope.
+    const dynamic = node.target.kind === "dynamic";
+    const hasParams = node.content?.hasParams === true;
     const rendered =
-      node.target.kind === "dynamic"
-        ? this.#scoped(false, (scope) => scope.#expression(children))
-        : node.target.kind === "define"
-          ? this.#scoped(
-              false,
-              (scope) => scope.#expression(children),
-              false,
-              node.content?.hasParams === true,
-            )
-          : node.content?.hasParams
-            ? // A tag-param body of a unit call is a scope too: a `/var` there is
-              // its own, and a region cannot lift a `<define>` out of it.
-              this.#scoped(
-                false,
-                (scope) => scope.#expression(children),
-                false,
-                true,
-              )
-            : this.#expression(children);
+      dynamic || node.target.kind === "define" || hasParams
+        ? this.#scoped(false, (scope) => scope.#expression(children), {
+            hard: dynamic,
+            bindsParams: hasParams,
+          })
+        : this.#expression(children);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
@@ -2858,8 +2967,7 @@ export class PreactEmitter implements Emitter<string> {
     // body, as it always did (only a dynamic-tag or `<try>` body refuses one).
     const { code: body, statements } = this.#scopeOf(
       (scope) => scope.#hostComponentBody(node, children),
-      false,
-      node.content?.hasParams === true,
+      { hard: false, bindsParams: node.content?.hasParams === true },
     );
     const open = node.content?.hasParams
       ? `((${node.content.params.join(", ")}) =>`

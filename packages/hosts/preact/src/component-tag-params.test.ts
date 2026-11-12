@@ -209,6 +209,12 @@ export interface Input { items: string[] }
 <Box><for|Row| of=[(n: number) => "L" + n]><@item><Row(1)/></@item></for></Box>`,
     html: "<div>L1</div>",
   },
+  "a define read through a Unicode-escaped dynamic target": {
+    caller: `export interface Input { items: string[] }
+<define/Row><li>r</li></define>
+<ul><\${\\u0052ow}/></ul>`,
+    html: "<ul><li>r</li></ul>",
+  },
   "a define called only directly (no unused public binding)": {
     caller: `export interface Input { items: string[] }
 <define/Row|p|><li>\${p}</li></define>

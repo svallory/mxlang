@@ -154,6 +154,17 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
     expect(out).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
   });
 
+  it("an IR node kind the shadow walk does not name is an error, never skipped", () => {
+    expect(() =>
+      emitted("<define/Row><i/></define><Row/>", (ir) => {
+        ir.body.push({
+          kind: "FutureKind",
+          loc: { line: 1, column: 0 },
+        } as never);
+      }),
+    ).toThrow('shadowedCalls: unhandled IR node kind "FutureKind"');
+  });
+
   it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {
     const source = "<for|i| from=lowbound to=highbound><b>${i}</b></for>";
     const edited = (change: (range: RangeSource) => void) =>
