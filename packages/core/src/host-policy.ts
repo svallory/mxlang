@@ -201,13 +201,6 @@ export interface TargetPolicyDiagnostic {
 export interface TargetPolicyResolution {
   policy: TargetPolicy;
   diagnostics: TargetPolicyDiagnostic[];
-  /**
-   * The `mx.host` word this lookup does not register, when no `mx.target` is
-   * present: a tool whose lookup is narrower than the full registry (a
-   * package's own) can ask whether another lookup would know it. Absent
-   * otherwise.
-   */
-  unregisteredHost?: string;
 }
 
 const START: MxConfigLocation = { line: 1, column: 0, length: 1 };
@@ -994,15 +987,13 @@ export function resolveTargetPolicyDetailed(
       ),
     );
   }
-  const strictEffective =
-    resolved.policy.strict === true ||
-    (resolved.policy.descriptor ?? lookup.target(resolved.policy.target))
-      ?.strict === "always";
   if (
     mx?.strict === true &&
     mx.host === undefined &&
     mx.target === undefined &&
-    !strictEffective
+    resolved.policy.strict !== true &&
+    (resolved.policy.descriptor ?? lookup.target(resolved.policy.target))
+      ?.strict !== "always"
   ) {
     // `mx.strict` accompanies an explicitly selected target only; with none
     // selected the default target is non-strict, and the setting does nothing.
@@ -1012,7 +1003,7 @@ export function resolveTargetPolicyDetailed(
       code: "strict-ignored",
       severity: "warning",
       file,
-      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. Add mx.target (for example "html") to compile strict.`,
+      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. Add mx.target "${resolved.policy.target}" to compile strict.`,
       ...at("strict"),
     });
   }
@@ -1109,12 +1100,7 @@ export function resolveTargetPolicyDetailed(
       ],
     });
   }
-  return {
-    ...finish(resolved.policy),
-    ...(typeof resolved.ignoredHost === "string" && mx?.target === undefined
-      ? { unregisteredHost: resolved.ignoredHost }
-      : {}),
-  };
+  return finish(resolved.policy);
 }
 
 /**

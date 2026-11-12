@@ -773,7 +773,7 @@ describe("TargetPolicyDiagnostic code", () => {
       ],
       { defaultTarget: "page" },
     );
-    const codes = (dependency: string) =>
+    const resolveWith = (dependency: string) =>
       resolveTargetPolicyDetailed(
         project(
           JSON.stringify({
@@ -782,9 +782,12 @@ describe("TargetPolicyDiagnostic code", () => {
           }),
         ),
         strictLookup,
-      ).diagnostics.map((d) => d.code);
-    expect(codes("@t/page")).toEqual(["strict-ignored"]);
-    expect(codes("@t/only-strict")).toEqual([]);
+      ).diagnostics;
+    const ignored = resolveWith("@t/page");
+    expect(ignored.map((d) => d.code)).toEqual(["strict-ignored"]);
+    // The hint names the resolved target, not a fixed one.
+    expect(ignored[0]?.message).toContain('mx.target "page"');
+    expect(resolveWith("@t/only-strict")).toEqual([]);
   });
 
   it("raises no strict-ignored when mx.host or mx.target is present: its own diagnostic says what is wrong", () => {

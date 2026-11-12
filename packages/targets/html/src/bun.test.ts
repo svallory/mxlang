@@ -607,6 +607,22 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
     }
   });
 
+  test.each([
+    ["mx.target astro-html", { mx: { target: "astro-html" } }],
+    [
+      "a @mxlang/host-astro dependency alone",
+      { dependencies: { "@mxlang/host-astro": "1.0.0" } },
+    ],
+  ])("the default lookup treats %s as strict", (_name, manifest) => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-select-"));
+    try {
+      writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
+      expect(strictFor(join(dir, "page.mx"), htmlTargets)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("an explicit mx.target decides: mx.target html with mx.host astro is not strict here", () => {
     // The full registry reports a target-host-mismatch and keeps html,
     // non-strict; the astro fallback applies only when no mx.target is present.

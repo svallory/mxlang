@@ -12,6 +12,7 @@ import {
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
+import { strictnessTargets } from "./foreign-strict.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -57,15 +58,6 @@ const FOREIGN_SEGMENTS: readonly string[] = [
 ];
 
 /**
- * Hosts other than this package's whose target is always strict
- * (`strict: "always"` in its descriptor), which this package cannot read for
- * the same reason as {@link FOREIGN_SEGMENTS}. A hand copy: a built-in
- * descriptor that declares `strict: "always"` must be listed here
- * (`@mxlang/targets`' `strict-hosts.test.ts` fails when the two drift).
- */
-const FOREIGN_STRICT_HOSTS: readonly string[] = ["astro"];
-
-/**
  * The `onLoad` filter: every `.mx` except a host module file (`.<segment>.mx`)
  * of `targets` or of {@link FOREIGN_SEGMENTS}. An unregistered `.<word>.mx`
  * is an ordinary `.mx` and stays claimed. Exported for its tests.
@@ -90,21 +82,19 @@ export function mxFilter(targets: TargetLookup): RegExp {
  * tools and `vite build` still print it). Exported for its tests.
  */
 export function strictFor(path: string, targets: TargetLookup): boolean {
-  const { policy, unregisteredHost } = resolveTargetPolicyDetailed(
+  // The package's own lookup does not register the astro target; resolve
+  // through one that does, so every way of selecting it agrees with the tools.
+  const { policy } = resolveTargetPolicyDetailed(
     path,
-    targets,
+    targets === htmlTargets ? strictnessTargets : targets,
     { quiet: true },
   );
-  const descriptor = policy.descriptor ?? targets.target(policy.target);
-  if (descriptor?.strict === "always" || policy.strict === true) return true;
-  // A host this lookup does not register resolves as an unknown word, but the
-  // full registry knows it. One of them has no mode but strict, so the project
-  // is strict here as it is in the editor tools and `vite build`. Only when no
-  // `mx.target` is present: an explicit target decides, as it does there.
-  return (
-    unregisteredHost !== undefined &&
-    FOREIGN_STRICT_HOSTS.includes(unregisteredHost)
-  );
+  const descriptor =
+    policy.descriptor ??
+    (targets === htmlTargets ? strictnessTargets : targets).target(
+      policy.target,
+    );
+  return descriptor?.strict === "always" || policy.strict === true;
 }
 
 /**
