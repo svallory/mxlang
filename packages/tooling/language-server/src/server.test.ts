@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, matchesGlob } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MX_CONFIG_SEARCH_PLACES } from "@mxlang/core";
-import { builtinFileKinds, resolveTargetPolicyDetailed } from "@mxlang/targets";
+import { builtinFileKinds } from "@mxlang/targets";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
@@ -1913,7 +1913,10 @@ describe("stdio server (e2e)", () => {
       ]);
     });
 
-    const open = async (pages: Record<string, string>) => {
+    const open = async (
+      pages: Record<string, string>,
+      root: string = directory,
+    ) => {
       const conn = startClient();
       await conn.sendRequest("initialize", {
         processId: null,
@@ -1925,7 +1928,7 @@ describe("stdio server (e2e)", () => {
       conn.onNotification(PublishDiagnosticsNotification, (params) => {
         log.push(params);
       });
-      const uriOf = (file: string) => `file://${join(directory, file)}`;
+      const uriOf = (file: string) => `file://${join(root, file)}`;
       for (const [file, text] of Object.entries(pages)) {
         conn.sendNotification("textDocument/didOpen", {
           textDocument: {
@@ -1970,10 +1973,17 @@ describe("stdio server (e2e)", () => {
     }, 15000);
 
     it("repairing a called template that failed to compile re-diagnoses its caller", async () => {
-      const broken = join(directory, "tags/broken.mx");
+      // Its own project: the shared one is never mutated.
+      const own = mkdtempSync(join(tmpdir(), "mx-lsp-broken-"));
+      writeFileSync(join(own, "package.json"), '{"mx":{"host":"html"}}');
+      mkdirSync(join(own, "tags"));
+      const broken = join(own, "tags/broken.mx");
       writeFileSync(broken, "<section>\n  <div>\n");
       try {
-        const { log, uriOf, changed } = await open({ "c.mx": "<broken/>\n" });
+        const { log, uriOf, changed } = await open(
+          { "c.mx": "<broken/>\n" },
+          own,
+        );
         await waitFor(
           () =>
             log.some(
@@ -2002,7 +2012,7 @@ describe("stdio server (e2e)", () => {
           "the caller and the template are cleared",
         );
       } finally {
-        rmSync(broken, { force: true });
+        rmSync(own, { recursive: true, force: true });
       }
     }, 15000);
   });
