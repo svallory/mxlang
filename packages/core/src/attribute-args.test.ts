@@ -83,6 +83,7 @@ describe("the opt-in attribute argument refusal", () => {
     "<for|x| in(v)=input><i/></for>",
     "<for|x| to=3 step(v)=1><i/></for>",
     "<for|x| to(v)=3><i/></for>",
+    "<for|x| until(v)=3><i/></for>",
     "<for|x| from(v)=1 to=3><i/></for>",
   ])(
     "reads a loop-source attribute with arguments as stock does, dropping them: %s",
@@ -97,6 +98,7 @@ describe("the opt-in attribute argument refusal", () => {
     ["<for|x| in(v)=input><i/></for>", "in", 8],
     ["<for|x| to=3 step(v)=1><i/></for>", "step", 13],
     ["<for|x| to(v)=3><i/></for>", "to", 8],
+    ["<for|x| until(v)=3><i/></for>", "until", 8],
     ["<for|x| from(v)=1 to=3><i/></for>", "from", 8],
   ])(
     "refuses a loop-source attribute with arguments under the refuse option: %s",
@@ -125,9 +127,42 @@ describe("the opt-in attribute argument refusal", () => {
     "<html-comment a(v)=1>text</html-comment>",
     "<html-comment a=1>text</html-comment>",
   ])(
-    "refuses attributes on a claimed comment tag, as Marko does: %s",
+    "reports a host's own refusal of a claimed comment tag before its attributes: %s",
     (source) => {
-      expect(failure(source)).toMatchObject({
+      expect(() => compile(source, "refuse")).toThrow(
+        "host-owned comment refusal",
+      );
+    },
+  );
+
+  it.each([
+    "<html-comment a(v)=1>text</html-comment>",
+    "<html-comment a=1>text</html-comment>",
+  ])(
+    "refuses attributes on a claimed comment tag the host renders, as Marko does: %s",
+    (source) => {
+      let error: { message: string; line: number; column: number } | undefined;
+      try {
+        compileSource(
+          source,
+          "/v/test.mx",
+          {
+            tags: {},
+            attrTags: 2,
+            isElement: () => true,
+            isComponent: () => false,
+            resolveAttributeMethod: () => true,
+            isDelegatedTag: (name) => name === "html-comment",
+            resolveDelegatedTag: () => ({}),
+          },
+          { targets, emitIr: () => "" },
+        );
+      } catch (e) {
+        error = e as typeof error;
+      }
+      expect(
+        error && { ...error, message: error.message.replace(ANSI, "") },
+      ).toMatchObject({
         message: "The `<html-comment>` tag does not support attributes.",
         line: 1,
         column: 14,
@@ -167,6 +202,11 @@ describe("the opt-in attribute argument refusal", () => {
       "<if=x><i/></if><else if=y a=1><i/></else>",
       "The `<else>` tag only supports an `if=` attribute.",
       26,
+    ],
+    [
+      "<if ...x><i/></if>",
+      "The `<if>` tag only supports the `value=` attribute.",
+      4,
     ],
     [
       "<if a=1 value=x><i/></if>",

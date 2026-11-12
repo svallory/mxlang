@@ -66,9 +66,9 @@ for (const [entry, compile] of Object.entries(compilers)) {
       );
     });
 
-    it("refuses attributes on <html-comment> in core, ahead of the host", () => {
+    it("refuses <html-comment> with attributes as the tag, ahead of the attribute error", () => {
       expect(() => compile("<html-comment a(v)=1>text</html-comment>")).toThrow(
-        "The `<html-comment>` tag does not support attributes.",
+        /an HTML comment \(<html-comment>\) cannot appear in a/,
       );
     });
 

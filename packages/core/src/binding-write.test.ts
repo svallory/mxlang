@@ -63,6 +63,12 @@ const withLet: HostDeclarations = {
   resolveAttributeMethod: () => true,
 };
 
+/** A host that also accepts a tag variable on an element and on `<id>`. */
+const withVarOnElements: HostDeclarations = {
+  ...withLet,
+  isDelegatedTag: (name) => name === "let" || name === "div" || name === "id",
+};
+
 function attempt(source: string): TranslateError | undefined {
   try {
     compileSource(source, "/page.mx", withLet, {
@@ -1138,6 +1144,26 @@ describe("a two-way bind on a parameter with no change handler", () => {
     expect([error?.line, error?.column]).toEqual([1, column - 1]);
   });
 
+  it.each([
+    ["<define/D|...rest|><input value:=rest/></define>", 34],
+    ["<for|[a]| of=[[1]]><input value:=a/></for>", 34],
+    ["<for|first, ...rest| of=[[1]]><input value:=rest/></for>", 45],
+  ])(
+    "refuses %s: a rest element and an array element have no object",
+    (source, column) => {
+      const error = attempt(source);
+      expect(error?.diagnosticCode).toBe(UNABLE);
+      expect(error?.message).toBe("Unable to bind to value.");
+      expect([error?.line, error?.column]).toEqual([1, column - 1]);
+    },
+  );
+
+  it("allows binding a name inside an object pattern, written through its object", () => {
+    expect(
+      attempt("<for|{a}| of=[{a: 1}]><input value:=a/></for>"),
+    ).toBeUndefined();
+  });
+
   it("a returning tag's variable shadows a plain parameter of its spelling", () => {
     // `/x` declares a new `x` below the call; binding it is no bind to the
     // `<for>` parameter.
@@ -1147,9 +1173,9 @@ describe("a two-way bind on a parameter with no change handler", () => {
         source: "<let/n=0/>\n<return value=n/>\n",
       },
     } as never;
-    const run = (source: string) => {
+    const runWith = (source: string, decls: HostDeclarations) => {
       try {
-        compileSource(source, "/page.mx", withLet, {
+        compileSource(source, "/page.mx", decls, {
           targets: lookup,
           customTags: { counter },
           tagDiscoveryDirs: [],
@@ -1160,25 +1186,65 @@ describe("a two-way bind on a parameter with no change handler", () => {
       }
       return undefined;
     };
+    const run = (source: string) => runWith(source, withLet);
     expect(
       run("<for|x| of=[1]><if=x><counter/x/><input value:=x/></if></for>"),
     ).toBeUndefined();
     // An element reference shadows it the same way.
-    for (const tag of ["div", "id"]) {
-      const error = run(
-        `<for|x| of=[1]><if=x><${tag}/x/><input value:=x/></if></for>`,
-      );
-      expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
-      expect(error?.message).toBe(
-        `tag variable \`/x\` on \`<${tag}>\` is not supported in a standalone template`,
-      );
-    }
     // Control: the parameter itself is still refused.
     expect(
       run("<for|x| of=[1]><if=x><counter/y/><input value:=x/></if></for>")
         ?.message,
     ).toBe("Unable to bind to value.");
   });
+
+  it("a returning tag's variable from a block that has ended is not an outer binding in by=", () => {
+    const counter = {
+      template: {
+        filename: "/tags/counter.mx",
+        source: "<let/n=0/>\n<return value=n/>\n",
+      },
+    } as never;
+    let error: TranslateError | undefined;
+    try {
+      compileSource(
+        "<if=c><counter/n/></if><for|n| of=xs by=n><i/></for>",
+        "/page.mx",
+        withLet,
+        {
+          targets: lookup,
+          customTags: { counter },
+          tagDiscoveryDirs: [],
+          emitIr: () => "",
+        } as never,
+      );
+    } catch (e) {
+      error = e as TranslateError;
+    }
+    expect(error?.diagnosticCode).toBe("MX_INVALID_FOR");
+    expect(error?.message).toBe(
+      'The `by=` attribute is evaluated before the loop runs, so `n` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(n) => n`).',
+    );
+  });
+
+  it.each(["div", "id"])(
+    "a /%s tag variable shadows a plain parameter of its spelling",
+    (tag) => {
+      // Under a host that accepts a tag variable on the element and on `<id>`.
+      let error: TranslateError | undefined;
+      try {
+        compileSource(
+          `<for|x| of=[1]><if=x><${tag}/x/><input value:=x/></if></for>`,
+          "/page.mx",
+          withVarOnElements,
+          { targets: lookup, tagDiscoveryDirs: [], emitIr: () => "" } as never,
+        );
+      } catch (e) {
+        error = e as TranslateError;
+      }
+      expect(error).toBeUndefined();
+    },
+  );
 
   it.each([
     "<for|{a}| of=[{a:1}]><input value:=a/></for>",

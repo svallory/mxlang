@@ -1980,6 +1980,12 @@ describe("text with JSX-significant characters (rendered)", () => {
     );
   });
 
+  it("rejects <html-comment> with an attribute as the tag, ahead of the attribute error", () => {
+    expect(() => markup("<html-comment a=1>hi</html-comment>")).toThrow(
+      /cannot appear in a Preact component/,
+    );
+  });
+
   it("renders braces in text as literal characters, like Marko", async () => {
     expect(await renderCompiled("<div>a {b} c</div>")).toBe(
       "<div>a {b} c</div>",

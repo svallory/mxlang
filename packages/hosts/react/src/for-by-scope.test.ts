@@ -33,6 +33,21 @@ const compiles = (source: string): void => {
   expect(() => failure(source)).toThrow("expected a compile error");
 };
 
+const KEY_FUNCTION: Record<string, string> = {
+  member: "by=(x) => x.id",
+  bare: "by=(x) => x",
+  "optional member": "by=(x) => x?.id",
+  "computed member": "by=(x) => obj[x.id]",
+  "call argument": "by=(x) => f(x)",
+  conditional: "by=(x) => a ? x.id : 'b'",
+  "template literal": "by=(x) => `k${x.id}`",
+  "second param": "by=(x, i) => i",
+  "destructured param": "by=({ id }) => id",
+  "range to": "by=(i) => i.n",
+  "range until": "by=(i) => i",
+  in: "by=(k) => k",
+};
+
 describe("<for by=> reads a loop param (react)", () => {
   it.each([
     ["member", "<for|x| of=items by=x.id><p>${x.id}</p></for>", "x", 20],
@@ -72,12 +87,12 @@ describe("<for by=> reads a loop param (react)", () => {
     ["range to", "<for|i| to=3 by=i.n><p>${i}</p></for>", "i", 16],
     ["range until", "<for|i| until=3 by=i><p>${i}</p></for>", "i", 19],
     ["in", "<for|k, v| in=o by=k><p>${k}</p></for>", "k", 19],
-  ])("rejects %s at the name read", (_label, source, name, column) => {
+  ])("rejects %s at the name read", (label, source, name, column) => {
     const error = failure(source);
     expect(error.message).toContain(
       `The \`by=\` attribute is evaluated before the loop runs, so \`${name}\` is not in scope.`,
     );
-    expect(error.message).toContain(`by=(${name}) => key`);
+    expect(error.message).toContain(KEY_FUNCTION[label]);
     expect(error.message).toContain('by="id"');
     expect(error).toMatchObject({ line: 1, column });
   });

@@ -2948,11 +2948,10 @@ function bodyChildrenWithoutAttributeTags(node: Node): Node[] {
  * Stock reports an attribute tag mixed with body content under a control tag
  * of a call's body ahead of the call's argument errors: the same condition
  * `lowerAttributeTags` checks (attribute tags present, and non-layout content
- * left beside them), raised early for a call that has arguments. Both
- * `rejectArgsWithProps` (dynamic, define and delegated calls) and
- * `lowerCustomTagBody` (named calls) run it; a call reaches one of them, and
- * a second walk of the same body only happens for a call no earlier check
- * refused, so the cost is a body walk per call, not per path.
+ * left beside them), raised early for a call that has arguments. A registered
+ * custom tag runs it from `lowerCustomTagBody`; every other call (dynamic,
+ * `define`, named) runs it once through `rejectArgsWithProps`, which
+ * `lowerComponent` skips for a dynamic call because its caller already ran it.
  */
 function rejectControlMixBesideArguments(ctx: Ctx, node: Node): void {
   if ((tagArgsOf(node) ?? []).length === 0) return;
@@ -3890,11 +3889,18 @@ function lowerAttributeTags(
   return { flat, tree, props, contentChildren };
 }
 
-/**
- * Marko's attribute check on a condition tag: `<if>`/`<else-if>` take the
- * `value=` attribute alone (the error runs from the second attribute),
- * `<else>` an `if=` alone (from the first). With or without arguments.
- */
+/** `<html-comment>` takes no attributes, as in Marko (`assertNoAttributes`). */
+function rejectHtmlCommentAttributes(ctx: Ctx, node: Node): void {
+  if (ctx.tagRules === "none") return;
+  const first = tagAttributesOf(node)[0];
+  if (first)
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      `The ${voiceOfCtx(ctx).tag("html-comment")} tag does not support ${voiceOfCtx(ctx).attributes}.`,
+      first,
+    );
+}
+
 /**
  * The attribute an "only supports X" error points at: the first one `allowed`
  * rejects, else the second (X written twice).
@@ -3909,6 +3915,14 @@ function offendingAttribute(
   );
 }
 
+/**
+ * Marko's attribute check on a condition tag: `<if>`/`<else-if>` take the
+ * condition (the `value=` attribute) alone, `<else>` an `if=` alone, with or
+ * without arguments. The error points at the first attribute that is not the
+ * allowed one, else the second. A lone plain attribute is the condition's own
+ * (a missing condition is reported elsewhere); a lone spread is refused, as
+ * stock refuses `<if ...x>`.
+ */
 function rejectExtraConditionAttributes(
   ctx: Ctx,
   node: Node,
@@ -3932,10 +3946,8 @@ function rejectExtraConditionAttributes(
     }
     return;
   }
-  // A lone attribute is the condition's own (a missing one is reported
-  // elsewhere); the extra one is what this refuses.
   const offender =
-    attrs.length > 1
+    attrs.length > 1 || attrs.some(isSpreadAttributeNode)
       ? offendingAttribute(
           attrs,
           (attr) =>
@@ -4118,13 +4130,16 @@ function findLoopParamRead(
  */
 function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   const { types } = coreBabel();
-  const names = new Set<string>();
-  for (const param of tagParamsOf(node)) {
+  // Each bound name with the slot of the param that binds it.
+  const params = tagParamsOf(node);
+  const slots = new Map<string, number>();
+  params.forEach((param: Node, index: number) => {
     for (const name of Object.keys(types.getBindingIdentifiers(param))) {
-      names.add(name);
+      if (!slots.has(name)) slots.set(name, index);
     }
-  }
-  if (names.size === 0) return;
+  });
+  if (slots.size === 0) return;
+  const names = new Set(slots.keys());
   // Marko scans whatever its parser produced; an MX container the front end
   // could not parse has no payload to scan, and fails later at `exprOf`.
   const value = by.type === "MxAttribute" ? by.value?.node : by.value;
@@ -4139,7 +4154,15 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   // A tag variable or `<define>` declared below the loop is pre-registered as
   // pending: in its temporal dead zone when `by=` runs, so not an outer binding.
   const declared = ctx.tagVars?.get(name);
-  const outerTagVar = declared ? !declared.pending : ctx.defines.has(name);
+  // A custom tag's `/var` is in scope only inside its declaring block, like a
+  // read of it (`checkTagVarReads`); its entry outlives the block.
+  const here = ctx.tagVarBlock ?? [];
+  const outerTagVar = declared
+    ? !declared.pending &&
+      (declared.define ||
+        (declared.block.length <= here.length &&
+          declared.block.every((id: number, i: number) => here[i] === id)))
+    : ctx.defines.has(name);
   const outer =
     name === "input" ||
     name === "$global" ||
@@ -4147,7 +4170,6 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
     ctx.renderLets?.has(name) ||
     outerTagVar ||
     ctx.tagVarShadowed?.has(name) ||
-    ctx.enclosingTagParams?.has(name) ||
     ctx.imports.has(name) ||
     isModuleBinding(ctx, name);
   const attribute = voiceOfCtx(ctx).attribute;
@@ -4155,22 +4177,20 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
   // The key function takes the loop's own parameters in order: the read name
   // sits at the slot of the param that binds it (a destructuring pattern
   // included), and each param up to it is printed as authored.
-  const params = tagParamsOf(node);
-  const slot = params.findIndex((param: Node) =>
-    Object.keys(types.getBindingIdentifiers(param)).includes(name),
-  );
+  const slot = slots.get(name);
   const keyParams =
-    slot < 0
+    slot === undefined
       ? undefined
       : params
           .slice(0, slot + 1)
           .map((param: Node) => sliceNode(ctx, param).trim())
           .join(", ");
+  const keyFunction = `by=(${keyParams ?? name}) => ${keyParams && authored ? authored : "key"}`;
   raise(
     INVALID_FOR_CODE,
     outer
-      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`by=(${keyParams ?? name}) => ${keyParams && authored ? authored : "key"}\`).`
-      : `The \`by=\` ${attribute} is evaluated before the loop runs, so \`${name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`by=(${name}) => key\`).`,
+      ? `The \`by=\` ${attribute} is evaluated before the loop runs, so it reads the outer \`${name}\`, not the loop's \`${name}\` parameter. Key with a property name string (\`by="id"\`) or a function (\`${keyFunction}\`).`
+      : `The \`by=\` ${attribute} is evaluated before the loop runs, so \`${name}\` is not in scope. Key with a property name string (\`by="id"\`) or a function (\`${keyFunction}\`).`,
     read,
   );
 }
@@ -4532,7 +4552,8 @@ function constGuards(
 /**
  * What a write to the parameters of `<for|…|>` or `<define/D|…|>` is
  * refused for: a parameter bound as a plain name (`|item|`, `|item = 0|`) is
- * written nowhere; one inside a pattern is written through its object, which
+ * written nowhere, and neither is a rest element or an element of an array
+ * pattern; one inside an object pattern is written through its object, which
  * is refused in the render only.
  */
 function paramGuards(
@@ -4540,13 +4561,27 @@ function paramGuards(
   kind: "for" | "define",
 ): ReadonlyMap<string, WriteGuard> {
   const guards = new Map<string, WriteGuard>();
+  // A name bound with no object behind it: a plain name, a defaulted one, a
+  // rest element, or an element of an array pattern. Stock refuses a write to
+  // each; a name inside an object pattern is written through its object.
+  const plainName = (pattern: Node | null | undefined): string | undefined => {
+    if (pattern?.type === "Identifier") return pattern.name;
+    if (pattern?.type === "AssignmentPattern") return plainName(pattern.left);
+    if (pattern?.type === "RestElement") return plainName(pattern.argument);
+    return undefined;
+  };
   for (const param of tagParamsOf(node)) {
-    const plain =
-      param?.type === "Identifier" ||
-      (param?.type === "AssignmentPattern" &&
-        param.left?.type === "Identifier");
+    const plain = new Set<string>();
+    const own = plainName(param);
+    if (own) plain.add(own);
+    if (param?.type === "ArrayPattern") {
+      for (const element of param.elements) {
+        const name = plainName(element);
+        if (name) plain.add(name);
+      }
+    }
     for (const name of bindingIdentifiers(param)) {
-      guards.set(name, { kind, inFunction: plain });
+      guards.set(name, { kind, inFunction: plain.has(name) });
     }
   }
   return guards;
@@ -7358,21 +7393,15 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
     (!ctx.customTags || !Object.hasOwn(ctx.customTags, name)) &&
     !Object.hasOwn(ctx.declarations.tags, name) &&
     !ctx.declarations.isDelegatedTag?.(name, ctx);
-  // Marko's `<html-comment>` takes no attributes (`assertNoAttributes`), on a
-  // host that claims the tag too: the claim decides how it renders, not what
-  // it accepts.
+  // Marko's `<html-comment>` takes no attributes (`assertNoAttributes`). A host
+  // that claims the tag answers first (a JSX host refuses the tag itself), so
+  // the check runs after the claim, below; elsewhere it runs here.
   if (
     name === "html-comment" &&
-    ctx.tagRules !== "none" &&
+    !ctx.declarations.isDelegatedTag?.(name, ctx) &&
     (!ctx.customTags || !Object.hasOwn(ctx.customTags, name))
   ) {
-    const first = tagAttributesOf(node)[0];
-    if (first)
-      raise(
-        INVALID_ATTRIBUTE_CODE,
-        `The ${voiceOfCtx(ctx).tag(name)} tag does not support ${voiceOfCtx(ctx).attributes}.`,
-        first,
-      );
+    rejectHtmlCommentAttributes(ctx, node);
   }
   if (!fileLocalBinding && (compilerValueTag || logTag))
     validateBuiltinValueAttributes(ctx, node, name);
@@ -7556,7 +7585,9 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   if (customTag) return lowerCustomTag(ctx, node, name, customTag);
 
   if (!fileLocalBinding && ctx.declarations.isDelegatedTag?.(name, ctx)) {
-    return lowerDelegatedTag(ctx, node, name);
+    const lowered = lowerDelegatedTag(ctx, node, name);
+    if (name === "html-comment") rejectHtmlCommentAttributes(ctx, node);
+    return lowered;
   }
 
   // `fileLocalBinding` alone is sufficient here for a `<const>`/`<for>`-param/

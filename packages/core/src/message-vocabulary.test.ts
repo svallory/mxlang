@@ -1042,9 +1042,9 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
   {
     name: "`for` with a loop parameter in `by=` (the fix is kept: it is JavaScript)",
     source: "for|i| of=[1] by=i\n  p\n",
-    mx: 'The `by=` attribute is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => key`).',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => i`).',
     option:
-      'The `by=` option is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => key`).',
+      'The `by=` option is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(i) => i`).',
   },
   {
     name: "`for` with a loop parameter in `by=` that shadows an outer binding",
@@ -1063,9 +1063,9 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
   {
     name: "`for` with a loop parameter in `by=` and a `let` of that name below",
     source: "for|x| of=input.list by=x.id\n  p\nlet/x=1\n",
-    mx: 'The `by=` attribute is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => key`).',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => x.id`).',
     option:
-      'The `by=` option is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => key`).',
+      'The `by=` option is evaluated before the loop runs, so `x` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(x) => x.id`).',
   },
   {
     name: "`for` with a loop parameter in `by=` that shadows an outer binding, keyed by a call",
@@ -1105,17 +1105,24 @@ const TEMPLATE_ROWS: readonly TemplateRow[] = [
   {
     name: "`for` with a loop parameter in `by=` and a `define` of that name below",
     source: "for|item| of=input.xs by=item.id\n  p\ndefine/item\n  p\n",
-    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => item.id`).',
     option:
-      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => item.id`).',
   },
   {
     name: "`for` with a loop parameter in `by=` and a returning call of that name below",
     source:
       'import Card from "./card.mx"\nfor|item| of=input.xs by=item.id\n  p\nCard/item\n',
-    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => item.id`).',
     option:
-      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => key`).',
+      'The `by=` option is evaluated before the loop runs, so `item` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item) => item.id`).',
+  },
+  {
+    name: "`for` index read in `by=` with no outer binding",
+    source: "for|item, i| of=input.xs by=i\n  p\n",
+    mx: 'The `by=` attribute is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item, i) => i`).',
+    option:
+      'The `by=` option is evaluated before the loop runs, so `i` is not in scope. Key with a property name string (`by="id"`) or a function (`by=(item, i) => i`).',
   },
 ];
 
