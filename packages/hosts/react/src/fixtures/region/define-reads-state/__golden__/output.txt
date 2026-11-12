@@ -1,4 +1,4 @@
-import { useState } from "react";function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {return ((first?: any, ...rest: any[]) => {if (first !== null && typeof first === "object" && first.content === undefined && first.children !== undefined) {const body = first.children;first = { ...first, content: typeof body === "string" || typeof body === "number" ? body === "" ? undefined : <>{String(body)}</> : body };}return fn(first, ...rest);}) as F;}
+import { useState } from "react";function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {return ((first?: any, ...rest: any[]) => {if (first !== null && typeof first === "object" && first.content == null && first.children != null) {const body = first.children;first = { ...first, content: typeof body === "string" || typeof body === "number" ? body === "" ? undefined : <>{String(body)}</> : body };}return fn(first, ...rest);}) as F;}
 
 export default function Page() {
   const [label] = useState("from-state");

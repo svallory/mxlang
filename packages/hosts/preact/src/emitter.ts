@@ -139,7 +139,7 @@ type DelegatedTagData = { kind: "try" };
  * parameter), so a strict project (`noImplicitAny`) does not report TS7006 or
  * TS7031 on a define whose params the author left untyped.
  */
-function typedDefineParam(param: string): string {
+export function typedDefineParam(param: string): string {
   const text = param.trim();
   let depth = 0;
   let quote = "";
@@ -735,6 +735,12 @@ export class PreactEmitter implements Emitter<string> {
   readonly #bindings: Map<string, Position>;
   readonly #positionAt: ((offset: number) => Position) | undefined;
   readonly #source: string | undefined;
+  /**
+   * This emitter fills a body that is its own scope (`#scoped`). A region
+   * lifts a `<define>` to the region's one arrow, outside that scope, where
+   * the body's `/var` and names are not visible, so a region refuses it.
+   */
+  readonly #scopedBody: boolean;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -750,7 +756,9 @@ export class PreactEmitter implements Emitter<string> {
     bindings = new Map<string, Position>(),
     positionAt = region?.positionAt,
     source?: string,
+    scopedBody = false,
   ) {
+    this.#scopedBody = scopedBody;
     this.#source = source;
     this.#bindings = bindings;
     this.#positionAt = positionAt;
@@ -806,6 +814,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#bindings,
       this.#positionAt,
       this.#source,
+      this.#scopedBody,
     );
   }
 
@@ -881,7 +890,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#aliases,
       [],
       { n: 0 },
-      false,
+      this.#callbackScope,
       this.#typeCheck,
       this.#decodeText,
       this.#region,
@@ -889,6 +898,7 @@ export class PreactEmitter implements Emitter<string> {
       new Map<string, Position>(),
       this.#positionAt,
       this.#source,
+      true,
     );
     const code = build(scope);
     if (scope.#varStatements.length === 0) return code;
@@ -2406,9 +2416,13 @@ export class PreactEmitter implements Emitter<string> {
    */
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
-    const rendered = this.#scoped(false, (scope) =>
-      scope.#expression(node.content?.children ?? []),
-    );
+    const children = node.content?.children ?? [];
+    // Only a dynamic tag's body is its own `/var` scope (Marko compiles it so);
+    // the body of a described or called unit keeps the component's.
+    const rendered =
+      node.target.kind === "dynamic"
+        ? this.#scoped(false, (scope) => scope.#expression(children))
+        : this.#expression(children);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
@@ -2629,7 +2643,7 @@ export class PreactEmitter implements Emitter<string> {
    * declaration is a statement.
    */
   define(node: Extract<IrNode, { kind: "Define" }>): void {
-    if (this.#region && !this.#callbackScope) {
+    if (this.#region && !this.#callbackScope && !this.#scopedBody) {
       this.#claimName(node.name, node.nameSpan, node.loc);
       // The whole-file statement text (`emitModuleWithMappings`). The body is
       // a function of its own, so it renders as a callback: a `/var` inside

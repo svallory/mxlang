@@ -233,9 +233,9 @@ export function attributeHelpers(
  * props, so the define body's `content` is the same slot either way. An
  * argument that already carries `content` is left alone.
  */
-export const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {
+const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F): F {
   return ((first?: any, ...rest: any[]) => {
-    if (first !== null && typeof first === "object" && first.content === undefined && first.children !== undefined) {
+    if (first !== null && typeof first === "object" && first.content == null && first.children != null) {
       const body = first.children;
       first = {
         ...first,
@@ -252,7 +252,7 @@ export const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>
 }`;
 
 /**
- * \`mxDynamic\`'s source, inlined into a module rather than imported.
+ * `mxDynamic`'s source, inlined into a module rather than imported.
  *
  * Marko's own dynamic tag is polymorphic at run time — the target can be a
  * tag-name string, a render function, or already-rendered content (a
@@ -515,6 +515,7 @@ export function emitModuleWithMappings(
       for (const name of body.runtimeImports) {
         emitter.runtimeImports.add(name);
       }
+      for (const name of body.aliases) emitter.aliases.add(name);
       statements.push(
         emitter.defineStatement(node, rendered, body.varStatements),
       );

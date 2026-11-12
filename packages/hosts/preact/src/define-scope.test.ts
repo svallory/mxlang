@@ -7,8 +7,10 @@
  * it is an unresolved tag. Before, core kept the name for the rest of the file
  * and the unresolved case compiled as far as the host's top-level error.
  */
+import { parse } from "@babel/parser";
 import type { CustomTag } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
+import { typedDefineParam } from "./emitter.ts";
 import { compilePreactMx } from "./index.ts";
 
 const FOO = "<define/Foo><p>inner</p></define>";
@@ -45,51 +47,119 @@ describe("preact: a <define> is scoped to the body that declares it", () => {
   });
 });
 
-describe("a /var inside a body is scoped to that body (stock Marko 6.4.4)", () => {
-  const counter = {
-    template: {
-      filename: "/fixtures/tags/counter.mx",
-      source: "<return value=1/>",
-    },
-  } as CustomTag;
-  const compile = (source: string) =>
-    compilePreactMx(source, "/fixtures/page.mx", { customTags: { counter } })
-      .code;
+const HOSTS = ["preact", "react", "hono"] as const;
 
-  it("a whole-file define body declares its own /var, beside an outer one", () => {
-    const code = compile(
-      "<define/Row><counter/x/>${x}</define><counter/x/><Row/>",
-    );
-    const define = code.slice(code.indexOf("const Row"));
-    // Inside the define's function, ahead of the markup that reads `x`.
-    expect(define).toMatch(
-      /const Row = __mxDefine\(\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(<>/,
-    );
-    // The component's own `/x` has its own temp, outside the define.
-    expect(code.match(/const x = /g)).toHaveLength(2);
-    expect(code.match(/const __mxRet0 = /g)).toHaveLength(2);
-  });
+async function compilerFor(
+  host: (typeof HOSTS)[number],
+): Promise<typeof compilePreactMx> {
+  if (host === "preact") return compilePreactMx;
+  const url = new URL(`../../${host}/src/index.ts`, import.meta.url).href;
+  const module = (await import(/* @vite-ignore */ url)) as Record<
+    string,
+    unknown
+  >;
+  return module[
+    host === "react" ? "compileReactMx" : "compileHonoMx"
+  ] as typeof compilePreactMx;
+}
 
-  it("two defines each declare their own /var", () => {
-    const code = compile(
-      "<define/A><counter/x/>${x}</define><define/B><counter/y/>${y}</define><A/><B/>",
-    );
-    expect(code.match(/const __mxRet0 = /g)).toHaveLength(2);
-    expect(code).toMatch(/const A = __mxDefine\(\(\) => \{ const __mxRet0/);
-    expect(code).toMatch(/const B = __mxDefine\(\(\) => \{ const __mxRet0/);
-  });
+const parseTsx = (code: string) =>
+  parse(code, { sourceType: "module", plugins: ["jsx", "typescript"] });
 
+describe.each(HOSTS)(
+  "%s: a /var inside a body is scoped to that body (stock Marko 6.4.4)",
+  (host) => {
+    const counter = {
+      template: {
+        filename: "/fixtures/tags/counter.mx",
+        source: "<return value=1/>",
+      },
+    } as CustomTag;
+    const compile = async (source: string) =>
+      (await compilerFor(host))(source, "/fixtures/page.mx", {
+        customTags: { counter },
+      }).code;
+
+    it("a whole-file define body declares its own /var, beside an outer one", async () => {
+      const code = await compile(
+        "<define/Row><counter/x/>${x}</define><counter/x/><Row/>",
+      );
+      const define = code.slice(code.indexOf("const Row"));
+      // Inside the define's function, ahead of the markup that reads `x`.
+      expect(define).toMatch(
+        /const Row = __mxDefine\(\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(<>/,
+      );
+      // The component's own `/x` has its own temp, outside the define.
+      expect(code.match(/const x = /g)).toHaveLength(2);
+      expect(code.match(/const __mxRet0 = /g)).toHaveLength(2);
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("two defines each declare their own /var", async () => {
+      const code = await compile(
+        "<define/A><counter/x/>${x}</define><define/B><counter/y/>${y}</define><A/><B/>",
+      );
+      expect(code.match(/const __mxRet0 = /g)).toHaveLength(2);
+      expect(code).toMatch(/const A = __mxDefine\(\(\) => \{ const __mxRet0/);
+      expect(code).toMatch(/const B = __mxDefine\(\(\) => \{ const __mxRet0/);
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("a /var in a define body that reuses one of its params is core's duplicate", async () => {
+      await expect(
+        compile("<define/Row|{ x }|><counter/x/>${x}</define><Row x=1/>"),
+      ).rejects.toThrow(/Duplicate declaration/);
+    });
+
+    it.each([
+      ["a dynamic tag body", "<${input.tag}><counter/x/>${x}</>"],
+      [
+        "a <try> @placeholder body",
+        "<try><b/><@placeholder><counter/x/>${x}</@placeholder></try>",
+      ],
+      [
+        "a <try> @catch body",
+        "<try><b/><@catch><counter/x/>${x}</@catch></try>",
+      ],
+      ["a <try> body", "<try><counter/x/>${x}<@catch>e</@catch></try>"],
+    ])("%s declares its own /var beside an outer /x", async (_label, body) => {
+      const code = await compile(`${body}\n<counter/x/>${"${x}"}`);
+      // One declaration inside the body's own arrow, one in the component.
+      expect(code.match(/const x = /g)).toHaveLength(2);
+      expect(code).toMatch(
+        /\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(/,
+      );
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    it("a dynamic-tag body inside a <for> still refuses a /var", async () => {
+      await expect(
+        compile("<for|i| of=input.xs><${input.t}><counter/x/>${x}</></for>"),
+      ).rejects.toThrow(/not supported/);
+    });
+
+    it("the body of a called, non-dynamic tag keeps the component's /var scope", async () => {
+      await expect(
+        compile(
+          "<define/Row|c|>${c}</define><Row><counter/x/>${x}</Row><counter/x/>",
+        ),
+      ).rejects.toThrow(/Duplicate declaration|not in scope|not supported/);
+    });
+  },
+);
+
+describe("typedDefineParam", () => {
   it.each([
-    ["a dynamic tag body", "<${input.tag}><counter/x/>${x}</>"],
-    [
-      "a <try> @placeholder body",
-      "<try><b/><@placeholder><counter/x/>${x}</@placeholder></try>",
-    ],
-    ["a <try> @catch body", "<try><b/><@catch><counter/x/>${x}</@catch></try>"],
-  ])("%s declares its own /var beside an outer /x", (_label, body) => {
-    const code = compile(`${body}\n<counter/x/>${"${x}"}`);
-    // One declaration inside the body's own arrow, one in the component.
-    expect(code.match(/const x = /g)).toHaveLength(2);
-    expect(code).toMatch(/\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(/);
+    ["p", "p: any"],
+    ["...r", "...r: any[]"],
+    ["{ a }", "{ a }: any"],
+    ["[a, b]", "[a, b]: any"],
+    ["a: string", "a: string"],
+    ["a = 1", "a = 1"],
+    ["{ a = 1 }", "{ a = 1 }: any"],
+    ["{ a } = {}", "{ a } = {}"],
+    ["...r: string[]", "...r: string[]"],
+  ])("%s -> %s", (param, typed) => {
+    expect(typedDefineParam(param)).toBe(typed);
   });
 });

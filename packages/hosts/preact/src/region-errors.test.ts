@@ -168,6 +168,29 @@ describe("region rule", () => {
     });
   });
 
+  it.each([
+    [
+      "a <for> callback around a dynamic-tag body",
+      "<ul><for|item| of=input.xs><${input.T}><define/Row>${item}</define><Row/></></for></ul>",
+    ],
+    [
+      "a /var bound in the same <try> body",
+      "<div><try><${input.T}/x/><define/Row>${x}</define><Row/><@catch>e</@catch></try></div>",
+    ],
+    [
+      "a same-named define outside the body",
+      "<div><define/Row/><try><define/Row/><Row/><@catch>x</@catch></try><Row/></div>",
+    ],
+  ])(
+    "refuses a <define> inside a dynamic-tag or <try> body (%s): it would leave the body's scope",
+    (_label, region) => {
+      const e = errorOf(inRegion(region));
+      expect(e.message).toBe(
+        "`<define>` inside `<for>`, `<if>`, an attribute-tag body or a `<define>` body cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside those bodies",
+      );
+    },
+  );
+
   it("refuses a second <define> of the same name, at its name (Marko: Duplicate declaration)", () => {
     // Both lift into the region's one arrow, so this would be a second
     // `const Row`; Marko 6.4.4 reports `Duplicate declaration "Row"` at the

@@ -207,3 +207,41 @@ describe("a body forwarded through <${input.content}/> (hono, Marko parity)", ()
     },
   );
 });
+
+describe("a <define> used as a dynamic target (mx-jsx-define-as-dynamic-target-empty)", () => {
+  const define = (params: string) =>
+    `<define/Row${params}><li><\${content}${params === "" ? "" : '("r")'}/></li></define>\n<const/R = Row/>\n`;
+
+  it("renders the body when the call has no tag params", async () => {
+    expect(
+      await renderPair(
+        `${define("|{ content }|")}<\${R}><b>x</b></>`,
+        {},
+        WRAP,
+        true,
+      ),
+    ).toBe("<li><b>x</b></li>");
+  });
+
+  it("renders the body, called with its params, when the call has tag params", async () => {
+    expect(
+      await renderPair(
+        `${define("|{ content }|")}<\${R}|n|><b>\${n}</b></>`,
+        {},
+        WRAP,
+        true,
+      ),
+    ).toBe("<li><b>r</b></li>");
+  });
+
+  it("a text body reads as text, not a tag name", async () => {
+    expect(
+      await renderPair(
+        `${define("|{ content }|")}<\${R}>hi</>`,
+        {},
+        WRAP,
+        true,
+      ),
+    ).toBe("<li>hi</li>");
+  });
+});
