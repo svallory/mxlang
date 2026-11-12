@@ -687,13 +687,42 @@ function varScopedNames(node: unknown, found: string[] = []): string[] {
  * and namespaces of different statements merge).
  */
 export function moduleValueNames(code: string, span?: SourceSpan): string[] {
+  // The emitter has no Marko node: a stub carrying the statement's span makes
+  // a parse failure (a gap between core's check and this parse) a positioned
+  // TranslateError at the statement.
+  const at = (
+    span ? { span: { start: span.sourceStart, end: span.sourceEnd } } : {}
+  ) as Node;
+  return valueNames(parseClientStatements(code, at, "static"));
+}
+
+/**
+ * The names a parameter list or binding pattern (`item, i`, `{ fmt }`,
+ * `x: number = 1`) binds; empty when the text does not parse as one.
+ */
+export function boundNames(text: string): string[] {
+  if (text.trim() === "") return [];
   try {
-    return valueNames(parseClientStatements(code, {} as Node, "static"));
-  } catch (error) {
-    // Core checked this text at resolve time, so this is a gap between that
-    // check and this parse; the emitter has no Marko node, so name the offset.
-    const at = span ? ` (source offset ${span.sourceStart})` : "";
-    throw new Error(`${(error as Error).message}${at}`, { cause: error });
+    const fn = babelParser.parseExpression(`(${text}) => 0`, {
+      plugins: [["typescript", { dts: false }]],
+    }) as Node;
+    return (fn.params ?? []).flatMap((param: Node) => bindingNames(param));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The names a `server` statement declares, or none when its text does not
+ * parse here. The names only feed the typeCheck view's merges, and core's
+ * parser (the MX Babel fork) may accept text this stock parse rejects: a
+ * failure here must never fail a build, it only loses a merge exclusion.
+ */
+function tryValueNames(code: string, node: Node): string[] {
+  try {
+    return valueNames(parseClientStatements(code, node, "server"));
+  } catch {
+    return [];
   }
 }
 
@@ -1166,9 +1195,10 @@ function resolveDelegatedTag(
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
       // Parsed on every compile, though only the typeCheck projection reads
-      // it: the resolve context carries no typeCheck flag, and the parse is
-      // small next to the statement check core already ran.
-      declaredNames: valueNames(parseClientStatements(code, node, "server")),
+      // it: the resolve context carries no typeCheck flag. A parse failure
+      // yields no names and never fails a build (`tryValueNames`); no input
+      // is known that core's parser accepts and this one rejects.
+      declaredNames: tryValueNames(code, node),
     };
   }
 

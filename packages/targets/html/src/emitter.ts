@@ -67,6 +67,7 @@ import type {
   DelegatedTagData,
 } from "./translate.ts";
 import {
+  boundNames,
   DYNAMIC,
   escapeComment,
   escapeScript,
@@ -294,6 +295,7 @@ export function createEmitter(
    * included.
    */
   const blockFunction = (children: IrNode[], params = ""): MappedCode => {
+    bindNames(params);
     const outerBody = state.body;
     const outerBodyMappings = state.bodyMappings;
     const outerPrelude = state.prelude;
@@ -486,6 +488,7 @@ export function createEmitter(
     const result = `__mxAttrTags${serial}`;
     const sourceName = `__mxAttrTagSource${serial}`;
     const [first = "__mxItem", second] = node.loop.params;
+    bindNames(`${first}, ${second ?? ""}`);
     const body = arraySourceValue(node.nodes, as, valueType);
 
     if (source.kind === "of") {
@@ -615,9 +618,17 @@ export function createEmitter(
    * so `fn` applied to the bound value's type is checked and mapped to the
    * modifier.
    */
+  /**
+   * Notes the names a parameter list or pattern binds, so a refinement of one
+   * reads the template's own binding, not a `client` import of that name.
+   */
+  const bindNames = (text: string): void => {
+    for (const name of boundNames(text)) state.templateBindings.add(name);
+  };
+
   /** `const x = ` for a tag variable, noting the binding for refinements. */
   const declared = (name: string): string => {
-    state.templateBindings.add(name);
+    bindNames(name);
     return `const ${name} = `;
   };
 
@@ -1346,6 +1357,7 @@ export function createEmitter(
       };
 
       const [first = "__mxItem", second] = node.params;
+      bindNames(`${first}, ${second ?? ""}`);
       const source = node.source;
 
       if (source.kind === "of") {
@@ -1376,7 +1388,7 @@ export function createEmitter(
     },
 
     define(node) {
-      state.templateBindings.add(node.name);
+      bindNames(node.name);
       const fn = blockFunction(node.children, node.params.join(", "));
       if (node.attrs.length === 0) {
         push(concatMapped(`const ${node.name} = `, fn, ";"));
@@ -1399,7 +1411,7 @@ export function createEmitter(
     },
 
     constant(node) {
-      state.templateBindings.add(node.name);
+      bindNames(node.name);
       push(`const ${node.name} = ${node.init.code};`);
     },
 
@@ -1494,7 +1506,7 @@ export function createEmitter(
         // an ordinary expression Marko's own server render evaluates and
         // renders. With no update path in a one-shot render, binding it as a
         // `const` reproduces Marko's output exactly.
-        if (tag.var) state.templateBindings.add(tag.var);
+        if (tag.var) bindNames(tag.var);
         push(`const ${tag.var} = ${data.init};`);
         return;
       }
@@ -1676,6 +1688,7 @@ export function createEmitter(
         state.sink = outerSink;
         push(`${trySink}.commit();`);
         state.indent--;
+        bindNames(katch.block.params.join(", "));
         push(`} catch (${katch.block.params.join(", ") || "__mxError"}) {`);
         state.indent++;
         drive(emitter, katch.block.children);

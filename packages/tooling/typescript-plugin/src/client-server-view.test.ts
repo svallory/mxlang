@@ -201,6 +201,38 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
   });
 
+  it("a for param of a refinement's name checks against the param", () => {
+    const source =
+      'client import { fmt } from "./f.ts";\n<let/q=1/>\n<for|fmt| of=[(v: number) => v]><input value:fmt:=q/></for>\n';
+    expect(
+      errorsOf(
+        { [FILE]: source, "/project/f.ts": "export const fmt = 1;\n" },
+        FILE,
+      ),
+    ).toEqual([]);
+  });
+
+  it("KNOWN LIMIT: a refinement naming a client-body function reads undefined", () => {
+    const source =
+      "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([2722]);
+  });
+
+  it("KNOWN LIMIT: a template binding elsewhere drops the alias for a refinement outside its scope", () => {
+    const source =
+      "client declare function fmt(x: number): number;\n<let/q=1/>\n<input value:fmt:=q/>\n<if=true><const/fmt=(v: number) => v/></if>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it("KNOWN LIMIT: a type-only client namespace drops the alias of a merged value", () => {
+    const source =
+      "client declare function f(x: number): number;\nclient namespace f { export type T = 1 }\n<let/q=1/>\n<input value:f:=q/>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.length).toBeGreaterThan(0);
+  });
+
   it("rename at a refinement's name reaches the client import", () => {
     const source =
       'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n';

@@ -918,6 +918,25 @@ describe("html typeCheck: the client arrow shadows the names a server statement 
     expect(code).not.toContain("__mxRefine_fmt");
   });
 
+  it.each([
+    [
+      "a <for> param",
+      'client import { fmt } from "./f"\n<let/q=1/>\n<for|fmt| of=[(v: number) => v]><input value:fmt:=q/></for>\n',
+    ],
+    [
+      "a <define> param",
+      'client import { fmt } from "./f"\n<let/q=1/>\n<define/D|fmt|><input value:fmt:=q/></define>\n<D/>\n',
+    ],
+    [
+      "a destructured /var",
+      "client declare function fmt(x: string): string;\n<let/q=1/>\n<const/{ fmt }={ fmt: (v: number) => v }/>\n<input value:fmt:=q/>\n",
+    ],
+  ])("%s of a refinement's name keeps the plain read", (_name, source) => {
+    const code = typeCheck(source);
+    expect(code).toContain("(false && fmt(q), q)");
+    expect(code).not.toContain("__mxRefine_fmt");
+  });
+
   it("a type-only namespace gets no refinement alias", () => {
     const code = typeCheck(
       "client namespace N { export type T = number }\n<let/q=1/>\n<input value:N:=q/>\n",

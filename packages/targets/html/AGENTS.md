@@ -132,14 +132,19 @@ function, the value names of `client` imports, namespaces and `declare` forms
 modules bind none) are declared `undefined`, with the whole render in a block
 below them, so a tag variable or `<define>` of the same name (core lets an
 ambient `client declare` share its spelling) declares without a clash. The
-The render's own parameters (`input`, `__mxOut`) and a name a `server` statement
+render's own parameters (`input`, `__mxOut`) and a name a `server` statement
 declares too are left out (`static` and `export` names are read from the
 module's hoisted code). A bound attribute's refinement (`v:fn:=q`) that names
 a `client` import reads `__mxRefine_fn`, a module-level alias of the real
 binding, so the shadow stays for every other read; the emitter drives the body
-twice to know that; a template binding of the same name (tag variable,
-`<define>`) in the template keeps the plain read, and a namespace holding only
-types gets no alias. Known limits: a `client` import of
+twice to know that; a template binding of the same name (tag variable, `/var` pattern, tag or
+`<for>`/`<define>`/content/catch param) keeps the plain read, and a namespace
+holding only types gets no alias. Known limits: the binding check is by name
+across the whole template, not by scope, so a refinement outside the scope of a
+same-named binding elsewhere reads the render-level `undefined` shadow; a
+namespace holding only types in one `client` statement drops the alias for that
+name even when another statement makes it a value; a refinement naming a
+function declared in a `client` body (not an import) reads `undefined`; a `client` import of
 another module's client export is TS2614 (that module's one projection is its
 server view); a top-level type (`Input`) cannot name a client class or enum; a
 namespace body reading a client value is `undefined`; a `client` statement
