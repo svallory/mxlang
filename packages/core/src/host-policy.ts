@@ -151,7 +151,8 @@ export type TargetPolicyDiagnosticCode =
   | "host-invalid-descriptor"
   | "invalid-default-tag"
   | "default-tag-overridden"
-  | "unknown-config-key";
+  | "unknown-config-key"
+  | "strict-ignored";
 
 /**
  * One problem found while resolving a target, positioned in the
@@ -985,6 +986,17 @@ export function resolveTargetPolicyDetailed(
         resolved.policy.descriptor,
       ),
     );
+  }
+  if (mx?.strict === true && resolved.policy.strict !== true) {
+    // `mx.strict` accompanies an explicitly selected target only; with none
+    // selected the default target is non-strict, and the setting does nothing.
+    diagnostics.push({
+      code: "strict-ignored",
+      severity: "warning",
+      file,
+      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. Add mx.target (for example "html") to compile strict.`,
+      ...at("strict"),
+    });
   }
   const config = source
     ? readDefaultTagConfig(

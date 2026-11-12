@@ -4182,7 +4182,10 @@ and `mx-tsc` prints them positioned in `package.json` without changing its exit
 code.
 
 `mx.strict` accompanies an explicitly selected target as it did an explicit
-host. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
+host. Without `mx.host` or `mx.target` the default target is non-strict, and
+`mx.strict: true` is a policy **warning** (code `strict-ignored`, "mx.strict is
+ignored without mx.host or mx.target"), positioned at the `strict` key, in every
+tool: the setting is reported, never silently dropped. `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
 warns that it is a target and suggests `solid`.
 
 **Third-party targets.** A package specifier under `mx.target` or `mx.host` is

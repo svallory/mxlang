@@ -687,7 +687,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
         for (const mx of [
           { target: "vue-jsx", host: "vue" },
           { target: "page" },
-          { strict: true },
+          {},
         ]) {
           const root = tree({
             "package.json": JSON.stringify({ mx }),
@@ -736,6 +736,30 @@ describe("TargetPolicyDiagnostic code", () => {
     );
 
     expect(diagnostics.map((d) => d.code)).toEqual(["unknown-host"]);
+  });
+
+  it('is "strict-ignored" for mx.strict: true with no mx.host or mx.target, and not once one selects a target', () => {
+    const text = JSON.stringify({ mx: { strict: true } }, null, 2);
+    const { policy, diagnostics } = resolveTargetPolicyDetailed(
+      project(text),
+      lookup,
+    );
+    expect(policy.strict).toBeUndefined();
+    expect(diagnostics).toMatchObject([
+      {
+        code: "strict-ignored",
+        severity: "warning",
+        message: expect.stringContaining("mx.strict is ignored"),
+        line: 3,
+        column: 14,
+      },
+    ]);
+    const selected = resolveTargetPolicyDetailed(
+      project(JSON.stringify({ mx: { target: "page", strict: true } })),
+      lookup,
+    );
+    expect(selected.diagnostics).toEqual([]);
+    expect(selected.policy.strict).toBe(true);
   });
 
   it.each([
