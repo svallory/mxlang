@@ -260,6 +260,18 @@ export function jsxRenderableExpression(shape: JsxNodeShape): string {
 }
 
 /**
+ * The body of `<html-style>`, as the text of a `<style>` element: placeholders
+ * stringified as in {@link JSX_SCRIPT_TEXT_EXPRESSION}, then the joined body
+ * escaped for style context (Marko's `_escape_style`): `</style` (any case)
+ * becomes `\3C/style`.
+ */
+export const JSX_STYLE_TEXT_EXPRESSION = `(...parts: unknown[]): string =>
+  parts
+    .map((part) => (part || part === 0 ? part + "" : ""))
+    .join("")
+    .replace(/<(\\/style)/gi, "\\\\3C$1")`;
+
+/**
  * `<textarea value=x>` renders `x` as the textarea's content, as Marko 6.4.4
  * does: `null`/`undefined`/`false`/`true` as nothing, everything else as text,
  * and a leading newline doubled because the HTML parser drops a textarea's

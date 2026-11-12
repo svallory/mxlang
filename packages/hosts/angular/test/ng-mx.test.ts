@@ -1757,3 +1757,14 @@ describe("compileNgMx: several bare roots (G9)", () => {
     expect(result.code).toContain(`template: ${expected},`);
   });
 });
+
+describe("compileNgMx: tag type containers", () => {
+  // Type arguments on a tag are TypeScript-only syntax: erased, not refused.
+  it("erases the type arguments of a native tag", () => {
+    const result = compileNgMx(
+      componentFile("<p<string>>x</p>"),
+      "/p/x.component.ng.mx",
+    );
+    expect(emittedTemplate(result.code)).toBe("<p>x</p>");
+  });
+});

@@ -211,6 +211,7 @@ export function compileJsxRegion(
   const { body } = parseFragment(source, {
     filename: options.filename,
     ...base,
+    stripTagTypes: true,
     customTags: options.customTags,
     nativeTags: options.declarations.nativeTags,
     targets: options.targets,

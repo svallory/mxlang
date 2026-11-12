@@ -92,3 +92,31 @@ describe(".preact.mx region renders what the whole-file .mx renders", () => {
     expect(fromRegion).not.toBe("");
   });
 });
+
+describe("compilePreactRegion: tag type containers", () => {
+  // Type arguments on a tag are TypeScript-only syntax: erased, not refused.
+  it("erases the type arguments of a native tag", async () => {
+    const { compilePreactRegion } = await import("./index.ts");
+    const result = compilePreactRegion("<p<string>>x</p>", {
+      filename: "/f/T.preact.mx",
+    });
+    expect(result.code).toContain("x");
+    expect(result.code).not.toContain("string");
+  });
+});
+
+describe("compilePreactRegion: <html-style>", () => {
+  // Stock Marko 6.4.4 writes `<style attrs>`, the body as text escaped for
+  // style context. It was a literal `<html-style>` element.
+  it("emits a real <style> with its attributes and an escaped raw-HTML body", async () => {
+    const { compilePreactRegion } = await import("./index.ts");
+    const { code } = compilePreactRegion(
+      '<html-style media="print">a > b { color: red }</html-style>',
+      { filename: "/f/T.preact.mx" },
+    );
+    expect(code).toContain('<style media="print"');
+    expect(code).toContain("dangerouslySetInnerHTML");
+    expect(code).toContain('__mxStyleText("a > b { color: red }")');
+    expect(code).not.toContain("html-style");
+  });
+});

@@ -130,6 +130,7 @@ export const MX_TEXTAREA_CONTENT_BINDING = "__mxTextareaContent";
 export const MX_TEXTAREA_PICK_BINDING = "__mxTextareaPick";
 export const MX_TEXTAREA_OMIT_BINDING = "__mxTextareaOmit";
 export const MX_SCRIPT_TEXT_BINDING = "__mxScriptText";
+export const MX_STYLE_TEXT_BINDING = "__mxStyleText";
 export const MX_IS_SERVER_BINDING = "__mxIsServer";
 export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
 export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
@@ -193,4 +194,14 @@ export const TEXTAREA_DYN_SPREAD_HELPER = `function ${MX_TEXTAREA_DYN_SPREAD_BIN
  */
 export const SCRIPT_TEXT_HELPER = String.raw`function ${MX_SCRIPT_TEXT_BINDING}(...parts: unknown[]): string {
   return parts.map((part) => (part || part === 0 ? part + "" : "")).join("").replace(/<(\/?script|!--)/gi, "\\u003C$1");
+}`;
+
+/**
+ * The body of `<html-style>`, as the text of a `<style>` element: placeholders
+ * stringified as in `SCRIPT_TEXT_HELPER`, then the joined body escaped for
+ * style context (Marko's `_escape_style`): `</style` (any case) becomes
+ * `\3C/style`. Handed to `innerHTML`, because Solid HTML-escapes a text child.
+ */
+export const STYLE_TEXT_HELPER = String.raw`function ${MX_STYLE_TEXT_BINDING}(...parts: unknown[]): string {
+  return parts.map((part) => (part || part === 0 ? part + "" : "")).join("").replace(/<(\/style)/gi, "\\3C$1");
 }`;

@@ -227,3 +227,37 @@ describe("<html-script> in the emitted module", () => {
     expect(code).toContain("a\\\\u003C/script>b");
   });
 });
+
+/**
+ * `<html-style>`: stock Marko 6.4.4 compiles it to `<style attrs>` keeping
+ * every attribute; the body is text with `${…}` stringified and `</style`
+ * (any case) escaped to `\3C/style` (`_escape_style`), never HTML-escaped:
+ *
+ *   <html-style media="print">a > b { color: ${x} }</html-style>
+ *     -> <style media=print>a > b { color: … }</style>
+ */
+describe("<html-style> keeps its attributes and escapes its body for style context", () => {
+  it("keeps the attributes", () => {
+    expect(
+      render('<html-style media="print" data-x=input.y>a{}</html-style>', {
+        y: "a b",
+      }),
+    ).toBe('<style media="print" data-x="a b">a{}</style>');
+  });
+
+  it("a placeholder is stringified, not HTML-escaped", () => {
+    expect(
+      render("<html-style>a > b { color: ${input.c} }</html-style>", {
+        c: "red&",
+      }),
+    ).toBe("<style>a > b { color: red& }</style>");
+  });
+
+  it("`</style` cannot close the element, in text or a placeholder", () => {
+    expect(
+      render("<html-style>a</STYLE>${input.v}</html-style>", {
+        v: "</style>",
+      }),
+    ).toBe("<style>a\\3C/STYLE>\\3C/style></style>");
+  });
+});

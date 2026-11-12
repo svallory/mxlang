@@ -817,3 +817,39 @@ describe("spread guard result type", () => {
     );
   });
 });
+
+describe("tag type containers", () => {
+  // Type arguments on a tag are TypeScript-only syntax: erased, not refused.
+  it("compileSolidMx erases the type arguments of a native tag", () => {
+    const { code } = compileSolidMx("<p<string>>x</p>", {
+      filename: "fixture.solid.mx",
+    });
+    expect(code).toContain("x");
+    expect(code).not.toContain("string");
+  });
+
+  it("compileSolidUnit erases the type arguments of a native tag", () => {
+    const { code } = compileSolidUnit("<p<string>>x</p>\n", {
+      filename: "fixture.mx",
+    });
+    expect(code).toContain("x");
+    expect(code).not.toContain("string");
+  });
+});
+
+describe("<html-style>", () => {
+  // Stock Marko 6.4.4 writes `<style attrs>`, the body as text escaped for
+  // style context. It was a literal `<html-style>` element.
+  it("emits a real <style> with its attributes and an escaped innerHTML body", () => {
+    const { code, hoistedDefines } = compileSolidMx(
+      '<html-style media="print">a > b { color: red }</html-style>',
+      { filename: "fixture.solid.mx" },
+    );
+    expect(code).toContain('<style media="print"');
+    expect(code).toContain('innerHTML={__mxStyleText("a > b { color: red }")}');
+    expect(code).not.toContain("html-style");
+    expect(hoistedDefines.map((define) => define.binding)).toContain(
+      "__mxStyleText",
+    );
+  });
+});

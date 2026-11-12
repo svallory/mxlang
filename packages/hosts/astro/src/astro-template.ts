@@ -87,6 +87,13 @@ const ATTRIBUTE_SPREAD_OUT_SOURCE = `((guard: (attrs: any, tag?: string) => any)
 const COMMENT_VALUE_EXPRESSION = "__mxCommentValue";
 const TEXTAREA_CONTENT_EXPRESSION = "__mxTextareaContent";
 const SCRIPT_TEXT_EXPRESSION = "__mxScriptText";
+const STYLE_TEXT_EXPRESSION = "__mxStyleText";
+/** The body of `<html-style>`: stringified like {@link SCRIPT_TEXT_SOURCE}, then `</style` (any case) becomes `\3C/style` (Marko's `_escape_style`). */
+const STYLE_TEXT_SOURCE = String.raw`(...parts: unknown[]): string =>
+  parts
+    .map((part) => (part || part === 0 ? part + "" : ""))
+    .join("")
+    .replace(/<(\/style)/gi, "\\3C$1")`;
 /**
  * The body of `<html-script>`, as the text of a `<script>` element. Marko
  * stringifies each placeholder as it does anywhere in text (`_to_text`: a
@@ -856,7 +863,10 @@ export function createEmitter(
    * no placeholder can close the element. `nonce` is the author's `nonce=`: an
    * Astro render has no `$global.cspNonce` to read.
    */
-  const emitHtmlScript = (node: Extract<IrNode, { kind: "Element" }>): void => {
+  const emitHtmlScript = (
+    node: Extract<IrNode, { kind: "Element" }>,
+    name: "script" | "style" = "script",
+  ): void => {
     const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
     for (const child of node.children) {
       if (child.kind === "Text" || child.kind === "Interpolation") {
@@ -864,17 +874,19 @@ export function createEmitter(
         continue;
       }
       fail(
-        "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+        `\`<html-${name}>\` takes only text and placeholders; markup in its body would be dropped from the ${name}`,
         child,
       );
     }
-    write("<script is:inline");
-    emitElementAttrs("script", node.attrs, write, writeMapped);
+    write(`<${name} is:inline`);
+    emitElementAttrs(name, node.attrs, write, writeMapped);
     if (body.length === 0) {
       write(" />");
       return;
     }
-    write(` set:html={${SCRIPT_TEXT_EXPRESSION}(`);
+    write(
+      ` set:html={${name === "script" ? SCRIPT_TEXT_EXPRESSION : STYLE_TEXT_EXPRESSION}(`,
+    );
     body.forEach((child, index) => {
       if (index > 0) write(", ");
       if (child.kind === "Text") write(JSON.stringify(child.value));
@@ -1017,8 +1029,8 @@ export function createEmitter(
         emitTextarea(node);
         return;
       }
-      if (node.name === "html-script") {
-        emitHtmlScript(node);
+      if (node.name === "html-script" || node.name === "html-style") {
+        emitHtmlScript(node, node.name === "html-script" ? "script" : "style");
         return;
       }
       write(`<${node.name}`);
@@ -1478,6 +1490,7 @@ export function lowerAstroMx(
     baseOffset,
     baseLine,
     baseColumn: 0,
+    stripTagTypes: true,
     customTags: options.customTags,
     nativeTags: astroTemplateDeclarations.nativeTags,
     targets: options.targets ?? ownTargets,
@@ -1612,6 +1625,9 @@ export function lowerAstroMx(
     }
     if (templateCode.includes(`${SCRIPT_TEXT_EXPRESSION}(`)) {
       helpers.push(`const ${SCRIPT_TEXT_EXPRESSION} = ${SCRIPT_TEXT_SOURCE};`);
+    }
+    if (templateCode.includes(`${STYLE_TEXT_EXPRESSION}(`)) {
+      helpers.push(`const ${STYLE_TEXT_EXPRESSION} = ${STYLE_TEXT_SOURCE};`);
     }
     if (templateCode.includes(`${TEXTAREA_CONTENT_EXPRESSION}(`)) {
       helpers.push(

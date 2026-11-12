@@ -422,6 +422,41 @@ export interface ClientProjection {
   returns: SourceSpan[];
 }
 
+/**
+ * The names the module's own statements (imports, `static`/`server`/`export`
+ * code) declare. A `client` statement's hoisted `var q;` is dropped for a name
+ * in this set: `function q(){}` beside `var q;` is TS2300 (duplicate
+ * identifier), and a `namespace q` merges with the function, not with a `var`.
+ * Text that does not parse declares nothing here (core has already read it).
+ */
+export function moduleDeclaredNames(codes: string[]): Set<string> {
+  const names = new Set<string>();
+  for (const code of codes) {
+    let body: Node[];
+    try {
+      body = babelParser.parse(code, {
+        sourceType: "module",
+        allowAwaitOutsideFunction: true,
+        allowImportExportEverywhere: true,
+        allowReturnOutsideFunction: true,
+        allowSuperOutsideMethod: true,
+        allowUndeclaredExports: true,
+        allowNewTargetOutsideFunction: true,
+        plugins: [
+          "objectRestSpread",
+          "classProperties",
+          "explicitResourceManagement",
+          ["typescript", { disallowAmbiguousJSXLike: false, dts: false }],
+        ],
+      }).program.body;
+    } catch {
+      continue;
+    }
+    for (const name of clientDeclaredNames(body)) names.add(name);
+  }
+  return names;
+}
+
 /** The leftmost identifier of `A`, `A.B`, `a.b.c`: the name a reference reads. */
 function leftmostName(node: Node | null | undefined): string | undefined {
   let current = node;
@@ -909,6 +944,8 @@ export type DelegatedTagData =
       start: number | undefined;
       span: SourceSpan | undefined;
       typeCheck?: ClientProjection;
+      /** A `client` statement's declared names, the ones `code` is the `var` of. */
+      clientVars?: string[];
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -1014,6 +1051,7 @@ function resolveDelegatedTag(
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
+      clientVars: names,
       start: node.start,
       span: undefined,
       // The projection keeps the statement itself in a scope of its own: a
@@ -1253,6 +1291,15 @@ const SCRIPT_UNSAFE = /<(\/?script|!--)/gi;
 export function escapeScript(text: string): string {
   return text.replace(SCRIPT_UNSAFE, "\\u003C$1");
 }
+
+/** Marko 6.4.4's `_escape_style`: `</style` (any case) becomes `\\3C/style`. */
+export function escapeStyle(text: string): string {
+  return text.replace(/<(\/style)/gi, "\\3C$1");
+}
+
+const ESCAPE_STYLE = `function __mxEscapeStyle(__mxValue: string): string {
+  return __mxValue.replace(/<(\\/style)/gi, "\\\\3C$1");
+}`;
 
 const ESCAPE_SCRIPT = `function __mxEscapeScript(__mxValue: string): string {
   return __mxValue.replace(/<(\\/?script|!--)/gi, "\\\\u003C$1");
@@ -1520,6 +1567,7 @@ function moduleHelpers(code: string): string[] {
     [code.includes("__mxEscapeComment("), ESCAPE_COMMENT],
     [code.includes("__mxTextOf("), TEXT_OF],
     [code.includes("__mxEscapeScript("), ESCAPE_SCRIPT],
+    [code.includes("__mxEscapeStyle("), ESCAPE_STYLE],
     [dynamic, DYNAMIC_PROPS],
     [dynamic, RENDER_DYNAMIC],
     [code.includes("__mxRenderTag("), RENDER_CALL],

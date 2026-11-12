@@ -41,6 +41,7 @@ import {
   MX_ATTR_VALUE_BINDING,
   MX_CLASS_BINDING,
   MX_SCRIPT_TEXT_BINDING,
+  MX_STYLE_TEXT_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_DYN_SPREAD_BINDING,
   MX_TEXTAREA_DYN_VALUE_BINDING,
@@ -122,6 +123,7 @@ let attrGuardUse: {
   textarea: boolean;
   dynTextarea: boolean;
   scriptText: boolean;
+  styleText: boolean;
 } | null = null;
 
 /**
@@ -611,6 +613,7 @@ export function collectReturnVars(
     textarea: boolean;
     dynTextarea: boolean;
     scriptText: boolean;
+    styleText: boolean;
   };
   hoistedDefines: HoistedSolidDefine[];
 } {
@@ -630,6 +633,7 @@ export function collectReturnVars(
     textarea: false,
     dynTextarea: false,
     scriptText: false,
+    styleText: false,
   };
   const collectedDefines: HoistedSolidDefine[] = [];
   returnVars = collected;
@@ -1582,6 +1586,7 @@ const RAW_TEXT_ELEMENTS: ReadonlySet<string> = new Set([
   "script",
   "style",
   "html-script",
+  "html-style",
 ]);
 const RAW_TEXT_PROPS: ReadonlySet<string> = new Set([
   "textContent",
@@ -2661,7 +2666,10 @@ export class SolidEmitter implements Emitter<string> {
    * `<!--`), so no placeholder can close the element. `nonce` is the author's
    * `nonce=`: a Solid render has no `$global.cspNonce` to read.
    */
-  #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
+  #htmlScript(
+    node: Extract<IrNode, { kind: "Element" }>,
+    name: "script" | "style" = "script",
+  ): void {
     const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
     for (const child of node.children) {
       if (child.kind === "Text" || child.kind === "Interpolation") {
@@ -2669,22 +2677,25 @@ export class SolidEmitter implements Emitter<string> {
         continue;
       }
       fail(
-        "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+        `\`<html-${name}>\` takes only text and placeholders; markup in its body would be dropped from the ${name}`,
         child,
       );
     }
-    rejectRawHtmlAttr(node.attrs, "html-script");
-    const attrs = renderAttrs(node.attrs, false, { tag: '"script"' });
+    rejectRawHtmlAttr(node.attrs, `html-${name}`);
+    const attrs = renderAttrs(node.attrs, false, { tag: JSON.stringify(name) });
     if (body.length === 0) {
-      this.#out.push(concatMapped("<script", attrs, " />"));
+      this.#out.push(concatMapped(`<${name}`, attrs, " />"));
       return;
     }
-    if (attrGuardUse) attrGuardUse.scriptText = true;
+    if (attrGuardUse) {
+      if (name === "script") attrGuardUse.scriptText = true;
+      else attrGuardUse.styleText = true;
+    }
     this.#out.push(
       concatMapped(
-        "<script",
+        `<${name}`,
         attrs,
-        ` innerHTML={${MX_SCRIPT_TEXT_BINDING}(`,
+        ` innerHTML={${name === "script" ? MX_SCRIPT_TEXT_BINDING : MX_STYLE_TEXT_BINDING}(`,
         ...body.flatMap((child, index) => [
           index === 0 ? "" : ", ",
           child.kind === "Text"
@@ -2697,8 +2708,8 @@ export class SolidEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    if (node.name === "html-script") {
-      this.#htmlScript(node);
+    if (node.name === "html-script" || node.name === "html-style") {
+      this.#htmlScript(node, node.name === "html-script" ? "script" : "style");
       return;
     }
     const raw = rawChild(node.children);

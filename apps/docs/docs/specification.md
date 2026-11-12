@@ -819,6 +819,21 @@ whitespace is kept. The `markup` tag rules keep `<script>` raw but read
 `<script>` and `<html-script>` as ordinary tags, so `<script><b>x</b></script>`
 holds a `<b>` element there.
 
+`<html-style>` is the tag for a native `<style>` element (the bare `<style>` is
+a core tag). It keeps every attribute, and its body is text: a `${…}`
+placeholder is stringified as in any text, then the whole body is escaped for
+style context (`</style`, any case, becomes `\3C/style`), never HTML-escaped.
+The html target, the JSX hosts, Solid and Astro write a real `<style>` (the JSX
+hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
+`is:inline` element); Angular keeps its own handling of `<style>`.
+
+A tag's type arguments and parameters (`<p<string>>`) are TypeScript-only
+syntax. The region and unit entry points of the Preact, React, Hono, Solid,
+Astro and Angular hosts erase them, as whole-file compilation does; they are
+not refused there. `dangerouslySetInnerHTML` is refused on a native element on
+the html target too, as on the JSX hosts and Solid: the raw-HTML form is
+`$!{html}`.
+
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
 annotations, an `enum`, `satisfies`, a `namespace` and `declare` are all

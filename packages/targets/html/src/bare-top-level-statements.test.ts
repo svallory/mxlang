@@ -73,3 +73,14 @@ describe("html: refused bare top-level forms never reach an emitted module", () 
     );
   });
 });
+
+describe("html: `static` text that is not TypeScript is refused with a position", () => {
+  it.each([
+    ["static const o = { a: :b }\n<div/>\n", 1],
+    ["<div/>\nstatic const x: = 1\n", 2],
+  ])("%j", (source, line) => {
+    expect(() => compile(source, "/f/t.mx")).toThrow(
+      expect.objectContaining({ message: "Unexpected token", line }),
+    );
+  });
+});

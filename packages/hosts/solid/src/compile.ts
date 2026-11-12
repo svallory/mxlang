@@ -48,12 +48,14 @@ import {
   MX_CLASS_BINDING,
   MX_IS_SERVER_BINDING,
   MX_SCRIPT_TEXT_BINDING,
+  MX_STYLE_TEXT_BINDING,
   MX_TEXTAREA_CONTENT_BINDING,
   MX_TEXTAREA_DYN_SPREAD_BINDING,
   MX_TEXTAREA_DYN_VALUE_BINDING,
   MX_TEXTAREA_OMIT_BINDING,
   MX_TEXTAREA_PICK_BINDING,
   SCRIPT_TEXT_HELPER,
+  STYLE_TEXT_HELPER,
   TEXTAREA_CONTENT_HELPER,
   TEXTAREA_DYN_SPREAD_HELPER,
   TEXTAREA_DYN_VALUE_HELPER,
@@ -348,6 +350,7 @@ export function compileSolidMx(
   const { body } = parseFragment(source, {
     filename: options.filename,
     ...base,
+    stripTagTypes: true,
     customTags: options.customTags,
     nativeTags: solidDeclarations.nativeTags,
     targets: options.targets,
@@ -491,6 +494,12 @@ export function compileSolidMx(
       binding: MX_SCRIPT_TEXT_BINDING,
     });
   }
+  if (needsAttrGuard.styleText) {
+    hoistedDefines.unshift({
+      code: STYLE_TEXT_HELPER,
+      binding: MX_STYLE_TEXT_BINDING,
+    });
+  }
   if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
     hoistedImports.unshift({
       code: `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";`,
@@ -586,6 +595,7 @@ export function compileSolidUnit(
 ): CompileSolidMxResult {
   const { body } = parseFragment(source, {
     filename: options.filename,
+    stripTagTypes: true,
     customTags: options.customTags,
     nativeTags: solidDeclarations.nativeTags,
     targets: options.targets,
@@ -701,6 +711,7 @@ export function compileSolidUnit(
     );
   }
   if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
+  if (needsAttrGuard.styleText) parts.unshift(`${STYLE_TEXT_HELPER}\n`);
   if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);
   if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
   if (needsAttrGuard.value || needsAttrGuard.spread) {

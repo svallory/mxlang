@@ -38,6 +38,7 @@ import {
 import {
   JSX_ATTRIBUTE_SPREAD_EXPRESSION,
   JSX_SCRIPT_TEXT_EXPRESSION,
+  JSX_STYLE_TEXT_EXPRESSION,
   JSX_TEXT_VALUE_EXPRESSION,
   jsxAttrValueExpression,
   jsxRenderableExpression,
@@ -211,6 +212,11 @@ export function attributeHelpers(
     helpers.push({
       binding: "__mxRenderable",
       code: `const __mxRenderable = ${jsxRenderableExpression(dialect.nodeShape ?? "preact")};`,
+    });
+  if (text.includes("__mxStyleText("))
+    helpers.push({
+      binding: "__mxStyleText",
+      code: `const __mxStyleText = ${JSX_STYLE_TEXT_EXPRESSION};`,
     });
   if (text.includes("__mxTextareaContent(") || text.includes("__mxTextarea("))
     helpers.push({

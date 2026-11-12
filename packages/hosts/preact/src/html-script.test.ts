@@ -72,14 +72,18 @@ describe("<html-script> on Preact emits a real <script>", () => {
       expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
     },
   );
-  // The raw-text view names every raw-text tag, not only <html-script>. This
-  // host has no <html-style> handling: the body is kept as raw text and the
-  // element is emitted under its authored name (not as a <style>), and an
-  // <html-comment> keeps the host's own refusal.
-  it("keeps an <html-style> body as raw text under its authored name, and refuses <html-comment> as before", () => {
-    expect(
-      compilePreactMx("<html-style>a { b: c }</html-style>", "/x/a.mx").code,
-    ).toContain("<html-style>a &#123; b: c &#125;</html-style>");
+  // The raw-text view names every raw-text tag, not only <html-script>.
+  // <html-style> writes a real <style> whose body rides the raw-HTML prop with
+  // the style escape; an <html-comment> keeps the host's own refusal.
+  it("writes <html-style> as a <style> with an escaped raw body, and refuses <html-comment> as before", () => {
+    const emitted = compilePreactMx(
+      "<html-style>a { b: c }</html-style>",
+      "/x/a.mx",
+    ).code;
+    expect(emitted).toContain(
+      '<style dangerouslySetInnerHTML={{ __html: __mxStyleText("a { b: c }") }} />',
+    );
+    expect(emitted).not.toContain("html-style");
     expect(() =>
       compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
     ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);

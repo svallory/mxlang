@@ -2653,7 +2653,10 @@ export class PreactEmitter implements Emitter<string> {
    * when the author gives none; a JSX render has no such global, so a nonce is
    * the `nonce=` the author writes.
    */
-  #htmlScript(node: Extract<IrNode, { kind: "Element" }>): void {
+  #htmlScript(
+    node: Extract<IrNode, { kind: "Element" }>,
+    name: "script" | "style" = "script",
+  ): void {
     const body: Array<Extract<IrNode, { kind: "Text" | "Interpolation" }>> = [];
     for (const child of node.children) {
       if (child.kind === "Text" || child.kind === "Interpolation") {
@@ -2661,13 +2664,13 @@ export class PreactEmitter implements Emitter<string> {
         continue;
       }
       fail(
-        'The body of `<html-script>` is read as markup on this host, so this would be dropped from the script. Put markup-like text inside a string placeholder, for example `${"<b>hi</b>"}`.',
+        `The body of \`<html-${name}>\` is read as markup on this host, so this would be dropped from the ${name}. Put markup-like text inside a string placeholder, for example \`\${"<b>hi</b>"}\`.`,
         child,
       );
     }
-    const attrs = this.#attrs(node.attrs, true, false, "script");
+    const attrs = this.#attrs(node.attrs, true, false, name);
     if (body.length === 0) {
-      this.#out.push(concatMapped("<script", attrs, " />"));
+      this.#out.push(concatMapped(`<${name}`, attrs, " />"));
       return;
     }
     const [open = "", close = ""] = this.#dialect
@@ -2675,9 +2678,9 @@ export class PreactEmitter implements Emitter<string> {
       .split(RAW_HTML_SLOT);
     this.#out.push(
       concatMapped(
-        "<script",
+        `<${name}`,
         attrs,
-        ` ${this.#dialect.rawHtmlProp}={${open}__mxScriptText(`,
+        ` ${this.#dialect.rawHtmlProp}={${open}${name === "script" ? "__mxScriptText" : "__mxStyleText"}(`,
         ...body.flatMap((child, index) => [
           index === 0 ? "" : ", ",
           child.kind === "Text"
@@ -2690,8 +2693,8 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   element(node: Extract<IrNode, { kind: "Element" }>): void {
-    if (node.name === "html-script") {
-      this.#htmlScript(node);
+    if (node.name === "html-script" || node.name === "html-style") {
+      this.#htmlScript(node, node.name === "html-script" ? "script" : "style");
       return;
     }
     rejectMixedRaw(node.children);

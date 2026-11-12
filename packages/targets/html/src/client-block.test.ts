@@ -789,3 +789,22 @@ describe("html typeCheck: the server view and the client code of a `client` stat
     expect(beforeWrapper(code)).not.toMatch(/export type \{[^}]*Q/);
   });
 });
+
+describe("html: a `client` name the module already declares is not declared again", () => {
+  // `function q(){}` beside `var q;` is TS2300; stock Marko 6.4.4 compiles it.
+  it("a static function and a client namespace of one name keep the function only", () => {
+    expect(
+      hoisted(
+        `static function q() {}\nclient export namespace q { export const a = 1 }${TEMPLATE}`,
+      ),
+    ).toBe("function q() {}");
+  });
+
+  it("a client function and a client namespace declare the name once", () => {
+    expect(
+      hoisted(
+        `client export function q() {}\nclient export namespace q { export const a = 1 }${TEMPLATE}`,
+      ),
+    ).toBe("var q;");
+  });
+});

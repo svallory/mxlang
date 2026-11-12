@@ -3249,3 +3249,23 @@ describe("event error positions", () => {
     expect(error).toMatchObject({ line: 1, column: 7 });
   });
 });
+
+describe("dangerouslySetInnerHTML", () => {
+  // Stock Marko 6.4.4 refuses it at compile time; the raw-HTML form is `$!{html}`.
+  it("is refused on a native element, at the attribute", () => {
+    expect(() =>
+      compile("<div dangerouslySetInnerHTML=input.x/>", "t.mx"),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+        line: 1,
+        column: 5,
+      }),
+    );
+  });
+
+  it("is allowed on a spread's key, which is runtime data", () => {
+    expect(() => compile("<div ...input.attrs/>", "t.mx")).not.toThrow();
+  });
+});

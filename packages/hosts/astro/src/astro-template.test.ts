@@ -1039,3 +1039,25 @@ describe("<textarea value> (Marko 6.4.4 parity)", () => {
     expect(lower("<textarea>hi</textarea>")).toBe("<textarea>hi</textarea>");
   });
 });
+
+describe("lowerAstroMx: tag type containers", () => {
+  // Type arguments on a tag are TypeScript-only syntax: erased, not refused.
+  it("erases the type arguments of a native tag", () => {
+    const { code } = lowerAstroMx("---\n---\n<p<string>>x</p>\n", "T.astro.mx");
+    expect(code).toContain("<p>x</p>");
+  });
+});
+
+describe("lowerAstroMx: <html-style>", () => {
+  // Stock Marko 6.4.4 writes `<style attrs>`, the body as text escaped for
+  // style context. It was a literal `<html-style>` element.
+  it("emits an inline <style> with its attributes and an escaped set:html body", () => {
+    const { code } = lowerAstroMx(
+      '---\n---\n<html-style media="print">a > b { color: red }</html-style>\n',
+      "T.astro.mx",
+    );
+    expect(code).toContain('<style is:inline media="print"');
+    expect(code).toContain('set:html={__mxStyleText("a > b { color: red }")}');
+    expect(code).not.toContain("html-style");
+  });
+});

@@ -320,6 +320,7 @@ function lowerRegion(
     {
       filename,
       ...parseBase,
+      stripTagTypes: true,
       customTags: options.customTags,
       nativeTags: angularDeclarations.nativeTags,
       targets: options.targets ?? angularOwnTargets,

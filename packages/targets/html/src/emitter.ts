@@ -65,7 +65,13 @@ import type {
   ClientTypeExport,
   DelegatedTagData,
 } from "./translate.ts";
-import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
+import {
+  DYNAMIC,
+  escapeComment,
+  escapeScript,
+  escapeStyle,
+  moduleDeclaredNames,
+} from "./translate.ts";
 
 const INDENT = "  ";
 
@@ -168,8 +174,15 @@ export interface StringEmitter extends Emitter<string[]> {
  */
 export function createEmitter(
   selfName?: string,
-  options: { typeCheck?: boolean; source?: string } = {},
+  options: {
+    typeCheck?: boolean;
+    source?: string;
+    /** Names the module's own statements declare; see `moduleDeclaredNames`. */
+    declaredNames?: ReadonlySet<string>;
+  } = {},
 ): StringEmitter {
+  /** Names an earlier `client` statement already declared with a `var`. */
+  const declaredByClient = new Set<string>();
   const state: State = {
     body: [],
     bodyMappings: [],
@@ -703,6 +716,17 @@ export function createEmitter(
    * spread and nothing before it iterates the spread directly.
    */
   const elementAttributes = (name: string, attrs: Attr[]): void => {
+    // Stock Marko refuses `dangerouslySetInnerHTML` on a native element; the
+    // raw-HTML form is `$!{html}`. Only an authored attribute is refused: a
+    // spread's keys are runtime data.
+    for (const attr of attrs) {
+      if (attr.kind !== "spread" && attr.name === "dangerouslySetInnerHTML") {
+        fail(
+          "`dangerouslySetInnerHTML` is not a valid attribute, did you mean `$!{html}`?",
+          attr,
+        );
+      }
+    }
     const isTextarea = name === "textarea";
     let lastSpread = -1;
     attrs.forEach((attr, index) => {
@@ -1383,9 +1407,11 @@ export function createEmitter(
    * author gives none; this target has no render global, so a nonce is the
    * `nonce=` attribute the author writes, and none is invented.
    */
-  function scriptElement(tag: DelegatedTag): void {
-    literal("<script");
-    elementAttributes("script", tag.attrs);
+  function rawTextElement(tag: DelegatedTag, name: "script" | "style"): void {
+    const escapeStatic = name === "script" ? escapeScript : escapeStyle;
+    const helper = name === "script" ? "__mxEscapeScript(" : "__mxEscapeStyle(";
+    literal(`<${name}`);
+    elementAttributes(name, tag.attrs);
     literal(">");
     const parts: Array<string | MappedCode> = [];
     let dynamic = false;
@@ -1396,7 +1422,7 @@ export function createEmitter(
         parts.push(concatMapped("__mxTextOf(", mappedExpr(child.expr), ")"));
       } else {
         fail(
-          "`<html-script>` takes only text and placeholders; markup in its body would be dropped from the script",
+          `\`<html-${name}>\` takes only text and placeholders; markup in its body would be dropped from the ${name}`,
           child,
         );
       }
@@ -1405,11 +1431,11 @@ export function createEmitter(
       const text = tag.children
         .map((child) => (child.kind === "Text" ? child.value : ""))
         .join("");
-      literal(escapeScript(text));
+      literal(escapeStatic(text));
     } else {
       write(
         concatMapped(
-          "__mxEscapeScript(",
+          helper,
           ...parts.flatMap((part, index) =>
             index === 0 ? [part] : [" + ", part],
           ),
@@ -1417,7 +1443,7 @@ export function createEmitter(
         ),
       );
     }
-    literal("</script>");
+    literal(`</${name}>`);
   }
 
   /**
@@ -1451,11 +1477,14 @@ export function createEmitter(
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
           const lines: Array<string | MappedCode> = [];
-          if (projection.serverNames.length > 0) {
+          const declared = projection.serverNames.filter(
+            (name) => !options.declaredNames?.has(name),
+          );
+          if (declared.length > 0) {
             // `void` reads the names, so `noUnusedLocals` does not flag a
             // declaration the author never wrote.
             lines.push(
-              `var ${projection.serverNames.map((name) => `${name}: undefined`).join(", ")}; void [${projection.serverNames.join(", ")}];`,
+              `var ${declared.map((name) => `${name}: undefined`).join(", ")}; void [${declared.join(", ")}];`,
             );
           }
           for (const hoisted of projection.hoisted) {
@@ -1509,6 +1538,22 @@ export function createEmitter(
           }
           return;
         }
+        if (data.clientVars) {
+          // A `var q;` beside a declaration of `q` is TS2300, and two
+          // `client` statements naming `q` would declare it twice.
+          const names = data.clientVars.filter(
+            (name) =>
+              !options.declaredNames?.has(name) && !declaredByClient.has(name),
+          );
+          for (const name of names) declaredByClient.add(name);
+          if (names.length > 0) {
+            state.moduleHoisted.push({
+              code: mapped(`var ${names.join(", ")};`, null),
+              start: data.start,
+            });
+          }
+          return;
+        }
         if (data.code !== "") {
           state.moduleHoisted.push({
             code: mapped(data.code, data.span ?? null),
@@ -1555,18 +1600,7 @@ export function createEmitter(
       case "raw-element": {
         // `<html-script>`/`<html-style>` are Marko's spelling of a literal
         // `<script>`/`<style>` element, since the bare names are core tags.
-        if (data.tag === "script") {
-          scriptElement(tag);
-          return;
-        }
-        write(quote(`<${data.tag}>`));
-        for (const child of tag.children) {
-          if (child.kind === "Text") write(quote(child.value));
-          else if (child.kind === "Interpolation") {
-            interpolation(mappedExpr(child.expr), child.escaped);
-          }
-        }
-        write(quote(`</${data.tag}>`));
+        rawTextElement(tag, data.tag === "script" ? "script" : "style");
         return;
       }
       case "style": {
@@ -1843,7 +1877,13 @@ export function emitModuleWithMappings(
   options: { typeCheck?: boolean; source?: string } = {},
 ): MappedCode {
   const name = moduleExportName(ir, "@mxlang/target-html");
-  const emitter = createEmitter(name, options);
+  const emitter = createEmitter(name, {
+    ...options,
+    declaredNames: moduleDeclaredNames([
+      ...ir.imports.map((node) => node.code),
+      ...ir.hoisted.map((node) => node.code),
+    ]),
+  });
   drive(emitter, ir.body);
   const body = emitter.done();
   const buffered = body.some((line) => line.includes("__mxCreateBufferedOut("));
