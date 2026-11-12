@@ -99,7 +99,13 @@ Six facts worth knowing before editing it:
   and adds a *types-only* preamble (`index.ts`, `handlerTypePreamble`; `satisfies` and types are erased by `mx-tsc`'s emit, so no helper value may ever exist — it would throw at run time) that finds the
   host's own handler type by case-insensitive key lookup on
   `JSX.IntrinsicElements`, `any` on no hit. Its identifiers are allocated against the template source (`handlerTypeNames`) so a user binding can never collide. It also sets core's
-  `stripTypes: false` so shorthand handlers keep their annotations. The
+  `stripTypes: false` so shorthand handlers keep their annotations. A define's direct
+  call (`<Row(x)/>`) reads the *public* `__mxDefine` binding in this projection
+  (a build calls the private function, so `x` reaches the body untouched), and
+  so does a region the TypeScript plugin compiles (`HostRegionInput.typeCheck`):
+  the private name is unmapped, so a hover and `noUnusedLocals` never name it.
+  The projection's JavaScript is not a build; do not execute it.
+  The
   wrapper exists to give TypeScript a contextual type and a *mapped* place to
   report on (the recomposed prop name is deliberately unmapped); never emit it
   for a build — `type-check.test.ts` asserts the unset output has no `__mx`.

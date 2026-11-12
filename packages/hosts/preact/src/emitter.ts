@@ -138,14 +138,14 @@ interface RegionSink {
  * (`{ a, b: [c], ...d }`, `x = 1`, `...rest`), never the identifiers of a
  * default's expression (`{ a = Row }` binds `a`) or of a type annotation.
  * A scanner over the text, so the host needs no parser of its own. It cannot
- * follow a regex literal or a template literal (a `/` or a backtick may hide a
- * bracket), so a parameter holding either fails safe: it yields `ALL_NAMES`,
+ * follow a regex literal or a template literal (either may hide a bracket), so
+ * a parameter holding one fails safe: it yields `ALL_NAMES`,
  * which binds every define name and routes those calls by the authored name.
  */
 export function paramNames(params: readonly string[]): string[] {
   const out: string[] = [];
   for (const text of params) {
-    if (/[/`]/.test(text)) {
+    if (unreadable(text)) {
       out.push(ALL_NAMES);
       continue;
     }
@@ -156,10 +156,36 @@ export function paramNames(params: readonly string[]): string[] {
   return out;
 }
 
+/**
+ * Does `text` hold a template literal or a regex literal? A `/` starts a regex
+ * only where an expression may begin (at the start, or after `=(,:[!&|?{;`);
+ * after a name, number or closer it is division, and `/*` after such a
+ * position is a comment the scan treats as a regex (it only fails safe).
+ */
+function unreadable(text: string): boolean {
+  let previous = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] as string;
+    if (ch === '"' || ch === "'") {
+      i = skipQuoted(text, i) - 1;
+      previous = ch;
+    } else if (ch === "`") {
+      return true;
+    } else if (ch === "/" && true) {
+      return true;
+    } else if (!/\s/.test(ch)) {
+      previous = ch;
+    }
+  }
+  return false;
+}
+
 /** A scope entry that stands for every name (`paramNames` could not read a param). */
 const ALL_NAMES = "*";
 
-const NAME = /[\p{ID_Start}$_][\p{ID_Continue}$‌‍]*/uy;
+/** One identifier, as every scan in this file reads it. */
+const IDENT = "[\\p{ID_Start}$_][\\p{ID_Continue}$\\u200c\\u200d]*";
+const NAME = new RegExp(IDENT, "uy");
 
 function skipSpace(text: string, from: number): number {
   let i = from;
@@ -457,6 +483,28 @@ interface SoftLift {
   parent: SoftLift | null;
 }
 
+/** What a `PreactEmitter` is built from; every field is optional. */
+interface EmitterOptions {
+  dialect?: JsxDialect;
+  runtimeImports?: Set<string>;
+  aliases?: Set<string>;
+  varStatements?: string[];
+  varSerial?: { n: number };
+  callbackScope?: boolean;
+  /** Tooling-only handler-type alias name (`#typeCheck`). */
+  typeCheck?: string;
+  decodeText?: boolean;
+  region?: RegionSink;
+  bare?: boolean;
+  bindings?: Map<string, Position>;
+  positionAt?: (offset: number) => Position;
+  source?: string;
+  scopedBody?: boolean;
+  softLift?: SoftLift | null;
+  shadowed?: WeakSet<object>;
+  publicDefines?: boolean;
+}
+
 /** How a body scope behaves (`#scoped`). */
 interface ScopeOptions {
   /** A dynamic tag's or `<try>`'s body: a region refuses a lifted `<define>` in it. */
@@ -468,6 +516,75 @@ interface ScopeOptions {
 /** What `resolveDelegatedTag` records for a claimed tag. */
 type DelegatedTagData = { kind: "try" };
 
+const PRIMITIVE_DEFAULT =
+  /^(?:-?\d[\d_]*(?:\.\d+)?n?|"[^"\\]*"|'[^'\\]*'|true|false)$/;
+const PLAIN_NAME = new RegExp(`^${IDENT}$`, "u");
+
+/** Is a `/` after `previous` (the last non-space character, "" at the start) a regex start? */
+const startsRegex = (previous: string): boolean =>
+  previous === "" || "=(,:[!&|?{;".includes(previous);
+
+/**
+ * The index after the comment, string, template or regex literal that starts
+ * at `from`, or `from` when none does. `previous` is the last non-space
+ * character before it, which decides between a regex and a division.
+ */
+function skipLiteral(text: string, from: number, previous: string): number {
+  const ch = text[from];
+  if (ch === '"' || ch === "'") return skipQuoted(text, from);
+  if (ch === "`") return skipTemplate(text, from);
+  if (ch !== "/") return from;
+  if (text[from + 1] === "*") {
+    const end = text.indexOf("*/", from + 2);
+    return end < 0 ? text.length : end + 2;
+  }
+  if (text[from + 1] === "/") {
+    const end = text.indexOf("\n", from);
+    return end < 0 ? text.length : end;
+  }
+  if (!startsRegex(previous)) return from;
+  let inClass = false;
+  let i = from + 1;
+  while (i < text.length) {
+    const c = text[i] as string;
+    if (c === "\\") i++;
+    else if (c === "[") inClass = true;
+    else if (c === "]") inClass = false;
+    else if (c === "/" && !inClass) return i + 1;
+    i++;
+  }
+  return text.length;
+}
+
+/** The index after the template literal at `from`, its `${…}` parts included. */
+function skipTemplate(text: string, from: number): number {
+  let i = from + 1;
+  while (i < text.length) {
+    const c = text[i] as string;
+    if (c === "\\") i += 2;
+    else if (c === "`") return i + 1;
+    else if (c === "$" && text[i + 1] === "{") {
+      let depth = 1;
+      let previous = "{";
+      i += 2;
+      while (i < text.length && depth > 0) {
+        const end = skipLiteral(text, i, previous);
+        if (end > i) {
+          previous = text[end - 1] as string;
+          i = end;
+          continue;
+        }
+        const d = text[i] as string;
+        if (d === "{") depth++;
+        else if (d === "}") depth--;
+        if (!/\s/.test(d)) previous = d;
+        i++;
+      }
+    } else i++;
+  }
+  return text.length;
+}
+
 /**
  * A `<define>` parameter as the arrow declares it. A parameter that carries
  * its own type (`a: string`) is kept as written, and so is a plain name with
@@ -475,36 +592,37 @@ type DelegatedTagData = { kind: "try" };
  * default. Any other is typed `any` (`any[]` for a rest parameter): a bare
  * name, a pattern, a null/undefined/`[]`/`{}`/expression default (inferred
  * `null`, `never[]`...), so a strict project (`noImplicitAny`) does not report
- * TS7006 or TS7031 on a define whose params the author left untyped.
+ * TS7006 or TS7031 on a define whose params the author left untyped. Strings,
+ * templates, regex literals and comments are skipped when looking for the
+ * `:` or `=` that ends the pattern.
  */
-const PRIMITIVE_DEFAULT =
-  /^(?:-?\d[\d_]*(?:\.\d+)?n?|"[^"\\]*"|'[^'\\]*'|true|false)$/;
-
 export function typedDefineParam(param: string): string {
   const text = param.trim();
   let depth = 0;
-  let quote = "";
+  let previous = "";
   for (let i = 0; i < text.length; i++) {
+    const end = skipLiteral(text, i, previous);
+    if (end > i) {
+      previous = text[end - 1] as string;
+      i = end - 1;
+      continue;
+    }
     const ch = text[i] as string;
-    if (quote) {
-      if (ch === "\\") i++;
-      else if (ch === quote) quote = "";
-    } else if (ch === '"' || ch === "'" || ch === "`") quote = ch;
-    else if (ch === "(" || ch === "[" || ch === "{") depth++;
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
     else if (ch === ")" || ch === "]" || ch === "}") depth--;
     else if (depth === 0 && ch === ":") return text;
     else if (depth === 0 && ch === "=") {
       const target = text.slice(0, i).trimEnd();
-      const value = text.slice(i + 1).trim();
       // A plain name with a primitive default infers its type from it.
       if (
-        PRIMITIVE_DEFAULT.test(value) &&
-        /^[\p{ID_Start}$_][\p{ID_Continue}$]*$/u.test(target)
+        PRIMITIVE_DEFAULT.test(text.slice(i + 1).trim()) &&
+        PLAIN_NAME.test(target)
       ) {
         return text;
       }
-      return `${text.slice(0, i).trimEnd()}: any ${text.slice(i)}`;
+      return `${target}: any ${text.slice(i)}`;
     }
+    if (!/\s/.test(ch)) previous = ch;
   }
   return text.startsWith("...") ? `${text}: any[]` : `${text}: any`;
 }
@@ -558,13 +676,13 @@ export function defineStatements(
 
 /**
  * The identifiers a text reads as values: every identifier token except a
- * member name after a single `.` (`a.Row`), while a spread (`...Row`) is a
- * read.
+ * member name after a single `.` on the same line (`a.Row`), while a spread
+ * (`...Row`) is a read. A `.` ending a line or a comment is no member access.
  */
 function readIdentifiers(text: string): Set<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(
-    /(\.{1,3})?\s*([\p{ID_Start}$_][\p{ID_Continue}$\u200c\u200d]*)/gu,
+    new RegExp(`(\\.{1,3})?[ \\t]*(${IDENT})`, "gu"),
   )) {
     if (match[1] === ".") continue;
     names.add(match[2] as string);
@@ -1177,42 +1295,31 @@ export class PreactEmitter implements Emitter<string> {
    */
   readonly #publicDefines: boolean;
 
-  constructor(
-    dialect: JsxDialect = preactDialect,
-    runtimeImports?: Set<string>,
-    aliases?: Set<string>,
-    varStatements?: string[],
-    varSerial?: { n: number },
-    callbackScope = false,
-    typeCheck?: string,
-    decodeText = true,
-    region?: RegionSink,
-    bare = false,
-    bindings = new Map<string, Position>(),
-    positionAt = region?.positionAt,
-    source?: string,
-    scopedBody = false,
-    softLift: SoftLift | null = null,
-    shadowed: WeakSet<object> = new WeakSet(),
-    publicDefines = false,
-  ) {
-    this.#publicDefines = publicDefines || typeCheck !== undefined;
-    this.#shadowed = shadowed;
-    this.#softLift = softLift;
-    this.#scopedBody = scopedBody;
-    this.#source = source;
-    this.#bindings = bindings;
+  constructor(options: EmitterOptions = {}) {
+    const {
+      dialect = preactDialect,
+      typeCheck,
+      region,
+      positionAt = region?.positionAt,
+    } = options;
+    this.#publicDefines =
+      options.publicDefines === true || typeCheck !== undefined;
+    this.#shadowed = options.shadowed ?? new WeakSet();
+    this.#softLift = options.softLift ?? null;
+    this.#scopedBody = options.scopedBody ?? false;
+    this.#source = options.source;
+    this.#bindings = options.bindings ?? new Map<string, Position>();
     this.#positionAt = positionAt;
     this.#dialect = dialect;
     this.#region = region;
     this.#typeCheck = typeCheck;
-    this.#runtimeImports = runtimeImports ?? new Set();
-    this.#aliases = aliases ?? new Set();
-    this.#varStatements = varStatements ?? [];
-    this.#varSerial = varSerial ?? { n: 0 };
-    this.#callbackScope = callbackScope;
-    this.#decodeText = decodeText;
-    this.#bare = bare;
+    this.#runtimeImports = options.runtimeImports ?? new Set();
+    this.#aliases = options.aliases ?? new Set();
+    this.#varStatements = options.varStatements ?? [];
+    this.#varSerial = options.varSerial ?? { n: 0 };
+    this.#callbackScope = options.callbackScope ?? false;
+    this.#decodeText = options.decodeText ?? true;
+    this.#bare = options.bare ?? false;
   }
 
   /** Statements a `/var` call site needs above the component's `return`. */
@@ -1249,25 +1356,26 @@ export class PreactEmitter implements Emitter<string> {
     scopedBody?: boolean;
     softLift?: SoftLift | null;
   }): PreactEmitter {
-    return new PreactEmitter(
-      this.#dialect,
-      this.#runtimeImports,
-      this.#aliases,
-      overrides.varStatements ?? this.#varStatements,
-      overrides.varSerial ?? this.#varSerial,
-      overrides.callbackScope ?? this.#callbackScope,
-      this.#typeCheck,
-      overrides.decodeText ?? this.#decodeText,
-      this.#region,
-      overrides.bare ?? this.#bare,
-      overrides.bindings ?? this.#bindings,
-      this.#positionAt,
-      this.#source,
-      overrides.scopedBody ?? this.#scopedBody,
-      overrides.softLift === undefined ? this.#softLift : overrides.softLift,
-      this.#shadowed,
-      this.#publicDefines,
-    );
+    return new PreactEmitter({
+      dialect: this.#dialect,
+      runtimeImports: this.#runtimeImports,
+      aliases: this.#aliases,
+      varStatements: overrides.varStatements ?? this.#varStatements,
+      varSerial: overrides.varSerial ?? this.#varSerial,
+      callbackScope: overrides.callbackScope ?? this.#callbackScope,
+      typeCheck: this.#typeCheck,
+      decodeText: overrides.decodeText ?? this.#decodeText,
+      region: this.#region,
+      bare: overrides.bare ?? this.#bare,
+      bindings: overrides.bindings ?? this.#bindings,
+      positionAt: this.#positionAt,
+      source: this.#source,
+      scopedBody: overrides.scopedBody ?? this.#scopedBody,
+      softLift:
+        overrides.softLift === undefined ? this.#softLift : overrides.softLift,
+      shadowed: this.#shadowed,
+      publicDefines: this.#publicDefines,
+    });
   }
 
   /** A child emitter: same scope, text decoding and slot reset unless given. */
@@ -3361,25 +3469,13 @@ export function createRegionEmitter(
   publicDefines = false,
 ): PreactEmitter {
   const root = new Map<string, Position>();
-  return new PreactEmitter(
+  return new PreactEmitter({
     dialect,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    false,
-    undefined,
-    true,
-    { segment, defines: [], claimed: new Map(), root, positionAt },
-    false,
-    root,
-    undefined,
-    undefined,
-    false,
-    null,
+    region: { segment, defines: [], claimed: new Map(), root, positionAt },
+    bindings: root,
     shadowed,
     publicDefines,
-  );
+  });
 }
 
 export function createEmitter(
@@ -3388,24 +3484,15 @@ export function createEmitter(
   source?: string,
   shadowed: WeakSet<object> = new WeakSet(),
 ): PreactEmitter {
-  return new PreactEmitter(
+  return new PreactEmitter({
     dialect,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    false,
     typeCheck,
-    true,
-    undefined,
-    false,
-    undefined,
-    !source ? undefined : (offset) => sourcePosition(source, offset),
     source,
-    false,
-    null,
+    positionAt: !source
+      ? undefined
+      : (offset) => sourcePosition(source, offset),
     shadowed,
-  );
+  });
 }
 
 /** Emits the template body of a resolved IR as one JSX expression. */

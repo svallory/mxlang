@@ -9,8 +9,14 @@
  */
 import { parse } from "@babel/parser";
 import type { CustomTag } from "@mxlang/core";
+import { concatMapped } from "@mxlang/core";
 import { describe, expect, it } from "vitest";
-import { paramNames, typedDefineParam } from "./emitter.ts";
+import {
+  type DefineParts,
+  defineStatements,
+  paramNames,
+  typedDefineParam,
+} from "./emitter.ts";
 import { compilePreactMx } from "./index.ts";
 
 const FOO = "<define/Foo><p>inner</p></define>";
@@ -248,12 +254,19 @@ describe("typedDefineParam", () => {
     ["a = 'x'", "a = 'x'"],
     ["a = true", "a = true"],
     ["a = 1 + 1", "a: any = 1 + 1"],
+    ["a = f()", "a: any = f()"],
     ["xs = []", "xs: any = []"],
     ["a = null", "a: any = null"],
     ["a = undefined", "a: any = undefined"],
     ["{ a = 1 }", "{ a = 1 }: any"],
     ["{ a } = {}", "{ a }: any = {}"],
     ["[a] = []", "[a]: any = []"],
+    ["{ a = /}/, b = 1 } = {}", "{ a = /}/, b = 1 }: any = {}"],
+    ["{ a = /[}]/, Row }", "{ a = /[}]/, Row }: any"],
+    ["{ a = `${'}'}`, b }", "{ a = `${'}'}`, b }: any"],
+    ["{ a = 1 /* } */, b } = {}", "{ a = 1 /* } */, b }: any = {}"],
+    ["n = total / 2", "n: any = total / 2"],
+    ["a\u200cb = 1", "a\u200cb = 1"],
     ["...r: string[]", "...r: string[]"],
   ])("%s -> %s", (param, typed) => {
     expect(typedDefineParam(param)).toBe(typed);
@@ -269,22 +282,6 @@ describe.each(HOSTS)("%s: define calls and attributes", (host) => {
       "<define/Row|o|>${o.content}</define><define/Id|{ a = Row }|><Row({ children: 'c' })/></define><Id/>",
     );
     expect(code).toContain("__mxDef_Row({ children: 'c' })");
-  });
-
-  it("a param default holding a regex literal fails safe: the call reaches the shadowing param", async () => {
-    const code = await compile(
-      "<define/Row|x|><li>${x}</li></define><define/List|{ a = /[}]/, Row }|><Row(1)/></define><List(null)/>",
-    );
-    expect(code).toContain("{Row(1)}");
-    expect(code).not.toContain("__mxDef_Row(1)");
-  });
-
-  it("a param default holding a template literal fails safe too", async () => {
-    const code = await compile(
-      "<define/Row|x|><li>${x}</li></define><define/List|{ a = `${'`'}`, Row }|><Row(1)/></define><List(null)/>",
-    );
-    expect(code).toContain("{Row(1)}");
-    expect(code).not.toContain("__mxDef_Row(1)");
   });
 
   it("a define attribute with a side effect is emitted once when the define is only called directly", async () => {
@@ -314,10 +311,36 @@ describe("paramNames", () => {
     [["x: Map<string, number>"], ["x"]],
     [["{ 'k-1': k, [`z${1}`]: z }"], ["*"]],
     [["{ a = /[}]/, Row }"], ["*"]],
-    [["{ a = 1 / 2, Row }"], ["*"]],
+    [["{ a = 1 / 2, Row }"], ["a", "Row"]],
+    [["n = total / 2"], ["n"]],
+    [["{ a = /x/ }"], ["*"]],
+    [["a = (b) / 2, c = /x/"], ["*"]],
+    [['a = "/x"'], ["a"]],
     [["{ 'k-1': k, [\"z\"]: z }"], ["k", "z"]],
     [["{ Ñame }"], ["Ñame"]],
   ])("%j -> %j", (params, names) => {
     expect(paramNames(params)).toEqual(names);
+  });
+});
+
+describe("defineStatements", () => {
+  const part = (name: string): DefineParts => ({
+    name,
+    fn: concatMapped(`const __mxDef_${name} = () => null;`),
+    value: concatMapped(` const ${name} = __mxDefine(__mxDef_${name});`),
+  });
+  const kept = (other: string) =>
+    defineStatements([part("Row")], other)[0]?.code.includes("const Row =");
+
+  it("keeps the public binding of a name read after a line that ends in a dot", () => {
+    expect(kept("[ // pick one.\n Row ]")).toBe(true);
+  });
+
+  it("drops it when the name is only a member (a.Row)", () => {
+    expect(kept("a.Row")).toBe(false);
+  });
+
+  it("returns nothing for no defines", () => {
+    expect(defineStatements([], "Row")).toEqual([]);
   });
 });

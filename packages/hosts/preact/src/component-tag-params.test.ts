@@ -230,6 +230,19 @@ export interface Input { items: string[] }
     html: "<ul><li>a</li><li>b</li></ul>",
     unusedLocals: true,
   },
+  "a regex default in a define param: the call reaches the shadowing param": {
+    caller: `<define/Row|x|><li>\${x}</li></define>
+<define/List|{ a = /[}]/, Row }|><Row(1)/></define>
+<List({ Row: (x: number) => "local" + x })/>`,
+    html: "local1",
+  },
+  "a template-literal default in a define param: the call reaches the shadowing param":
+    {
+      caller: `<define/Row|x|><li>\${x}</li></define>
+<define/List|{ a = \`\${"\\\`"}\`, Row }|><Row(1)/></define>
+<List({ Row: (x: number) => "local" + x })/>`,
+      html: "local1",
+    },
   "a define read as a value keeps its arity and name": {
     caller: `<define/Row|a, b|><li>\${a}</li></define>
 <p>\${Row.length}\${Row.name}</p>`,
