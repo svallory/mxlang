@@ -20,7 +20,7 @@ module.exports = {
       "div";
     return {
       compileModule(source, filename, options) {
-        let names = [];
+        const names = [];
         const walk = (nodes) => {
           for (const node of nodes) {
             if (node.kind === "Element") names.push(node.name);

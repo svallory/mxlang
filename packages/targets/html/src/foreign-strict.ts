@@ -1,9 +1,9 @@
 import {
   createTargetLookup,
   resolveTargetPolicyDetailed,
-  TargetLookupError,
   type TargetDescriptor,
   type TargetLookup,
+  TargetLookupError,
 } from "@mxlang/core";
 import html from "./descriptor.ts";
 
