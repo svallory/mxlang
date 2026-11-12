@@ -43,6 +43,7 @@ import {
   type Diagnostic,
   DiagnosticSeverity,
 } from "vscode-languageserver/node";
+import { TextDocument } from "vscode-languageserver-textdocument";
 
 export type { TargetPolicy };
 
@@ -443,6 +444,8 @@ export function diagnoseDocument(
   // are collected here and returned alongside whatever the compile produces,
   // rather than replacing it.
   let scanWarnings: Diagnostic[] = [];
+  // Each `package.json` a position is converted against is read once per run.
+  const documents = new Map<string, TextDocument | undefined>();
   // Positioned warnings the *compile* raised: content a tag template never
   // placed, an attribute tag a transform never read. A different source from
   // the scan's configuration warnings above, and routed per file below, since
@@ -505,7 +508,7 @@ export function diagnoseDocument(
     // target, so none of them is raised on its behalf (above, they would
     // have reached the `package.json` through `related`).
     scanWarnings = (hostPolicyDiagnostics ?? []).map((diagnostic) =>
-      scanDiagnosticToLsp(diagnostic, related),
+      scanDiagnosticToLsp(diagnostic, related, false, documents),
     );
     // Tag discovery is filesystem work, so it needs a path. `startServer`
     // already converts before calling, but this function is public and an
@@ -536,7 +539,9 @@ export function diagnoseDocument(
       ...scanDiagnosticsNotSaidByPolicy(
         hostPolicyDiagnostics ?? [],
         scan.diagnostics,
-      ).map((diagnostic) => scanDiagnosticToLsp(diagnostic, related, true)),
+      ).map((diagnostic) =>
+        scanDiagnosticToLsp(diagnostic, related, true, documents),
+      ),
     ];
     // Tags the caller supplied win over the scan's. Normally nothing is
     // supplied and discovery is the whole story; a caller that does pass a map
@@ -794,30 +799,29 @@ export function diagnoseDocument(
  * cannot be read, the position core computed stands.
  */
 function lspPosition(
+  documents: Map<string, TextDocument | undefined>,
   file: string,
   offset: number | undefined,
   line: number,
   column: number,
 ): { line: number; character: number } {
   if (offset === undefined) return { line, character: column };
-  let text: string;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    return { line, character: column };
-  }
-  const end = Math.min(offset, text.length);
-  let row = 0;
-  let lineStart = 0;
-  for (let i = 0; i < end; i++) {
-    const code = text.charCodeAt(i);
-    if (code === 13 && text.charCodeAt(i + 1) === 10) continue;
-    if (code === 10 || code === 13) {
-      row++;
-      lineStart = i + 1;
+  if (!documents.has(file)) {
+    let document: TextDocument | undefined;
+    try {
+      document = TextDocument.create(
+        uriOf(file),
+        "json",
+        0,
+        readFileSync(file, "utf8"),
+      );
+    } catch {
+      document = undefined;
     }
+    documents.set(file, document);
   }
-  return { line: row, character: end - lineStart };
+  const document = documents.get(file);
+  return document ? document.positionAt(offset) : { line, character: column };
 }
 
 function scanDiagnosticToLsp(
@@ -828,10 +832,18 @@ function scanDiagnosticToLsp(
    * (`MX_MISPLACED_TAG_FILE`) are, the host policy's are not.
    */
   showCode = false,
+  /** The files read so far, by path (shared by a run's calls). */
+  documents: Map<string, TextDocument | undefined> = new Map(),
 ): Diagnostic {
   const line = Math.max(0, diagnostic.line - 1);
   const column = Math.max(0, diagnostic.column);
-  const at = lspPosition(diagnostic.file, diagnostic.offset, line, column);
+  const at = lspPosition(
+    documents,
+    diagnostic.file,
+    "offset" in diagnostic ? diagnostic.offset : undefined,
+    line,
+    column,
+  );
   const range = {
     start: at,
     end: {
@@ -853,6 +865,7 @@ function scanDiagnosticToLsp(
             uri: uriOf(entry.file),
             range: (() => {
               const start = lspPosition(
+                documents,
                 entry.file,
                 entry.offset,
                 entry.line - 1,

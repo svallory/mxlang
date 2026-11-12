@@ -1076,6 +1076,36 @@ describe("custom tag template positions", () => {
     }
   });
 
+  it("places a malformed-manifest diagnostic by its offset past a U+2028", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ls-malformed-"));
+    try {
+      const text = '{\n "a":"x\u2028y",\n  "b" 1}';
+      const file = join(dir, "package.json");
+      writeFileSync(file, text);
+      const offset = 20;
+      const related: RelatedDiagnostics[] = [];
+      diagnoseDocument(
+        "<div>ok</div>\n",
+        "file:///app/page.mx",
+        policy("html"),
+        undefined,
+        "",
+        undefined,
+        related,
+        undefined,
+        [{ file, message: "bad", line: 4, column: 4, offset }],
+      );
+      // Two LF breaks before the offset: LSP line 2, not core's 4th line.
+      const lineStart = text.lastIndexOf("\n", offset) + 1;
+      expect(related[0]?.diagnostics[0]?.range.start).toEqual({
+        line: 2,
+        character: offset - lineStart,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps host-policy warnings when the compile itself fails", () => {
     const diagnostics = diagnoseDocument(
       "<let/count=1/>\n",

@@ -24,6 +24,8 @@ export interface PackageJsonParseError {
   line: number;
   /** 0-based. `0` when the parser's message carries no position. */
   column: number;
+  /** The UTF-16 offset of that position, when the parser's message gave one. */
+  offset?: number;
 }
 
 export interface PackageJsonRead {
@@ -189,7 +191,13 @@ export function jsonKeyPosition(
 export function positionOfParseError(
   message: string,
   text: string,
-): { line: number; column: number } {
+): { line: number; column: number; offset?: number } {
+  // A `position N` is converted with the one line-break rule and carries its
+  // offset, so a consumer with another rule (LSP's) can place it too. V8's own
+  // `(line L column C)` follows another rule (no U+2028) and has no offset, so
+  // it is only the fallback for a message that gives no position.
+  const offset = /position (\d+)/.exec(message);
+  if (offset) return positionOfOffset(text, Number(offset[1]));
   const lineColumn = /\(line (\d+) column (\d+)\)/.exec(message);
   if (lineColumn) {
     return {
@@ -197,8 +205,6 @@ export function positionOfParseError(
       column: Math.max(0, Number(lineColumn[2]) - 1),
     };
   }
-  const offset = /position (\d+)/.exec(message);
-  if (offset) return positionOfOffset(text, Number(offset[1]));
   return { line: 1, column: 0 };
 }
 

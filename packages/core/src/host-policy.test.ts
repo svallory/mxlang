@@ -747,6 +747,15 @@ describe("TargetPolicyDiagnostic code", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["malformed-package-json"]);
   });
 
+  it("carries the offset of a JSON syntax error after a U+2028 in a string", () => {
+    const text = '{\n "a":"x\u2028y",\n  "b" 1}';
+    const { diagnostics } = resolveTargetPolicyDetailed(project(text), lookup);
+    expect(diagnostics.map((d) => d.code)).toEqual(["malformed-package-json"]);
+    // V8's message names `position 20`; the offset is carried and the line
+    // follows the one line rule (U+2028 breaks a line).
+    expect(diagnostics[0]).toMatchObject({ line: 4, column: 4, offset: 20 });
+  });
+
   it("raises none for a valid host", () => {
     const { diagnostics } = resolveTargetPolicyDetailed(
       project(JSON.stringify({ mx: { target: "page" } })),

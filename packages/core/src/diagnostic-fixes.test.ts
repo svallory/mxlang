@@ -204,6 +204,22 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
     expect(diagnostics.map((d) => d.code)).toContain(code);
   });
 
+  it.each([
+    ["a space before the close `>`", "<effect>x</effect >"],
+    ["a close name in another case", "<effect>x</EFFECT>"],
+  ])(
+    "%s is a parse error, and so has no `<effect>` error and no fix",
+    (_n, source) => {
+      // The parser does not match this close to the open (`<div>x</div >` fails
+      // the same way), so lowering stops before the `<effect>` rule.
+      const { diagnostics } = lowerSource(`${source}\n`, "/tmp/page.mx");
+      expect(diagnostics.map((d) => d.code)).toEqual([
+        "MX_PARSE_MISMATCHED_CLOSING_TAG",
+      ]);
+      expect(diagnostics.some((d) => d.fixes !== undefined)).toBe(false);
+    },
+  );
+
   it("the fixed bodied tag is the same source with `script` for `effect`", () => {
     const source = "<effect>go()</effect>\n";
     const [fix] = fixesOf(source).fixes as IrDiagnosticFix[];

@@ -162,6 +162,8 @@ export interface MxConfigError {
   line: number;
   /** 0-based. */
   column: number;
+  /** The UTF-16 offset of that position, when the parser's message gave one. */
+  offset?: number;
 }
 
 /** A value's place in the config file (1-based line, 0-based column, UTF-16 length). */

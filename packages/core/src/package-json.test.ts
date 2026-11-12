@@ -14,30 +14,51 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearPackageJsonCache,
   positionOfOffset,
+  positionOfParseError,
   readPackageJsonCached,
   setPackageJsonStatForTests,
 } from "./package-json.ts";
 
 describe("positionOfOffset", () => {
   it.each([
-    ["start", "abc", 0, { line: 1, column: 0 }],
-    ["same line", "abc", 2, { line: 1, column: 2 }],
-    ["after a newline", "a\nbc", 3, { line: 2, column: 1 }],
-    ["on a line start", "a\nb", 2, { line: 2, column: 0 }],
-    ["third line", '{\n  "a": 1,\n}\n', 12, { line: 3, column: 0 }],
-    ["past the end clamps", "ab", 99, { line: 1, column: 2 }],
-    ["negative clamps", "ab", -4, { line: 1, column: 0 }],
-    ["empty text", "", 0, { line: 1, column: 0 }],
-    ["after a lone CR", "a\rbc", 3, { line: 2, column: 1 }],
-    ["after CRLF, one break", "a\r\nbc", 4, { line: 2, column: 1 }],
-    ["after U+2028", "a\u2028bc", 3, { line: 2, column: 1 }],
-    ["after U+2029", "a\u2029bc", 3, { line: 2, column: 1 }],
+    ["start", "abc", 0, { line: 1, column: 0, offset: 0 }],
+    ["same line", "abc", 2, { line: 1, column: 2, offset: 2 }],
+    ["after a newline", "a\nbc", 3, { line: 2, column: 1, offset: 3 }],
+    ["on a line start", "a\nb", 2, { line: 2, column: 0, offset: 2 }],
+    ["third line", '{\n  "a": 1,\n}\n', 12, { line: 3, column: 0, offset: 12 }],
+    ["past the end clamps", "ab", 99, { line: 1, column: 2, offset: 2 }],
+    ["negative clamps", "ab", -4, { line: 1, column: 0, offset: 0 }],
+    ["empty text", "", 0, { line: 1, column: 0, offset: 0 }],
+    ["after a lone CR", "a\rbc", 3, { line: 2, column: 1, offset: 3 }],
+    ["after CRLF, one break", "a\r\nbc", 4, { line: 2, column: 1, offset: 4 }],
+    ["after U+2028", "a\u2028bc", 3, { line: 2, column: 1, offset: 3 }],
+    ["after U+2029", "a\u2029bc", 3, { line: 2, column: 1, offset: 3 }],
   ])("%s", (_name, text, offset, expected) => {
-    expect(positionOfOffset(text, offset)).toMatchObject(expected);
-    // ...and carries the clamped offset for a consumer with another line rule.
-    expect(positionOfOffset(text, offset).offset).toBe(
-      Math.min(Math.max(offset, 0), text.length),
-    );
+    // The offset is carried for a consumer whose line rule differs.
+    expect(positionOfOffset(text, offset)).toEqual(expected);
+  });
+});
+
+describe("positionOfParseError", () => {
+  it("places a `position N` message by the one line rule, with its offset", () => {
+    const text = '{\n "a":"x\u2028y",\n  "b" 1}';
+    expect(
+      positionOfParseError(
+        "Expected ':' after property name in JSON at position 20 (line 3 column 7)",
+        text,
+      ),
+    ).toEqual({ line: 4, column: 4, offset: 20 });
+  });
+
+  it("falls back to `(line L column C)`, then to 1:0", () => {
+    expect(positionOfParseError("bad (line 3 column 7)", "")).toEqual({
+      line: 3,
+      column: 6,
+    });
+    expect(positionOfParseError("JSON Parse error", "")).toEqual({
+      line: 1,
+      column: 0,
+    });
   });
 });
 

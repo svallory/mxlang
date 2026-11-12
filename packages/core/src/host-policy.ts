@@ -317,7 +317,7 @@ function locateMxValue(
   text: string,
   key: string | readonly string[],
   legacyValue?: unknown,
-): { line: number; column: number; length: number } {
+): MxConfigLocation {
   const keys = typeof key === "string" ? [key] : key;
   if (legacyValue !== undefined) {
     const mxKey = /"mx"\s*:/.exec(text);
@@ -340,7 +340,7 @@ function locateMxValue(
     ),
   ];
   let cursor = 0;
-  let found: { line: number; column: number; length: number } | undefined;
+  let found: MxConfigLocation | undefined;
   const value = (path: string[]): void => {
     const start = tokens[cursor];
     if (!start) return;
@@ -923,6 +923,9 @@ export function resolveTargetPolicyDetailed(
       message: `${file} ${reason}; using the default "${lookup.defaultTarget()}" host for the files under ${dir}${before}${consequence}`,
       line: read.error?.line ?? 1,
       column: read.error?.column ?? 0,
+      ...(read.error?.offset !== undefined
+        ? { offset: read.error.offset }
+        : {}),
     });
     return finish(defaultPolicy());
   }
@@ -938,6 +941,9 @@ export function resolveTargetPolicyDetailed(
       message: `${source.file} could not be loaded: ${source.error.message}; ${source.config ? "the last revision that loaded stays in force until this one does" : `its settings are not applied until it loads (the target comes from the @mxlang dependencies, or the default "${lookup.defaultTarget()}")`}`,
       line: source.error.line,
       column: source.error.column,
+      ...(source.error.offset !== undefined
+        ? { offset: source.error.offset }
+        : {}),
     });
   }
   for (const hidden of source?.shadowed ?? []) {
