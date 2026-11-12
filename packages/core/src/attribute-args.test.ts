@@ -63,7 +63,6 @@ describe("the opt-in attribute argument refusal", () => {
     ["<button\n  onClick(v)=fn/>", "onClick", 2, 2],
     ['import C from "./card.js"\n<C onClick(v)=fn/>', "onClick", 2, 3],
     ['import C from "./card.js"\n<C v:fn(x)=1/>', "v:fn", 2, 3],
-    ['import C from "./card.js"\n<C v:fn(x)=1/>', "v:fn", 2, 3],
   ])("refuses %s at the authored attribute", (source, name, line, column) => {
     expect(failure(source)).toMatchObject({
       message: `Unsupported arguments on the \`${name}\` attribute.`,
