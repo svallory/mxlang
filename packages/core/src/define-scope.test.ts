@@ -26,6 +26,9 @@ const policy = (): Policy => ({
   isElement: () => true,
   isComponent: (name, ctx) => ctx.defines.has(name) || ctx.imports.has(name),
   resolveDefaultTag: () => "input",
+  isBuiltinTag: (name) => name === "let",
+  isDelegatedTag: (name) => name === "let",
+  resolveDelegatedTag: () => ({}),
 });
 
 function lowerSource(source: string) {
@@ -324,6 +327,26 @@ describe("a <define> in a nested body is not readable before the walk reaches it
       refusal(`<div>${FOO}</div>\n<p>\${typeof Foo}</p>\n`)?.message,
     ).toMatch(/not readable outside it/);
   });
+
+  it.each([
+    [
+      "a <let> in an <if> body",
+      `<if=input.a><let/Foo=1/>\${Foo}</if><div>${FOO}</div>`,
+    ],
+    [
+      "a <let> in an element body",
+      `<div><let/Foo=1/>\${Foo}</div><section>${FOO}</section>`,
+    ],
+    [
+      "a <let> in the body above the nested define",
+      `<let/Foo=1/>\${Foo}<div>${FOO}</div>`,
+    ],
+  ])(
+    "%s of the same name is the binding its read reaches",
+    (_label, source) => {
+      expect(() => lowerSource(`${source}\n`)).not.toThrow();
+    },
+  );
 
   it("an import of the same name is the one an earlier read reaches", () => {
     expect(() =>

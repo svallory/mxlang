@@ -7728,12 +7728,19 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     );
     return siblingImports.has(tagName);
   };
+  // Every name a direct child declares as a tag variable (`<let>` included,
+  // which is registered nowhere else), so a nested define of that name does
+  // not hide it.
+  const declaredHere = new Set<string>();
   for (const child of children) {
     if (!isTagNode(child) || !tagVarOf(child)) continue;
     for (const name of bindingIdentifiers(tagVarOf(child))) {
       saveTagVar(name);
-      // A name this body declares itself is not the exited define's.
-      if (ctx.tagVars?.get(name)?.exited) ctx.tagVars.delete(name);
+      declaredHere.add(name);
+      // A name this body declares itself is neither the exited define's nor
+      // the not-yet-reached nested define's.
+      const entry = ctx.tagVars?.get(name);
+      if (entry?.exited || entry?.nested) ctx.tagVars?.delete(name);
     }
     // A `<define>` binds its name the same way for reads *above* it: the
     // binding does not exist yet, so it is pre-registered pending until its
@@ -7790,7 +7797,12 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // registered here is left alone: it is another binding the nested one shadows.
   if (ctx.tagRules !== "none") {
     for (const name of nestedDefineNames(ctx, children)) {
-      if (declaredDefines.has(name) || ctx.tagVars?.has(name)) continue;
+      if (
+        declaredDefines.has(name) ||
+        declaredHere.has(name) ||
+        ctx.tagVars?.has(name)
+      )
+        continue;
       saveTagVar(name, true);
       ctx.tagVars ??= new Map();
       ctx.tagVars.set(name, {

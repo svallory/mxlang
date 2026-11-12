@@ -87,3 +87,11 @@ describe("html: an element body scopes the tag variables it declares", () => {
     expect(emit("<div><const/a=1/>${a}</div>")).toMatch(/\{\n\s*const a = 1;/);
   });
 });
+
+describe("a /var on an imported value html cannot read a return from", () => {
+  it("names the dynamic-tag form that binds it", () => {
+    expect(() => emit('import Barrel from "./barrel.ts"\n<Barrel/c/>')).toThrow(
+      /write `<\$\{Barrel\}\/c\/>`$/,
+    );
+  });
+});
