@@ -318,11 +318,6 @@ describe("a plain object in a text interpolation prints as Marko prints it", () 
     expect(html).toMatch(/^<p>&lt;b(&gt;|>)x&lt;\/b(&gt;|>)<\/p>$/);
   });
 
-  it("throws on a null-prototype object, as Marko does", async () => {
-    const x = Object.assign(Object.create(null), { a: 1 });
-    await expect(renderMx("<p>${input.x}</p>", { x })).rejects.toThrow();
-  });
-
   it("maps an array that holds an object", async () => {
     expect(await renderMx("<p>${input.x}</p>", { x: ["a", DATA] })).toBe(
       "<p>a[object Object]</p>",

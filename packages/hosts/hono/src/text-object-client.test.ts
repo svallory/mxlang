@@ -300,8 +300,11 @@ describe("JSON-shaped data in a text placeholder (Hono client and server)", () =
     expect(html(at("valueOf").server)).toBe("<p>&lt;u>v&lt;/u></p>");
   });
   it("throws on a null-prototype object, as Marko does (String() of an object with no toString)", () => {
-    // The message is the engine's (Bun and Node word it differently).
+    // client and server both throw; the wording is the engine's (V8: "primitive value", JSC: "No default value").
     expect(at("nullProto").errors).toHaveLength(2);
+    expect(
+      at("nullProto").errors.every((m) => /primitive|default value/i.test(m)),
+    ).toBe(true);
   });
   it("prints a bigint as Marko does: 1n as 1, 0n as nothing", () => {
     expect(at("bigints").errors).toEqual([]);

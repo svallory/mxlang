@@ -120,7 +120,9 @@ export function jsxAttrValueExpression(reactBooleans: boolean): string {
  * HTML parser reads the same attribute name. `textContent` and `innerText` get
  * the same treatment: Marko prints them as ordinary escaped attributes, while
  * Preact would hyphenate one and the client renderers would assign it as a DOM
- * property that replaces the element's text.
+ * property that replaces the element's text. The lowercase spelling differs
+ * from Marko's `textContent=` bytes on purpose; an HTML parser reads both as
+ * the same attribute.
  */
 export const JSX_ATTRIBUTE_SPREAD_EXPRESSION = `(<T extends object | null | undefined,>(attrs: T, tag = "", props: readonly string[] = [], events = false): T => {
   const values = { ...attrs } as Record<string, unknown>;

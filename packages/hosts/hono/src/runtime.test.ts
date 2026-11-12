@@ -146,8 +146,19 @@ describe("a compiled <@catch> body", () => {
           join(dir, "App.mx"),
         ).code,
       );
+      writeFileSync(
+        join(dir, "Nested.tsx"),
+        compileHonoMx(
+          "<try><div>${input.boom()}</div><@catch|e|><if=true><for|i| of=[0, 1]>${i}</for></if></@catch></try>",
+          join(dir, "Nested.mx"),
+        ).code,
+      );
       const module = (await import(entry)) as { default: unknown };
       expect(await html(jsx(module.default, { boom: missing }))).toBe("01");
+      const nested = (await import(join(dir, "Nested.tsx"))) as {
+        default: unknown;
+      };
+      expect(await html(jsx(nested.default, { boom: missing }))).toBe("01");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

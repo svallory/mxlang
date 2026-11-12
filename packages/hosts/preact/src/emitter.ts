@@ -1075,6 +1075,17 @@ function holdsScalar(nodes: IrNode[]): boolean {
   return false;
 }
 
+/** Whether a body is one `<for>` (an array), alone or as a branch of a lone `<if>`; mirrors {@link holdsScalar}. */
+function holdsList(nodes: IrNode[]): boolean {
+  const content = meaningful(nodes);
+  const only = content.length === 1 ? content[0] : undefined;
+  if (only?.kind === "For") return true;
+  if (only?.kind === "IfChain") {
+    return only.branches.some((branch) => holdsList(branch.children));
+  }
+  return false;
+}
+
 function meaningful(nodes: IrNode[]): IrNode[] {
   return nodes.filter(
     (node) =>
@@ -3430,10 +3441,9 @@ export class PreactEmitter implements Emitter<string> {
     // Hono drops when it is `0` or `NaN`: write it as a closed fragment.
     // A lone `<for>` is an array: Hono's string renderer joins an array a
     // function returns with commas, so it is closed as a fragment too.
-    const catchContent = meaningful(catchTag.block.children);
     const caught =
       holdsScalar(catchTag.block.children) ||
-      (catchContent.length === 1 && catchContent[0]?.kind === "For")
+      holdsList(catchTag.block.children)
       ? concatMapped(
           "<>",
           closeFragmentBody(
