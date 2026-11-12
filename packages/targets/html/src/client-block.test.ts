@@ -806,11 +806,66 @@ describe("html typeCheck: the render function shadows the value names a client s
     ).toBeUndefined();
   });
 
+  it("the render's own `input` is not shadowed", () => {
+    expect(
+      shadow(
+        'client import { input } from "./x.ts";\nexport interface Input { a: number }\n<div>${input.a}</div>\n',
+      ),
+    ).toBeUndefined();
+  });
+
+  it("a name a server statement declares too is not shadowed", () => {
+    expect(
+      shadow(
+        "server namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\n<div/>\n",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("the render body stands in a block below the shadow, so a tag variable declares cleanly", () => {
+    const { code } = compile(
+      "client declare const count: number;\n<let/count=0/>\n<div>${count}</div>\n",
+      "/f/t.mx",
+      { typeCheck: true },
+    );
+    expect(code).toMatch(/var count: undefined; void \[count\];\n {2}\{\n/);
+  });
+
+  it("a refinement that names a client import reads a module-level alias of it", () => {
+    const { code } = compile(
+      'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n<div>${clamp(5)}</div>\n',
+      "/f/t.mx",
+      { typeCheck: true },
+    );
+    expect(code).toContain("const __mxRefine_clamp = clamp;");
+    expect(code).toContain("(false && __mxRefine_clamp(q), q)");
+    expect(code).toContain("var clamp: undefined; void [clamp];");
+  });
+
   it("a qualified namespace binds its leftmost name, once for a merged one", () => {
     expect(
       shadow(
         "client namespace A.B { export const x = 1 }\nclient namespace A.C { export const y = 1 }\n<div/>\n",
       ),
     ).toBe("A");
+  });
+});
+
+describe("html typeCheck: the client arrow shadows the names a server statement declares", () => {
+  const typeCheck = (source: string) =>
+    compile(source, "/f/t.mx", { typeCheck: true }).code;
+
+  it("an exported `declare` form is a server name", () => {
+    expect(
+      typeCheck(
+        "server export declare const s: number;\nclient const n = 1;\n<div/>\n",
+      ),
+    ).toContain("var s: undefined; void [s];");
+  });
+
+  it("a name a client statement declares too is not shadowed", () => {
+    expect(
+      typeCheck("server var s = 1;\nclient var s = 2;\n<div/>\n"),
+    ).not.toContain("s: undefined; void");
   });
 });

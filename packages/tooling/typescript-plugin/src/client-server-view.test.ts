@@ -134,6 +134,29 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     },
   );
 
+  it.each([
+    ["two vars", "server var s = 1;\nclient var s = 2;\n<div/>\n"],
+    [
+      "two namespaces",
+      "server namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\nclient const t = N.a;\n<div>${N.a}</div>\n",
+    ],
+  ])(
+    "%s merged across server and client exist on both sides",
+    (_name, source) => {
+      expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+    },
+  );
+
+  it("KNOWN LIMIT: a type query of a server name reads the undefined shadow", () => {
+    const source =
+      'server import { f } from "./fn.ts";\nclient let r: ReturnType<typeof f> | null = null;\n<div/>\n';
+    const found = errorsOf(
+      { [FILE]: source, "/project/fn.ts": "export const f = () => 1;\n" },
+      FILE,
+    );
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([2344]);
+  });
+
   it("a server name read by server code stays typed", () => {
     const source =
       "server const s = 1;\nserver const n: number = s;\n<div>${s.toFixed(1)}</div>\n";
@@ -192,6 +215,45 @@ describe("a client import, namespace or declare in the server view", {
         FILE,
       ),
     ).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a declare const",
+      "client declare const count: number;\n<let/count=0/>\n<div>${count}</div>\n",
+    ],
+    [
+      "a declare function",
+      "client declare function f(): number;\n<const/f=1/>\n<div>${f}</div>\n",
+    ],
+    [
+      "an import spelled input",
+      'client import { input } from "./x.ts";\nexport interface Input { a: number }\n<div>${input.a}</div>\n',
+    ],
+  ])(
+    "%s that a template variable or the render parameter shares checks clean",
+    (_name, source) => {
+      expect(
+        errorsOf(
+          { [FILE]: source, "/project/x.ts": "export const input = 1;\n" },
+          FILE,
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("a refinement from a client import does not type the template's own read", () => {
+    const source =
+      'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n<div>${clamp(5)}</div>\n';
+    const found = errorsOf(
+      {
+        [FILE]: source,
+        "/project/fn.ts": "export const clamp = (n: number) => n;\n",
+      },
+      FILE,
+    );
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([2722]);
+    expect(found[0]?.start).toBe(source.indexOf("clamp(5)"));
   });
 
   it("KNOWN LIMIT: a server statement still reads a client import typed", () => {

@@ -135,9 +135,9 @@ interface State {
    */
   clientHoisted: string[];
   /**
-   * Under `typeCheck`, the leftmost names of bound-attribute refinements
-   * (`v:fn:=q`): `fn` is a client change handler, so the probe that checks it
-   * reads the client binding, not the server view's `undefined`.
+   * Under `typeCheck`, the names bound-attribute refinements (`v:fn:=q`) read.
+   * `fn` is a client change handler: when it is a `client` import, the module
+   * keeps an alias of the real binding for the probe (`refinementAliases`).
    */
   refinementReads: Set<string>;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
@@ -181,7 +181,12 @@ export interface StringEmitter extends Emitter<string[]> {
  */
 export function createEmitter(
   selfName?: string,
-  options: { typeCheck?: boolean; source?: string } = {},
+  options: {
+    typeCheck?: boolean;
+    source?: string;
+    refinementAliases?: ReadonlySet<string>;
+    mergedNames?: ReadonlySet<string>;
+  } = {},
 ): StringEmitter {
   const state: State = {
     body: [],
@@ -593,21 +598,23 @@ export function createEmitter(
    * modifier.
    */
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
-    if (options.typeCheck && attr.kind === "bound" && attr.refinement) {
-      const read = /^[\p{ID_Start}$_][\p{ID_Continue}$]*/u.exec(
-        attr.refinement.code.trim(),
-      );
-      if (read) state.refinementReads.add(read[0]);
+    if (!options.typeCheck || attr.kind !== "bound" || !attr.refinement) {
+      return mappedExpr(attr.value);
     }
-    return options.typeCheck && attr.kind === "bound" && attr.refinement
-      ? concatMapped(
-          "(false && ",
-          mappedExpr(attr.refinement),
-          `(${attr.value.code}), `,
-          mappedExpr(attr.value),
-          ")",
-        )
-      : mappedExpr(attr.value);
+    // Core makes the refinement an identifier. A `client import` of that name
+    // is `undefined` in the server view, so the probe reads the alias the
+    // module keeps of the real binding (`refinementAliases`).
+    const name = attr.refinement.code;
+    state.refinementReads.add(name);
+    return concatMapped(
+      "(false && ",
+      options.refinementAliases?.has(name)
+        ? mapped(`__mxRefine_${name}`, attr.refinement.span ?? null)
+        : mappedExpr(attr.refinement),
+      `(${attr.value.code}), `,
+      mappedExpr(attr.value),
+      ")",
+    );
   };
 
   const attribute = (attr: Attr, tag = ""): void => {
@@ -1478,9 +1485,12 @@ export function createEmitter(
           const projection = data.typeCheck;
           state.clientHoisted.push(...projection.hoistedNames);
           const lines: Array<string | MappedCode> = [];
-          if (projection.serverNames.length > 0) {
-            lines.push(undefinedShadow(projection.serverNames));
-          }
+          // A name a `server` statement declares too (two `var`s, merged enums
+          // or namespaces) is not `undefined` in the server view.
+          const absent = projection.serverNames.filter(
+            (name) => !options.mergedNames?.has(name),
+          );
+          if (absent.length > 0) lines.push(undefinedShadow(absent));
           for (const hoisted of projection.hoisted) {
             lines.push(clientPiece(hoisted));
           }
@@ -1799,9 +1809,16 @@ function placeClientCode(state: State): void {
   if (body.length === 0) return;
   // The client code runs in the browser, where a `server` name does not
   // exist: the arrow declares each as `undefined`, so a read is reported at the
-  // author's token. (Core refuses a client statement that declares a name a
-  // `server` statement does, so the shadow cannot clash with the code.)
-  const absent = undefinedShadow(state.serverDeclared);
+  // author's token. A name a client statement declares too (two `var`s, merged
+  // enums or namespaces, which core accepts) exists on both sides and is left
+  // out. A type query (`typeof s`) reads the shadow: a known limit.
+  const absent = undefinedShadow(
+    state.serverDeclared.filter(
+      (name) =>
+        !state.clientNames.includes(name) &&
+        !state.clientHoisted.includes(name),
+    ),
+  );
   if (absent !== "") body.unshift(concatMapped(absent));
   state.moduleHoisted.push({
     code: concatMapped(
@@ -1812,6 +1829,14 @@ function placeClientCode(state: State): void {
     start: state.clientStart,
   });
 }
+
+/** Names the render function binds itself, which a shadow must not redeclare. */
+const RENDER_NAMES: ReadonlySet<string> = new Set([
+  "input",
+  "$global",
+  "$signal",
+  "__mxOut",
+]);
 
 /**
  * `var a: undefined, b: undefined; void [a, b];` for the distinct `names`: the
@@ -1884,8 +1909,31 @@ export function emitModuleWithMappings(
   options: { typeCheck?: boolean; source?: string } = {},
 ): MappedCode {
   const name = moduleExportName(ir, "@mxlang/target-html");
-  const emitter = createEmitter(name, options);
+  let emitter = createEmitter(name, options);
   drive(emitter, ir.body);
+  // A refinement that names a `client` import reads an alias of the real
+  // binding, which the module declares: the template's own reads of the name
+  // stay `undefined`. Which names are client imports, and which a server
+  // statement declares too, is known once the body has been driven, so the body
+  // is driven again with that knowledge.
+  const refinementAliases = new Set(
+    [...emitter.state.refinementReads].filter((read) =>
+      emitter.state.clientHoisted.includes(read),
+    ),
+  );
+  const mergedNames = new Set(
+    emitter.state.clientNames.filter((client) =>
+      emitter.state.serverDeclared.includes(client),
+    ),
+  );
+  if (refinementAliases.size > 0 || mergedNames.size > 0) {
+    emitter = createEmitter(name, {
+      ...options,
+      refinementAliases,
+      mergedNames,
+    });
+    drive(emitter, ir.body);
+  }
   const body = emitter.done();
   const buffered = body.some((line) => line.includes("__mxCreateBufferedOut("));
 
@@ -1902,15 +1950,22 @@ export function emitModuleWithMappings(
     ...ir.imports.map((node) => node.code),
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
   ];
+  // The render function's own names (`input` is its parameter, which already
+  // hides an import of that spelling) and the names a server or static statement
+  // declares too are not shadowed.
   const shadowed = undefinedShadow(
     emitter.state.clientHoisted.filter(
-      (name) => !emitter.state.refinementReads.has(name),
+      (name) =>
+        !RENDER_NAMES.has(name) && !emitter.state.serverDeclared.includes(name),
     ),
   );
   const inputType = ir.tagMetadata.readsContent
     ? "Input & { content?: () => string }"
     : "Input";
   if (hoisted.length > 0) lines.push("", ...hoisted);
+  for (const alias of refinementAliases) {
+    lines.push(`const __mxRefine_${alias} = ${alias};`);
+  }
   lines.push(
     "",
     ir.inputInterface?.code ?? "export interface Input {}",
@@ -1936,11 +1991,11 @@ export function emitModuleWithMappings(
     // Hoisted statements precede the body, so a hoisted declaration is in
     // scope for all of it.
     // A template read of a `client` import, namespace or `declare` name is
-    // `undefined`, typed in the client code. (Core refuses a tag variable
-    // spelled like a module level name, so the shadow has nothing to clash
-    // with.) A bound attribute's refinement names a client handler, so it
-    // keeps the binding.
-    ...(shadowed === "" ? [] : [`${INDENT}${shadowed}`]),
+    // `undefined`, typed in the client code. The shadow stands outside a block
+    // that holds the whole render: a tag variable or `<define>` of the same
+    // name (core lets an ambient `client declare` share its spelling) declares
+    // in the block without a clash.
+    ...(shadowed === "" ? [] : [`${INDENT}${shadowed}`, `${INDENT}{`]),
     ...[...ir.prelude.map((node) => node.code), ...emitter.state.prelude].map(
       (code) => INDENT + code,
     ),
@@ -1949,6 +2004,7 @@ export function emitModuleWithMappings(
       mappings: emitter.state.bodyMappings[index] ?? [],
     })),
     ...(ir.returnValue ? [`${INDENT}return ${ir.returnValue.code};`] : []),
+    ...(shadowed === "" ? [] : [`${INDENT}}`]),
     "}",
     "export { __mxRender as render };",
     // A module cannot load with a top-level `return`; the function above would

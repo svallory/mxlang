@@ -116,16 +116,22 @@ names nothing reads (the `_` keeps `noUnusedLocals` quiet), mapped piece by
 piece; `export {..}` of values and `export default` are dropped. A top-level
 `return` is repeated after the module, mapped to the keyword, because the arrow
 would hide its TS1108. Two shadows keep each view to the names it has at run
-time. In the client code, an outer arrow declares every name a `server`
-statement binds (`let`/`const`/`function`/`class`, `import`, `declare` forms) as
-`var s: undefined` at the head of the client arrow, so a read is reported at the
-author's token (core refuses a client statement that declares the same name). In the server view, the render function declares
-the value names of `client` imports, namespaces and `declare` forms (a qualified
-namespace by its leftmost name; `declare global` and ambient modules bind none)
-as `undefined` at the head of the render, so a template read is reported (core
-refuses a tag variable spelled like a module level name, so nothing clashes).
-A bound attribute's refinement (`v:fn:=q`) names a client handler: a name used
-as a refinement is left out of that shadow. Known limits: a `client` import of
+time. At the head of the client arrow, every name a `server` statement binds
+(`let`/`const`/`function`/`class`, `import`, `declare` forms, exported or not)
+is declared `var s: undefined`, so a read is reported at the author's token; a
+name a `client` statement declares too (two `var`s, merged enums or namespaces,
+which core accepts) exists on both sides and is not shadowed, nor is the
+`var q: undefined` of the module's server view. At the head of the render
+function, the value names of `client` imports, namespaces and `declare` forms
+(a qualified namespace by its leftmost name; `declare global` and ambient
+modules bind none) are declared `undefined`, with the whole render in a block
+below them, so a tag variable or `<define>` of the same name (core lets an
+ambient `client declare` share its spelling) declares without a clash. The
+render's own `input`, `$global` and `$signal` and a name a `server` statement
+declares too are left out. A bound attribute's refinement (`v:fn:=q`) that names
+a `client` import reads `__mxRefine_fn`, a module-level alias of the real
+binding, so the shadow stays for every other read; the emitter drives the body
+twice to know that. Known limits: a `client` import of
 another module's client export is TS2614 (that module's one projection is its
 server view); a top-level type (`Input`) cannot name a client class or enum; a
 namespace body reading a client value is `undefined`; a `client` statement
@@ -133,7 +139,10 @@ reading a `static` or `server` name declared after it but before a later
 `client` statement is not reported; a `server` or `static` statement reading a
 `client` import, namespace or `declare` name is typed (the import is one
 module-level binding, and a module-level shadow of the same name would hide its
-type meaning from the client code); a template read of a client name is not
+type meaning from the client code); a type query (`typeof fetchRows`) of a name
+the shadow covers reads `undefined`, so `ReturnType<typeof fetchRows>` in client
+code is TS2344; names a `static` statement declares are not read, so a `client`
+statement of the same merged name is shadowed; a template read of a client name is not
 linked to its declaration for definition and rename. The
 runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a

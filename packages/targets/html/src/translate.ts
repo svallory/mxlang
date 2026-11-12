@@ -199,7 +199,11 @@ function statementCodeSpan(
 }
 
 /** The top-level statements of a `client` statement's code, with Babel's offsets. */
-function parseClientStatements(code: string, at: Node): Node[] {
+function parseClientStatements(
+  code: string,
+  at: Node,
+  keyword = "client",
+): Node[] {
   try {
     return babelParser.parse(code, {
       sourceType: "module",
@@ -225,7 +229,7 @@ function parseClientStatements(code: string, at: Node): Node[] {
     // that check and this parse. Say so: declaring nothing would turn the
     // template's own read of the name into a ReferenceError.
     fail(
-      `the names this \`client\` statement declares could not be read: ${(error as Error).message}`,
+      `the names this \`${keyword}\` statement declares could not be read: ${(error as Error).message}`,
       at,
     );
   }
@@ -581,7 +585,7 @@ function valueNames(nodes: Node[]): string[] {
       if (inner.global || inner.kind === "global") continue;
       const name = leftmostName(inner.id);
       if (name) names.add(name);
-    } else plain.push(node.declare ? { ...node, declare: false } : node);
+    } else plain.push(inner.declare ? { ...inner, declare: false } : node);
   }
   for (const name of clientDeclaredNames(plain)) names.add(name);
   return [...names];
@@ -1046,7 +1050,8 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
-      declaredNames: () => valueNames(parseClientStatements(code, node)),
+      declaredNames: () =>
+        valueNames(parseClientStatements(code, node, "server")),
     };
   }
 
