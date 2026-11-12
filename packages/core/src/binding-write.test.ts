@@ -1185,6 +1185,35 @@ describe("a two-way bind on a parameter with no change handler", () => {
     },
   );
 
+  it.each([
+    ["<const/{a, ...rest}=input.o/><input value:=rest/>", "rest", 43],
+    ["<const/[a]=input.x/><button onClick() { a = 1 }/>", "a", 40],
+    [
+      "<const/{a, ...rest}=input.o/><button onClick() { rest = 1 }/>",
+      "rest",
+      49,
+    ],
+  ])("refuses %s: no object stands behind it", (source, name, column) => {
+    const error = attempt(source);
+    expect([
+      error?.diagnosticCode,
+      error?.message,
+      error?.line,
+      error?.column,
+    ]).toEqual([
+      "MX_READONLY_BINDING_WRITE",
+      `\`${name}\` is a \`<const>\` and cannot be written. Keep a value that changes in a \`<let>\` and write that in an event handler or a \`<script>\` body, or derive a new value with another \`<const>\`.`,
+      1,
+      column,
+    ]);
+  });
+
+  it("allows a handler write to a name inside an object pattern of a <const>, written through its object", () => {
+    expect(
+      attempt("<const/{a}=input.o/><button onClick() { a = 1 }/>"),
+    ).toBeUndefined();
+  });
+
   it("allows binding a name inside an object pattern nested in an array, written through its object", () => {
     expect(
       attempt("<for|[{a}]| of=[[{a: 1}]]><input value:=a/></for>"),

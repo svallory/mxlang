@@ -2651,7 +2651,7 @@ function lowerAttrs(
       // Structural/builtin tags keep their own rules. A region's authored
       // module statements must reach the host's module-level refusal first.
       if (refuseArgs && !isMethodAttr(attr) && lowered.kind !== "spread") {
-        rejectAttributeArguments(ctx, attr);
+        rejectAttributeArguments(ctx, attr, lowered.name);
       }
       return lowered;
     },
@@ -3911,7 +3911,11 @@ function offendingAttribute(
  * module-statement refusal reports first, so a region that does not emit a
  * module waits for it. Stock compiles and drops the arguments.
  */
-function rejectAttributeArguments(ctx: Ctx, attr: Node): void {
+function rejectAttributeArguments(
+  ctx: Ctx,
+  attr: Node,
+  display: string = attrNameOf(attr),
+): void {
   if (
     ctx.declarations.attributeArgs !== "refuse" ||
     !(ctx.emitsModule || !ctx.moduleScope) ||
@@ -3920,7 +3924,7 @@ function rejectAttributeArguments(ctx: Ctx, attr: Node): void {
     return;
   raise(
     INVALID_ATTRIBUTE_CODE,
-    `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
+    `Unsupported arguments on the \`${display}\` ${voiceOfCtx(ctx).attribute}.`,
     attr,
   );
 }
@@ -4185,7 +4189,6 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
     outerTagVar ||
     ctx.tagVarShadowed?.has(name) ||
     ctx.imports.has(name) ||
-    ctx.bindings.get(name) !== undefined ||
     isModuleBinding(ctx, name);
   // A name a `$ const x = …` scriptlet declares in the render is not tracked
   // by core, so it reads as "not in scope" here.
@@ -5847,11 +5850,11 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   // A comment's attribute error is Marko's `assertNoAttributes`, ahead of its
   // body: raised right after the host has resolved the claim (and had its
   // chance to refuse the tag), before any child is lowered.
-  const data = ctx.declarations.resolveDelegatedTag?.(
-    name,
-    markoViewOf(ctx, node),
-    ctx,
-  );
+  const resolve = () =>
+    ctx.declarations.resolveDelegatedTag?.(name, markoViewOf(ctx, node), ctx);
+  // Every other tag resolves last, after its attributes and children, as the
+  // contract-only delegated path does; only a comment resolves early.
+  const commentData = name === "html-comment" ? resolve() : undefined;
   if (name === "html-comment") rejectHtmlCommentAttributes(ctx, node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
@@ -5903,7 +5906,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data,
+      data: name === "html-comment" ? commentData : resolve(),
       loc,
     },
     loc,
