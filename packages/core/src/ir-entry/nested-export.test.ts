@@ -54,6 +54,34 @@ describe("import or export below the top level", () => {
       17,
     ],
     [
+      "a static function",
+      "static function f() { export { a } }\n<div/>",
+      undefined,
+      1,
+      22,
+    ],
+    [
+      "a static block with an if",
+      "static { if (a) { export { b } } }\n<div/>",
+      undefined,
+      1,
+      18,
+    ],
+    [
+      "a static block after an import",
+      'static { import x from "x"; function f() { export { a } } }\n<div/>',
+      undefined,
+      1,
+      43,
+    ],
+    [
+      "a server function",
+      "server function f() { export { a } }\n<div/>",
+      undefined,
+      1,
+      22,
+    ],
+    [
       "a scriptlet function",
       "$ function f() { export { a } }\n<div/>",
       undefined,
@@ -76,6 +104,15 @@ describe("import or export below the top level", () => {
     expect(diagnostics).toMatchObject([
       { code: "MX_INVALID_STATEMENT", message: MESSAGE, line, column },
     ]);
+  });
+
+  it("a block's own export still compiles", () => {
+    const { diagnostics } = lowerSource(
+      "static { export const z = 1 }\n<div/>",
+      "/v/e.mx",
+      {},
+    );
+    expect(diagnostics).toEqual([]);
   });
 
   it("an export in a namespace body is not refused", () => {

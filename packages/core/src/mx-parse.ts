@@ -1659,20 +1659,23 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
       container.node = statement?.expression ?? node;
       return;
     }
-    case "MxStatements":
-      if (moduleBlock && stripModuleBlock(container)) return;
-      if (!moduleBlock) {
-        // The statements themselves may be module statements; what is
-        // below them may not.
-        for (const statement of node as Node[]) {
-          for (const [key, field] of Object.entries(statement ?? {})) {
-            if (!NON_CHILD_FIELDS.has(key))
-              rejectNestedModuleDeclaration(field);
-          }
+    case "MxStatements": {
+      // The statements themselves may be module statements (a block's own
+      // are the module's); what is below them may not.
+      const [first, ...rest] = node as Node[];
+      const own =
+        moduleBlock && rest.length === 0 && first?.type === "BlockStatement"
+          ? (first.body as Node[])
+          : (node as Node[]);
+      for (const statement of own) {
+        for (const [key, field] of Object.entries(statement ?? {})) {
+          if (!NON_CHILD_FIELDS.has(key)) rejectNestedModuleDeclaration(field);
         }
       }
+      if (moduleBlock && stripModuleBlock(container)) return;
       container.node = stripProgram([...node], moduleBlock);
       return;
+    }
     case "MxPattern": {
       rejectNestedModuleDeclaration(node);
       const [declaration] = stripProgram([
