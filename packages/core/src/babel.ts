@@ -136,6 +136,14 @@ function reasonOf(error: Error): string | undefined {
   return undefined;
 }
 
+/** `error.stack` with its header (`Name: message`) swapped for the new message, keeping the original's frames. */
+function restack(error: Error, message: string): string | undefined {
+  const header = `${error.name}: ${error.message}`;
+  return typeof error.stack === "string" && error.stack.startsWith(header)
+    ? `${error.name}: ${message}${error.stack.slice(header.length)}`
+    : error.stack;
+}
+
 /**
  * A parse error whose `.message` starts with its reason.
  *
@@ -164,7 +172,7 @@ export function withReasonFirst<E extends Error>(error: E): E {
       configurable: true,
     },
     stack: {
-      value: `${error.name}: ${message}`,
+      value: restack(error, message),
       enumerable: false,
       writable: true,
       configurable: true,

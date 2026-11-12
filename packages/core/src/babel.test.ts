@@ -210,6 +210,42 @@ describe("withReasonFirst puts a parse error's reason on the first line", () => 
     expect(Object.getPrototypeOf(fixed)).toBe(Object.getPrototypeOf(error));
   });
 
+  it("keeps the original's call-site frames in the stack", () => {
+    const error = new Error("\n    at x.mx:1:1\n    > 1 | a\n        | ^ Boom");
+    const fixed = withReasonFirst(error);
+    expect(fixed.stack?.split("\n")[0]).toBe("Error: Boom");
+    // The frames below the header are the original's own.
+    const frames = (error.stack ?? "")
+      .split("\n")
+      .filter((line) => /^\s+at .*\(.*\)|^\s+at \S+:\d+:\d+/.test(line));
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) expect(fixed.stack).toContain(frame);
+  });
+
+  it("reads the reason from the error's `label` before the frame", () => {
+    const error = Object.assign(new Error("\n    at x.mx:1:1"), {
+      label: "A labelled reason",
+    });
+    expect(withReasonFirst(error).message.split("\n")[0]).toBe(
+      "A labelled reason",
+    );
+  });
+
+  it("reads an aggregate's reason from its first error", () => {
+    const first = new Error(
+      "\n    at x.mx:1:1\n    > 1 | a\n        | ^ First one",
+    );
+    const aggregate = Object.assign(new Error("\n    at x.mx:1:1"), {
+      errors: [first, new Error("\n    at x.mx:2:1\n        | ^ Second")],
+    });
+    expect(withReasonFirst(aggregate).message.split("\n")[0]).toBe("First one");
+  });
+
+  it("returns the same object when the message has no reason to lift", () => {
+    const error = new Error("\n    at x.mx:1:1");
+    expect(withReasonFirst(error)).toBe(error);
+  });
+
   it("leaves a message that already starts with text as it is", () => {
     const error = new Error("plain reason");
     expect(withReasonFirst(error)).toBe(error);
