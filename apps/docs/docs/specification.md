@@ -2615,14 +2615,17 @@ a positioned error naming their own constraint.
 
 **A named custom tag's argument beside attribute tags.** `<foo(a)><@x/></foo>`
 (and the concise `foo(a)` with `@x`) is a positioned error, "Tag does not
-support arguments when attributes or body present." (`MX_UNSUPPORTED_TAG_ARGUMENTS`
-for a tag the file imports, `MX_UNSUPPORTED_CONSTRUCT` for a registered or
-discovered one); stock compiles it and drops `<@x/>`, so this is a recorded
-divergence. An attribute tag mixed with body content under a control tag
+support arguments when attributes or body present."
+(`MX_UNSUPPORTED_TAG_ARGUMENTS`) for a tag the file imports, and "Tag does not
+support arguments." (`MX_UNSUPPORTED_CONSTRUCT`) for a registered or discovered
+one; stock compiles it and drops `<@x/>`, so this is a recorded divergence. An attribute tag mixed with body content under a control tag
 (`<foo(a)><if=c><@x/>text</if></foo>`) is reported first, as stock orders them:
 "Cannot have attribute tags and body content under a control flow tag."
-(`MX_INVALID_ATTRIBUTE_TAG`). A lone `<foo(a)/>` is the callee's input where the
-host passes it: html passes `a` as the callee's whole input, as stock does. Every other host refuses it with
+(`MX_INVALID_ATTRIBUTE_TAG`). A lone `<foo(a)/>` on an imported component is the callee's input where the
+host passes it: html passes `a` as the callee's whole input, as stock does. A
+registered or discovered `foo` refuses a lone argument on every host ("Tag does
+not support arguments.", `MX_UNSUPPORTED_CONSTRUCT`), where stock passes it: a
+recorded divergence. On an imported component every other host refuses it with
 "`<foo>` does not take an argument on this host: it would be dropped. Pass the
 value as an attribute instead." (`MX_UNSUPPORTED_TAG_ARGUMENTS`, over the
 argument), never dropping it silently. A host opts in with
