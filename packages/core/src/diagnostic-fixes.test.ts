@@ -164,8 +164,8 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
 
   // A rename that `<script>` would itself refuse trades one error for another:
   // the error stays, and offers no fix.
-  it.each([
-    ...REFUSED.map(([n, source]) => [n, source] as const),
+  it.each<[string, string]>([
+    ...REFUSED.map(([n, source]): [string, string] => [n, source]),
     ["arguments", "<effect(x)>go()</effect>"],
     ["parameters", "<effect|x|>go()</effect>"],
     ["a tag variable, self-closing", "<effect/x/>"],
