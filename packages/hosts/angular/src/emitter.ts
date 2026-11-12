@@ -612,6 +612,21 @@ function handlerShape(code: string):
   return { form: "other" };
 }
 
+/** Whether `code` is an optional chain at its root (`q?.a`, `q?.[k]`, `q?.a.b`). */
+function isOptionalChain(code: string): boolean {
+  try {
+    const babel = babelParser as unknown as {
+      parseExpression(source: string, options: unknown): HandlerNode;
+    };
+    const type = babel.parseExpression(code, {
+      plugins: [["typescript", {}]],
+    }).type;
+    return type === "OptionalMemberExpression";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The first construct in `code` Angular's template expression parser cannot
  * read: a `function` expression (method shorthand lowers to one) or an arrow
@@ -1377,6 +1392,15 @@ function emitAttrs(
           writeRefinedWrite(out, attr, attr.refinement, refine);
           out.write('"');
         } else {
+          // Angular's `[(v)]` refuses an optional chain (NG5002, "Unsupported
+          // expression in a two-way binding"); Marko accepts it. Refuse it
+          // here, at the attribute, like the refined form.
+          if (isOptionalChain(attr.value.code)) {
+            fail(
+              "a bound attribute (`v:=q`) must be bound to a name or a member of one: Angular's `[(v)]` does not accept an optional chain",
+              attr,
+            );
+          }
           out.write(" [(");
           out.writeMapped(attr.name, attr.nameSpan);
           out.write(')]="');

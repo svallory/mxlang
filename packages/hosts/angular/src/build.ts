@@ -75,6 +75,12 @@ export interface BuildResult {
   ok: boolean;
   errors: PositionedMessage[];
   warnings: PositionedMessage[];
+  /**
+   * Per emitted output file (the page `.html`, a tag's or `.ng.mx`'s `.ts`),
+   * each generated `<const>`/`<define>` name mapped to the authored one. Only
+   * files that renamed something appear. `mx-angular ng-build` reads it.
+   */
+  authoredNames: Record<string, Record<string, string>>;
 }
 
 export function outputPathFor(
@@ -336,6 +342,8 @@ export interface CompileOneResult {
   usedTags: string[];
   /** Every output path this call touched (page `.html`, its `.map`), for `knownOutputs` bookkeeping. */
   outputs: string[];
+  /** The generated-to-authored names of the file this call compiled, when it renamed any. */
+  authoredNames?: Record<string, string>;
 }
 
 /**
@@ -418,6 +426,7 @@ function compileTagFile(
       // map, and a tag is tracked by its own path, not by its callees.
       usedTags: [],
       outputs: [outputPath],
+      authoredNames: result.authoredNames,
     };
   } catch (err) {
     // Same shape as the `.ng.mx` catch below: a parse error is a Babel
@@ -568,6 +577,7 @@ function compileNgMxFile(
       // rebuilds every `.ng.mx` that calls it.
       usedTags: result.usedTags.map((tag) => tag.name),
       outputs: [outputPath, mapPath],
+      authoredNames: result.authoredNames,
     };
   } catch (err) {
     // Not `instanceof TranslateError`: a `.ng.mx` compile runs inside the
@@ -758,6 +768,7 @@ export function compileOne(
       warnings,
       usedTags: usedTagNames,
       outputs,
+      authoredNames: result.authoredNames,
     };
   } catch (err) {
     const positioned = isTranslateError(err);
@@ -894,6 +905,7 @@ export function build(
 
   const knownOutputs = new Set<string>();
   const reported = new Set<string>();
+  const authoredNames: BuildResult["authoredNames"] = {};
   for (const routed of files) {
     // Belt and suspenders: discoverFiles() already filters to projectDir,
     // but a build() caller other than the CLI could hand in a file list of
@@ -909,7 +921,11 @@ export function build(
     const result = compileOne(routed, config, knownOutputs, targets, reported);
     errors.push(...result.errors);
     warnings.push(...result.warnings);
+    const names = result.authoredNames;
+    if (names && Object.keys(names).length > 0 && result.outputs[0]) {
+      authoredNames[result.outputs[0]] = names;
+    }
   }
 
-  return { ok: errors.length === 0, errors, warnings };
+  return { ok: errors.length === 0, errors, warnings, authoredNames };
 }

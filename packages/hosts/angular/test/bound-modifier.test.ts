@@ -11,10 +11,22 @@ describe("a bound attribute's refinement (angular)", () => {
   });
 
   // Marko compiles `v:fn:=q?.a` with a nullish-guarded change handler; Angular
-  // has no guarded write yet, so the refined form is refused at the attribute,
-  // and the unrefined optional-chain target binds `[(v)]` as Marko's does.
-  it("binds an optional-chain target as [(name)]", () => {
-    expect(emit("<input value:=q?.a/>")).toBe('<input [(value)]="q?.a">');
+  // has no guarded write yet, so the refined form is refused at the attribute.
+  // The unrefined form is refused too: Angular's `[(v)]` rejects an optional
+  // chain (NG5002), which Marko accepts (divergences.md).
+  it("refuses an unrefined optional-chain target at the attribute", () => {
+    let error: { message: string; line: number; column: number } | undefined;
+    try {
+      emit("<input value:=q?.a/>");
+    } catch (e) {
+      error = e as typeof error;
+    }
+    expect(error).toMatchObject({ line: 1, column: 7 });
+    expect(error?.message).toContain("must be bound to a name or a member");
+  });
+
+  it("still binds a plain member as [(name)]", () => {
+    expect(emit("<input value:=q.a/>")).toBe('<input [(value)]="q.a">');
   });
 
   it("refuses a refined optional-chain target at the attribute", () => {

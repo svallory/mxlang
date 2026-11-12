@@ -23,7 +23,6 @@ ${REFINE_HELPER_MEMBERS.join("\n")}
   item = "field";
   sigs = [signal("a")];
   c = true;
-  opt?: { a: string } = { a: "x" };
 `;
 
 interface Found {
@@ -125,20 +124,5 @@ describe("a refined bound attribute type-checks under strictTemplates", () => {
     );
     expect(found).toEqual([]);
     expect(code).toContain("__mxSet(box, 'v', fn($event))");
-  });
-});
-
-describe("an unrefined two-way binding on an optional chain", () => {
-  // Measured against @angular/compiler 22.1.7: `[(v)]="opt?.a"` is refused
-  // (NG5002), so the emitted `value:=q?.a` form does not compile in Angular.
-  it("is rejected by Angular's template compiler", () => {
-    const { found, code } = check("<div appPick v:=opt?.a/>");
-    expect(code).toContain('[(v)]="opt?.a"');
-    expect(found).toContainEqual(
-      expect.objectContaining({
-        code: -995002,
-        message: "Unsupported expression in a two-way binding",
-      }),
-    );
   });
 });

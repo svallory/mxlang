@@ -126,6 +126,12 @@ export interface CompileAngularResult extends CompileResult {
    */
   mappings: AngularMapping[];
   /**
+   * Each name the emitter generated for a `<const>` or `<define>` it renamed,
+   * by generated name (`__mxConst_a` is `a`); empty when nothing was renamed.
+   * `mx-angular ng-build` maps Angular's diagnostics back with it.
+   */
+  authoredNames: Record<string, string>;
+  /**
    * Every MX tag this template called, in source order, as the caller's own
    * TypeScript must name it: the class the tag's emitted module exports and
    * that module's relative import path.
@@ -155,6 +161,7 @@ export function compile(
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
   const mappings: AngularMapping[] = [];
+  const authoredNames = new Map<string, string>();
   const result = compileSourceWithHint(source, filename, angularDeclarations, {
     customTags: options.customTags,
     defaultTag: options.defaultTag,
@@ -183,6 +190,9 @@ export function compile(
         options.tagSelectorPrefix,
         false,
         mappings,
+        undefined,
+        false,
+        authoredNames,
       );
     },
   });
@@ -198,6 +208,7 @@ export function compile(
     mappings,
     warnings,
     usedTags,
+    authoredNames: Object.fromEntries(authoredNames),
   };
 }
 

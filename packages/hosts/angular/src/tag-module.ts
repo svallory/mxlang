@@ -77,6 +77,8 @@ export interface CompileTagModuleResult extends CompileResult {
   warnings: MxWarning[];
   /** Every MX tag this tag's own template called, for its `imports:` array. */
   usedTags: UsedTag[];
+  /** Each renamed `<const>`/`<define>` by generated name; see `CompileAngularResult.authoredNames`. */
+  authoredNames: Record<string, string>;
   /** The component class this module exports, e.g. `UserCard`. */
   className: string;
   /** The element name the component matches, e.g. `mx-user-card`. */
@@ -1311,6 +1313,7 @@ export function compileTagModule(
   const warnings: MxWarning[] = options.warnings ?? [];
   const usedTags: UsedTag[] = [];
   const templateMappings: AngularMapping[] = [];
+  const authoredNames = new Map<string, string>();
   const basename = tagBasename(filename);
   const prefix = options.tagSelectorPrefix ?? "mx-";
   let selector = `${prefix}${kebabCase(basename)}`;
@@ -1479,6 +1482,7 @@ export function compileTagModule(
         templateMappings,
         undefined,
         true,
+        authoredNames,
       );
       return template;
     },
@@ -1673,6 +1677,7 @@ export function compileTagModule(
     mappings,
     warnings,
     usedTags,
+    authoredNames: Object.fromEntries(authoredNames),
     className,
     selector,
   };
