@@ -54,30 +54,20 @@ async function renderMx(
 }
 
 describe("<html-script> on React", () => {
+  // The body is one raw text on every host (spec, "A `<script>` body"):
+  // markup-looking text in it is script text, kept as written, not parsed.
   it.each([
-    [
-      "an element inside a string",
-      '<html-script>x = "<b>hi</b>"; go();</html-script>',
-    ],
-    ["an <if>", "<html-script>x(); <if=input.c>y();</if></html-script>"],
-    ["a comment", "<html-script>a(); <!-- c --> b();</html-script>"],
-  ])(
-    "refuses markup in the body instead of dropping it: %s",
-    (_name, source) => {
-      let error: unknown;
-      try {
-        compileReactMx(source, "/x/App.mx");
-      } catch (caught) {
-        error = caught;
-      }
-      // Positioned at the offending child, not at the tag or 1:1.
-      expect(error).toMatchObject({
-        message: expect.stringMatching(/read as markup/),
-        line: 1,
-        column: 18,
-      });
-    },
-  );
+    ["an element inside a string", 'x = "<b>hi</b>"; go();'],
+    ["an <if>", "x(); <if=input.c>y();</if>"],
+    ["a comment", "a(); <!-- c --> b();"],
+  ])("keeps markup-looking text in the body as script text: %s", (_name, body) => {
+    const emitted = compileReactMx(
+      `<html-script>${body}</html-script>`,
+      "/x/App.mx",
+    ).code;
+    expect(emitted).toContain("dangerouslySetInnerHTML");
+    expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
+  });
   it("emits a real <script>, never a literal <html-script>", () => {
     const code = compileReactMx(
       '<html-script type="module">go();</html-script>',
