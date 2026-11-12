@@ -473,6 +473,16 @@ describe("scanCustomTags", () => {
     );
   });
 
+  it("indexes a tag template whatever the case of its `.mx`", () => {
+    const dir = scratch();
+    mkdirSync(join(dir, "tags"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), '{"name":"casetag"}');
+    writeFileSync(join(dir, "tags", "Card.MX"), "<div/>\n");
+    const result = scanCustomTags(join(dir, "caller.mx"), { targets: lookup });
+    expect(Object.keys(result.customTags)).toEqual(["Card"]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("reports a host module file whatever its letter case", () => {
     const dir = scratch();
     mkdirSync(join(dir, "tags"), { recursive: true });

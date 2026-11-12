@@ -436,6 +436,17 @@ describe("mx()", () => {
       ).toBe(`/root/src/Base.Foo.mx${MX_SUFFIX}`);
     });
 
+    it("an opt-in to another host's extension counts in any case", async () => {
+      const resolveId = resolveIdOf(mx({ extensions: [".Astro.mx"] }));
+      expect(
+        await resolveId.call(
+          makeContext(),
+          "./Base.astro.mx",
+          "/root/src/index.tsx",
+        ),
+      ).toBe(`/root/src/Base.astro.mx${MX_SUFFIX}`);
+    });
+
     it("leaves ids it does not handle alone", async () => {
       const context = makeContext();
       const resolveId = resolveIdOf(mx());

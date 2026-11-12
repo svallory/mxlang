@@ -140,11 +140,16 @@ A host file kind's middle segment is the host's name (`.solid.mx`, `.astro.mx`,
 `.react.mx`, `.preact.mx`, `.hono.mx`); Angular's is `.ng.mx`.
 
 File kinds are matched on the lowercased file name, so `Card.Solid.MX` is a
-`.solid.mx` file and `Card.Astro.MX` an `.astro.mx` one. The build (core's tag
-directory scan, the Vite plugin, the Astro template plugin and pages guard,
-the target registry) and the editor tools apply this rule. Not yet covered:
-the `.mx` import-specifier checks inside the Angular host, the extensions a
-dialect claims, and the `.marko` tag extension, which stay case-sensitive.
+`.solid.mx` file and `Card.Astro.MX` an `.astro.mx` one. The build applies this
+rule in core's tag directory scan, the Vite plugin, the Astro template plugin
+and pages guard, and the target registry's region file kinds. Not yet covered,
+and still case-sensitive: the TypeScript plugin's and the language server's
+region-file lowering and `.mx` document checks (so the editor claims
+`Counter.Solid.MX` without lowering its MX regions, though the build compiles
+it); the html Bun loader; core's callee `Input` reads (`callee-input.ts`, so
+a tag file `Card.MX` is indexed but its `Input` reads as unknown) and the
+`.mx` check in dialect emit; the Angular host's `.mx` specifier checks; the
+extensions a dialect claims; and the `.marko` tag extension.
 
 ### Whole files vs region files
 

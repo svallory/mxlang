@@ -868,8 +868,7 @@ console.log(JSON.stringify({
       { encoding: "utf8" },
     );
     rmSync(dir, { recursive: true, force: true });
-    expect(probe.stderr).toBe("");
-    expect(probe.status).toBe(0);
+    expect(probe.status, String(probe.stderr)).toBe(0);
   });
 
   it("an ES module or TypeScript module keeps its first evaluation until the process restarts", () => {

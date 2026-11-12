@@ -918,7 +918,9 @@ export default function mx(options: MxPluginOptions = {}): Plugin {
   // explicitly, so an opt-in `extensions: [".astro.mx"]` still works.
   const isForeign = (file: string): boolean =>
     FOREIGN_EXTENSIONS.some(
-      (ext) => hasExt(file, ext) && !extensions.includes(ext),
+      (ext) =>
+      hasExt(file, ext) &&
+      !extensions.some((e) => e.toLowerCase() === ext),
     );
   /**
    * Which MX modules depend on which compilation *inputs*, so an edit to one
