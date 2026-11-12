@@ -125,6 +125,20 @@ describe("the opt-in attribute argument refusal", () => {
     });
   });
 
+  it.each([
+    ["<if=a><i/></if><else if(v)=x><i/></else>", "if", 21],
+    ["<if=a><i/></if><else-if value(v)=x><i/></else-if>", "value", 24],
+  ])(
+    "refuses an argument list on a chained condition attribute under the refuse option: %s",
+    (source, name, column) => {
+      expect(failure(source)).toMatchObject({
+        message: `Unsupported arguments on the \`${name}\` attribute.`,
+        line: 1,
+        column,
+      });
+    },
+  );
+
   it("keeps the builtin try contract error", () => {
     expect(() => compile("<try a(v)=1><i/></try>", "refuse")).toThrow(
       "`<try>`: accepts no attributes",

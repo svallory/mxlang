@@ -1152,6 +1152,8 @@ describe("a two-way bind on a parameter with no change handler", () => {
     ["<for|[[a]]| of=[[[1]]]><input value:=a/></for>", 38],
     ["<define/D|...[a]|><input value:=a/></define>", 33],
     ["<for|{a: [b]}| of=[{a: [1]}]><input value:=b/></for>", 44],
+    ["<for|{a, ...rest}| of=[{a: 1}]><input value:=rest/></for>", 46],
+    ["<define/D|{a, ...rest}|><input value:=rest/></define>", 39],
   ])(
     "refuses %s: a rest element and an array element have no object",
     (source, column) => {
@@ -1159,6 +1161,27 @@ describe("a two-way bind on a parameter with no change handler", () => {
       expect(error?.diagnosticCode).toBe(UNABLE);
       expect(error?.message).toBe("Unable to bind to value.");
       expect([error?.line, error?.column]).toEqual([1, column - 1]);
+    },
+  );
+
+  it.each([
+    ["<const/[a]=input.x/><input value:=a/>", "a", 34],
+    ["<const/{a: [b]}=input.x/><input value:=b/>", "b", 39],
+  ])(
+    "refuses %s: an array element of a <const> has no object",
+    (source, name, column) => {
+      const error = attempt(source);
+      expect([
+        error?.diagnosticCode,
+        error?.message,
+        error?.line,
+        error?.column,
+      ]).toEqual([
+        "MX_READONLY_BINDING_WRITE",
+        `\`${name}\` is a \`<const>\` and cannot be written. Keep a value that changes in a \`<let>\` and write that in an event handler or a \`<script>\` body, or derive a new value with another \`<const>\`.`,
+        1,
+        column,
+      ]);
     },
   );
 

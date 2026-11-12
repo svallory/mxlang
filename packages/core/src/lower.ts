@@ -2650,19 +2650,8 @@ function lowerAttrs(
       const lowered = lowerAttr(ctx, attr, on, isElement, posOf(ctx, node));
       // Structural/builtin tags keep their own rules. A region's authored
       // module statements must reach the host's module-level refusal first.
-      if (
-        refuseArgs &&
-        ctx.declarations.attributeArgs === "refuse" &&
-        (ctx.emitsModule || !ctx.moduleScope) &&
-        attrArgsOf(attr) &&
-        !isMethodAttr(attr) &&
-        lowered.kind !== "spread"
-      ) {
-        raise(
-          INVALID_ATTRIBUTE_CODE,
-          `Unsupported arguments on the \`${lowered.name}\` ${voiceOfCtx(ctx).attribute}.`,
-          attr,
-        );
+      if (refuseArgs && !isMethodAttr(attr) && lowered.kind !== "spread") {
+        rejectAttributeArguments(ctx, attr);
       }
       return lowered;
     },
@@ -3916,25 +3905,24 @@ function offendingAttribute(
 }
 
 /**
- * The condition attribute of `<if>`/`<else-if>`/`<else>` never reaches
- * `lowerAttrs`, so a host that refuses attribute arguments is told here, as
- * for every other attribute (`<if value(v)=x>`).
+ * A host that opts into refusing attribute arguments refuses `a(v)=1` on any
+ * attribute, here: the one rule for `lowerAttrs`, a `<for>` head and a
+ * condition tag's attribute (which never reaches `lowerAttrs`). A region's
+ * module-statement refusal reports first, so a region that does not emit a
+ * module waits for it. Stock compiles and drops the arguments.
  */
-function rejectConditionArguments(ctx: Ctx, attrs: readonly Node[]): void {
+function rejectAttributeArguments(ctx: Ctx, attr: Node): void {
   if (
     ctx.declarations.attributeArgs !== "refuse" ||
-    !(ctx.emitsModule || !ctx.moduleScope)
+    !(ctx.emitsModule || !ctx.moduleScope) ||
+    !attrArgsOf(attr)
   )
     return;
-  const attr = attrs.find(
-    (candidate) => !isSpreadAttributeNode(candidate) && attrArgsOf(candidate),
+  raise(
+    INVALID_ATTRIBUTE_CODE,
+    `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
+    attr,
   );
-  if (attr)
-    raise(
-      INVALID_ATTRIBUTE_CODE,
-      `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
-      attr,
-    );
 }
 
 /**
@@ -3966,7 +3954,8 @@ function rejectExtraConditionAttributes(
         offender,
       );
     }
-    rejectConditionArguments(ctx, attrs);
+    for (const attr of attrs)
+      if (!isSpreadAttributeNode(attr)) rejectAttributeArguments(ctx, attr);
     return;
   }
   const offender =
@@ -3985,7 +3974,8 @@ function rejectExtraConditionAttributes(
       offender,
     );
   }
-  rejectConditionArguments(ctx, attrs);
+  for (const attr of attrs)
+    if (!isSpreadAttributeNode(attr)) rejectAttributeArguments(ctx, attr);
 }
 
 /**
@@ -4195,7 +4185,10 @@ function rejectLoopParamInBy(ctx: Ctx, node: Node, by: Node): void {
     outerTagVar ||
     ctx.tagVarShadowed?.has(name) ||
     ctx.imports.has(name) ||
+    ctx.bindings.get(name) !== undefined ||
     isModuleBinding(ctx, name);
+  // A name a `$ const x = …` scriptlet declares in the render is not tracked
+  // by core, so it reads as "not in scope" here.
   const attribute = voiceOfCtx(ctx).attribute;
   const authored = by.value ? sliceNode(ctx, by.value).trim() : "";
   // The key function takes the loop's own parameters in order: the read name
@@ -4313,20 +4306,7 @@ function lowerForHead(
         attr,
       );
     }
-    // Stock compiles and drops the arguments; a host that opts into refusing
-    // attribute arguments refuses them here too, like every other attribute.
-    // A region's module-statement refusal reports first, as in `lowerAttrs`.
-    if (
-      ctx.declarations.attributeArgs === "refuse" &&
-      (ctx.emitsModule || !ctx.moduleScope) &&
-      attrArgsOf(attr)
-    ) {
-      raise(
-        INVALID_ATTRIBUTE_CODE,
-        `Unsupported arguments on the \`${attrNameOf(attr)}\` ${voiceOfCtx(ctx).attribute}.`,
-        attr,
-      );
-    }
+    rejectAttributeArguments(ctx, attr);
   }
 
   const combos = [of, inAttr, attrByName(node, "from") || to || until].filter(
@@ -4560,19 +4540,57 @@ function lowerConst(ctx: Ctx, node: Node): IrNode {
 }
 
 /**
- * What a write to the names of a `<const>` is refused for. A plain name is
- * written nowhere; a name inside an object pattern is written through its
- * object, which Marko allows outside the render, as for a `<for>` parameter.
+ * Collects into `into` the names bound with no object behind them: a plain
+ * name, a defaulted one, a rest element, or any element of an array pattern,
+ * at any depth of defaults, rests and arrays. Stock refuses a write to each. A
+ * name directly inside an object pattern is written through its object, except
+ * the object's own rest (`{a, ...rest}`), a fresh object with nothing behind it.
+ */
+function collectPlain(
+  pattern: Node | null | undefined,
+  plain: boolean,
+  into: Set<string>,
+): void {
+  if (!pattern) return;
+  switch (pattern.type) {
+    case "Identifier":
+      if (plain) into.add(pattern.name);
+      return;
+    case "AssignmentPattern":
+      collectPlain(pattern.left, plain, into);
+      return;
+    case "RestElement":
+      collectPlain(pattern.argument, plain, into);
+      return;
+    case "ArrayPattern":
+      for (const element of pattern.elements) collectPlain(element, true, into);
+      return;
+    case "ObjectPattern":
+      for (const property of pattern.properties) {
+        if (property.type === "RestElement")
+          collectPlain(property.argument, true, into);
+        else collectPlain(property.value, false, into);
+      }
+      return;
+  }
+}
+
+/**
+ * What a write to the names of a `<const>` is refused for. A name with no
+ * object behind it (a plain name, an array element, a rest) is written nowhere,
+ * as for a `<for>` parameter (`collectPlain`); a name inside an object pattern
+ * is written through its object, which Marko allows outside the render.
  */
 function constGuards(
   node: Node,
   names: readonly string[],
 ): ReadonlyMap<string, WriteGuard> {
-  const plain = tagVarOf(node)?.type === "Identifier";
+  const plain = new Set<string>();
+  collectPlain(tagVarOf(node), true, plain);
   return new Map(
     names.map((name): [string, WriteGuard] => [
       name,
-      { kind: "const", inFunction: plain },
+      { kind: "const", inFunction: plain.has(name) },
     ]),
   );
 }
@@ -4589,36 +4607,6 @@ function paramGuards(
   kind: "for" | "define",
 ): ReadonlyMap<string, WriteGuard> {
   const guards = new Map<string, WriteGuard>();
-  // A name bound with no object behind it: a plain name, a defaulted one, a
-  // rest element, or any element of an array pattern, at any depth of
-  // defaults, rests and arrays. Stock refuses a write to each; a name directly
-  // inside an object pattern is written through its object.
-  const collectPlain = (
-    pattern: Node | null | undefined,
-    plain: boolean,
-    into: Set<string>,
-  ): void => {
-    if (!pattern) return;
-    switch (pattern.type) {
-      case "Identifier":
-        if (plain) into.add(pattern.name);
-        return;
-      case "AssignmentPattern":
-        collectPlain(pattern.left, plain, into);
-        return;
-      case "RestElement":
-        collectPlain(pattern.argument, plain, into);
-        return;
-      case "ArrayPattern":
-        for (const element of pattern.elements)
-          collectPlain(element, true, into);
-        return;
-      case "ObjectPattern":
-        for (const property of pattern.properties)
-          collectPlain(property.value ?? property.argument, false, into);
-        return;
-    }
-  };
   for (const param of tagParamsOf(node)) {
     const plain = new Set<string>();
     collectPlain(param, true, plain);
@@ -5859,17 +5847,12 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
   // A comment's attribute error is Marko's `assertNoAttributes`, ahead of its
   // body: raised right after the host has resolved the claim (and had its
   // chance to refuse the tag), before any child is lowered.
-  let commentData: ReturnType<
-    NonNullable<HostDeclarations["resolveDelegatedTag"]>
-  >;
-  if (name === "html-comment") {
-    commentData = ctx.declarations.resolveDelegatedTag?.(
-      name,
-      markoViewOf(ctx, node),
-      ctx,
-    );
-    rejectHtmlCommentAttributes(ctx, node);
-  }
+  const data = ctx.declarations.resolveDelegatedTag?.(
+    name,
+    markoViewOf(ctx, node),
+    ctx,
+  );
+  if (name === "html-comment") rejectHtmlCommentAttributes(ctx, node);
   const target: ComponentTarget =
     name === DYNAMIC_TAG
       ? { kind: "dynamic", expr: exprOf(ctx, tagNameExprOf(node)) }
@@ -5920,14 +5903,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
-      data:
-        name === "html-comment"
-          ? commentData
-          : ctx.declarations.resolveDelegatedTag?.(
-              name,
-              markoViewOf(ctx, node),
-              ctx,
-            ),
+      data,
       loc,
     },
     loc,
