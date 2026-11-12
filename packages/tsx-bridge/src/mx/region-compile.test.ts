@@ -687,3 +687,35 @@ describe("mxRegionCompile: recorded mappings", () => {
     ]);
   });
 });
+
+/**
+ * A method shorthand's generic head (`onClick<T extends Missing>(e: T) {}`)
+ * is printed verbatim by the host, so its type nodes are found by text like
+ * the parameters and body; a type error in a constraint is reported where the
+ * author wrote it, not at the generated offset.
+ */
+describe("mxRegionCompile: a method shorthand's generic head", () => {
+  const source =
+    "const view = <button onClick<T extends Missing>(e: T) { go() }/>;";
+  const code = "<button onClick={function <T extends Missing>(e: T) { go(); }}/>";
+
+  it("remaps the constraint's type nodes to their authored span", () => {
+    const file = parse(source, "x.solid.mx", {
+      mxRegionCompile: () => ({ code }),
+    });
+    const found: Array<[string, number, number]> = [];
+    const walk = (n: unknown) => {
+      if (n === null || typeof n !== "object") return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      const r = n as Record<string, unknown>;
+      if (r.type === "Identifier" && r.name === "Missing") {
+        found.push([r.name, r.start as number, r.end as number]);
+      }
+      for (const k of Object.keys(r))
+        if (k !== "loc" && k !== "extra") walk(r[k]);
+    };
+    walk(file.program);
+    const at = source.indexOf("Missing");
+    expect(found).toEqual([["Missing", at, at + "Missing".length]]);
+  });
+});

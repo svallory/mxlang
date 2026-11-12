@@ -734,7 +734,12 @@ function collectExpressionRanges(root: MxElement): MxRange[] {
     if (attr.kind === "dynamic" || attr.kind === "bound") {
       ranges.push(attr.value);
     } else if (attr.kind === "method") {
-      ranges.push(attr.params, attr.body);
+      // The generic head (`<T extends Missing>`) sits between the name and the
+      // parameter list's `(`. The host prints it verbatim after `function`, so
+      // it is found by text like the parameters; without this range its type
+      // nodes keep generated offsets and a diagnostic lands on the wrong text.
+      const head = { start: attr.nameRange.end, end: attr.params.start - 1 };
+      ranges.push(head, attr.params, attr.body);
     } else if (attr.kind === "spread") {
       ranges.push(attr.value);
     }
