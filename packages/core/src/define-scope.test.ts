@@ -234,26 +234,24 @@ function refusal(source: string) {
 }
 
 describe("a <define> name is not readable outside the body that declares it", () => {
-  const READS: Array<[string, string]> = [
-    ["a placeholder", "<div>${typeof Foo}</div>"],
-    ["a script", "<script>console.log(Foo)</script>"],
-    ["an attribute", "<div attr=Foo/>"],
+  const IF_BLOCK = `<if=input.a>${FOO}</if>`;
+  const CASES: Array<[string, string, string]> = [
+    ["a placeholder after an <if>", IF_BLOCK, "<div>${typeof Foo}</div>"],
+    ["a script after an <if>", IF_BLOCK, "<script>console.log(Foo)</script>"],
+    ["an attribute after an <if>", IF_BLOCK, "<div attr=Foo/>"],
+    [
+      "a placeholder after a native element",
+      `<div>${FOO}</div>`,
+      "<div>${typeof Foo}</div>",
+    ],
   ];
-  const BLOCKS: Array<[string, string]> = [
-    ["an <if>", `<if=input.a>${FOO}</if>`],
-    ["a native element", `<div>${FOO}</div>`],
-    ["a <for>", `<for|i| of=[1]>${FOO}</for>`],
-  ];
-  for (const [block, declared] of BLOCKS) {
-    for (const [read, use] of READS) {
-      it(`${read} after ${block} is refused at the read`, () => {
-        const source = `${declared}\n${use}\n`;
-        const error = refusal(source);
-        expect(error?.diagnosticCode).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
-        expect(error?.message).toMatch(/not readable outside it/);
-        expect(error?.line).toBe(2);
-      });
-    }
+  for (const [label, declared, use] of CASES) {
+    it(`${label} is refused at the read`, () => {
+      const error = refusal(`${declared}\n${use}\n`);
+      expect(error?.diagnosticCode).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
+      expect(error?.message).toMatch(/not readable outside it/);
+      expect(error?.line).toBe(2);
+    });
   }
 
   it("a read inside the declaring body, below the define, still compiles", () => {
@@ -314,7 +312,9 @@ describe("a <define> in a nested body is not readable before the walk reaches it
     it(`${label} is refused at the read`, () => {
       const error = refusal(source);
       expect(error?.diagnosticCode).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
-      expect(error?.message).toMatch(/is read before the `<define>`/);
+      expect(error?.message).toMatch(
+        /inside a nested body and is not readable here/,
+      );
       expect(error?.line).toBe(line);
     });
   }

@@ -1534,6 +1534,13 @@ function checkDefineReads(
     },
   });
   if (!read) return;
+  if (binding.nested && !binding.exited) {
+    raise(
+      DEFINE_READ_BEFORE_DECLARATION_CODE,
+      `\`${name}\` is declared by a ${tagText(ctx, "define")} inside a nested body and is not readable here; a ${tagText(ctx, "define")} binds only in the body that declares it. Read it inside that body, or declare it where it is read.`,
+      read,
+    );
+  }
   if (binding.exited) {
     raise(
       DEFINE_READ_BEFORE_DECLARATION_CODE,
@@ -6586,32 +6593,17 @@ function lowerComponent(
       code: UNREADABLE_CALLEE_INPUT_CODE,
     });
   }
-  const callVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null;
-  // The call's body and attribute tags run after the call has returned, so
-  // they may read its `/var` (stock accepts `<Foo/x>${x}</Foo>` and
-  // `<Foo/x><@b c=x/></Foo>`); only the named attributes, which are evaluated
-  // before the call, are checked. Their pending flag is lifted around the two
-  // lowerings that are deferred and kept for the attributes.
-  const callBinding = callVar ? ctx.tagVars?.get(callVar) : undefined;
-  const deferred = <T>(lower: () => T): T => {
-    if (!callBinding?.pending) return lower();
-    callBinding.pending = false;
-    try {
-      return lower();
-    } finally {
-      callBinding.pending = true;
-    }
-  };
-  const loweredTags = deferred(() =>
-    lowerAttributeTags(ctx, node, schemaFor(input, owner)),
-  );
+  const loweredTags = lowerAttributeTags(ctx, node, schemaFor(input, owner));
   raiseInvalidCalleeInput(ctx, input, owner, loweredTags.flat);
   const children = loweredTags.contentChildren;
+  const callVar = tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null;
+  // Attributes lower before the call's result binds `/var`. Stock permits a
+  // body read, but that separate, pre-existing body-scope gap remains tracked:
+  // a host emits the body inside the call that assigns `/var`, so a read there
+  // would be in its temporal dead zone.
   const attrs = lowerAttrs(ctx, node, targetName(target), "component");
   // Same normalized-body presence rule as custom template tags.
-  const content = hasContent(children)
-    ? deferred(() => lowerBlock(ctx, node, children))
-    : null;
+  const content = hasContent(children) ? lowerBlock(ctx, node, children) : null;
   // Reaching the call makes the binding readable; see the discovered path.
   if (callVar) {
     ctx.tagVars ??= new Map();

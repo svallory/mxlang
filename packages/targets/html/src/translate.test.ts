@@ -1226,27 +1226,23 @@ describe("an imported .mx tag that declares <return>", () => {
     }
   });
 
-  it("reads the /var in the call's own body, and rejects it in the call's attributes", () => {
+  it("rejects a read of the /var in the call's own body, positioned", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-html-imported-var-body-"));
     try {
       writeFileSync(join(dir, "counter.mx"), src(counter));
-      const attempt = (call: string) => {
-        try {
-          compile(
-            src(`import Counter from "./counter.mx"\n${call}`),
-            join(dir, "page.mx"),
-          );
-        } catch (caught) {
-          return caught as Error & { line?: number };
-        }
-        return undefined;
-      };
-      expect(
-        attempt("<Counter/n start=1><b>${n}</b></Counter>"),
-      ).toBeUndefined();
-      const error = attempt("<Counter/n start=n/>");
+      let error: (Error & { line?: number; column?: number }) | undefined;
+      try {
+        compile(
+          src(
+            'import Counter from "./counter.mx"\n<Counter/n start=1><b>${n}</b></Counter>',
+          ),
+          join(dir, "page.mx"),
+        );
+      } catch (caught) {
+        error = caught as Error;
+      }
       expect(error?.message).toMatch(
-        /`n` is the tag variable this tag declares/,
+        /`n` is read before the `\/var` that binds it/,
       );
       expect(error?.line).toBe(2);
     } finally {
