@@ -275,6 +275,10 @@ describe("the matching is the template scanner's", () => {
       ["class A { m() { f(x)\n ~zz } }", ZZ],
       ["const f = function () {} / 2 / ~zz", ZZ],
       ["for await (const x of xs) { f(x) } ~zz", ZZ],
+      ["switch (a) { case 1: case 2: { b } ~zz }", ZZ],
+      ["switch (a) { case 1:\n default: { b } ~zz }", ZZ],
+      ["switch (a) { case b: c: { d } ~zz }", ZZ],
+      ["f = () => { lbl: { b } ~zz }", ZZ],
       [
         "switch (a) { case 1: let t: [number?] = []; break\n case 2: { b } ~zz }",
         ZZ,
@@ -301,6 +305,9 @@ describe("the matching is the template scanner's", () => {
     table("in a type position", [
       ["let t: { a: 1 } &zz = v", undefined, [amp]],
       ["function f(a: { b: 1 } &zz) {}", undefined, [amp]],
+      ["interface I { a: { b: 1 } &zz }", undefined, [amp]],
+      ["class A { default() { let t: { a: 1 } &zz = v } }", undefined, [amp]],
+      ["function f(x): x is { a: 1 } &zz {}", undefined, [amp]],
       ["const f = function (): { a: 1 } { } ~zz", undefined],
       ["class A<T extends {}> {\n x = 1\n @dec y = 2\n}", undefined, [at]],
       [
@@ -332,12 +339,20 @@ describe("the matching is the template scanner's", () => {
     ]);
   });
 
+  describe("a row in a class field initializer is a row", () => {
+    table("found", [
+      ["class A { x = f(@b) }", ["at", "@b"], [at]],
+      ["class A { x = [1, @b] }", ["at", "@b"], [at]],
+    ]);
+  });
+
   describe("a decorator before a declaration is TypeScript", () => {
     table("no row", [
       ["class A {}\n@dec class B {}", undefined, [at]],
       ["class A {}\n@dec(1) @other export class B {}", undefined, [at]],
       ["x = y\n@a.b class B {}", undefined, [at]],
       ["x = y\n@a<T>() class B {}", undefined, [at]],
+      ["x = y\n@a (1) class B {}", undefined, [at]],
     ]);
     table("a row after a class", [["class A {} @dec", ["at", "@dec"], [at]]]);
   });

@@ -118,6 +118,8 @@ interface Facts {
   readonly blockEnds: Set<number>;
   /** Every `{ … }` of the statement, in opening order. */
   readonly braces: Brace[];
+  /** Every function or method parameter list `( … )`. */
+  readonly paramLists: { start: number; end: number }[];
 }
 
 /** What the scan reads: a string, or the masked characters so far. */
@@ -279,7 +281,9 @@ function expectsOperand(
       before === "{" ||
       before === ";" ||
       before === "}" ||
-      (first === "@" && (before === "(" || before === ","))
+      (first === "@" &&
+        (before === "(" || before === ",") &&
+        facts.paramLists.some((list) => list.start < at && at < list.end))
     ) {
       return false;
     }
@@ -356,7 +360,16 @@ function scannerExpectsOperand(
 }
 
 /** What a `{` opens, by the construct that opened it. */
-type ScopeKind = "block" | "class" | "classExpr" | "object" | "fnExpr";
+type ScopeKind =
+  | "block"
+  | "class"
+  | "classExpr"
+  | "object"
+  | "fnExpr"
+  | "typeBody";
+
+/** Words after which a `{` is a type literal (`x is { … }`, `keyof { … }`). */
+const TYPE_WORDS = new Set(["is", "keyof", "asserts", "infer", "unique"]);
 
 /** Words after which a `{` is an object literal (an expression), not a block. */
 const EXPRESSION_BRACE_WORDS = new Set([
@@ -416,6 +429,7 @@ function mask(text: string): { masked: string; facts: Facts } {
     headEnds: new Set(),
     blockEnds: new Set(),
     braces: [],
+    paramLists: [],
   };
   const out = text.split("");
   const blank = (from: number, to: number): void => {
@@ -440,14 +454,16 @@ function mask(text: string): { masked: string; facts: Facts } {
   const parens: {
     head: boolean;
     blockHead: boolean;
+    switchHead: boolean;
     body: { stmt: boolean } | null;
+    list: number;
   }[] = [];
   // A `function`/`class` keyword whose body has not opened yet, with the
   // paren depth it was written at and whether it starts a statement.
   let pendingFunction: { depth: number; stmt: boolean } | undefined;
   let pendingBody: { depth: number; stmt: boolean } | undefined;
   let pendingClass: { depth: number; stmt: boolean } | undefined;
-  let pendingBlock: number | undefined;
+  let pendingBlock: { depth: number; kind: ScopeKind } | undefined;
   // Open braces: the kind, and how many `?` still wait for their `:`.
   // The first entry is the statement itself.
   interface Scope {
@@ -457,14 +473,25 @@ function mask(text: string): { masked: string; facts: Facts } {
     /** The paren and bracket depth the brace opened at: its own keys sit there. */
     readonly parens: number;
     readonly brackets: number;
+    /** The `{` of a `switch (…)`: its statement-level `case`/`default` words open labels. */
+    readonly switchBody: boolean;
   }
   const scopes: Scope[] = [
-    { kind: "block", ternary: 0, range: -1, parens: 0, brackets: 0 },
+    {
+      kind: "block",
+      ternary: 0,
+      range: -1,
+      parens: 0,
+      brackets: 0,
+      switchBody: false,
+    },
   ];
   const scope = (): Scope => scopes[scopes.length - 1] as Scope;
   let bracketDepth = 0;
   // `<` depth inside a declaration's header (`class A<T extends {}>`).
   let angle = 0;
+  // The token indexes of the colons that closed a label or a `case`.
+  const labelColons = new Set<number>();
   // Whether the keyword at token index `k` starts a statement.
   const startsStatement = (k: number): boolean => {
     let j = k - 1;
@@ -477,6 +504,8 @@ function mask(text: string): { masked: string; facts: Facts } {
     if (before === ";" || before === "{" || before === "}") return true;
     if (before === "else" || before === "do") return true;
     if (before === ")" && facts.headEnds.has(tokAt[j] as number)) return true;
+    // A label's or a `case`'s colon ends one statement start and begins another.
+    if (before === ":" && labelColons.has(j)) return true;
     // A line break after a token that ends an operand splits the statement.
     return endsOperandToken(before) && lineBreakBefore(out, tokAt[k] as number);
   };
@@ -487,13 +516,14 @@ function mask(text: string): { masked: string; facts: Facts } {
       pendingBody?.depth === here ||
       pendingClass?.depth === here ||
       pendingFunction?.depth === here ||
-      pendingBlock === here;
+      pendingBlock?.depth === here;
     // A type literal in a header (`: { a: 1 }` after the parameters, a type
     // argument) is no body: keep waiting for the body's own `{`.
     if (waiting) {
       const prev = last();
       const typePosition =
         angle > 0 ||
+        TYPE_WORDS.has(prev) ||
         !(
           prev === "" ||
           isWord(prev[0]) ||
@@ -512,9 +542,10 @@ function mask(text: string): { masked: string; facts: Facts } {
       pendingClass = undefined;
       return body.stmt ? "class" : "classExpr";
     }
-    if (pendingBlock === parens.length) {
+    if (pendingBlock && pendingBlock.depth === parens.length) {
+      const body = pendingBlock;
       pendingBlock = undefined;
-      return "block";
+      return body.kind;
     }
     const before = last();
     if (before === "") return "block";
@@ -527,11 +558,14 @@ function mask(text: string): { masked: string; facts: Facts } {
       return lastColonLabel ? "block" : "object";
     }
     if (isWord(before[0])) {
-      return EXPRESSION_BRACE_WORDS.has(before) ? "object" : "block";
+      return EXPRESSION_BRACE_WORDS.has(before) || TYPE_WORDS.has(before)
+        ? "object"
+        : "block";
     }
     return "object";
   };
   let lastParenBlockHead = false;
+  let lastParenSwitch = false;
   let lastColonTernary = false;
   let lastColonLabel = false;
   // A `case`/`default` whose `:` has not come yet.
@@ -636,7 +670,13 @@ function mask(text: string): { masked: string; facts: Facts } {
       push(word, from);
       if (!afterDot) {
         const k = toks.length - 1;
-        if (word === "case" || word === "default") inCase = startsStatement(k);
+        if (
+          (word === "case" || word === "default") &&
+          scope().switchBody &&
+          scope().kind === "block"
+        ) {
+          inCase = startsStatement(k);
+        }
         if (word === "function") {
           pendingFunction = { depth: parens.length, stmt: startsStatement(k) };
         } else if (word === "class") {
@@ -646,7 +686,10 @@ function mask(text: string): { masked: string; facts: Facts } {
           word === "enum" ||
           word === "namespace"
         ) {
-          pendingBlock = parens.length;
+          pendingBlock = {
+            depth: parens.length,
+            kind: word === "interface" ? "typeBody" : "block",
+          };
         }
       }
       continue;
@@ -676,13 +719,22 @@ function mask(text: string): { masked: string; facts: Facts } {
       parens.push({
         head,
         blockHead: head || before === "switch" || before === "catch",
+        switchHead: before === "switch",
         body,
+        list: body
+          ? facts.paramLists.push({ start: i, end: Number.POSITIVE_INFINITY }) -
+            1
+          : -1,
       });
       push("(", i);
     } else if (char === ")") {
       const info = parens.pop();
       if (info?.head === true) facts.headEnds.add(i);
       lastParenBlockHead = info?.blockHead === true;
+      lastParenSwitch = info?.switchHead === true;
+      if (info && info.list >= 0) {
+        (facts.paramLists[info.list] as { end: number }).end = i;
+      }
       // A header whose parens closed below it was a call, not a declaration.
       for (const wait of [pendingFunction, pendingBody, pendingClass]) {
         if (wait && parens.length < wait.depth) {
@@ -697,6 +749,8 @@ function mask(text: string): { masked: string; facts: Facts } {
       push(")", i);
     } else if (char === "{") {
       depth++;
+      const switchOpens =
+        last() === ")" && lastParenSwitch && !pendingBody && !pendingClass;
       const kind = kindOfBrace();
       facts.braces.push({
         start: i,
@@ -710,6 +764,7 @@ function mask(text: string): { masked: string; facts: Facts } {
         range: facts.braces.length - 1,
         parens: parens.length,
         brackets: bracketDepth,
+        switchBody: switchOpens,
       });
       push("{", i);
     } else if (char === "}") {
@@ -727,7 +782,9 @@ function mask(text: string): { masked: string; facts: Facts } {
         // method, a constructor, a `static {}` block) starts none.
         const outer = scope().kind;
         if (
-          (closed.kind === "block" || closed.kind === "class") &&
+          (closed.kind === "block" ||
+            closed.kind === "class" ||
+            closed.kind === "typeBody") &&
           outer !== "class" &&
           outer !== "classExpr"
         ) {
@@ -785,11 +842,12 @@ function mask(text: string): { masked: string; facts: Facts } {
       // an annotation's, a parameter's or a key's does not.
       lastColonLabel =
         !lastColonTernary &&
-        inside.kind === "block" &&
+        (inside.kind === "block" || inside.kind === "fnExpr") &&
         parens.length === inside.parens &&
         bracketDepth === inside.brackets &&
         (inCase || startsStatement(toks.length - 1));
       if (!lastColonTernary) inCase = false;
+      if (lastColonLabel) labelColons.add(toks.length);
       push(":", i);
     } else if (!isSpace(char)) {
       if (char === "[") bracketDepth++;
@@ -826,7 +884,10 @@ function isDecorator(masked: string, end: number): boolean {
     ["<", ">"],
     ["(", ")"],
   ] as const) {
-    if (masked[j] !== open) continue;
+    let k = j;
+    while (isSpace(masked[k])) k++;
+    if (masked[k] !== open) continue;
+    j = k;
     let level = 0;
     for (; j < masked.length; j++) {
       if (masked[j] === open) level++;
