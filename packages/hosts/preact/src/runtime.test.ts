@@ -31,6 +31,7 @@ import {
   type VNode,
 } from "preact";
 import { useState } from "preact/hooks";
+import { setupRerender } from "preact/test-utils";
 import { render, renderToStringAsync } from "preact-render-to-string";
 import { describe, expect, it } from "vitest";
 import { MxErrorBoundary, MxPlaceholder, mxClass } from "./runtime.ts";
@@ -290,17 +291,18 @@ describe("MxErrorBoundary", () => {
     const throwing = (): never => {
       throw new Error("boom");
     };
-    const view = (f: () => string): VNode =>
+    const view = (f: () => string): VNode<never> =>
       tryOf(
         () => "caught",
         () => createElement("p", null, f()),
       );
     const html = await withDom(async () => {
+      const rerender = setupRerender();
       const host = document.createElement("div");
       clientRender(view(throwing), host);
-      await new Promise((r) => setTimeout(r, 20));
+      rerender();
       clientRender(view(() => "fine"), host);
-      await new Promise((r) => setTimeout(r, 20));
+      rerender();
       return host.innerHTML;
     });
     expect(html).toBe("caught");
