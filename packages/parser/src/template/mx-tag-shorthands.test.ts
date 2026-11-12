@@ -251,10 +251,13 @@ describe("tagShorthands: false, the refusals use the table's noun", () => {
       'a tag name cannot start with `.`: this file\'s dialect has no `.class` shorthand and no implicit `div`; name the tag and write the class as an option (`class="x"`)',
       NO_LEAD_DOT,
     ],
-  ])("%j says an option, and MX's own wording stays the default", (code, voiced, plain) => {
-    expect(render(code, VOICED)).toContain(` ${voiced})`);
-    expect(render(code, OFF)).toContain(` ${plain})`);
-  });
+  ])(
+    "%j says an option, and MX's own wording stays the default",
+    (code, voiced, plain) => {
+      expect(render(code, VOICED)).toContain(` ${voiced})`);
+      expect(render(code, OFF)).toContain(` ${plain})`);
+    },
+  );
 
   it("anAttribute must be a non-empty string", () => {
     for (const bad of ["", 1]) {
