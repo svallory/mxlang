@@ -3421,7 +3421,8 @@ not allowed in regions. Rename one binding and its uses; two regions or two
 independent compilations have separate scopes.
 
 **A body that is its own scope keeps its `/var` to itself.** As in Marko
-6.4.4, a whole-file `<define>` body, a dynamic tag's body and a `<try>`'s body,
+6.4.4, a whole-file `<define>` body, the body of a call to a `<define>`, of an
+imported value tag and of a dynamic tag, and a `<try>`'s body,
 `<@placeholder>` and `<@catch>` bodies are scopes of their own. Their `/var`
 statements run inside the define's function, or inside a function called in
 place in the body, so a `/x` there sits beside an outer `/x` without a
