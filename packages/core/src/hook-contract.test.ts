@@ -158,7 +158,36 @@ describe("hook contract additions", () => {
       ctx.attribute("y", ctx.expression({ type: "Identifier", name: "q" })),
     ]);
     const error = caught(() => irOf("<div !a/>", module));
-    expect(error.message).toContain("builds one value per trigger text");
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+  });
+
+  it("a registered node value and a `ctx.expression` over one trigger text are refused too", () => {
+    const module = {
+      ...probe((_id, _text, _span, ctx) => [
+        ctx.attribute("x", { type: "probe:T", name: "n" } as never),
+        ctx.attribute("y", ctx.expression({ type: "Identifier", name: "q" })),
+      ]),
+      nodeTypes: {
+        T: {
+          keys: [],
+          schema: { fields: { name: "data" }, slot: ["value"] },
+          parse: (text: string) => ({ name: text }),
+          print: (node: { name: string }) => node.name,
+          lower: (
+            node: { name: string },
+            ctx: { expression(n: object): unknown },
+          ) =>
+            ctx.expression({
+              type: "StringLiteral",
+              value: node.name,
+              extra: { raw: `"${node.name}"`, rawValue: node.name },
+            }),
+        },
+      },
+    } as unknown as Dialect;
+    const error = caught(() => irOf("<div !a/>", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
     expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
   });
 
@@ -166,7 +195,8 @@ describe("hook contract additions", () => {
     ["<div !a:=x/>", 7, 2],
     ["<div !a(x)/>", 7, 1],
     ["<div !abc:=x/>", 9, 2],
-    ["<div !a:= x/>", 7, 2],
+    ["<div !a := x/>", 8, 2],
+    ["<div !a (x)/>", 8, 1],
   ])(
     "%s: the refusal of what nothing can place points at the operator, offset %i",
     (source, at, length) => {
@@ -174,6 +204,7 @@ describe("hook contract additions", () => {
         ctx.attribute("x", true),
       );
       const error = caught(() => irOf(source, module));
+      expect(error.diagnosticCode).toBe("MX_INVALID_TRIGGER_USE");
       expect(error.span).toEqual({
         sourceStart: at,
         sourceEnd: at + length,

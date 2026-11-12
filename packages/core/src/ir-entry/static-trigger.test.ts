@@ -220,8 +220,10 @@ describe("the matching is the template scanner's", () => {
   const mark = row("mark", "%", "%\\.[a-z]+");
   const set = row("set", "@#", "[@#][a-z]+");
   const rows = [sigil, mark, set];
-  const hit = (text: string) => {
-    const found = firstRowIn(text, rows);
+  const hash = row("hash", "#", "#[a-z]+");
+  const at = row("at", "@", "@[a-z]+");
+  const hit = (text: string, using: Trigger[] = rows) => {
+    const found = firstRowIn(text, using);
     return found && [found.row.id, text.slice(found.start, found.end)];
   };
 
@@ -253,12 +255,30 @@ describe("the matching is the template scanner's", () => {
   });
 
   it("a statement start after a block's `}` or an inserted semicolon is found", () => {
-    expect(hit("static { f(x) } ~zz")).toEqual(["sigil", "~zz"]);
-    expect(hit("static {\n f(x)\n ~zz\n}")).toEqual(["sigil", "~zz"]);
     expect(hit("if (a) { b } ~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("a = 1\n~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("i++\n~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("a = /x/\n~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("f(x) /*\n*/ ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("function f(): void { } ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("switch (a) { case 1: { b } ~zz }")).toEqual(["sigil", "~zz"]);
+    expect(hit("a: { b } ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("export function f() { } ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("class A { m() { f(x)\n ~zz } }")).toEqual(["sigil", "~zz"]);
+    // A function or class expression's `}`, an `export default` object and
+    // a `satisfies`/`as` literal end an operand; a class body's members are
+    // no statements.
+    expect(hit("const f = function () {} ~zz")).toBeUndefined();
+    expect(hit("a = class {} ~zz")).toBeUndefined();
+    expect(hit("export default { a: 1 } ~zz")).toBeUndefined();
+    expect(hit("x = y as { a: 1 } ~zz")).toBeUndefined();
+    expect(hit("f = () => { a } ~zz")).toBeUndefined();
+    expect(hit("a = c ? 1 : { b } ~zz")).toBeUndefined();
+    expect(hit("a = { k: { b } } ~zz")).toBeUndefined();
+    expect(hit("const f = function () {} / 2 / ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("class A {\n x = 1\n ~zz y = 2\n}")).toBeUndefined();
+    expect(hit("class A {\n x = 1\n #b = 2\n}", [hash])).toBeUndefined();
+    expect(hit("class A {\n x = 1\n @dec y = 2\n}", [at])).toBeUndefined();
     // An object literal's `}` ends an operand, and a line that continues
     // the expression is no statement start.
     expect(hit("a = { b } ~zz")).toBeUndefined();

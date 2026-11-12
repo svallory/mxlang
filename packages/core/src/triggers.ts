@@ -1416,7 +1416,7 @@ function lowerExpressionTriggers(
     // text becomes the replacement's printed code. A node's replacement is
     // its forward: the splice carries the node, so the expression records
     // it where the forward is printed.
-    run.splices.push({
+    pushSplice(ctx, trigger, run.splices, {
       ...spanRange(trigger),
       text: printed(ctx, replacement, trigger),
       ...(claimed
@@ -1441,31 +1441,62 @@ function valueFormOf(trigger: Node): TriggerValueForm {
 }
 
 /**
- * A node over the operator written right after a trigger's text (`:=`, or
- * the `(` of its arguments), the range a refusal of the value points at.
+ * A node over the operator after a trigger's text (`:=`, or the `(` of its
+ * arguments): the lexer skips whitespace between them, so the offset is
+ * searched forward from the text's end.
  */
-function operatorNode(trigger: Node, width: number): Node {
-  const start = trigger.start + String(trigger.text).length;
+function operatorNode(ctx: Ctx, trigger: Node, width: number): Node {
+  let start = trigger.start + String(trigger.text).length;
+  while (start < ctx.source.length && /\s/.test(ctx.source[start] as string)) {
+    start++;
+  }
   return { type: "MxTrigger", start, end: start + width } as Node;
 }
 
 /** A bound value or arguments after an attribute trigger: nothing can place them. */
-function refuseUnplaceable(trigger: Node): void {
+function refuseUnplaceable(ctx: Ctx, trigger: Node): void {
   const form = valueFormOf(trigger);
   if (form === ":=") {
     raise(
       INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no bound value (\`:=\`): the \`${trigger.id}\` trigger cannot place one`,
-      operatorNode(trigger, 2),
+      operatorNode(ctx, trigger, 2),
     );
   }
   if (form === "arguments") {
     raise(
       INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no arguments: the \`${trigger.id}\` trigger cannot place them`,
-      operatorNode(trigger, 1),
+      operatorNode(ctx, trigger, 1),
     );
   }
+}
+
+/** The splices each trigger has pushed, to refuse a second over the same text. */
+const pushedSplices = new WeakMap<Node, TriggerSplice[]>();
+
+/**
+ * Push a trigger's splice into `into`. Two values spliced over overlapping
+ * text would each get both splices applied to their `code`, so a splice that
+ * overlaps one the same trigger already pushed is a positioned error.
+ */
+function pushSplice(
+  ctx: Ctx,
+  trigger: Node,
+  into: TriggerSplice[] | undefined,
+  splice: TriggerSplice,
+): void {
+  const mine = pushedSplices.get(trigger) ?? [];
+  if (mine.some((each) => splice.start < each.end && each.start < splice.end)) {
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: two values would be written over the same text of \`${trigger.text}\`; build one \`ctx.expression\` or registered node per trigger text and give the other attributes a string, \`true\` or the trigger's own value`,
+      trigger,
+    );
+  }
+  mine.push(splice);
+  pushedSplices.set(trigger, mine);
+  into?.push(splice);
 }
 
 /** The value behind a trigger's `=value` container, or its method value (`:x() { … }`). */
@@ -1583,21 +1614,7 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       end: text.sourceEnd,
       loc: locOf(ctx, text.sourceStart, text.sourceEnd),
     });
-    // Two built expressions over the same text would each get both splices
-    // applied to their `code`: one per range.
-    if (
-      ctx.triggerSplices?.some(
-        (splice) =>
-          splice.start === text.sourceStart && splice.end === text.sourceEnd,
-      )
-    ) {
-      raise(
-        DIALECT_HOOK_ERROR_CODE,
-        `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.expression\` builds one value per trigger text; give the second attribute a string, \`true\` or the trigger's own value`,
-        trigger,
-      );
-    }
-    ctx.triggerSplices?.push({
+    pushSplice(ctx, trigger, ctx.triggerSplices, {
       start: text.sourceStart,
       end: text.sourceEnd,
       text: printed(ctx, node, trigger),
@@ -1724,7 +1741,7 @@ function lowerAttributeTrigger(
   }
   let results: readonly (TriggerAttribute | TriggerShorthand)[];
   if (row.node === "attribute") {
-    refuseUnplaceable(trigger);
+    refuseUnplaceable(ctx, trigger);
     const value = triggerValue(trigger);
     if (value?.kind === "method") {
       return raise(
@@ -1756,7 +1773,7 @@ function lowerAttributeTrigger(
       wrongResult(trigger, "ctx.attribute(name, value)");
     }
     results = list as (TriggerAttribute | TriggerShorthand)[];
-    refuseUnplaceable(trigger);
+    refuseUnplaceable(ctx, trigger);
     const attrs = results.filter(
       (item): item is TriggerAttribute => item.kind === "attribute",
     );
@@ -1943,7 +1960,7 @@ function lowerValueNode(
     end,
     loc: locOf(ctx, start, end),
   });
-  ctx.triggerSplices?.push({
+  pushSplice(ctx, trigger, ctx.triggerSplices, {
     start,
     end,
     text: printed(ctx, expression, trigger),
