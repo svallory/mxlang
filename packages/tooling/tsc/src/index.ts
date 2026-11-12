@@ -34,6 +34,7 @@ import {
   parseBuildMode,
   resolveBuildProjects,
 } from "./build-templates.ts";
+import { watchForCountLine } from "./count-line.ts";
 import { formatFixLines } from "./fix-lines.ts";
 import {
   checkNgMxGroups,
@@ -1087,38 +1088,6 @@ function countCompileErrors(
 ): number {
   return diagnostics.filter((diagnostic) => diagnostic.category === "error")
     .length;
-}
-
-/**
- * Watches `process.stdout` for tsc's own count line (`Found 1 error in a.ts:1`,
- * `Found 2 errors in 2 files.`), which tsc writes only under `--pretty` and
- * only when it has errors. Every write passes through untouched.
- */
-function watchForCountLine(): { seen(): boolean; stop(): void } {
-  const stdout = process.stdout;
-  const original = stdout.write;
-  let seen = false;
-  stdout.write = ((chunk: unknown, ...rest: unknown[]) => {
-    if (
-      !seen &&
-      typeof chunk === "string" &&
-      /(?:^|\n)Found \d+ errors?\b/.test(chunk)
-    ) {
-      seen = true;
-    }
-    return (original as (...args: unknown[]) => boolean).call(
-      stdout,
-      chunk,
-      ...rest,
-    );
-  }) as typeof process.stdout.write;
-  return {
-    seen: () => seen,
-    stop: () => {
-      // Restored unconditionally: runs nest and stop in order.
-      stdout.write = original;
-    },
-  };
 }
 
 /**
