@@ -868,4 +868,26 @@ describe("html typeCheck: the client arrow shadows the names a server statement 
       typeCheck("server var s = 1;\nclient var s = 2;\n<div/>\n"),
     ).not.toContain("s: undefined; void");
   });
+
+  it("a client label spelled like a server var is not a declared name", () => {
+    expect(
+      typeCheck("server var x = 1;\nclient x: for (;;) { break x }\n<div/>\n"),
+    ).toContain("var x: undefined; void [x];");
+  });
+
+  it("a var nested in a client statement merges with a server var", () => {
+    expect(
+      typeCheck(
+        "server var i = 0;\nclient for (var i = 0; i < 3; i++) {}\n<div/>\n",
+      ),
+    ).not.toContain("i: undefined");
+  });
+
+  it("a static name a client statement declares too is not shadowed in either view", () => {
+    const code = typeCheck(
+      "static var s = 1;\nclient var s = 2;\nstatic namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\n<div/>\n",
+    );
+    expect(code).not.toContain("s: undefined");
+    expect(code).not.toContain("N: undefined");
+  });
 });

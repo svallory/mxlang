@@ -138,7 +138,7 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     ["two vars", "server var s = 1;\nclient var s = 2;\n<div/>\n"],
     [
       "two namespaces",
-      "server namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\nclient const t = N.a;\n<div>${N.a}</div>\n",
+      "server namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\nclient const t = N.b;\n<div>${N.a}</div>\n",
     ],
   ])(
     "%s merged across server and client exist on both sides",
@@ -146,6 +146,31 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
       expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
     },
   );
+
+  it.each([
+    [
+      "a static and a client namespace",
+      "static namespace N { export const a = 1 }\nclient namespace N { export const b = 2 }\n<div>${N.a}</div>\n",
+    ],
+    [
+      "a static and a client var",
+      "static var s = 1;\nclient var s = 2;\n<div>${s}</div>\n",
+    ],
+    [
+      "a server var and a client for-loop var",
+      "server var i = 0;\nclient for (var i = 0; i < 3; i++) {}\n<div/>\n",
+    ],
+  ])("%s merge: the name exists on both sides", (_name, source) => {
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
+
+  it("KNOWN LIMIT: the body of a client namespace reads a server name typed", () => {
+    // A namespace is hoisted to module level, outside the client arrow that
+    // shadows server names, so its body is not checked against them.
+    const source =
+      "server const secret = 1;\nclient namespace Api { export const k = secret.toFixed(1) }\n<div/>\n";
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
 
   it("KNOWN LIMIT: a type query of a server name reads the undefined shadow", () => {
     const source =

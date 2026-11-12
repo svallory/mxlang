@@ -119,16 +119,19 @@ would hide its TS1108. Two shadows keep each view to the names it has at run
 time. At the head of the client arrow, every name a `server` statement binds
 (`let`/`const`/`function`/`class`, `import`, `declare` forms, exported or not)
 is declared `var s: undefined`, so a read is reported at the author's token; a
-name a `client` statement declares too (two `var`s, merged enums or namespaces,
-which core accepts) exists on both sides and is not shadowed, nor is the
-`var q: undefined` of the module's server view. At the head of the render
+name a `client` statement declares too (two `var`s, a `for (var …)` or a `var` in
+a nested block, merged enums or namespaces, which core accepts, with a `server`,
+`static` or `export` statement) exists on both sides and is not shadowed, nor is
+the `var q: undefined` of the module's server view. Statement labels and loop
+heads are not names. At the head of the render
 function, the value names of `client` imports, namespaces and `declare` forms
 (a qualified namespace by its leftmost name; `declare global` and ambient
 modules bind none) are declared `undefined`, with the whole render in a block
 below them, so a tag variable or `<define>` of the same name (core lets an
 ambient `client declare` share its spelling) declares without a clash. The
 render's own `input`, `$global` and `$signal` and a name a `server` statement
-declares too are left out. A bound attribute's refinement (`v:fn:=q`) that names
+declares too are left out (`static` and `export` names are read from the
+module's hoisted code). A bound attribute's refinement (`v:fn:=q`) that names
 a `client` import reads `__mxRefine_fn`, a module-level alias of the real
 binding, so the shadow stays for every other read; the emitter drives the body
 twice to know that. Known limits: a `client` import of
@@ -141,8 +144,11 @@ reading a `static` or `server` name declared after it but before a later
 module-level binding, and a module-level shadow of the same name would hide its
 type meaning from the client code); a type query (`typeof fetchRows`) of a name
 the shadow covers reads `undefined`, so `ReturnType<typeof fetchRows>` in client
-code is TS2344; names a `static` statement declares are not read, so a `client`
-statement of the same merged name is shadowed; a template read of a client name is not
+code is TS2344; the body of a `client` namespace (hoisted to module level, outside
+the client arrow) reads `server` names typed; a refinement of a `client` import
+maps its `__mxRefine_` alias onto the author's token, so go-to-definition and
+rename there reach the alias, not the import (a mapping that is diagnostic-only
+needs a code-information field on core's `GeneratedMapping`); a template read of a client name is not
 linked to its declaration for definition and rename. The
 runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a

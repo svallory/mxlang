@@ -65,7 +65,12 @@ import type {
   ClientTypeExport,
   DelegatedTagData,
 } from "./translate.ts";
-import { DYNAMIC, escapeComment, escapeScript } from "./translate.ts";
+import {
+  DYNAMIC,
+  escapeComment,
+  escapeScript,
+  moduleValueNames,
+} from "./translate.ts";
 
 const INDENT = "  ";
 
@@ -134,6 +139,8 @@ interface State {
    * `declare` forms bind at module level.
    */
   clientHoisted: string[];
+  /** Under `typeCheck`, every value name a `client` statement binds. */
+  clientScope: string[];
   /**
    * Under `typeCheck`, the names bound-attribute refinements (`v:fn:=q`) read.
    * `fn` is a client change handler: when it is a `client` import, the module
@@ -196,6 +203,7 @@ export function createEmitter(
     clientBody: [],
     serverDeclared: [],
     clientHoisted: [],
+    clientScope: [],
     refinementReads: new Set(),
     clientTypes: [],
     clientTypeExports: [],
@@ -1479,11 +1487,12 @@ export function createEmitter(
         // exported) and the client code, kept in a function of its own. The
         // module that runs keeps the `var` of its names.
         if (options.typeCheck && data.declaredNames) {
-          state.serverDeclared.push(...data.declaredNames());
+          state.serverDeclared.push(...data.declaredNames);
         }
         if (options.typeCheck && data.typeCheck) {
           const projection = data.typeCheck;
           state.clientHoisted.push(...projection.hoistedNames);
+          state.clientScope.push(...projection.scopeNames);
           const lines: Array<string | MappedCode> = [];
           // A name a `server` statement declares too (two `var`s, merged enums
           // or namespaces) is not `undefined` in the server view.
@@ -1811,11 +1820,12 @@ function placeClientCode(state: State): void {
   // exist: the arrow declares each as `undefined`, so a read is reported at the
   // author's token. A name a client statement declares too (two `var`s, merged
   // enums or namespaces, which core accepts) exists on both sides and is left
-  // out. A type query (`typeof s`) reads the shadow: a known limit.
+  // out. A type query (`typeof s`) reads the shadow, and the body of a `client`
+  // namespace (module level, so outside this arrow) does not: known limits.
   const absent = undefinedShadow(
     state.serverDeclared.filter(
       (name) =>
-        !state.clientNames.includes(name) &&
+        !state.clientScope.includes(name) &&
         !state.clientHoisted.includes(name),
     ),
   );
@@ -1830,7 +1840,11 @@ function placeClientCode(state: State): void {
   });
 }
 
-/** Names the render function binds itself, which a shadow must not redeclare. */
+/**
+ * Names a shadow in the render function must not redeclare: its parameters
+ * (`input`, `__mxOut`) and the implicit render bindings core reserves
+ * (`$global`, `$signal`), which core lets a module import under their spelling.
+ */
 const RENDER_NAMES: ReadonlySet<string> = new Set([
   "input",
   "$global",
@@ -1909,6 +1923,16 @@ export function emitModuleWithMappings(
   options: { typeCheck?: boolean; source?: string } = {},
 ): MappedCode {
   const name = moduleExportName(ir, "@mxlang/target-html");
+  // The names the `static` and `export` statements declare: a `client`
+  // statement of the same name merges with them, so the name exists in both
+  // views.
+  const moduleDeclared = new Set(
+    options.typeCheck
+      ? ir.hoisted.flatMap((node) =>
+          node.code === "" ? [] : moduleValueNames(node.code),
+        )
+      : [],
+  );
   let emitter = createEmitter(name, options);
   drive(emitter, ir.body);
   // A refinement that names a `client` import reads an alias of the real
@@ -1922,8 +1946,10 @@ export function emitModuleWithMappings(
     ),
   );
   const mergedNames = new Set(
-    emitter.state.clientNames.filter((client) =>
-      emitter.state.serverDeclared.includes(client),
+    emitter.state.clientScope.filter(
+      (client) =>
+        emitter.state.serverDeclared.includes(client) ||
+        moduleDeclared.has(client),
     ),
   );
   if (refinementAliases.size > 0 || mergedNames.size > 0) {
@@ -1951,12 +1977,14 @@ export function emitModuleWithMappings(
     ...inSourceOrder(ir.hoisted, emitter.state.moduleHoisted),
   ];
   // The render function's own names (`input` is its parameter, which already
-  // hides an import of that spelling) and the names a server or static statement
-  // declares too are not shadowed.
+  // hides an import of that spelling) and the names a server, static or export
+  // statement declares too are not shadowed.
   const shadowed = undefinedShadow(
     emitter.state.clientHoisted.filter(
       (name) =>
-        !RENDER_NAMES.has(name) && !emitter.state.serverDeclared.includes(name),
+        !RENDER_NAMES.has(name) &&
+        !emitter.state.serverDeclared.includes(name) &&
+        !moduleDeclared.has(name),
     ),
   );
   const inputType = ir.tagMetadata.readsContent

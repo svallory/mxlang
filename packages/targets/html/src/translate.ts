@@ -257,8 +257,11 @@ function parseClientStatements(
  * Marko prints the value. `declare` enums are skipped like every `declare`
  * form. A plain `enum` declares its name
  * where stock Marko refuses to compile it.
+ *
+ * With `values`, a statement label is not a name and a loop head adds none:
+ * the names a view of the module shadows are values.
  */
-function clientDeclaredNames(body: Node[]): string[] {
+function clientDeclaredNames(body: Node[], values = false): string[] {
   const names = new Set<string>();
   const queue: Array<Node | null | undefined> = [...body];
   for (let index = 0; index < queue.length; index++) {
@@ -296,10 +299,12 @@ function clientDeclaredNames(body: Node[]): string[] {
         break;
       case "ForInStatement":
       case "ForOfStatement":
-        queue.push(node.left);
+        // `values`: a loop head binds a value only as a `var`, which
+        // `varScopedNames` finds.
+        if (!values) queue.push(node.left);
         break;
       case "LabeledStatement":
-        queue.push(node.label);
+        if (!values) queue.push(node.label);
         break;
       case "ImportDeclaration":
         // `import type { T }` is erased, so it binds nothing at run time.
@@ -422,6 +427,8 @@ export interface ClientProjection {
    * server view shadows them as `undefined` in the render function.
    */
   hoistedNames: string[];
+  /** Every value name the statements bind, nested `var`s included. */
+  scopeNames: string[];
   hoisted: ClientPiece[];
   types: ClientType[];
   typeExports: ClientTypeExport[];
@@ -587,8 +594,50 @@ function valueNames(nodes: Node[]): string[] {
       if (name) names.add(name);
     } else plain.push(inner.declare ? { ...inner, declare: false } : node);
   }
-  for (const name of clientDeclaredNames(plain)) names.add(name);
+  for (const name of clientDeclaredNames(plain, true)) names.add(name);
+  for (const name of varScopedNames(nodes)) names.add(name);
   return [...names];
+}
+
+/**
+ * The names a `var` declares anywhere in `nodes` short of a function body: a
+ * `for (var …;;)` initialiser or a `var` in an `if`, `try` or block hoists to
+ * the module (or arrow) scope, which core counts as a top-level binding when it
+ * lets a `var` merge with another statement's.
+ */
+function varScopedNames(node: unknown, found: string[] = []): string[] {
+  if (!node || typeof node !== "object") return found;
+  if (Array.isArray(node)) {
+    for (const child of node) varScopedNames(child, found);
+    return found;
+  }
+  const { type } = node as Node;
+  // A namespace body is a scope of its own.
+  if (
+    (typeof type === "string" && FUNCTION_NODES.has(type)) ||
+    type === "TSModuleDeclaration"
+  ) {
+    return found;
+  }
+  if (type === "VariableDeclaration" && (node as Node).kind === "var") {
+    for (const declarator of (node as Node).declarations ?? []) {
+      found.push(...bindingNames(declarator.id));
+    }
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "loc" || key === "extra" || key.endsWith("Comments")) continue;
+    varScopedNames(value, found);
+  }
+  return found;
+}
+
+/**
+ * The value names a `static` or `export` statement's code declares, for the
+ * server view's merges with `client` statements (core lets two `var`s, enums
+ * and namespaces of different statements merge).
+ */
+export function moduleValueNames(code: string): string[] {
+  return valueNames(parseClientStatements(code, {} as Node, "static"));
 }
 
 function clientProjection(
@@ -744,6 +793,7 @@ function clientProjection(
       (name) => !taken.has(name),
     ),
     hoistedNames: valueNames(hoistedNodes),
+    scopeNames: valueNames(statements),
     hoisted,
     types,
     typeExports,
@@ -955,11 +1005,11 @@ export type DelegatedTagData =
       span: SourceSpan | undefined;
       typeCheck?: ClientProjection;
       /**
-       * Under `typeCheck`, the names a `server` statement declares, read on
-       * demand: they do not exist in the browser, so the client view
+       * The names a `server` statement declares, read while the statement is
+       * resolved: they do not exist in the browser, so the client view
        * shadows them.
        */
-      declaredNames?: () => string[];
+      declaredNames?: string[];
     }
   | { kind: "html-comment" }
   /** `<html-script>`/`<html-style>`: a literal element with a raw-text body. */
@@ -1050,8 +1100,7 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
-      declaredNames: () =>
-        valueNames(parseClientStatements(code, node, "server")),
+      declaredNames: valueNames(parseClientStatements(code, node, "server")),
     };
   }
 
