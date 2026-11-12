@@ -5813,10 +5813,13 @@ head). A comment, a string, a regular expression and the text of a template
 literal are not scanned; a `${…}` substitution is code. One difference from the
 template: the row's node type is not asked to claim the text. A statement start
 also stands where an operand is expected: after a block's `}` (the `}` of an
-`if`, `for`, function, class or `static` body, not an object literal's), and
-after a line break that ends a statement (the next character cannot continue
-the expression, so `f(x)` then `~zz` on the next line is a row, while `f(x)`
-then `&zz` is a bitwise and).
+`if`, `for`, `switch`, a function or class declaration, a `static` body or a
+label or `case` block, not an object literal's, a function or class
+expression's or an arrow body's), and after a line break that ends a statement
+(the next character cannot continue the expression, so `f(x)` then `~zz` on
+the next line is a row, while `f(x)` then `&zz` is a bitwise and). A class
+body's members are no statements, so a decorator `@dec` or a `#private` member
+on its own line there is TypeScript, not a row.
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
 the statement, and a statement the parser refuses (`export static …`) keep their
