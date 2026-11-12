@@ -14,7 +14,7 @@ import { transformSync } from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import { type CustomTag, readCalleeInput } from "@mxlang/core";
 import { parse as parseMxFile } from "@mxlang/tsx-bridge";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { compileSolidMx, compileSolidUnit, solidTargets } from "./index.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -92,7 +92,7 @@ describe("Solid IR lowering", () => {
     [
       "ordinary capture name",
       `<div oncapture:click=fn/>`,
-      ["oncapture:click={fn}"],
+      ['oncapture:click={__mxAttrValue("oncapture:click", fn, "div")}'],
     ],
     [
       "ordinary attr name",
@@ -570,6 +570,47 @@ describe("Solid callee Input reader", () => {
       });
     },
   );
+});
+
+describe("a failed compile still reports the dependencies it read", () => {
+  const dir = mkdtempSync(join(tmpdir(), "mx-solid-deps-"));
+  const callee = join(dir, "card.mx");
+  writeFileSync(
+    callee,
+    'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
+  );
+  const caller = join(dir, "page.mx");
+  const source =
+    'import Card from "./card.mx"\n<Card><@header>a</@header><@header>b</@header></Card>\n';
+  const failure = (run: () => unknown): { dependencies?: string[] } => {
+    try {
+      run();
+    } catch (error) {
+      return error as { dependencies?: string[] };
+    }
+    throw new Error("expected a compile error");
+  };
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("compileSolidUnit attaches the callee whose contract failed", () => {
+    expect(
+      failure(() =>
+        compileSolidUnit(source, { filename: caller, targets: solidTargets }),
+      ).dependencies,
+    ).toContain(callee);
+  });
+
+  it("compileSolidMx attaches the callee whose contract failed", () => {
+    expect(
+      failure(() =>
+        compileSolidMx(source.replace(/^import.*\n/, ""), {
+          filename: caller,
+          importSpecifiers: new Map([["Card", "./card.mx"]]),
+          importDefaultFromMarkoOrMx: new Set(["Card"]),
+        }),
+      ).dependencies,
+    ).toContain(callee);
+  });
 });
 
 describe("Solid host errors", () => {

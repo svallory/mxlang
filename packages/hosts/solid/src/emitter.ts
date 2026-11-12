@@ -136,11 +136,12 @@ let attrGuardUse: {
 const UNGUARDED_ATTRS = new Set(["class", "style", "ref", "children"]);
 
 /**
- * Solid prop namespaces that are not attribute writes: `on:`/`oncapture:`
- * listeners and `prop:` (a real property write). `attr:`, `bool:` and `use:`
- * lower to `setAttribute` on Solid 2, so they validate like any attribute.
+ * Solid prop namespaces that are not attribute writes: `on:` (an error
+ * elsewhere) and `prop:` (a real property write). `oncapture:`, `attr:`,
+ * `bool:` and `use:` are ordinary attributes with their full names, so they
+ * validate like any attribute.
  */
-const UNGUARDED_NAMESPACE = /^(?:on|oncapture|prop):/;
+const UNGUARDED_NAMESPACE = /^(?:on|prop):/;
 
 /**
  * What a native-attribute guard needs: the JS expression for the tag name, and
@@ -1148,6 +1149,7 @@ function renderAttr(
   mapName = false,
   native?: NativeAttrs,
   hasSpread = false,
+  dropSpreadClass = false,
 ): MappedCode {
   // A literal markup-writing prop on a runtime-resolved tag cannot be refused
   // at compile time (the tag may be `script`, `style` or a component), so it
@@ -1224,7 +1226,7 @@ function renderAttr(
           concatMapped(
             `${MX_ATTR_SPREAD_BINDING}(`,
             mappedExpr(attr.value),
-            `, ${nativeTagOf(native)})`,
+            `, ${nativeTagOf(native)}${dropSpreadClass ? ", true" : ""})`,
           ),
           native,
         ),
@@ -1303,10 +1305,12 @@ function renderAttr(
       // Marko omits a falsy primitive class and prints `true`; Solid's own
       // `class={v}` always prints the attribute, so a non-literal class on a
       // native element becomes a one-key prop object that is empty when omitted.
+      // Beside a spread a primitive takes the same route: `class=null` after
+      // the spread must print nothing, not `class=""`.
       if (
         attr.name === "class" &&
         native !== undefined &&
-        !isPrimitiveValue(attr.value) &&
+        (!isPrimitiveValue(attr.value) || hasSpread) &&
         attr.value.shape !== "object"
       ) {
         if (attrGuardUse) attrGuardUse.klass = true;
@@ -1436,6 +1440,23 @@ function renderAttrs(
   native?: NativeAttrs,
 ): MappedCode {
   const hasSpread = attrs.some((attr) => attr.kind === "spread");
+  // A dynamic `class=` after a spread wins over the spread's class, even when
+  // its value is empty (`[]`, `null`, `0`), where Marko prints no class at
+  // all: the earlier spread must not offer its class.
+  let lastDynamicClass = -1;
+  attrs.forEach((attr, index) => {
+    if (attr.kind === "dynamic" && attr.name === "class") {
+      lastDynamicClass = index;
+    }
+  });
+  const renderAt = (attr: Attr, index: number): MappedCode =>
+    renderAttr(
+      attr,
+      mapNames,
+      native,
+      hasSpread,
+      attr.kind === "spread" && index < lastDynamicClass,
+    );
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))
     .filter(({ attr }) => attr.kind !== "spread" && attr.name === "class");
@@ -1445,9 +1466,7 @@ function renderAttrs(
       (attr.value.shape === "object" || attr.value.shape === "array"),
   );
   if (!structured) {
-    return concatMapped(
-      ...attrs.map((attr) => renderAttr(attr, mapNames, native, hasSpread)),
-    );
+    return concatMapped(...attrs.map(renderAt));
   }
 
   const strings = classEntries.flatMap(({ attr }) => {
@@ -1467,9 +1486,9 @@ function renderAttrs(
         return concatMapped();
       }
       if (index !== structured.index || attr.kind !== "dynamic") {
-        return renderAttr(attr, mapNames, native, hasSpread);
+        return renderAt(attr, index);
       }
-      if (merged === "") return renderAttr(attr, mapNames, native, hasSpread);
+      if (merged === "") return renderAt(attr, index);
       if (attr.value.shape === "array" && native !== undefined) {
         if (attrGuardUse) attrGuardUse.klass = true;
         return concatMapped(

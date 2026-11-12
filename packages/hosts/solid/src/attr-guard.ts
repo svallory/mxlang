@@ -57,10 +57,11 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  * Solid merges spreads lazily, so the helper must not snapshot the object: a
  * Proxy validates each key as Solid reads it, which keeps reactivity and means
  * a key a later source overwrites is never read, so never validated. Exempt:
- * event handlers (Marko's `/^on[A-Z-]/`, plus Solid's `on:`/`oncapture:`),
+ * event handlers (Marko's `/^on[A-Z-]/`, plus Solid's `on:`),
  * `prop:` (a real property write), ref, class, style and children. Everything
- * else, including `attr:`, `bool:`, `use:` and classList, is a plain attribute
+ * else, including `oncapture:`, `attr:`, `bool:`, `use:` and classList, is a plain attribute
  * write on Solid and validates like Marko.
+ * `dropClass` hides the spread's `class` when a later `class=` overrides it.
  * `<T,>` keeps the helper unconstrained so any spread type-checks, and {@link SPREADABLE} keeps its result spreadable (covered by mx-tsc `attr-guard-solid.test.ts`).
  *
  * Four keys are not "a plain attribute write" on Solid, and each can put
@@ -85,13 +86,14 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  * The view sits over an empty target, so hiding or renaming a key breaks no
  * Proxy invariant, even for a frozen source.
  */
-export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = ""): ${SPREADABLE} {
+export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<T,>(attrs: T, tag: string | null = "", dropClass = false): ${SPREADABLE} {
   if (tag === null || attrs === null || typeof attrs !== "object") return attrs as never;
   const source = attrs as object;
   const markup = ["innerHTML", "outerHTML", "textContent", "innerText"];
   const raw = typeof tag === "string" && /^(?:script|style)$/i.test(tag);
   const hidden = (key: string | symbol): boolean => {
     if (typeof key !== "string") return false;
+    if (dropClass && key === "class") return true;
     if (markup.includes(key) || key === "prop:innerHTML" || key === "prop:outerHTML") return true;
     if (raw && (key === "prop:textContent" || key === "prop:innerText" || key === "prop:text")) return true;
     if (key !== "children" || !Reflect.has(source, key)) return false;
@@ -107,7 +109,7 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
       if (hidden(key)) return undefined;
       const name = original(key);
       const value = Reflect.get(source, name);
-      if (typeof name === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|oncapture:|prop:)/.test(name)) {
+      if (typeof name === "string" && !/^(?:(?:ref|children|class|style|\$mxReturn)$|on[A-Z:-]|prop:)/.test(name)) {
         try { ${MX_ATTR_VALUE_BINDING}(name, value, tag); } catch (error) {
           if ((name === "innerHTML" || name === "outerHTML") && error instanceof Error) error.message += " To write raw HTML, make \`$!{html}\` the element's only child.";
           throw error;

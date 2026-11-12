@@ -104,6 +104,10 @@ const CASES: Record<string, Case> = {
     fragment: "<div ...input.a/>",
     setup: 'const input = { a: { "attr:x": { a: 1 }, "bool:y": { a: 1 } } };',
   },
+  oncaptureSpread: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { "oncapture:click": { a: 1 } } };',
+  },
   propNamespace: {
     fragment: "<div prop:x=input.o/>",
     setup: "const input = { o: { a: 1 } };",
@@ -456,6 +460,11 @@ describe.each(["ssr", "dom"] as const)(
           /^The `(?:attr:x|bool:x|use:x|attr:x)` attribute cannot be a plain object/,
         );
       }
+    });
+    it("validates a spread's oncapture: key, an ordinary attribute as in Marko", () => {
+      expect(get("oncaptureSpread").error).toBe(
+        "The `oncapture:click` attribute cannot be a plain object (it would render as `[object Object]`).",
+      );
     });
     it("leaves prop: (a property write) and event handler keys alone", () => {
       expect(get("propNamespace").error).toBeUndefined();

@@ -402,7 +402,7 @@ export function compileSolidMx(
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
-  const ir = lower(ctx, body);
+  const ir = lowerKeepingDependencies(ctx, body);
   // An import the *compiler* minted for a discovered tag is not a
   // module-level statement the author wrote, so it is not theirs to move:
   // the region is the only place that call exists, and the import has
@@ -578,6 +578,29 @@ function mappedStatement(
 }
 
 /**
+ * `lower` records the callee files it read in `ctx.dependencies`, and a
+ * successful compile returns them. A lowering error carries them too, so an
+ * integration can watch the callee whose contract caused it (core's own
+ * compile does the same); the error's sibling errors travel with it.
+ */
+function lowerKeepingDependencies(
+  ctx: Parameters<typeof lower>[0],
+  body: Parameters<typeof lower>[1],
+): ReturnType<typeof lower> {
+  try {
+    return lower(ctx, body);
+  } catch (error) {
+    if (error instanceof TranslateError) {
+      const dependencies = [...(ctx.dependencies ?? [])];
+      for (const each of [error, ...(error.errors ?? [])]) {
+        each.dependencies = dependencies;
+      }
+    }
+    throw error;
+  }
+}
+
+/**
  * Compiles a whole `.mx` file to a Solid component module.
  *
  * This is the tag-unit entry point: a `tags/icon.mx` is an ordinary `.mx`
@@ -616,7 +639,7 @@ export function compileSolidUnit(
   // above: it has a `export default function <Name>` to name, so a tag that
   // calls itself resolves to that declaration rather than importing itself.
   ctx.emitsModule = true;
-  const ir = lower(ctx, body);
+  const ir = lowerKeepingDependencies(ctx, body);
   // A `prelude` node is a statement a hoist hook lifted to the enclosing
   // function's head. No Solid-host construct mints one today, so rather than
   // emit it somewhere plausible and untested, report it at the statement's
