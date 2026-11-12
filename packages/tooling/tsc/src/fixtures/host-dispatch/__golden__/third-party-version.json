@@ -86,6 +86,7 @@
             "message": "mx.target \"./target.cjs\" targets descriptor version 1; this compiler supports descriptor version 0.",
             "line": 3,
             "column": 14,
+            "offset": 26,
             "length": 14
           }
         ],

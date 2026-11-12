@@ -86,6 +86,7 @@
             "message": "mx.host \"./target.cjs\" exports a target with no host. Use mx.target \"./target.cjs\", or give the descriptor a \"host\" part.",
             "line": 3,
             "column": 12,
+            "offset": 24,
             "length": 14
           }
         ],

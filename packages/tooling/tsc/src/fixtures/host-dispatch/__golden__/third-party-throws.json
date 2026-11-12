@@ -86,6 +86,7 @@
             "message": "mx.target \"./target.cjs\" failed to load: boom: the fixture target exploded on load. (<root>/third-party-throws/target.cjs)",
             "line": 3,
             "column": 14,
+            "offset": 26,
             "length": 14
           }
         ],

@@ -86,6 +86,7 @@
             "message": "mx.target \"./nope.cjs\" cannot be resolved from <root>/third-party-missing: Cannot find module './nope.cjs'. Check the path or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
             "line": 3,
             "column": 14,
+            "offset": 26,
             "length": 12
           }
         ],

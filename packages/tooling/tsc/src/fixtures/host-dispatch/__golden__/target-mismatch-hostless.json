@@ -119,6 +119,7 @@
             "message": "mx.target \"html\" has no host, but mx.host is \"solid\". Remove one of them: mx.host \"solid\" selects target \"solid-jsx\"; mx.target \"html\" needs no mx.host.",
             "line": 4,
             "column": 14,
+            "offset": 47,
             "length": 6,
             "relatedInformation": [
               {
@@ -126,6 +127,7 @@
                 "message": "mx.host \"solid\" selects target \"solid-jsx\".",
                 "line": 3,
                 "column": 12,
+                "offset": 24,
                 "length": 7
               }
             ]

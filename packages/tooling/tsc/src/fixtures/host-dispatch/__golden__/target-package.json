@@ -86,6 +86,7 @@
             "message": "mx.target \"@acme/mx-view\" cannot be resolved from <root>/target-package: Cannot find module '@acme/mx-view'. Install it (bun add -d @acme/mx-view) or use a built-in target: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template.",
             "line": 3,
             "column": 14,
+            "offset": 26,
             "length": 15
           }
         ],

@@ -86,6 +86,7 @@
             "message": "mx.target \"./target.cjs\" must export a target descriptor (default export or \"mxTarget\"): \"name\" is missing, expected a string. See the TargetDescriptor contract (unstable).",
             "line": 3,
             "column": 14,
+            "offset": 26,
             "length": 14
           }
         ],

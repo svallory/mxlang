@@ -76,7 +76,8 @@
             "file": "<root>/target-unknown-host/package.json",
             "message": "unknown mx.host \"bogus\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
             "line": 3,
-            "column": 12
+            "column": 12,
+            "offset": 24
           }
         ],
         "logged": []

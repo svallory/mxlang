@@ -119,6 +119,7 @@
             "message": "mx.host \"html\" is the legacy spelling of mx.target \"html\", but mx.target is \"astro-html\" (host \"astro\"). Remove mx.host: mx.target alone selects the target.",
             "line": 4,
             "column": 14,
+            "offset": 46,
             "length": 12,
             "relatedInformation": [
               {
@@ -126,6 +127,7 @@
                 "message": "mx.host \"html\" selects target \"html\".",
                 "line": 3,
                 "column": 12,
+                "offset": 24,
                 "length": 6
               }
             ]
