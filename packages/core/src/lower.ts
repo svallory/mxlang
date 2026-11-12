@@ -1492,6 +1492,7 @@ function checkDefineReads(
     pending: boolean;
     define?: boolean;
     exited?: boolean;
+    nested?: boolean;
   },
   here: number[],
   node: Node,
@@ -1499,15 +1500,16 @@ function checkDefineReads(
   const inScope =
     binding.block.length <= here.length &&
     binding.block.every((id, index) => here[index] === id);
-  if (binding.exited) {
-    // The declaring body has ended. An import or a `static` binding of the
-    // same name is the one the read reaches, as in JS.
+  if (binding.exited || binding.nested) {
+    // The declaring body has ended, or has not been reached. An import or a
+    // `static` binding of the same name is the one the read reaches, as in JS.
     if (
       ctx.imports.has(name) ||
       ctx.importSpecifiers.has(name) ||
       ctx.staticBindings.has(name)
     )
       return;
+    if (!binding.exited && !binding.pending) return;
   } else {
     // A `<define>` is block-scoped by name lookup (§5.4); the read-before-
     // declaration rule applies inside the declaring body's path.
@@ -7623,6 +7625,27 @@ function ifChainEnd(children: readonly Node[], index: number): number {
   return i;
 }
 
+/** The names of every `<define>` declared below `children`, at any depth. */
+function nestedDefineNames(
+  ctx: Ctx,
+  children: readonly Node[],
+  names = new Set<string>(),
+  depth = 0,
+): Set<string> {
+  for (const child of children) {
+    if (!isTagNode(child) && child.type !== "MxAttributeTag") continue;
+    if (depth > 0 && tagNameOf(child) === "define" && tagVarOf(child)) {
+      try {
+        names.add(declName(ctx, tagVarOf(child)));
+      } catch {
+        // No readable name: the define's own lowering reports it.
+      }
+    }
+    nestedDefineNames(ctx, bodyChildren(child), names, depth + 1);
+  }
+  return names;
+}
+
 function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   // A body read straight off its tag: its line triggers as lowered.
   const children = childrenWithTriggers(authored);
@@ -7719,6 +7742,24 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       block: [...(ctx.tagVarBlock ?? [])],
       pending: true,
     });
+  }
+
+  // A `<define>` declared in a body nested inside this one is not readable
+  // before the walk reaches it either (stock: "move the define before its first
+  // reference"), so its name is registered pending too. A name that is already
+  // registered here is left alone: it is another binding the nested one shadows.
+  if (ctx.tagRules !== "none") {
+    for (const name of nestedDefineNames(ctx, children)) {
+      if (declaredDefines.has(name) || ctx.tagVars?.has(name)) continue;
+      saveTagVar(name, true);
+      ctx.tagVars ??= new Map();
+      ctx.tagVars.set(name, {
+        block: [...(ctx.tagVarBlock ?? [])],
+        pending: true,
+        define: true,
+        nested: true,
+      });
+    }
   }
 
   // The tag-variable names this body declares, per direct child, for the
@@ -8101,7 +8142,8 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     // Restore define entries shadowed by this body, including a still-pending
     // outer define. Custom `/var` escape tracking keeps its existing lifetime.
     for (const [name, outer] of savedTagVars) {
-      if (outer) ctx.tagVars?.set(name, outer);
+      if (outer && !(outer.nested && declaredDefines.has(name)))
+        ctx.tagVars?.set(name, outer);
       else if (declaredDefines.has(name) && ctx.tagVarBlock?.length)
         // Not deleted: a read after this body is refused (`checkDefineReads`).
         ctx.tagVars?.set(name, {

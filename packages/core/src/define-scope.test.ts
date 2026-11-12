@@ -284,3 +284,60 @@ describe("a <define> name is not readable outside the body that declares it", ()
     ).not.toThrow();
   });
 });
+
+describe("a <define> in a nested body is not readable before the walk reaches it", () => {
+  const CASES: Array<[string, string, number]> = [
+    [
+      "a script above a define in an element body",
+      `<script>console.log(Foo)</script><div>${FOO}</div>`,
+      1,
+    ],
+    [
+      "an <if> branch above a define in its <else>",
+      `<if=true>\${typeof Foo}</if><else>${FOO}</else>`,
+      1,
+    ],
+    [
+      "a placeholder above a define two bodies down",
+      `<p>\${typeof Foo}</p><div><if=input.a>${FOO}</if></div>`,
+      1,
+    ],
+    [
+      "a read in a <define> body above a define in a later element",
+      `<define/Box>\${typeof Foo}</define><div>${FOO}</div>`,
+      1,
+    ],
+  ];
+  for (const [label, source, line] of CASES) {
+    it(`${label} is refused at the read`, () => {
+      const error = refusal(source);
+      expect(error?.diagnosticCode).toBe("MX_DEFINE_READ_BEFORE_DECLARATION");
+      expect(error?.message).toMatch(/is read before the `<define>`/);
+      expect(error?.line).toBe(line);
+    });
+  }
+
+  it("a read after the body that declares it is the exited-body refusal", () => {
+    expect(
+      refusal(`<div>${FOO}</div>\n<p>\${typeof Foo}</p>\n`)?.message,
+    ).toMatch(/not readable outside it/);
+  });
+
+  it("an import of the same name is the one an earlier read reaches", () => {
+    expect(() =>
+      lowerSource(`${IMPORT}<p>\${typeof Foo}</p><div>${FOO}</div>\n`),
+    ).not.toThrow();
+  });
+
+  it("a read below the define in its own body still compiles", () => {
+    expect(() =>
+      lowerSource(`<div>${FOO}<p>\${typeof Foo}</p></div>\n`),
+    ).not.toThrow();
+  });
+
+  it("an outer define of the same name keeps the reads above the nested one", () => {
+    expect(() =>
+      lowerSource(`${FOO}<p>\${typeof Foo}</p><if=input.a>${FOO}</if>\n`),
+    ).not.toThrow();
+  });
+});

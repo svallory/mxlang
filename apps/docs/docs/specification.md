@@ -1803,7 +1803,9 @@ the declaration keeps its unresolved-component diagnostic.
 (`${D}`, `<${D}/>`, an initializer, an attribute, a `<script>`) after the body
 that declares `<define/D>` has ended are refused at the read with the same
 code, as Marko 6.4.4 refuses them ("Hoisted values must be functions"): the
-binding exists only inside that body. An `import`, a `static` binding or a
+binding exists only inside that body. A read above a `<define>` declared in a
+body nested below it (an element, an `<if>` branch, another `<define>`) is
+refused the same way, before the walk reaches that body. An `import`, a `static` binding or a
 `<const>` of the same name is the one such a read reaches.
 
 **A `<define>` tag's own attributes are properties of its value.**

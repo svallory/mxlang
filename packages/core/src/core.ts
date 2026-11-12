@@ -654,6 +654,12 @@ export interface Ctx {
        * refuses it, instead of reaching the emitted JS as an unbound name.
        */
       exited?: boolean;
+      /**
+       * A pending `<define>` that a body nested inside the registering one
+       * declares, registered ahead of the walk so a read before the walk
+       * reaches that body is refused too.
+       */
+      nested?: boolean;
     }
   >;
   /**
