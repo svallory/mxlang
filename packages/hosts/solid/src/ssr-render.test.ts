@@ -992,13 +992,15 @@ describe("Solid SSR render: a later class= beside a spread", () => {
   // Stock Marko 6.4.4 lets the later `class=` win over the spread's class, so
   // an empty array, `null` and `0` leave the element without any class. One
   // render holds every row (each spawns a process).
-  it("drops the spread's class when a later class= is empty, null or 0", () => {
+  it("drops the spread's class when a later class= is empty, null, 0 or ''", () => {
     const html = renderApp(
       [
         "<div ...{class:'s'} class=[]/>",
         "<div ...{class:'s'} class=null/>",
         "<div ...{class:'s'} class=0/>",
         "<div ...{class:'s'} class='c'/>",
+        "<div ...{class:'s'} class=''/>",
+        "<div ...{class:'s'} class/>",
       ].join(""),
       "",
     );
@@ -1006,7 +1008,7 @@ describe("Solid SSR render: a later class= beside a spread", () => {
       [...html.matchAll(/<div(?: class="([^"]*)")?\s*>/g)].map(
         (match) => match[1] ?? "(none)",
       ),
-    ).toEqual(["(none)", "(none)", "(none)", "c"]);
+    ).toEqual(["(none)", "(none)", "(none)", "c", "(none)", "true"]);
   });
 });
 

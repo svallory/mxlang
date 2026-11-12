@@ -1164,6 +1164,34 @@ function renderAttr(
   ) {
     return viewedAttr(attr, native);
   }
+  // Solid's compilers drop (server) or bind as a capture listener (client) a
+  // JSX `oncapture:` prop, but `oncapture:click` is an ordinary attribute with
+  // its full name, so it goes through the spread view, which validates it and
+  // writes it as an attribute.
+  if (
+    native !== undefined &&
+    (attr.kind === "static" ||
+      attr.kind === "dynamic" ||
+      attr.kind === "boolean") &&
+    attr.name.startsWith("oncapture:")
+  ) {
+    return viewedAttr(attr, native);
+  }
+  // Beside a spread, an empty static `class=""` prints nothing and a bare
+  // `class` prints `true`, as in Marko; Solid's own `class=""`/`class={true}`
+  // would print an empty attribute.
+  if (
+    native !== undefined &&
+    hasSpread &&
+    attr.kind !== "spread" &&
+    attr.name === "class" &&
+    ((attr.kind === "static" && attr.value === "") || attr.kind === "boolean")
+  ) {
+    if (attrGuardUse) attrGuardUse.klass = true;
+    return concatMapped(
+      ` {...${MX_CLASS_BINDING}(${attr.kind === "boolean" ? "true" : '""'}, ${nativeTagOf(native)})}`,
+    );
+  }
   // A literal `children=` on a native element: Solid's server renderer
   // writes an object there raw (`{ t }` is an already-rendered node), so a
   // value that may be one goes through the view, which drops an object or
@@ -1440,13 +1468,13 @@ function renderAttrs(
   native?: NativeAttrs,
 ): MappedCode {
   const hasSpread = attrs.some((attr) => attr.kind === "spread");
-  // A dynamic `class=` after a spread wins over the spread's class, even when
+  // A `class=` of any kind after a spread wins over the spread's class, even when
   // its value is empty (`[]`, `null`, `0`), where Marko prints no class at
   // all: the earlier spread must not offer its class.
-  let lastDynamicClass = -1;
+  let lastClassAttr = -1;
   attrs.forEach((attr, index) => {
-    if (attr.kind === "dynamic" && attr.name === "class") {
-      lastDynamicClass = index;
+    if (attr.kind !== "spread" && attr.name === "class") {
+      lastClassAttr = index;
     }
   });
   const renderAt = (attr: Attr, index: number): MappedCode =>
@@ -1455,7 +1483,7 @@ function renderAttrs(
       mapNames,
       native,
       hasSpread,
-      attr.kind === "spread" && index < lastDynamicClass,
+      attr.kind === "spread" && index < lastClassAttr,
     );
   const classEntries = attrs
     .map((attr, index) => ({ attr, index }))

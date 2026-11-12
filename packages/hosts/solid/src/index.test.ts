@@ -92,7 +92,7 @@ describe("Solid IR lowering", () => {
     [
       "ordinary capture name",
       `<div oncapture:click=fn/>`,
-      ['oncapture:click={__mxAttrValue("oncapture:click", fn, "div")}'],
+      ['{...__mxAttrSpread({"oncapture:click": (fn)}, "div")}'],
     ],
     [
       "ordinary attr name",

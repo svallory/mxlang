@@ -104,6 +104,18 @@ const CASES: Record<string, Case> = {
     fragment: "<div ...input.a/>",
     setup: 'const input = { a: { "attr:x": { a: 1 }, "bool:y": { a: 1 } } };',
   },
+  oncaptureNamespace: {
+    fragment: "<div oncapture:click=input.o/>",
+    setup: "const input = { o: { a: 1 } };",
+  },
+  oncaptureString: {
+    fragment: "<div oncapture:click=input.v/>",
+    setup: 'const input = { v: "x" };',
+  },
+  oncaptureStatic: {
+    fragment: '<div oncapture:click="y"/>',
+    setup: "const input = {};",
+  },
   oncaptureSpread: {
     fragment: "<div ...input.a/>",
     setup: 'const input = { a: { "oncapture:click": { a: 1 } } };',
@@ -459,6 +471,17 @@ describe.each(["ssr", "dom"] as const)(
         expect(get(name).error ?? `${name} did not throw`, name).toMatch(
           /^The `(?:attr:x|bool:x|use:x|attr:x)` attribute cannot be a plain object/,
         );
+      }
+    });
+    it("validates a static or dynamic oncapture: attribute and prints its full name", () => {
+      expect(get("oncaptureNamespace").error).toBe(
+        "The `oncapture:click` attribute cannot be a plain object (it would render as `[object Object]`).",
+      );
+      // Solid's server renderer drops an `oncapture:` key without printing
+      // it, so the printed form is asserted on the client render only.
+      if (mode === "dom") {
+        expect(get("oncaptureString").html).toContain('oncapture:click="x"');
+        expect(get("oncaptureStatic").html).toContain('oncapture:click="y"');
       }
     });
     it("validates a spread's oncapture: key, an ordinary attribute as in Marko", () => {
