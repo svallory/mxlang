@@ -5575,6 +5575,8 @@ row's id and `<text>` for the trigger's text:
 | The hook ignores the trigger's `=value` or method value | `` `<text>` takes no `=value` here: the `<id>` trigger does not place it `` (`method value` for a method; a value that would vanish from the output is an error, positioned at the value) |
 | An expression trigger that is not a whole operand, or is a property name (`{ &a }`, `{ &a: 1 }`) | `` `<text>` is not a whole operand here: the `<id>` trigger lowers to an expression; write it where a value stands `` |
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
+| The hook builds two values over overlapping text of one trigger (two `ctx.expression` values, or a registered node and a `ctx.expression`, written over the trigger's text) | `` the `<id>` trigger's `lowerTrigger`: two values would be written over the same text of `<text>`; build one `ctx.expression` or registered node per trigger text and give the other attributes a string, `true` or the trigger's own value `` (`MX_DIALECT_HOOK_ERROR`) |
+| The hook leaves a bound `:=` value or `(args)` that nothing can place | `` `<text>` takes no bound value (`:=`): the `<id>` trigger cannot place one `` or `` `<text>` takes no arguments: the `<id>` trigger cannot place them `` (`MX_INVALID_TRIGGER_USE`, positioned at the operator, whitespace before it skipped) |
 | The replacement does not print | `` the `<id>` trigger's replacement does not print: <message> `` |
 
 A `=value` is also lowered as an expression with its own triggers, and a member
@@ -5819,7 +5821,13 @@ expression's or an arrow body's), and after a line break that ends a statement
 (the next character cannot continue the expression, so `f(x)` then `~zz` on
 the next line is a row, while `f(x)` then `&zz` is a bitwise and). A class
 body's members are no statements, so a decorator `@dec` or a `#private` member
-on its own line there is TypeScript, not a row.
+on its own line there is TypeScript, not a row, and so is a decorator at a
+statement start that is followed by `class`, `export`, `abstract`, `default` or
+another decorator (`@dec class B {}`). The scan reads tokens, not a parse: it
+tells blocks from object literals by the construct that opened each brace and
+does not model every TypeScript form (a type literal after a statement-level
+`:` counts as a block), so a form it misreads is found or missed as the
+template would not.
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
 the statement, and a statement the parser refuses (`export static …`) keep their
