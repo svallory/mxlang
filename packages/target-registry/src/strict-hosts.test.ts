@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, expect, it } from "vitest";
 import { createTargetLookup } from "@mxlang/core";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import {
   standInTargets,
   strictFor,

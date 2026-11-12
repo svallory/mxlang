@@ -108,7 +108,8 @@ export function withStandIns(lookup: TargetLookup): TargetLookup {
     for (
       let base = t.builtOn === undefined ? undefined : lookup.target(t.builtOn);
       base !== undefined && !own.includes(base);
-      base = base.builtOn === undefined ? undefined : lookup.target(base.builtOn)
+      base =
+        base.builtOn === undefined ? undefined : lookup.target(base.builtOn)
     )
       own.push(base);
   }
@@ -151,6 +152,7 @@ export function strictFor(path: string, targets: TargetLookup): boolean {
   const descriptor = policy.descriptor ?? targets.target(policy.target);
   if (descriptor?.strict === "always") return true;
   const noStrictMode =
-    descriptor?.host !== undefined && descriptor.declarations?.strict === undefined;
+    descriptor?.host !== undefined &&
+    descriptor.declarations?.strict === undefined;
   return policy.strict === true && !noStrictMode;
 }
