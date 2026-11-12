@@ -5810,10 +5810,13 @@ it stands where an operand is expected (not after an operand, a postfix `++`,
 `--` or `!`, TypeScript's `?`/`!` markers, a type argument list's `>` or a
 regular expression; after `...`, an operator or an `if`/`for`/`while`/`with`
 head). A comment, a string, a regular expression and the text of a template
-literal are not scanned; a `${…}` substitution is code. Two differences from the
-template: the row's node type is not asked to claim the text, and a statement
-start after a block's `}` or after a line break that ends a statement expects
-no operand, so a row that is a whole expression statement there is not found.
+literal are not scanned; a `${…}` substitution is code. One difference from the
+template: the row's node type is not asked to claim the text. A statement start
+also stands where an operand is expected: after a block's `}` (the `}` of an
+`if`, `for`, function, class or `static` body, not an object literal's), and
+after a line break that ends a statement (the next character cannot continue
+the expression, so `f(x)` then `~zz` on the next line is a row, while `f(x)`
+then `&zz` is a bitwise and).
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
 the statement, and a statement the parser refuses (`export static …`) keep their

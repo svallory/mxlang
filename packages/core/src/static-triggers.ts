@@ -21,10 +21,13 @@
  * substitution is code.
  *
  * Where it differs from the template: the parser's `claim` hook and its
- * non-ASCII `stopsShortOfToken` decline are not applied, and a statement
- * start that is not after an `if`/`for`/`while`/`with` head (after a block's
- * `}`, or after a line break that ends a statement) expects no operand, so a
- * row that is a whole expression statement there is not found.
+ * non-ASCII `stopsShortOfToken` decline are not applied. A module statement
+ * is statements, which the template's expression scanner does not model, so
+ * a statement start also expects an operand: after a block's `}` (a `}` that
+ * closes an `if`/`for`/function/class/`static` body, not an object literal),
+ * and after a line break that ends a statement (the next token cannot
+ * continue the expression, so automatic semicolon insertion splits there:
+ * `f(x)\n~zz`, but not `f(x)\n&zz`, which is a bitwise and).
  */
 import type { Trigger } from "./syntax-table.ts";
 
@@ -103,6 +106,8 @@ interface Facts {
   readonly regexEnds: Set<number>;
   /** Offsets of a `)` that closes an `if`/`for`/`while`/`with` head. */
   readonly headEnds: Set<number>;
+  /** Offsets of a `}` that closes a block (a statement list), not an object literal. */
+  readonly blockEnds: Set<number>;
 }
 
 /** The index of the last non-space character before `at`, or -1. */
@@ -195,8 +200,30 @@ function endsPostfixUpdate(
 }
 
 /**
- * Whether an operand is expected at `at` (the parser's `expectsExpression`):
- * `text` is the masked statement, `at` the offset asked about.
+ * A character that, written after a line break, continues the expression
+ * before it (an operator, `(`, `[`, `.`, a template tag, `?`, `:`, `,`,
+ * `!=`): no semicolon is inserted before it.
+ */
+function continuesExpression(text: string, at: number): boolean {
+  const char = text[at];
+  if (char === undefined) return false;
+  if (char === "!") return text[at + 1] === "=";
+  return "([+-*/%&|^<>=?:,.`".includes(char);
+}
+
+/** Whether a line break lies between the last token before `at` and `at`. */
+function lineBreakBefore(text: string, at: number): boolean {
+  for (let j = at - 1; j >= 0 && isSpace(text[j]); j--) {
+    if (isLineBreak(text[j])) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether an operand is expected at `at`: the template scanner's rule
+ * (`expectsOperand`'s own), or a statement start after a line break that
+ * ends a statement. `text` is the masked statement, `at` the offset asked
+ * about.
  */
 function expectsOperand(
   text: string,
@@ -204,9 +231,27 @@ function expectsOperand(
   at: number,
   beforePair = false,
 ): boolean {
+  if (scannerExpectsOperand(text, facts, at, beforePair)) return true;
+  if (beforePair || !lineBreakBefore(text, at)) return false;
+  if (continuesExpression(text, at)) return false;
+  // `a.` and `a ?` do not end an expression, so no semicolon follows them.
+  const char = text[lastIndexBefore(text, at)];
+  return char !== "." && char !== "?";
+}
+
+/**
+ * Whether an operand is expected at `at` (the parser's `expectsExpression`):
+ * `text` is the masked statement, `at` the offset asked about.
+ */
+function scannerExpectsOperand(
+  text: string,
+  facts: Facts,
+  at: number,
+  beforePair = false,
+): boolean {
   const i = lastIndexBefore(text, at);
   if (i < 0) return true;
-  if (facts.headEnds.has(i)) return true;
+  if (facts.headEnds.has(i) || facts.blockEnds.has(i)) return true;
   const char = text[i] as string;
   switch (char) {
     case ")":
@@ -255,12 +300,34 @@ function expectsOperand(
 }
 
 /**
+ * Whether the `{` at `at` opens a block (an `if`/`for`/function/class/`static`
+ * body, a bare block) and not an object literal: a `)`, `;`, `{`, `}`, an
+ * arrow, a type argument list or an ordinary word (`else`, `try`, a class
+ * name, `static`) comes before a block; an operator, `(`, `[`, `,`, `:` or an
+ * operator keyword (`return`) before an object literal.
+ */
+function opensBlock(text: string, at: number): boolean {
+  const i = lastIndexBefore(text, at);
+  if (i < 0) return true;
+  const char = text[i] as string;
+  if (char === ")" || char === ";" || char === "{" || char === "}") return true;
+  if (char === ">") return text[i - 1] === "=" || closesTypeArguments(text, i);
+  if (!isWord(char)) return false;
+  const word = text.slice(wordStart(text, i), i + 1);
+  return word === "else" || word === "do" || !isOperatorWord(text, i);
+}
+
+/**
  * `text` with comments, string contents, regular expressions and the text of
  * template literals replaced by spaces (a `${…}` substitution stays code),
  * every offset unchanged, and what the masking learned about the code.
  */
 function mask(text: string): { masked: string; facts: Facts } {
-  const facts: Facts = { regexEnds: new Set(), headEnds: new Set() };
+  const facts: Facts = {
+    regexEnds: new Set(),
+    headEnds: new Set(),
+    blockEnds: new Set(),
+  };
   const out = text.split("");
   const blank = (from: number, to: number): void => {
     for (let k = from; k < to && k < out.length; k++) {
@@ -270,6 +337,8 @@ function mask(text: string): { masked: string; facts: Facts } {
   const current = (): string => out.join("");
   // Open parens: whether each follows an if/for/while/with.
   const parens: boolean[] = [];
+  // Open braces: whether each opens a block (a statement list).
+  const blocks: boolean[] = [];
   // Template nesting: the brace depth to return to at each open `${`.
   const braces: number[] = [];
   let depth = 0;
@@ -356,8 +425,10 @@ function mask(text: string): { masked: string; facts: Facts } {
       );
     } else if (char === ")") {
       if (parens.pop() === true) facts.headEnds.add(i);
-    } else if (char === "{") depth++;
-    else if (char === "}") {
+    } else if (char === "{") {
+      depth++;
+      blocks.push(opensBlock(current(), i));
+    } else if (char === "}") {
       if (depth === 0 && braces.length > 0) {
         depth = braces.pop() as number;
         i++;
@@ -365,6 +436,7 @@ function mask(text: string): { masked: string; facts: Facts } {
         continue;
       }
       depth--;
+      if (blocks.pop() === true) facts.blockEnds.add(i);
     }
     i++;
   }

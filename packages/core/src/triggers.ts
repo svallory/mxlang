@@ -1440,6 +1440,15 @@ function valueFormOf(trigger: Node): TriggerValueForm {
   return trigger.operator === ":=" ? ":=" : "=";
 }
 
+/**
+ * A node over the operator written right after a trigger's text (`:=`, or
+ * the `(` of its arguments), the range a refusal of the value points at.
+ */
+function operatorNode(trigger: Node, width: number): Node {
+  const start = trigger.start + String(trigger.text).length;
+  return { type: "MxTrigger", start, end: start + width } as Node;
+}
+
 /** A bound value or arguments after an attribute trigger: nothing can place them. */
 function refuseUnplaceable(trigger: Node): void {
   const form = valueFormOf(trigger);
@@ -1447,14 +1456,14 @@ function refuseUnplaceable(trigger: Node): void {
     raise(
       INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no bound value (\`:=\`): the \`${trigger.id}\` trigger cannot place one`,
-      trigger.value ?? trigger,
+      operatorNode(trigger, 2),
     );
   }
   if (form === "arguments") {
     raise(
       INVALID_TRIGGER_USE_CODE,
       `\`${trigger.text}\` takes no arguments: the \`${trigger.id}\` trigger cannot place them`,
-      trigger.args ?? trigger,
+      operatorNode(trigger, 1),
     );
   }
 }
@@ -1574,6 +1583,20 @@ function attributeNode(ctx: Ctx, trigger: Node, attr: TriggerAttribute): Node {
       end: text.sourceEnd,
       loc: locOf(ctx, text.sourceStart, text.sourceEnd),
     });
+    // Two built expressions over the same text would each get both splices
+    // applied to their `code`: one per range.
+    if (
+      ctx.triggerSplices?.some(
+        (splice) =>
+          splice.start === text.sourceStart && splice.end === text.sourceEnd,
+      )
+    ) {
+      raise(
+        DIALECT_HOOK_ERROR_CODE,
+        `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.expression\` builds one value per trigger text; give the second attribute a string, \`true\` or the trigger's own value`,
+        trigger,
+      );
+    }
     ctx.triggerSplices?.push({
       start: text.sourceStart,
       end: text.sourceEnd,

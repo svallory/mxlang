@@ -358,6 +358,19 @@ describe("a table core cannot lower yet fails the file loudly", () => {
     expect(fragment.message).toBe(error.message);
   });
 
+  it("a non-empty `textTriggers` is refused: the field is reserved until a consumer exists", () => {
+    const page = join(dir, "page.mx");
+    const bad = Object.freeze({
+      ...defaultSyntax(),
+      textTriggers: [{ ...MEMBER, chars: "%", match: "%a" }],
+    });
+    const error = caught(() => compile("<p/>\n", page, bad));
+    expect(error.message).toMatch(
+      /^the `dialect` option is not a valid syntax table: `dialect\.textTriggers`.*layer 3 only/,
+    );
+    expect([error.file, error.line, error.column]).toEqual([page, 1, 0]);
+  });
+
   it("an explicit null is refused, not read as omitted (review 442/443 verify)", () => {
     dialect(dir, INLINE);
     const page = join(dir, "page.mx");

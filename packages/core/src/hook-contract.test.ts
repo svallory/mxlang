@@ -152,6 +152,35 @@ describe("hook contract additions", () => {
     },
   );
 
+  it("a hook that builds two `ctx.expression` values for one trigger is refused, positioned at the trigger", () => {
+    const module = probe((_id, _text, _span, ctx) => [
+      ctx.attribute("x", ctx.expression({ type: "Identifier", name: "p" })),
+      ctx.attribute("y", ctx.expression({ type: "Identifier", name: "q" })),
+    ]);
+    const error = caught(() => irOf("<div !a/>", module));
+    expect(error.message).toContain("builds one value per trigger text");
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+  });
+
+  it.each([
+    ["<div !a:=x/>", 7, 2],
+    ["<div !a(x)/>", 7, 1],
+    ["<div !abc:=x/>", 9, 2],
+    ["<div !a:= x/>", 7, 2],
+  ])(
+    "%s: the refusal of what nothing can place points at the operator, offset %i",
+    (source, at, length) => {
+      const module = probe((_id, _text, _span, ctx) =>
+        ctx.attribute("x", true),
+      );
+      const error = caught(() => irOf(source, module));
+      expect(error.span).toEqual({
+        sourceStart: at,
+        sourceEnd: at + length,
+      });
+    },
+  );
+
   it.each([
     ["kind !a(p) { b }\n", "method", false, 5],
     ["kind async !a(p) { b }\n", "async-method", true, 11],

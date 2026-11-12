@@ -64,6 +64,14 @@ describe("a dialect expression row in a static statement", () => {
       21,
       "~zz",
     ],
+    ["after a block's `}`", "static { f(x) } ~zz\n<div/>", 1, 16, "~zz"],
+    [
+      "after a line break that ends a statement",
+      "static {\n f(x)\n ~zz\n}\n<div/>",
+      3,
+      1,
+      "~zz",
+    ],
   ];
 
   it.each(cases)(
@@ -238,10 +246,25 @@ describe("the matching is the template scanner's", () => {
   it("never inside a word, after the same character, or where no operand stands", () => {
     expect(hit("a~zz")).toBeUndefined();
     expect(hit("a ~~zz")).toBeUndefined();
-    expect(hit("f(x)\n~zz")).toBeUndefined();
+    expect(hit("f(x)\n&zz")).toBeUndefined();
     expect(hit("a[0] ~zz")).toBeUndefined();
     expect(hit("return ~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("f(a, ~zz)")).toEqual(["sigil", "~zz"]);
+  });
+
+  it("a statement start after a block's `}` or an inserted semicolon is found", () => {
+    expect(hit("static { f(x) } ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("static {\n f(x)\n ~zz\n}")).toEqual(["sigil", "~zz"]);
+    expect(hit("if (a) { b } ~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("a = 1\n~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("i++\n~zz")).toEqual(["sigil", "~zz"]);
+    expect(hit("a = /x/\n~zz")).toEqual(["sigil", "~zz"]);
+    // An object literal's `}` ends an operand, and a line that continues
+    // the expression is no statement start.
+    expect(hit("a = { b } ~zz")).toBeUndefined();
+    expect(hit("a = f({ b }) ~zz")).toBeUndefined();
+    expect(hit("a = { b }\n&zz")).toBeUndefined();
+    expect(hit("a.\n~zz")).toBeUndefined();
   });
 
   it("comments, strings and template-literal text are skipped; a substitution is code", () => {
