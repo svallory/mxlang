@@ -1,5 +1,5 @@
 ---
-packages: [core, vite-plugin, host-astro]
+packages: [core, vite-plugin, astro]
 kind: Fixed
 ---
 
