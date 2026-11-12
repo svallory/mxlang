@@ -560,20 +560,20 @@ export function emitModuleWithMappings(
     statements.push(concatMapped(statement));
   }
 
-  // Every piece of module text that can read a define's public name, in one
-  // list: the markup, each statement, the core's prelude, the `<return>` value
-  // and the dynamic helper. The same text feeds the helper scan below.
-  const scanText = (): string =>
+  // Every piece of module text that can read a define's public name: the
+  // markup, each statement, the core's prelude and the `<return>` value. The
+  // static dynamic helper cannot read one, so it is not scanned for defines.
+  const moduleText = (): string =>
     [
       body.code,
       ...statements.map((statement) => statement.code),
       ...ir.prelude.map((node) => node.code),
       ...(ir.returnValue ? [ir.returnValue.code] : []),
-      ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
     ].join("\n");
   const resolvedDefines = defineStatements(
     defineParts.map((entry) => entry.part),
-    scanText(),
+    moduleText(),
+    typeCheck,
   );
   defineParts.forEach((entry, index) => {
     statements[entry.slot] = resolvedDefines[index] as MappedCode;
@@ -589,7 +589,10 @@ export function emitModuleWithMappings(
   const imports = importLines(emitter.runtimeImports, dialect);
   if (imports.length > 0) lines.push(...imports);
 
-  const helperInput = scanText();
+  const helperInput = [
+    moduleText(),
+    ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
+  ].join("\n");
   const attrHelpers = attributeHelpers(helperInput, dialect).map(
     (helper) => helper.code,
   );

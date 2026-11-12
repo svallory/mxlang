@@ -125,8 +125,16 @@ interface RegionSink {
   segment: string;
   /** Lifted `<define>` statements, in source order. */
   defines: DefineParts[];
+  /** Names claimed by lifted defines across every scope of the region. */
+  claimed: Map<string, Position>;
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
+}
+
+/** The defines a region lifted out of one soft-scoped body (and its parents). */
+interface SoftLift {
+  defines: Array<Extract<IrNode, { kind: "Define" }>>;
+  parent: SoftLift | null;
 }
 
 /** What `resolveDelegatedTag` records for a claimed tag. */
@@ -179,32 +187,43 @@ export interface DefineParts {
 /**
  * The statements for a set of defines. The wrapped public `const Row` is
  * emitted only when something reads it (a dynamic target, an author's
- * expression, a `Row.attr` property read): `otherCode` is the text of the
- * whole module outside the defines (markup, statements, prelude, `<return>`
- * value, helpers), searched for the name as a bare identifier. A name found
- * in a string or in text counts as a read, so a miss only costs an unused
- * wrapper, never a missing binding.
+ * expression, a `Row.attr` property read, a `...Row` spread): `otherCode` is
+ * the text of the whole module outside the defines (markup, statements,
+ * prelude, `<return>` value), tokenized once into the identifiers it reads.
+ * A name found in a string or in text counts as a read, so a miss only costs
+ * an unused wrapper, never a missing binding. `keepAll` emits every wrapper
+ * (the typeCheck projection, whose direct calls read the public name).
  */
 export function defineStatements(
   parts: readonly DefineParts[],
   otherCode: string,
+  keepAll = false,
 ): MappedCode[] {
-  const text = [otherCode, ...parts.map((part) => part.fn.code)].join("\n");
-  return parts.map((part) => {
-    // Another define's value can read this one through its attributes.
-    const others = parts
-      .filter((other) => other !== part)
-      .map((other) => other.value.code)
-      .join("\n");
-    return readsName(`${text}\n${others}`, part.name)
-      ? concatMapped(part.fn, part.value)
-      : part.fn;
+  const base = readIdentifiers(
+    [otherCode, ...parts.map((part) => part.fn.code)].join("\n"),
+  );
+  const values = parts.map((part) => readIdentifiers(part.value.code));
+  return parts.map((part, index) => {
+    const read =
+      keepAll ||
+      base.has(part.name) ||
+      values.some((names, other) => other !== index && names.has(part.name));
+    return read ? concatMapped(part.fn, part.value) : part.fn;
   });
 }
 
-function readsName(text: string, name: string): boolean {
-  const escaped = name.replace(/[$]/g, "\\$&");
-  return new RegExp(`(?<![\\w$.])${escaped}(?![\\w$])`).test(text);
+/**
+ * The identifiers a text reads as values: every identifier token except a
+ * member name after a single `.` (`a.Row`), while a spread (`...Row`) is a
+ * read.
+ */
+function readIdentifiers(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const match of text.matchAll(/(\.{1,3})?\s*([A-Za-z_$][\w$]*)/g)) {
+    if (match[1] === ".") continue;
+    names.add(match[2] as string);
+  }
+  return names;
 }
 
 /** The private binding a `<define>`'s own function is declared under. */
@@ -797,6 +816,12 @@ export class PreactEmitter implements Emitter<string> {
    * the body's `/var` and names are not visible, so a region refuses it.
    */
   readonly #scopedBody: boolean;
+  /**
+   * The body of an imported tag or a `<define>` call being filled in a
+   * region: a `<define>` may be lifted out of it unless the body binds a
+   * `/var` (checked when the body ends).
+   */
+  readonly #softLift: SoftLift | null;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -813,7 +838,9 @@ export class PreactEmitter implements Emitter<string> {
     positionAt = region?.positionAt,
     source?: string,
     scopedBody = false,
+    softLift: SoftLift | null = null,
   ) {
+    this.#softLift = softLift;
     this.#scopedBody = scopedBody;
     this.#source = source;
     this.#bindings = bindings;
@@ -862,6 +889,7 @@ export class PreactEmitter implements Emitter<string> {
     bare?: boolean;
     bindings?: Map<string, Position>;
     scopedBody?: boolean;
+    softLift?: SoftLift | null;
   }): PreactEmitter {
     return new PreactEmitter(
       this.#dialect,
@@ -878,6 +906,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#positionAt,
       this.#source,
       overrides.scopedBody ?? this.#scopedBody,
+      overrides.softLift === undefined ? this.#softLift : overrides.softLift,
     );
   }
 
@@ -910,10 +939,11 @@ export class PreactEmitter implements Emitter<string> {
     name: string,
     span: SourceSpan | null | undefined,
     fallback: Position,
+    table = this.#bindings,
   ): void {
     const at =
       span && this.#positionAt ? this.#positionAt(span.sourceStart) : fallback;
-    const first = this.#bindings.get(name);
+    const first = table.get(name);
     if (first) {
       // Whole-file statements are claimed after markup is checked. Diagnose
       // the later authored declaration regardless of the two passes' order.
@@ -928,7 +958,7 @@ export class PreactEmitter implements Emitter<string> {
         second.column,
       );
     }
-    this.#bindings.set(name, at);
+    table.set(name, at);
   }
 
   /** Claim a top-level statement after the markup's own errors are checked. */
@@ -957,8 +987,9 @@ export class PreactEmitter implements Emitter<string> {
   #scoped(
     slot: boolean,
     build: (scope: PreactEmitter) => MappedCode,
+    hard = true,
   ): MappedCode {
-    const { code, statements } = this.#scopeOf(build);
+    const { code, statements } = this.#scopeOf(build, hard);
     if (statements === "") return code;
     return slot
       ? concatMapped(`(() => { ${statements} return (`, code, "); })()")
@@ -972,19 +1003,35 @@ export class PreactEmitter implements Emitter<string> {
   /** Runs `build` in a scope of its own and returns its code and `/var` statements. */
   #scopeOf(
     build: (scope: PreactEmitter) => MappedCode,
-    scopedBody = true,
+    hard = true,
   ): {
     code: MappedCode;
     statements: string;
   } {
+    // A hard scope (a dynamic tag's or `<try>`'s body) refuses a region
+    // `<define>` outright. A soft one (an imported tag's or a `<define>`
+    // call's body) lets it be lifted, unless the body binds a `/var` the
+    // lifted define could not see.
+    const soft: SoftLift | null = hard
+      ? null
+      : { defines: [], parent: this.#softLift };
     const scope = this.#derive({
       varStatements: [],
       varSerial: { n: 0 },
       bindings: new Map<string, Position>(),
-      scopedBody,
+      scopedBody: hard ? true : this.#scopedBody,
+      softLift: soft,
     });
     const code = build(scope);
-    return { code, statements: scope.#varStatements.join(" ") };
+    const statements = scope.#varStatements.join(" ");
+    const lifted = soft?.defines[0];
+    if (lifted && statements !== "") {
+      fail(
+        `\`<define>\` inside the body of an imported tag or a \`<define>\` call that declares a \`/var\` cannot be lifted out of it in a \`.${this.#region?.segment}.mx\` region without changing its scope; declare it directly in the region's markup, outside that body`,
+        lifted,
+      );
+    }
+    return { code, statements };
   }
 
   #render(
@@ -2387,7 +2434,12 @@ export class PreactEmitter implements Emitter<string> {
             : "";
       this.#out.push(
         this.#slot(
-          mapped(defineFunctionName(node.target.name), node.nameSpan),
+          mapped(
+            this.#typeCheck
+              ? node.target.name
+              : defineFunctionName(node.target.name),
+            node.nameSpan,
+          ),
           `(${args})`,
         ),
       );
@@ -2524,9 +2576,11 @@ export class PreactEmitter implements Emitter<string> {
     // (Marko compiles it so); the body of a described or called unit keeps the
     // component's.
     const rendered =
-      node.target.kind === "dynamic" || node.target.kind === "define"
+      node.target.kind === "dynamic"
         ? this.#scoped(false, (scope) => scope.#expression(children))
-        : this.#expression(children);
+        : node.target.kind === "define"
+          ? this.#scoped(false, (scope) => scope.#expression(children), false)
+          : this.#expression(children);
     if (!node.content?.hasParams)
       return concatMapped("() => <>", closeFragmentBody(rendered), "</>");
     return concatMapped(
@@ -2568,7 +2622,7 @@ export class PreactEmitter implements Emitter<string> {
     // body, as it always did (only a dynamic-tag or `<try>` body refuses one).
     const { code: body, statements } = this.#scopeOf(
       (scope) => scope.#hostComponentBody(node, children),
-      this.#scopedBody,
+      false,
     );
     const open = node.content?.hasParams
       ? `((${node.content.params.join(", ")}) =>`
@@ -2765,6 +2819,12 @@ export class PreactEmitter implements Emitter<string> {
   define(node: Extract<IrNode, { kind: "Define" }>): void {
     if (this.#region && !this.#callbackScope && !this.#scopedBody) {
       this.#claimName(node.name, node.nameSpan, node.loc);
+      // The lifted define shares the region's one arrow whichever body it
+      // sat in, so a name is unique across every scope of the region.
+      this.#claimName(node.name, node.nameSpan, node.loc, this.#region.claimed);
+      for (let soft = this.#softLift; soft; soft = soft.parent) {
+        soft.defines.push(node);
+      }
       // The whole-file statement text (`emitModuleWithMappings`). The body is
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
@@ -2922,7 +2982,7 @@ export function createRegionEmitter(
     false,
     undefined,
     true,
-    { segment, defines: [], positionAt },
+    { segment, defines: [], claimed: new Map(), positionAt },
   );
 }
 

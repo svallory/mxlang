@@ -140,6 +140,13 @@ export interface Input { items: string[] }
     html: "<ul><li>a</li><li>b</li></ul>",
     unusedLocals: true,
   },
+  "a define whose attribute is spread": {
+    caller: `export interface Input { items: string[] }
+<define/Row|p| list=[1, 2]><li>\${p}</li></define>
+<ul><for|x| of=input.items><Row(x)/></for></ul><p>\${[...Row.list].length}</p>`,
+    html: "<ul><li>a</li><li>b</li></ul><p>2</p>",
+    unusedLocals: true,
+  },
   "a define whose param defaults to null": {
     caller: `export interface Input { items: string[] }
 <define/Row|p = null|><li>\${p}</li></define>

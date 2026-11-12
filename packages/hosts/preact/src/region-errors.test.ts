@@ -93,6 +93,68 @@ describe("region rule", () => {
     throw new Error("expected a compile error");
   }
 
+  const COUNTER_FILE = join(
+    import.meta.dirname,
+    "fixtures",
+    "region",
+    "tag-var",
+    "dup.preact.mx",
+  );
+  const BOX_SOURCE = (body: string) =>
+    `import { Box } from "./box.tsx";\nimport Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>${body}</div>\n  );\n}\n`;
+
+  it("refuses a <define> in an imported tag's body that declares a /var", () => {
+    const e = errorOf(
+      BOX_SOURCE(
+        "<Box><Counter/x start=1/><define/Row>${x}</define><Row/></Box>",
+      ),
+      COUNTER_FILE,
+    );
+    expect(e.message).toBe(
+      "`<define>` inside the body of an imported tag or a `<define>` call that declares a `/var` cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside that body",
+    );
+    expect(e.line).toBe(5);
+  });
+
+  it("refuses a <define> in a <define> call's body that declares a /var", () => {
+    const e = errorOf(
+      BOX_SOURCE(
+        "<define/Wrap|{ content }|>${content}</define><Wrap><Counter/x start=1/><define/Row>${x}</define><Row/></Wrap>",
+      ),
+      COUNTER_FILE,
+    );
+    expect(e.message).toContain("declares a `/var` cannot be lifted");
+  });
+
+  it("lifts a <define> in a <define> call's body that binds no /var", () => {
+    const out = print(
+      BOX_SOURCE(
+        "<define/Wrap|{ content }|>${content}</define><Wrap><define/X><i/></define><X/></Wrap>",
+      ),
+      FILE,
+      {
+        mx: true,
+        mxRegionCompile: (input) =>
+          compilePreactRegion(input.source, {
+            ...input,
+            targets,
+          }) as ReturnType<
+            NonNullable<
+              NonNullable<Parameters<typeof print>[2]>["mxRegionCompile"]
+            >
+          >,
+      },
+    );
+    expect(out.code).toContain("const __mxDef_X = ");
+  });
+
+  it("claims a lifted define's name across scopes of the region", () => {
+    const e = errorOf(
+      BOX_SOURCE("<define/Row/><Box><define/Row/><Row/></Box><Row/>"),
+    );
+    expect(e.message).toBe('Duplicate declaration "Row"');
+  });
+
   it("lifts a <define> met in an imported tag's body, as before", () => {
     const source = `import { Box } from "./box.tsx";\nexport function Panel() {\n  return (\n    <div><Box><define/Row><p>x</p></define><Row/></Box></div>\n  );\n}\n`;
     const out = print(source, FILE, {

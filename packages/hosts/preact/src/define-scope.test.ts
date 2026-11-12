@@ -160,6 +160,21 @@ describe.each(HOSTS)(
       expect(code).not.toContain("const Row =");
     });
 
+    it.each([
+      ["a spread attribute", "<define/Row a=1/><div ...Row/>"],
+      [
+        "a spread inside an expression",
+        "<define/Row list=[1]/>${[...Row.list]}",
+      ],
+    ])(
+      "a define read through %s keeps its public binding",
+      async (_label, source) => {
+        const code = await compile(source);
+        expect(code).toContain("const Row = Object.assign(");
+        expect(() => parseTsx(code)).not.toThrow();
+      },
+    );
+
     it("a define with attributes whose property is read keeps its binding", async () => {
       const code = await compile(
         "<define/Row x=1><p>r</p></define><Row/>${Row.x}",
@@ -194,6 +209,20 @@ describe.each(HOSTS)(
     });
   },
 );
+
+describe("the typeCheck projection reads the public define name", () => {
+  it("calls a define directly through its public binding", () => {
+    const code = compilePreactMx(
+      "<define/Row|p|>${p}</define><Row('a')/>",
+      "/f/t.mx",
+      {
+        typeCheck: true,
+      },
+    ).code;
+    expect(code).toContain("{Row('a')}");
+    expect(code).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
+  });
+});
 
 describe("typedDefineParam", () => {
   it.each([
