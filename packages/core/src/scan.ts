@@ -1183,15 +1183,9 @@ function literalToValue(
  * identifies one of these two, restates the constraint rather than leaving an
  * author to map Node's wording onto their sidecar.
  *
- * **Node keeps an ES module it has loaded.** `.cjs` and Bun re-evaluate an
- * edited sidecar; under Node a `.ts`/`.mjs` sidecar (or `mx.contracts` module,
- * or target descriptor) keeps its first evaluation until the process
- * restarts, because deleting its `require.cache` entry does not clear the ESM
- * loader's cache. The scan cache still rescans, so `parseOptions` and the
- * contract keys follow the edit, but the hooks come from the first
- * evaluation. A long-lived Node process (a language server, `vite dev` under
- * Node) needs a restart after such an edit. The same holds for a dialect
- * module (`resolveSyntaxOf`).
+ * Under Node an edited ES/TypeScript sidecar keeps its first evaluation until
+ * the process restarts (specification §9.2; the dialect note on
+ * `resolveSyntaxOf`); `.cjs` and Bun reload.
  *
  * The runtime's module cache is dropped for this file first. The scan cache
  * already notices an edited sidecar and rebuilds its entry, but a long-lived

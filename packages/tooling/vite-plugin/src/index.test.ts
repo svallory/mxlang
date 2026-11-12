@@ -393,7 +393,6 @@ describe("mx()", () => {
     });
 
     it.each([
-      ["./Base.Astro.MX", null],
       ["./Base.ASTRO.mx", null],
       ["./Counter.Solid.MX", `/root/src/Counter.Solid.MX${MX_SUFFIX}`],
       ["./Card.MX", `/root/src/Card.MX${MX_SUFFIX}`],
@@ -424,6 +423,17 @@ describe("mx()", () => {
       expect(
         await resolveId.call(context, "./Base.other.mx", "/root/src/index.tsx"),
       ).toBe("/root/src/Base.other.mx.tsx");
+    });
+
+    it("matches a configured extension written in mixed case", async () => {
+      const resolveId = resolveIdOf(mx({ extensions: [".Foo.mx", ".mx"] }));
+      expect(
+        await resolveId.call(
+          makeContext(),
+          "./Base.Foo.mx",
+          "/root/src/index.tsx",
+        ),
+      ).toBe(`/root/src/Base.Foo.mx${MX_SUFFIX}`);
     });
 
     it("leaves ids it does not handle alone", async () => {

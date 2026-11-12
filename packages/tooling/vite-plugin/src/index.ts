@@ -302,12 +302,12 @@ const TAG_EXT = ".marko";
 const FOREIGN_EXTENSIONS: string[] = [".astro.mx"];
 
 /**
- * Whether `file` ends in the MX extension `ext` (registered lowercase), ignoring
- * case: `Card.Astro.MX` is an Astro template as the editor tools already read it
+ * Whether `file` ends in the MX extension `ext`, ignoring case on both sides
+ * (a configured extension need not be lowercase): `Card.Astro.MX` is an Astro template as the editor tools already read it
  * (they lowercase the name first), and `Card.Solid.MX` a Solid one.
  */
 function hasExt(file: string, ext: string): boolean {
-  return file.toLowerCase().endsWith(ext);
+  return file.toLowerCase().endsWith(ext.toLowerCase());
 }
 
 /**

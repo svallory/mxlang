@@ -1523,6 +1523,10 @@ describe("the merge is memoized per dialect and `customTags` map", () => {
 });
 
 describe("`declares` across contract sources", () => {
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).__declSeen;
+  });
+
   const MODULE = `module.exports = { default: {
   table: {},
   contractFields: { tag: ["declares"] },
@@ -1580,6 +1584,6 @@ describe("`declares` across contract sources", () => {
     write("tags/side.tag.ts", "export default { declares: 1 };\n");
     const sidecar = messages(undefined, "side");
     expect(sidecar).toHaveLength(1);
-    expect(sidecar[0]).toContain(refusal);
+    expect(sidecar[0]).toBe(`\`<side>\`: ${refusal}`);
   });
 });

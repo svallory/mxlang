@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { compileSource } from "./compile.ts";
 import { TranslateError } from "./core.ts";
 import { customTagTaglib } from "./custom-tags.ts";
@@ -841,12 +841,14 @@ describe("reloading an edited module under Node", () => {
   // re-evaluated. vitest has its own module registry, so this runs in a real
   // `node` child, once for the file, through the same `loadDefaultExport` a
   // sidecar and an `mx.contracts` module are loaded with.
-  const probe = (() => {
+  let probe: ReturnType<typeof spawnSync>;
+  beforeAll(() => {
     const dir = mkdtempSync(join(tmpdir(), "mx-node-reload-"));
     const script = join(dir, "probe.mjs");
     writeFileSync(
       script,
       `import { writeFileSync } from "node:fs";
+if (process.versions.bun !== undefined) throw new Error("the probe must run under Node");
 const { loadDefaultExport } = await import(process.argv[2]);
 const reload = (file, first, second) => {
   writeFileSync(file, first);
@@ -860,21 +862,21 @@ console.log(JSON.stringify({
 }));
 `,
     );
-    const run = spawnSync(
-      process.execPath,
+    probe = spawnSync(
+      "node",
       [script, join(import.meta.dirname, "scan.ts"), dir],
       { encoding: "utf8" },
     );
     rmSync(dir, { recursive: true, force: true });
-    return run;
-  })();
+    expect(probe.stderr).toBe("");
+    expect(probe.status).toBe(0);
+  });
 
   it("an ES module or TypeScript module keeps its first evaluation until the process restarts", () => {
-    expect(probe.stderr).toBe("");
-    expect(JSON.parse(probe.stdout).esm).toEqual([1, 1]);
+    expect(JSON.parse(String(probe.stdout)).esm).toEqual([1, 1]);
   });
 
   it("a CommonJS module is re-evaluated", () => {
-    expect(JSON.parse(probe.stdout).cjs).toEqual([1, 2]);
+    expect(JSON.parse(String(probe.stdout)).cjs).toEqual([1, 2]);
   });
 });
