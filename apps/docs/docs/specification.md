@@ -2617,8 +2617,7 @@ divergence. An attribute tag mixed with body content under a control tag
 (`<foo(a)><if=c><@x/>text</if></foo>`) is reported first, as stock orders them:
 "Cannot have attribute tags and body content under a control flow tag."
 (`MX_INVALID_ATTRIBUTE_TAG`). A lone `<foo(a)/>` is the callee's input where the
-host passes it: html calls the template with `a` as its input
-(`Panel.render(a, …)`), as stock does. Every other host refuses it with
+host passes it: html passes `a` as the callee's whole input, as stock does. Every other host refuses it with
 "`<foo>` does not take an argument on this host: it would be dropped. Pass the
 value as an attribute instead." (`MX_UNSUPPORTED_TAG_ARGUMENTS`, over the
 argument), never dropping it silently. A host opts in with
