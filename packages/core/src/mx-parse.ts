@@ -904,6 +904,7 @@ function stripDeclarationSites(
   program: Node,
   t: Node,
   moduleBlock: boolean,
+  nestedNamespace: { error?: TranslateError },
 ): StripDeclarationGroup[] {
   const groups: StripDeclarationGroup[] = [];
   // A static/server/client block is emitted as module statements even when
@@ -919,6 +920,7 @@ function stripDeclarationSites(
   // namespace. One inside a function, an `if` or any other block is not, and
   // neither is anything declared in its body.
   const topLevelBodies = new Set<Node>();
+  const topLevelNamespaces = new Set<Node>();
   const markBodies = (body: Node): void => {
     for (const statement of body.body as Node[]) {
       const declaration = isModuleDeclaration(statement)
@@ -929,6 +931,7 @@ function stripDeclarationSites(
     }
   };
   const markNamespace = (declaration: Node): void => {
+    topLevelNamespaces.add(declaration);
     const body = declaration.body;
     if (body?.type === "TSModuleDeclaration") markNamespace(body);
     else if (body?.type === "TSModuleBlock") {
@@ -938,6 +941,31 @@ function stripDeclarationSites(
   };
   markBodies(program);
   if (moduleBody !== program) markBodies(moduleBody);
+  // The first namespace that is not at the top level. It compiles (the strip
+  // emits an IIFE) but leaves a namespace in the emitted TypeScript inside a
+  // body, which Bun and esbuild do not load, so it is refused once the strip
+  // has passed (a duplicate the strip reports first keeps its own position).
+  t.traverseFast(program, (node: Node) => {
+    if (
+      nestedNamespace.error ||
+      node.type !== "TSModuleDeclaration" ||
+      node.declare === true ||
+      node.global ||
+      topLevelNamespaces.has(node) ||
+      node.id?.type !== "Identifier" ||
+      !node.loc
+    ) {
+      return;
+    }
+    const error = codedError(
+      INVALID_STATEMENT_CODE,
+      "A namespace is only allowed at the top level of a module or of another namespace. Move the namespace there.",
+      node.id.loc.start.line,
+      node.id.loc.start.column,
+    );
+    error.end = { line: node.id.loc.end.line, column: node.id.loc.end.column };
+    nestedNamespace.error = error;
+  });
   t.traverseFast(program, (node: Node) => {
     if (!Array.isArray(node.body)) return;
     const group: StripDeclaration[] = [];
@@ -1118,7 +1146,8 @@ function stripProgram(body: Node[], moduleBlock = false): Node[] {
   const babel = coreBabel();
   const t = babel.types;
   const program = t.program(body, [], "module");
-  const sites = stripDeclarationSites(program, t, moduleBlock);
+  const nestedNamespace: { error?: TranslateError } = {};
+  const sites = stripDeclarationSites(program, t, moduleBlock, nestedNamespace);
   rejectExportListInNamespace(program, t);
   let file: Node;
   try {
@@ -1165,6 +1194,7 @@ function stripProgram(body: Node[], moduleBlock = false): Node[] {
       ) ?? error
     );
   }
+  if (nestedNamespace.error) throw nestedNamespace.error;
   // Marko drops the empty `export {}` the plugin adds to a module.
   return path.node.body.filter(
     (statement: Node) =>
@@ -1354,6 +1384,10 @@ export function stripMxTypes(document: Node): void {
       return;
     }
     if (typeof value.type === "string" && value.type.startsWith("Mx")) {
+      // A `$` scriptlet is refused by lowering (MX_UNSUPPORTED_CONSTRUCT), so
+      // its payload is not stripped: a duplicate the strip would report in it
+      // would advise a rewrite into a form that refusal rejects.
+      if (value.type === "MxScriptlet") return;
       if (value.type === "MxModuleStatement") {
         recordImportDeclaration(value);
         if (value.keyword === "import" && leavesImportUnstripped(value)) return;

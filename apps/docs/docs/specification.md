@@ -348,7 +348,7 @@ enum and the merge inside one block are not. A plain
 `MX_INVALID_STATEMENT` at its name, since stock reads the statement as a scriptlet that cannot
 hold one: write `static export enum`. A namespace is valid only at the top level of the
 module or of a namespace that is itself at top level: one inside a function, `if` or other block is
-refused with advice to move it, never to reorder. An `export { … }` list inside a namespace body is
+`MX_INVALID_STATEMENT` at the namespace, with advice to move it to the top level (stock compiles it; MX's emit does not load it yet). A `$` scriptlet that holds a namespace or an enum reports the scriptlet refusal (`MX_UNSUPPORTED_CONSTRUCT`) first. An `export { … }` list inside a namespace body is
 `MX_INVALID_STATEMENT` (TypeScript TS1194). An `import x = A.B` alias beside another declaration of its
 name in one block is `MX_DUPLICATE_DECLARATION`, at the enum's name when the other is an
 enum and at the alias's name otherwise. Forms the strip accepts compile:

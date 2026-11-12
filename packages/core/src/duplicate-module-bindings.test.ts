@@ -2315,6 +2315,61 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
     expectCompiles("static declare enum q {A}");
   });
 
+  it.each([
+    [
+      "a function body",
+      "static function f() { namespace q { export const b = 1 } }",
+      32,
+    ],
+    [
+      "a function body after a let",
+      "static let q = 1\nstatic function f() { namespace q { export const b = 1 } }",
+      32,
+    ],
+    [
+      "an if body",
+      "static if (true) { namespace q { export const b = 1 } }",
+      29,
+    ],
+  ])("refuses a namespace in %s at the namespace", (_name, source, column) => {
+    const found = diagnostics(source).filter((d) => d.severity === "error");
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ code: "MX_INVALID_STATEMENT" });
+    expect(found[0]?.column).toBe(column);
+    expect(found[0]?.message).toContain("only allowed at the top level");
+  });
+
+  it("compiles a namespace nested in another namespace", () => {
+    expectCompiles(
+      "static namespace o { export namespace q { export const b = 1 } }",
+    );
+  });
+
+  it("reports a scriptlet before anything its payload would raise", () => {
+    for (const source of [
+      "$ namespace q {}\n$ enum q {A}",
+      "$ namespace q { export const b = 1 }\n$ const q = 1",
+    ]) {
+      const found = diagnostics(source).filter((d) => d.severity === "error");
+      expect(found[0]).toMatchObject({
+        code: "MX_UNSUPPORTED_CONSTRUCT",
+        line: 1,
+        column: 0,
+      });
+      expect(found.map((d) => d.code)).toEqual(
+        found.map(() => "MX_UNSUPPORTED_CONSTRUCT"),
+      );
+    }
+  });
+
+  it("refuses a namespace, an export list and an enum of one name (stock loads it)", () => {
+    const found = diagnostics(
+      "static namespace q {}\nstatic export { q }\nstatic namespace q {}\nstatic export enum q {A}",
+    ).filter((d) => d.severity === "error");
+    expect(found).toMatchObject([{ code: DUPLICATE, line: 4, column: 19 }]);
+    expect(found[0]?.message).toContain('Duplicate export "q"');
+  });
+
   it("does not advise reordering a namespace that is not at the top level", () => {
     for (const source of [
       "static if (true) { namespace o { declare namespace q { const b: number }; enum q {A} } }",
