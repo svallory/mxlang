@@ -885,18 +885,51 @@ function isRawTextScript(ctx: Ctx, tag: Node): boolean {
  */
 function checkScriptShape(ctx: Ctx, tag: Node): void {
   if (!isRawTextScript(ctx, tag)) return;
-  const refuse = (
-    message: string,
-    at: Node,
-    code: MxDiagnosticCode = INERT_TAG_SHAPE_CODE,
-  ) => {
+  const raiseRefusal = (refusal: ScriptRefusal) => {
     try {
-      raise(code, message, at);
+      raise(refusal.code, refusal.message, refusal.at);
     } catch (error) {
       if (!ctx.errors || !isTranslateError(error)) throw error;
       positionError(ctx, error);
       ctx.errors.push(error);
     }
+  };
+  // Stock reads the body before the head: the placeholder, then the body's
+  // syntax, then the head and attributes.
+  const refusals = scriptShapeRefusals(ctx, tag);
+  for (const refusal of refusals) if (refusal.body) raiseRefusal(refusal);
+  checkScriptBodySyntax(ctx, tag);
+  for (const refusal of refusals) if (!refusal.body) raiseRefusal(refusal);
+  for (const candidate of tagAttributesOf(tag)) {
+    if (isSpreadAttributeNode(candidate)) scriptSpreadsRefused.add(candidate);
+  }
+}
+
+/** One thing `checkScriptShape` refuses about a `<script>`'s head or body. */
+interface ScriptRefusal {
+  code: MxDiagnosticCode;
+  message: string;
+  at: Node;
+  /** Read from the body, so reported before the body's syntax check. */
+  body?: true;
+}
+
+/**
+ * Everything `checkScriptShape` refuses about `tag` read as a `<script>`, in
+ * the order it reports them (the placeholder, which is read from the body,
+ * then the head error; the body's syntax check falls between them). Pure: the
+ * rename fix of `<effect>` asks it about the `<effect>` tag, so what `<script>`
+ * refuses and what the fix offers cannot drift apart.
+ */
+function scriptShapeRefusals(ctx: Ctx, tag: Node): ScriptRefusal[] {
+  const out: ScriptRefusal[] = [];
+  const refuse = (
+    message: string,
+    at: Node,
+    code: MxDiagnosticCode = INERT_TAG_SHAPE_CODE,
+    body?: true,
+  ) => {
+    out.push({ code, message, at, ...(body ? { body } : {}) });
   };
   // The attributes in the order they were written: the parser rewrites a
   // `#id` / `.class` shorthand after the plain attributes, so `#a.b` arrives as
@@ -930,9 +963,6 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     }
     valueSeen = true;
   }
-  for (const candidate of tagAttributesOf(tag)) {
-    if (isSpreadAttributeNode(candidate)) scriptSpreadsRefused.add(candidate);
-  }
   const voice = voiceOfCtx(ctx);
   const scriptText = (): string => tagText(ctx, "script", tag);
   // Where a list of tag parts starts and ends, as stock's `assertNoArgs` and
@@ -957,13 +987,14 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
     refuse(
       `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`,
       at,
+      INERT_TAG_SHAPE_CODE,
+      true,
     );
   // The first error raised is the primary one a compile throws, and stock
   // Marko reads the body before it checks the head: the placeholder, then the
   // body's syntax, then the head and attributes. An entry that lists every
   // diagnostic (`lowerSource`) orders them by position, head first.
   if (placeholder) refusePlaceholder(placeholder);
-  checkScriptBodySyntax(ctx, tag);
   // The body is the tag's value when it holds statements or comments, as stock
   // counts it: whitespace and a directive (`'use strict'`) alone are none, and
   // a body that does not parse or holds a placeholder is refused for that.
@@ -1034,6 +1065,7 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
       );
     }
   }
+  return out;
 }
 
 /** What reading one `<script>` body came to: its statements, or why they are not. */
@@ -6923,7 +6955,7 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
   }
   const at = tagNameSpanOf(node) ?? node.name ?? node;
   const message = effectTagMessage(ctx, node);
-  const fixes = scriptTakesTheShape(node)
+  const fixes = scriptAcceptsTheShape(ctx, node)
     ? effectRenameFixes(node, tagText(ctx, "script"))
     : undefined;
   if (fixes !== undefined) {
@@ -6933,34 +6965,21 @@ function rejectEffectTag(ctx: Ctx, node: Node, name: string): void {
 }
 
 /**
- * Would a `<script>` with the head and body of this `<effect>` be refused by
- * `checkScriptShape`? Arguments, parameters, a tag variable, an attribute that
- * is not the one plain value, a second value, a value next to a body, and a
- * body that is not text (a child tag, a placeholder) are. Renaming such a tag
- * trades one error for another, so no rename is offered for it.
+ * Would a `<script>` with the head and body of this `<effect>` be accepted?
+ * Asks `scriptShapeRefusals` (the rules of `checkScriptShape`) and the body's
+ * own syntax check, as the `<effect>` tag read as a `<script>`; a body that is
+ * not text (a child tag) is refused too, as the renamed `<script>` would read
+ * it as text that does not parse. Renaming a refused tag trades one error for
+ * another, so no rename is offered for it.
  */
-function scriptTakesTheShape(node: Node): boolean {
-  if ((tagArgsOf(node) ?? []).length > 0) return false;
-  if (tagParamsOf(node).length > 0) return false;
-  if (tagVarOf(node)) return false;
-  let values = 0;
-  for (const attr of tagAttributesOf(node)) {
-    const isValue =
-      !isSpreadAttributeNode(attr) &&
-      attr.modifier == null &&
-      !isBoundAttr(attr) &&
-      (attrNameOf(attr) === "value" || isDefaultAttr(attr));
-    if (!isValue) return false;
-    values++;
-  }
-  if (values > 1) return false;
-  let hasBody = false;
+function scriptAcceptsTheShape(ctx: Ctx, node: Node): boolean {
+  if (hostRefusesScript(ctx)) return false;
+  if (scriptShapeRefusals(ctx, node).length > 0) return false;
   for (const child of bodyChildren(node)) {
-    if (child.type !== "MarkoText" && child.type !== "MxText") return false;
-    if (typeof child.value === "string" && child.value.trim() === "") continue;
-    hasBody = true;
+    if (!isTextNode(child) && !isCommentNode(child)) return false;
   }
-  return !(values === 1 && hasBody);
+  const body = scriptBodyOf(ctx, node);
+  return !(body && "failure" in body);
 }
 
 /**

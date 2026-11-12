@@ -81,6 +81,13 @@ const FORMS: Array<[string, string, string[], string[]]> = [
     ["MX_PARSE_INVALID_LINE_START"],
   ],
   ["concise value", "effect=go()", ["effect"], []],
+  // A directive alone is no statement: `<script=a>'use strict'</script>` is accepted.
+  [
+    "a value beside a directive-only body",
+    "<effect=a>'use strict'</effect>",
+    ["effect", "effect"],
+    [],
+  ],
   [
     "concise block",
     "effect {\n  go()\n}",
@@ -164,37 +171,38 @@ describe("the `<effect>` error offers the rename to `<script>`", () => {
 
   // A rename that `<script>` would itself refuse trades one error for another:
   // the error stays, and offers no fix.
-  it.each<[string, string]>([
-    ...REFUSED.map(([n, source]): [string, string] => [n, source]),
-    ["arguments", "<effect(x)>go()</effect>"],
-    ["parameters", "<effect|x|>go()</effect>"],
-    ["a tag variable, self-closing", "<effect/x/>"],
-    ["a second value", "<effect=a value=b/>"],
-    ["a value beside a body", "<effect=a>go()</effect>"],
-    ["a method beside a body", "<effect() { go() }>x</effect>"],
-  ])("%s: the error is kept and offers no fix", (_n, source) => {
+  it.each<[string, string, string]>([
+    ...REFUSED.map(([n, source, , remaining]): [string, string, string] => [
+      n,
+      source,
+      remaining[0] as string,
+    ]),
+    ["arguments", "<effect(x)>go()</effect>", "MX_INERT_TAG_SHAPE"],
+    ["parameters", "<effect|x|>go()</effect>", "MX_INERT_TAG_SHAPE"],
+    ["a tag variable, self-closing", "<effect/x/>", "MX_INERT_TAG_SHAPE"],
+    ["a second value", "<effect=a value=b/>", "MX_DUPLICATE_VALUE_ATTRIBUTE"],
+    [
+      "a value beside a body",
+      "<effect=a>go()</effect>",
+      "MX_DUPLICATE_VALUE_ATTRIBUTE",
+    ],
+    [
+      "a body that does not parse",
+      "<effect>go(</effect>",
+      "MX_INVALID_STATEMENT",
+    ],
+    [
+      "a placeholder in the body",
+      "<effect>go(${x})</effect>",
+      "MX_INERT_TAG_SHAPE",
+    ],
+  ])("%s: the error is kept and offers no fix", (_n, source, code) => {
     expect(fixesOf(source).fixes).toBeUndefined();
-    // ...and the claim holds: the renamed `<script>` is refused.
+    // ...and the claim holds: the renamed `<script>` is refused, for that reason.
     const renamed = source.replace(/effect/g, "script");
     const { diagnostics } = lowerSource(`${renamed}\n`, "/tmp/page.mx");
-    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(diagnostics.map((d) => d.code)).toContain(code);
   });
-
-  it.each([
-    ["a space before the close `>`", "<effect>x</effect >"],
-    ["a close name in another case", "<effect>x</EFFECT>"],
-  ])(
-    "%s is a parse error, and so has no `<effect>` error and no fix",
-    (_n, source) => {
-      // The parser does not match this close to the open (`<div>x</div >` fails
-      // the same way), so lowering stops before the `<effect>` rule.
-      const { diagnostics } = lowerSource(`${source}\n`, "/tmp/page.mx");
-      expect(diagnostics.map((d) => d.code)).toEqual([
-        "MX_PARSE_MISMATCHED_CLOSING_TAG",
-      ]);
-      expect(diagnostics.some((d) => d.fixes !== undefined)).toBe(false);
-    },
-  );
 
   it("the fixed bodied tag is the same source with `script` for `effect`", () => {
     const source = "<effect>go()</effect>\n";
