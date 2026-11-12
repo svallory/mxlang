@@ -97,6 +97,15 @@ describe("<html-script> on Solid emits a real <script>", () => {
     );
   });
 
+  it("a whole-file unit declares the style helper beside the component", () => {
+    const { code } = compileSolidUnit(
+      '<html-style media="print">a{}</html-style>\n',
+      { filename: "fixture.mx" },
+    );
+    expect(code).toContain("function __mxStyleText(");
+    expect(code).toContain('innerHTML={__mxStyleText("a{}")}');
+  });
+
   it("refuses an explicit innerHTML, as it does on any native element", () => {
     for (const source of [
       "<html-script innerHTML=input.h>y</html-script>",

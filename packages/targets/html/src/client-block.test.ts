@@ -508,6 +508,7 @@ describe("html typeCheck: the server view and the client code of a `client` stat
 
   it("leaves out `var q: undefined` for a name a static `var` already declares", () => {
     const { code } = project("static var q = 1\nclient var q = 2\n<div/>\n");
+    expect(beforeWrapper(code)).toContain("var q = 1");
     expect(beforeWrapper(code)).not.toContain("var q: undefined");
   });
 

@@ -1485,9 +1485,11 @@ export function createEmitter(
           const declared =
             projection.serverNames.length > 0
               ? projection.serverNames.filter(
-                  (name) => !declaredNames().has(name),
+                  (name) =>
+                    !declaredNames().has(name) && !declaredByClient.has(name),
                 )
               : [];
+          for (const name of declared) declaredByClient.add(name);
           if (declared.length > 0) {
             // `void` reads the names, so `noUnusedLocals` does not flag a
             // declaration the author never wrote.
