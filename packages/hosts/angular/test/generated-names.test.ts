@@ -75,11 +75,6 @@ const RENAMED: Array<[string, string, string]> = [
     "<ul>@for (a of items; track $index) { <li>@let __mxConst_a = 1;</li> }</ul>",
   ],
   [
-    "two sibling bodies define the same name and neither calls it",
-    "<div><define/D>x</define></div><div><define/D>y</define></div>",
-    "<div><ng-template #__mxDefine_D> x </ng-template></div><div><ng-template #__mxDefine_D1> y </ng-template></div>",
-  ],
-  [
     "a template reference has the name",
     "<main><input #a/><div><const/a=1/>${a}</div></main>",
     "<main><input #a><div>@let __mxConst_a = 1;{{ __mxConst_a }}</div></main>",
@@ -118,11 +113,6 @@ const RENAMED: Array<[string, string, string]> = [
     "the same name in the bodies of two <if> branches",
     "<if=x><div><const/a=1/>${a}</div></if><else><div><const/a=2/>${a}</div></else>",
     "@if (x) { <div>@let __mxConst_a = 1;{{ __mxConst_a }}</div> } @else { <div>@let __mxConst_a1 = 2;{{ __mxConst_a1 }}</div> }",
-  ],
-  [
-    "an inner define shadows an outer one",
-    "<define/D>x</define><div><define/D>y</define><D/></div><D/>",
-    '<ng-template #D> x </ng-template><div><ng-template #__mxDefine_D> y </ng-template><ng-container [ngTemplateOutlet]="__mxDefine_D" [ngTemplateOutletContext]="{}"></ng-container></div><ng-container [ngTemplateOutlet]="D" [ngTemplateOutletContext]="{}"></ng-container>',
   ],
   [
     "an attribute reads the name outside the body",
@@ -175,7 +165,7 @@ describe("a name another declaration or read shares is renamed", () => {
   });
 });
 
-describe("assigning a renamed define keeps the hint", () => {
+describe("assigning a define that has attributes keeps the hint", () => {
   const HINT =
     "`D` is a `<define>`'s value and cannot be assigned; read its attributes as `D.name`";
 
@@ -183,19 +173,5 @@ describe("assigning a renamed define keeps the hint", () => {
     expect(() => emit("<div><define/D a=1>x</define>${D = 2}</div>")).toThrow(
       HINT,
     );
-  });
-
-  it("on a define the rename gave a name of its own", () => {
-    expect(() =>
-      emit(
-        "<define/D>y</define><div><define/D a=1>x</define>${D = 2}</div><D/>",
-      ),
-    ).toThrow(HINT);
-  });
-
-  it("without attributes the message has no hint", () => {
-    expect(() =>
-      emit("<define/D>y</define><div><define/D>x</define>${D = 2}</div><D/>"),
-    ).toThrow(/^`D` is a `<define>`'s value and cannot be assigned$/);
   });
 });

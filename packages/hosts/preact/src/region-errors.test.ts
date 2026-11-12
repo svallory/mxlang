@@ -333,14 +333,19 @@ describe("region rule", () => {
   it("refuses a second <define> of the same name, at its name (Marko: Duplicate declaration)", () => {
     // Both lift into the region's one arrow, so this would be a second
     // `const Row`; Marko 6.4.4 reports `Duplicate declaration "Row"` at the
-    // second define's name.
+    // second define's name, and so does core (the message is MX's own).
     expect(
       errorOf(
         inRegion(
           "<section><define/Row><b>1</b></define><Row/></section><section><define/Row><i>2</i></define><Row/></section>",
         ),
       ),
-    ).toEqual({ message: 'Duplicate declaration "Row"', line: 5, column: 77 });
+    ).toEqual({
+      message:
+        "Duplicate declaration of `Row`: it is already declared in this body at 5:24, where a `<define>` inside a native element belongs to the body around the element. Rename one of them.",
+      line: 5,
+      column: 77,
+    });
   });
 
   it("refuses a /var inside a <for> with the region's wording", () => {

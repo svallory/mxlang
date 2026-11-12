@@ -75,11 +75,17 @@ describe("html: an element body scopes the tag variables it declares", () => {
     });
   }
 
-  it("a <define> written in an element body is scoped to it, and so is its name", () => {
+  it("a <define> written in a body below an element is scoped to that body, and so is its name", () => {
     const source =
-      "<div><define/Row><b>1</b></define><Row/></div><div><define/Row><b>2</b></define><Row/></div>";
+      "<div><if=true><define/Row><b>1</b></define><Row/></if></div><div><if=true><define/Row><b>2</b></define><Row/></if></div>";
     expect(render(source)).toBe("<div><b>1</b></div><div><b>2</b></div>");
     expect(emit(source).match(/const Row =/g)).toHaveLength(2);
+  });
+
+  it("the same <define> name in two element bodies is a duplicate declaration, as in Marko", () => {
+    const source =
+      "<div><define/Row><b>1</b></define><Row/></div><div><define/Row><b>2</b></define><Row/></div>";
+    expect(() => emit(source)).toThrow(/^Duplicate declaration of `Row`/);
   });
 
   it("only an element that declares something gets a block", () => {
