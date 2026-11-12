@@ -838,6 +838,8 @@ The html target, the JSX hosts, Solid and Astro write a real `<style>` (the JSX
 hosts and Solid hand the body over as raw HTML, Astro as `set:html` on an
 `is:inline` element); Angular keeps its own handling of `<style>`.
 
+An `<html-script>` takes no event handler and no method attribute: `onClick=fn`, `onclick() { … }` and `foo() { … }` are refused on every host, positioned at the attribute, because a script element never fires or calls one. A string value (`onclick="…"`) is an ordinary attribute.
+
 A `<script>` body must parse. It is read as the statements of a TypeScript
 module, so an `import`, an `export`, a top-level `return` or `await` and type
 annotations, an `enum`, `satisfies`, a `namespace` and `declare` are all
@@ -2241,7 +2243,7 @@ On Preact, React and Hono the `<try>` body reaches the host's boundary as a thun
 (`<__mxErrorBoundary fallback={…}>{() => body}</__mxErrorBoundary>`), so a throw
 written directly in the body is caught with the real error and none of the partial
 body, and a throw in a descendant component is caught during a server render too
-(TODO `jsx-try-ssr-error-boundary`). Preact sets `options.errorBoundaries`, a
+(TODO `jsx-try-ssr-error-boundary`). Once `<@catch>` has rendered on the client it stays rendered when the input changes, whether the body threw directly or in a descendant, as in Marko 6.4.4 (Hono renders on the server only). Preact sets `options.errorBoundaries`, a
 process-global flag of the consumer's `preact`. React's server renderer runs no
 error boundaries, so its boundary wraps the body in an internal `Suspense` whose
 fallback is `<@catch>`. Three React-only divergences from Marko 6.4.4 remain,
