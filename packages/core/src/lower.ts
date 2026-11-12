@@ -6570,6 +6570,7 @@ function lowerComponent(
       // module, a barrel re-export) is still a value `<${Name}/var/>` binds.
       ...(tagVarOf(node) &&
       target.kind === "dynamic" &&
+      ctx.declarations.dynamicTagDelegateBindsVar === true &&
       target.valueImportBinding
         ? {
             varHint: `; to bind the value of a tag resolved at run time, write \`<\${${target.valueImportBinding}}/${declName(ctx, tagVarOf(node))}/>\``,

@@ -307,10 +307,15 @@ describe("the data path (`none` preset) blames the variable too", () => {
 });
 
 describe("a /var on an imported value the host cannot bind names the dynamic-tag form", () => {
-  const unbound: Policy = { ...policy, bindsDynamicTagVar: false };
-  const failure = (source: string) => {
+  const unbound: Policy = {
+    ...policy,
+    bindsDynamicTagVar: false,
+    dynamicTagDelegateBindsVar: true,
+  };
+  const noDelegate: Policy = { ...unbound, dynamicTagDelegateBindsVar: false };
+  const failure = (source: string, host: Policy = unbound) => {
     try {
-      compileSource(source, PAGE, unbound, {
+      compileSource(source, PAGE, host, {
         targets: lookup,
         tagDiscoveryDirs: [],
         customTags: {},
@@ -327,6 +332,15 @@ describe("a /var on an imported value the host cannot bind names the dynamic-tag
     expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
     expect(error?.message).toBe(
       "tag variable `/c` on `<Barrel>` is not supported in a standalone template; to bind the value of a tag resolved at run time, write `<${Barrel}/c/>`",
+    );
+  });
+
+  it("says nothing about the dynamic form on a host that does not bind it", () => {
+    expect(
+      failure('import Barrel from "./barrel.ts"\n<Barrel/c/>', noDelegate)
+        ?.message,
+    ).toBe(
+      "tag variable `/c` on `<Barrel>` is not supported in a standalone template",
     );
   });
 

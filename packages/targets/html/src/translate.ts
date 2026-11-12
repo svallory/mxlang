@@ -1086,6 +1086,7 @@ export const policy: Policy = {
   isComponent,
   checkBinding: rejectInputShadowing,
   isDelegatedTag,
+  dynamicTagDelegateBindsVar: true,
   isBuiltinTag: (name) => name === "let" || name === "id",
   resolveDelegatedTag,
   // The resolver offers the host first refusal on each of these so the

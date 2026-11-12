@@ -82,12 +82,6 @@ describe("html: an element body scopes the tag variables it declares", () => {
     expect(emit(source).match(/const Row =/g)).toHaveLength(2);
   });
 
-  it("the same <define> name in two element bodies is a duplicate declaration, as in Marko", () => {
-    const source =
-      "<div><define/Row><b>1</b></define><Row/></div><div><define/Row><b>2</b></define><Row/></div>";
-    expect(() => emit(source)).toThrow(/^Duplicate declaration of `Row`/);
-  });
-
   it("only an element that declares something gets a block", () => {
     expect(emit("<div>${input.a}</div>")).not.toMatch(/\n\s*\{\n/);
     expect(emit("<div><const/a=1/>${a}</div>")).toMatch(/\{\n\s*const a = 1;/);

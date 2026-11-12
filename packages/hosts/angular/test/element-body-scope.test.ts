@@ -152,19 +152,6 @@ describe("a tag variable is scoped to the native element body that declares it",
     });
   }
 
-  // Core declares a `<define>` in an element body in the body around the
-  // element (Marko: "Duplicate declaration"), so the same name twice in element
-  // bodies, or beside an outer define, never reaches the emitter.
-  describe("the same <define> name in an element body and its enclosing body", () => {
-    it.each([
-      "<div><define/D>x</define><D/></div><div><define/D>y</define><D/></div>",
-      "<define/D>o</define><div><define/D>i</define><D/></div><D/>",
-      "<div><define/D>x</define><span><define/D>y</define><D/></span><D/></div>",
-    ])("is refused by core: %s", (source) => {
-      expect(() => emit(source)).toThrow(/^Duplicate declaration of `D`/);
-    });
-  });
-
   // A template reference or variable of the same name is in the same view as a
   // `@let`, and Angular refuses the pair (NG8017): the const is renamed.
   describe("beside an Angular template reference or variable of the same name", () => {

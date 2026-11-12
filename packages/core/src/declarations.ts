@@ -192,6 +192,12 @@ export interface HostDeclarations {
    */
   bindsDynamicTagVar?: boolean;
   /**
+   * Whether this host's delegated dynamic tag (`<${expr}/v/>`) binds `/var`
+   * itself, so core may tell an author whose static `<Name/v/>` it refuses to
+   * write the dynamic form. Absent or false, core says nothing about it.
+   */
+  dynamicTagDelegateBindsVar?: boolean;
+  /**
    * Records whatever this host decided about a claimed tag, into the
    * `DelegatedTag` node's `data` slot.
    *
