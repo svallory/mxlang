@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  spyOn,
+  test,
+} from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -580,18 +588,82 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
     expect(strictFor("/nowhere/page.mx", htmlTargets)).toBe(false);
   });
 
-  test("the default lookup treats an mx.host astro project as strict, as the editor and vite do", () => {
-    // Astro has no mode but strict (its descriptor declares `strict: "always"`),
-    // and this package's own lookup does not register it, so the host used to
-    // resolve as an unknown word and the project compiled non-strict here.
-    const dir = mkdtempSync(join(tmpdir(), "mx-astro-host-"));
-    try {
-      writeFileSync(
-        join(dir, "package.json"),
-        JSON.stringify({ name: "astro-host-fixture", mx: { host: "astro" } }),
-      );
+  describe("astro selections resolve as the registry does", () => {
+    // One root for every case: a project directory per row, written once.
+    const rows: [name: string, manifest: object, strict: boolean][] = [
+      ["mx.host astro", { mx: { host: "astro" } }, true],
+      ["mx.target astro-html", { mx: { target: "astro-html" } }, true],
+      [
+        "a @mxlang/host-astro dependency alone",
+        { dependencies: { "@mxlang/host-astro": "1" } },
+        true,
+      ],
+      [
+        "two host dependencies",
+        {
+          dependencies: {
+            "@mxlang/host-astro": "1",
+            "@mxlang/host-preact": "1",
+          },
+        },
+        false,
+      ],
+      [
+        "mx.host solid with an astro dependency",
+        { mx: { host: "solid" }, dependencies: { "@mxlang/host-astro": "1" } },
+        false,
+      ],
+      // An explicit mx.target html keeps html (target-host-mismatch), non-strict.
+      [
+        "mx.target html with mx.host astro",
+        { mx: { target: "html", host: "astro" } },
+        false,
+      ],
+    ];
+    let root = "";
+    const projectOf = (index: number): string => join(root, String(index));
+
+    beforeAll(() => {
+      root = mkdtempSync(join(tmpdir(), "mx-astro-select-"));
+      rows.forEach(([, manifest], index) => {
+        mkdirSync(projectOf(index));
+        writeFileSync(
+          join(projectOf(index), "package.json"),
+          JSON.stringify(manifest),
+        );
+      });
+    });
+    afterAll(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+
+    test.each(rows.map((row, index) => [index, ...row] as const))(
+      "#%i: %s",
+      (index, _name, _manifest, strict) => {
+        expect(
+          strictFor(join(projectOf(index), "page.mx"), strictnessTargets),
+        ).toBe(strict);
+      },
+    );
+
+    // The loader itself, not only the rule: the stand-ins are chosen for the
+    // default lookup and for any lookup that registers html alone.
+    test.each([
+      ["the default plugin", () => createHtmlBunPlugin()],
+      [
+        "a lookup holding only the html descriptor",
+        () =>
+          createHtmlBunPlugin(
+            createTargetLookup([
+              htmlTargets.target(
+                htmlTargets.defaultTarget(),
+              ) as TargetDescriptor,
+            ]),
+          ),
+      ],
+    ])("%s refuses <let> in an mx.host astro project", (_name, plugin) => {
       let onLoad!: (args: { path: string }) => { contents: string };
-      createHtmlBunPlugin().setup({
+      plugin().setup({
         onLoad: (
           _options: unknown,
           callback: (args: { path: string }) => { contents: string },
@@ -599,71 +671,10 @@ describe("@mxlang/target-html/bun compiles under the resolved strictness", () =>
           onLoad = callback;
         },
       } as unknown as Parameters<BunPlugin["setup"]>[0]);
-      const path = join(dir, "stateful.mx");
+      const path = join(projectOf(0), "stateful.mx");
       writeFileSync(path, "<let/count=0/><span>hi</span>\n");
-      expect(strictFor(path, strictnessTargets)).toBe(true);
       expect(() => onLoad({ path })).toThrow(/`<let>`.*strict/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test.each([
-    ["mx.target astro-html", { mx: { target: "astro-html" } }],
-    [
-      "a @mxlang/host-astro dependency alone",
-      { dependencies: { "@mxlang/host-astro": "1.0.0" } },
-    ],
-  ])("the default lookup treats %s as strict", (_name, manifest) => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-astro-select-"));
-    try {
-      writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
-      expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(true);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test.each([
-    [
-      "two host dependencies",
-      {
-        dependencies: {
-          "@mxlang/host-astro": "1",
-          "@mxlang/host-preact": "1",
-        },
-      },
-    ],
-    [
-      "mx.host solid with an astro dependency",
-      { mx: { host: "solid" }, dependencies: { "@mxlang/host-astro": "1" } },
-    ],
-  ])(
-    "the default lookup keeps %s non-strict, as the registry does",
-    (_name, manifest) => {
-      const dir = mkdtempSync(join(tmpdir(), "mx-astro-others-"));
-      try {
-        writeFileSync(join(dir, "package.json"), JSON.stringify(manifest));
-        expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(false);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    },
-  );
-
-  test("an explicit mx.target decides: mx.target html with mx.host astro is not strict here", () => {
-    // As in the full registry: an explicit mx.target html keeps html
-    // (target-host-mismatch), non-strict.
-    const dir = mkdtempSync(join(tmpdir(), "mx-astro-target-"));
-    try {
-      writeFileSync(
-        join(dir, "package.json"),
-        JSON.stringify({ mx: { target: "html", host: "astro" } }),
-      );
-      expect(strictFor(join(dir, "page.mx"), strictnessTargets)).toBe(false);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    });
   });
 
   test("a deprecated mx.host value warns at most once per loaded file", async () => {

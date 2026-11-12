@@ -12,7 +12,7 @@ import {
 } from "@mxlang/core";
 import type { BunPlugin } from "bun";
 import { configuredDefaultTag } from "./default-tag.ts";
-import { strictFor, strictnessTargets } from "./foreign-strict.ts";
+import { strictFor, withStandIns } from "./foreign-strict.ts";
 import { htmlTargets } from "./index.ts";
 
 /**
@@ -91,10 +91,13 @@ export function createHtmlBunPlugin(
 ): BunPlugin {
   /** De-dup key per distinct scan diagnostic, so a misconfigured `mx.tags` warns once per problem, not once per loaded file. */
   const reportedScanDiagnostics = new Set<string>();
-  // The default lookup knows only html, so strictness resolves through it plus
-  // stand-ins for the other built-ins; a lookup the caller passes is already
-  // the registry's. Chosen once, for the default only.
-  const strictLookup = targets === htmlTargets ? strictnessTargets : targets;
+  // A lookup that registers html alone (the default, or an equivalent the
+  // caller builds) does not know the other built-ins, so strictness resolves
+  // through it plus stand-ins for them; a wider lookup is already the
+  // registry's. Chosen once, on that fact and not on object identity.
+  const names = targets.targetNames();
+  const strictLookup =
+    names.length === 1 && names[0] === "html" ? withStandIns(targets) : targets;
 
   return {
     name: "mxlang-translator",

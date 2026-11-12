@@ -31,6 +31,7 @@ const STAND_INS: readonly (readonly [
   ["angular-template", "@mxlang/host-angular", "angular"],
 ];
 
+/** @internal Exported only for `@mxlang/targets`' cross-package test, `strict-hosts.test.ts`. */
 export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
   ([name, packageName, host, strict]) => ({
     descriptorVersion: 0,
@@ -42,14 +43,31 @@ export const standInTargets: readonly TargetDescriptor[] = STAND_INS.map(
   }),
 );
 
-/** This package's own lookup plus {@link standInTargets}, for strictness only. */
-export const strictnessTargets: TargetLookup = createTargetLookup(
-  [html, ...standInTargets],
-  { defaultTarget: html.name },
+/**
+ * `htmlOnly` (a lookup that registers the html target alone) plus
+ * {@link standInTargets}, for strictness only, with the registry's reserved
+ * names so a descriptor loaded from a package path is accepted or refused
+ * exactly as there (`strict-hosts.test.ts` checks the two lists match). The
+ * caller's own html descriptor is kept, so its strictness still counts.
+ */
+export function withStandIns(htmlOnly: TargetLookup): TargetLookup {
+  const own = htmlOnly.target("html") ?? html;
+  return createTargetLookup([own, ...standInTargets], {
+    defaultTarget: own.name,
+    reservedNames: ["astro-template", "data"],
+  });
+}
+
+/**
+ * @internal The default html lookup with the stand-ins. Exported for the Bun
+ * loader and `strict-hosts.test.ts`.
+ */
+export const strictnessTargets: TargetLookup = withStandIns(
+  createTargetLookup([html]),
 );
 
 /**
- * Whether `path` compiles strict under `targets`: the resolved target
+ * @internal Whether `path` compiles strict under `targets`: the resolved target
  * descriptor declares `strict: "always"`, or the resolved policy carries
  * `mx.strict: true`. Resolved quietly (no deprecation warning per file).
  */

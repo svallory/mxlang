@@ -688,6 +688,7 @@ describe("resolveTargetPolicyDetailed walk edge cases", () => {
           { target: "vue-jsx", host: "vue" },
           { target: "page" },
           {},
+          { tags: [] },
         ]) {
           const root = tree({
             "package.json": JSON.stringify({ mx }),
@@ -812,6 +813,27 @@ describe("TargetPolicyDiagnostic code", () => {
     ).diagnostics[0]?.message;
     expect(noMode).toContain('target "no-mode" has no strict mode');
     expect(noMode).not.toContain("to compile strict");
+  });
+
+  it("with several target dependencies, strict-ignored asks the author to choose instead of advising the default", () => {
+    const message = resolveTargetPolicyDetailed(
+      project(
+        JSON.stringify({
+          dependencies: { "@t/page": "1", "@t/other": "1" },
+          mx: { strict: true },
+        }),
+      ),
+      createTargetLookup(
+        [
+          fixtureTarget("page", "@t/page", { declarations: withStrictMode }),
+          fixtureTarget("other", "@t/other", { host: { name: "oth" } }),
+        ],
+        { defaultTarget: "page" },
+      ),
+    ).diagnostics[0]?.message;
+    expect(message).toContain("@t/page, @t/other");
+    expect(message).toContain("choose one with mx.host or mx.target");
+    expect(message).not.toContain("to compile strict");
   });
 
   it("raises no strict-ignored when mx.host or mx.target is present: its own diagnostic says what is wrong", () => {

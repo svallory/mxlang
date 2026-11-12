@@ -23,6 +23,8 @@
  *    manifest is always the nearest `package.json`, wherever the config
  *    came from.
  * 3. Otherwise, fall back to the lookup's default target, non-strict.
+ *    `mx.strict: true` here is a `strict-ignored` warning unless the default
+ *    target is always strict.
  *
  * Edge cases of the walk (each pinned in `host-policy.test.ts`):
  *
@@ -433,6 +435,8 @@ function policyOf(
   policy: TargetPolicy;
   ignoredHost?: unknown;
   ignoredTarget?: unknown;
+  /** The target packages in the manifest when more than one made rule 2 fall through to the default. */
+  ambiguousDependencies?: string[];
   mismatch?: {
     host: string;
     hostTarget: string;
@@ -529,7 +533,10 @@ function policyOf(
     ...(isObject(pkg.dependencies) ? pkg.dependencies : undefined),
     ...(isObject(pkg.devDependencies) ? pkg.devDependencies : undefined),
   };
-  const targetDeps = Object.keys(deps).flatMap((name) => {
+  const targetPackages = Object.keys(deps).filter((name) =>
+    lookup.fromPackage(name),
+  );
+  const targetDeps = targetPackages.flatMap((name) => {
     const target = lookup.fromPackage(name);
     return target ? [target] : [];
   });
@@ -549,6 +556,9 @@ function policyOf(
     },
     ignoredHost,
     ignoredTarget,
+    ...(targetPackages.length > 1
+      ? { ambiguousDependencies: targetPackages }
+      : {}),
   };
 }
 
@@ -987,26 +997,28 @@ export function resolveTargetPolicyDetailed(
       ),
     );
   }
+  const fallbackTarget = resolved.policy.target;
+  const fallbackDescriptor = lookup.target(fallbackTarget);
   if (
     mx?.strict === true &&
     mx.host === undefined &&
     mx.target === undefined &&
-    lookup.target(resolved.policy.target)?.strict !== "always"
+    fallbackDescriptor?.strict !== "always"
   ) {
     // `mx.strict` accompanies an explicitly selected target only, so with none
     // selected the policy never carries it (nor a loaded descriptor): the
     // setting does nothing. A host or target that is present but unknown or
     // unloadable already has its own diagnostic, so it gets no second one.
-    const target = resolved.policy.target;
+    const advice = resolved.ambiguousDependencies
+      ? `Several target packages are dependencies (${resolved.ambiguousDependencies.join(", ")}), so none is selected: choose one with mx.host or mx.target.`
+      : fallbackDescriptor?.declarations?.strict
+        ? `Add mx.target "${fallbackTarget}" to compile strict.`
+        : `The resolved target "${fallbackTarget}" has no strict mode.`;
     diagnostics.push({
       code: "strict-ignored",
       severity: "warning",
       file,
-      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. ${
-        lookup.target(target)?.declarations?.strict
-          ? `Add mx.target "${target}" to compile strict.`
-          : `The resolved target "${target}" has no strict mode.`
-      }`,
+      message: `mx.strict is ignored without mx.host or mx.target: strictness accompanies an explicitly selected target. ${advice}`,
       ...at("strict"),
     });
   }
