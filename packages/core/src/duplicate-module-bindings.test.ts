@@ -2356,23 +2356,32 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
     );
   });
 
-  it("reports a scriptlet before anything its payload would raise", () => {
-    const found = diagnostics(
-      "$ { namespace q { export const b = 1 }; enum q {A} }",
-    ).filter((d) => d.severity === "error");
-    expect(found).toMatchObject([
-      { code: "MX_UNSUPPORTED_CONSTRUCT", line: 1, column: 0 },
-    ]);
-  });
+  it.each(["html", "none"] as const)(
+    "reports a scriptlet before anything its payload would raise (%s)",
+    (tagRules) => {
+      const found = diagnostics(
+        "$ { namespace q { export const b = 1 }; enum q {A} }",
+        tagRules,
+      ).filter((d) => d.severity === "error");
+      expect(found).toMatchObject([
+        { code: "MX_UNSUPPORTED_CONSTRUCT", line: 1, column: 0 },
+      ]);
+    },
+  );
 
   it.each([
-    ["static", "static const q = super.x"],
-    ["server", "server let q = new.target"],
-    ["export", "export const q = super.x"],
-  ])("keeps refusing super and new.target in a %s statement", (_k, source) => {
-    const found = diagnostics(source).filter((d) => d.severity === "error");
-    expect(found).toMatchObject([{ code: "MX_INVALID_STATEMENT", line: 1 }]);
-  });
+    ["static", "static const q = super.x", 17],
+    ["server", "server let q = new.target", 15],
+    ["export", "export const q = super.x", 17],
+  ])(
+    "keeps refusing super and new.target in a %s statement",
+    (_k, source, column) => {
+      const found = diagnostics(source).filter((d) => d.severity === "error");
+      expect(found).toMatchObject([
+        { code: "MX_INVALID_STATEMENT", line: 1, column },
+      ]);
+    },
+  );
 
   it("compiles a namespace of types only in a function", () => {
     expectCompiles("static function f() { namespace q { export type T = 1 } }");
@@ -2383,9 +2392,26 @@ describe("module code as stock Marko 6.4.4 reads it", () => {
       'static declare module "m" { const a: number; export { a } }',
     );
     expectCompiles(
+      "static declare namespace D { const a: number; export { a } }",
+    );
+    expectCompiles(
       "static declare global { namespace N { type T = 1; export { T } } }",
     );
   });
+
+  it.each(["html", "none"] as const)(
+    "refuses an export list in a declare namespace inside a namespace that emits (%s)",
+    (tagRules) => {
+      const source =
+        "static namespace A { declare namespace B { const a: number; export { a } } }";
+      const found = diagnostics(source, tagRules).filter(
+        (d) => d.severity === "error",
+      );
+      expect(found).toMatchObject([
+        { code: "MX_INVALID_STATEMENT", line: 1, column: 60 },
+      ]);
+    },
+  );
 
   it("refuses an export list in a namespace that emits (TS1194)", () => {
     const found = diagnostics(

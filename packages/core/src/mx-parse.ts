@@ -1122,8 +1122,11 @@ function stripDuplicateError(
  */
 function rejectExportListInNamespace(program: Node, t: Node): void {
   // An ambient module (`declare module "m"`, `declare global`, `declare
-  // namespace`) may hold an export list: it emits nothing.
+  // namespace`) may hold an export list: it emits nothing. A `declare
+  // namespace` inside a namespace that emits does not count: Babel's
+  // namespace transform still visits it and crashes on the list.
   const ambient = new Set<Node>();
+  const insideAmbient = new Set<Node>();
   t.traverseFast(program, (node: Node) => {
     if (
       node.type !== "TSModuleDeclaration" ||
@@ -1137,10 +1140,33 @@ function rejectExportListInNamespace(program: Node, t: Node): void {
     }
     t.traverseFast(node, (inner: Node) => {
       if (inner.type === "TSModuleBlock") ambient.add(inner);
+      if (inner !== node && inner.type === "TSModuleDeclaration") {
+        insideAmbient.add(inner);
+      }
+    });
+  });
+  const emitting = new Set<Node>();
+  t.traverseFast(program, (node: Node) => {
+    if (
+      node.type !== "TSModuleDeclaration" ||
+      node.declare === true ||
+      node.global ||
+      node.id?.type !== "Identifier" ||
+      insideAmbient.has(node)
+    ) {
+      return;
+    }
+    t.traverseFast(node, (inner: Node) => {
+      if (inner.type === "TSModuleBlock") emitting.add(inner);
     });
   });
   t.traverseFast(program, (node: Node) => {
-    if (node.type !== "TSModuleBlock" || ambient.has(node)) return;
+    if (
+      node.type !== "TSModuleBlock" ||
+      (ambient.has(node) && !emitting.has(node))
+    ) {
+      return;
+    }
     for (const statement of node.body as Node[]) {
       if (statement.type !== "ExportNamedDeclaration" || statement.declaration)
         continue;
