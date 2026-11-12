@@ -5524,6 +5524,9 @@ UTF-16 range. `ctx` is frozen and offers exactly:
   `lower` returns an expression other than a string literal). A node of any
   other type is ``the `<id>` trigger's `lowerTrigger`: the attribute value is
   a `<type>` node, which is not a node type the dialect registers (…)``.
+  An optional third argument `{ at }` names the part of the trigger's text that
+  spells the attribute (`title` in `&title`); `at`, and a node value's `span`,
+  lie inside the trigger's own text.
 - `ctx.child(tagName, attrs)`: a child tag of the enclosing block, built from
   `ctx.attribute` results. It goes through the normal tag path, so contracts and
   host declarations apply to it.
@@ -5577,6 +5580,7 @@ row's id and `<text>` for the trigger's text:
 | An expression trigger where a name is declared (`(&a) => 1`, a declarator, a catch parameter, a method parameter) | `` `<text>` (the `<id>` trigger) cannot be declared: it lowers to an expression, and a parameter or declaration needs a plain name `` |
 | The hook builds two values over overlapping text of one trigger (two `ctx.expression` values, or a registered node and a `ctx.expression`, written over the trigger's text) | `` the `<id>` trigger's `lowerTrigger`: two values would be written over the same text of `<text>`; build one `ctx.expression` or registered node per trigger text and give the other attributes a string, `true` or the trigger's own value `` (`MX_DIALECT_HOOK_ERROR`) |
 | The hook leaves a bound `:=` value or `(args)` that nothing can place | `` `<text>` takes no bound value (`:=`): the `<id>` trigger cannot place one `` or `` `<text>` takes no arguments: the `<id>` trigger cannot place them `` (`MX_INVALID_TRIGGER_USE`, positioned at the operator, whitespace before it skipped) |
+| The hook's `ctx.attribute` `at`, or a registered node value's `span`, lies outside the trigger's own text (it would write over a neighbouring trigger or an authored value) | `` the `<id>` trigger's `lowerTrigger`: `ctx.attribute`'s `at` is a span inside the trigger's own text (<start> to <end>) `` (a node value says ``a node value's `span` ``; `MX_DIALECT_HOOK_ERROR`, at the trigger) |
 | The replacement does not print | `` the `<id>` trigger's replacement does not print: <message> `` |
 
 A `=value` is also lowered as an expression with its own triggers, and a member
