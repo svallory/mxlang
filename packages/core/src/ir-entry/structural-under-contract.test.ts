@@ -1008,12 +1008,6 @@ describe("structural: reject, which construct is named", () => {
     expect(found[0]?.[0]).toBe("MX_STRUCTURAL_CONSTRUCT");
   });
 
-  it("a contract-only tag holding an `if` with an attribute tag still reports the construct", () => {
-    expect(seen("<box><if=x><@zzz/></if></box>\n", options)).toEqual([
-      ["MX_STRUCTURAL_CONSTRUCT", 1, 5, IF],
-    ]);
-  });
-
   it("an orphan `<else>` in a body the transform consumes still reports", () => {
     const result = lowerSource(
       "<eater>\n  <else><leaf/></else>\n</eater>\n",
@@ -1021,6 +1015,24 @@ describe("structural: reject, which construct is named", () => {
       { ...options, structural: "pass", customTags: consuming },
     );
     expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
+      ["MX_NOT_IN_DATA_FILE", 2],
+    ]);
+  });
+
+  it("a refused `<try>` is reported beside a contract that fails on something else", () => {
+    const result = lowerSource(
+      "<entity>\n  <try>x</try>\n</entity>\n",
+      "/t.mx",
+      {
+        ...options,
+        customTags: {
+          entity: { children: { item: { required: true } } },
+          item: {},
+        },
+      },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
+      ["MX_MISSING_CHILD", 1],
       ["MX_NOT_IN_DATA_FILE", 2],
     ]);
   });

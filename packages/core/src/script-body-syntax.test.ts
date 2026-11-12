@@ -426,6 +426,27 @@ describe("a concise-mode script body", () => {
   });
 });
 
+describe("`<html-script>` is raw text under a tag-rules preset that names the file's tags", () => {
+  // `markup` and `none` state no html tags: there `<html-script>` is ordinary.
+  it.each(["html"] as const)(
+    "%s: one raw text, edge whitespace kept",
+    (tagRules) => {
+      const { ir, diagnostics } = lowerSource(
+        "<html-script>  </script> <!-- a<b  </html-script>\n",
+        "/f/t.mx",
+        { tagRules, structural: "pass" },
+      );
+      expect(diagnostics).toEqual([]);
+      const [tag] = ir?.body ?? [];
+      const children = (tag as { tag?: { children?: unknown[] } }).tag
+        ?.children;
+      expect(children).toMatchObject([
+        { kind: "Text", value: "  </script> <!-- a<b  " },
+      ]);
+    },
+  );
+});
+
 describe("where `<script>` is not a raw-text tag", () => {
   it("does not check the body under the `none` tag rules", () => {
     // `none` reads `<script>` as an ordinary tag: its body is tags and

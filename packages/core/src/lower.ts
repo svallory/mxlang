@@ -5951,6 +5951,22 @@ function blameEndOffset(node: Node): number | undefined {
   return end !== undefined && "offset" in end ? end.offset : undefined;
 }
 
+/** The host's refusal of `name` as something a data file cannot hold (`try`, `return`), when it declares one. */
+function dataFileRefusal(
+  ctx: Ctx,
+  name: string,
+): Extract<Disposition, { kind: "error" | "unsupported" }> | undefined {
+  // `else` and `else-if` are branches, which the contract reports itself.
+  if (name === "else" || name === "else-if") return undefined;
+  const refusal = Object.hasOwn(ctx.declarations.tags, name)
+    ? ctx.declarations.tags[name]
+    : undefined;
+  return (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
+    refusal.code === NOT_IN_DATA_FILE_CODE
+    ? refusal
+    : undefined;
+}
+
 /** Retains authored names and groups transparent control flow without lowering its contents. */
 function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
   const tree: ChildNode[] = [];
@@ -6043,14 +6059,7 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
         // always lowered), and the real error wins: the parent's contract does
         // not report it as a tag it does not allow first. `else` and
         // `else-if` are branches, handled above.
-        const refusal = Object.hasOwn(ctx.declarations.tags, name)
-          ? ctx.declarations.tags[name]
-          : undefined;
-        if (
-          (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
-          refusal.code === NOT_IN_DATA_FILE_CODE
-        )
-          continue;
+        if (dataFileRefusal(ctx, name)) continue;
         rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
@@ -6334,11 +6343,36 @@ function lowerCustomTagBody(
       ctx.structural === "reject",
     ),
   );
-  // Both are about the body; the one written first is the one reported.
-  const failure = [rejected, contract]
+  // A child the host refuses as something a data file cannot hold is left out
+  // of the contract's tree, and it is its own error: raised beside the
+  // contract's, so the contract failing on something else does not hide it.
+  // When nothing else fails the body is lowered and raises it there.
+  const refused = (rejected || contract ? children : []).flatMap((child) => {
+    const refusal = isTagNode(child)
+      ? dataFileRefusal(ctx, tagNameOf(child) as string)
+      : undefined;
+    const error = refusal
+      ? firstFailure(() =>
+          raiseDisposition(ctx, tagNameOf(child) as string, refusal, child),
+        )
+      : undefined;
+    return error ? [error] : [];
+  });
+  // Of the body's own checks the one written first is the one reported; a
+  // refused child is reported beside it, in position order.
+  const own = [rejected, contract]
     .filter((error) => error !== undefined)
     .sort((a, b) => a.line - b.line || a.column - b.column)[0];
-  if (failure) throw failure;
+  if (own) {
+    const all = [own, ...refused].sort(
+      (a, b) => a.line - b.line || a.column - b.column,
+    );
+    const [failure, ...later] = all;
+    if (failure) {
+      attachRelatedErrors(failure, later);
+      throw failure;
+    }
+  }
   const handsToHost =
     !isBuiltin &&
     !definition.transform &&

@@ -92,6 +92,7 @@ parse-error-hints.ts :: genericReplacement :: `<const/x=…/>` -- example: the s
 template-tag.ts :: routeTemplateCall :: add `<return value=…/>` to -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: fix :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: checkScriptShape :: native html `<script>` element -- html: the html element, not the built-in tag
+lower.ts :: refusePlaceholder :: native html `<script>` element -- html: the html element, not the built-in tag
 lower.ts :: <top> :: `<if=cond>` / `<for|item| of=list>` -- example: the suggested rewrite is written in MX's syntax
 lower.ts :: forNameEnd :: ==<for -- internal: offset arithmetic over the MX source of an attribute-tag loop
 lower.ts :: lowerForHead :: `<for|item| of=…>` -- example: the suggested rewrite is written in MX's syntax

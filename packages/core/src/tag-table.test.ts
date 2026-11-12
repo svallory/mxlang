@@ -21,7 +21,13 @@ import {
 import type { CustomTag } from "./custom-tags.ts";
 import { customTagTaglib } from "./custom-tags.ts";
 import expected from "./tag-table.expected.json" with { type: "json" };
-import { type TagEntry, tagTable } from "./tag-table.ts";
+import {
+  ELEMENT_TAGLIB_IDS,
+  type TagEntry,
+  tagTable,
+  withRawTextParseOptions,
+} from "./tag-table.ts";
+import { wildcardIneligibility } from "./wildcard-resolve.ts";
 
 interface ProjectedTag {
   taglibId?: string;
@@ -260,5 +266,60 @@ describe("tagTable", () => {
     expect(table.getTag("x-tag")).toEqual({ taglibId: "x" });
     expect(table.getTag("@attr")).toBeUndefined();
     expect(table.getTag("taglibId")).toBeUndefined();
+  });
+});
+
+describe("withRawTextParseOptions", () => {
+  const coreOptions = (
+    PARSE_OPTIONS_TAGLIB as Record<string, { parseOptions: object }>
+  )["<html-script>"]?.parseOptions;
+  const own: TagEntry = {
+    taglibId: "mine",
+    parseOptions: { preserveWhitespace: false },
+  };
+  const plain: TagEntry = { taglibId: "x" };
+  const base = {
+    getTag: (name: string): TagEntry | undefined =>
+      name === "html-style" ? own : name === "div" ? plain : undefined,
+  };
+  const view = withRawTextParseOptions(base);
+
+  it("is one view per table", () => {
+    expect(withRawTextParseOptions(base)).toBe(view);
+  });
+
+  it("gives a raw-text name the table does not define an element entry, with core's options", () => {
+    const entry = view.getTag("html-script");
+    expect(ELEMENT_TAGLIB_IDS.has(entry?.taglibId ?? "")).toBe(true);
+    expect(entry?.html).toBeUndefined();
+    expect(entry?.parseOptions).toEqual(coreOptions);
+  });
+
+  it("answers the same entry every time", () => {
+    expect(view.getTag("html-script")).toBe(view.getTag("html-script"));
+  });
+
+  it("merges key by key, the entry's own options winning", () => {
+    const entry = view.getTag("html-style");
+    expect(entry?.taglibId).toBe("mine");
+    expect(entry?.parseOptions).toEqual({
+      ...(PARSE_OPTIONS_TAGLIB as Record<string, { parseOptions: object }>)[
+        "<html-style>"
+      ]?.parseOptions,
+      preserveWhitespace: false,
+    });
+  });
+
+  it("answers every other name as the table does", () => {
+    expect(view.getTag("div")).toBe(plain);
+    expect(view.getTag("nothing")).toBeUndefined();
+  });
+
+  it("keeps html-script a built-in for the wildcard check, as the bare table does", () => {
+    for (const lookup of [base, view]) {
+      expect(
+        wildcardIneligibility("html-script", { tagTable: lookup } as never),
+      ).toBe("built-in");
+    }
   });
 });

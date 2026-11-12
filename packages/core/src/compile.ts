@@ -548,7 +548,9 @@ export function compileSource(
   );
   const filePolicy = rules ? policyUnder(rules, policy) : policy;
   // A tag-rules preset (`statementTags: false`) states the file's whole tag
-  // set itself, `none` among them: its `<script>` is an ordinary tag.
+  // set itself, and the table it builds is the file's: `html` carries the
+  // raw-text options of `<script>` and `<html-script>`, `markup` and `none`
+  // read both as ordinary tags.
   const baseLookup = tagTable(translator, filePolicy.nativeTags);
   const lookup =
     rules || host.statementTags === false

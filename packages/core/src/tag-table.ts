@@ -230,7 +230,8 @@ const rawTextViews = new WeakMap<TagTable, TagTable>();
  * core taglib would otherwise parse an `<html-script>` body as markup and trim
  * its edge whitespace, where the html target, Solid and Astro read it as raw
  * text. The parser and lowering share this one view. A name the table did not
- * define gets an element entry, the answer lowering gave it before.
+ * define gets an entry under the element taglib id and without `html: true`
+ * (the wildcard check names core's own tags built-in before it reads either).
  */
 export function withRawTextParseOptions(lookup: TagTable): TagTable {
   const cached = rawTextViews.get(lookup);
@@ -242,18 +243,19 @@ export function withRawTextParseOptions(lookup: TagTable): TagTable {
   // One entry per name, built on first ask and kept, so `getTag(n)` answers the
   // same object every time. The entry's own options win key by key, as a later
   // taglib's do in `tagTable`.
-  const patched = new Map<string, TagEntry | undefined>();
+  const patched = new Map<string, TagEntry>();
   const view: TagTable = {
     getTag(name) {
-      if (patched.has(name)) return patched.get(name);
-      const entry = lookup.getTag(name);
       const core = raw[`<${name}>`]?.parseOptions;
-      const answer = core
-        ? {
-            ...(entry ?? { taglibId: NAMESPACE_TAGLIB_IDS.html }),
-            parseOptions: { ...core, ...entry?.parseOptions },
-          }
-        : entry;
+      // Only the few raw-text names are patched, and only they are kept.
+      if (!core) return lookup.getTag(name);
+      const kept = patched.get(name);
+      if (kept) return kept;
+      const entry = lookup.getTag(name);
+      const answer = {
+        ...(entry ?? { taglibId: NAMESPACE_TAGLIB_IDS.html }),
+        parseOptions: { ...core, ...entry?.parseOptions },
+      };
       patched.set(name, answer);
       return answer;
     },

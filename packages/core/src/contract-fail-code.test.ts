@@ -308,11 +308,13 @@ describe("analyze hooks of several tags", () => {
 
   it("never leads with a related error from another file, and only the primary carries the list", () => {
     const COMPILED = "/u.mx";
+    let kept: TranslateError | undefined;
     const box = {
       analyze: (calls: readonly { loc: { line: number } }[]) => {
         const main = new TranslateError("main box", calls[0]?.loc.line ?? 1, 0);
         const elsewhere = new TranslateError("elsewhere", 1, 0, "other.mx");
         main.errors = [main, elsewhere];
+        kept = main;
         throw main;
       },
     };
@@ -344,6 +346,12 @@ describe("analyze hooks of several tags", () => {
       ["other.mx", 1],
     ]);
     expect(list.slice(1).every((e) => !e.errors?.length)).toBe(true);
+    // The error the hook threw is left as it was: the aggregate is built from copies.
+    expect(thrown).not.toBe(kept);
+    expect(kept?.errors?.map((e) => e.message)).toEqual([
+      "main box",
+      "elsewhere",
+    ]);
   });
 
   it("keeps the related errors a failing hook carries", () => {

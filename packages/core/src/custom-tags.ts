@@ -3933,7 +3933,7 @@ export function runAnalyzeHooks(
     const primary =
       failures.filter(inFile).sort(byPosition)[0] ??
       [...failures].sort(byPosition)[0];
-    if (!primary) return;
+    if (!primary) throw failures[0];
     const members = [
       ...new Set(failures.flatMap((e) => [e, ...(e.errors ?? [])])),
     ].filter((e) => e !== primary);
@@ -3943,9 +3943,21 @@ export function runAnalyzeHooks(
         (a.file ?? "").localeCompare(b.file ?? "") ||
         byPosition(a, b),
     );
-    for (const member of members) delete member.errors;
-    primary.errors = [primary, ...members];
-    throw primary;
+    // Copies, not the objects the hooks threw: a hook may throw an error it
+    // keeps (a module-level one), which this must not change for later compiles.
+    const copyOf = (error: TranslateError): TranslateError => {
+      const copy = Object.create(
+        Object.getPrototypeOf(error),
+      ) as TranslateError;
+      Object.defineProperties(copy, Object.getOwnPropertyDescriptors(error));
+      delete (copy as { errors?: unknown }).errors;
+      const occurrence = tagOccurrenceOf(error);
+      if (occurrence !== undefined) occurrences.set(copy, occurrence);
+      return copy;
+    };
+    const lead = copyOf(primary);
+    lead.errors = [lead, ...members.map(copyOf)];
+    throw lead;
   }
 }
 
