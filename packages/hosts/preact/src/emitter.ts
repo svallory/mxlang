@@ -2634,6 +2634,11 @@ export class PreactEmitter implements Emitter<string> {
         "NullLiteral",
         "TemplateLiteral",
       ].includes(node.expr.node?.type ?? "");
+    // A sequence (`${0, x}`) is one expression: bare, it would read as two
+    // slot operands (`c ? 0, x : null`) once there is no guard call around it.
+    if (primitive && node.expr.node?.type === "SequenceExpression") {
+      return concatMapped("(", mappedExpr(node.expr), ")");
+    }
     if (primitive) return mappedExpr(node.expr);
     // A sequence (`${0, x}`) is one argument, not two.
     return node.expr.node?.type === "SequenceExpression"
