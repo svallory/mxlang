@@ -1184,6 +1184,43 @@ function rejectExportListInNamespace(program: Node, t: Node): void {
   });
 }
 
+/**
+ * An `import` or `export` below the top level of a payload (inside an arrow, a
+ * function, a block): the TypeScript plugin looks up the program scope for it
+ * and crashes with an internal error, so it is refused here at its position.
+ * A namespace body (`TSModuleBlock`) may hold `export`. Run on the payloads
+ * of expression, pattern, argument and parameter containers; a module
+ * statement's own placement is refused in lowering.
+ */
+function rejectNestedModuleDeclaration(root: unknown): void {
+  const visit = (value: unknown, parentType: string | undefined): void => {
+    if (value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, parentType);
+      return;
+    }
+    const node = value as Node;
+    if (typeof node.type !== "string") return;
+    if (isModuleDeclaration(node) && parentType !== "TSModuleBlock") {
+      const keyword = node.type === "ImportDeclaration" ? "import" : "export";
+      const loc = node.loc;
+      if (!loc) return;
+      const error = codedError(
+        INVALID_STATEMENT_CODE,
+        `\`${keyword}\` is only allowed at the top level of a module, not inside a function or a block.`,
+        loc.start.line,
+        loc.start.column,
+      );
+      error.end = { line: loc.end.line, column: loc.end.column };
+      throw error;
+    }
+    for (const [key, field] of Object.entries(node)) {
+      if (!NON_CHILD_FIELDS.has(key)) visit(field, node.type);
+    }
+  };
+  visit(root, undefined);
+}
+
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
 function stripProgram(body: Node[], moduleBlock = false): Node[] {
   // The plugin runs for every payload, TypeScript or not: it is not a no-op
@@ -1609,6 +1646,7 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
   if (node == null) return;
   switch (container.type) {
     case "MxExpression": {
+      rejectNestedModuleDeclaration(node);
       if (typeof node.start === "number" && typeof node.end === "number") {
         strippedValueRoots.set(container, { start: node.start, end: node.end });
       }
@@ -1621,6 +1659,7 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
       container.node = stripProgram([...node], moduleBlock);
       return;
     case "MxPattern": {
+      rejectNestedModuleDeclaration(node);
       const [declaration] = stripProgram([
         t.variableDeclaration("let", [t.variableDeclarator(node)]),
       ]);
@@ -1628,6 +1667,7 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
       return;
     }
     case "MxArguments": {
+      rejectNestedModuleDeclaration(node);
       const [statement] = stripProgram([
         t.expressionStatement(t.callExpression(t.identifier("f"), [...node])),
       ]);
@@ -1635,6 +1675,7 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
       return;
     }
     case "MxParameterList": {
+      rejectNestedModuleDeclaration(node);
       const [declaration] = stripProgram([
         t.functionDeclaration(
           t.identifier("f"),
