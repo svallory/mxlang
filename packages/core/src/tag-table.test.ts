@@ -295,6 +295,17 @@ describe("withRawTextParseOptions", () => {
     expect(entry?.parseOptions).toEqual(coreOptions);
   });
 
+  it.each(["html-script", "html-style", "html-comment"])(
+    "answers %s, a name the table never defined, under the element taglib id",
+    (name) => {
+      const empty = { getTag: (): TagEntry | undefined => undefined };
+      const entry = withRawTextParseOptions(empty).getTag(name);
+      expect(entry?.taglibId).toBe("marko-html");
+      expect(ELEMENT_TAGLIB_IDS.has(entry?.taglibId ?? "")).toBe(true);
+      expect(entry?.html).toBeUndefined();
+    },
+  );
+
   it("answers the same entry every time", () => {
     expect(view.getTag("html-script")).toBe(view.getTag("html-script"));
   });

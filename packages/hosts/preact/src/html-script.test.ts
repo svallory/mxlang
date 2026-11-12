@@ -72,11 +72,11 @@ describe("<html-script> on Preact emits a real <script>", () => {
       expect(emitted).toContain(JSON.stringify(body).slice(1, -1));
     },
   );
-  // The raw-text view names every raw-text tag, not only <html-script>: the
-  // others are native elements on this host too, and keep their own handling.
-  it("reads <html-style> and <html-comment> as native elements, with the host's own handling", () => {
-    // Emitted as an element with its body text (braces escaped for JSX), not
-    // dropped and not turned into a text child of something else.
+  // The raw-text view names every raw-text tag, not only <html-script>. This
+  // host has no <html-style> handling: the body is kept as raw text and the
+  // element is emitted under its authored name (not as a <style>), and an
+  // <html-comment> keeps the host's own refusal.
+  it("keeps an <html-style> body as raw text under its authored name, and refuses <html-comment> as before", () => {
     expect(
       compilePreactMx("<html-style>a { b: c }</html-style>", "/x/a.mx").code,
     ).toContain("<html-style>a &#123; b: c &#125;</html-style>");
@@ -84,6 +84,7 @@ describe("<html-script> on Preact emits a real <script>", () => {
       compilePreactMx("<html-comment> x </html-comment>", "/x/a.mx"),
     ).toThrow(/HTML comment \(<html-comment>\) cannot appear in a Preact/);
   });
+
   it("writes a script element, not a literal <html-script>", () => {
     const emitted = code('<html-script async src="/a.js"/>');
     expect(emitted).toContain('<script async={true} src="/a.js" />');

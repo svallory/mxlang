@@ -5958,8 +5958,8 @@ function dataFileRefusal(
   ctx: Ctx,
   name: string,
 ): Extract<Disposition, { kind: "error" | "unsupported" }> | undefined {
-  // `else` and `else-if` are branches, which the contract reports itself.
-  if (name === "else" || name === "else-if") return undefined;
+  // Only asked of a name that is not `if`, `for`, `else` or `else-if`: those
+  // are branches, which `authoredChildTree` handles before it gets here.
   const refusal = Object.hasOwn(ctx.declarations.tags, name)
     ? ctx.declarations.tags[name]
     : undefined;
@@ -6016,12 +6016,16 @@ function authoredChildTree(
   ctx: Ctx,
   children: readonly Node[],
   refused: RefusedChild[],
+  unchecked = false,
 ): ChildNode[] {
   const tree: ChildNode[] = [];
   // Under `structural: "reject"` the first `<if>`/`<for>` is the error,
-  // whatever it holds, and a contract does not look inside it: what a
-  // construct holds is collected into a sink nobody reads.
-  const inside: RefusedChild[] = ctx.structural === "reject" ? [] : refused;
+  // whatever it holds, and a contract does not look inside it: the contents
+  // still shape the tree (what a construct holds satisfies a required child),
+  // but nothing raises there and a refused child in it is not collected.
+  const reject = ctx.structural === "reject";
+  const within = (body: readonly Node[]): ChildNode[] =>
+    authoredChildTree(ctx, body, reject ? [] : refused, unchecked || reject);
   for (let index = 0; index < children.length; index++) {
     const node = children[index];
     const loc = posOf(ctx, node);
@@ -6058,7 +6062,7 @@ function authoredChildTree(
         tree.push(
           ended({
             kind: "ChildFor",
-            nodes: authoredChildTree(ctx, bodyChildren(node), inside),
+            nodes: within(bodyChildren(node)),
             loc,
           }),
         );
@@ -6066,7 +6070,7 @@ function authoredChildTree(
         const branches = [
           {
             unconditional: false,
-            nodes: authoredChildTree(ctx, bodyChildren(node), inside),
+            nodes: within(bodyChildren(node)),
           },
         ];
         let cursor = index + 1;
@@ -6086,7 +6090,7 @@ function authoredChildTree(
             branchName === "else" && !attrByName(branch, "if");
           branches.push({
             unconditional,
-            nodes: authoredChildTree(ctx, bodyChildren(branch), inside),
+            nodes: within(bodyChildren(branch)),
           });
           index = cursor++;
           if (unconditional) break;
@@ -6099,7 +6103,7 @@ function authoredChildTree(
           branches: [
             {
               unconditional: false,
-              nodes: authoredChildTree(ctx, bodyChildren(node), inside),
+              nodes: within(bodyChildren(node)),
             },
           ],
           loc,
@@ -6109,14 +6113,13 @@ function authoredChildTree(
         // A name the host refuses as something a data file cannot hold (`try`,
         // `return`) is that refusal when the child lowers (a tag's body is
         // always lowered), and the real error wins: the parent's contract does
-        // not report it as a tag it does not allow first. `else` and
-        // `else-if` are branches, handled above.
+        // not report it as a tag it does not allow first.
         const refusal = dataFileRefusal(ctx, name);
         if (refusal) {
           refused.push({ node, refusal });
           continue;
         }
-        rejectEffectTag(ctx, node, name);
+        if (!unchecked) rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);
         const known = wildcard
