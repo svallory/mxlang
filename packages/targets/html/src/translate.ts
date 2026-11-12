@@ -427,6 +427,8 @@ export interface ClientProjection {
    * server view shadows them as `undefined` in the render function.
    */
   hoistedNames: string[];
+  /** The `hoistedNames` that are namespaces holding only types. */
+  typeOnlyNames: string[];
   /** Every value name the statements bind, nested `var`s included. */
   scopeNames: string[];
   hoisted: ClientPiece[];
@@ -575,6 +577,11 @@ function topLevelReturns(node: unknown, found: number[] = []): number[] {
  * (`namespace A.B {}`) binds its leftmost name.
  */
 function valueNames(nodes: Node[]): string[] {
+  // Two sets this walk must agree with: core's per-statement declaration
+  // collector (`packages/core/src/module-scope.ts`, `statementDeclarations`),
+  // for what merges and clashes, and the runtime's `clientDeclaredNames` above,
+  // which differs on purpose (it declares labels and loop heads, not nested
+  // `var`s) and feeds `ClientProjection.serverNames`.
   const names = new Set<string>();
   const plain: Node[] = [];
   for (const node of nodes) {
@@ -600,6 +607,46 @@ function valueNames(nodes: Node[]): string[] {
   for (const name of clientDeclaredNames(plain, true)) names.add(name);
   for (const name of varScopedNames(nodes)) names.add(name);
   return [...names];
+}
+
+/** Whether a namespace holds a value (anything but types and empty namespaces). */
+function instantiated(ns: Node): boolean {
+  const body = ns.body;
+  if (!body) return false;
+  if (body.type === "TSModuleDeclaration") return instantiated(body);
+  return (body.body ?? []).some((stmt: Node) => {
+    const inner =
+      stmt.type === "ExportNamedDeclaration" && stmt.declaration
+        ? stmt.declaration
+        : stmt;
+    switch (inner.type) {
+      case "TSTypeAliasDeclaration":
+      case "TSInterfaceDeclaration":
+        return false;
+      case "TSModuleDeclaration":
+        return instantiated(inner);
+      case "TSImportEqualsDeclaration":
+        return inner.importKind !== "type";
+      default:
+        return !(inner.type === "TSEnumDeclaration" && inner.const);
+    }
+  });
+}
+
+/** The names of the namespaces in `nodes` that hold no value, only types. */
+function typeOnlyNamespaces(nodes: Node[]): string[] {
+  const names: string[] = [];
+  for (const node of nodes) {
+    const inner =
+      node.type === "ExportNamedDeclaration" && node.declaration
+        ? node.declaration
+        : node;
+    if (inner.type !== "TSModuleDeclaration") continue;
+    if (inner.global || inner.kind === "global") continue;
+    const name = leftmostName(inner.id);
+    if (name && !instantiated(inner)) names.push(name);
+  }
+  return names;
 }
 
 /**
@@ -639,8 +686,15 @@ function varScopedNames(node: unknown, found: string[] = []): string[] {
  * server view's merges with `client` statements (core lets two `var`s, enums
  * and namespaces of different statements merge).
  */
-export function moduleValueNames(code: string): string[] {
-  return valueNames(parseClientStatements(code, {} as Node, "static"));
+export function moduleValueNames(code: string, span?: SourceSpan): string[] {
+  try {
+    return valueNames(parseClientStatements(code, {} as Node, "static"));
+  } catch (error) {
+    // Core checked this text at resolve time, so this is a gap between that
+    // check and this parse; the emitter has no Marko node, so name the offset.
+    const at = span ? ` (source offset ${span.sourceStart})` : "";
+    throw new Error(`${(error as Error).message}${at}`, { cause: error });
+  }
 }
 
 function clientProjection(
@@ -794,10 +848,16 @@ function clientProjection(
   const taken = new Set(hoistedNames);
   const scopeNames = valueNames(statements);
   return {
-    // One rule for the module's `var q: undefined`, the arrow exclusion and the
-    // merges: labels and loop heads are no names, a nested `var` is one.
-    serverNames: scopeNames.filter((name) => !taken.has(name)),
+    // MUST equal the `var` list of the module that runs (`clientDeclaredNames`
+    // of the same statements, see the `client` case of `resolveDelegatedTag`):
+    // the server view's `var q: undefined` mirrors the runtime's declarations,
+    // loop heads and labels included, nested `var`s left out. `scopeNames`
+    // (the value-scope walk) serves only the client arrow's exclusion.
+    serverNames: clientDeclaredNames(statements).filter(
+      (name) => !taken.has(name),
+    ),
     hoistedNames,
+    typeOnlyNames: typeOnlyNamespaces(hoistedNodes),
     scopeNames,
     hoisted,
     types,
@@ -1105,6 +1165,9 @@ function resolveDelegatedTag(
       code,
       start: node.start,
       span: statementCodeSpan(ctx, node, text, "server", code),
+      // Parsed on every compile, though only the typeCheck projection reads
+      // it: the resolve context carries no typeCheck flag, and the parse is
+      // small next to the statement check core already ran.
       declaredNames: valueNames(parseClientStatements(code, node, "server")),
     };
   }

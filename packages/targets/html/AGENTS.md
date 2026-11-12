@@ -122,19 +122,24 @@ is declared `var s: undefined`, so a read is reported at the author's token; a
 name a `client` statement declares too (two `var`s, a `for (var …)` or a `var` in
 a nested block, merged enums or namespaces, which core accepts, with a `server`,
 `static` or `export` statement) exists on both sides and is not shadowed, nor is
-the `var q: undefined` of the module's server view. Statement labels and loop
-heads are not names. At the head of the render
+the `var q: undefined` of the module's server view when a `server`, `static`
+or `export` statement declares it. The module's `var q: undefined` mirrors the
+runtime's own `var` list (top-level loop heads and labels included, nested
+`var`s not); the arrow's exclusion follows value scope (labels and loop heads
+are not names, a nested `var` is one). At the head of the render
 function, the value names of `client` imports, namespaces and `declare` forms
 (a qualified namespace by its leftmost name; `declare global` and ambient
 modules bind none) are declared `undefined`, with the whole render in a block
 below them, so a tag variable or `<define>` of the same name (core lets an
 ambient `client declare` share its spelling) declares without a clash. The
-render's own `input`, `$global` and `$signal` and a name a `server` statement
+The render's own parameters (`input`, `__mxOut`) and a name a `server` statement
 declares too are left out (`static` and `export` names are read from the
 module's hoisted code). A bound attribute's refinement (`v:fn:=q`) that names
 a `client` import reads `__mxRefine_fn`, a module-level alias of the real
 binding, so the shadow stays for every other read; the emitter drives the body
-twice to know that. Known limits: a `client` import of
+twice to know that; a template binding of the same name (tag variable,
+`<define>`) in the template keeps the plain read, and a namespace holding only
+types gets no alias. Known limits: a `client` import of
 another module's client export is TS2614 (that module's one projection is its
 server view); a top-level type (`Input`) cannot name a client class or enum; a
 namespace body reading a client value is `undefined`; a `client` statement

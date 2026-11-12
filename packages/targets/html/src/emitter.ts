@@ -142,6 +142,12 @@ interface State {
   clientHoisted: string[];
   /** Under `typeCheck`, every value name a `client` statement binds. */
   clientScope: string[];
+  /** Under `typeCheck`, the names the module that runs declares `var` for. */
+  clientRuntime: string[];
+  /** Under `typeCheck`, the namespaces of `client` statements holding only types. */
+  clientTypeOnly: string[];
+  /** Under `typeCheck`, the names template tags and `<define>`s bind so far. */
+  templateBindings: Set<string>;
   /**
    * Under `typeCheck`, the names bound-attribute refinements (`v:fn:=q`) read.
    * `fn` is a client change handler: when it is a `client` import, the module
@@ -205,6 +211,9 @@ export function createEmitter(
     serverDeclared: [],
     clientHoisted: [],
     clientScope: [],
+    clientRuntime: [],
+    clientTypeOnly: [],
+    templateBindings: new Set(),
     refinementReads: new Map(),
     clientTypes: [],
     clientTypeExports: [],
@@ -606,6 +615,12 @@ export function createEmitter(
    * so `fn` applied to the bound value's type is checked and mapped to the
    * modifier.
    */
+  /** `const x = ` for a tag variable, noting the binding for refinements. */
+  const declared = (name: string): string => {
+    state.templateBindings.add(name);
+    return `const ${name} = `;
+  };
+
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
     if (!options.typeCheck || attr.kind !== "bound" || !attr.refinement) {
       return mappedExpr(attr.value);
@@ -619,7 +634,7 @@ export function createEmitter(
     }
     return concatMapped(
       "(false && ",
-      options.refinementAliases?.has(name)
+      options.refinementAliases?.has(name) && !state.templateBindings.has(name)
         ? mapped(`__mxRefine_${name}`, attr.refinement.span ?? null)
         : mappedExpr(attr.refinement),
       `(${attr.value.code}), `,
@@ -1159,7 +1174,7 @@ export function createEmitter(
         // value, which is what a `/var` on the dynamic tag binds.
         push(
           concatMapped(
-            node.var ? `const ${node.var} = ` : "",
+            node.var ? declared(node.var) : "",
             `__mxRenderDynamic(${state.sink}, ${target.expr.code}, `,
             propsObject,
             // With call args the callee's first parameter is an arg, not the
@@ -1264,7 +1279,7 @@ export function createEmitter(
       if (node.returnsValue || target.binding || callee === selfName) {
         push(
           concatMapped(
-            node.var ? `const ${node.var} = ` : "",
+            node.var ? declared(node.var) : "",
             mapped(callee, node.nameSpan),
             ".render(",
             propsObject,
@@ -1361,6 +1376,7 @@ export function createEmitter(
     },
 
     define(node) {
+      state.templateBindings.add(node.name);
       const fn = blockFunction(node.children, node.params.join(", "));
       if (node.attrs.length === 0) {
         push(concatMapped(`const ${node.name} = `, fn, ";"));
@@ -1383,6 +1399,7 @@ export function createEmitter(
     },
 
     constant(node) {
+      state.templateBindings.add(node.name);
       push(`const ${node.name} = ${node.init.code};`);
     },
 
@@ -1477,6 +1494,7 @@ export function createEmitter(
         // an ordinary expression Marko's own server render evaluates and
         // renders. With no update path in a one-shot render, binding it as a
         // `const` reproduces Marko's output exactly.
+        if (tag.var) state.templateBindings.add(tag.var);
         push(`const ${tag.var} = ${data.init};`);
         return;
       }
@@ -1496,6 +1514,8 @@ export function createEmitter(
           const projection = data.typeCheck;
           state.clientHoisted.push(...projection.hoistedNames);
           state.clientScope.push(...projection.scopeNames);
+          state.clientRuntime.push(...projection.serverNames);
+          state.clientTypeOnly.push(...projection.typeOnlyNames);
           const lines: Array<string | MappedCode> = [];
           // A name a `server` statement declares too (two `var`s, merged enums
           // or namespaces) is not `undefined` in the server view.
@@ -1512,7 +1532,9 @@ export function createEmitter(
           for (const list of projection.typeExports) {
             state.clientTypeExports.push({ list, start: data.start });
           }
-          state.clientNames.push(...projection.serverNames);
+          // A merged name exists on both sides, so no type that mentions it
+          // moves into the client arrow.
+          state.clientNames.push(...absent);
           state.clientListed.push(...projection.listed);
           if (
             data.start !== undefined &&
@@ -1929,7 +1951,7 @@ export function emitModuleWithMappings(
   const moduleDeclared = new Set(
     options.typeCheck
       ? ir.hoisted.flatMap((node) =>
-          node.code === "" ? [] : moduleValueNames(node.code),
+          node.code === "" ? [] : moduleValueNames(node.code, node.span),
         )
       : [],
   );
@@ -1941,12 +1963,15 @@ export function emitModuleWithMappings(
   // statement declares too, is known once the body has been driven, so the body
   // is driven again with that knowledge.
   const refinementAliases = new Map(
-    [...emitter.state.refinementReads].filter(([read]) =>
-      emitter.state.clientHoisted.includes(read),
+    [...emitter.state.refinementReads].filter(
+      ([read]) =>
+        emitter.state.clientHoisted.includes(read) &&
+        !emitter.state.clientTypeOnly.includes(read) &&
+        !emitter.state.templateBindings.has(read),
     ),
   );
   const mergedNames = new Set(
-    emitter.state.clientScope.filter(
+    emitter.state.clientRuntime.filter(
       (client) =>
         emitter.state.serverDeclared.includes(client) ||
         moduleDeclared.has(client),

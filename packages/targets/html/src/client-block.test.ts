@@ -878,13 +878,51 @@ describe("html typeCheck: the client arrow shadows the names a server statement 
     expect(code.slice(0, arrow)).not.toContain("x: undefined");
   });
 
-  it("a nested client var is a module-level name of the server view", () => {
+  it("a nested client var is no module-level name: the runtime declares none", () => {
     const code = typeCheck(
       "client for (var i = 0; i < 3; i++) {}\n<div>${i}</div>\n",
     );
-    expect(code.slice(0, code.indexOf("(async () => {"))).toContain(
-      "var i: undefined; void [i];",
+    expect(code.slice(0, code.indexOf("(async () => {"))).not.toContain(
+      "var i: undefined",
     );
+  });
+
+  it("a client for-of head is a module-level name: the runtime declares it", () => {
+    const code = typeCheck("client for (const x of [1]) {}\n<div>${x}</div>\n");
+    expect(code.slice(0, code.indexOf("(async () => {"))).toContain(
+      "var x: undefined; void [x];",
+    );
+  });
+
+  it("a merged name does not move a type that mentions it into the client arrow", () => {
+    const code = typeCheck(
+      "server var s = 1;\nclient var s = 2;\nclient type T = typeof s;\nexport interface Input { t: T }\n<div/>\n",
+    );
+    expect(code.indexOf("type T")).toBeLessThan(code.indexOf("(async () => {"));
+  });
+
+  it("a client import of $global is shadowed undefined in the render function", () => {
+    const code = typeCheck(
+      'client import { $global } from "./g"\n<div>${$global}</div>\n',
+    );
+    expect(code.slice(code.indexOf("function __mxRender"))).toContain(
+      "var $global: undefined",
+    );
+  });
+
+  it("a template binding of a refinement's name keeps the plain read", () => {
+    const code = typeCheck(
+      "client declare function fmt(x: string): string;\n<const/fmt=(v: number) => v/>\n<let/q=1/>\n<input value:fmt:=q/>\n",
+    );
+    expect(code).toContain("(false && fmt(q), q)");
+    expect(code).not.toContain("__mxRefine_fmt");
+  });
+
+  it("a type-only namespace gets no refinement alias", () => {
+    const code = typeCheck(
+      "client namespace N { export type T = number }\n<let/q=1/>\n<input value:N:=q/>\n",
+    );
+    expect(code).not.toContain("const __mxRefine_N");
   });
 
   it("core refuses a server const and a client const enum of one name", () => {

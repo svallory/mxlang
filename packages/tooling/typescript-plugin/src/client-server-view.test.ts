@@ -173,15 +173,35 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
     expect(found[0]?.start).toBe(read.indexOf("x.toFixed"));
   });
 
-  it("a nested client var read in the template is undefined, not unknown", () => {
+  it("a nested client var is unknown in the template, as the runtime declares none", () => {
     const source =
       "client for (var i = 0; i < 3; i++) {}\n<div>${i.toFixed(1)}</div>\n";
     const found = errorsOf({ [FILE]: source }, FILE);
-    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([2304]);
     expect(found[0]?.start).toBe(source.indexOf("i.toFixed"));
   });
 
-  it("definition at a refinement's name reaches the client import's declaration", () => {
+  it("a client for-of head is undefined in the template, as the runtime declares it", () => {
+    const source =
+      "client for (const x of [1]) {}\n<div>${x.toFixed(1)}</div>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found[0]?.start).toBe(source.indexOf("x.toFixed"));
+  });
+
+  it("a merged name does not strand a type that mentions it", () => {
+    const source =
+      "server var s = 1;\nclient var s = 2;\nclient type T = typeof s;\nexport interface Input { t: T }\n<div/>\n";
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
+
+  it("a template binding of a refinement's name checks against the binding", () => {
+    const source =
+      "client declare function fmt(x: string): string;\n<const/fmt=(v: number) => v/>\n<let/q=1/>\n<input value:fmt:=q/>\n";
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
+
+  it("rename at a refinement's name reaches the client import", () => {
     const source =
       'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n';
     const svc = service({
@@ -189,10 +209,19 @@ describe("a server-only name in client code", { timeout: 60_000 }, () => {
       "/project/fn.ts": "export const clamp = (n: number) => n;\n",
     });
     svc.getSemanticDiagnostics(CONSUMER);
-    const found = svc.getDefinitionAtPosition(FILE, source.indexOf("clamp:=q"));
-    expect(found?.map((definition) => definition.fileName)).toContain(
-      "/project/fn.ts",
+    const found = svc.findRenameLocations(
+      FILE,
+      source.indexOf("clamp:=q"),
+      false,
+      false,
     );
+    expect(
+      found?.some(
+        (location) =>
+          location.fileName === FILE &&
+          location.textSpan.start === source.indexOf("clamp }"),
+      ),
+    ).toBe(true);
   });
 
   it("KNOWN LIMIT: the body of a client namespace reads a server name typed", () => {
