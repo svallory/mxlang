@@ -247,6 +247,7 @@ import {
   commonJsFormOf,
   endOfInputError,
   findCommonJsForm,
+  IMPORT_EXPORT_PLACEMENT_MESSAGE,
   isTypeofImport,
   parsedImportDeclarations,
   pendingFrontEndError,
@@ -5179,13 +5180,6 @@ function secondDefaultExportIn(
   }
   return undefined;
 }
-
-/**
- * MX's text for Babel's "'import' and 'export' may only appear at the top
- * level.": a statement's own block is allowed, so "top level" would mislead.
- */
-const IMPORT_EXPORT_PLACEMENT_MESSAGE =
-  "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
 
 /** The same refusal in a `<script>` body, where the body's own statements are the module's. */
 function scriptImportExportPlacementMessage(script: string): string {

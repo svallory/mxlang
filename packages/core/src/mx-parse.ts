@@ -1185,40 +1185,34 @@ function rejectExportListInNamespace(program: Node, t: Node): void {
 }
 
 /**
+ * MX's text for Babel's "'import' and 'export' may only appear at the top
+ * level.": a statement's own block is allowed, so "top level" would mislead.
+ */
+export const IMPORT_EXPORT_PLACEMENT_MESSAGE =
+  "An `import` or `export` must be a statement of the module: at the top of the file, after `static`, `server` or `client`, or directly inside that statement's `{ … }` block. This one is inside a nested block, an `if` or a function body; move it out to the block's own statements.";
+
+/**
  * An `import` or `export` below the top level of a payload (inside an arrow, a
  * function, a block): the TypeScript plugin looks up the program scope for it
  * and crashes with an internal error, so it is refused here at its position.
  * A namespace body (`TSModuleBlock`) may hold `export`. Run on the payloads
- * of expression, pattern, argument and parameter containers; a module
- * statement's own placement is refused in lowering.
+ * of expression, pattern, argument and parameter containers and below the
+ * statements of a statement container; a module statement's own placement
+ * in a block is refused in lowering.
  */
 function rejectNestedModuleDeclaration(root: unknown): void {
-  const visit = (value: unknown, parentType: string | undefined): void => {
-    if (value === null || typeof value !== "object") return;
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item, parentType);
-      return;
-    }
-    const node = value as Node;
-    if (typeof node.type !== "string") return;
-    if (isModuleDeclaration(node) && parentType !== "TSModuleBlock") {
-      const keyword = node.type === "ImportDeclaration" ? "import" : "export";
-      const loc = node.loc;
-      if (!loc) return;
-      const error = codedError(
-        INVALID_STATEMENT_CODE,
-        `\`${keyword}\` is only allowed at the top level of a module, not inside a function or a block.`,
-        loc.start.line,
-        loc.start.column,
-      );
-      error.end = { line: loc.end.line, column: loc.end.column };
-      throw error;
-    }
-    for (const [key, field] of Object.entries(node)) {
-      if (!NON_CHILD_FIELDS.has(key)) visit(field, node.type);
-    }
-  };
-  visit(root, undefined);
+  const [node] = findNodes(root, isModuleDeclaration);
+  if (!node) return;
+  const loc = node.loc ??
+    (root as Node)?.loc ?? { start: { line: 1, column: 0 } };
+  const error = codedError(
+    INVALID_STATEMENT_CODE,
+    IMPORT_EXPORT_PLACEMENT_MESSAGE,
+    loc.start.line,
+    loc.start.column,
+  );
+  if (node.loc) error.end = { line: loc.end.line, column: loc.end.column };
+  throw error;
 }
 
 /** Runs the TS plugin over `body` as one program; returns the program's body after it. */
@@ -1406,6 +1400,19 @@ const NON_CHILD_FIELDS = new Set([
  */
 export function findCommonJsForm(root: unknown): Node | undefined {
   let first: Node | undefined;
+  for (const node of findNodes(root, (n) => Boolean(commonJsFormOf(n)))) {
+    if (!first || (node.start ?? 0) < (first.start ?? 0)) first = node;
+  }
+  return first;
+}
+
+/**
+ * Every node under `root` (a node or a list of them) that `matches`, in walk
+ * order, except one directly in a namespace or `declare module` body
+ * (`TSModuleBlock`), where `export` and the like are legal.
+ */
+function findNodes(root: unknown, matches: (node: Node) => boolean): Node[] {
+  const found: Node[] = [];
   const visit = (value: unknown, parentType: string | undefined): void => {
     if (value === null || typeof value !== "object") return;
     if (Array.isArray(value)) {
@@ -1414,15 +1421,13 @@ export function findCommonJsForm(root: unknown): Node | undefined {
     }
     const node = value as Node;
     if (typeof node.type !== "string") return;
-    if (commonJsFormOf(node) && parentType !== "TSModuleBlock") {
-      if (!first || (node.start ?? 0) < (first.start ?? 0)) first = node;
-    }
+    if (parentType !== "TSModuleBlock" && matches(node)) found.push(node);
     for (const [key, field] of Object.entries(node)) {
       if (!NON_CHILD_FIELDS.has(key)) visit(field, node.type);
     }
   };
   visit(root, undefined);
-  return first;
+  return found;
 }
 
 /**
@@ -1656,6 +1661,16 @@ function stripContainer(container: Node, t: Node, moduleBlock = false): void {
     }
     case "MxStatements":
       if (moduleBlock && stripModuleBlock(container)) return;
+      if (!moduleBlock) {
+        // The statements themselves may be module statements; what is
+        // below them may not.
+        for (const statement of node as Node[]) {
+          for (const [key, field] of Object.entries(statement ?? {})) {
+            if (!NON_CHILD_FIELDS.has(key))
+              rejectNestedModuleDeclaration(field);
+          }
+        }
+      }
       container.node = stripProgram([...node], moduleBlock);
       return;
     case "MxPattern": {
