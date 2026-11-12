@@ -775,9 +775,11 @@ than a loud one (jsx-text-entities review, 2026-10-04; the same policy as
 `<!doctype>` on those hosts). Write the comment in the HTML shell that mounts
 the app.
 
-`<html-comment>` takes no attributes, with or without an argument list, on
-every host that claims the tag, as in Marko: "The `<html-comment>` tag does not
-support attributes." (`MX_INVALID_ATTRIBUTE`, at the first attribute).
+`<html-comment>` takes no attributes, with or without an argument list, as in
+Marko: "The `<html-comment>` tag does not support attributes."
+(`MX_INVALID_ATTRIBUTE`, at the first attribute). A host that refuses the tag
+itself (the JSX hosts) reports that refusal first; the attribute error is the
+one a host that renders the tag, or does not claim it, reports.
 
 `<log>` and `<debug>` take the `value=` attribute alone: "The `<log>` tag only
 supports the `value=` attribute." (`MX_INVALID_ATTRIBUTE`, at the first
@@ -1793,9 +1795,12 @@ Four iteration shapes, chosen by attribute.
   `<define>`, a module binding, `input` or `$global`), the message says so:
   "The `by=` attribute is evaluated before the loop runs, so it reads the outer
   `x`, not the loop's `x` parameter. Key with a property name string (`by="id"`)
-  or a function (`by=(x) => <the authored expression>`)." A `<let>` declared
-  below the loop is not in scope there, and gets the "`x` is not in scope"
-  wording. `MX_INVALID_FOR`, at the name.
+  or a function (`by=(x) => <the authored expression>`)." The function lists the
+  loop's parameters up to the one that binds the name, as authored
+  (`by=(item, i) => i`, `by=({id}) => id`). A `<let>` declared below the loop,
+  and a tag variable declared in a block that has ended, are not in scope there:
+  they get the "`x` is not in scope" wording with the same key function.
+  `MX_INVALID_FOR`, at the name.
 
 **Params come before `=value`** — `<for|item, i| of=xs>`, and by the same rule
 `<if|u|=cond>` would be the spelling were it legal. `notes/solidmx-spec.md` §5.1
