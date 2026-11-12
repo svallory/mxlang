@@ -1308,6 +1308,25 @@ describe("a two-way bind on a parameter with no change handler", () => {
     },
   );
 
+  it.each(["div", "id"])(
+    "a bind above a /%s tag variable of the same name is not one to the parameter (the variable is hoisted)",
+    (tag) => {
+      // Under a host that accepts a tag variable on the element and on `<id>`.
+      let error: TranslateError | undefined;
+      try {
+        compileSource(
+          `<for|x| of=[1]><if=x><input value:=x/><${tag}/x/></if></for>`,
+          "/page.mx",
+          withVarOnElements,
+          { targets: lookup, tagDiscoveryDirs: [], emitIr: () => "" } as never,
+        );
+      } catch (e) {
+        error = e as TranslateError;
+      }
+      expect(error).toBeUndefined();
+    },
+  );
+
   it.each([
     "<for|{a}| of=[{a:1}]><input value:=a/></for>",
     "<define/D|{a}|><input value:=a/></define>",

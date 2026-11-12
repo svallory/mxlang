@@ -93,7 +93,7 @@ const CASES: Case[] = [
   },
   {
     name: "a refused definition (the refuse exit)",
-    source: "<if x=1/>\n",
+    source: "<if=1/>\n",
     options: { customTags: { if: {} } },
     exit: "refuse",
     before: ["MX_RESERVED_TAG"],

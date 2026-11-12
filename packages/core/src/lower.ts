@@ -1383,9 +1383,9 @@ function dropGuard(ctx: Ctx, names: readonly string[]): void {
 
 /**
  * A tag variable (a returning call's `/var`, an element reference, `<id>`)
- * shadows a `<for>`/`<define>` parameter of its spelling from the tag to the
- * end of the block: a write to the name is not one to that parameter any
- * more. `<let>` and `<const>` manage their own guards.
+ * shadows a `<for>`/`<define>` parameter of its spelling for the whole block,
+ * writes and binds above its tag included (Marko hoists a tag variable): a
+ * write to the name is not one to that parameter. `<let>` and `<const>` manage their own guards.
  */
 function shadowTagVarGuards(ctx: Ctx, child: Node): void {
   if (!isTagNode(child) || !tagVarOf(child)) return;
@@ -3933,9 +3933,8 @@ function rejectAttributeArguments(
  * Marko's attribute check on a condition tag: `<if>`/`<else-if>` take the
  * condition (the `value=` attribute) alone, `<else>` an `if=` alone, with or
  * without arguments. The error points at the first attribute that is not the
- * allowed one, else the second. A lone plain attribute is the condition's own
- * (a missing condition is reported elsewhere); a lone spread is refused, as
- * stock refuses `<if ...x>`.
+ * allowed one, else the second. A lone attribute that is not the condition
+ * (`<if foo=x>`) or a lone spread (`<if ...x>`) is refused too, as stock does.
  */
 function rejectExtraConditionAttributes(
   ctx: Ctx,
@@ -3962,15 +3961,12 @@ function rejectExtraConditionAttributes(
       if (!isSpreadAttributeNode(attr)) rejectAttributeArguments(ctx, attr);
     return;
   }
-  const offender =
-    attrs.length > 1 || attrs.some(isSpreadAttributeNode)
-      ? offendingAttribute(
-          attrs,
-          (attr) =>
-            !isSpreadAttributeNode(attr) &&
-            (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
-        )
-      : undefined;
+  const offender = offendingAttribute(
+    attrs,
+    (attr) =>
+      !isSpreadAttributeNode(attr) &&
+      (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
+  );
   if (offender) {
     raise(
       INVALID_ATTRIBUTE_CODE,
@@ -8095,6 +8091,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
   const declaredHere = new Set<string>();
   for (const child of children) {
     if (!isTagNode(child) || !tagVarOf(child)) continue;
+    // A tag variable is in scope for the whole block (Marko hoists it), so it
+    // shadows a same-named parameter for a write or bind above its tag too.
+    shadowTagVarGuards(ctx, child);
     for (const name of bindingIdentifiers(tagVarOf(child))) {
       saveTagVar(name);
       declaredHere.add(name);

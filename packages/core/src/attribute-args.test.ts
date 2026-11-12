@@ -268,6 +268,16 @@ describe("the opt-in attribute argument refusal", () => {
       4,
     ],
     [
+      "<if foo=x><i/></if>",
+      "The `<if>` tag only supports the `value=` attribute.",
+      4,
+    ],
+    [
+      "<if=x><i/></if><else-if foo=y><i/></else-if>",
+      "The `<else-if>` tag only supports the `value=` attribute.",
+      24,
+    ],
+    [
       "<if a=1 value=x><i/></if>",
       "The `<if>` tag only supports the `value=` attribute.",
       4,
