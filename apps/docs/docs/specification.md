@@ -4182,13 +4182,17 @@ and `mx-tsc` prints them positioned in `package.json` without changing its exit
 code.
 
 `mx.strict` accompanies an explicitly selected target as it did an explicit
-host. Without `mx.host` or `mx.target` the default target is non-strict, and
-`mx.strict: true` is a policy **warning** (code `strict-ignored`, "mx.strict is
-ignored without mx.host or mx.target"), positioned at the `strict` value. It is
-raised only when neither key is present (a bad `mx.host` or `mx.target` has its
-own diagnostic) and the resolved target is not strict anyway. Every tool that
-prints policy diagnostics reports it (the vite plugin, the language server, the
-TypeScript plugin and `mx-tsc`); the Bun loaders do not print them.
+host. Without `mx.host` or `mx.target`, `mx.strict` does not apply: the
+selected target (a lone target dependency, else the default target) compiles
+strict only when it is always strict. Otherwise `mx.strict: true` is a policy
+**warning** (code `strict-ignored`, "mx.strict is ignored without mx.host or
+mx.target"), positioned at the `strict` value. It is raised only when neither
+key is present (a bad `mx.host` or `mx.target` has its own diagnostic). With
+several target dependencies it names them and asks for `mx.host` or
+`mx.target`; otherwise it suggests `mx.target "<resolved>"`, or says the
+resolved target has no strict mode. Every tool that prints policy diagnostics
+reports it (the vite plugin, the language server, the TypeScript plugin and
+`mx-tsc`); the Bun loaders do not print them.
 `mx.tags[].hosts` still filters by **host**, not target: `solid-jsx` there
 warns that it is a target and suggests `solid`.
 
