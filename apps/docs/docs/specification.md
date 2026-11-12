@@ -1813,7 +1813,7 @@ hits the temporal dead zone and throws at render time.
 | `` `<for>` with more than one of `of=`, `in=`, `from=`/`to=`/`until=` `` | More than one source form. |
 | `` `<for>` with both `to=` and `until=` `` | Both present. |
 | `` `<for step=...>` is only valid on a range `` | `step` without `to`/`until`. |
-| `` `<for ${label}=...>` requires an expression value `` | The attribute has no value or is a function expression. `label` ∈ `of in from to until step by`. An argument list on the attribute (`by(v)="id"`, `of(v)=xs`, `to=3 step(v)=1`) is accepted and dropped, as Marko does. |
+| `` `<for ${label}=...>` requires an expression value `` | The attribute has no value or is a function expression. `label` ∈ `of in from to until step by`. An argument list on the attribute (`by(v)="id"`, `of(v)=xs`, `to=3 step(v)=1`) is accepted and dropped, as Marko does; a host that refuses attribute arguments refuses it here too ("Unsupported arguments on the `by` attribute."). |
 | `` `<for>` does not support the `x` attribute. `` | An attribute other than `of in from to until step by` (`<for|x| of=xs a=1>`), with or without arguments. `MX_INVALID_ATTRIBUTE`, at the attribute. |
 | `` `<for>` does not support spread attributes. `` | A spread attribute on `<for>`. `MX_INVALID_ATTRIBUTE`. |
 | `` `<for>` requires `of=`, `in=`, or `from=`/`to=`/`until=` `` | No source form at all. |
