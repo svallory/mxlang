@@ -305,6 +305,30 @@ describe("React runtime", () => {
     expect(result).toEqual({ hydrated: "c:nope", csr: "c:nope" });
   });
 
+  it("stays on the catch when the body stops throwing, as Marko does", async () => {
+    const throwing = (): never => {
+      throw new Error("boom");
+    };
+    const view = (f: () => string): ReactNode =>
+      tryOf(
+        () => "caught",
+        () => createElement("p", null, f()),
+      );
+    const html = await withDom(async () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      await act(async () => {
+        root.render(view(throwing));
+      });
+      await act(async () => {
+        root.render(view(() => "fine"));
+      });
+      return host.innerHTML;
+    });
+    expect(html).toBe("caught");
+  });
+
   it("hydrates and client-renders a descendant throw to the real error", async () => {
     const view = (): ReactNode =>
       createElement(

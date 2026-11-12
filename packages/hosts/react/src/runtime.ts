@@ -66,12 +66,28 @@ export class MxErrorBoundary extends Component<
     this.setState({ error, caught: true });
   }
 
+  /**
+   * The error a direct throw in the `<try>` body left, recorded by
+   * {@link MxTryBody} while it rendered. An instance field rather than state:
+   * a `setState` from a child's render is a React warning, and the next
+   * render of this boundary is all that has to read it. As in Marko, once
+   * `<@catch>` has rendered it stays rendered when the body stops throwing.
+   */
+  #thrown: { error: unknown } | null = null;
+
   render(): ReactNode {
     const { fallback, children } = this.props;
     if (this.state.caught) return callFallback(fallback, this.state.error);
+    if (this.#thrown) return callFallback(fallback, this.#thrown.error);
     const body =
       typeof children === "function"
-        ? createElement(MxTryBody, { render: children, fallback })
+        ? createElement(MxTryBody, {
+            render: children,
+            fallback,
+            onCatch: (error: unknown) => {
+              this.#thrown = { error };
+            },
+          })
         : children;
     return createElement(
       Suspense,
@@ -91,6 +107,8 @@ function callFallback(
 interface MxTryBodyProps {
   render: () => ReactNode;
   fallback: MxErrorBoundaryProps["fallback"];
+  /** Tells the boundary a direct throw happened, so it stays on the catch. */
+  onCatch: (error: unknown) => void;
 }
 
 /**
@@ -99,13 +117,14 @@ interface MxTryBodyProps {
  * the partial body. A function component, so hooks written inline in the body
  * stay legal.
  */
-function MxTryBody({ render, fallback }: MxTryBodyProps): ReactNode {
+function MxTryBody({ render, fallback, onCatch }: MxTryBodyProps): ReactNode {
   try {
     return render();
   } catch (error) {
     // A suspension is not an error: it must reach the nearest `Suspense`
     // (`<@placeholder>`'s, the internal one, or an outer one), not `<@catch>`.
     if (isSuspension(error)) throw error;
+    onCatch(error);
     return callFallback(fallback, error);
   }
 }
