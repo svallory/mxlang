@@ -194,20 +194,24 @@ edit found no caller left to re-diagnose. Fixed in `@mxlang/core`
 here in `diagnoseDocument`'s `catch` block before building the diagnostic.
 
 **Scan evidence is a dependency too** (`mx.contracts` PR 2).
-`diagnoseDocument` adds every `scan.files[].path` to the caller's dependency
-set before compiling: contracts modules, sidecars and scanned tag files do
-not necessarily appear among the compiler's callee-input dependencies.
-Recording them early retains these watcher edges even when compilation fails.
-Discovery errors carry partial scan evidence and the last complete scan's
-inputs through `TranslateError.dependencies`, consumed by the same catch path.
-`src/contracts.test.ts` proves module-only and sidecar-only watched-file edits
-re-publish the caller's diagnostics over Bun stdio, through error-to-error,
-error-to-success and success-to-error cycles without editing the page, plus
-valid → invalid declaration → repair and initially-invalid discovery → repair.
-Dynamic registration includes `.js`, `.mjs` and `.cjs`; a real Node stdio client
-asserts the registered globs and drives a `.cjs` module edit through them.
-Scan-level template dependency fan-out is intentionally deferred to space TODO
-`ls-scan-dependency-fanout`.
+`diagnoseDocument` adds `scanInputs(scan)` to the caller's dependency set
+before compiling: the files the scan itself read (contracts modules, sidecars,
+the dialect module and dialect tag files). Recording them early retains these
+watcher edges even when compilation fails. A core `.mx` template tag file is
+listed by the scan but never read by it, so it is not a scan input: it is a
+dependency only of a caller whose compile resolved it (a callee that fails to
+compile still reports itself), so editing an unused template re-diagnoses no
+caller. Discovery errors carry partial scan evidence and the last complete
+scan's inputs through `TranslateError.dependencies`, consumed by the same catch
+path. `src/contracts.test.ts` proves module-only and sidecar-only watched-file
+edits re-publish the caller's diagnostics over Bun stdio, through
+error-to-error, error-to-success and success-to-error cycles without editing
+the page, plus valid → invalid declaration → repair and initially-invalid
+discovery → repair. Dynamic registration includes `.js`, `.mjs` and `.cjs`; a
+real Node stdio client asserts the registered globs and drives a `.cjs` module
+edit through them. `server.test.ts` ("scan inputs are not template-body
+dependencies") pins `scanInputs`, the unused-template edit staying quiet, and
+the repair of a broken called template.
 Node's ESM/TS module reload still requires restart (`sync-esm-reload-node`);
 watcher scheduling does not bypass the runtime's export cache.
 

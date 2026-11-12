@@ -548,9 +548,11 @@ export function diagnoseDocument(
     const lookup = lookupFor(hostPolicy);
     const host = lookup.hostFilterKey(hostPolicy.target) ?? null;
     const scan = scanCached(path, { host, targets: lookup });
-    // Discovery reads contracts modules, sidecars and tag files independently
-    // of the compiler's callee-input dependencies. Record them before compiling
-    // so watcher-only edits reach callers even when compilation fails.
+    // Record the files discovery read (`scanInputs`: contracts modules,
+    // sidecars, the dialect module and dialect tag files) before compiling, so
+    // watcher-only edits reach callers even when compilation fails. Core
+    // templates are left out (see `scanInputs`): the compile records the ones
+    // it resolves, failed ones included.
     if (dependencies)
       for (const file of scanInputs(scan)) dependencies.add(file);
     scanWarnings = [

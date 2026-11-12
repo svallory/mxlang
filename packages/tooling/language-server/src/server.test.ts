@@ -11,7 +11,7 @@ import { join, matchesGlob } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MX_CONFIG_SEARCH_PLACES } from "@mxlang/core";
 import { builtinFileKinds, resolveTargetPolicyDetailed } from "@mxlang/targets";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   createMessageConnection,
   type MessageConnection,
@@ -27,7 +27,7 @@ import {
   probeProject,
   tagDiscoveryProject,
 } from "../../../../test-fixtures/dialects/probe.ts";
-import { diagnoseDocument } from "./diagnose.ts";
+import { scanInputs } from "./diagnose.ts";
 import { expectQuiet, waitFor } from "./fixtures/wait-for.ts";
 import { globMatcher, isMxDocument, WATCHED_FILE_GLOBS } from "./server.ts";
 
@@ -1870,8 +1870,9 @@ describe("stdio server (e2e)", () => {
   }, 15000);
   describe("scan inputs are not template-body dependencies", () => {
     const UNUSED = 40;
-    const makeProject = (): string => {
-      const directory = mkdtempSync(join(tmpdir(), "mx-lsp-fanout-"));
+    let directory: string;
+    beforeAll(() => {
+      directory = mkdtempSync(join(tmpdir(), "mx-lsp-fanout-"));
       writeFileSync(
         join(directory, "package.json"),
         '{"name":"x","mx":{"host":"html"}}',
@@ -1881,87 +1882,127 @@ describe("stdio server (e2e)", () => {
         writeFileSync(join(directory, `tags/unused${i}.mx`), "<span/>\n");
       }
       writeFileSync(join(directory, "tags/card.mx"), "<section/>\n");
-      return directory;
-    };
-
-    it("records only the called template, not the 40 unused ones", () => {
-      const directory = makeProject();
-      try {
-        const dependencies = new Set<string>();
-        const page = join(directory, "page.mx");
-        diagnoseDocument(
-          "<card/>\n",
-          page,
-          resolveTargetPolicyDetailed(page).policy,
-          () => undefined,
-          undefined,
-          undefined,
-          undefined,
-          dependencies,
-        );
-        const tags = [...dependencies].filter((file) =>
-          file.includes("/tags/"),
-        );
-        expect(tags).toEqual([join(directory, "tags/card.mx")]);
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
-      }
+    });
+    afterAll(() => {
+      rmSync(directory, { recursive: true, force: true });
     });
 
+    it("scanInputs keeps what the scan read and drops core templates", () => {
+      const tags = new Map([
+        ["plain", { template: "/p/tags/plain.mx" }],
+        [
+          "both",
+          { template: "/p/tags/both.mx", sidecar: "/p/tags/both.tag.ts" },
+        ],
+        ["dialect", { tagFile: "/p/tags/money.mesh.mx" }],
+        ["fromModule", { module: "/p/contracts.ts" }],
+      ]);
+      const files = [
+        "/p/tags/plain.mx",
+        "/p/tags/both.mx",
+        "/p/tags/both.tag.ts",
+        "/p/tags/money.mesh.mx",
+        "/p/contracts.ts",
+        "/p/dialect.ts",
+      ].map((path) => ({ path }));
+      expect(scanInputs({ files, tags })).toEqual([
+        "/p/tags/both.tag.ts",
+        "/p/tags/money.mesh.mx",
+        "/p/contracts.ts",
+        "/p/dialect.ts",
+      ]);
+    });
+
+    const open = async (pages: Record<string, string>) => {
+      const conn = startClient();
+      await conn.sendRequest("initialize", {
+        processId: null,
+        rootUri: null,
+        capabilities: {},
+      });
+      conn.sendNotification("initialized", {});
+      const log: Array<{ uri: string; diagnostics: unknown[] }> = [];
+      conn.onNotification(PublishDiagnosticsNotification, (params) => {
+        log.push(params);
+      });
+      const uriOf = (file: string) => `file://${join(directory, file)}`;
+      for (const [file, text] of Object.entries(pages)) {
+        conn.sendNotification("textDocument/didOpen", {
+          textDocument: {
+            uri: uriOf(file),
+            languageId: "mx",
+            version: 1,
+            text,
+          },
+        });
+      }
+      await waitFor(
+        () =>
+          Object.keys(pages).every((f) => log.some((l) => l.uri === uriOf(f))),
+        "every page published",
+      );
+      const changed = (file: string) =>
+        conn.sendNotification("workspace/didChangeWatchedFiles", {
+          changes: [{ uri: uriOf(file), type: 2 }],
+        });
+      return { log, uriOf, changed };
+    };
+
     it("an unused template edit re-publishes neither page; a called one does", async () => {
-      const directory = makeProject();
+      const { log, uriOf, changed } = await open({
+        "a.mx": "<div/>\n",
+        "b.mx": "<card/>\n",
+      });
+      const before = log.length;
+      changed("tags/unused7.mx");
+      await expectQuiet(
+        () => log.slice(before),
+        "publishes after editing an unused template",
+      );
+      changed("tags/card.mx");
+      await waitFor(
+        () => log.slice(before).some((l) => l.uri === uriOf("b.mx")),
+        "the page calling <card/> re-publishes",
+      );
+      expect(log.slice(before).some((l) => l.uri === uriOf("a.mx"))).toBe(
+        false,
+      );
+    }, 15000);
+
+    it("repairing a called template that failed to compile re-diagnoses its caller", async () => {
+      const broken = join(directory, "tags/broken.mx");
+      writeFileSync(broken, "<section>\n  <div>\n");
       try {
-        const conn = startClient();
-        await conn.sendRequest("initialize", {
-          processId: null,
-          rootUri: null,
-          capabilities: {},
-        });
-        conn.sendNotification("initialized", {});
-        const pages = ["a", "b"].map(
-          (name) => `file://${join(directory, `${name}.mx`)}`,
-        );
-        const log: string[] = [];
-        conn.onNotification(PublishDiagnosticsNotification, (params) => {
-          log.push(params.uri);
-        });
-        for (const uri of pages) {
-          conn.sendNotification("textDocument/didOpen", {
-            textDocument: {
-              uri,
-              languageId: "mx",
-              version: 1,
-              text: uri === pages[0] ? "<div/>\n" : "<card/>\n",
-            },
-          });
-        }
+        const { log, uriOf, changed } = await open({ "c.mx": "<broken/>\n" });
         await waitFor(
-          () => pages.every((uri) => log.includes(uri)),
-          "both pages published",
+          () =>
+            log.some(
+              (l) =>
+                l.uri === uriOf("tags/broken.mx") && l.diagnostics.length > 0,
+            ),
+          "the template's error is published on its own URI",
         );
-        const change = (name: string) =>
-          conn.sendNotification("workspace/didChangeWatchedFiles", {
-            changes: [
-              {
-                uri: `file://${join(directory, `tags/${name}.mx`)}`,
-                type: 2,
-              },
-            ],
-          });
         const before = log.length;
-        change("unused7");
-        await expectQuiet(
-          () => log.slice(before),
-          "publishes after editing an unused template",
-        );
-        change("card");
+        writeFileSync(broken, "<section><div/></section>\n");
+        changed("tags/broken.mx");
         await waitFor(
-          () => log.slice(before).includes(pages[1] as string),
-          "the page calling <card/> re-publishes",
+          () =>
+            log
+              .slice(before)
+              .some(
+                (l) => l.uri === uriOf("c.mx") && l.diagnostics.length === 0,
+              ) &&
+            log
+              .slice(before)
+              .some(
+                (l) =>
+                  l.uri === uriOf("tags/broken.mx") &&
+                  l.diagnostics.length === 0,
+              ),
+          "the caller and the template are cleared",
         );
-        expect(log.slice(before)).not.toContain(pages[0]);
       } finally {
-        rmSync(directory, { recursive: true, force: true });
+        rmSync(broken, { force: true });
       }
     }, 15000);
   });
