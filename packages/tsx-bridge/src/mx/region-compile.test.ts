@@ -697,7 +697,8 @@ describe("mxRegionCompile: recorded mappings", () => {
 describe("mxRegionCompile: a method shorthand's generic head", () => {
   const source =
     "const view = <button onClick<T extends Missing>(e: T) { go() }/>;";
-  const code = "<button onClick={function <T extends Missing>(e: T) { go(); }}/>";
+  const code =
+    "<button onClick={function <T extends Missing>(e: T) { go(); }}/>";
 
   it("remaps the constraint's type nodes to their authored span", () => {
     const file = parse(source, "x.solid.mx", {
