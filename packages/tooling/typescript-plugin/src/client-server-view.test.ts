@@ -105,6 +105,109 @@ describe("a client name in the server view", { timeout: 60_000 }, () => {
   });
 });
 
+describe("a server-only name in client code", { timeout: 60_000 }, () => {
+  it.each([
+    [
+      "a server let",
+      "server let s = 1;\nclient const n = s.toFixed(1);\n<div/>\n",
+      "s.toFixed",
+    ],
+    [
+      "a server const",
+      "server const s = 1;\nclient const n = s.toFixed(1);\n<div/>\n",
+      "s.toFixed",
+    ],
+    [
+      "a server import",
+      'server import { one as s } from "./one.ts";\nclient const n = s.toFixed(1);\n<div/>\n',
+      "s.toFixed",
+    ],
+  ])(
+    "%s is undefined in client code, reported at the read",
+    (_name, source, needle) => {
+      const found = errorsOf(
+        { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
+        FILE,
+      );
+      expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+      expect(found[0]?.start).toBe(source.indexOf(needle));
+    },
+  );
+
+  it("a server name read by server code stays typed", () => {
+    const source =
+      "server const s = 1;\nserver const n: number = s;\n<div>${s.toFixed(1)}</div>\n";
+    expect(errorsOf({ [FILE]: source }, FILE)).toEqual([]);
+  });
+});
+
+describe("a client import, namespace or declare in the server view", {
+  timeout: 60_000,
+}, () => {
+  it.each([
+    [
+      "a client import",
+      'client import { one as y } from "./one.ts";\n<div>${y.toFixed(1)}</div>\n',
+      "y.toFixed",
+    ],
+    [
+      "a client namespace",
+      "client namespace N { export const a = 1 }\n<div>${N.a.toFixed(1)}</div>\n",
+      "N.a.toFixed",
+    ],
+    [
+      "a client declare",
+      "client declare const d: number;\n<div>${d.toFixed(1)}</div>\n",
+      "d.toFixed",
+    ],
+  ])(
+    "%s is undefined in a template read, at the read",
+    (_name, source, needle) => {
+      const found = errorsOf(
+        { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
+        FILE,
+      );
+      expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+      expect(found[0]?.start).toBe(source.indexOf(needle));
+    },
+  );
+
+  it("a qualified client namespace is undefined at its leftmost name", () => {
+    const source =
+      "client namespace A.B { export const x = 1 }\n<div>${A.B.x.toFixed(1)}</div>\n";
+    const found = errorsOf({ [FILE]: source }, FILE);
+    expect(found.map((diagnostic) => diagnostic.code)).toEqual([18048]);
+    expect(found[0]?.start).toBe(source.indexOf("A.B.x"));
+  });
+
+  it("a refinement from a client import checks against the client binding", () => {
+    const source =
+      'client import { clamp } from "./fn.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n';
+    expect(
+      errorsOf(
+        {
+          [FILE]: source,
+          "/project/fn.ts": "export const clamp = (n: number) => n;\n",
+        },
+        FILE,
+      ),
+    ).toEqual([]);
+  });
+
+  it("KNOWN LIMIT: a server statement still reads a client import typed", () => {
+    // The import is one module-level binding; the server statement is module
+    // level too, so the shadow the render function uses is not available there.
+    const source =
+      'client import { one as y } from "./one.ts";\nserver const z = y.toFixed(1);\n<div/>\n';
+    expect(
+      errorsOf(
+        { [FILE]: source, "/project/one.ts": "export const one = 1;\n" },
+        FILE,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("client code keeps its own scope and order", {
   timeout: 60_000,
 }, () => {
