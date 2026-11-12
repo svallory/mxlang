@@ -149,7 +149,10 @@ describe("diagnoseNgMx positions NG8112 at the authored <const>", () => {
     expect(found[0]?.mapped).toBe("node");
     expect(lineColumn(source, found[0]?.start ?? -1)).toBe("6:21");
     expect(
-      source.slice(found[0]?.start, found[0]?.start + (found[0]?.length ?? 0)),
+      source.slice(
+        found[0]?.start,
+        (found[0]?.start ?? 0) + (found[0]?.length ?? 0),
+      ),
     ).toBe("<const/a=1/>");
   });
 
@@ -165,6 +168,21 @@ describe("diagnoseNgMx positions NG8112 at the authored <const>", () => {
       expect.stringContaining("@let a is declared"),
       expect.stringContaining("@let a is declared"),
     ]);
+  });
+  it("a name bound by a destructuring pattern: the <const> tag, not the region start", () => {
+    const { source, found } = unused(
+      "<section><const/{ p, q }=obj/>${p}</section>",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("@let q is declared");
+    expect(found[0]?.mapped).toBe("node");
+    expect(lineColumn(source, found[0]?.start ?? -1)).toBe("6:21");
+    expect(
+      source.slice(
+        found[0]?.start,
+        (found[0]?.start ?? 0) + (found[0]?.length ?? 0),
+      ),
+    ).toBe("<const/{ p, q }=obj/>");
   });
 });
 

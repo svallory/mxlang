@@ -1,17 +1,16 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: MX `${…}` placeholders in template source
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { build } from "../src/build.ts";
 import { runCli } from "../src/cli.ts";
-import { rewriteGeneratedNames } from "../src/ng-build.ts";
+import {
+  forwardLines,
+  rewriteGeneratedNames,
+  rewriterFor,
+} from "../src/ng-build.ts";
 
 describe("rewriteGeneratedNames", () => {
   const names = {
@@ -76,9 +75,65 @@ describe("rewriteGeneratedNames and terminal output", () => {
   });
 });
 
+/** Feeds `chunks` through forwardLines and returns what the sink received. */
+async function forward(
+  chunks: string[],
+  names: Parameters<typeof rewriterFor>[0],
+  end: "end" | "error" = "end",
+): Promise<string> {
+  const source = new PassThrough();
+  const sink = new PassThrough();
+  const received: string[] = [];
+  sink.on("data", (d) => received.push(String(d)));
+  const done = forwardLines(source, sink, rewriterFor(names));
+  for (const chunk of chunks) source.write(chunk);
+  if (end === "end") source.end();
+  else source.destroy(new Error("boom"));
+  await done;
+  return received.join("");
+}
+
+describe("forwardLines", () => {
+  const names = { "src/x.html": { __mxConst_a1: "a" } };
+
+  it("rewrites a name that arrives split across two reads", async () => {
+    expect(
+      await forward(["NG8112: @let __mxCon", "st_a1 is declared\n"], names),
+    ).toBe("NG8112: @let a is declared\n");
+  });
+
+  it("flushes an unterminated last line at the end", async () => {
+    expect(await forward(["@let __mxConst_a1"], names)).toBe("@let a");
+  });
+
+  it("settles when the stream errors, keeping what it had", async () => {
+    expect(await forward(["__mxConst_a1 x\n"], names, "error")).toBe("a x\n");
+  });
+
+  it("realigns the underline under a shortened source line", async () => {
+    expect(
+      await forward(
+        [
+          "▲ [ERROR] NG8112: unused\n\n    @let __mxConst_a1 = 2;\n         ~~~~~~~~~~~~\n\n",
+        ],
+        names,
+      ),
+    ).toBe("▲ [ERROR] NG8112: unused\n\n    @let a = 2;\n         ~\n\n");
+  });
+
+  it("leaves a line that is not an underline alone", async () => {
+    expect(await forward(["__mxConst_a1\n  ~ not caret? x\n"], names)).toBe(
+      "a\n  ~ not caret? x\n",
+    );
+  });
+});
+
 describe("mx-angular ng-build", () => {
-  const dir = mkdtempSync(join(tmpdir(), "mx-ng-build-"));
-  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  // A space in the path: nothing may re-split it.
+  const root = mkdtempSync(join(tmpdir(), "mx-ng-build-"));
+  const dir = join(root, "my app");
+  let built: ReturnType<typeof build>;
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
 
   beforeAll(() => {
     mkdirSync(join(dir, "src"), { recursive: true });
@@ -102,41 +157,43 @@ describe("mx-angular ng-build", () => {
       join(dir, "src/y.component.ng.mx"),
       "declare function Component(options: object): ClassDecorator;\n@Component({ template: <section><div><const/b=1/></div><div><const/b=2/></div></section> })\nexport class YComponent {}\n",
     );
-    const bin = join(dir, "node_modules/.bin");
-    mkdirSync(bin, { recursive: true });
-    // Writes in two chunks, the second mid-line, as a build does.
-    const script =
-      "process.stdout.write('args: ' + process.argv.slice(2).join(' ') + '\\n');\n" +
-      "process.stderr.write('NG8112: @let __mxCon');\n" +
-      "setTimeout(() => { process.stderr.write('st_a1 is declared\\n'); process.exit(3); }, 20);\n";
-    writeFileSync(join(bin, "ng"), `#!/usr/bin/env node\n${script}`);
-    chmodSync(join(bin, "ng"), 0o755);
-    writeFileSync(join(bin, "ng.cmd"), `@node "%~dp0\\ng" %*\r\n`);
+    // The project's own `ng`: `@angular/cli/bin/ng.js`, run under this node.
+    const cli = join(dir, "node_modules/@angular/cli");
+    mkdirSync(join(cli, "bin"), { recursive: true });
+    writeFileSync(
+      join(cli, "package.json"),
+      JSON.stringify({ name: "@angular/cli", version: "0.0.0" }),
+    );
+    writeFileSync(
+      join(cli, "bin/ng.js"),
+      "process.stdout.write('args: ' + JSON.stringify(process.argv.slice(2)) + '\\n');\n" +
+        "process.stderr.write('NG8112: @let __mxConst_a1 is declared\\n');\n" +
+        "process.exit(3);\n",
+    );
+    built = build(dir);
   });
 
   it("records the authored name of each renamed const per output file", () => {
-    const result = build(dir);
-    expect(result.errors).toEqual([]);
-    expect(result.authoredNames[join(dir, "src/x.html")]).toEqual({
+    expect(built.errors).toEqual([]);
+    expect(built.authoredNames[join(dir, "src/x.html")]).toEqual({
       __mxConst_a: "a",
       __mxConst_a1: "a",
     });
   });
 
   it("records a .ng.mx module's renamed names", () => {
-    const result = build(dir);
-    const names = result.authoredNames[join(dir, "src/y.component.ts")];
+    const names = built.authoredNames[join(dir, "src/y.component.ts")];
     expect(Object.values(names ?? {})).toEqual(["b", "b"]);
   });
 
   it("names a destructuring const's holder as the pattern the author wrote", () => {
-    const result = build(dir);
     expect(
-      Object.values(result.authoredNames[join(dir, "src/pattern.html")] ?? {}),
+      Object.values(built.authoredNames[join(dir, "src/pattern.html")] ?? {}),
     ).toContain("{ p, q }");
   });
 
-  it("refuses a positional argument before --", async () => {
+  // Not a process smoke: `build` refuses before anything runs.
+  it("refuses a positional argument", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       expect(await runCli(["ng-build", "--project", dir, "oops"])).toBe(1);
@@ -156,13 +213,12 @@ describe("mx-angular ng-build", () => {
         dir,
         "--",
         "--configuration",
-        "production",
+        "two words & more",
       ]);
       expect(code).toBe(3);
       expect(out.mock.calls.join("")).toBe(
-        "args: build --configuration production\n",
+        'args: ["build","--configuration","two words & more"]\n',
       );
-      // The name was split across two writes; it is still one name.
       expect(err.mock.calls.join("")).toBe("NG8112: @let a is declared\n");
     } finally {
       out.mockRestore();

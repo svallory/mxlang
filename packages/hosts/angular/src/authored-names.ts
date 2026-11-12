@@ -22,25 +22,35 @@ export function mergeAuthoredNames(
   return merged;
 }
 
-// Colour escapes (`ng build` colours a TTY's names): `\x1b[1m__mxConst_a\x1b[0m`
-// has no word character between the escape and the name, but `m` of `[0m` is
-// one, so the boundary test below skips escapes first.
+// Colour escapes: `ng build` prints none into a pipe, so they appear only when
+// the environment forces colour (`FORCE_COLOR`); `\x1b[1m__mxConst_a\x1b[0m` has
+// no word character between the escape and the name, but `m` of `[0m` is one,
+// so the boundary test below looks past escapes.
 const ANSI = "(?:\\x1b\\[[0-9;]*m)*";
 
+/** One replacement a rewrite made: where in the input, how long it was, how long its replacement is. */
+export interface NameEdit {
+  index: number;
+  removed: number;
+  added: number;
+}
+
 /**
- * `text` with each generated name replaced by its authored one, in one pass
- * (a replaced name is never rescanned). A name is matched as a whole
- * identifier, so `__mxConst_a` leaves `__mxConst_ab` alone. A `null` entry
- * (see {@link mergeAuthoredNames}) is left as printed.
+ * A function that replaces each generated name in `names` with its authored
+ * one, in one pass (a replaced name is never rescanned). A name is matched as
+ * a whole identifier, so `__mxConst_a` leaves `__mxConst_ab` alone. A `null`
+ * entry (see {@link mergeAuthoredNames}) is left as printed. The map is read
+ * and the pattern compiled once, so build it once per run. `onEdit` is told
+ * each replacement, in input order, for a caller that keeps a second line
+ * aligned with the first.
  */
-export function rewriteAuthoredNames(
-  text: string,
+export function createNameRewriter(
   names: Record<string, string | null>,
-): string {
+): (text: string, onEdit?: (edit: NameEdit) => void) => string {
   const usable = Object.entries(names).filter(
     (entry): entry is [string, string] => entry[1] !== null,
   );
-  if (usable.length === 0) return text;
+  if (usable.length === 0) return (text) => text;
   // Longest first, so a name that prefixes another cannot win the alternation.
   const alternation = usable
     .map(([generated]) => generated)
@@ -52,7 +62,22 @@ export function rewriteAuthoredNames(
     "g",
   );
   const byGenerated = new Map(usable);
-  return text.replace(pattern, (whole, generated: string) =>
-    whole.replace(generated, () => byGenerated.get(generated) as string),
-  );
+  return (text, onEdit) =>
+    text.replace(pattern, (whole, generated: string, offset: number) => {
+      const authored = byGenerated.get(generated) as string;
+      onEdit?.({
+        index: offset + whole.indexOf(generated),
+        removed: generated.length,
+        added: authored.length,
+      });
+      return whole.replace(generated, () => authored);
+    });
+}
+
+/** `text` with each generated name replaced by its authored one; see {@link createNameRewriter}. */
+export function rewriteAuthoredNames(
+  text: string,
+  names: Record<string, string | null>,
+): string {
+  return createNameRewriter(names)(text);
 }

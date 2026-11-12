@@ -78,7 +78,9 @@ export interface BuildResult {
   /**
    * Per emitted output file (the page `.html`, a tag's or `.ng.mx`'s `.ts`),
    * each generated `<const>`/`<define>` name mapped to the authored one. Only
-   * files that renamed something appear. `mx-angular ng-build` reads it.
+   * files whose template has a generated name (a renamed `<const>`/`<define>`,
+   * or a destructuring `<const>`'s holder) appear; a `null` is a name two
+   * regions of one file give different authored names. `mx-angular ng-build` reads it.
    */
   authoredNames: Record<string, Record<string, string | null>>;
 }

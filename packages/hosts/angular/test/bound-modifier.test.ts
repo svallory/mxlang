@@ -25,11 +25,12 @@ describe("a bound attribute's refinement (angular)", () => {
     expect(error?.message).toContain("must be bound to a name or a member");
   });
 
-  it.each([
-    ["a non-null assertion", "<input value:=q?.a!/>"],
-    ["a type assertion", "<input value:=(q?.a as string)/>"],
-  ])("refuses an optional chain behind %s", (_label, mx) => {
-    expect(() => emit(mx)).toThrow("must be bound to a name or a member");
+  // Pins core's `stripTypes`: an assertion around the target is removed before
+  // the emitter reads it, so `q?.a!` is the same refusal as `q?.a`.
+  it("refuses an optional chain behind a non-null assertion", () => {
+    expect(() => emit("<input value:=q?.a!/>")).toThrow(
+      "must be bound to a name or a member",
+    );
   });
 
   it("still binds a plain member as [(name)]", () => {

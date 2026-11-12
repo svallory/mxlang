@@ -2881,6 +2881,7 @@ class AngularEmitter implements Emitter<string> {
         this.selectorPrefix,
       );
     }
+    const takes = this.calleeTakes(target, node.attrs);
     emitAttrs(
       this.out,
       node.attrs,
@@ -2892,8 +2893,8 @@ class AngularEmitter implements Emitter<string> {
       undefined,
       () => this.refineContext(node.loc),
       () => this.classHelperContext(node.loc),
-      this.calleeTakesClass(target, node.attrs),
-      this.calleeTakesInput(target, node.attrs, "style", ["static"]),
+      takes.class,
+      takes.style,
       this.joinElementClass,
     );
     this.out.write(">");
@@ -2909,44 +2910,30 @@ class AngularEmitter implements Emitter<string> {
   }
 
   /**
-   * Whether this call's `class` value goes to a `class` input of the callee.
-   * True when the callee's `Input` declares `class`; false when it does not,
-   * cannot be read, or the call has no `class` to place. Without the
-   * input Angular binds `[class]` on the callee's host element, where only a
-   * joined string is safe.
+   * Whether this call's `class` and static `style` go to inputs of the callee:
+   * the call writes one (`class`: dynamic, static or bare; `style`: static) and
+   * the callee's `Input` declares it. False for one the callee does not
+   * declare, cannot be read, or the call does not write. Without the input
+   * Angular binds the attribute on the callee's host element, where only a
+   * joined class string is safe. The callee's `Input` is read once per call.
    */
-  private calleeTakesClass(
+  private calleeTakes(
     target: Extract<ComponentTarget, { kind: "name" }>,
     attrs: Attr[],
-  ): boolean {
-    return this.calleeTakesInput(target, attrs, "class", [
-      "dynamic",
-      "static",
-      "boolean",
-    ]);
-  }
-
-  /**
-   * Whether `attrs` holds an attribute `name` of one of `kinds` and the
-   * callee's `Input` declares `name`. False when it does not, cannot be read,
-   * or the call has no such attribute to place.
-   */
-  private calleeTakesInput(
-    target: Extract<ComponentTarget, { kind: "name" }>,
-    attrs: Attr[],
-    name: "class" | "style",
-    kinds: Array<"dynamic" | "static" | "boolean">,
-  ): boolean {
-    if (
-      !attrs.some(
+  ): { class: boolean; style: boolean } {
+    const writes = (
+      name: "class" | "style",
+      kinds: Array<"dynamic" | "static" | "boolean">,
+    ): boolean =>
+      attrs.some(
         (a) =>
           a.kind !== "spread" &&
           (kinds as string[]).includes(a.kind) &&
           a.name === name,
-      )
-    ) {
-      return false;
-    }
+      );
+    const wantsClass = writes("class", ["dynamic", "static", "boolean"]);
+    const wantsStyle = writes("style", ["static"]);
+    if (!wantsClass && !wantsStyle) return { class: false, style: false };
     const resolvedPath =
       target.resolvedPath ?? this.tagModules.get(target.name)?.resolvedPath;
     // No try/catch: `readCalleeInput` returns `none`, `unresolved` or `invalid`
@@ -2956,7 +2943,11 @@ class AngularEmitter implements Emitter<string> {
       resolvedPath ? { ...target, resolvedPath } : target,
       this.ctx,
     );
-    return input.kind === "declared" && input.otherProps.has(name);
+    const declared = input.kind === "declared";
+    return {
+      class: wantsClass && declared && input.otherProps.has("class"),
+      style: wantsStyle && declared && input.otherProps.has("style"),
+    };
   }
 
   private validateAttributeTagProp(
@@ -3749,6 +3740,9 @@ class AngularEmitter implements Emitter<string> {
         (bound): Extract<IrNode, { kind: "Const" }> => ({
           kind: "Const",
           loc: node.loc,
+          // The pattern's `<const>` tag: where Angular's unused-`@let`
+          // diagnostic for a bound name resolves to.
+          span: node.span,
           name: bound.name,
           init: { code: bound.code, shape: "other", node: null },
         }),
