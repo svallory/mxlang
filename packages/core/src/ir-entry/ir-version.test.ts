@@ -19,8 +19,8 @@ import * as core from "../index.ts";
  */
 
 const PINNED = {
-  irVersion: 8,
-  shape: "2144845f7fbfe2a7cb6ad2eb6e59a6956e18df6c7d94c63007d88f5546c6a375",
+  irVersion: 9,
+  shape: "b48f20e1ba3ed0af2b4336f751a7517eef2b75d36e8bd7ecf4423a628b6f5840",
 };
 
 /** Type-level declarations only: a function body in `spans.ts` is not shape. */
