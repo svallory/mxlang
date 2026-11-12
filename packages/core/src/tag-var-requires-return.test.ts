@@ -305,3 +305,34 @@ describe("the data path (`none` preset) blames the variable too", () => {
     });
   });
 });
+
+describe("a /var on an imported value the host cannot bind names the dynamic-tag form", () => {
+  const unbound: Policy = { ...policy, bindsDynamicTagVar: false };
+  const failure = (source: string) => {
+    try {
+      compileSource(source, PAGE, unbound, {
+        targets: lookup,
+        tagDiscoveryDirs: [],
+        customTags: {},
+        emitIr: () => "",
+      });
+    } catch (caught) {
+      return caught as { message: string; diagnosticCode?: string };
+    }
+    return undefined;
+  };
+
+  it("says what binds the value, at the refusal", () => {
+    const error = failure('import Barrel from "./barrel.ts"\n<Barrel/c/>');
+    expect(error?.diagnosticCode).toBe("MX_UNSUPPORTED_CONSTRUCT");
+    expect(error?.message).toBe(
+      "tag variable `/c` on `<Barrel>` is not supported in a standalone template; to bind the value of a tag resolved at run time, write `<${Barrel}/c/>`",
+    );
+  });
+
+  it("leaves a refusal with no imported value as it was", () => {
+    expect(failure("<${input.t}/c/>")?.message).toBe(
+      "tag variable `/c` on `<dynamic tag>` is not supported in a standalone template",
+    );
+  });
+});

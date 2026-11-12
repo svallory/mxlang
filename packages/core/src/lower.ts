@@ -6559,6 +6559,15 @@ function lowerComponent(
       args: true,
       params: true,
       var: allowVar,
+      // An imported value the call cannot read a `<return>` from (a `.ts`
+      // module, a barrel re-export) is still a value `<${Name}/var/>` binds.
+      ...(tagVarOf(node) &&
+      target.kind === "dynamic" &&
+      target.valueImportBinding
+        ? {
+            varHint: `; to bind the value of a tag resolved at run time, write \`<\${${target.valueImportBinding}}/${declName(ctx, tagVarOf(node))}/>\``,
+          }
+        : {}),
     },
   );
 

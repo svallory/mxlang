@@ -2264,6 +2264,8 @@ export function rejectUnsupportedFields(
     var?: boolean;
     params?: boolean;
     args?: boolean;
+    /** Appended to the refusal of a `/var`, to say what binds it instead. */
+    varHint?: string;
   } = {},
 ): void {
   // A host view (or its handle) stands for its MX node (ast §6.4).
@@ -2298,7 +2300,7 @@ export function rejectUnsupportedFields(
     // refusal above follows).
     raise(
       UNSUPPORTED_CONSTRUCT_CODE,
-      `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${ownerText(what)} is not supported in ${unsupportedIn(ctx)}`,
+      `tag variable \`/${expr(ctx, tagVarOf(node))}\` on ${ownerText(what)} is not supported in ${unsupportedIn(ctx)}${allow.varHint ?? ""}`,
       tagVarOf(node),
     );
   }
