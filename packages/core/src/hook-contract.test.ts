@@ -213,6 +213,10 @@ describe("hook contract additions", () => {
     ]);
     const error = caught(() => irOf("<div !a/>", module));
     expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+    expect(error.message).toMatch(
+      /two values would be written over the same text/,
+    );
   });
 
   it("adjacent non-empty spans of one trigger are accepted", () => {
@@ -236,6 +240,34 @@ describe("hook contract additions", () => {
     const error = caught(() => irOf("<div !a !b/>", module));
     expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
     expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+  });
+
+  it("a node value whose `span` covers another trigger's text is refused", () => {
+    const module = {
+      ...probe((_id, _text, _span, ctx) =>
+        ctx.attribute("x", {
+          type: "probe:T",
+          name: "n",
+          span: { sourceStart: 8, sourceEnd: 10 },
+        } as never),
+      ),
+      nodeTypes: {
+        T: {
+          keys: [],
+          schema: { fields: { name: "data" }, slot: ["value"] },
+          parse: (text: string) => ({ name: text }),
+          print: (node: { name: string }) => node.name,
+          lower: (
+            node: { name: string },
+            ctx: { expression(n: object): unknown },
+          ) => ctx.expression({ type: "Identifier", name: node.name }),
+        },
+      },
+    } as unknown as Dialect;
+    const error = caught(() => irOf("<div !a !b/>", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+    expect(error.message).toMatch(/node value's `span` is a span inside/);
   });
 
   it("a line trigger whose child carries two `ctx.expression` values is refused, positioned at the trigger", () => {

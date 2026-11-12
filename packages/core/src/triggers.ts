@@ -863,19 +863,7 @@ function callHook(
       checkAttributeOptions(trigger, options);
       if (options?.at) {
         checkPart(ctx, trigger, options.at, "ctx.attribute");
-        // `at` names part of the trigger's own text: another trigger's text
-        // (or an authored value) is not this hook's to write over.
-        const own = spanOf(trigger);
-        if (
-          options.at.sourceStart < own.sourceStart ||
-          options.at.sourceEnd > own.sourceEnd
-        ) {
-          raise(
-            DIALECT_HOOK_ERROR_CODE,
-            `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\`'s \`at\` is a span inside the trigger's own text (${own.sourceStart} to ${own.sourceEnd})`,
-            trigger,
-          );
-        }
+        insideTrigger(trigger, options.at, "`ctx.attribute`'s `at`");
       }
       const result = Object.freeze({
         kind: "attribute" as const,
@@ -1002,6 +990,22 @@ function checkPart(
   return { type: "MxTriggerPart", start: at.sourceStart, end: at.sourceEnd };
 }
 
+/**
+ * A span a hook writes over (`at`, a node value's `span`) names part of the
+ * trigger's own text: another trigger's text, or an authored value, is not
+ * this hook's to write over, and the per-result overlap guard cannot see it.
+ */
+function insideTrigger(trigger: Node, at: SourceSpan, what: string): void {
+  const own = spanOf(trigger);
+  if (at.sourceStart < own.sourceStart || at.sourceEnd > own.sourceEnd) {
+    raise(
+      DIALECT_HOOK_ERROR_CODE,
+      `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: ${what} is a span inside the trigger's own text (${own.sourceStart} to ${own.sourceEnd})`,
+      trigger,
+    );
+  }
+}
+
 function checkAttributeOptions(
   trigger: Node,
   options: TriggerAttributeOptions | undefined,
@@ -1071,6 +1075,8 @@ function checkAttributeValue(
           trigger,
         );
       }
+      if (span !== undefined)
+        insideTrigger(trigger, span, "a node value's `span`");
       return;
     }
   }
