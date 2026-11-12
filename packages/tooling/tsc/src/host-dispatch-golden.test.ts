@@ -472,27 +472,6 @@ describe("dispatch goldens", () => {
     for (const name of mxFilesOf(row)) {
       const file = join(root, row, name);
       const text = readFileSync(file, "utf8");
-      if (row === "bad-package-json") {
-        // Only the host-policy output is pinned for this row. Compiling a file
-        // beside a malformed package.json depends on the process cwd: Marko's
-        // Babel config lookup throws "Error while parsing JSON" for it when
-        // vitest runs from the repo root (`bun run test`) and not from this
-        // package's directory, so generated text, mappings and the compile
-        // diagnostics differ between the two. Reported, not fixed here (TODO
-        // compile-beside-malformed-package-json-cwd). The policy warning also
-        // names the package.json this file's target was taken from instead
-        // (`<repo>/packages/tooling/tsc/package.json`), so the golden depends
-        // on that file's `mx` field staying `html`.
-        const lsLeg = languageServerLeg(file, text, "mx");
-        files[name] = {
-          languageServer: lsLeg.diagnostics.filter((d) =>
-            String(d.message).includes("package.json"),
-          ),
-          // Keep the recorded JSON key byte-identical; it is not an API name.
-          tsPluginHostPolicy: tsPluginLeg(file, text).hostPolicyDiagnostics,
-        };
-        continue;
-      }
       const entry: Record<string, unknown> = {
         languageServer: name.endsWith(".astro.mx")
           ? "watched by the server, not diagnosed"
@@ -511,10 +490,7 @@ describe("dispatch goldens", () => {
     }
     const golden = normalise({
       files,
-      mxTsc: (tsc.byRow.get(row) ?? []).filter(
-        // bad-package-json: the host-policy warning only (see its leg above).
-        (block) => row !== "bad-package-json" || block.includes("TS80003"),
-      ),
+      mxTsc: tsc.byRow.get(row) ?? [],
     });
     await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(
       join(goldens, `${row}.json`),
