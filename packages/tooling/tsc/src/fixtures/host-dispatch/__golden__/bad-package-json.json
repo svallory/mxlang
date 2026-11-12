@@ -42,7 +42,8 @@
           "file": "<root>/bad-package-json/package.json",
           "message": "<root>/bad-package-json/package.json could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\"); no `mx.tags` or `mx.contracts` are loaded until the manifest parses",
           "line": 1,
-          "column": 26
+          "column": 26,
+          "offset": 26
         }
       ]
     },
@@ -88,7 +89,8 @@
           "file": "<root>/bad-package-json/package.json",
           "message": "<root>/bad-package-json/package.json could not be parsed as JSON: Expected double-quoted property name in JSON at position 26 (line 1 column 27); using the default \"html\" host for the files under <root>/bad-package-json; before, its host was taken from <repo>/packages/tooling/tsc/package.json (\"html\"); no `mx.tags` or `mx.contracts` are loaded until the manifest parses",
           "line": 1,
-          "column": 26
+          "column": 26,
+          "offset": 26
         }
       ]
     }

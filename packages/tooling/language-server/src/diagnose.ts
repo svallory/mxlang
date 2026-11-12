@@ -437,7 +437,7 @@ export function diagnoseDocument(
    * fails). Optional: omitting it (or passing `[]`) returns exactly what this
    * function returned before the parameter existed. `startServer` passes it.
    */
-  hostPolicyDiagnostics?: readonly ScanDiagnostic[],
+  hostPolicyDiagnostics?: readonly (ScanDiagnostic | TargetPolicyDiagnostic)[],
 ): Diagnostic[] {
   // Configuration problems the scan found. They are not fatal — a typo'd
   // `mx.tags` leaves the local `tags/` directories perfectly usable — so they

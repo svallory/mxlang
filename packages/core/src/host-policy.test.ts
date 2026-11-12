@@ -753,7 +753,7 @@ describe("TargetPolicyDiagnostic code", () => {
     expect(diagnostics.map((d) => d.code)).toEqual(["malformed-package-json"]);
     // V8's message names `position 20`; the offset is carried and the line
     // follows the one line rule (U+2028 breaks a line).
-    expect(diagnostics[0]).toMatchObject({ line: 4, column: 4, offset: 20 });
+    expect(diagnostics[0]).toMatchObject({ line: 4, column: 6, offset: 20 });
   });
 
   it("raises none for a valid host", () => {

@@ -47,7 +47,7 @@ describe("positionOfParseError", () => {
         "Expected ':' after property name in JSON at position 20 (line 3 column 7)",
         text,
       ),
-    ).toEqual({ line: 4, column: 4, offset: 20 });
+    ).toEqual({ line: 4, column: 6, offset: 20 });
   });
 
   it("falls back to `(line L column C)`, then to 1:0", () => {

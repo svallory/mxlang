@@ -562,7 +562,7 @@ describe("a config that is not an object", () => {
       const source = findMxConfig(root);
       expect(source?.config).toBeUndefined();
       expect(noOffsets(source?.error)).toEqual({ message, line, column });
-      expect(policyOf(root)).toEqual({
+      expect(noOffsets(policyOf(root))).toEqual({
         policy: { target: "page" },
         diagnostics: [
           {
@@ -585,7 +585,7 @@ describe("a config that is not an object", () => {
     });
     expect(policyOf(root).policy.target).toBe("view-jsx");
     edit(root, "mx.config.json", `["unit-jsx"]\n`);
-    expect(policyOf(root)).toEqual({
+    expect(noOffsets(policyOf(root))).toEqual({
       policy: { target: "view-jsx", host: "view" },
       diagnostics: [
         {

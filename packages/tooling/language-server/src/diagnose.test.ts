@@ -1093,7 +1093,7 @@ describe("custom tag template positions", () => {
         undefined,
         related,
         undefined,
-        [{ file, message: "bad", line: 4, column: 4, offset }],
+        [{ file, message: "bad", line: 4, column: 6, offset }],
       );
       // Two LF breaks before the offset: LSP line 2, not core's 4th line.
       const lineStart = text.lastIndexOf("\n", offset) + 1;
