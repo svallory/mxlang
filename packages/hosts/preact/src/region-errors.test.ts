@@ -103,29 +103,29 @@ describe("region rule", () => {
   const BOX_SOURCE = (body: string) =>
     `import { Box } from "./box.tsx";\nimport Counter from "./counter.mx";\nexport function Panel() {\n  return (\n    <div>${body}</div>\n  );\n}\n`;
 
+  const LIFT =
+    "`<define>` inside the body of an imported tag or a `<define>` call that declares a `/var` or tag parameters cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside that body";
+
   it("refuses a <define> in an imported tag's body that declares a /var", () => {
-    const e = errorOf(
-      BOX_SOURCE(
-        "<Box><Counter/x start=1/><define/Row>${x}</define><Row/></Box>",
+    expect(
+      errorOf(
+        BOX_SOURCE(
+          "<Box><Counter/x start=1/><define/Row>${x}</define><Row/></Box>",
+        ),
+        COUNTER_FILE,
       ),
-      COUNTER_FILE,
-    );
-    expect(e.message).toBe(
-      "`<define>` inside the body of an imported tag or a `<define>` call that declares a `/var` or tag parameters cannot be lifted out of it in a `.preact.mx` region without changing its scope; declare it directly in the region's markup, outside that body",
-    );
-    expect(e.line).toBe(5);
+    ).toEqual({ message: LIFT, line: 5, column: 34 });
   });
 
   it("refuses a <define> in a <define> call's body that declares a /var", () => {
-    const e = errorOf(
-      BOX_SOURCE(
-        "<define/Wrap|{ content }|>${content}</define><Wrap><Counter/x start=1/><define/Row>${x}</define><Row/></Wrap>",
+    expect(
+      errorOf(
+        BOX_SOURCE(
+          "<define/Wrap|{ content }|>${content}</define><Wrap><Counter/x start=1/><define/Row>${x}</define><Row/></Wrap>",
+        ),
+        COUNTER_FILE,
       ),
-      COUNTER_FILE,
-    );
-    expect(e.message).toContain(
-      "declares a `/var` or tag parameters cannot be lifted",
-    );
+    ).toEqual({ message: LIFT, line: 5, column: 80 });
   });
 
   it("lifts a <define> in a <define> call's body that binds no /var", () => {
@@ -151,43 +151,55 @@ describe("region rule", () => {
   });
 
   it.each([
-    ["an imported tag", "<Box|v|><define/Row>${v}</define><Row/></Box>"],
+    ["an imported tag", "<Box|v|><define/Row>${v}</define><Row/></Box>", 17],
     [
       "a <define> call",
       "<define/Wrap|{ content }|>${content}</define><Wrap|v|><define/Row>${v}</define><Row/></Wrap>",
+      63,
     ],
   ])(
     "refuses a <define> in the body of %s that declares tag params",
-    (_label, body) => {
-      const e = errorOf(BOX_SOURCE(body), COUNTER_FILE);
-      expect(e.message).toContain("or tag parameters cannot be lifted");
-      expect(e.line).toBe(5);
+    (_label, body, column) => {
+      expect(errorOf(BOX_SOURCE(body), COUNTER_FILE)).toEqual({
+        message: LIFT,
+        line: 5,
+        column,
+      });
     },
   );
 
   it.each([
     [
-      "a /var",
+      "a /var of the same name as the define",
       "<Counter/Row start=1/><Box><define/Row>hi</define><Row/></Box>",
+      "Row",
+      44,
     ],
     [
-      "a /var of another name",
+      "a /var of the same name as the define, used as a value",
       "<Counter/x start=1/><Box><define/x><i/></define>${String(x)}</Box>",
+      "x",
+      42,
     ],
   ])(
     "claims a region-level %s against a define lifted from a tag body",
-    (_label, body) => {
-      const e = errorOf(BOX_SOURCE(body), COUNTER_FILE);
-      expect(e.message).toMatch(/^Duplicate declaration "(Row|x)"$/);
-      expect(e.line).toBe(5);
+    (_label, body, name, column) => {
+      expect(errorOf(BOX_SOURCE(body), COUNTER_FILE)).toEqual({
+        message: `Duplicate declaration "${name}"`,
+        line: 5,
+        column,
+      });
     },
   );
 
   it("claims a lifted define's name across scopes of the region", () => {
-    const e = errorOf(
-      BOX_SOURCE("<define/Row/><Box><define/Row/><Row/></Box><Row/>"),
-    );
-    expect(e.message).toBe('Duplicate declaration "Row"');
+    expect(
+      errorOf(BOX_SOURCE("<define/Row/><Box><define/Row/><Row/></Box><Row/>")),
+    ).toEqual({
+      message: 'Duplicate declaration "Row"',
+      line: 5,
+      column: 35,
+    });
   });
 
   it("lifts a <define> met in an imported tag's body, as before", () => {

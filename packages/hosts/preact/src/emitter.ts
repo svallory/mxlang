@@ -134,40 +134,78 @@ interface RegionSink {
 }
 
 /**
- * Every name a tag param, `<for>` param or catch param of the template binds,
- * as a superset (each identifier of the param text). A direct call of a
- * `<define>` whose name is in the set may resolve to such a local, so it is
- * emitted under the authored name, not the private function.
+ * The direct define calls (`<Row(x)/>`) whose name an enclosing scope also
+ * binds: a `<for>`, `<define>` or tag param, or a `/var` or `<const>` declared
+ * earlier in an enclosing body. Such a call may resolve to the local, so it is
+ * emitted under the authored name, not the private function. Every other
+ * direct call reaches the private function and its argument as written.
+ * Scopes follow the IR: every node with its own `children` is a scope, a
+ * binding is visible to the later siblings and what they contain, and a body
+ * never leaks into the scope around it. A param is read as every identifier of
+ * its text (a superset: a default's identifiers count), only inside its body.
  */
-export function shadowedNames(ir: Ir): Set<string> {
-  const names = new Set<string>();
+export function shadowedCalls(ir: Ir): WeakSet<object> {
+  const calls = new WeakSet<object>();
   const seen = new WeakSet<object>();
-  const skip = new Set(["paramNodes", "node", "loc", "span", "paramSpans"]);
-  const walk = (value: unknown): void => {
-    if (value === null || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
+  const skip = new Set([
+    "paramNodes",
+    "node",
+    "nodes",
+    "loc",
+    "span",
+    "paramSpans",
+  ]);
+  const walk = (value: unknown, scope: Set<string>): void => {
+    if (value === null || typeof value !== "object") return;
     if (Array.isArray(value)) {
-      for (const item of value) walk(item);
+      for (const item of value) walk(item, scope);
       return;
     }
-    for (const [key, child] of Object.entries(value)) {
-      if (skip.has(key)) continue;
-      if ((key === "params" || key === "bindings") && Array.isArray(child)) {
-        for (const text of child) {
+    if (seen.has(value)) return;
+    seen.add(value);
+    const node = value as Record<string, unknown>;
+    let inner = scope;
+    if (Array.isArray(node.children)) {
+      inner = new Set(scope);
+      const own = node.bindings ?? node.params;
+      if (Array.isArray(own)) {
+        for (const text of own) {
           if (typeof text === "string") {
-            for (const name of readIdentifiers(text)) names.add(name);
+            for (const name of readIdentifiers(text)) inner.add(name);
           }
         }
-      } else walk(child);
+      }
+    }
+    const target = node.target as { kind?: string; name?: string } | undefined;
+    if (
+      node.kind === "Component" &&
+      target?.kind === "define" &&
+      typeof target.name === "string" &&
+      scope.has(target.name)
+    ) {
+      calls.add(value);
+    }
+    for (const [key, child] of Object.entries(node)) {
+      if (!skip.has(key)) walk(child, inner);
+    }
+    // A `/var` or `<const>` binds in the body it is written in, after it.
+    if (node.kind === "Component" || node.kind === "Const") {
+      const declared = node.varBindings as Array<{ name: string }> | undefined;
+      const names = declared
+        ? declared.map((binding) => binding.name)
+        : [
+            ...readIdentifiers(
+              String(node.kind === "Const" ? node.name : (node.var ?? "")),
+            ),
+          ];
+      for (const name of names) scope.add(name);
     }
   };
-  walk(ir.body);
-  return names;
+  walk(ir.body, new Set());
+  return calls;
 }
 
 /** The defines a region lifted out of one soft-scoped body (and its parents). */
-const NO_NAMES: ReadonlySet<string> = new Set();
-
 interface SoftLift {
   defines: Array<Extract<IrNode, { kind: "Define" }>>;
   parent: SoftLift | null;
@@ -853,8 +891,8 @@ export class PreactEmitter implements Emitter<string> {
    * `/var` (checked when the body ends).
    */
   readonly #softLift: SoftLift | null;
-  /** Names a param of the template binds (`shadowedNames`). */
-  readonly #shadowed: ReadonlySet<string>;
+  /** The direct define calls an enclosing scope shadows (`shadowedCalls`). */
+  readonly #shadowed: WeakSet<object>;
 
   constructor(
     dialect: JsxDialect = preactDialect,
@@ -872,7 +910,7 @@ export class PreactEmitter implements Emitter<string> {
     source?: string,
     scopedBody = false,
     softLift: SoftLift | null = null,
-    shadowed: ReadonlySet<string> = NO_NAMES,
+    shadowed: WeakSet<object> = new WeakSet(),
   ) {
     this.#shadowed = shadowed;
     this.#softLift = softLift;
@@ -2063,7 +2101,7 @@ export class PreactEmitter implements Emitter<string> {
     const own = defineFunctionName(node.name);
     const fn = concatMapped(
       "const ",
-      mapped(own, node.nameSpan ?? null),
+      mapped(own, this.#typeCheck ? null : (node.nameSpan ?? null)),
       " = (",
       params,
       bodyVarStatements.length > 0
@@ -2488,7 +2526,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(
         this.#slot(
           mapped(
-            this.#typeCheck || this.#shadowed.has(node.target.name)
+            this.#typeCheck || this.#shadowed.has(node)
               ? node.target.name
               : defineFunctionName(node.target.name),
             node.nameSpan,
@@ -3031,7 +3069,7 @@ export function createRegionEmitter(
   dialect: JsxDialect,
   segment: string,
   positionAt: RegionSink["positionAt"],
-  shadowed: ReadonlySet<string> = NO_NAMES,
+  shadowed: WeakSet<object> = new WeakSet(),
 ): PreactEmitter {
   const root = new Map<string, Position>();
   return new PreactEmitter(
@@ -3058,7 +3096,7 @@ export function createEmitter(
   dialect: JsxDialect = preactDialect,
   typeCheck?: string,
   source?: string,
-  shadowed: ReadonlySet<string> = NO_NAMES,
+  shadowed: WeakSet<object> = new WeakSet(),
 ): PreactEmitter {
   return new PreactEmitter(
     dialect,

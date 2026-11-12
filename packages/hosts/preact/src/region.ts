@@ -54,7 +54,7 @@ import {
   componentAlias,
   createRegionEmitter,
   defineStatements,
-  shadowedNames,
+  shadowedCalls,
 } from "./emitter.ts";
 import { sourcePosition } from "./source-position.ts";
 
@@ -256,7 +256,7 @@ export function compileJsxRegion(
     dialect,
     segment,
     (offset) => sourcePosition(padded, offset),
-    shadowedNames(ir),
+    shadowedCalls(ir),
   );
   drive(emitter, ir.body);
   const markupCode = emitter.result();

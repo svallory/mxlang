@@ -105,7 +105,7 @@ so a template using no `<try>` and no structured `class` imports nothing.
 | `<Comp|item|>…</Comp>` | a render-prop child: `{(item) => …}` |
 | `<@name>body</@name>` | the prop `name={body}`; with params, `name={(p) => body}`; **repeated, an array** |
 | `<const/x=expr/>` (top level) | `const x = expr;` in the component body |
-| `<define/R|p|>…</define>` (top level) | `const __mxDef_R = (p: any) => (<>…</>);` — direct calls `<R(x)/>` call it as written. A wrapped public value `const R = __mxDefine(__mxDef_R, "R");` is emitted only when something reads `R` as a value (a dynamic target, an expression, a define with attributes); it reads a body handed over as `children` as `content` |
+| `<define/R|p|>…</define>` (top level) | `const __mxDef_R = (p: any) => (<>…</>);` — direct calls `<R(x)/>` call it as written. A wrapped public value `const R = __mxDefine(__mxDef_R, "R");` is emitted only when something reads `R` as a value (a dynamic target, an expression, a spread, an `R.attr` property read); it reads a body handed over as `children` as `content` |
 | `<try>` + `<@catch>`/`<@placeholder>` | `<MxErrorBoundary>` / `<MxPlaceholder>` (see below) |
 | `import`, `static`, `export` | hoisted verbatim to module scope |
 | `<${expr}>` (dynamic tag) | `mxDynamic(expr, props)` — JSX's tag position is static, so the target can't be written there directly |

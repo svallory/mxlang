@@ -52,7 +52,7 @@ import {
   type DefineParts,
   defineStatements,
   preactDeclarations,
-  shadowedNames,
+  shadowedCalls,
 } from "./emitter.ts";
 
 export interface CompilePreactOptions {
@@ -228,6 +228,25 @@ export function attributeHelpers(
 }
 
 /**
+ * The expression that reads a component body (`subject`) as `content`: a bare
+ * string or number becomes a fragment, an empty string `undefined`, anything
+ * else passes through. The module preamble (a component's own `children`) and
+ * `__mxDefine` (a define reached through a dynamic tag) both print it, so the
+ * two cannot drift. A number goes through `String` because hono drops a bare
+ * `0` inside a fragment; an empty string stays falsy for `<if=input.content>`.
+ */
+function contentNormalization(subject: string, indent: number): string {
+  const pad = " ".repeat(indent);
+  return [
+    `${pad}typeof ${subject} === "string" || typeof ${subject} === "number"`,
+    `${pad}  ? ${subject} === ""`,
+    `${pad}    ? undefined`,
+    `${pad}    : <>{String(${subject})}</>`,
+    `${pad}  : ${subject}`,
+  ].join("\n");
+}
+
+/**
  * Wraps a `<define>`'s function so a call through the dynamic route reads its
  * body as `content`. A define is called as `Row({ content })`; `__mxDynamic`
  * calls any function target as a component, handing the body over as
@@ -245,11 +264,7 @@ const MX_DEFINE = `function __mxDefine<F extends (...args: any[]) => any>(fn: F,
       first = {
         ...first,
         content:
-          typeof body === "string" || typeof body === "number"
-            ? body === ""
-              ? undefined
-              : <>{String(body)}</>
-            : body,
+${contentNormalization("body", 10)}
       };
     }
     return fn(first, ...rest);
@@ -506,7 +521,7 @@ export function emitModuleWithMappings(
   source = "",
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
-  const shadowed = shadowedNames(ir);
+  const shadowed = shadowedCalls(ir);
   const emitter = createEmitter(dialect, names?.handler, source, shadowed);
 
   // Statements first, markup second. Splitting on the top level only: a
@@ -651,11 +666,7 @@ export function emitModuleWithMappings(
     "  const input = {",
     "    ...props,",
     "    content:",
-    '      typeof __mxBody === "string" || typeof __mxBody === "number"',
-    '        ? __mxBody === ""',
-    "          ? undefined",
-    "          : <>{String(__mxBody)}</>",
-    "        : __mxBody,",
+    `${contentNormalization("__mxBody", 6)},`,
     "  } as Input & { content?: unknown };",
   );
   // A statement lifted by the core's own hoist hook precedes the author's, so

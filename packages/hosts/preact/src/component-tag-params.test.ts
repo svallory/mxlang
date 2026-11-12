@@ -125,6 +125,37 @@ export interface Input { items: string[] }
 <ul><Row("x")|n|><b>\${n}</b></Row></ul>`,
     html: "<ul><li>x<b>r</b></li></ul>",
   },
+  "a /var in a define body that shadows another define": {
+    callee: {
+      file: "fn.mx",
+      source: `export interface Input {}
+<return value=(n: number) => "local" + n/>`,
+    },
+    caller: `import Fn from "./fn.mx"
+export interface Input { items: string[] }
+<define/Row|a|><li>\${a}</li></define>
+<define/Wrap><Fn/Row/><li><Row(2)/></li></define>
+<ul><Wrap/></ul>`,
+    html: "<ul><li>local2</li></ul>",
+  },
+  "a /var in a dynamic tag body that shadows a define": {
+    callee: {
+      file: "fn.mx",
+      source: `export interface Input {}
+<return value=(n: number) => "local" + n/>`,
+    },
+    caller: `import Fn from "./fn.mx"
+export interface Input { items: string[] }
+<define/Row|a|><li>\${a}</li></define>
+<ul><\${"section"}><Fn/Row/><Row(2)/></></ul>`,
+    html: "<ul><section>local2</section></ul>",
+  },
+  "an unrelated <for|Row|> leaves a direct call's argument as written": {
+    caller: `export interface Input { items: string[] }
+<define/Row|o|>\${typeof o.content}</define>
+<p><for|Row| of=input.items>\${Row}</for><Row({ children: "c" })/></p>`,
+    html: "<p>abundefined</p>",
+  },
   "a define called only directly (no unused public binding)": {
     caller: `export interface Input { items: string[] }
 <define/Row|p|><li>\${p}</li></define>
