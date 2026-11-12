@@ -1045,7 +1045,6 @@ describe("custom tag template positions", () => {
       const text = '{\n  "note": "a\u2028b", "mx": { "host": "htmll" }\n}';
       const file = join(dir, "package.json");
       writeFileSync(file, text);
-      const offset = text.indexOf('"htmll"');
       const related: RelatedDiagnostics[] = [];
       diagnoseDocument(
         "<div>ok</div>\n",
@@ -1061,28 +1060,26 @@ describe("custom tag template positions", () => {
             file,
             message: 'unknown mx.host "htmll"',
             line: 3,
-            column: offset - (text.indexOf("\u2028") + 1),
-            offset,
+            column: 20,
+            offset: 35,
           },
         ],
       );
-      const lspColumn = offset - (text.indexOf("\n") + 1);
       expect(related[0]?.diagnostics[0]?.range).toEqual({
-        start: { line: 1, character: lspColumn },
-        end: { line: 1, character: lspColumn + 1 },
+        start: { line: 1, character: 33 },
+        end: { line: 1, character: 34 },
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it("places a malformed-manifest diagnostic by its offset past a U+2028", () => {
-    const dir = mkdtempSync(join(tmpdir(), "mx-ls-malformed-"));
+  it("places related information by its offset: U+2028 does not break an LSP line", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ls-related-"));
     try {
       const text = '{\n "a":"x\u2028y",\n  "b" 1}';
       const file = join(dir, "package.json");
       writeFileSync(file, text);
-      const offset = 20;
       const related: RelatedDiagnostics[] = [];
       diagnoseDocument(
         "<div>ok</div>\n",
@@ -1093,13 +1090,31 @@ describe("custom tag template positions", () => {
         undefined,
         related,
         undefined,
-        [{ file, message: "bad", line: 4, column: 6, offset }],
+        [
+          {
+            file,
+            message: "bad",
+            line: 1,
+            column: 0,
+            relatedInformation: [
+              {
+                file,
+                message: "here",
+                // Core's line 4, column 6: U+2028 counts there.
+                line: 4,
+                column: 6,
+                length: 1,
+                offset: 20,
+              },
+            ],
+          },
+        ],
       );
-      // Two LF breaks before the offset: LSP line 2, not core's 4th line.
-      const lineStart = text.lastIndexOf("\n", offset) + 1;
-      expect(related[0]?.diagnostics[0]?.range.start).toEqual({
-        line: 2,
-        character: offset - lineStart,
+      expect(
+        related[0]?.diagnostics[0]?.relatedInformation?.[0]?.location.range,
+      ).toEqual({
+        start: { line: 2, character: 6 },
+        end: { line: 2, character: 7 },
       });
     } finally {
       rmSync(dir, { recursive: true, force: true });

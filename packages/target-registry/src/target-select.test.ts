@@ -39,7 +39,7 @@ it.each([{}, { "@mxlang/host-solid": "1" }])(
         line: 3,
         column: 14,
         length: 6,
-        offset: expect.any(Number),
+        offset: 26,
         message:
           'unknown mx.target "tree"; valid targets: html, astro-html, solid-jsx, preact-jsx, react-jsx, hono-jsx, angular-template. Compiling under the target taken from the @mxlang dependencies (or the default) so later diagnostics are not drowned.',
       },

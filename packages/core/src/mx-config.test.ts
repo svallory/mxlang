@@ -25,13 +25,6 @@ import { clearScanCache, scanCached } from "./scan-cache.ts";
 import { createTargetLookup, type TargetLookup } from "./target-descriptor.ts";
 import { dialectProject } from "./test-dialect-project.ts";
 
-/** `value` without the `offset` positions carry for consumers with another line rule; these tests pin line and column. */
-function noOffsets<T>(value: T): T {
-  return JSON.parse(
-    JSON.stringify(value, (key, each) => (key === "offset" ? undefined : each)),
-  );
-}
-
 /**
  * A fixture lookup (core names no real target): a hostless default target
  * and two hosted ones, so `mx.host` and `mx.target` can agree or disagree.
@@ -145,10 +138,11 @@ describe("findMxConfig: where MX's config comes from", () => {
     expect(source?.file).toBe(join(root, "package.json"));
     expect(source?.format).toBe("package.json");
     expect(source?.config).toEqual({ target: "view-jsx", strict: true });
-    expect(noOffsets(source?.locate(["target"]))).toEqual({
+    expect(source?.locate(["target"])).toEqual({
       line: 3,
       column: 20,
       length: 10,
+      offset: 39,
     });
     expect(policyOf(root)).toEqual({
       policy: { target: "view-jsx", host: "view", strict: true },
@@ -480,7 +474,7 @@ describe("a config that is not an object", () => {
     "; MX reads its config synchronously, so export the object itself";
   const NOT_APPLIED =
     '; its settings are not applied until it loads (the target comes from the @mxlang dependencies, or the default "page")';
-  const cases: [string, string, string, string, number, number][] = [
+  const cases: [string, string, string, string, number, number, number?][] = [
     [
       "a function",
       "mx.config.mjs",
@@ -520,6 +514,7 @@ describe("a config that is not an object", () => {
       "the config must be an object, and it is an array",
       2,
       2,
+      3,
     ],
     [
       "a JSON string",
@@ -527,6 +522,7 @@ describe("a config that is not an object", () => {
       '"view-jsx"\n',
       "the config must be an object, and it is a string",
       1,
+      0,
       0,
     ],
     [
@@ -536,6 +532,7 @@ describe("a config that is not an object", () => {
       "the config must be an object, and it is null",
       1,
       0,
+      0,
     ],
     [
       "a YAML array",
@@ -543,6 +540,7 @@ describe("a config that is not an object", () => {
       "# the target\n- target: view-jsx\n",
       "the config must be an object, and it is an array",
       1,
+      0,
       0,
     ],
     [
@@ -552,17 +550,19 @@ describe("a config that is not an object", () => {
       "the config must be an object, and it is a string",
       1,
       0,
+      0,
     ],
   ];
 
   it.each(cases)(
     "refuses %s at its position, applying none of it",
-    (_name, file, text, message, line, column) => {
+    (_name, file, text, message, line, column, offset) => {
       const root = project({ "package.json": PACKAGE, [file]: text });
       const source = findMxConfig(root);
       expect(source?.config).toBeUndefined();
-      expect(noOffsets(source?.error)).toEqual({ message, line, column });
-      expect(noOffsets(policyOf(root))).toEqual({
+      const at = offset === undefined ? {} : { offset };
+      expect(source?.error).toEqual({ message, line, column, ...at });
+      expect(policyOf(root)).toEqual({
         policy: { target: "page" },
         diagnostics: [
           {
@@ -572,6 +572,7 @@ describe("a config that is not an object", () => {
             message: `<root>/${file} could not be loaded: ${message}${NOT_APPLIED}`,
             line,
             column,
+            ...at,
           },
         ],
       });
@@ -585,7 +586,7 @@ describe("a config that is not an object", () => {
     });
     expect(policyOf(root).policy.target).toBe("view-jsx");
     edit(root, "mx.config.json", `["unit-jsx"]\n`);
-    expect(noOffsets(policyOf(root))).toEqual({
+    expect(policyOf(root)).toEqual({
       policy: { target: "view-jsx", host: "view" },
       diagnostics: [
         {
@@ -596,9 +597,24 @@ describe("a config that is not an object", () => {
             "<root>/mx.config.json could not be loaded: the config must be an object, and it is an array; the last revision that loaded stays in force until this one does",
           line: 1,
           column: 0,
+          offset: 0,
         },
       ],
     });
+  });
+});
+
+describe("a config with a JSON syntax error", () => {
+  it("is positioned by the parser's offset, past a U+2028 inside a string", () => {
+    const root = project({
+      "package.json": PACKAGE,
+      "mx.config.json": '{\n "a":"x\u2028y",\n  "b" 1}',
+    });
+    // `line` counts U+2028 as a break (TypeScript's rule); the offset is what
+    // a consumer with LSP's rule converts from.
+    expect(policyOf(root).diagnostics).toMatchObject([
+      { code: "malformed-config", line: 4, column: 6, offset: 20 },
+    ]);
   });
 });
 
@@ -631,7 +647,7 @@ describe("mx.host and mx.target in a config file", () => {
 
   it("reports a mismatch at both keys of the config file and hands on mx.target", () => {
     const root = config(`{\n  "host": "view",\n  "target": "unit-jsx"\n}\n`);
-    expect(noOffsets(policyOf(root))).toEqual({
+    expect(policyOf(root)).toEqual({
       policy: { target: "unit-jsx", host: "unit" },
       diagnostics: [
         {
@@ -643,6 +659,7 @@ describe("mx.host and mx.target in a config file", () => {
           line: 3,
           column: 12,
           length: 10,
+          offset: 32,
           relatedInformation: [
             {
               file: "<root>/mx.config.json",
@@ -650,6 +667,7 @@ describe("mx.host and mx.target in a config file", () => {
               line: 2,
               column: 10,
               length: 6,
+              offset: 12,
             },
           ],
         },
@@ -676,7 +694,7 @@ describe("mx.host and mx.target in a config file", () => {
 
   it("reports an unknown mx.target in a config file at its value", () => {
     const root = config(`{\n  "target": "nope"\n}\n`);
-    expect(noOffsets(policyOf(root).diagnostics)).toEqual([
+    expect(policyOf(root).diagnostics).toEqual([
       {
         code: "unknown-target",
         severity: "error",
@@ -687,6 +705,7 @@ describe("mx.host and mx.target in a config file", () => {
         line: 2,
         column: 12,
         length: 6,
+        offset: 14,
       },
     ]);
   });
@@ -970,22 +989,29 @@ describe("the tag scan reads the same config", () => {
 describe("a top-level key that is neither MX's, a target's nor a dialect's", () => {
   const unknown = (key: string) =>
     `\`mx.${key}\` is not a setting: MX's config holds MX's own keys (target, host, strict, tags, contracts, data, extensions), a target's or host's settings under its name, and a dialect's settings under its id, and no dialect among this project's dependencies has the id \`${key}\``;
-  const error = (file: string, key: string, line: number, column: number) => ({
+  const error = (
+    file: string,
+    key: string,
+    line: number,
+    column: number,
+    offset: number,
+  ) => ({
     code: "unknown-config-key",
     severity: "error",
     file,
     message: unknown(key),
     line,
     column,
+    offset,
   });
 
   it("is an error at its key in package.json#mx", () => {
     const root = project({
       "package.json": `{\n  "name": "app",\n  "mx": {\n    "target": "page",\n    "kit": { "strictModels": true }\n  }\n}\n`,
     });
-    expect(noOffsets(policyOf(root))).toEqual({
+    expect(policyOf(root)).toEqual({
       policy: { target: "page" },
-      diagnostics: [error("<root>/package.json", "kit", 5, 4)],
+      diagnostics: [error("<root>/package.json", "kit", 5, 4, 55)],
     });
   });
 
@@ -994,20 +1020,29 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
       "mx.config.json",
       `{\n  "target": "page",\n  "pgae": { "defaultTag": "div" }\n}\n`,
       "pgae",
-      [3, 2],
+      [3, 2, 24],
     ],
     [
       "mx.config.yaml",
       "target: page\nkit:\n  strictModels: true\n",
       "kit",
-      [2, 0],
+      [2, 0, 13],
     ],
-  ])("is an error at its key in %s", (name, text, key, [line, column]) => {
-    const root = project({ "package.json": PACKAGE, [name]: text });
-    expect(noOffsets(policyOf(root).diagnostics)).toEqual([
-      error(`<root>/${name}`, key, line as number, column as number),
-    ]);
-  });
+  ])(
+    "is an error at its key in %s",
+    (name, text, key, [line, column, offset]) => {
+      const root = project({ "package.json": PACKAGE, [name]: text });
+      expect(policyOf(root).diagnostics).toEqual([
+        error(
+          `<root>/${name}`,
+          key,
+          line as number,
+          column as number,
+          offset as number,
+        ),
+      ]);
+    },
+  );
 
   it("MX's keys, a target's or host's block, a discovered dialect's id and `tagRules` are not", () => {
     const root = project({});
@@ -1064,24 +1099,24 @@ describe("a top-level key that is neither MX's, a target's nor a dialect's", () 
 
 describe("locateYamlPath counts every line break", () => {
   it.each([
-    ["LF", "\n"],
-    ["a lone CR", "\r"],
-    ["CRLF", "\r\n"],
-    ["U+2028", "\u2028"],
-    ["U+2029", "\u2029"],
-  ])("%s before the value", (_name, brk) => {
+    ["LF", "\n", 11, 19],
+    ["a lone CR", "\r", 11, 19],
+    ["CRLF", "\r\n", 13, 21],
+    ["U+2028", "\u2028", 11, 19],
+    ["U+2029", "\u2029", 11, 19],
+  ])("%s before the value", (_name, brk, keyOffset, valueOffset) => {
     const text = `a: 1${brk}mx:${brk}  target: page${brk}`;
     expect(locateYamlPath(text, ["mx", "target"])).toEqual({
       line: 3,
       column: 10,
       length: 4,
-      offset: text.indexOf("page"),
+      offset: valueOffset,
     });
     expect(locateYamlPath(text, ["mx", "target"], { key: true })).toEqual({
       line: 3,
       column: 2,
       length: 6,
-      offset: text.indexOf("target"),
+      offset: keyOffset,
     });
   });
 });
