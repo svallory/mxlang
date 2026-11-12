@@ -861,7 +861,22 @@ function callHook(
       }
       checkAttributeValue(ctx, trigger, attrValue);
       checkAttributeOptions(trigger, options);
-      if (options?.at) checkPart(ctx, trigger, options.at, "ctx.attribute");
+      if (options?.at) {
+        checkPart(ctx, trigger, options.at, "ctx.attribute");
+        // `at` names part of the trigger's own text: another trigger's text
+        // (or an authored value) is not this hook's to write over.
+        const own = spanOf(trigger);
+        if (
+          options.at.sourceStart < own.sourceStart ||
+          options.at.sourceEnd > own.sourceEnd
+        ) {
+          raise(
+            DIALECT_HOOK_ERROR_CODE,
+            `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: \`ctx.attribute\`'s \`at\` is a span inside the trigger's own text (${own.sourceStart} to ${own.sourceEnd})`,
+            trigger,
+          );
+        }
+      }
       const result = Object.freeze({
         kind: "attribute" as const,
         name,
@@ -1441,11 +1456,16 @@ function valueFormOf(trigger: Node): TriggerValueForm {
 }
 
 /**
- * A node over the operator after a trigger's text: the `(` of its arguments
- * (recorded by the parser), or the `:=` the lexer reaches by skipping the
- * whitespace after the text.
+ * A node over the operator after a trigger's text: the `:=` found backward
+ * from the bound value's start, or the `(` of its arguments, which the
+ * lexer reaches by skipping the whitespace after the recorded start.
  */
 function operatorNode(ctx: Ctx, trigger: Node, width: number): Node {
+  const valueStart = trigger.value?.outer?.start;
+  if (width === 2 && typeof valueStart === "number") {
+    const at = ctx.source.lastIndexOf(":=", valueStart - 1);
+    if (at >= 0) return { type: "MxTrigger", start: at, end: at + 2 } as Node;
+  }
   const recorded = trigger.args?.outer?.start;
   let start =
     typeof recorded === "number" ? recorded : spanOf(trigger).sourceEnd;
@@ -1476,6 +1496,20 @@ function refuseUnplaceable(ctx: Ctx, trigger: Node): void {
 }
 
 /**
+ * Whether two splices share text. A zero-width splice at an offset inside
+ * the other's range (or at the same offset) counts: `triggerSplicesIn` takes
+ * every splice a container contains, so it would apply to both values.
+ * Ranges that only touch (`5..6`, `6..7`) do not overlap.
+ */
+function overlaps(a: TriggerSplice, b: TriggerSplice): boolean {
+  return (
+    (a.start >= b.start && a.end <= b.end) ||
+    (b.start >= a.start && b.end <= a.end) ||
+    (a.start < b.end && b.start < a.end)
+  );
+}
+
+/**
  * Push a trigger's splice into `into`. Two values spliced over overlapping
  * text would each get both splices applied to their `code`, so a splice that
  * overlaps one `mine` (this hook result's own splices) already holds is a
@@ -1488,9 +1522,7 @@ function pushSplice(
   splice: TriggerSplice,
   mine?: TriggerSplice[],
 ): void {
-  if (
-    mine?.some((each) => splice.start < each.end && each.start < splice.end)
-  ) {
+  if (mine?.some((each) => overlaps(splice, each))) {
     raise(
       DIALECT_HOOK_ERROR_CODE,
       `the \`${trigger.id}\` trigger's ${hookLabel(trigger)}: two values would be written over the same text of \`${trigger.text}\`; build one \`ctx.expression\` or registered node per trigger text and give the other attributes a string, \`true\` or the trigger's own value`,

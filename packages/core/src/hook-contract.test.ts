@@ -192,6 +192,79 @@ describe("hook contract additions", () => {
   });
 
   it.each([
+    [
+      "two zero-width spans at one offset",
+      { sourceStart: 5, sourceEnd: 5 },
+      { sourceStart: 5, sourceEnd: 5 },
+    ],
+    [
+      "a zero-width span inside the other",
+      { sourceStart: 6, sourceEnd: 6 },
+      { sourceStart: 5, sourceEnd: 7 },
+    ],
+  ])("%s: both `ctx.expression` values are refused", (_name, first, second) => {
+    const module = probe((_id, _text, _span, ctx) => [
+      ctx.attribute("x", ctx.expression({ type: "Identifier", name: "p" }), {
+        at: first,
+      }),
+      ctx.attribute("y", ctx.expression({ type: "Identifier", name: "q" }), {
+        at: second,
+      }),
+    ]);
+    const error = caught(() => irOf("<div !a/>", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+  });
+
+  it("adjacent non-empty spans of one trigger are accepted", () => {
+    const module = probe((_id, _text, _span, ctx) => [
+      ctx.attribute("x", ctx.expression({ type: "Identifier", name: "p" }), {
+        at: { sourceStart: 5, sourceEnd: 6 },
+      }),
+      ctx.attribute("y", ctx.expression({ type: "Identifier", name: "q" }), {
+        at: { sourceStart: 6, sourceEnd: 7 },
+      }),
+    ]);
+    expect(() => irOf("<div !a/>", module)).not.toThrow();
+  });
+
+  it("an `at` outside the trigger's own text is refused", () => {
+    const module = probe((_id, _text, _span, ctx) =>
+      ctx.attribute("x", ctx.expression({ type: "Identifier", name: "p" }), {
+        at: { sourceStart: 8, sourceEnd: 10 },
+      }),
+    );
+    const error = caught(() => irOf("<div !a !b/>", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.span).toEqual({ sourceStart: 5, sourceEnd: 7 });
+  });
+
+  it("a line trigger whose child carries two `ctx.expression` values is refused, positioned at the trigger", () => {
+    const base = probe(() => ({}) as never);
+    const module: Dialect = {
+      ...base,
+      table: {
+        lineTriggers: [
+          {
+            id: "ln",
+            chars: "&",
+            match: "&[a-z]+",
+            standIn: "keep",
+            node: { call: "ln" },
+          },
+        ],
+      },
+      lowerTrigger: (_id, _text, _span, ctx) =>
+        ctx.child("x", [
+          ctx.attribute("p", ctx.expression({ type: "Identifier", name: "p" })),
+          ctx.attribute("q", ctx.expression({ type: "Identifier", name: "q" })),
+        ]),
+    };
+    const error = caught(() => irOf("div\n  &ab\n", module));
+    expect(error.diagnosticCode).toBe("MX_DIALECT_HOOK_ERROR");
+    expect(error.span).toEqual({ sourceStart: 6, sourceEnd: 9 });
+  });
+
+  it.each([
     ["<div !a:=x/>", 7, 2],
     ["<div !a(x)/>", 7, 1],
     ["<div !abc:=x/>", 9, 2],
