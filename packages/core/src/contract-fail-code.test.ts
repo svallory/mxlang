@@ -267,17 +267,67 @@ describe("analyze hooks of several tags", () => {
     expect(diagnostics.map((d) => d.line)).toEqual([1, 2]);
   });
 
-  it("a hook that passes is not blamed", () => {
-    const { diagnostics } = lowerSource("<box/>\n<ok/>\n<crate/>\n", "/u.mx", {
-      customTags: { ...customTags, ok: { analyze: () => {} } } as never,
+  // The tag that fails earliest in the file is the primary error, whatever
+  // its name: `zeta` sorts after `alpha`, and stands on line 1.
+  const ordered = {
+    zeta: failing("zeta"),
+    alpha: failing("alpha"),
+  } as unknown as Record<string, CustomTag>;
+  const ORDER_SOURCE = "<zeta/>\n<p/>\n<alpha/>\n";
+
+  it("lists the failures in file order, not tag-name order", () => {
+    const { diagnostics } = lowerSource(ORDER_SOURCE, "/u.mx", {
+      customTags: ordered,
     });
     expect(diagnostics.map((d) => d.line)).toEqual([1, 3]);
   });
 
-  it("one failing tag is reported once", () => {
-    const { diagnostics } = lowerSource("<box/>\n<box/>\n", "/u.mx", {
-      customTags: { box: customTags.box as CustomTag },
+  it("throws the earliest failure in the file as the primary error", () => {
+    let thrown: TranslateError | undefined;
+    try {
+      compileSource(
+        ORDER_SOURCE,
+        "/u.mx",
+        { tags: {}, isElement: () => true, isComponent: () => false },
+        {
+          targets,
+          emitIr: () => "",
+          customTags: {
+            zeta: { transform: () => [], ...ordered.zeta },
+            alpha: { transform: () => [], ...ordered.alpha },
+          } as unknown as Record<string, CustomTag>,
+        },
+      );
+    } catch (error) {
+      thrown = error as TranslateError;
+    }
+    expect(thrown?.line).toBe(1);
+    expect(thrown?.message).toContain("bad zeta");
+    expect((thrown?.errors ?? []).map((e) => e.line)).toEqual([1, 3]);
+  });
+
+  it("keeps the related errors a failing hook carries", () => {
+    const related = (line: number) =>
+      new TranslateError(`related at ${line}`, line, 0);
+    const carrier = {
+      analyze: (calls: readonly { loc: { line: number } }[]) => {
+        const main = new TranslateError("main", calls[0]?.loc.line ?? 1, 0);
+        main.errors = [main, related(5), related(6)];
+        throw main;
+      },
+    };
+    const { diagnostics } = lowerSource("<box/>\n<crate/>\n", "/u.mx", {
+      customTags: {
+        box: carrier,
+        crate: failing("crate"),
+      } as unknown as Record<string, CustomTag>,
     });
-    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics.map((d) => d.line)).toEqual([1, 2, 5, 6]);
+    expect(diagnostics.map((d) => d.message.replace(/^.*: /, ""))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("related at 5"),
+        expect.stringContaining("related at 6"),
+      ]),
+    );
   });
 });

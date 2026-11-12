@@ -1127,3 +1127,21 @@ describe("the first error of a throwing compile follows stock's order", () => {
     expect([error.line, error.column]).toEqual([2, 8]);
   });
 });
+
+describe("collecting (lowerSource) lists a script's diagnostics in position order, head first", () => {
+  // The throwing compile raises the placeholder or body first, as stock does;
+  // the collected list stays sorted by position, so the head leads it.
+  it.each([
+    ["arguments and a placeholder", "<script(x)>go(${y})</script>"],
+    [
+      "arguments and a body that does not parse",
+      "<script(x)>const = 1;</script>",
+    ],
+  ])("%s", (_label, source) => {
+    const { diagnostics } = lower(source);
+    expect(diagnostics.length).toBeGreaterThanOrEqual(2);
+    expect(diagnostics[0]?.column).toBe(8);
+    const columns = diagnostics.map((d) => d.column);
+    expect(columns).toEqual([...columns].sort((a, b) => a - b));
+  });
+});

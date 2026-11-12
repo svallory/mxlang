@@ -3920,7 +3920,14 @@ export function runAnalyzeHooks(
   }
   const [only] = failures;
   if (failures.length === 1 && only) throw only;
-  if (failures.length > 1) throw collectedError(failures);
+  if (failures.length > 1) {
+    // Each failure stands for its own list (related errors a hook carried), and
+    // the first error in the file is the primary, not the first tag by name.
+    const all = [
+      ...new Set(failures.flatMap((e) => (e.errors?.length ? e.errors : [e]))),
+    ].sort((a, b) => a.line - b.line || a.column - b.column);
+    throw collectedError(all);
+  }
 }
 
 /**

@@ -547,7 +547,13 @@ export function compileSource(
     claimed,
   );
   const filePolicy = rules ? policyUnder(rules, policy) : policy;
-  const lookup = tagTable(translator, filePolicy.nativeTags);
+  // A tag-rules preset (`statementTags: false`) states the file's whole tag
+  // set itself, `none` among them: its `<script>` is an ordinary tag.
+  const baseLookup = tagTable(translator, filePolicy.nativeTags);
+  const lookup =
+    rules || host.statementTags === false
+      ? baseLookup
+      : withRawTextParseOptions(baseLookup);
 
   const state = {
     source,
@@ -580,12 +586,7 @@ export function compileSource(
     // defaults to true for a build). `@marko/compiler` no longer parses.
     const document = parseMx(source, {
       syntax,
-      // A tag-rules preset (`statementTags: false`) states the file's whole tag
-      // set itself, `none` among them: its `<script>` is an ordinary tag.
-      lookup:
-        rules || host.statementTags === false
-          ? lookup
-          : withRawTextParseOptions(lookup),
+      lookup,
       dialect: resolvedSyntax.dialect,
     });
     const tableError = tableParseError(

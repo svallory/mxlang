@@ -956,10 +956,10 @@ function checkScriptShape(ctx: Ctx, tag: Node): void {
       `A ${scriptText()} body is JavaScript or TypeScript text, so a \`\${…}\` placeholder in it is not supported. Use the value directly (\`x\`, not \`\${x}\`), in a string through a template literal, or for a native html \`<script>\` element use ${tagText(ctx, "html-script", tag)}`,
       at,
     );
-  // The first error a walk raises is the one a throwing compile reports, and
-  // stock Marko reads the body before it checks the head: the placeholder,
-  // then the body's syntax, then the head and attributes. A walk that
-  // collects still reports every one of them, in position order, head first.
+  // The first error raised is the primary one a compile throws, and stock
+  // Marko reads the body before it checks the head: the placeholder, then the
+  // body's syntax, then the head and attributes. An entry that lists every
+  // diagnostic (`lowerSource`) orders them by position, head first.
   if (placeholder) refusePlaceholder(placeholder);
   checkScriptBodySyntax(ctx, tag);
   // The body is the tag's value when it holds statements or comments, as stock
@@ -5672,7 +5672,6 @@ function validateCustomAttributeTagBodies(
   declarations: CustomTag["attributeTags"],
   allowUncontractedTags: boolean,
   controlName?: string,
-  outermostControl?: Node,
 ): void {
   const voice = voiceOfCtx(ctx);
   const children = bodyChildren(node);
@@ -5686,6 +5685,10 @@ function validateCustomAttributeTagBodies(
   ];
   for (const tag of directTags) {
     if (isControl(tag)) {
+      // Under `structural: "reject"` the construct is the error, and the
+      // lowering reports the first one in source order; what it holds is not
+      // checked here, or a later construct could be blamed before an earlier.
+      if (ctx.structural === "reject") continue;
       validateCustomAttributeTagBodies(
         ctx,
         owner,
@@ -5693,7 +5696,6 @@ function validateCustomAttributeTagBodies(
         declarations,
         allowUncontractedTags,
         attrName(tag) === "for" ? "for" : "if",
-        outermostControl ?? tag,
       );
       continue;
     }
@@ -5702,16 +5704,6 @@ function validateCustomAttributeTagBodies(
     const extended = hasAttributeTagContract(declaration);
     if (!allowUncontractedTags && !extended) {
       if (controlName) {
-        // Under `structural: "reject"` the construct is the error, whatever it
-        // holds: the outermost `<if>`/`<for>`, as when it holds anything else.
-        if (ctx.structural === "reject" && outermostControl) {
-          throw structuralConstructError(
-            attrName(outermostControl) === "for" ? "for" : "if",
-            posOf(ctx, outermostControl),
-            voice,
-            blameEndOffset(outermostControl),
-          );
-        }
         raise(
           INVALID_ATTRIBUTE_TAG_CODE,
           `${ownerText(owner)}: ${voice.attributeTag} ${voice.attrTag(name)} may not appear inside ${tagText(ctx, controlName, node)}; registered custom tags cannot preserve ${voice.attributeTagCompound} control flow`,
@@ -5773,7 +5765,8 @@ function validateCustomAttributeTagBodies(
     if (
       isTagNode(child) &&
       CONTROL_FLOW_TAGS.includes(tagNameOf(child) as string) &&
-      !directTags.includes(child)
+      !directTags.includes(child) &&
+      ctx.structural !== "reject"
     ) {
       validateCustomAttributeTagBodies(
         ctx,
@@ -5782,7 +5775,6 @@ function validateCustomAttributeTagBodies(
         declarations,
         allowUncontractedTags,
         tagNameOf(child) === "for" ? "for" : "if",
-        outermostControl ?? child,
       );
     }
   }
@@ -5993,18 +5985,6 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
       const name = tagNameOf(node) as string;
       if (name === "const" || name === "define" || name.startsWith("@"))
         continue;
-      // A name the host refuses as something a data file cannot hold (`try`,
-      // `return`) is that refusal when the child lowers, and the real error
-      // wins: the parent's contract does not report it as a tag it does not
-      // allow first.
-      const refusal = Object.hasOwn(ctx.declarations.tags, name)
-        ? ctx.declarations.tags[name]
-        : undefined;
-      if (
-        (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
-        refusal.code === NOT_IN_DATA_FILE_CODE
-      )
-        continue;
       if (name === "for") {
         tree.push(
           ended({
@@ -6057,6 +6037,19 @@ function authoredChildTree(ctx: Ctx, children: readonly Node[]): ChildNode[] {
           orphan: true,
         });
       } else {
+        // A name the host refuses as something a data file cannot hold (`try`,
+        // `return`) is that refusal when the child lowers (a tag's body is
+        // always lowered), and the real error wins: the parent's contract does
+        // not report it as a tag it does not allow first. `else` and
+        // `else-if` are branches, handled above.
+        const refusal = Object.hasOwn(ctx.declarations.tags, name)
+          ? ctx.declarations.tags[name]
+          : undefined;
+        if (
+          (refusal?.kind === "error" || refusal?.kind === "unsupported") &&
+          refusal.code === NOT_IN_DATA_FILE_CODE
+        )
+          continue;
         rejectEffectTag(ctx, node, name);
         const why = invalidDefaultTagHint(node);
         const wildcard = activeWildcard(ctx, node);

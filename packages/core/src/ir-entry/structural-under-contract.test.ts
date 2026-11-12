@@ -956,3 +956,80 @@ describe("<try> and <return> under a tag with a contract", () => {
     ]);
   });
 });
+
+describe("structural: reject, which construct is named", () => {
+  const options = {
+    structural: "reject",
+    unknownTags: "reject",
+    customTags: {
+      ...customTags,
+      span: {},
+      card: { attributeTags: { a: { repeatable: true } } },
+    },
+  } as const;
+
+  const first = (source: string) => {
+    const result = lowerSource(source, "/t.mx", options);
+    return result.diagnostics.map((d) => [d.code, d.line, d.column, d.message]);
+  };
+
+  it("an `else` holding an attribute tag is blamed on the `if`, once, at the `if`", () => {
+    expect(
+      first("<card>\n  <if=x><@a/></if>\n  <else><@a/></else>\n</card>\n"),
+    ).toEqual([["MX_STRUCTURAL_CONSTRUCT", 2, 2, IF]]);
+  });
+
+  it("an `if` is listed before a later `for` that also holds an attribute tag", () => {
+    const found = first(
+      "<card><if=x><span/></if><for|y| of=[1]><@a/></for></card>\n",
+    );
+    expect(found.map((d) => [d[0], d[1], d[2]])).toEqual([
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 6],
+      ["MX_STRUCTURAL_CONSTRUCT", 1, 24],
+    ]);
+    expect(found[0]?.[3]).toContain("`<if>`");
+  });
+
+  it("an orphan `<else>` under a data-file contract tag still reports", () => {
+    const found = seen(
+      "<entity>\n  <else><string/></else>\n</entity>\n",
+      options,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.[1]).toBe(2);
+    expect(found[0]?.[3]).toContain("`<else>`");
+    expect(found[0]?.[0]).toBe("MX_STRUCTURAL_CONSTRUCT");
+  });
+
+  it("an orphan `<else>` in a body the transform consumes still reports", () => {
+    const eater: Record<string, CustomTag> = {
+      ...customTags,
+      eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
+      leaf: {},
+    };
+    const result = lowerSource(
+      "<eater>\n  <else><leaf/></else>\n</eater>\n",
+      "/t.mx",
+      { ...options, structural: "pass", customTags: eater },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
+      ["MX_NOT_IN_DATA_FILE", 2],
+    ]);
+  });
+
+  it("a contract tag's body is lowered even when its transform ignores it", () => {
+    const eater: Record<string, CustomTag> = {
+      ...customTags,
+      eater: { children: { leaf: { repeatable: true } }, transform: () => [] },
+      leaf: {},
+    };
+    const result = lowerSource(
+      "<eater>\n  <try><leaf/></try>\n</eater>\n",
+      "/t.mx",
+      { ...options, customTags: eater },
+    );
+    expect(result.diagnostics.map((d) => [d.code, d.line])).toEqual([
+      ["MX_NOT_IN_DATA_FILE", 2],
+    ]);
+  });
+});

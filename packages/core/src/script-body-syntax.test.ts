@@ -438,6 +438,17 @@ describe("where `<script>` is not a raw-text tag", () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it("parses `<b>` in a `<script>` as a tag under the `none` tag rules", () => {
+    // Raw text would keep `<b>x</b>` as the script's text: a tag it is not.
+    const { ir, diagnostics } = lowerSource(
+      "<script><b>x</b></script>",
+      "/f/t.mx",
+      { tagRules: "none", structural: "pass" },
+    );
+    expect(diagnostics).toEqual([]);
+    expect(JSON.stringify(ir)).toContain('"name":"b"');
+  });
+
   it("does not check the body of a registered tag named script", () => {
     const { diagnostics } = lowerSource(
       "<div/>\n<script>\nconst = 1;\n</script>",

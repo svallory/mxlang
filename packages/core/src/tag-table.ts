@@ -25,11 +25,7 @@
  * No entry carries a `template`.
  */
 import { VOID_TAGS } from "./core.ts";
-import {
-  PARSE_OPTIONS_TAGLIB,
-  PARSE_OPTIONS_TAGLIB_ID,
-  withStatementTags,
-} from "./core-taglib.ts";
+import { PARSE_OPTIONS_TAGLIB, withStatementTags } from "./core-taglib.ts";
 import { HTML_ELEMENTS } from "./did-you-mean.ts";
 
 /** A native element's body mode, the front end's `tagShape` values (ast §3.12). */
@@ -225,31 +221,36 @@ export function tagTable(
   return table;
 }
 
+const rawTextViews = new WeakMap<TagTable, TagTable>();
+
 /**
- * `lookup` as the parser reads it, with the raw-text parse options of core's
- * own tags (`<html-script>`, `<html-style>`, `<script>`, `<style>`,
- * `<html-comment>`) for a name whose entry carries none. They are core's, not
- * a host's: a host that registers no core taglib would otherwise parse an
- * `<html-script>` body as markup and trim its edge whitespace, where the html
- * target, Solid and Astro read it as raw text. Only the parser sees this view:
- * lowering still asks `lookup`, so a name the table does not define stays
- * undefined there (it is not a tag some taglib registered).
+ * `lookup` with the raw-text parse options of core's own tags (`<html-script>`,
+ * `<html-style>`, `<script>`, `<style>`, `<html-comment>`) for a name whose
+ * entry carries none. They are core's, not a host's: a host that registers no
+ * core taglib would otherwise parse an `<html-script>` body as markup and trim
+ * its edge whitespace, where the html target, Solid and Astro read it as raw
+ * text. The parser and lowering share this one view. A name the table did not
+ * define gets an element entry, the answer lowering gave it before.
  */
 export function withRawTextParseOptions(lookup: TagTable): TagTable {
+  const cached = rawTextViews.get(lookup);
+  if (cached) return cached;
   const raw = PARSE_OPTIONS_TAGLIB as Record<
     string,
     { parseOptions?: TagParseOptions } | undefined
   >;
-  return {
+  const view: TagTable = {
     getTag(name) {
       const entry = lookup.getTag(name);
       if (entry?.parseOptions) return entry;
       const parseOptions = raw[`<${name}>`]?.parseOptions;
       if (!parseOptions) return entry;
       return {
-        ...(entry ?? { taglibId: PARSE_OPTIONS_TAGLIB_ID }),
+        ...(entry ?? { taglibId: NAMESPACE_TAGLIB_IDS.html }),
         parseOptions: { ...parseOptions },
       };
     },
   };
+  rawTextViews.set(lookup, view);
+  return view;
 }
