@@ -10,16 +10,18 @@
  * is replayed only when a key proves every input of that answer unchanged by
  * content; any doubt is a miss, and a miss runs the full pass.
  *
- * The key is SHA-256 over, in this order: a format number; the tool (this
- * module's bundle and the externals that compile and check templates); the
- * `typescript` version mx-tsc runs; whether `--astro` was given; the project's
- * tsconfig and build info paths; the build info's `fileNames` and `fileInfos`
- * (tsc's own per-file content hashes of every file the program read, written by
- * the tsc run that just finished); the raw bytes of the tsconfig and every file
- * of its `extends` chain; the raw bytes of every `.mx` file of the program
- * (tsc hashes their authored text, not the lowered text the host config
- * decides); every `package.json` and MX config file that can decide those
- * files' host and Angular config, or "absent" for each probed path; the
+ * The key is SHA-256 over, in this order: a format number; the tool (mx-tsc's
+ * own code and the externals that lower and check templates, by their bytes);
+ * the `typescript` version mx-tsc runs; whether `--astro` was given; the
+ * project's tsconfig and build info paths; the build info's `fileNames` and
+ * `fileInfos` (tsc's own per-file content hashes of every file the program
+ * read, written by the tsc run that just finished); the raw bytes of the
+ * tsconfig and every file of its `extends` chain; the raw bytes of every `.mx`
+ * file of the program (tsc hashes their authored text, not the lowered text the
+ * host config decides); every `package.json` and MX config file that can decide
+ * those files' host and Angular config, or "absent" for each probed path; the
+ * custom-tag discovery of each `.mx` file (every candidate tag directory's
+ * listing and file bytes, and the manifests and configs the scan read); the
  * `@angular/compiler-cli` and checker `typescript` the project resolves; and
  * the previous project's key, this project's position in the graph and the
  * files earlier projects claimed (ownership of an overlapping `.ng.mx`). No
@@ -31,17 +33,26 @@
 
 import { createHash } from "node:crypto";
 import {
+  readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCompilerCli, resolveTypescript } from "@mxlang/angular-checker";
-import { findMxConfig } from "@mxlang/core";
+import {
+  createTargetLookup,
+  findMxConfig,
+  scanCached,
+  type TargetLookup,
+} from "@mxlang/core";
+import angularDescriptor from "@mxlang/host-angular/descriptor";
+import { moduleFileExtensions } from "@mxlang/typescript-plugin";
 import type ts from "typescript";
 import {
   type NgDiagnosticsResult,
@@ -57,6 +68,13 @@ export const BUILD_CACHE_FORMAT = 1;
 /** The sidecar of a project whose build info is at `buildInfoPath`. */
 export const sidecarPath = (buildInfoPath: string) =>
   `${buildInfoPath}.mx-ng.json`;
+
+/**
+ * Test seam: how often the `-b` template pass created a program for a
+ * project's `.ng.mx` files and an Angular checker (`index.ts` counts them).
+ * A cache hit creates neither. Never read by mx-tsc itself.
+ */
+export const buildPassCounters = { compileProjectNgMx: 0, createChecker: 0 };
 
 /** What the compiler-cli lookup of one package directory found. */
 export interface CompilerCliInput {
@@ -97,6 +115,11 @@ export interface CacheKeyInputs {
   mxFiles: readonly FileInput[];
   /** Every manifest and MX config file that decides an `.mx` file's config. */
   configInputs: readonly FileInput[];
+  /**
+   * Custom-tag discovery of every `.mx` file: each candidate tag directory
+   * (its listing, then each file under it) and the files the scan read.
+   */
+  tagInputs: readonly FileInput[];
   compilerCli: readonly CompilerCliInput[];
   /** The previous project's key in graph order (`""` for the first). */
   previous: string;
@@ -127,6 +150,7 @@ export function cacheKey(inputs: CacheKeyInputs): string {
   add("configFiles", files(inputs.configFiles));
   add("mxFiles", files(inputs.mxFiles));
   add("configInputs", files(inputs.configInputs));
+  add("tagInputs", files(inputs.tagInputs));
   add("compilerCli", inputs.compilerCli);
   add("previous", inputs.previous);
   add("position", inputs.position);
@@ -143,57 +167,161 @@ function readText(path: string): string | null {
   }
 }
 
-/**
- * The externals that lower and check templates: the first three resolved from
- * this package, the two `@mxlang/typescript-plugin` lowers with resolved from
- * it (`@mxlang/tsx-bridge` is not a dependency of this package).
- */
-const EXTERNALS: readonly [name: string, from: "self" | "plugin"][] = [
-  ["@mxlang/angular-checker", "self"],
-  ["@mxlang/host-angular", "self"],
-  ["@mxlang/typescript-plugin", "self"],
-  ["@mxlang/core", "plugin"],
-  ["@mxlang/tsx-bridge", "plugin"],
-];
+/** Every file under `dir`, sorted, skipping `node_modules`; `[]` when absent. */
+function filesUnder(
+  dir: string,
+  keep: (path: string) => boolean,
+  enter: (name: string) => boolean = (name) => name !== "node_modules",
+): string[] {
+  const found: string[] = [];
+  const visit = (current: string) => {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (enter(entry.name)) visit(path);
+      } else if (keep(path)) {
+        found.push(path);
+      }
+    }
+  };
+  visit(dir);
+  return found.sort();
+}
+
+/** One package the tool's answer depends on (see {@link toolIdentity}). */
+export interface ToolExternal {
+  name: string;
+  /** Resolved from mx-tsc (`"self"`) or from an earlier external's entry. */
+  from: string;
+  /** Files beside the entry whose bytes count too, relative to it. */
+  siblings?: readonly string[];
+  /**
+   * Not MX code: its `package.json` version and real path stand for it
+   * (`@angular/compiler`, which host-angular lowers with).
+   */
+  manifestOnly?: boolean;
+}
 
 /**
- * The code that decides a template's lowering and diagnostics: SHA-256 of
- * mx-tsc's own module file (the bundle in a built package, which carries every
- * module it does not leave external), and of each external's entry file plus
- * its version (workspace versions do not move, so a version alone is not
- * enough). `undefined` when any of it cannot be read: then nothing is cached.
+ * The externals that lower and check templates. Three resolve from this
+ * package; `@mxlang/core` and `@mxlang/tsx-bridge` from the
+ * `@mxlang/typescript-plugin` that lowers with them (core with the parse layer
+ * its dist loads beside itself); `@mxlang/web-elements` (the element table)
+ * and `@angular/compiler` from `@mxlang/host-angular`.
  */
-export function toolIdentity(): string | undefined {
-  const self = fileURLToPath(import.meta.url);
-  const selfText = readText(self);
-  if (selfText === null) return undefined;
-  const parts = [`self:${hashText(selfText)}`];
-  const requireFrom = {
-    self: createRequire(self),
-    plugin: createRequire(self),
-  };
-  for (const [name, from] of EXTERNALS) {
-    let entry: string;
+export const TOOL_EXTERNALS: readonly ToolExternal[] = [
+  { name: "@mxlang/angular-checker", from: "self" },
+  { name: "@mxlang/host-angular", from: "self" },
+  { name: "@mxlang/typescript-plugin", from: "self" },
+  {
+    name: "@mxlang/core",
+    from: "@mxlang/typescript-plugin",
+    siblings: ["marko-frontend.cjs"],
+  },
+  { name: "@mxlang/tsx-bridge", from: "@mxlang/typescript-plugin" },
+  { name: "@mxlang/web-elements", from: "@mxlang/host-angular" },
+  {
+    name: "@angular/compiler",
+    from: "@mxlang/host-angular",
+    manifestOnly: true,
+  },
+];
+
+const isTestFile = (path: string) => /\.test\.[cm]?tsx?$/.test(path);
+
+/**
+ * A directory of mx-tsc's own sources: not `node_modules`, not a fixture
+ * directory (`fixtures*`) and not a dot-directory (the scratch projects tests
+ * create beside their sources), whose `.ts` files are inputs, not code.
+ */
+const isCodeDirectory = (name: string) =>
+  name !== "node_modules" &&
+  !name.startsWith(".") &&
+  !name.startsWith("fixtures");
+
+/**
+ * The code that decides a template's lowering and diagnostics, by its bytes
+ * (workspace versions do not move, so a version alone is not enough):
+ *
+ * - mx-tsc itself: `self`, the bundle in a built package, which carries every
+ *   module it does not leave external. Run from source (`self` is a `.ts`
+ *   file), every non-test `.ts` file of the directory `self` is in and below
+ *   it, fixture and dot-directories aside, so an edit to any of this
+ *   package's modules counts.
+ * - each of `externals`: its entry file's bytes, its siblings' bytes and its
+ *   `package.json` version, or for a manifest-only one its version and the
+ *   real path of its `package.json`.
+ *
+ * `undefined` when any of it cannot be resolved or read: then nothing is
+ * cached.
+ */
+export function toolIdentity(
+  options: { self?: string; externals?: readonly ToolExternal[] } = {},
+): string | undefined {
+  const self = options.self ?? fileURLToPath(import.meta.url);
+  const parts: string[] = [];
+  const selfFiles = self.endsWith(".ts")
+    ? filesUnder(
+        dirname(self),
+        (p) => p.endsWith(".ts") && !isTestFile(p),
+        isCodeDirectory,
+      )
+    : [self];
+  for (const file of selfFiles) {
+    const text = readText(file);
+    if (text === null) return undefined;
+    parts.push(`self:${basename(file)}:${hashText(text)}`);
+  }
+  const entries = new Map<string, string>([["self", self]]);
+  for (const external of options.externals ?? TOOL_EXTERNALS) {
+    const base = entries.get(external.from);
+    if (base === undefined) return undefined;
+    const require = createRequire(base);
     try {
-      entry = requireFrom[from].resolve(name);
+      if (external.manifestOnly) {
+        const manifest = realpathSync(
+          require.resolve(`${external.name}/package.json`),
+        );
+        const version = versionOf(manifest);
+        if (version === undefined) return undefined;
+        parts.push(`${external.name}@${version}:${manifest}`);
+        continue;
+      }
+      const entry = require.resolve(external.name);
+      entries.set(external.name, entry);
+      const version = versionOf(join(nearestPackageDir(entry), "package.json"));
+      if (version === undefined) return undefined;
+      parts.push(`${external.name}@${version}`);
+      for (const file of [
+        entry,
+        ...(external.siblings ?? []).map((s) => join(dirname(entry), s)),
+      ]) {
+        const text = readText(file);
+        if (text === null) return undefined;
+        parts.push(`${basename(file)}:${hashText(text)}`);
+      }
     } catch {
       return undefined;
     }
-    if (name === "@mxlang/typescript-plugin") {
-      requireFrom.plugin = createRequire(entry);
-    }
-    const text = readText(entry);
-    const manifest = readText(join(nearestPackageDir(entry), "package.json"));
-    if (text === null || manifest === null) return undefined;
-    let version: unknown;
-    try {
-      version = (JSON.parse(manifest) as { version?: unknown }).version;
-    } catch {
-      return undefined;
-    }
-    parts.push(`${name}@${String(version)}:${hashText(text)}`);
   }
   return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+function versionOf(manifest: string): string | undefined {
+  const text = readText(manifest);
+  if (text === null) return undefined;
+  try {
+    const version = (JSON.parse(text) as { version?: unknown }).version;
+    return typeof version === "string" ? version : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Seams for tests; production uses the real resolvers. */
@@ -231,8 +359,70 @@ export function compilerCliInput(
   };
 }
 
-/** Extensions a program may hold whose answer the key covers. */
-const KNOWN_EXTENSIONS = /\.(?:[cm]?tsx?|[cm]?jsx?|json|mx)$/;
+/** Script and data files a program may hold, which `fileInfos` covers. */
+const SCRIPT_EXTENSIONS = /\.(?:[cm]?tsx?|[cm]?jsx?|json)$/;
+
+/**
+ * The `.mx` suffixes whose lowering the key covers: the built-in host file
+ * kinds (`moduleFileExtensions`, the registry's region and `ng-template`
+ * kinds) and `.astro.mx`. Any other `<name>.mx` (a dialect file, such as
+ * `x.probe.mx`, whose rules live in a module no input covers) is not covered;
+ * a plain `.mx` file is one whose name has no other dot.
+ */
+function coveredMx(file: string): boolean {
+  if (!file.endsWith(".mx")) return false;
+  if (
+    [...moduleFileExtensions(), ".astro.mx"].some((ext) => file.endsWith(ext))
+  ) {
+    return true;
+  }
+  return !basename(file).slice(0, -".mx".length).includes(".");
+}
+
+let angularTargets: TargetLookup | undefined;
+
+/**
+ * The inputs of each `.mx` file's custom-tag discovery, by core's own scan
+ * (`scanCached`, the walk the compile runs): every candidate tag directory
+ * the scan probed, as its listing (absent ones too) and every file under it,
+ * plus the manifests, config search places and tag files the scan read.
+ * Hashing every file under a tag directory, not only the ones the scan
+ * indexed, keeps the answer independent of the target lookup the scan is run
+ * with.
+ */
+function tagInputsOf(mxPaths: readonly string[]): FileInput[] {
+  angularTargets ??= createTargetLookup([angularDescriptor]);
+  const inputs = new Map<string, string | null>();
+  for (const file of mxPaths) {
+    const scan = scanCached(file, { targets: angularTargets });
+    for (const dir of scan.directories) {
+      const files = filesUnder(dir, () => true);
+      inputs.set(
+        `${slash(dir)}/`,
+        isDirectory(dir) ? files.map((f) => slash(f)).join("\n") : null,
+      );
+      for (const f of files) inputs.set(slash(f), readText(f));
+    }
+    for (const path of [
+      ...scan.packageFiles,
+      ...(scan.configFiles ?? []),
+      ...scan.files.map((f) => f.path),
+    ]) {
+      inputs.set(slash(path), readText(path));
+    }
+  }
+  return [...inputs]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([path, text]) => ({ path, text }));
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /** What one project of the graph needs to look up or store its answer. */
 export interface ProjectCacheContext {
@@ -240,7 +430,8 @@ export interface ProjectCacheContext {
   /** The root files tsc selects for the project (`BuildProject.rootNames`). */
   rootNames: readonly string[];
   astro: boolean;
-  tool: string;
+  /** {@link toolIdentity}, asked only once a project has a build info. */
+  tool: () => string | undefined;
   previous: string;
   position: number;
   claimed: ReadonlySet<string>;
@@ -263,7 +454,8 @@ const slash = (path: string) => path.replaceAll("\\", "/");
  * project cannot be cached: no build info (not composite or incremental, or
  * tsc wrote none), a build info of an unexpected shape or another TypeScript,
  * a root file the build info does not list, a file kind the key does not
- * cover (a dialect file, `.astro`), or an input that cannot be read.
+ * cover (a dialect file, `.astro`), an MX config that is a module (the
+ * modules it imports are no input), or an input that cannot be read.
  */
 export function projectCacheEntry(
   typescript: TypeScript,
@@ -325,11 +517,15 @@ function readEntry(
   const files = (fileNames as string[]).map((name) =>
     slash(resolve(base, name)),
   );
-  if (!files.every((file) => KNOWN_EXTENSIONS.test(file))) return undefined;
+  if (!files.every((file) => SCRIPT_EXTENSIONS.test(file) || coveredMx(file))) {
+    return undefined;
+  }
   const listed = new Set(files);
   if (!context.rootNames.every((file) => listed.has(slash(file)))) {
     return undefined;
   }
+  const tool = context.tool();
+  if (tool === undefined) return undefined;
 
   const configFiles: FileInput[] = [
     tsconfigPath,
@@ -342,12 +538,13 @@ function readEntry(
   const mxFiles = mxPaths.map((path) => ({ path, text: readText(path) }));
   if (mxFiles.some((file) => file.text === null)) return undefined;
 
+  // Once per directory: every `.mx` file of a directory probes the same paths.
   const probed = new Set<string>();
-  for (const file of mxPaths) {
+  for (const [dir, file] of new Map(mxPaths.map((f) => [dirname(f), f]))) {
     for (const path of packageJsonInputs(file)) probed.add(slash(path));
-    for (const path of findMxConfig(dirname(file))?.watch ?? []) {
-      probed.add(slash(path));
-    }
+    const config = findMxConfig(dir);
+    if (config?.format === "module") return undefined;
+    for (const path of config?.watch ?? []) probed.add(slash(path));
   }
   const configInputs = [...probed]
     .sort()
@@ -360,7 +557,7 @@ function readEntry(
 
   const key = cacheKey({
     format: BUILD_CACHE_FORMAT,
-    tool: context.tool,
+    tool,
     typescriptVersion: typescript.version,
     astro: context.astro,
     tsconfigPath: slash(tsconfigPath),
@@ -370,12 +567,57 @@ function readEntry(
     configFiles,
     mxFiles,
     configInputs,
+    tagInputs: tagInputsOf(mxPaths),
     compilerCli,
     previous: context.previous,
     position: context.position,
     claimed: [...context.claimed].sort(),
   });
   return { key, sidecar: sidecarPath(buildInfoPath), ngFiles };
+}
+
+/** What a project's fresh pass produced, as {@link mayStore} weighs it. */
+export interface StoreFacts {
+  /** Project-level errors of the pass (`NgDiagnosticsResult.errors`). */
+  projectErrors: number;
+  /** The run's `ambientTypes` errors. */
+  ambientErrors: number;
+  /** MX compile diagnostics (any category) of the project's own program. */
+  compileDiagnostics: number;
+  /** Host-policy diagnostics (`TS80003`, warnings too) of that program. */
+  policyDiagnostics: number;
+  /** The `.ng.mx` files that program compiled. */
+  compiled: readonly string[];
+  /** The `.ng.mx` files the build info lists (`ProjectCacheEntry.ngFiles`). */
+  listed: readonly string[];
+  /** Whether any owned file's Angular diagnostics are `"off"` (or unreadable). */
+  diagnosticsOff: boolean;
+}
+
+/**
+ * Whether a project's fresh answer may be stored: only when it is all the pass
+ * would print for the project. Compile, policy and ambient-types diagnostics
+ * are printed from the project's own program, which a hit skips; a
+ * project-level error is environmental (a missing compiler-cli, a bad config);
+ * a hit derives ownership from the build info, so the program must have
+ * compiled exactly the `.ng.mx` files tsc listed; and `"off"` is never stored.
+ */
+export function mayStore(facts: StoreFacts): boolean {
+  if (
+    facts.projectErrors > 0 ||
+    facts.ambientErrors > 0 ||
+    facts.compileDiagnostics > 0 ||
+    facts.policyDiagnostics > 0 ||
+    facts.diagnosticsOff
+  ) {
+    return false;
+  }
+  const listed = new Set(facts.listed);
+  const compiled = new Set(facts.compiled);
+  return (
+    compiled.size === listed.size &&
+    [...compiled].every((name) => listed.has(name))
+  );
 }
 
 /** What a sidecar holds. */

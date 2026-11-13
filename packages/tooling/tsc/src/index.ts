@@ -32,7 +32,8 @@ import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName
 import type ts from "typescript";
 import { createTsconfigPathsResolver } from "../../typescript-plugin/src/tsconfig-paths.ts";
 import {
-  type ProjectCacheEntry,
+  buildPassCounters,
+  mayStore,
   projectCacheEntry,
   readStoredAnswer,
   toolIdentity,
@@ -756,13 +757,6 @@ function compileProjectNgMx(
   return ngPlugins.flatMap((plugin) => plugin.getCompiledNgMx());
 }
 
-/**
- * Test seam: how often the `-b` template pass created a program for a
- * project's `.ng.mx` files and an Angular checker. A cache hit creates
- * neither. Never read by mx-tsc itself.
- */
-export const buildPassCounters = { compileProjectNgMx: 0, createChecker: 0 };
-
 const countingCheckerDeps: NgDiagnosticsDeps = {
   createChecker: (options) => {
     buildPassCounters.createChecker += 1;
@@ -805,7 +799,16 @@ function checkBuildProjects(
   };
   const require = createRequire(import.meta.url);
   const typescript = require("typescript") as typeof ts;
-  const tool = cache.enabled ? toolIdentity() : undefined;
+  // Hashes the tool's bundles once, and only once a project has a build info.
+  let toolKnown = false;
+  let toolHash: string | undefined;
+  const tool = () => {
+    if (!toolKnown) {
+      toolKnown = true;
+      toolHash = toolIdentity();
+    }
+    return toolHash;
+  };
   const claimed = new Set<string>();
   // The chain: a project's key covers the previous project's, so a change
   // that moves ownership in an earlier project reaches every later one.
@@ -813,18 +816,17 @@ function checkBuildProjects(
   projects.forEach(({ tsconfigPath, hasFiles, rootNames }, position) => {
     // No root files, no program (a solution root): nothing to compile.
     if (!hasFiles) return;
-    const entry =
-      tool === undefined
-        ? undefined
-        : projectCacheEntry(typescript, {
-            tsconfigPath,
-            rootNames,
-            astro,
-            tool,
-            previous,
-            position,
-            claimed,
-          });
+    const entry = !cache.enabled
+      ? undefined
+      : projectCacheEntry(typescript, {
+          tsconfigPath,
+          rootNames,
+          astro,
+          tool,
+          previous,
+          position,
+          claimed,
+        });
     previous = entry?.key ?? `uncached:${position}`;
     const stored =
       entry && cache.read ? readStoredAnswer(entry, claimed) : undefined;
@@ -842,15 +844,25 @@ function checkBuildProjects(
       countingCheckerDeps,
     );
     merge(part);
+    const plugins = diagnosticPlugins.slice(pluginsBefore);
     if (
       entry &&
-      storable(
-        entry,
-        compiled,
-        entries,
-        part,
-        diagnosticPlugins.slice(pluginsBefore),
-      )
+      mayStore({
+        projectErrors: part.errors.length,
+        ambientErrors: currentAmbientTypeErrors().length,
+        compileDiagnostics: plugins.reduce(
+          (n, plugin) => n + plugin.getCompileDiagnostics().length,
+          0,
+        ),
+        policyDiagnostics: plugins.reduce(
+          (n, plugin) =>
+            n + (plugin.getTargetPolicyDiagnostics?.() ?? []).length,
+          0,
+        ),
+        compiled: compiled.map((e) => e.fileName),
+        listed: entry.ngFiles,
+        diagnosticsOff: entries.some((e) => angularDiagnosticsOff(e.fileName)),
+      })
     ) {
       writeStoredAnswer(
         entry,
@@ -862,35 +874,12 @@ function checkBuildProjects(
   return result;
 }
 
-/** Whether one project's fresh answer may be stored (see {@link checkBuildProjects}). */
-function storable(
-  entry: ProjectCacheEntry,
-  compiled: readonly CompiledNgMx[],
-  owned: readonly CompiledNgMx[],
-  part: NgDiagnosticsResult,
-  plugins: readonly MxDiagnosticLanguagePlugin[],
-): boolean {
-  if (part.errors.length > 0 || currentAmbientTypeErrors().length > 0) {
-    return false;
-  }
-  for (const plugin of plugins) {
-    if (plugin.getCompileDiagnostics().length > 0) return false;
-    if ((plugin.getTargetPolicyDiagnostics?.() ?? []).length > 0) return false;
-  }
-  // The program compiled exactly the `.ng.mx` files tsc listed for it: what
-  // a hit derives its ownership from.
-  const listed = new Set(entry.ngFiles);
-  const names = new Set(compiled.map((e) => e.fileName));
-  if (names.size !== listed.size || ![...names].every((n) => listed.has(n))) {
-    return false;
-  }
+/** Whether a file's Angular diagnostics are `"off"`; an unreadable config counts as off. */
+function angularDiagnosticsOff(fileName: string): boolean {
   try {
-    return owned.every(
-      (e) =>
-        readAngularConfig(nearestPackageDir(e.fileName)).diagnostics !== "off",
-    );
+    return readAngularConfig(nearestPackageDir(fileName)).diagnostics === "off";
   } catch {
-    return false;
+    return true;
   }
 }
 

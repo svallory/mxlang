@@ -10,20 +10,27 @@ import {
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   BUILD_CACHE_FORMAT,
+  buildPassCounters,
   type CacheKeyInputs,
   cacheKey,
   compilerCliInput,
+  mayStore,
+  type ProjectCacheEntry,
   projectCacheEntry,
+  readStoredAnswer,
+  type StoreFacts,
+  TOOL_EXTERNALS,
+  type ToolExternal,
   toolIdentity,
+  writeStoredAnswer,
 } from "./build-cache.ts";
 import {
   APP_ERROR,
   BROKEN,
   CASE_TIMEOUT_MS,
-  CLEAN,
   mxTscIn,
   type Run,
   refsFixture,
@@ -34,16 +41,13 @@ import {
   templateErrors,
   unlinkProjects,
 } from "./build-uptodate-support.ts";
-import { buildPassCounters } from "./index.ts";
 
 /**
  * The `-b` template pass's sidecar cache (`build-cache.ts`). A hit is proven
  * by the seam counters (`buildPassCounters`: the per-project program and the
  * Angular checker), never by timing; every miss is shown by its counters and
- * by the new output it prints. Integration cases share one scratch copy per
- * describe and run in order, each leaving the project settled for the next
- * (the watch test files' pattern); `beforeAll` makes the cold run, so `-t` on
- * any case works.
+ * by the new output it prints. Each integration case works on its own scratch
+ * copy and makes its own cold run, so cases are independent of order.
  */
 
 const typescript = createRequire(import.meta.url)(
@@ -55,7 +59,7 @@ interface Pass extends Run {
   checkers: number;
 }
 
-async function pass(cwd: string, args: string[]): Promise<Pass> {
+async function pass(cwd: string, args: string[] = ["-b", "."]): Promise<Pass> {
   buildPassCounters.compileProjectNgMx = 0;
   buildPassCounters.createChecker = 0;
   const run = await mxTscIn(cwd, args);
@@ -83,45 +87,29 @@ const editJson = (file: string, edit: (json: Json) => void) => {
 // biome-ignore lint/suspicious/noTemplateCurlyInString: MX interpolation, not a JS template
 const NULLISH = '<p>${user.name ?? "x"}</p>';
 const NG8102 = "warning TS-998102: NG8102:";
+const SUPPRESS_NG8102 = {
+  extendedDiagnostics: { checks: { nullishCoalescingNotNullable: "suppress" } },
+};
 
 describe("mx-tsc -b template cache: ng-build-refs", () => {
-  let dir: string;
-  let app: string;
-  let cold: Pass;
-  beforeAll(async () => {
-    dir = scratch(refsFixture);
-    app = join(dir, "app");
-    cold = await pass(app, ["-b", "."]);
-  }, CASE_TIMEOUT_MS);
-
   it(
-    "a no-change second run replays both projects: no program, no checker, the same output; --force bypasses and rewrites",
+    "a no-change run replays both projects (no program, no checker, same output); a broken template is stored and replayed with its exact text; a truncated sidecar is a miss and is rewritten; --force bypasses",
     async () => {
+      const dir = scratch(refsFixture);
+      const app = join(dir, "app");
+      const cold = await pass(app);
       expect(cold.status).toBe(0);
       expect(cold.output).toBe("");
       expect([cold.compiles, cold.checkers]).toEqual([2, 2]);
       expect(existsSync(sidecar(dir, "lib"))).toBe(true);
-      expect(existsSync(sidecar(dir, "app"))).toBe(true);
 
-      const warm = await pass(app, ["-b", "."]);
+      const warm = await pass(app);
       expect([warm.compiles, warm.checkers]).toEqual([0, 0]);
       expect(warm.status).toBe(0);
-      expect(warm.output).toBe(cold.output);
+      expect(warm.output).toBe("");
 
-      const forced = await pass(app, ["-b", "--force", "."]);
-      expect([forced.compiles, forced.checkers]).toEqual([2, 2]);
-      expect(forced.output).toBe("");
-      const after = await pass(app, ["-b", "."]);
-      expect([after.compiles, after.checkers]).toEqual([0, 0]);
-    },
-    CASE_TIMEOUT_MS,
-  );
-
-  it(
-    "a broken template is stored and replayed with its exact text; fixing the .ng.mx text is a miss",
-    async () => {
       setTemplate(dir, "app", BROKEN);
-      const broken = await pass(app, ["-b", "."]);
+      const broken = await pass(app);
       // lib is a hit; app's own text changed.
       expect([broken.compiles, broken.checkers]).toEqual([1, 1]);
       expect(broken.status).toBe(1);
@@ -130,16 +118,21 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
         "error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.",
       );
 
-      const replay = await pass(app, ["-b", "."]);
+      const replay = await pass(app);
       expect([replay.compiles, replay.checkers]).toEqual([0, 0]);
       expect(replay.status).toBe(1);
       expect(replay.output).toBe(broken.output);
 
-      setTemplate(dir, "app", CLEAN);
-      const fixed = await pass(app, ["-b", "."]);
-      expect([fixed.compiles, fixed.checkers]).toEqual([1, 1]);
-      expect(fixed.status).toBe(0);
-      expect(fixed.output).toBe("");
+      const valid = readFileSync(sidecar(dir, "app"), "utf8");
+      writeFileSync(sidecar(dir, "app"), valid.slice(0, 40));
+      const truncated = await pass(app);
+      expect([truncated.compiles, truncated.checkers]).toEqual([1, 1]);
+      expect(truncated.output).toBe(broken.output);
+      expect(readFileSync(sidecar(dir, "app"), "utf8")).toBe(valid);
+
+      const forced = await pass(app, ["-b", "--force", "."]);
+      expect([forced.compiles, forced.checkers]).toEqual([2, 2]);
+      expect(forced.output).toBe(broken.output);
     },
     CASE_TIMEOUT_MS,
   );
@@ -147,27 +140,23 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
   it(
     "package.json mx.angular, and a nearer package.json created later, are inputs",
     async () => {
+      const dir = scratch(refsFixture);
+      const app = join(dir, "app");
       setTemplate(dir, "app", BROKEN);
-      expect(templateErrors((await pass(app, ["-b", "."])).output)).toEqual([
-        APP_ERROR,
-      ]);
+      expect(templateErrors((await pass(app)).output)).toEqual([APP_ERROR]);
 
-      editJson(join(app, "package.json"), (json) => {
+      const manifest = join(app, "package.json");
+      const original = readFileSync(manifest, "utf8");
+      editJson(manifest, (json) => {
         json.mx = { angular: { diagnostics: "off" } };
       });
-      const off = await pass(app, ["-b", "."]);
+      const off = await pass(app);
       expect(off.compiles).toBe(1);
       expect(off.output).toBe("");
       expect(off.status).toBe(0);
 
-      editJson(join(app, "package.json"), (json) => {
-        delete json.mx;
-      });
-      const on = await pass(app, ["-b", "."]);
-      expect(on.compiles).toBe(1);
-      expect(templateErrors(on.output)).toEqual([APP_ERROR]);
-      expect((await pass(app, ["-b", "."])).compiles).toBe(0);
-
+      // Back to the cold run's manifest; only a nearer one is new.
+      writeFileSync(manifest, original);
       writeFileSync(
         join(app, "src", "package.json"),
         JSON.stringify({
@@ -175,13 +164,10 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
           mx: { angular: { diagnostics: "off" } },
         }),
       );
-      const nearer = await pass(app, ["-b", "."]);
+      const nearer = await pass(app);
       expect(nearer.compiles).toBe(1);
       expect(nearer.output).toBe("");
       expect(nearer.status).toBe(0);
-      rmSync(join(app, "src", "package.json"));
-      setTemplate(dir, "app", CLEAN);
-      expect((await pass(app, ["-b", "."])).status).toBe(0);
     },
     CASE_TIMEOUT_MS,
   );
@@ -189,42 +175,29 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
   it(
     "the tsconfig and its extends parent are inputs (angularCompilerOptions)",
     async () => {
+      const dir = scratch(refsFixture);
+      const app = join(dir, "app");
       setTemplate(dir, "app", NULLISH);
       writeFileSync(
         join(app, "tsconfig.base.json"),
-        JSON.stringify({
-          angularCompilerOptions: {
-            extendedDiagnostics: {
-              checks: { nullishCoalescingNotNullable: "suppress" },
-            },
-          },
-        }),
+        JSON.stringify({ angularCompilerOptions: SUPPRESS_NG8102 }),
       );
       editJson(join(app, "tsconfig.json"), (json) => {
         json.extends = "./tsconfig.base.json";
       });
-      const suppressed = await pass(app, ["-b", "."]);
-      expect(suppressed.compiles).toBe(1);
-      expect(suppressed.output).toBe("");
+      expect((await pass(app)).output).toBe("");
 
       // Only the parent changes.
       writeFileSync(join(app, "tsconfig.base.json"), "{}");
-      const parent = await pass(app, ["-b", "."]);
+      const parent = await pass(app);
       expect(parent.compiles).toBe(1);
       expect(parent.output).toContain(`app.component.ng.mx(5,18): ${NG8102}`);
-      const replay = await pass(app, ["-b", "."]);
-      expect(replay.compiles).toBe(0);
-      expect(replay.output).toBe(parent.output);
 
       // Only the tsconfig itself changes.
       editJson(join(app, "tsconfig.json"), (json) => {
-        json.angularCompilerOptions = {
-          extendedDiagnostics: {
-            checks: { nullishCoalescingNotNullable: "suppress" },
-          },
-        };
+        json.angularCompilerOptions = SUPPRESS_NG8102;
       });
-      const own = await pass(app, ["-b", "."]);
+      const own = await pass(app);
       expect(own.compiles).toBe(1);
       expect(own.output).toBe("");
     },
@@ -232,30 +205,44 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
   );
 
   it(
-    "an empty, truncated, wrong-format or wrong-key sidecar is a miss and is rewritten",
+    "a project whose pass printed a host-policy warning is not stored, and prints it again",
     async () => {
-      expect((await pass(app, ["-b", "."])).compiles).toBe(0);
-      const valid = JSON.parse(readFileSync(sidecar(dir, "app"), "utf8"));
-      const corrupt: [string, string][] = [
-        ["", ""],
-        ["truncated", JSON.stringify(valid).slice(0, 40)],
-        [
-          "wrong format",
-          JSON.stringify({ ...valid, format: BUILD_CACHE_FORMAT + 1 }),
-        ],
-        ["wrong key", JSON.stringify({ ...valid, key: "0".repeat(64) })],
-      ];
-      for (const [name, text] of corrupt) {
-        writeFileSync(sidecar(dir, "app"), text);
-        const run = await pass(app, ["-b", "."]);
-        expect(run.compiles, name).toBe(1);
-        expect(run.status, name).toBe(0);
-        expect(run.output, name).toBe("");
-        expect(
-          JSON.parse(readFileSync(sidecar(dir, "app"), "utf8")),
-          name,
-        ).toEqual(valid);
-      }
+      const dir = scratch(refsFixture);
+      const app = join(dir, "app");
+      editJson(join(app, "package.json"), (json) => {
+        json.mx = { host: "bogus" };
+      });
+      const first = await pass(app);
+      const policy = first.output
+        .split("\n")
+        .filter((line) => line.includes("warning TS80003"));
+      expect(policy).toEqual([
+        expect.stringContaining('warning TS80003: unknown mx.host "bogus"'),
+      ]);
+      expect(existsSync(sidecar(dir, "app"))).toBe(false);
+      expect(existsSync(sidecar(dir, "lib"))).toBe(true);
+
+      const second = await pass(app);
+      expect(second.compiles).toBe(1);
+      expect(second.output).toBe(first.output);
+      expect(existsSync(sidecar(dir, "app"))).toBe(false);
+    },
+    CASE_TIMEOUT_MS,
+  );
+
+  it(
+    "a run whose TypeScript pass failed stores nothing",
+    async () => {
+      const dir = scratch(refsFixture);
+      writeFileSync(
+        join(dir, "lib", "src", "extra.ts"),
+        'export const x: number = "s";\n',
+      );
+      const run = await pass(join(dir, "app"));
+      expect(run.output).toContain("error TS2322");
+      expect(run.status).not.toBe(0);
+      expect(existsSync(sidecar(dir, "lib"))).toBe(false);
+      expect(existsSync(sidecar(dir, "app"))).toBe(false);
     },
     CASE_TIMEOUT_MS,
   );
@@ -271,17 +258,17 @@ describe("mx-tsc -b template cache: ownership chain", () => {
         json.include = ["src", "../lib/src"];
         json.compilerOptions.rootDir = "..";
       });
-      const roots = [join(dir, "lib"), join(dir, "app")];
-      const cold = await pass(dir, ["-b", ...roots]);
+      const roots = ["-b", join(dir, "lib"), join(dir, "app")];
+      const cold = await pass(dir, roots);
       expect(cold.output).toBe("");
       expect(cold.compiles).toBe(2);
-      expect((await pass(dir, ["-b", ...roots])).compiles).toBe(0);
+      expect((await pass(dir, roots)).compiles).toBe(0);
 
       // Nothing app reads changes: only lib's own tsconfig.
       editJson(join(dir, "lib", "tsconfig.json"), (json) => {
         json.compilerOptions.removeComments = true;
       });
-      const after = await pass(dir, ["-b", ...roots]);
+      const after = await pass(dir, roots);
       expect(after.compiles).toBe(2);
       expect(after.output).toBe("");
     },
@@ -299,21 +286,20 @@ describe("mx-tsc -b template cache: ng-build-solution", () => {
       editJson(join(dir, "lib", "tsconfig.json"), (json) => {
         json.include = ["src"];
       });
-      const component = join(dir, "lib", "src", "lib.component.ng.mx");
-      setBody(component, NULLISH);
+      setBody(join(dir, "lib", "src", "lib.component.ng.mx"), NULLISH);
       const model = join(dir, "lib", "src", "model.ts");
 
-      const cold = await pass(dir, ["-b", "."]);
+      const cold = await pass(dir);
       expect(cold.status).toBe(0);
       expect(cold.output).toContain(`lib.component.ng.mx(6,18): ${NG8102}`);
-      expect((await pass(dir, ["-b", "."])).compiles).toBe(0);
+      expect((await pass(dir)).compiles).toBe(0);
 
       // Nullable now: the template's `??` is needed, and the warning goes.
       writeFileSync(
         model,
         "export interface Item {\n  name: string | null;\n}\n",
       );
-      const typed = await pass(dir, ["-b", "."]);
+      const typed = await pass(dir);
       expect(typed.compiles).toBeGreaterThan(0);
       expect(typed.output).toBe("");
 
@@ -321,13 +307,23 @@ describe("mx-tsc -b template cache: ng-build-solution", () => {
         model,
         "export interface Item {\n  name: string | null;\n}\nexport const unused = 1;\n",
       );
-      const body = await pass(dir, ["-b", "."]);
+      const body = await pass(dir);
       expect(body.compiles).toBeGreaterThan(0);
       expect(body.output).toBe("");
     },
     CASE_TIMEOUT_MS,
   );
 });
+
+const dirs: string[] = [];
+afterAll(() => {
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+function tempDir(): string {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-build-cache-")));
+  dirs.push(dir);
+  return dir;
+}
 
 describe("build-cache key", () => {
   const base: CacheKeyInputs = {
@@ -341,10 +337,8 @@ describe("build-cache key", () => {
     fileInfos: [{ version: "v1" }],
     configFiles: [{ path: "/p/tsconfig.json", text: "{}" }],
     mxFiles: [{ path: "/p/src/a.ng.mx", text: "a" }],
-    configInputs: [
-      { path: "/p/package.json", text: "{}" },
-      { path: "/p/src/package.json", text: null },
-    ],
+    configInputs: [{ path: "/p/package.json", text: "{}" }],
+    tagInputs: [{ path: "/p/src/tags/", text: null }],
     compilerCli: [
       {
         dir: "/p",
@@ -359,32 +353,15 @@ describe("build-cache key", () => {
     claimed: [],
   };
 
-  it("is SHA-256 hex, the same for the same inputs", () => {
-    expect(cacheKey(base)).toMatch(/^[0-9a-f]{64}$/);
+  it("is the same for the same inputs", () => {
     expect(cacheKey({ ...base })).toBe(cacheKey(base));
   });
 
   const variants: [string, Partial<CacheKeyInputs>][] = [
-    ["format number (row 9)", { format: 2 }],
-    ["tool bytes (row 7)", { tool: "tool2" }],
-    ["typescript version (row 6)", { typescriptVersion: "6.0.4" }],
-    ["fileInfos (row 1)", { fileInfos: [{ version: "v2" }] }],
-    [
-      ".ng.mx text (row 3)",
-      { mxFiles: [{ path: "/p/src/a.ng.mx", text: "b" }] },
-    ],
-    [
-      "a probed manifest appears (row 4)",
-      {
-        configInputs: [
-          { path: "/p/package.json", text: "{}" },
-          { path: "/p/src/package.json", text: "{}" },
-        ],
-      },
-    ],
-    ["previous key (row 8)", { previous: "k" }],
-    ["position (row 8)", { position: 1 }],
-    ["claimed files", { claimed: ["/q/b.ng.mx"] }],
+    ["the format number (row 9)", { format: 2 }],
+    ["the typescript version (row 6)", { typescriptVersion: "6.0.4" }],
+    ["the position (row 8)", { position: 1 }],
+    ["the claimed files", { claimed: ["/q/b.ng.mx"] }],
     ["--astro", { astro: true }],
   ];
   it.each(variants)("changes with %s", (_name, change) => {
@@ -392,21 +369,19 @@ describe("build-cache key", () => {
   });
 
   it("changes with the compiler-cli version, its package.json realpath and the checker's typescript (row 5)", () => {
-    const fake = (version: string, packageJson: string) => () => ({
-      status: "ok" as const,
-      version,
-      module: {} as never,
-      packageJson,
-    });
-    const ts = (version: string) => () => ({
-      status: "ok" as const,
-      version,
-      module: {} as never,
-    });
     const input = (version: string, packageJson: string, tsVersion: string) =>
       compilerCliInput("/p", {
-        resolveCompilerCli: fake(version, packageJson),
-        resolveTypescript: ts(tsVersion),
+        resolveCompilerCli: () => ({
+          status: "ok" as const,
+          version,
+          module: {} as never,
+          packageJson,
+        }),
+        resolveTypescript: () => ({
+          status: "ok" as const,
+          version: tsVersion,
+          module: {} as never,
+        }),
       });
     const first = input("22.1.7", "/n/a/package.json", "6.0.3");
     expect(first).toEqual({
@@ -437,25 +412,252 @@ describe("build-cache key", () => {
     });
     expect(key(missing)).not.toBe(key(first));
   });
+});
 
-  it("names the tool by the bytes of this module and its externals", () => {
-    expect(toolIdentity()).toMatch(/^[0-9a-f]{64}$/);
+describe("build-cache tool identity (row 7)", () => {
+  /** mx-tsc as one bundle, an external with a sibling, a manifest-only one. */
+  function tool() {
+    const dir = tempDir();
+    const pkg = (name: string, files: Record<string, string>) => {
+      const root = join(dir, "node_modules", name);
+      mkdirSync(root, { recursive: true });
+      for (const [file, text] of Object.entries(files)) {
+        writeFileSync(join(root, file), text);
+      }
+    };
+    writeFileSync(join(dir, "self.cjs"), "self 1");
+    pkg("@t/a", {
+      "package.json": JSON.stringify({ name: "@t/a", version: "1.0.0" }),
+      "index.js": "a 1",
+      "side.cjs": "side 1",
+    });
+    pkg("@t/b", {
+      "package.json": JSON.stringify({ name: "@t/b", version: "2.0.0" }),
+    });
+    const externals: ToolExternal[] = [
+      { name: "@t/a", from: "self", siblings: ["side.cjs"] },
+      { name: "@t/b", from: "@t/a", manifestOnly: true },
+    ];
+    const identity = () =>
+      toolIdentity({ self: join(dir, "self.cjs"), externals });
+    return { identity, at: (path: string) => join(dir, path) };
+  }
+
+  it.each([
+    ["mx-tsc's own bundle", "self.cjs", "self 2"],
+    ["an external's entry", "node_modules/@t/a/index.js", "a 2"],
+    [
+      "an external's sibling (core's parse layer)",
+      "node_modules/@t/a/side.cjs",
+      "side 2",
+    ],
+    [
+      "an external's version",
+      "node_modules/@t/a/package.json",
+      JSON.stringify({ name: "@t/a", version: "1.0.1" }),
+    ],
+    [
+      "a manifest-only external's version (@angular/compiler)",
+      "node_modules/@t/b/package.json",
+      JSON.stringify({ name: "@t/b", version: "2.0.1" }),
+    ],
+  ])("changes with the bytes of %s", (_name, file, text) => {
+    const { identity, at } = tool();
+    const before = identity();
+    expect(before).toBeDefined();
+    writeFileSync(at(file), text);
+    expect(identity()).not.toBe(before);
+  });
+
+  it.each([
+    ["an external that does not resolve", "node_modules/@t/b"],
+    ["a sibling that is missing", "node_modules/@t/a/side.cjs"],
+  ])("is undefined for %s", (_name, path) => {
+    const { identity, at } = tool();
+    expect(identity()).toBeDefined();
+    rmSync(at(path), { recursive: true });
+    expect(identity()).toBeUndefined();
+  });
+
+  it("run from source, counts every non-test .ts file beside and below mx-tsc's module, fixtures and dot-directories aside", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src", "deep"), { recursive: true });
+    for (const file of ["self.ts", "deep/other.ts", "x.test.ts"]) {
+      writeFileSync(join(dir, "src", file), file);
+    }
+    const identity = () =>
+      toolIdentity({ self: join(dir, "src", "self.ts"), externals: [] });
+    const before = identity();
+    expect(before).toBeDefined();
+    writeFileSync(join(dir, "src", "x.test.ts"), "edited");
+    // A test's scratch project or a fixture beside the sources is no code.
+    for (const sub of ["fixtures/p", ".tmp-x"]) {
+      mkdirSync(join(dir, "src", sub), { recursive: true });
+      writeFileSync(join(dir, "src", sub, "y.ts"), "y");
+    }
+    expect(identity()).toBe(before);
+    writeFileSync(join(dir, "src", "deep", "other.ts"), "edited");
+    expect(identity()).not.toBe(before);
+  });
+
+  it("covers core's parse layer, the element table and @angular/compiler, and resolves here", () => {
+    expect(
+      TOOL_EXTERNALS.map(({ name, from, siblings, manifestOnly }) => [
+        name,
+        from,
+        siblings ?? [],
+        manifestOnly ?? false,
+      ]),
+    ).toEqual([
+      ["@mxlang/angular-checker", "self", [], false],
+      ["@mxlang/host-angular", "self", [], false],
+      ["@mxlang/typescript-plugin", "self", [], false],
+      [
+        "@mxlang/core",
+        "@mxlang/typescript-plugin",
+        ["marko-frontend.cjs"],
+        false,
+      ],
+      ["@mxlang/tsx-bridge", "@mxlang/typescript-plugin", [], false],
+      ["@mxlang/web-elements", "@mxlang/host-angular", [], false],
+      ["@angular/compiler", "@mxlang/host-angular", [], true],
+    ]);
+    expect(toolIdentity()).toBeDefined();
+  });
+});
+
+describe("build-cache store rules", () => {
+  const storable: StoreFacts = {
+    projectErrors: 0,
+    ambientErrors: 0,
+    compileDiagnostics: 0,
+    policyDiagnostics: 0,
+    compiled: ["/p/a.ng.mx"],
+    listed: ["/p/a.ng.mx"],
+    diagnosticsOff: false,
+  };
+
+  it("stores a pass that printed nothing but template diagnostics", () => {
+    expect(mayStore(storable)).toBe(true);
+  });
+
+  it.each<[string, Partial<StoreFacts>]>([
+    ["a project-level error", { projectErrors: 1 }],
+    ["an ambient-types error", { ambientErrors: 1 }],
+    ["an MX compile diagnostic", { compileDiagnostics: 1 }],
+    ["a host-policy diagnostic", { policyDiagnostics: 1 }],
+    ["Angular diagnostics off", { diagnosticsOff: true }],
+    [
+      "a compiled file the build info does not list",
+      { compiled: ["/p/a.ng.mx", "/p/b.ng.mx"] },
+    ],
+    [
+      "a listed file the program did not compile",
+      { listed: ["/p/a.ng.mx", "/p/b.ng.mx"] },
+    ],
+  ])("does not store with %s", (_name, change) => {
+    expect(mayStore({ ...storable, ...change })).toBe(false);
+  });
+});
+
+describe("build-cache sidecar", () => {
+  const result = {
+    reports: [
+      {
+        fileName: "/p/a.ng.mx",
+        source: "a",
+        diagnostics: [
+          {
+            start: 0,
+            length: 1,
+            code: 2339,
+            message: "m",
+            category: "error" as const,
+            source: "angular" as const,
+            mapped: "exact" as const,
+          },
+        ],
+      },
+    ],
+    errors: [],
+    warnings: ["w"],
+  };
+  function stored(): ProjectCacheEntry {
+    const entry = {
+      key: "k",
+      sidecar: join(tempDir(), "s.json"),
+      ngFiles: ["/p/a.ng.mx"],
+    };
+    writeStoredAnswer(entry, ["/p/a.ng.mx"], result as never);
+    return entry;
+  }
+
+  it("reads back what it wrote", () => {
+    expect(readStoredAnswer(stored(), new Set())).toEqual({
+      format: BUILD_CACHE_FORMAT,
+      key: "k",
+      ownedFiles: ["/p/a.ng.mx"],
+      ngResult: result,
+    });
+  });
+
+  it.each<[string, (text: string) => string]>([
+    ["empty", () => ""],
+    ["truncated", (text) => text.slice(0, 40)],
+    [
+      "of another format",
+      (text) =>
+        JSON.stringify({ ...JSON.parse(text), format: BUILD_CACHE_FORMAT + 1 }),
+    ],
+    [
+      "under another key",
+      (text) => JSON.stringify({ ...JSON.parse(text), key: "other" }),
+    ],
+    [
+      "holding a project-level error",
+      (text) => {
+        const json = JSON.parse(text);
+        json.ngResult.errors = ["e"];
+        return JSON.stringify(json);
+      },
+    ],
+    [
+      "with a malformed report",
+      (text) => {
+        const json = JSON.parse(text);
+        json.ngResult.reports[0].diagnostics[0].start = "0";
+        return JSON.stringify(json);
+      },
+    ],
+  ])("is a miss when %s", (_name, corrupt) => {
+    const entry = stored();
+    writeFileSync(entry.sidecar, corrupt(readFileSync(entry.sidecar, "utf8")));
+    expect(readStoredAnswer(entry, new Set())).toBeUndefined();
+  });
+
+  it("is a miss when the files it owned are no longer the ones it would own", () => {
+    expect(readStoredAnswer(stored(), new Set(["/p/a.ng.mx"]))).toBeUndefined();
+  });
+
+  it("swallows a write into a directory that does not exist", () => {
+    const entry = {
+      key: "k",
+      sidecar: join(tempDir(), "no", "s.json"),
+      ngFiles: [],
+    };
+    expect(() => writeStoredAnswer(entry, [], result as never)).not.toThrow();
+    expect(readStoredAnswer(entry, new Set())).toBeUndefined();
   });
 });
 
 describe("build-cache project entry (inputs read from disk)", () => {
-  const dirs: string[] = [];
-  afterAll(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
-  });
   const noCli = {
     resolveCompilerCli: () => ({ status: "missing" as const, message: "m" }),
   };
 
   /** A composite project with one `.ng.mx` and a hand-written build info. */
   function project(buildInfo?: object) {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-build-cache-")));
-    dirs.push(dir);
+    const dir = tempDir();
     mkdirSync(join(dir, "src"));
     mkdirSync(join(dir, "out"));
     writeFileSync(
@@ -463,23 +665,29 @@ describe("build-cache project entry (inputs read from disk)", () => {
       JSON.stringify({ compilerOptions: { composite: true, outDir: "out" } }),
     );
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "p" }));
+    const info = buildInfo ?? {
+      version: typescript.version,
+      fileNames: ["../src/a.ng.mx"],
+      fileInfos: [{ version: "v1", signature: "s1" }],
+    };
+    // Every listed file exists, so a row fails only on its own reason.
+    for (const name of (info as { fileNames?: string[] }).fileNames ?? []) {
+      writeFileSync(
+        join(dir, "out", name),
+        name === "../src/a.ng.mx" ? "a" : "",
+      );
+    }
     writeFileSync(join(dir, "src", "a.ng.mx"), "a");
     writeFileSync(
       join(dir, "out", "tsconfig.tsbuildinfo"),
-      JSON.stringify(
-        buildInfo ?? {
-          version: typescript.version,
-          fileNames: ["../src/a.ng.mx"],
-          fileInfos: [{ version: "v1", signature: "s1" }],
-        },
-      ),
+      JSON.stringify(info),
     );
     const entry = () =>
       projectCacheEntry(typescript, {
         tsconfigPath: join(dir, "tsconfig.json"),
         rootNames: [join(dir, "src", "a.ng.mx")],
         astro: false,
-        tool: "tool",
+        tool: () => "tool",
         previous: "",
         position: 0,
         claimed: new Set(),
@@ -497,49 +705,29 @@ describe("build-cache project entry (inputs read from disk)", () => {
     });
   });
 
-  it.each([
+  it.each<[string, (dir: string) => void]>([
     [
       "the .ng.mx text (row 3, a build info older than the file)",
-      (dir: string) => writeFileSync(join(dir, "src", "a.ng.mx"), "b"),
+      (dir) => writeFileSync(join(dir, "src", "a.ng.mx"), "b"),
     ],
     [
       "package.json mx.host (row 4)",
-      (dir: string) =>
+      (dir) =>
         writeFileSync(
           join(dir, "package.json"),
           JSON.stringify({ name: "p", mx: { host: "angular" } }),
         ),
     ],
     [
-      "a nearer package.json created later (row 4)",
-      (dir: string) => writeFileSync(join(dir, "src", "package.json"), "{}"),
+      "an MX config file created later (row 4)",
+      (dir) => writeFileSync(join(dir, ".mxrc.json"), '{"angular":{}}'),
     ],
     [
-      "an mx config file created later (row 4)",
-      (dir: string) => writeFileSync(join(dir, ".mxrc.json"), '{"angular":{}}'),
-    ],
-    [
-      "the tsconfig bytes (row 2)",
-      (dir: string) =>
-        writeFileSync(
-          join(dir, "tsconfig.json"),
-          JSON.stringify({
-            compilerOptions: { composite: true, outDir: "out" },
-            angularCompilerOptions: { strictTemplates: false },
-          }),
-        ),
-    ],
-    [
-      "the build info's fileInfos (row 1)",
-      (dir: string) =>
-        writeFileSync(
-          join(dir, "out", "tsconfig.tsbuildinfo"),
-          JSON.stringify({
-            version: typescript.version,
-            fileNames: ["../src/a.ng.mx"],
-            fileInfos: [{ version: "v2", signature: "s1" }],
-          }),
-        ),
+      "a nearer tag file created later",
+      (dir) => {
+        mkdirSync(join(dir, "src", "tags"));
+        writeFileSync(join(dir, "src", "tags", "card.mx"), "<p/>");
+      },
     ],
   ])("changes with %s", (_name, change) => {
     const { dir, entry } = project();
@@ -547,6 +735,30 @@ describe("build-cache project entry (inputs read from disk)", () => {
     expect(before).toBeDefined();
     change(dir);
     expect(entry()?.key).not.toBe(before);
+  });
+
+  it.each([
+    ["a tag file's bytes", "card.mx"],
+    [
+      "the bytes of a file under a tag directory the scan does not index",
+      "notes.txt",
+    ],
+  ])("changes with %s", (_name, file) => {
+    const { dir, entry } = project();
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(join(dir, "tags", "card.mx"), "<p/>");
+    writeFileSync(join(dir, "tags", "notes.txt"), "1");
+    const before = entry()?.key;
+    expect(before).toBeDefined();
+    writeFileSync(join(dir, "tags", file), "<div/>");
+    expect(entry()?.key).not.toBe(before);
+  });
+
+  it("is not cacheable with an MX config module (its imports are no input)", () => {
+    const { dir, entry } = project();
+    expect(entry()).toBeDefined();
+    writeFileSync(join(dir, "mx.config.cjs"), "module.exports = {};\n");
+    expect(entry()).toBeUndefined();
   });
 
   it.each([
@@ -579,6 +791,14 @@ describe("build-cache project entry (inputs read from disk)", () => {
       {
         version: typescript.version,
         fileNames: ["../src/a.ng.mx", "../src/b.probe"],
+        fileInfos: [{ version: "v" }, { version: "w" }],
+      },
+    ],
+    [
+      "a dialect's .mx file",
+      {
+        version: typescript.version,
+        fileNames: ["../src/a.ng.mx", "../src/b.probe.mx"],
         fileInfos: [{ version: "v" }, { version: "w" }],
       },
     ],
