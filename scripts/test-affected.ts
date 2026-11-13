@@ -107,6 +107,12 @@ export const FIXTURE_CONSUMERS: readonly {
     consumers: ["packages/hosts/angular/test/ng-mx-mapping-invariant.test.ts"],
   },
   {
+    path: /^packages\/tooling\/tsc\/src\/fixtures\/host-dispatch\/alias-html\//,
+    consumers: [
+      "packages/tooling/typescript-plugin/src/tsconfig-paths-callee.test.ts",
+    ],
+  },
+  {
     path: /^packages\/editors\/tree-sitter-mx\/test\/corpus\//,
     consumers: ["packages/core/src/ir-entry/conformance.test.ts"],
   },

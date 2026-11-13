@@ -1294,7 +1294,7 @@ class InputAnalyzer {
     if (!resolved) return undefined;
     // The brief pins .ts and .mx targets for followed type imports; a
     // component's types never come from a runtime module.
-    if (!/\.(?:tsx?|jsx?|mx)$/.test(resolved)) return undefined;
+    if (!/\.(?:tsx?|jsx?|mx)$/i.test(resolved)) return undefined;
 
     let source: string;
     try {

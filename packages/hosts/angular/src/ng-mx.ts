@@ -41,7 +41,6 @@ import {
   helperMembersFor,
   helperNamesFor,
   IMPORTS_ADVICE_CODE,
-  isMarkoSpecifier,
   isMxSpecifier,
   RUNTIME_SPECIFIER,
   type UsedTag,
@@ -373,189 +372,203 @@ function lowerRegion(
   }
   for (const name of base.importDefaultFromMarkoOrMx ?? []) {
     const from = specifiers.get(name);
-    if (isMxSpecifier(from) || isMarkoSpecifier(from)) {
+    if (from?.toLowerCase().endsWith(".marko") || isMxSpecifier(from)) {
       ctx.importDefaultFromMarkoOrMx.add(name);
     }
   }
 
   // A `*ngIf="…"` after another attribute fails in `lower` with Marko's
   // message about an assignment; the hint names the cause. Whichever error
-  // leaves carries the callee files read so far (`dependencies`), which
-  // `withLineColumn` keeps: it adds to the error, never replaces it.
-  let ir: ReturnType<typeof lower>;
+  // leaves, from lowering or from emitting after it (a callee's contract
+  // the emitter rejects, its selector), carries the callee files read so
+  // far (`dependencies`), which `withLineColumn` keeps: it adds to the
+  // error, never replaces it.
   try {
-    ir = withStructuralAttrHint(positionedSource, () => lower(ctx, body));
+    return emitLowered(
+      withStructuralAttrHint(positionedSource, () => lower(ctx, body)),
+    );
   } catch (error) {
     attachDependencies(ctx, error);
     throw error;
   }
 
-  // A4 divergence 4, the functional gain of `.ng.mx` over a `.mx` page:
-  // module-level MX statements are *hoisted* into the surrounding TypeScript
-  // module rather than rejected. `.solid.mx` rejects them (an author there
-  // has a real module to put them in); here the module is the file the
-  // region already sits in, so they simply move.
-  //
-  // A *synthesized* import is not hoisted as text: it is the compiler's own
-  // import for a discovered tag, and it reaches the surrounding module
-  // through `hoistedImports`, deduped by resolved path.
-  const hoistedImports: LoweredRegion["hoistedImports"] = [];
-  for (const node of ir.imports) {
-    if (node.synthesized) {
-      const binding = node.bindings[0];
-      // All three are set together where a synthesized import is minted
-      // (`template-tag.ts`'s `bindingForTemplate`), so one missing is a
-      // compiler bug. Failing loudly beats dropping the entry, which would
-      // become an unresolved binding far from its cause.
-      if (!binding || !node.specifier || !node.resolvedPath) {
-        throw new TranslateError(
-          `internal: synthesized import is missing its binding, specifier or resolved path (${node.code})`,
-          node.loc.line,
-          node.loc.column,
-          node.loc.file,
-        );
+  function emitLowered(ir: Ir): LoweredRegion {
+    // A4 divergence 4, the functional gain of `.ng.mx` over a `.mx` page:
+    // module-level MX statements are *hoisted* into the surrounding TypeScript
+    // module rather than rejected. `.solid.mx` rejects them (an author there
+    // has a real module to put them in); here the module is the file the
+    // region already sits in, so they simply move.
+    //
+    // A *synthesized* import is not hoisted as text: it is the compiler's own
+    // import for a discovered tag, and it reaches the surrounding module
+    // through `hoistedImports`, deduped by resolved path.
+    const hoistedImports: LoweredRegion["hoistedImports"] = [];
+    for (const node of ir.imports) {
+      if (node.synthesized) {
+        const binding = node.bindings[0];
+        // All three are set together where a synthesized import is minted
+        // (`template-tag.ts`'s `bindingForTemplate`), so one missing is a
+        // compiler bug. Failing loudly beats dropping the entry, which would
+        // become an unresolved binding far from its cause.
+        if (!binding || !node.specifier || !node.resolvedPath) {
+          throw new TranslateError(
+            `internal: synthesized import is missing its binding, specifier or resolved path (${node.code})`,
+            node.loc.line,
+            node.loc.column,
+            node.loc.file,
+          );
+        }
+        hoistedImports.push({
+          code: node.code,
+          binding,
+          specifier: node.specifier,
+          resolvedPath: node.resolvedPath,
+        });
+        continue;
       }
-      hoistedImports.push({
-        code: node.code,
-        binding,
-        specifier: node.specifier,
-        resolvedPath: node.resolvedPath,
-      });
-      continue;
+      moduleStatements.push(node.code);
     }
-    moduleStatements.push(node.code);
-  }
-  for (const node of ir.hoisted) {
-    if (node.code !== "") moduleStatements.push(node.code);
-  }
-  if (ir.needsAttrTagImport) {
-    moduleStatements.push(
-      'import type { AttrTag } from "@mxlang/host-angular";',
-    );
-  }
-  if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
-
-  // The author's own `.mx` default imports live in the surrounding module,
-  // not in the region, so the IR never carries them. They are handed to the
-  // emitter as imports (its constructor already resolves an authored `.mx`
-  // import to the same selector, class and path a discovered tag gets), and
-  // reported back so `compileNgMx` can rewrite the module's own line.
-  const authoredTagImports: LoweredRegion["authoredTagImports"] = [];
-  const authoredImportNodes: Ir["imports"] = [];
-  const unresolved = new Map<string, string>();
-  for (const name of base.importDefaultFromMarkoOrMx ?? []) {
-    const specifier = base.importSpecifiers?.get(name);
-    if (!isMxSpecifier(specifier)) continue;
-    authoredTagImports.push({ local: name });
-    // An unresolvable path is an error only if the import is called as a
-    // tag; the emitter would reject it eagerly, so it is withheld here and
-    // checked against the tags actually used below.
-    if (
-      !resolveSpecifier(specifier, {
-        importer: filename,
-        targets: options.targets ?? angularOwnTargets,
-      })
-    ) {
-      unresolved.set(name, specifier);
-      continue;
+    for (const node of ir.hoisted) {
+      if (node.code !== "") moduleStatements.push(node.code);
     }
-    authoredImportNodes.push({
-      kind: "Import",
-      code: `import ${name} from ${JSON.stringify(specifier)};`,
-      bindings: [name],
-      loc: { line: base.baseLine + 1, column: base.baseColumn, file: filename },
-      end: { line: base.baseLine + 1, column: base.baseColumn, file: filename },
-    } as Ir["imports"][number]);
-  }
-
-  const templateMappings: AngularMapping[] = [];
-  const templateAnchors: NodeAnchor[] = [];
-  const authoredNames = new Map<string, string>();
-  const template = emitTemplate(
-    {
-      ...ir,
-      // The emitter reads the tag-module imports to resolve each call site's
-      // selector and import path; everything else was hoisted above and
-      // would otherwise be rejected as module-level.
-      imports: [
-        ...ir.imports.filter((node) => node.synthesized),
-        ...authoredImportNodes,
-      ],
-      hoisted: [],
-      inputInterface: null,
-    },
-    ctx,
-    filename,
-    usedTags,
-    options.tagSelectorPrefix,
-    // This region *does* own a module — the author's own `.ng.mx` file —
-    // which is exactly what a `.solid.mx` region cannot say.
-    true,
-    templateMappings,
-    templateAnchors,
-    // A `.ng.mx` gets `__mxClass` injected, like a tag module: a dynamic
-    // element `class=` of any value form is joined by it.
-    true,
-    authoredNames,
-  );
-
-  // An authored import called as a tag is referenced by its own local name
-  // (`imports: [Chip]`), and an unresolvable one is an error at the import.
-  const authoredLocals = new Set(authoredTagImports.map((i) => i.local));
-  for (const tag of usedTags) {
-    if (!authoredLocals.has(tag.name)) continue;
-    const missing = unresolved.get(tag.name);
-    if (missing !== undefined) {
-      throw new AuthoredImportError(
-        tag.name,
-        `cannot resolve \`${missing}\` to read its \`export const selector\`; check the import path.`,
+    if (ir.needsAttrTagImport) {
+      moduleStatements.push(
+        'import type { AttrTag } from "@mxlang/host-angular";',
       );
     }
-    tag.local = tag.name;
-  }
+    if (ir.inputInterface) moduleStatements.push(ir.inputInterface.code);
 
-  return {
-    // A fragment region replaces its `<>` (2 characters) and `</>` (3) too.
-    start: base.baseOffset - (fragment ? 2 : 0),
-    end: base.baseOffset + regionSource.length + (fragment ? 3 : 0),
-    literal: `\`${escapeTemplateLiteral(template)}\``,
-    moduleStatements,
-    directives: directivesFor(template),
-    usedTags,
-    // Real mappings since 2.2b, from core's `Expr.span` (C4) through the
-    // emitter's own span recording.
-    //
-    // Offsets are relative to this region's **literal**, not to the module:
-    // the module's text is not built until every region has been spliced and
-    // the hoisted statements inserted, and each insertion shifts everything
-    // after it. `compileNgMx` rebases these onto the finished module once it
-    // knows where each literal landed.
-    //
-    // The +1 skips the opening backtick, and the escaping is the template
-    // literal's own (`\``, `\${`, `\\`): a run containing any of those
-    // occupies more bytes escaped than raw, so it is dropped rather than
-    // mapped to bytes it does not cover. The `\${` case is a 2-char escape —
-    // `$` gains its backslash only when `{` follows — so the escaper is
-    // given the lookahead rather than `escapeTemplateLiteral` per character.
-    mappings: rebaseThroughEscaping(
-      template,
+    // The author's own `.mx` default imports live in the surrounding module,
+    // not in the region, so the IR never carries them. They are handed to the
+    // emitter as imports (its constructor already resolves an authored `.mx`
+    // import to the same selector, class and path a discovered tag gets), and
+    // reported back so `compileNgMx` can rewrite the module's own line.
+    const authoredTagImports: LoweredRegion["authoredTagImports"] = [];
+    const authoredImportNodes: Ir["imports"] = [];
+    const unresolved = new Map<string, string>();
+    for (const name of base.importDefaultFromMarkoOrMx ?? []) {
+      const specifier = base.importSpecifiers?.get(name);
+      if (!isMxSpecifier(specifier)) continue;
+      authoredTagImports.push({ local: name });
+      // An unresolvable path is an error only if the import is called as a
+      // tag; the emitter would reject it eagerly, so it is withheld here and
+      // checked against the tags actually used below.
+      if (
+        !resolveSpecifier(specifier, {
+          importer: filename,
+          targets: options.targets ?? angularOwnTargets,
+          resolveImport: options.resolveImport,
+        })
+      ) {
+        unresolved.set(name, specifier);
+        continue;
+      }
+      authoredImportNodes.push({
+        kind: "Import",
+        code: `import ${name} from ${JSON.stringify(specifier)};`,
+        bindings: [name],
+        loc: {
+          line: base.baseLine + 1,
+          column: base.baseColumn,
+          file: filename,
+        },
+        end: {
+          line: base.baseLine + 1,
+          column: base.baseColumn,
+          file: filename,
+        },
+      } as Ir["imports"][number]);
+    }
+
+    const templateMappings: AngularMapping[] = [];
+    const templateAnchors: NodeAnchor[] = [];
+    const authoredNames = new Map<string, string>();
+    const template = emitTemplate(
+      {
+        ...ir,
+        // The emitter reads the tag-module imports to resolve each call site's
+        // selector and import path; everything else was hoisted above and
+        // would otherwise be rejected as module-level.
+        imports: [
+          ...ir.imports.filter((node) => node.synthesized),
+          ...authoredImportNodes,
+        ],
+        hoisted: [],
+        inputInterface: null,
+      },
+      ctx,
+      filename,
+      usedTags,
+      options.tagSelectorPrefix,
+      // This region *does* own a module — the author's own `.ng.mx` file —
+      // which is exactly what a `.solid.mx` region cannot say.
+      true,
       templateMappings,
-      1,
-      escapeForLiteral,
-    ),
-    // Anchors take the same literal-relative offsets and escaping as the
-    // mappings, but are kept when their extent contains an escaped character.
-    anchors: rebaseAnchorsThroughEscaping(
-      template,
       templateAnchors,
-      1,
-      escapeForLiteral,
-    ),
-    warnings,
-    authoredNames: Object.fromEntries(authoredNames),
-    hoistedImports,
-    authoredTagImports,
-  };
+      // A `.ng.mx` gets `__mxClass` injected, like a tag module: a dynamic
+      // element `class=` of any value form is joined by it.
+      true,
+      authoredNames,
+    );
+
+    // An authored import called as a tag is referenced by its own local name
+    // (`imports: [Chip]`), and an unresolvable one is an error at the import.
+    const authoredLocals = new Set(authoredTagImports.map((i) => i.local));
+    for (const tag of usedTags) {
+      if (!authoredLocals.has(tag.name)) continue;
+      const missing = unresolved.get(tag.name);
+      if (missing !== undefined) {
+        throw new AuthoredImportError(
+          tag.name,
+          `cannot resolve \`${missing}\` to read its \`export const selector\`; check the import path.`,
+        );
+      }
+      tag.local = tag.name;
+    }
+
+    return {
+      // A fragment region replaces its `<>` (2 characters) and `</>` (3) too.
+      start: base.baseOffset - (fragment ? 2 : 0),
+      end: base.baseOffset + regionSource.length + (fragment ? 3 : 0),
+      literal: `\`${escapeTemplateLiteral(template)}\``,
+      moduleStatements,
+      directives: directivesFor(template),
+      usedTags,
+      // Real mappings since 2.2b, from core's `Expr.span` (C4) through the
+      // emitter's own span recording.
+      //
+      // Offsets are relative to this region's **literal**, not to the module:
+      // the module's text is not built until every region has been spliced and
+      // the hoisted statements inserted, and each insertion shifts everything
+      // after it. `compileNgMx` rebases these onto the finished module once it
+      // knows where each literal landed.
+      //
+      // The +1 skips the opening backtick, and the escaping is the template
+      // literal's own (`\``, `\${`, `\\`): a run containing any of those
+      // occupies more bytes escaped than raw, so it is dropped rather than
+      // mapped to bytes it does not cover. The `\${` case is a 2-char escape —
+      // `$` gains its backslash only when `{` follows — so the escaper is
+      // given the lookahead rather than `escapeTemplateLiteral` per character.
+      mappings: rebaseThroughEscaping(
+        template,
+        templateMappings,
+        1,
+        escapeForLiteral,
+      ),
+      // Anchors take the same literal-relative offsets and escaping as the
+      // mappings, but are kept when their extent contains an escaped character.
+      anchors: rebaseAnchorsThroughEscaping(
+        template,
+        templateAnchors,
+        1,
+        escapeForLiteral,
+      ),
+      warnings,
+      authoredNames: Object.fromEntries(authoredNames),
+      hoistedImports,
+      authoredTagImports,
+    };
+  }
 }
 
 /**

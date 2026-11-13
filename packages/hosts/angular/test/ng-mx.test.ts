@@ -1802,19 +1802,25 @@ describe("compileNgMx: file-kind casing", () => {
 });
 
 describe("compileNgMx: a failed compile reports its dependencies", () => {
-  it("attaches the callee whose contract failed to the thrown error", () => {
+  it.each([
+    [
+      "a contract that fails in lowering",
+      'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
+      "<Card><@header>a</@header><@header>b</@header></Card>",
+    ],
+    [
+      "a contract the emitter rejects after lowering",
+      "export interface Input { header: AttrTag[] }\n<div/>\n",
+      "<Card><@header>a</@header></Card>",
+    ],
+  ])("attaches the callee of %s to the thrown error", (_, contract, call) => {
     const dir = mkdtempSync(join(tmpdir(), "mx-ngmx-deps-"));
     try {
       const callee = join(dir, "card.mx");
-      writeFileSync(
-        callee,
-        'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n',
-      );
+      writeFileSync(callee, contract);
       const error = thrown(() =>
         compileNgMx(
-          `import Card from "./card.mx";\n${componentFile(
-            "<Card><@header>a</@header><@header>b</@header></Card>",
-          )}`,
+          `import Card from "./card.mx";\n${componentFile(call)}`,
           join(dir, "x.component.ng.mx"),
         ),
       ) as { dependencies?: string[] };

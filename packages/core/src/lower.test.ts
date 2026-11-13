@@ -26,6 +26,7 @@ import { type CustomTag, customTagTaglib } from "./custom-tags.ts";
 import type { Policy } from "./declarations.ts";
 import type { AttributeTag, Ir, IrNode } from "./ir.ts";
 import {
+  attachDependencies,
   exprOf,
   exprSpan,
   lower,
@@ -6659,5 +6660,23 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
     ).e;
     expect(error.file).toBe("x.mx");
     expect(() => assertPositioned(error)).toThrow(/not yours: an internal bug/);
+  });
+});
+
+describe("attachDependencies", () => {
+  it.each([
+    ["an error with none of its own", undefined, ["/p/card.mx"]],
+    [
+      "an error that carries a nested callee",
+      ["/p/tags/inner.mx"],
+      ["/p/tags/inner.mx", "/p/card.mx"],
+    ],
+    ["an error that carries the same file", ["/p/card.mx"], ["/p/card.mx"]],
+  ])("adds the lowering's callees to %s", (_, own, expected) => {
+    const error = new TranslateError("x", 1, 0);
+    if (own) error.dependencies = own;
+    const ctx = { dependencies: new Set(["/p/card.mx"]) } as unknown as Ctx;
+    attachDependencies(ctx, error);
+    expect(error.dependencies).toEqual(expected);
   });
 });

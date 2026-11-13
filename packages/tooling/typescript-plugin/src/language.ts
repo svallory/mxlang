@@ -253,7 +253,6 @@ export function createRegionLanguagePlugin(
   // One rule for every file-kind suffix, in every tool: the lower-cased name
   // ends with the kind's suffix. An `X.SOLID.mx` is claimed and lowered alike.
   const isKind = (fileName: string) => fileName.toLowerCase().endsWith(suffix);
-  const isRegionFile = isKind;
   const syntaxErrors = new Map<string, SolidMxSyntaxError>();
   const compileDiagnostics = new Map<string, MxCompileDiagnostic[]>();
   const dependencies = new Map<string, string[]>();
@@ -308,7 +307,7 @@ export function createRegionLanguagePlugin(
             const warnings: MxWarning[] = [];
             regions.length = 0;
             const printed = print(source, fileName, {
-              mx: isRegionFile(fileName),
+              mx: isKind(fileName),
               defaultTag: defaultTagFor(
                 fileName,
                 resolveTargetPolicy(fileName, { quiet: true }),

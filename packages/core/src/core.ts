@@ -2045,7 +2045,7 @@ export function importedNames(
  * rather than duplicating the extension test.
  */
 export function isMarkoOrMxSpecifier(specifier: string): boolean {
-  return /\.(?:marko|mx)$/.test(specifier);
+  return /\.(?:marko|mx)$/i.test(specifier);
 }
 
 /**

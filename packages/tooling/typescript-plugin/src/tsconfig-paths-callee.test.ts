@@ -168,11 +168,22 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
       rmSync(project.dir, { recursive: true, force: true });
     }
   });
+  // The plugin service's `baseUrl` is the repository root, so a project
+  // under it (in the gitignored `.gen/`) is reached by a bare specifier.
+  function underBaseUrl() {
+    const parent = join(import.meta.dirname, "..", ".gen");
+    mkdirSync(parent, { recursive: true });
+    const project = scratch({}, parent);
+    const root = realpathSync(
+      join(import.meta.dirname, "..", "..", "..", ".."),
+    );
+    return { project, specifier: relative(root, realpathSync(project.dir)) };
+  }
+
   it("threads it to a .solid.mx region through the plugin factory too", () => {
-    const project = scratch({});
+    const { project, specifier } = underBaseUrl();
     const page = join(project.dir, "page.solid.mx");
-    const source =
-      'import Card from "packages/tooling/tsc/src/fixtures/host-dispatch/alias-html/Card-html.mx";\n\nexport const view = <Card><@tab/></Card>;\n';
+    const source = `import Card from "${specifier}/src/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n`;
     writeFileSync(page, source);
     const consumer = join(project.dir, "consumer.ts");
     const service = createPluginService(
@@ -181,18 +192,17 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
     );
     try {
       service.getSemanticDiagnostics(consumer);
-      // Read through `baseUrl`, the callee's index signature accepts `tab`;
-      // unread, the call would warn MX_UNREADABLE_CALLEE_INPUT.
+      // Read through `baseUrl`, the callee's Input declares no `tab`;
+      // unread, the call would warn MX_UNREADABLE_CALLEE_INPUT instead.
       expect(
-        service
-          .getSyntacticDiagnostics(page)
-          .map((d) => ({ code: d.code, message: d.messageText })),
-      ).toEqual([]);
+        service.getSyntacticDiagnostics(page).map(({ code }) => code),
+      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
     } finally {
       service.dispose();
       rmSync(project.dir, { recursive: true, force: true });
     }
   });
+
   it.each(["~/Card.mx", "~/Card"])(
     "refreshes misses and hits for %s with the same compiler options",
     (specifier) => {
@@ -418,16 +428,18 @@ describe("every pipeline's plugin reads an aliased callee's Input", () => {
         "",
         "@Component({",
         '  selector: "app-x",',
-        "  template: <Card><@tab>x</@tab></Card>,",
+        "  template: <Card/>,",
         "})",
         "export class XComponent {}",
         "",
       ].join("\n"),
     );
     try {
+      // A valid call: it compiles with no diagnostic only when the alias is
+      // resolved, for the callee's Input and for its selector alike.
       expect(
         codesFrom(createNgMxLanguagePlugin(ts, { resolveImport }), file),
-      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
+      ).toEqual([]);
       // Angular resolves the callee for its selector too, and says so.
       expect(codesFrom(createNgMxLanguagePlugin(ts), file)).toEqual([
         "cannot resolve `~/Card.mx` to read its `export const selector`; check the import path.",

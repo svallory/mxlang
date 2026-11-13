@@ -533,6 +533,7 @@ describe("external files", () => {
       project.path("a.probe"),
       project.path("a.probe.mx"),
       project.path("a.mx"),
+      project.path("B.MX"),
       project.path("util.ts"),
       project.path("a.probes"),
     ];
@@ -544,6 +545,7 @@ describe("external files", () => {
       project.path("a.probe"),
       project.path("a.probe.mx"),
       project.path("a.mx"),
+      project.path("B.MX"),
     ]);
   });
 });

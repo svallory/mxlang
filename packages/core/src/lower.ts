@@ -4768,7 +4768,7 @@ function failUncalled(
   raise(
     UNSUPPORTED_MARKO_FILE_CODE,
     voicedAt(node, () =>
-      found.file.endsWith(".marko")
+      found.file.toLowerCase().endsWith(".marko")
         ? markoFileTagMessage(
             ctx.filename,
             name,
@@ -4803,7 +4803,7 @@ function rejectMarkoImportTag(
 ): void {
   const from = ctx.importSpecifiers.get(binding);
   if (
-    !from?.endsWith(".marko") ||
+    !from?.toLowerCase().endsWith(".marko") ||
     !ctx.importDefaultFromMarkoOrMx.has(binding) ||
     ctx.tagVarShadowed?.has(binding)
   ) {
@@ -4896,7 +4896,7 @@ function discoveredTagModuleOf(
   node: Node,
 ): string | undefined {
   const modulePath = ctx.declarations.resolveDiscoveredTagModule?.(name, ctx);
-  if (modulePath?.endsWith(".marko"))
+  if (modulePath?.toLowerCase().endsWith(".marko"))
     raise(
       UNSUPPORTED_MARKO_FILE_CODE,
       voicedAt(node, () =>
@@ -8795,7 +8795,7 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
 }
 
 /**
- * Puts the callee files `ctx` has read so far (`ctx.dependencies`) on a thrown
+ * Adds the callee files `ctx` has read so far (`ctx.dependencies`) to a thrown
  * `TranslateError` and on every sibling error it carries, so an integration
  * can watch the callee whose contract caused it, as on a successful compile.
  * Anything that is not a `TranslateError` is left as it is.
@@ -8807,9 +8807,12 @@ export function lower(ctx: Ctx, body: readonly Node[]): Ir {
  */
 export function attachDependencies(ctx: Ctx, error: unknown): void {
   if (!isTranslateError(error)) return;
-  const dependencies = [...(ctx.dependencies ?? [])];
   for (const each of [error, ...(error.errors ?? [])]) {
-    each.dependencies = dependencies;
+    // An error may already carry files of its own (a failed tag template's
+    // nested callees); they stay, beside the ones this lowering read.
+    each.dependencies = [
+      ...new Set([...(each.dependencies ?? []), ...(ctx.dependencies ?? [])]),
+    ];
   }
 }
 

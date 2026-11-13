@@ -1589,13 +1589,6 @@ export function isMxSpecifier(
   return specifier?.toLowerCase().endsWith(".mx") === true;
 }
 
-/** {@link isMxSpecifier} for a `.marko` tag file. */
-export function isMarkoSpecifier(
-  specifier: string | undefined,
-): specifier is string {
-  return specifier?.toLowerCase().endsWith(".marko") === true;
-}
-
 /** One MX tag a template called, as the caller's TypeScript must name it. */
 export interface UsedTag {
   /**
@@ -2446,6 +2439,7 @@ class AngularEmitter implements Emitter<string> {
         resolveSpecifier(specifierSource, {
           importer: filename,
           targets: this.ctx.targets,
+          resolveImport: this.ctx.resolveImport,
         });
       if (!calleePath) {
         throw new TranslateError(

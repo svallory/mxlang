@@ -149,6 +149,14 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
     ]);
   });
 
+  it("tsc's alias-html fixture selects the typescript-plugin project", () => {
+    expect(
+      projectsOf(
+        "packages/tooling/tsc/src/fixtures/host-dispatch/alias-html/Card-html.mx",
+      ),
+    ).toEqual(["@mxlang/tsc", "@mxlang/typescript-plugin"]);
+  });
+
   it("core's member fixture selects target-html", () => {
     expect(
       projectsOf("packages/core/src/fixtures/syntax/member-fixture.ts"),

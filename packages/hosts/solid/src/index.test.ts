@@ -612,6 +612,22 @@ describe("a failed compile still reports the dependencies it read", () => {
     ).toContain(callee);
   });
 
+  it("compileSolidUnit attaches them to an error raised after lowering", () => {
+    // `/var` inside an `<if>` lowers, then the emitter refuses it: a Solid
+    // callback scope has no statement position. Whether the call returns a
+    // value is read from the callee.
+    const returning = join(dir, "ret.mx");
+    writeFileSync(returning, "<return value=1/>\n");
+    const error = failure(() =>
+      compileSolidUnit('import Ret from "./ret.mx"\n<if=true><Ret/x/></if>\n', {
+        filename: caller,
+        targets: solidTargets,
+      }),
+    ) as { dependencies?: string[]; message?: string };
+    expect(error.message).toContain("is not supported on Solid yet");
+    expect(error.dependencies).toEqual([returning]);
+  });
+
   it("compileSolidMx attaches them to an error raised after lowering", () => {
     // Lowers clean (one `@header`), then the authored import is refused as
     // a module-level statement — after `lower` has read the callee.

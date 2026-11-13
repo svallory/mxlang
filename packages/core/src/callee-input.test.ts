@@ -1946,6 +1946,24 @@ describe("calleeReturnsValue", () => {
     );
   });
 
+  it("follows an Input's type import from a `.MX` file", () => {
+    withFiles(
+      {
+        "counter.ts":
+          'import type { Base } from "./Base.MX";\nexport interface Input extends Base {}\nexport default function Counter() {}\n',
+        "Base.MX": "export interface Base { title?: string }\n\n<div/>\n",
+      },
+      [["Counter", "./counter.ts"]],
+      (ctx) => {
+        const { input } = readCalleeInput(target, ctx);
+        expect(input.kind === "declared" && [...input.otherProps]).toEqual([
+          "title",
+        ]);
+        expect(input.kind === "declared" && input.open).toBe(false);
+      },
+    );
+  });
+
   it("calleeReturn says why a .mx callee is unreadable, and nothing for other unknowns", () => {
     withFiles(
       {

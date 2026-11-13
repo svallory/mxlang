@@ -26,7 +26,6 @@ import {
   concatMapped,
   type GeneratedMapping,
   lower,
-  lowerKeepingDependencies,
   type MappedCode,
   type MxWarning,
   mapped,
@@ -648,187 +647,197 @@ export function compileSolidUnit(
   // above: it has a `export default function <Name>` to name, so a tag that
   // calls itself resolves to that declaration rather than importing itself.
   ctx.emitsModule = true;
-  const ir = lowerKeepingDependencies(ctx, body);
-  // A `prelude` node is a statement a hoist hook lifted to the enclosing
-  // function's head. No Solid-host construct mints one today, so rather than
-  // emit it somewhere plausible and untested, report it at the statement's
-  // own position. Placing it is 2b's business if a construct ever does.
-  const [hoistedStatement] = ir.prelude;
-  if (hoistedStatement) {
-    throw new TranslateError(
-      "a hoisted statement is not supported in a Solid tag unit",
-      hoistedStatement.loc.line,
-      hoistedStatement.loc.column,
-      hoistedStatement.loc.file,
-    );
+  // An error from lowering, or from emitting after it, carries the callee
+  // files read so far, as on the region path.
+  try {
+    return emitUnit(lower(ctx, body));
+  } catch (error) {
+    attachDependencies(ctx, error);
+    throw error;
   }
 
-  const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
-  for (const node of ir.imports)
-    parts.push(mappedStatement(source, node), "\n");
-  for (const node of ir.hoisted) {
-    if (node.code === "") continue;
-    parts.push(mappedStatement(source, node), "\n");
-  }
-  // The author's `export interface Input` is emitted and the component
-  // parameter is annotated with it, exactly as `@mxlang/host-preact` and
-  // `@mxlang/target-html` do, so a caller's `<Card title=1/>` is a JSX props check
-  // against `Input` (TS2322). The output is therefore TSX carrying types, and
-  // every runtime consumer must run a TypeScript-aware step over it. The vite
-  // plugin already hands a whole-file unit to `@solidjs/vite-plugin` under a
-  // `.tsx` id, and Solid's native compiler parses TS and passes the types
-  // through for vite's own transform to strip. A component with no `Input`
-  // gets an empty one, again as on the other hosts.
-  parts.push(
-    ir.inputInterface
-      ? mappedStatement(source, ir.inputInterface)
-      : "export interface Input {}",
-    "\n",
-  );
-  if (ir.needsAttrTagImport) {
-    parts.unshift(`import type { AttrTag } from "@mxlang/host-solid";\n`);
-  }
-  // Named after the file, never anonymous: a tag whose template calls its own
-  // name resolves to this declaration, so self-recursion needs no self-import
-  // (design invariant §7.5-7).
-  // A unit that declares `<return>` hands its value back through a
-  // **callback prop**, not through the return value — the one host where the
-  // `{ value, output }` shape does not fit, because a Solid component's
-  // return value is its view and the caller writes JSX rather than a call.
-  //
-  // Measured against solid-js 2.0.0-rc.7 (design §2.4): the component
-  // function runs synchronously at the JSX site under both `dom` and `ssr`
-  // generation, so a callback invoked during setup has already run by the
-  // caller's next statement. The value is therefore **one-shot, not
-  // reactive** — the binding holds the value from that single invocation.
-  // That matches `/var`'s meaning on every other host, and it is documented
-  // as risk 4: a Solid author may reasonably expect a signal, and a tag
-  // wanting reactivity should return an accessor for the caller to call.
-  // `/var` names are collected while emitting, because only the emitter
-  // knows which call sites declared one — a call inside an `<if>` branch or
-  // a `<for>` body reaches a child emitter, not this scope.
-  // `allowHoist: false` — a tag unit is a whole file, not a spliced region,
-  // so nothing here reads `hoistedDefines`; a `<define>` still gets the
-  // positioned "cannot declare a function inside a JSX expression" error
-  // rather than hoisting into a list this function never consumes.
-  // One emit, with the `/var` names and mappings collected together, the
-  // same reasoning `compileSolidMx` gives for its own single emit above.
-  let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
-  const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(
-    () => {
-      emittedBody = emitSolidWithMappings(ir);
-      return emittedBody.code;
-    },
-    false,
-    source,
-  );
-  if (needsEscapeImport) {
-    parts.unshift(
-      `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
+  function emitUnit(ir: ReturnType<typeof lower>): CompileSolidMxResult {
+    // A `prelude` node is a statement a hoist hook lifted to the enclosing
+    // function's head. No Solid-host construct mints one today, so rather than
+    // emit it somewhere plausible and untested, report it at the statement's
+    // own position. Placing it is 2b's business if a construct ever does.
+    const [hoistedStatement] = ir.prelude;
+    if (hoistedStatement) {
+      throw new TranslateError(
+        "a hoisted statement is not supported in a Solid tag unit",
+        hoistedStatement.loc.line,
+        hoistedStatement.loc.column,
+        hoistedStatement.loc.file,
+      );
+    }
+
+    const parts: Array<string | ReturnType<typeof emitSolidWithMappings>> = [];
+    for (const node of ir.imports)
+      parts.push(mappedStatement(source, node), "\n");
+    for (const node of ir.hoisted) {
+      if (node.code === "") continue;
+      parts.push(mappedStatement(source, node), "\n");
+    }
+    // The author's `export interface Input` is emitted and the component
+    // parameter is annotated with it, exactly as `@mxlang/host-preact` and
+    // `@mxlang/target-html` do, so a caller's `<Card title=1/>` is a JSX props check
+    // against `Input` (TS2322). The output is therefore TSX carrying types, and
+    // every runtime consumer must run a TypeScript-aware step over it. The vite
+    // plugin already hands a whole-file unit to `@solidjs/vite-plugin` under a
+    // `.tsx` id, and Solid's native compiler parses TS and passes the types
+    // through for vite's own transform to strip. A component with no `Input`
+    // gets an empty one, again as on the other hosts.
+    parts.push(
+      ir.inputInterface
+        ? mappedStatement(source, ir.inputInterface)
+        : "export interface Input {}",
+      "\n",
     );
-  }
-  if (
-    needsAttrGuard.textarea ||
-    needsAttrGuard.dynTextarea ||
-    needsAttrGuard.spread
-  ) {
-    parts.unshift(
-      `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";\n`,
+    if (ir.needsAttrTagImport) {
+      parts.unshift(`import type { AttrTag } from "@mxlang/host-solid";\n`);
+    }
+    // Named after the file, never anonymous: a tag whose template calls its own
+    // name resolves to this declaration, so self-recursion needs no self-import
+    // (design invariant §7.5-7).
+    // A unit that declares `<return>` hands its value back through a
+    // **callback prop**, not through the return value — the one host where the
+    // `{ value, output }` shape does not fit, because a Solid component's
+    // return value is its view and the caller writes JSX rather than a call.
+    //
+    // Measured against solid-js 2.0.0-rc.7 (design §2.4): the component
+    // function runs synchronously at the JSX site under both `dom` and `ssr`
+    // generation, so a callback invoked during setup has already run by the
+    // caller's next statement. The value is therefore **one-shot, not
+    // reactive** — the binding holds the value from that single invocation.
+    // That matches `/var`'s meaning on every other host, and it is documented
+    // as risk 4: a Solid author may reasonably expect a signal, and a tag
+    // wanting reactivity should return an accessor for the caller to call.
+    // `/var` names are collected while emitting, because only the emitter
+    // knows which call sites declared one — a call inside an `<if>` branch or
+    // a `<for>` body reaches a child emitter, not this scope.
+    // `allowHoist: false` — a tag unit is a whole file, not a spliced region,
+    // so nothing here reads `hoistedDefines`; a `<define>` still gets the
+    // positioned "cannot declare a function inside a JSX expression" error
+    // rather than hoisting into a list this function never consumes.
+    // One emit, with the `/var` names and mappings collected together, the
+    // same reasoning `compileSolidMx` gives for its own single emit above.
+    let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
+    const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(
+      () => {
+        emittedBody = emitSolidWithMappings(ir);
+        return emittedBody.code;
+      },
+      false,
+      source,
     );
-  }
-  if (needsAttrGuard.textarea) {
-    parts.unshift(
-      `${TEXTAREA_OMIT_HELPER}\n${TEXTAREA_PICK_HELPER}\n${TEXTAREA_CONTENT_HELPER}\n`,
+    if (needsEscapeImport) {
+      parts.unshift(
+        `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
+      );
+    }
+    if (
+      needsAttrGuard.textarea ||
+      needsAttrGuard.dynTextarea ||
+      needsAttrGuard.spread
+    ) {
+      parts.unshift(
+        `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";\n`,
+      );
+    }
+    if (needsAttrGuard.textarea) {
+      parts.unshift(
+        `${TEXTAREA_OMIT_HELPER}\n${TEXTAREA_PICK_HELPER}\n${TEXTAREA_CONTENT_HELPER}\n`,
+      );
+    }
+    if (needsAttrGuard.dynTextarea) {
+      parts.unshift(
+        `${TEXTAREA_DYN_SPREAD_HELPER}\n${TEXTAREA_DYN_VALUE_HELPER}\n`,
+      );
+    }
+    if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
+    if (needsAttrGuard.styleText) parts.unshift(`${STYLE_TEXT_HELPER}\n`);
+    if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);
+    if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
+    if (needsAttrGuard.value || needsAttrGuard.spread) {
+      parts.unshift(`${ATTR_VALUE_HELPER}\n`);
+    }
+    // Declared above the JSX that fills them: the callback prop assigns during
+    // the child's synchronous setup, which happens as the JSX is evaluated.
+    //
+    // Explicitly `: any`, not a bare `let` (TODO tag-var-type-from-return):
+    // the value is assigned inside the `$mxReturn={...}` callback, so
+    // TypeScript's control-flow analysis cannot narrow it from the
+    // declaration alone — a bare `let n;` reports `noImplicitAny`'s own
+    // TS7005 at every read, unrelated noise regardless of the `<return>`
+    // value's real type. That real type cannot be inferred here without
+    // changing the emitted runtime JS (firstmate's ruling): TypeScript's
+    // `typeof` only accepts an identifier, never an arbitrary expression, and
+    // the expression can depend on the unit's own body locals, so no
+    // type-only declaration beside the component can name it either.
+    const varDecls =
+      vars.length > 0
+        ? `let ${vars.map((name) => `${name}: any`).join(", ")}; `
+        : "";
+    const name = moduleExportName(ir, "@mxlang/host-solid");
+    // The return callback is not part of the author's `Input`, so a unit that
+    // declares `<return>` widens its parameter with it; the caller's generated
+    // `$mxReturn={...}` then type-checks against exactly the units that return.
+    const inputType = ir.returnValue
+      ? `Input & { ${JSON.stringify(MX_RETURN_PROP)}?: (value: unknown) => void }`
+      : "Input";
+    // Marko names a tag's body `content` and a template reads it as
+    // `${input.content}`; a Solid component receives the same slot as
+    // `props.children`, and this host emits calls that way so a hand-written
+    // Solid component called from MX, and an MX tag called from plain TSX,
+    // both work. A unit that reads `input.content` therefore gets `input` as a
+    // lazy view over its props whose `content` is the body — an explicit
+    // `content=` prop winning, else `children` — so `props.children` is left
+    // untouched. Without this `<Card><p/></Card>` compiled cleanly and rendered
+    // an empty card. A unit that never reads it is emitted unchanged.
+    //
+    // `merge` keeps `props` reactive (a spread would snapshot it), and
+    // `children` resolves the body once into a memo: reading `input.content`
+    // twice (`<if=input.content>` then `<${input.content}/>`) must not create
+    // the body's nodes twice. A bare string or number body becomes a fragment
+    // because `<${input.content}/>` lowers to a dynamic tag that reads a string
+    // as a tag NAME; an empty string becomes `undefined` (renders nothing and
+    // stays falsy for `<if=input.content>`). `<${tagName}/>` never comes
+    // through `input.content`, so it is unaffected.
+    const bodyAlias = ir.tagMetadata.readsContent;
+    if (bodyAlias) {
+      parts.unshift(
+        `import { children as ${MX_CHILDREN_BINDING}, merge as ${MX_MERGE_BINDING} } from "solid-js";\n`,
+      );
+    }
+    const head = bodyAlias
+      ? `export default function ${name}(__mxProps: ${inputType}) { const __mxBody = ${MX_CHILDREN_BINDING}(() => (__mxProps as { content?: unknown }).content ?? (__mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}(__mxProps, { get content() { const __mxValue = __mxBody() as unknown; return typeof __mxValue === "string" || typeof __mxValue === "number" ? __mxValue === "" ? undefined : <>{String(__mxValue)}</> : __mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
+      : `export default function ${name}(input: ${inputType}) { ${varDecls}`;
+    parts.push(
+      ir.returnValue
+        ? `${head}input[${JSON.stringify(
+            MX_RETURN_PROP,
+          )}]?.(${ir.returnValue.code}); return <>`
+        : `${head}return <>`,
+      emittedBody,
+      "</>; }",
     );
+    const { code, mappings } = concatMapped(...parts);
+    const rewritten = new MagicString(source);
+    rewritten.overwrite(0, source.length, code);
+    const map = rewritten.generateMap({
+      file: options.filename,
+      source: options.filename,
+      includeContent: true,
+      hires: true,
+    });
+    return {
+      code,
+      map: map as RawSourceMap,
+      mappings,
+      hoistedImports: [],
+      hoistedDefines: [],
+      returnVars: [],
+      dependencies: [...(ctx.dependencies ?? [])],
+    };
   }
-  if (needsAttrGuard.dynTextarea) {
-    parts.unshift(
-      `${TEXTAREA_DYN_SPREAD_HELPER}\n${TEXTAREA_DYN_VALUE_HELPER}\n`,
-    );
-  }
-  if (needsAttrGuard.scriptText) parts.unshift(`${SCRIPT_TEXT_HELPER}\n`);
-  if (needsAttrGuard.styleText) parts.unshift(`${STYLE_TEXT_HELPER}\n`);
-  if (needsAttrGuard.klass) parts.unshift(`${CLASS_PROP_HELPER}\n`);
-  if (needsAttrGuard.spread) parts.unshift(`${ATTR_SPREAD_HELPER}\n`);
-  if (needsAttrGuard.value || needsAttrGuard.spread) {
-    parts.unshift(`${ATTR_VALUE_HELPER}\n`);
-  }
-  // Declared above the JSX that fills them: the callback prop assigns during
-  // the child's synchronous setup, which happens as the JSX is evaluated.
-  //
-  // Explicitly `: any`, not a bare `let` (TODO tag-var-type-from-return):
-  // the value is assigned inside the `$mxReturn={...}` callback, so
-  // TypeScript's control-flow analysis cannot narrow it from the
-  // declaration alone — a bare `let n;` reports `noImplicitAny`'s own
-  // TS7005 at every read, unrelated noise regardless of the `<return>`
-  // value's real type. That real type cannot be inferred here without
-  // changing the emitted runtime JS (firstmate's ruling): TypeScript's
-  // `typeof` only accepts an identifier, never an arbitrary expression, and
-  // the expression can depend on the unit's own body locals, so no
-  // type-only declaration beside the component can name it either.
-  const varDecls =
-    vars.length > 0
-      ? `let ${vars.map((name) => `${name}: any`).join(", ")}; `
-      : "";
-  const name = moduleExportName(ir, "@mxlang/host-solid");
-  // The return callback is not part of the author's `Input`, so a unit that
-  // declares `<return>` widens its parameter with it; the caller's generated
-  // `$mxReturn={...}` then type-checks against exactly the units that return.
-  const inputType = ir.returnValue
-    ? `Input & { ${JSON.stringify(MX_RETURN_PROP)}?: (value: unknown) => void }`
-    : "Input";
-  // Marko names a tag's body `content` and a template reads it as
-  // `${input.content}`; a Solid component receives the same slot as
-  // `props.children`, and this host emits calls that way so a hand-written
-  // Solid component called from MX, and an MX tag called from plain TSX,
-  // both work. A unit that reads `input.content` therefore gets `input` as a
-  // lazy view over its props whose `content` is the body — an explicit
-  // `content=` prop winning, else `children` — so `props.children` is left
-  // untouched. Without this `<Card><p/></Card>` compiled cleanly and rendered
-  // an empty card. A unit that never reads it is emitted unchanged.
-  //
-  // `merge` keeps `props` reactive (a spread would snapshot it), and
-  // `children` resolves the body once into a memo: reading `input.content`
-  // twice (`<if=input.content>` then `<${input.content}/>`) must not create
-  // the body's nodes twice. A bare string or number body becomes a fragment
-  // because `<${input.content}/>` lowers to a dynamic tag that reads a string
-  // as a tag NAME; an empty string becomes `undefined` (renders nothing and
-  // stays falsy for `<if=input.content>`). `<${tagName}/>` never comes
-  // through `input.content`, so it is unaffected.
-  const bodyAlias = ir.tagMetadata.readsContent;
-  if (bodyAlias) {
-    parts.unshift(
-      `import { children as ${MX_CHILDREN_BINDING}, merge as ${MX_MERGE_BINDING} } from "solid-js";\n`,
-    );
-  }
-  const head = bodyAlias
-    ? `export default function ${name}(__mxProps: ${inputType}) { const __mxBody = ${MX_CHILDREN_BINDING}(() => (__mxProps as { content?: unknown }).content ?? (__mxProps as { children?: unknown }).children); const input = ${MX_MERGE_BINDING}(__mxProps, { get content() { const __mxValue = __mxBody() as unknown; return typeof __mxValue === "string" || typeof __mxValue === "number" ? __mxValue === "" ? undefined : <>{String(__mxValue)}</> : __mxValue; } }) as ${inputType} & { content?: unknown }; ${varDecls}`
-    : `export default function ${name}(input: ${inputType}) { ${varDecls}`;
-  parts.push(
-    ir.returnValue
-      ? `${head}input[${JSON.stringify(
-          MX_RETURN_PROP,
-        )}]?.(${ir.returnValue.code}); return <>`
-      : `${head}return <>`,
-    emittedBody,
-    "</>; }",
-  );
-  const { code, mappings } = concatMapped(...parts);
-  const rewritten = new MagicString(source);
-  rewritten.overwrite(0, source.length, code);
-  const map = rewritten.generateMap({
-    file: options.filename,
-    source: options.filename,
-    includeContent: true,
-    hires: true,
-  });
-  return {
-    code,
-    map: map as RawSourceMap,
-    mappings,
-    hoistedImports: [],
-    hoistedDefines: [],
-    returnVars: [],
-    dependencies: [...(ctx.dependencies ?? [])],
-  };
 }

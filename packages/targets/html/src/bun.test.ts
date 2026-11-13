@@ -98,6 +98,33 @@ describe("@mxlang/target-html/bun", () => {
     }
   });
 
+  // The filter's `i` flag must reach Bun's native onLoad matcher, not only
+  // `RegExp.test`: an upper-case `.MX` compiles like `.mx`.
+  test("Bun.plugin claims an upper-case .MX file", async () => {
+    Bun.plugin(markoPlugin);
+
+    const fixtureDir = join(
+      import.meta.dirname,
+      "..",
+      "fixtures-marko",
+      "attributes",
+    );
+    const input = JSON.parse(
+      readFileSync(join(fixtureDir, "input.json"), "utf8"),
+    ) as { value: string };
+    const path = join(fixtureDir, "Upper.MX");
+    writeFileSync(path, readFileSync(join(fixtureDir, "input.marko"), "utf8"));
+    try {
+      const mod = await import(path);
+      expect(typeof mod.default).toBe("function");
+      expect((mod.default as (i: unknown) => string)(input)).toContain(
+        input.value,
+      );
+    } finally {
+      rmSync(path);
+    }
+  });
+
   // The default export keeps `(input) => string`, and the sink entry is
   // reachable both as `X.render` and as the named `render` export.
   test("a loaded .mx module exposes render(input, out) beside its default export", async () => {
