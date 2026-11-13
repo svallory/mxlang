@@ -152,7 +152,7 @@ describe("attribute tags become props", () => {
       `const el = <Errored><@fallback|e, reset|><p>\${e.message}</p></@fallback></Errored>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      "fallback={__mxAttrTag({ content: (e, reset) => () => <p>{e.message}</p> })}",
+      "fallback={(e, reset) => () => <p>{e.message}</p>}",
     );
   });
 
@@ -243,9 +243,7 @@ describe("consumed attribute tags", () => {
       `const el = <Show|u| when=user()><b>hi</b><@fallback>NOPE</@fallback></Show>;`,
     );
     expect(text).toContain("u => <b>hi</b>");
-    expect(text.replace(/\s+/g, " ")).toContain(
-      "fallback={__mxAttrTag({ content: () => <>NOPE</> })}",
-    );
+    expect(text).toContain("fallback={() => <>NOPE</>}");
     expect(text).not.toContain("@fallback");
   });
 });
