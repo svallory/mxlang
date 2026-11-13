@@ -55,6 +55,7 @@ import {
 } from "@mxlang/core";
 import { WEB_ELEMENTS } from "@mxlang/web-elements";
 import { decodeHTML } from "entities";
+import { type ParamNode, typedDefineParamNode } from "./define-param-type.ts";
 import { type JsxDialect, preactDialect } from "./dialect.ts";
 import { sourcePosition } from "./source-position.ts";
 
@@ -434,6 +435,10 @@ function skipTemplate(text: string, from: number): number {
  * TS7006 or TS7031 on a define whose params the author left untyped. Strings,
  * templates, regex literals and comments are skipped when looking for the
  * `:` or `=` that ends the pattern.
+ *
+ * @deprecated The emitter types a param from its parser node
+ * (`Define.paramNodes`); this text-only form stays for callers of the
+ * `@mxlang/host-preact/emitter` subpath and is not used by the emitter.
  */
 export function typedDefineParam(param: string): string {
   const text = param.trim();
@@ -2350,7 +2355,12 @@ export class PreactEmitter implements Emitter<string> {
     rendered: MappedCode,
     bodyVarStatements: readonly string[] = [],
   ): DefineParts {
-    const params = node.params.map(typedDefineParam).join(", ");
+    const params = node.params
+      .map((param, i) => {
+        const paramNode = node.paramNodes?.[i] as ParamNode | undefined;
+        return paramNode ? typedDefineParamNode(param, paramNode) : param;
+      })
+      .join(", ");
     // The function itself keeps a private name: a direct call from MX
     // (`<Row(x)/>`) calls it as written, so an argument reaches the body
     // untouched. Only the value `Row`, which a dynamic tag or an author's

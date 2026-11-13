@@ -4753,6 +4753,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     nameSpan: exprSpan(ctx, tagVarOf(node)),
     span: exprSpan(ctx, node),
     params,
+    paramNodes: [...tagParamsOf(node)],
     bindings,
     paramSpans: paramSpansOf(ctx, node),
     ...(typeParams ? { typeParams } : {}),

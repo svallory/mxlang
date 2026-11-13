@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 13;
+export const IR_VERSION = 14;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -854,6 +854,14 @@ export type IrNode =
        */
       span?: SourceSpan;
       params: string[];
+      /**
+       * Original parser nodes for the params, one per `params` entry (as
+       * `For.paramNodes`), for a host that reads a param's shape (its
+       * pattern, annotation or default) instead of its text. Core always
+       * fills it (`[]` with no params); optional so a hand-built define keeps
+       * compiling, and a consumer treats an absent field or entry as unknown.
+       */
+      paramNodes?: Node[];
       /**
        * Every name the params bind, from Babel's binding analysis, for a host
        * that tracks scopes (as `For.bindings`). Core fills it (`[]` with

@@ -292,7 +292,12 @@ describe("the typeCheck projection reads the public define name", () => {
   });
 });
 
-describe("typedDefineParam", () => {
+describe("a define param as the emitted arrow declares it", () => {
+  const head = (param: string, typeCheck = false) =>
+    compilePreactMx(`<define/Row|${param}|>x</define>\n<Row/>\n`, "/f/t.mx", {
+      typeCheck,
+    }).code.match(/const __mxDef_Row = \((.*)\) => /)?.[1];
+
   it.each([
     ["p", "p: any"],
     ["...r", "...r: any[]"],
@@ -322,6 +327,28 @@ describe("typedDefineParam", () => {
     ],
     ["a\u200cb = 1", "a\u200cb = 1"],
     ["...r: string[]", "...r: string[]"],
+    // Read from the node, a string with an escape and a leading-dot number
+    // are primitive defaults too.
+    ['a = "x\\"y"', 'a = "x\\"y"'],
+    ["a = .5", "a = .5"],
+  ])("%s -> %s", (param, typed) => {
+    expect(head(param)).toBe(typed);
+  });
+
+  it.each([
+    ["a: string", "a: string"],
+    ["{ a }: { a: number } = { a: 1 }", "{ a }: { a: number } = { a: 1 }"],
+  ])("%s stays as written with and without typeCheck", (param, typed) => {
+    expect(head(param, false)).toBe(typed);
+    expect(head(param, true)).toBe(typed);
+  });
+});
+
+describe("typedDefineParam (deprecated, text only)", () => {
+  it.each([
+    ["p", "p: any"],
+    ["a = 1 + 1", "a: any = 1 + 1"],
+    ["{ a = /}/, b = 1 } = {}", "{ a = /}/, b = 1 }: any = {}"],
   ])("%s -> %s", (param, typed) => {
     expect(typedDefineParam(param)).toBe(typed);
   });

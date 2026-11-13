@@ -6092,4 +6092,27 @@ describe("tag-param bindings on the IR", () => {
         .bindings,
     ).toEqual(names);
   });
+
+  it("puts one parser node per param on a define, [] with none", () => {
+    const define = find(
+      lowerSource(
+        "<define/Row|{ a }, b = 1, ...r|>x</define>",
+        declarations(""),
+      ).body,
+      "Define",
+    );
+    expect(define.params).toEqual(["{ a }", "b = 1", "...r"]);
+    expect(define.paramNodes?.map((node) => node.type)).toEqual([
+      "ObjectPattern",
+      "AssignmentPattern",
+      "RestElement",
+    ]);
+
+    const bare = find(
+      lowerSource("<define/Row>x</define>", declarations("")).body,
+      "Define",
+    );
+    expect(bare.params).toEqual([]);
+    expect(bare.paramNodes).toEqual([]);
+  });
 });
