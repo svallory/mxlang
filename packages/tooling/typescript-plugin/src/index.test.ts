@@ -5927,12 +5927,18 @@ describe("an unmapped diagnostic lands on its enclosing tag in every file kind",
     },
   );
 
-  it.each(["solid", "preact", "hono"] as const)(
+  it.each([
+    ["solid", "for=2", true],
+    ["preact", "for", false],
+    ["hono", "for", false],
+  ] as const)(
     "a .%s.mx region reports a wrongly typed attribute on the attribute",
-    (kind) => {
-      // The attribute value is wrongly typed, and the printer maps the
+    (kind, site, approximate) => {
+      // The attribute value is wrongly typed. Solid's printer maps the
       // attribute's value but not its name: the diagnostic lands on the
-      // attribute, as the author's, with the approximate marker.
+      // attribute, as the author's, with the approximate marker. The JSX
+      // hosts' region compile records the name's mapping, so it lands on the
+      // name itself, exactly.
       const source = [
         "declare global { namespace JSX { interface IntrinsicElements { label: { onDblClick?: (event: number) => void; for?: string }; div: object } } }",
         "export function C() {",
@@ -5943,10 +5949,14 @@ describe("an unmapped diagnostic lands on its enclosing tag in every file kind",
       const { diagnostics } = regionService(kind, source, "Attr");
 
       const attribute = diagnostics().find(
-        (d) => d.code === 2322 && onSource(source, d) === "for=2",
+        (d) => d.code === 2322 && onSource(source, d) === site,
       );
       expect(attribute).toBeDefined();
-      expect(text(attribute as ts.Diagnostic)).toMatch(APPROXIMATE);
+      if (approximate) {
+        expect(text(attribute as ts.Diagnostic)).toMatch(APPROXIMATE);
+      } else {
+        expect(text(attribute as ts.Diagnostic)).not.toMatch(APPROXIMATE);
+      }
       expect(
         diagnostics()
           .map(text)
