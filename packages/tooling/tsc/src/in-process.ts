@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { BuildPassProbe } from "./build-cache.ts";
 import { runMxTscArgs } from "./index.ts";
 
 export interface InProcessRun {
@@ -25,6 +26,7 @@ export interface InProcessRun {
 export function runInProcess(
   args: readonly string[],
   cwd?: string,
+  probe?: BuildPassProbe,
 ): InProcessRun {
   const mapped = cwd
     ? args.map((arg) =>
@@ -49,7 +51,7 @@ export function runInProcess(
   }) as typeof process.stderr.write;
   let status: number;
   try {
-    status = runMxTscArgs(mapped);
+    status = runMxTscArgs(mapped, probe);
   } catch (cause) {
     status = 1;
     stderr +=

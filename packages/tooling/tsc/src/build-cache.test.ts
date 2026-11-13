@@ -629,6 +629,18 @@ describe("build-cache project entry (inputs read from disk)", () => {
     expect(entry()).toBeUndefined();
   });
 
+  it("is not cacheable with a JSON MX config that pulls a file in through $import", () => {
+    const { dir, entry } = project();
+    writeFileSync(join(dir, "shared-mx.json"), JSON.stringify({}));
+    writeFileSync(join(dir, ".mxrc.json"), JSON.stringify({ strict: true }));
+    expect(entry()).toBeDefined();
+    writeFileSync(
+      join(dir, ".mxrc.json"),
+      JSON.stringify({ $import: "./shared-mx.json", strict: true }),
+    );
+    expect(entry()).toBeUndefined();
+  });
+
   it.each([
     [
       "another TypeScript's build info",

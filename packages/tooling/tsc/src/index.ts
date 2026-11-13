@@ -32,7 +32,7 @@ import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName
 import type ts from "typescript";
 import { createTsconfigPathsResolver } from "../../typescript-plugin/src/tsconfig-paths.ts";
 import {
-  buildPassCounters,
+  type BuildPassProbe,
   mayStore,
   projectCacheEntry,
   readStoredAnswer,
@@ -733,7 +733,6 @@ function compileProjectNgMx(
   tsconfigPath: string,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
 ): CompiledNgMx[] {
-  buildPassCounters.compileProjectNgMx += 1;
   const ngPlugins: NgProgram[] = [];
   const argv = process.argv;
   const stdout = process.stdout.write;
@@ -756,13 +755,6 @@ function compileProjectNgMx(
   }
   return ngPlugins.flatMap((plugin) => plugin.getCompiledNgMx());
 }
-
-const countingCheckerDeps: NgDiagnosticsDeps = {
-  createChecker: (options) => {
-    buildPassCounters.createChecker += 1;
-    return createAngularChecker(options);
-  },
-};
 
 /** How the `-b` template pass may use the sidecar cache (`build-cache.ts`). */
 interface BuildCacheMode {
@@ -790,7 +782,16 @@ function checkBuildProjects(
   projects: readonly BuildProject[],
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
   cache: BuildCacheMode,
+  probe?: BuildPassProbe,
 ): NgDiagnosticsResult {
+  const checkerDeps: NgDiagnosticsDeps = probe
+    ? {
+        createChecker: (options) => {
+          probe.checkers += 1;
+          return createAngularChecker(options);
+        },
+      }
+    : {};
   const result: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
   const merge = (part: NgDiagnosticsResult) => {
     result.reports.push(...part.reports);
@@ -836,13 +837,11 @@ function checkBuildProjects(
       return;
     }
     const pluginsBefore = diagnosticPlugins.length;
+    if (probe) probe.compiles += 1;
     const compiled = compileProjectNgMx(astro, tsconfigPath, diagnosticPlugins);
     const entries = compiled.filter((e) => !claimed.has(e.fileName));
     for (const e of entries) claimed.add(e.fileName);
-    const part = checkNgMxGroups(
-      [{ tsconfigPath, entries }],
-      countingCheckerDeps,
-    );
+    const part = checkNgMxGroups([{ tsconfigPath, entries }], checkerDeps);
     merge(part);
     const plugins = diagnosticPlugins.slice(pluginsBefore);
     if (
@@ -910,13 +909,17 @@ export function runMxTsc(): void {
  * does not use it. `process.argv` is replaced for the call and restored; every
  * path in `args` must be absolute or relative to `process.cwd()` (nothing
  * changes directory). Runs are synchronous and share process-global state
- * (`process.argv`, the stream writes), so they cannot overlap.
+ * (`process.argv`, the stream writes), so they cannot overlap. A `probe`
+ * counts the `-b` template pass's programs and checkers (a test seam).
  */
-export function runMxTscArgs(args: readonly string[]): number {
+export function runMxTscArgs(
+  args: readonly string[],
+  probe?: BuildPassProbe,
+): number {
   const saved = process.argv;
   process.argv = [saved[0] ?? "node", saved[1] ?? "mx-tsc", ...args];
   try {
-    return runMxTscBody();
+    return runMxTscBody(probe);
   } finally {
     process.argv = saved;
   }
@@ -942,11 +945,11 @@ function withoutForcedColorOffTty<T>(body: () => T): T {
   }
 }
 
-function runMxTscBody(): number {
-  return withoutForcedColorOffTty(runMxTscChecks);
+function runMxTscBody(probe?: BuildPassProbe): number {
+  return withoutForcedColorOffTty(() => runMxTscChecks(probe));
 }
 
-function runMxTscChecks(): number {
+function runMxTscChecks(probe?: BuildPassProbe): number {
   ambientTypeErrors.clear();
   const astro = consumeAstroFlag(process.argv);
   const diagnosticPlugins: MxDiagnosticLanguagePlugin[] = [];
@@ -1036,10 +1039,16 @@ function runMxTscChecks(): number {
   // their own path.
   const buildAngular =
     build && !build.clean && !build.dry && !watchRan
-      ? checkBuildProjects(astro, buildProjects, diagnosticPlugins, {
-          enabled: !watchMode && tscExitCode === 0,
-          read: !build.force,
-        })
+      ? checkBuildProjects(
+          astro,
+          buildProjects,
+          diagnosticPlugins,
+          {
+            enabled: !watchMode && tscExitCode === 0,
+            read: !build.force,
+          },
+          probe,
+        )
       : undefined;
   if (build?.dry) reportDryRun(buildProjects);
 

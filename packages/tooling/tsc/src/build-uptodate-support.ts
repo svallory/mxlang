@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, expect } from "vitest";
+import type { BuildPassProbe } from "./build-cache.ts";
 import { runInProcess } from "./in-process.ts";
 
 /**
@@ -111,10 +112,10 @@ export async function mxTscSpawn(cwd: string, args: string[]): Promise<Run> {
 export async function mxTscIn(
   cwd: string,
   args: string[],
-  options: { spawn?: boolean } = {},
+  options: { spawn?: boolean; probe?: BuildPassProbe } = {},
 ): Promise<Run> {
   if (options.spawn) return mxTscSpawn(cwd, args);
-  const { status, stdout, stderr } = runInProcess(args, cwd);
+  const { status, stdout, stderr } = runInProcess(args, cwd, options.probe);
   // Hand the event loop back (vitest's worker RPC) between runs.
   await new Promise<void>((resolve) => setImmediate(resolve));
   return { status, stdout, stderr, output: `${stdout}${stderr}` };

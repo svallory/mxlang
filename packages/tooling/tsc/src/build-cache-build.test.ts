@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildPassCounters } from "./build-cache.ts";
+import type { BuildPassProbe } from "./build-cache.ts";
 import {
   APP_ERROR,
   BROKEN,
@@ -30,7 +30,8 @@ import {
 /**
  * The `-b` template pass's sidecar cache (`build-cache.ts`) end to end, over
  * the ng-build fixtures. A hit is proven by the seam counters
- * (`buildPassCounters`: the per-project program and the Angular checker),
+ * (a `BuildPassProbe` passed to the in-process run: the per-project program
+ * and the Angular checker),
  * never by timing; every miss is shown by its counters and by the new output
  * it prints. Each case works on its own scratch copy and makes its own cold
  * run, so cases are independent of order. These are whole `mx-tsc -b` runs
@@ -44,14 +45,9 @@ interface Pass extends Run {
 }
 
 async function pass(cwd: string, args: string[] = ["-b", "."]): Promise<Pass> {
-  buildPassCounters.compileProjectNgMx = 0;
-  buildPassCounters.createChecker = 0;
-  const run = await mxTscIn(cwd, args);
-  return {
-    ...run,
-    compiles: buildPassCounters.compileProjectNgMx,
-    checkers: buildPassCounters.createChecker,
-  };
+  const probe: BuildPassProbe = { compiles: 0, checkers: 0 };
+  const run = await mxTscIn(cwd, args, { probe });
+  return { ...run, ...probe };
 }
 
 /** The spawned case runs `dist/bin.cjs`: it must be built from these sources. */

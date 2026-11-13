@@ -72,11 +72,14 @@ export const sidecarPath = (buildInfoPath: string) =>
   `${buildInfoPath}.mx-ng.json`;
 
 /**
- * Test seam: how often the `-b` template pass created a program for a
- * project's `.ng.mx` files and an Angular checker (`index.ts` counts them).
- * A cache hit creates neither. Never read by mx-tsc itself.
+ * Test seam: a caller of `runMxTscArgs` may pass one to count how often the
+ * `-b` template pass created a program for a project's `.ng.mx` files and an
+ * Angular checker. A cache hit creates neither. The CLI passes none.
  */
-export const buildPassCounters = { compileProjectNgMx: 0, createChecker: 0 };
+export interface BuildPassProbe {
+  compiles: number;
+  checkers: number;
+}
 
 /** What the compiler-cli lookup of one package directory found. */
 export interface CompilerCliInput {
@@ -717,7 +720,13 @@ function readEntry(
   for (const [dir, file] of new Map(mxPaths.map((f) => [dirname(f), f]))) {
     for (const path of packageJsonInputs(file)) probed.add(slash(path));
     const config = findMxConfig(dir);
-    if (config?.format === "module") return undefined;
+    // A module's imports, and the files a JSON or YAML config pulls in through
+    // cosmiconfig's `$import`, are config inputs core does not list in
+    // `watch`. The text check is conservative: `$import` anywhere in the file
+    // (a nested key, a string) only costs the cache, never a stale answer.
+    if (config?.format === "module" || config?.text.includes("$import")) {
+      return undefined;
+    }
     for (const path of config?.watch ?? []) probed.add(slash(path));
   }
   const configInputs = [...probed]
