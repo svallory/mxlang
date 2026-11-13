@@ -257,7 +257,10 @@ export function freeIdentifiersIn(code: string): Set<string> {
  *
  * `jsxTagNames: false` leaves out a name read only as an element's tag (`Show`
  * in `<Show>…</Show>`, `Foo` in `<Foo.Bar/>`), for a caller that asks what a
- * body reads besides the components it renders; default `true`.
+ * body reads besides the components it renders; default `true`. The root of a
+ * member tag is left out too, although it is a value read (`item` in
+ * `<item.Comp/>`), so a caller that must see every read of a local through a
+ * tag keeps the default.
  */
 export function freeIdentifiersInProgram(
   code: string,
