@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { compileHonoMx } from "./index.ts";
+import { compileHonoMx, compileHonoRegion } from "./index.ts";
 import {
   FIXTURES,
   printHonoMx,
@@ -90,5 +90,47 @@ describe(".hono.mx region renders what the whole-file .mx renders", () => {
     ];
     expect(fromRegion).toBe(`<div>${fromWhole}</div>`);
     expect(fromRegion).not.toBe("");
+  });
+});
+
+/**
+ * The region result carries the emitter's recorded mappings (generated
+ * offsets into `code`, source offsets file-absolute), so the parser bridge
+ * maps a define, its direct call and a later read of the same name without
+ * searching the emitted text. The private `__mxDef_Row` maps to the authored
+ * name it was minted from.
+ */
+describe("compileHonoRegion: recorded mappings", () => {
+  // The region starts at file offset 27 (line 2, column 2).
+  const prefix = "export const V = () => (\n  ";
+  const region =
+    "<ul><define/Row|a: number|><li>${a}</li></define><Row(1)/><${Row}/>${Row.name}</ul>";
+  const file = `${prefix}${region});\n`;
+
+  it("maps every recorded name file-absolute into unchanged code", () => {
+    const { code, mappings } = compileHonoRegion(region, {
+      filename: join(FIXTURES, "rows.hono.mx"),
+      baseOffset: 27,
+      baseLine: 1,
+      baseColumn: 2,
+      targets,
+    });
+    expect(code).toBe(
+      '<>{(() => { const __mxDef_Row = (a: number) => (<><li>{__mxTextValue(a)}</li></>); const Row = __mxDefine(__mxDef_Row, "Row"); return (<><ul>{__mxDef_Row(1)}{__mxDynamic(Row, {  })}{__mxTextValue(Row.name)}</ul></>); })()}</>',
+    );
+    expect(
+      mappings.map((m) => [
+        m.generatedStart,
+        code.slice(m.generatedStart, m.generatedEnd),
+        m.sourceStart,
+        file.slice(m.sourceStart, m.sourceEnd),
+      ]),
+    ).toEqual([
+      [18, "__mxDef_Row", 39, "Row"],
+      [69, "a", 60, "a"],
+      [89, "Row", 39, "Row"],
+      [142, "__mxDef_Row", 77, "Row"],
+      [196, "Row.name", 96, "Row.name"],
+    ]);
   });
 });

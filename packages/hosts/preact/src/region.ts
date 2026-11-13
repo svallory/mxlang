@@ -30,6 +30,7 @@ import {
   type CustomTag,
   concatMapped,
   drive,
+  type GeneratedMapping,
   type HostDeclarations,
   type Ir,
   lower,
@@ -118,6 +119,12 @@ export interface CompileJsxRegionResult {
   returnVars: string[];
   /** Callee declarations read while resolving this region's attribute tags. */
   dependencies: string[];
+  /**
+   * Authored names and expressions in `code`: generated offsets relative to
+   * `code`, source offsets file-absolute (the bridge's
+   * `MxRegionCompileResult.mappings` shape).
+   */
+  mappings: GeneratedMapping[];
 }
 
 /** The position an IR node reports, or the region start when it has none. */
@@ -332,13 +339,22 @@ export function compileJsxRegion(
   // and only a JSX element reads the same in both (a bare `{…}` or call in a
   // child position would print as text). The statements' arrow is called
   // inside it for the same reason.
-  const jsx = `<>${closeFragmentBody(markupCode).code}</>`;
-  const code =
+  const jsx = concatMapped("<>", closeFragmentBody(markupCode), "</>");
+  const { code, mappings } =
     statements.length === 0
       ? jsx
-      : `<>{(() => { ${statements.map((statement) => statement.code).join(" ")} return (${jsx}); })()}</>`;
+      : concatMapped(
+          "<>{(() => { ",
+          ...statements.flatMap((statement, index) =>
+            index === 0 ? [statement] : [" ", statement],
+          ),
+          " return (",
+          jsx,
+          "); })()}</>",
+        );
   return {
     code,
+    mappings,
     hoistedImports,
     hoistedDefines,
     returnVars: [],
