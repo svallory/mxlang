@@ -173,7 +173,7 @@ describe("assembleChangelog", () => {
 
     const result = assembleChangelog(root, { date: "2026-10-12" });
     expect(result.consumedFragments).toEqual(["aaa-first", "zzz-last"]);
-    expect(result.appended).toBe(3);
+    expect(result.added).toBe(3);
     expect(readFileSync(core, "utf8")).toBe(
       "# @mxlang/core\n\n## Unreleased\n\n- **Added (aaa-first):** first add\n- **Fixed (zzz-last):** last fix\n- **old:** entry\n",
     );
@@ -197,7 +197,7 @@ describe("assembleChangelog", () => {
     const afterFirst = readFileSync(core, "utf8");
     const result = assembleChangelog(root);
     expect(result).toEqual({
-      appended: 0,
+      added: 0,
       renamedFiles: [],
       consumedFragments: [],
     });
@@ -288,6 +288,13 @@ describe("assembleChangelog --packages", () => {
     );
   });
 
+  it("fails on an empty package list instead of renaming nothing", () => {
+    const { root } = releaseRepo();
+    expect(() =>
+      assembleChangelog(root, { release: "1", packages: [] }),
+    ).toThrow("--packages needs at least one name");
+  });
+
   it("fails on a package with no CHANGELOG", () => {
     const { root } = releaseRepo();
     expect(() =>
@@ -321,6 +328,14 @@ describe("parseAssembleArgs", () => {
   it("refuses --packages without --release, with the usage line", () => {
     expect(() => parseAssembleArgs(["--packages", "core"], known)).toThrow(
       "--packages needs --release\nusage: bun run changelog:assemble [--release <version> [--packages <name,name>]]",
+    );
+  });
+
+  it("refuses a --packages list with no names", () => {
+    expect(() =>
+      parseAssembleArgs(["--release", "1", "--packages", " , "], known),
+    ).toThrow(
+      "--packages needs at least one name\nusage: bun run changelog:assemble [--release <version> [--packages <name,name>]]",
     );
   });
 

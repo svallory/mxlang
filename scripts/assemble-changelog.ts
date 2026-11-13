@@ -272,6 +272,11 @@ export function parseAssembleArgs(
           .split(",")
           .map((name) => name.trim())
           .filter((name) => name.length > 0);
+        if (parsed.packages.length === 0) {
+          throw new FragmentError(
+            `--packages needs at least one name\n${usage}`,
+          );
+        }
       }
       i++;
     } else {
@@ -286,7 +291,7 @@ export function parseAssembleArgs(
 }
 
 export interface AssembleResult {
-  appended: number;
+  added: number;
   renamedFiles: string[];
   consumedFragments: string[];
 }
@@ -307,7 +312,14 @@ export function assembleChangelog(
   );
 
   const packages = discoverPackages(repoRoot);
-  if (opts.packages) assertKnownPackages(opts.packages, packages);
+  if (opts.packages) {
+    // An empty list would rename nothing and still succeed: a release that
+    // silently releases nothing.
+    if (opts.packages.length === 0) {
+      throw new FragmentError("--packages needs at least one name");
+    }
+    assertKnownPackages(opts.packages, packages);
+  }
   // Per package, entries in slug order.
   const byPackage = new Map<string, string[]>();
   for (const fragment of fragments) {
@@ -321,14 +333,14 @@ export function assembleChangelog(
     }
   }
 
-  let appended = 0;
+  let added = 0;
   for (const [name, entries] of [...byPackage.entries()].sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
     const changelogPath = packages.get(name) as string;
     // The whole batch in one call: inserting entry by entry would reverse it.
     const text = prependEntries(readFileSync(changelogPath, "utf8"), entries);
-    appended += entries.length;
+    added += entries.length;
     writeFileSync(changelogPath, text);
   }
 
@@ -353,7 +365,7 @@ export function assembleChangelog(
   }
 
   return {
-    appended,
+    added,
     renamedFiles,
     consumedFragments: fragments.map((f) => f.slug),
   };
@@ -374,7 +386,7 @@ if (import.meta.main) {
     console.log(`[changelog] consumed fragment ${slug}`);
   }
   console.log(
-    `[changelog] added ${result.appended} entr${result.appended === 1 ? "y" : "ies"}`,
+    `[changelog] added ${result.added} entr${result.added === 1 ? "y" : "ies"}`,
   );
   if (release) {
     console.log(
