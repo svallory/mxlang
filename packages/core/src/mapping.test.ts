@@ -145,6 +145,38 @@ describe("shorthand placeholder mappings (Expr.parts)", () => {
     ]);
   });
 
+  it("maps a part through a reads rewrite, indexed against unrewrittenCode", () => {
+    // `.${x}${y}` with both reads rewritten (`x()`, `y()`): the part ranges
+    // index the text before the rewrite, and `y` moves two columns in `code`.
+    const expr = {
+      code: "`${x()}${y()}`",
+      unrewrittenCode: "`${x}${y}`",
+      shape: "string",
+      node: null,
+      span: { sourceStart: 5, sourceEnd: 13 },
+      parts: [
+        { span: { sourceStart: 7, sourceEnd: 8 }, code: { start: 3, end: 4 } },
+        {
+          span: { sourceStart: 11, sourceEnd: 12 },
+          code: { start: 7, end: 8 },
+        },
+      ],
+    } as Expr;
+    const { mappings } = mappedExpr(expr);
+    expect(mappings).toContainEqual({
+      sourceStart: 7,
+      sourceEnd: 8,
+      generatedStart: 3,
+      generatedEnd: 4,
+    });
+    expect(mappings).toContainEqual({
+      sourceStart: 11,
+      sourceEnd: 12,
+      generatedStart: 9,
+      generatedEnd: 10,
+    });
+  });
+
   it("keeps the whole-span mapping when a part is not found in the printed code", () => {
     // A printer that prints a lone identifier unlike the same identifier
     // inside the template: the part's text is not in the code with its

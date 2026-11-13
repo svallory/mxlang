@@ -1936,6 +1936,7 @@ function loopBinding(param: string): string {
  * A define's arrow head type parameters, `<T,>`, the text mapped to where the
  * author wrote it. The comma keeps `<T>` from reading as a JSX tag when the
  * output is checked as TSX; none is added when the list already ends in one.
+ * The same rule is in `@mxlang/host-preact` (`emitter.ts`)'s `arrowTypeParams`; keep the two in step.
  */
 function arrowTypeParams(typeParams: {
   code: string;

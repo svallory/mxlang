@@ -709,6 +709,7 @@ function readIdentifiers(text: string): Set<string> {
  * A define's arrow head type parameters, `<T,>`, the text mapped to where the
  * author wrote it. The comma keeps `<T>` from reading as a JSX tag in TSX;
  * none is added when the list already ends in one.
+ * The same rule is in `@mxlang/target-html` (`emitter.ts`)'s `arrowTypeParams`; keep the two in step.
  */
 function arrowTypeParams(typeParams: {
   code: string;
