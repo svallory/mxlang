@@ -529,7 +529,7 @@ describe("html: the type-check projection of a `client` or `server` statement", 
     // The same module, apart from the type-check module's reserved export.
     expect(compile(source, "/f/t.mx").code).toBe(
       compile(source, "/f/t.mx", { typeCheck: true }).code.replace(
-        /import \* as __mxSelf[\s\S]*?\n}\n/,
+        /(;\n)?\/\/ @ts-ignore\nimport \* as __mxSelf[\s\S]*?\n}\n/,
         "",
       ),
     );
@@ -601,6 +601,7 @@ describe("html typeCheck: the server view and the client code of a `client` stat
       "client export const x = 1;\nclient export class C {}\nstatic export const stx = 3;\n<div/>\n";
     expect(project(source).code).toContain(
       [
+        "// @ts-ignore",
         'import * as __mxSelf from "./t.mx";',
         "export declare namespace __mxClientExports {",
         "  export import stx = __mxSelf.stx;",

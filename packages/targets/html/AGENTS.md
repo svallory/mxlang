@@ -211,6 +211,7 @@ view, so it exports no client name. Every type-check module (none without
 self-import and one ambient namespace an importer's client view reads:
 
 ```ts
+// @ts-ignore
 import * as __mxSelf from "./page.mx";
 export declare namespace __mxClientExports {
   export import stx = __mxSelf.stx;  // each module-level export
@@ -224,7 +225,10 @@ The module-level names are core's `ModuleStatementNames.exports` of every
 statement that is not `client` (the compile passes them and the file name to
 `emitModuleWithMappings`), the client types `placeClientCode` keeps at module
 level, and `Input` and `render`. They go through the self-import because
-`import a = b` of a module-level `const` or class is TS2503/TS2702. The client
+`import a = b` of a module-level `const` or class is TS2503/TS2702. The
+self-import is under `@ts-ignore`: it always resolves to the module itself,
+and a project without `jsx` would report TS6142 on it (a `.mx` module is
+TSX). The client
 value exports are the client projection's `exported` declarations (less
 `const enum`s) and its client-declared `export { a as b }` lists; the client
 function returns them, beside the refined names. The namespace is there even

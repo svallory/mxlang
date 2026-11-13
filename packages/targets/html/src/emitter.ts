@@ -2393,7 +2393,11 @@ function reservedExport(
   const base = fileName.slice(
     Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
   );
+  // The self-import always resolves (to this module); `@ts-ignore` keeps a
+  // project without `jsx` from reporting TS6142 on it, since a `.mx` module
+  // is TSX, and the namespace still reads the module's exports.
   return concatMapped(
+    "// @ts-ignore\n",
     `import * as __mxSelf from ${JSON.stringify(`./${base}`)};\n`,
     "export declare namespace __mxClientExports {\n",
     ...members.map((member) => `${member}\n`),
