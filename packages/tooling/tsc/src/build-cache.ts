@@ -54,7 +54,6 @@ import {
   type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import * as angularDescriptorModule from "@mxlang/host-angular/descriptor";
 import type ts from "typescript";
 import {
   type NgDiagnosticsResult,
@@ -543,11 +542,16 @@ export function descriptorOf(module: unknown): TargetDescriptor {
  * plus the manifests, config search places and tag files the scan read.
  * Hashing every file under a tag directory, not only the ones the scan
  * indexed, keeps the answer independent of the target lookup the scan is run
- * with.
+ * with. `undefined` when a module the scan read (a `.tag.ts` sidecar, an
+ * `mx.contracts` module, a dialect module) has a relative import that leaves
+ * the hashed tag directories: that file's code is no input of the key.
  */
-function tagInputsOf(mxPaths: readonly string[]): FileInput[] {
+function tagInputsOf(mxPaths: readonly string[]): FileInput[] | undefined {
+  // Loaded here, not at module load: only the `-b` cache path reads it.
   angularTargets ??= createTargetLookup([
-    descriptorOf(angularDescriptorModule),
+    descriptorOf(
+      createRequire(import.meta.url)("@mxlang/host-angular/descriptor"),
+    ),
   ]);
   const inputs = new Map<string, string | null>();
   const directories = new Set<string>();
@@ -572,10 +576,49 @@ function tagInputsOf(mxPaths: readonly string[]): FileInput[] {
     );
     for (const f of files) read.add(f);
   }
-  for (const path of read) inputs.set(slash(path), readText(path));
+  for (const path of read) {
+    const text = readText(path);
+    inputs.set(slash(path), text);
+    if (text !== null && MODULE_FILE.test(path)) {
+      const outside = relativeSpecifiersOf(path, text).some(
+        (target) =>
+          ![...directories].some((dir) =>
+            slash(target).startsWith(`${slash(dir)}/`),
+          ),
+      );
+      if (outside) return undefined;
+    }
+  }
   return [...inputs]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([path, text]) => ({ path, text }));
+}
+
+const MODULE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
+
+/**
+ * Every relative specifier a module writes (`from`, `import`, `import()`,
+ * `require()`), resolved against its directory as written. Existence is not
+ * checked: a conservative caller only asks where they point.
+ */
+function relativeSpecifiersOf(file: string, text: string): string[] {
+  return [
+    ...text.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g,
+    ),
+  ].map((match) => resolve(dirname(file), match[1] as string));
+}
+
+/**
+ * Whether an `mx.target`/`mx.host` value is a package or path specifier
+ * (core's own test, `host-policy.ts`): core loads that descriptor module, and
+ * its code is no input of the key. Conservative: a specifier a built-in target
+ * owns counts too.
+ */
+function isSpecifier(value: unknown): boolean {
+  return (
+    typeof value === "string" && (value.includes("/") || /^[@./]/.test(value))
+  );
 }
 
 function isDirectory(path: string): boolean {
@@ -635,15 +678,34 @@ export function projectCacheEntry(
 
 /**
  * A throw that says an input could not be read, which makes a project
- * uncacheable: a Node fs error (`code`), a malformed JSON input
+ * uncacheable: a Node fs error (an errno `code`) or an unresolved module, a malformed JSON input
  * (`SyntaxError`), or core's `TranslateError` for a tag file or manifest the
  * compile reports itself. Anything else is a bug and is rethrown.
  */
 function isUnreadableInput(error: unknown): boolean {
   if (error instanceof SyntaxError || isTranslateError(error)) return true;
   const code = (error as { code?: unknown } | null)?.code;
-  return error instanceof Error && typeof code === "string";
+  return (
+    error instanceof Error &&
+    typeof code === "string" &&
+    UNREADABLE_CODES.has(code)
+  );
 }
+
+/**
+ * The codes of an input that cannot be read: fs errno codes and a module
+ * that does not resolve. Node's own `ERR_*` codes (`ERR_INVALID_ARG_TYPE`,
+ * ...) are programming errors and are rethrown.
+ */
+const UNREADABLE_CODES = new Set([
+  "ENOENT",
+  "ENOTDIR",
+  "EISDIR",
+  "EACCES",
+  "EPERM",
+  "ELOOP",
+  "MODULE_NOT_FOUND",
+]);
 
 function readEntry(
   typescript: TypeScript,
@@ -727,6 +789,11 @@ function readEntry(
     if (config?.format === "module" || config?.text.includes("$import")) {
       return undefined;
     }
+    // A target or host given as a specifier is a descriptor module core loads.
+    const values = config?.config;
+    if (isSpecifier(values?.target) || isSpecifier(values?.host)) {
+      return undefined;
+    }
     for (const path of config?.watch ?? []) probed.add(slash(path));
   }
   const configInputs = [...probed]
@@ -737,6 +804,9 @@ function readEntry(
   const compilerCli = [...new Set(ngFiles.map(nearestPackageDir))]
     .sort()
     .map((dir) => compilerCliInput(dir, context.deps));
+
+  const tagInputs = tagInputsOf(mxPaths);
+  if (tagInputs === undefined) return undefined;
 
   const key = cacheKey({
     format: BUILD_CACHE_FORMAT,
@@ -750,7 +820,7 @@ function readEntry(
     configFiles,
     mxFiles,
     configInputs,
-    tagInputs: tagInputsOf(mxPaths),
+    tagInputs,
     compilerCli,
     previous: context.previous,
     position: context.position,

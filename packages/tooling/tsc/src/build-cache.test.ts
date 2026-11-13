@@ -616,6 +616,26 @@ describe("build-cache project entry (inputs read from disk)", () => {
     ).toThrow(TypeError);
   });
 
+  it("rethrows a Node ERR_* error (a programming error, not an unreadable input)", () => {
+    const { dir } = project();
+    const bug = Object.assign(new TypeError("bad argument"), {
+      code: "ERR_INVALID_ARG_TYPE",
+    });
+    expect(() =>
+      projectCacheEntry(typescript, {
+        tsconfigPath: join(dir, "tsconfig.json"),
+        rootNames: [join(dir, "src", "a.ng.mx")],
+        astro: false,
+        tool: () => {
+          throw bug;
+        },
+        previous: "",
+        position: 0,
+        claimed: new Set(),
+      }),
+    ).toThrow(bug);
+  });
+
   it("is not cacheable with a build info that is not JSON (an unreadable input)", () => {
     const { dir, entry } = project();
     writeFileSync(join(dir, "out", "tsconfig.tsbuildinfo"), "{");
@@ -637,6 +657,38 @@ describe("build-cache project entry (inputs read from disk)", () => {
     writeFileSync(
       join(dir, ".mxrc.json"),
       JSON.stringify({ $import: "./shared-mx.json", strict: true }),
+    );
+    expect(entry()).toBeUndefined();
+  });
+
+  it("is not cacheable with a target given as a specifier (its descriptor module is no input)", () => {
+    const { dir, entry } = project();
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "p", mx: { target: "angular" } }),
+    );
+    expect(entry()).toBeDefined();
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "p", mx: { target: "./t.js" } }),
+    );
+    expect(entry()).toBeUndefined();
+  });
+
+  it("is not cacheable with a tag sidecar that imports a file outside the tag directories", () => {
+    const { dir, entry } = project();
+    mkdirSync(join(dir, "tags"));
+    mkdirSync(join(dir, "lib"));
+    writeFileSync(join(dir, "lib", "x.ts"), "export const x = 1;\n");
+    writeFileSync(join(dir, "tags", "helper.ts"), "export const h = 1;\n");
+    writeFileSync(
+      join(dir, "tags", "card.tag.ts"),
+      'import { h } from "./helper.ts";\nexport default { transform: () => h };\n',
+    );
+    expect(entry()).toBeDefined();
+    writeFileSync(
+      join(dir, "tags", "card.tag.ts"),
+      'import { x } from "../lib/x.ts";\nexport default { transform: () => x };\n',
     );
     expect(entry()).toBeUndefined();
   });
