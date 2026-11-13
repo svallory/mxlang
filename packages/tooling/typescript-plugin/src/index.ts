@@ -17,6 +17,7 @@ import {
   type AstroLanguagePluginLoader,
   createAstroLanguagePlugin,
 } from "./astro-language.ts";
+import { dropVerificationOnlyCodeFixes } from "./code-action-mappings.ts";
 import { diagnosticCodeOf, mxCodeFixes } from "./code-fixes.ts";
 import {
   createDialectLanguagePlugin,
@@ -152,6 +153,10 @@ const pluginFactory: ts.server.PluginModuleFactory = (modules) => {
       LANGUAGE_SERVICE_DIAGNOSTIC_METHODS,
       () => language,
     );
+    // Beneath Volar's proxy too: a TypeScript code fix whose edit Volar would
+    // map through a verification-only mapping is dropped while its changes are
+    // still in generated coordinates.
+    dropVerificationOnlyCodeFixes(info.languageService, () => language);
     const readSource = createProjectSourceReader(info);
     ngDiagnostics = createEditorNgDiagnostics(typescript, info);
     // The project's own compiler options decide alias resolution, so a

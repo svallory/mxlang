@@ -1037,12 +1037,8 @@ export function createEmitter(
       // call's props braces take (the tag name): a callee whose input
       // declares no `content` (TS2353) is the author's error, reported where
       // a missing prop is. `verification` only, so hover, navigation and
-      // completion on the tag name stay the name's own. Known limit: the
-      // pinned Volar (2.4.28) enables code actions from `verification` too
-      // (`isCodeActionsEnabled` is `!!verification`), so a TypeScript quick
-      // fix on the key maps onto the tag name: TS2561's "Change spelling to
-      // 'contents'" would rewrite the tag name. No `use` here can keep the
-      // diagnostic and drop the fix.
+      // completion on the tag name stay the name's own. The TypeScript plugin
+      // drops a code fix that lands on a verification-only mapping.
       setProp(
         "content",
         untypedCallee && content.hasParams

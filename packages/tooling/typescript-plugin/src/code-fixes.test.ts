@@ -334,6 +334,69 @@ describe("everything that is not an MX diagnostic's is TypeScript's", () => {
   });
 });
 
+describe("a TypeScript fix whose edit lands on a verification-only mapping", () => {
+  // `input` is never read by this page's generated module, so TypeScript
+  // reports TS6133 in MX-generated code; that diagnostic reaches the page
+  // through a verification-only approximation overlay at 1:1. The fix's edit
+  // would go through the same overlay and insert `_input` at offset 0.
+  const page = `${here}/fixtures/html-tags/verification-only.mx`;
+  const PAGE = '<div class="a"/>\n';
+  // An authored expression's mapping carries every `CodeInformation` key.
+  const authored = `${here}/fixtures/html-tags/verification-control.mx`;
+  const AUTHORED = "static const value = 1;\n\n<p>${valu}</p>\n";
+  const consumer = `${here}/fixtures/html-tags/verification-consumer.ts`;
+  let service: ts.LanguageService | undefined;
+  const plugin = () => {
+    service ??= createMutablePluginService(
+      {
+        [page]: PAGE,
+        [authored]: AUTHORED,
+        [consumer]:
+          'import "./verification-only.mx";\nimport "./verification-control.mx";\n',
+      },
+      [consumer],
+    ).service;
+    return service;
+  };
+
+  it("is not offered", () => {
+    const unused = plugin()
+      .getSuggestionDiagnostics(page)
+      .find((diagnostic) => diagnostic.code === 6133);
+    expect(unused?.start).toBe(0);
+    const fixes = plugin().getCodeFixesAtPosition(page, 0, 0, [6133], {}, {});
+    expect(fixes.map((fix) => fix.description)).toEqual([]);
+  });
+
+  it("empties a fix-all that would make that edit", () => {
+    const combined = plugin().getCombinedCodeFix(
+      { type: "file", fileName: page },
+      "unusedIdentifier_prefix",
+      {},
+      {},
+    );
+    expect(combined.changes).toEqual([]);
+  });
+
+  it("keeps a fix on authored code, rewriting only the authored text", () => {
+    const start = AUTHORED.indexOf("valu}");
+    const fixes = plugin().getCodeFixesAtPosition(
+      authored,
+      start,
+      start + 4,
+      [2552],
+      {},
+      {},
+    );
+    expect(fixes.map((fix) => fix.description)).toEqual([
+      "Change spelling to 'value'",
+    ]);
+    expect(apply(AUTHORED, fixes[0] as ts.CodeFixAction, authored)).toBe(
+      "static const value = 1;\n\n<p>${value}</p>\n",
+    );
+  });
+});
+
 describe("applicableFixes", () => {
   const edit = (offset: number, end: number, newText = "x") => ({
     offset,
