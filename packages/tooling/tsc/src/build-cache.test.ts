@@ -114,22 +114,32 @@ const SUPPRESS_NG8102 = {
 };
 
 describe("mx-tsc -b template cache: ng-build-refs", () => {
+  /**
+   * One scratch copy and one cold run, then each step changes one input and
+   * runs again, starting from the state the step before left. The steps:
+   * hit and replay, a sidecar the read path refuses, --force, package.json
+   * mx.angular (and a nearer one), a host-policy warning, the tsconfig and
+   * its extends parent, a failed TypeScript pass, and the built binary.
+   */
   it(
-    "a no-change run replays both projects (no program, no checker, same output); a broken template is stored and replayed with its exact text; a truncated sidecar is a miss and is rewritten; --force bypasses",
+    "replays an unchanged project, misses on each input, never stores what it must not, and the built binary stores too",
     async () => {
       const dir = scratch(refsFixture);
       const app = join(dir, "app");
+      const appSidecar = () => readFileSync(sidecar(dir, "app"), "utf8");
+      const libSidecar = () => readFileSync(sidecar(dir, "lib"), "utf8");
+
+      // Hit: a no-change run replays both projects.
       const cold = await pass(app);
       expect(cold.status).toBe(0);
       expect(cold.output).toBe("");
       expect([cold.compiles, cold.checkers]).toEqual([2, 2]);
       expect(existsSync(sidecar(dir, "lib"))).toBe(true);
-
       const warm = await pass(app);
       expect([warm.compiles, warm.checkers]).toEqual([0, 0]);
-      expect(warm.status).toBe(0);
       expect(warm.output).toBe("");
 
+      // A broken template is stored and replayed with its exact text.
       setTemplate(dir, "app", BROKEN);
       const broken = await pass(app);
       // lib is a hit; app's own text changed.
@@ -139,51 +149,26 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       expect(broken.output).toContain(
         "error TS2339: Property 'nmae' does not exist on type '{ name: string; }'.",
       );
-
       const replay = await pass(app);
       expect([replay.compiles, replay.checkers]).toEqual([0, 0]);
       expect(replay.status).toBe(1);
       expect(replay.output).toBe(broken.output);
 
-      const valid = readFileSync(sidecar(dir, "app"), "utf8");
+      // A truncated sidecar is a miss and is rewritten (the other refusals
+      // of the read path are unit rows below).
+      const valid = appSidecar();
       writeFileSync(sidecar(dir, "app"), valid.slice(0, 40));
       const truncated = await pass(app);
       expect([truncated.compiles, truncated.checkers]).toEqual([1, 1]);
       expect(truncated.output).toBe(broken.output);
-      expect(readFileSync(sidecar(dir, "app"), "utf8")).toBe(valid);
+      expect(appSidecar()).toBe(valid);
 
       const forced = await pass(app, ["-b", "--force", "."]);
       expect([forced.compiles, forced.checkers]).toEqual([2, 2]);
       expect(forced.output).toBe(broken.output);
 
-      // The built binary (CommonJS bundle, its own tool identity) is a miss
-      // here, and must compute a key and store under it: a key it cannot
-      // build leaves the sidecar as the sources wrote it.
-      expectFreshBuild();
-      const keyOf = () =>
-        (
-          JSON.parse(readFileSync(sidecar(dir, "app"), "utf8")) as {
-            key: string;
-          }
-        ).key;
-      const sourceKey = keyOf();
-      const built = await mxTscSpawn(app, ["-b", "."]);
-      expect(built.status).toBe(1);
-      // Paths print relative to the spawned cwd; the diagnostics are the same.
-      expect(templateErrors(built.output)).toEqual([APP_ERROR]);
-      expect(keyOf()).not.toBe(sourceKey);
-    },
-    CASE_TIMEOUT_MS,
-  );
-
-  it(
-    "package.json mx.angular, and a nearer package.json created later, are inputs",
-    async () => {
-      const dir = scratch(refsFixture);
-      const app = join(dir, "app");
-      setTemplate(dir, "app", BROKEN);
-      expect(templateErrors((await pass(app)).output)).toEqual([APP_ERROR]);
-
+      // package.json mx.angular is an input; "off" is never stored, so the
+      // original manifest replays the stored answer again.
       const manifest = join(app, "package.json");
       const original = readFileSync(manifest, "utf8");
       editJson(manifest, (json) => {
@@ -191,31 +176,48 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       });
       const off = await pass(app);
       expect(off.compiles).toBe(1);
-      expect(off.output).toBe("");
-      expect(off.status).toBe(0);
-
-      // Back to the cold run's manifest; only a nearer one is new.
+      expect([off.status, off.output]).toEqual([0, ""]);
+      expect(appSidecar()).toBe(valid);
       writeFileSync(manifest, original);
+      const back = await pass(app);
+      expect(back.compiles).toBe(0);
+      expect(back.output).toBe(broken.output);
+
+      // A nearer package.json created later is an input.
+      const nearer = join(app, "src", "package.json");
       writeFileSync(
-        join(app, "src", "package.json"),
+        nearer,
         JSON.stringify({
           name: "nearer",
           mx: { angular: { diagnostics: "off" } },
         }),
       );
-      const nearer = await pass(app);
-      expect(nearer.compiles).toBe(1);
-      expect(nearer.output).toBe("");
-      expect(nearer.status).toBe(0);
-    },
-    CASE_TIMEOUT_MS,
-  );
+      const nearerOff = await pass(app);
+      expect(nearerOff.compiles).toBe(1);
+      expect([nearerOff.status, nearerOff.output]).toEqual([0, ""]);
+      rmSync(nearer);
 
-  it(
-    "the tsconfig and its extends parent are inputs (angularCompilerOptions)",
-    async () => {
-      const dir = scratch(refsFixture);
-      const app = join(dir, "app");
+      // A pass that printed a host-policy warning is not stored, and prints
+      // it again.
+      editJson(manifest, (json) => {
+        json.mx = { host: "bogus" };
+      });
+      const policy = await pass(app);
+      expect(
+        policy.output
+          .split("\n")
+          .filter((line) => line.includes("warning TS80003")),
+      ).toEqual([
+        expect.stringContaining('warning TS80003: unknown mx.host "bogus"'),
+      ]);
+      expect(appSidecar()).toBe(valid);
+      const policyAgain = await pass(app);
+      expect(policyAgain.compiles).toBe(1);
+      expect(policyAgain.output).toBe(policy.output);
+      expect(appSidecar()).toBe(valid);
+      writeFileSync(manifest, original);
+
+      // The tsconfig and its extends parent are inputs.
       setTemplate(dir, "app", NULLISH);
       writeFileSync(
         join(app, "tsconfig.base.json"),
@@ -224,64 +226,41 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       editJson(join(app, "tsconfig.json"), (json) => {
         json.extends = "./tsconfig.base.json";
       });
-      expect((await pass(app)).output).toBe("");
-
-      // Only the parent changes.
+      const suppressed = await pass(app);
+      expect(suppressed.compiles).toBe(1);
+      expect(suppressed.output).toBe("");
       writeFileSync(join(app, "tsconfig.base.json"), "{}");
       const parent = await pass(app);
       expect(parent.compiles).toBe(1);
       expect(parent.output).toContain(`app.component.ng.mx(5,18): ${NG8102}`);
-
-      // Only the tsconfig itself changes.
       editJson(join(app, "tsconfig.json"), (json) => {
         json.angularCompilerOptions = SUPPRESS_NG8102;
       });
       const own = await pass(app);
       expect(own.compiles).toBe(1);
       expect(own.output).toBe("");
-    },
-    CASE_TIMEOUT_MS,
-  );
 
-  it(
-    "a project whose pass printed a host-policy warning is not stored, and prints it again",
-    async () => {
-      const dir = scratch(refsFixture);
-      const app = join(dir, "app");
-      editJson(join(app, "package.json"), (json) => {
-        json.mx = { host: "bogus" };
-      });
-      const first = await pass(app);
-      const policy = first.output
-        .split("\n")
-        .filter((line) => line.includes("warning TS80003"));
-      expect(policy).toEqual([
-        expect.stringContaining('warning TS80003: unknown mx.host "bogus"'),
-      ]);
-      expect(existsSync(sidecar(dir, "app"))).toBe(false);
-      expect(existsSync(sidecar(dir, "lib"))).toBe(true);
+      // A run whose TypeScript pass failed reads and stores nothing.
+      const stored = [libSidecar(), appSidecar()];
+      const extra = join(dir, "lib", "src", "extra.ts");
+      writeFileSync(extra, 'export const x: number = "s";\n');
+      const failed = await pass(app);
+      expect(failed.output).toContain("error TS2322");
+      expect(failed.status).not.toBe(0);
+      expect(failed.compiles).toBe(2);
+      expect([libSidecar(), appSidecar()]).toEqual(stored);
+      rmSync(extra);
 
-      const second = await pass(app);
-      expect(second.compiles).toBe(1);
-      expect(second.output).toBe(first.output);
-      expect(existsSync(sidecar(dir, "app"))).toBe(false);
-    },
-    CASE_TIMEOUT_MS,
-  );
-
-  it(
-    "a run whose TypeScript pass failed stores nothing",
-    async () => {
-      const dir = scratch(refsFixture);
-      writeFileSync(
-        join(dir, "lib", "src", "extra.ts"),
-        'export const x: number = "s";\n',
-      );
-      const run = await pass(join(dir, "app"));
-      expect(run.output).toContain("error TS2322");
-      expect(run.status).not.toBe(0);
-      expect(existsSync(sidecar(dir, "lib"))).toBe(false);
-      expect(existsSync(sidecar(dir, "app"))).toBe(false);
+      // The built binary (CommonJS bundle, its own tool identity) is a miss
+      // here, and must compute a key and store under it: a key it cannot
+      // build leaves the sidecar as the sources wrote it.
+      expectFreshBuild();
+      const keyOf = () => (JSON.parse(appSidecar()) as { key: string }).key;
+      const sourceKey = keyOf();
+      const built = await mxTscSpawn(app, ["-b", "."]);
+      expect(built.status).toBe(0);
+      expect(templateErrors(built.output)).toEqual([]);
+      expect(keyOf()).not.toBe(sourceKey);
     },
     CASE_TIMEOUT_MS,
   );
@@ -475,7 +454,14 @@ describe("build-cache tool identity (row 7)", () => {
       "side.cjs": "side 1",
     });
     pkg("@t/dep", {
-      "package.json": JSON.stringify({ name: "@t/dep", version: "3.0.0" }),
+      "package.json": JSON.stringify({
+        name: "@t/dep",
+        version: "3.0.0",
+        dependencies: { "@t/sub": "^4.0.0" },
+      }),
+    });
+    pkg("@t/sub", {
+      "package.json": JSON.stringify({ name: "@t/sub", version: "4.0.0" }),
     });
     pkg("@t/b", {
       "package.json": JSON.stringify({ name: "@t/b", version: "2.0.0" }),
@@ -509,7 +495,16 @@ describe("build-cache tool identity (row 7)", () => {
     [
       "a runtime dependency's installed version (a lockfile bump)",
       "node_modules/@t/dep/package.json",
-      JSON.stringify({ name: "@t/dep", version: "3.0.1" }),
+      JSON.stringify({
+        name: "@t/dep",
+        version: "3.0.1",
+        dependencies: { "@t/sub": "^4.0.0" },
+      }),
+    ],
+    [
+      "a transitive dependency's installed version (a lockfile refresh)",
+      "node_modules/@t/sub/package.json",
+      JSON.stringify({ name: "@t/sub", version: "4.0.1" }),
     ],
     [
       "a manifest-only external's version (@angular/compiler)",
@@ -565,6 +560,48 @@ describe("build-cache tool identity (row 7)", () => {
     }
     expect(identity()).toBe(before);
     writeFileSync(join(dir, "src", "deep", "other.ts"), "edited");
+    expect(identity()).not.toBe(before);
+  });
+
+  it("run from source, counts where each file sits, not only its name and bytes", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src", "a"), { recursive: true });
+    mkdirSync(join(dir, "src", "b"));
+    writeFileSync(join(dir, "src", "self.ts"), "self");
+    writeFileSync(join(dir, "src", "a", "x.ts"), "x");
+    const identity = () =>
+      toolIdentity({ self: join(dir, "src", "self.ts"), externals: [] });
+    const before = identity();
+    expect(before).toBeDefined();
+    rmSync(join(dir, "src", "a", "x.ts"));
+    writeFileSync(join(dir, "src", "b", "x.ts"), "x");
+    expect(identity()).not.toBe(before);
+  });
+
+  it("run from source, follows an extensionless, an index and a second-level import outside src/", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"));
+    mkdirSync(join(dir, "plugin", "deep"), { recursive: true });
+    writeFileSync(
+      join(dir, "src", "self.ts"),
+      'import { paths } from "../plugin/paths";\n',
+    );
+    writeFileSync(
+      join(dir, "plugin", "paths.ts"),
+      'export { deep as paths } from "./deep";\n',
+    );
+    writeFileSync(
+      join(dir, "plugin", "deep", "index.ts"),
+      "export const deep = 1;",
+    );
+    const identity = () =>
+      toolIdentity({ self: join(dir, "src", "self.ts"), externals: [] });
+    const before = identity();
+    expect(before).toBeDefined();
+    writeFileSync(
+      join(dir, "plugin", "deep", "index.ts"),
+      "export const deep = 2;",
+    );
     expect(identity()).not.toBe(before);
   });
 
@@ -917,6 +954,22 @@ describe("build-cache project entry (inputs read from disk)", () => {
       {
         version: typescript.version,
         fileNames: ["../src/a.ng.mx", "../src/b.probe"],
+        fileInfos: [{ version: "v" }, { version: "w" }],
+      },
+    ],
+    [
+      "another host's region file beside the .ng.mx (its tag scan is not the Angular one)",
+      {
+        version: typescript.version,
+        fileNames: ["../src/a.ng.mx", "../src/b.solid.mx"],
+        fileInfos: [{ version: "v" }, { version: "w" }],
+      },
+    ],
+    [
+      "an .astro.mx file",
+      {
+        version: typescript.version,
+        fileNames: ["../src/a.ng.mx", "../src/b.astro.mx"],
         fileInfos: [{ version: "v" }, { version: "w" }],
       },
     ],

@@ -55,7 +55,6 @@ import {
   type TargetLookup,
 } from "@mxlang/core";
 import * as angularDescriptorModule from "@mxlang/host-angular/descriptor";
-import { moduleFileExtensions } from "@mxlang/typescript-plugin";
 import type ts from "typescript";
 import {
   type NgDiagnosticsResult,
@@ -282,16 +281,30 @@ export function toolIdentity(
       )
     : [self];
   const selfDir = dirname(self);
+  const isOutside = (path: string) => relative(selfDir, path).startsWith("..");
+  // Run from source: what a relative import reaches outside `src/`, and what
+  // those modules import in turn (`typescript-plugin/src/tsconfig-paths.ts`).
   const outside = new Set<string>();
+  const pending: string[] = [];
+  const follow = (file: string, text: string) => {
+    if (!self.endsWith(".ts")) return;
+    for (const path of relativeImportsOf(file, text)) {
+      if (isOutside(path) && !outside.has(path)) {
+        outside.add(path);
+        pending.push(path);
+      }
+    }
+  };
   for (const file of selfFiles) {
     const text = readText(file);
     if (text === null) return undefined;
-    parts.push(`self:${basename(file)}:${hashText(text)}`);
-    if (self.endsWith(".ts")) {
-      for (const path of relativeImportsOf(file, text)) {
-        if (relative(selfDir, path).startsWith("..")) outside.add(path);
-      }
-    }
+    parts.push(`self:${slash(relative(selfDir, file))}:${hashText(text)}`);
+    follow(file, text);
+  }
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    const text = readText(file);
+    if (text === null) return undefined;
+    follow(file, text);
   }
   for (const file of [...outside].sort()) {
     const text = readText(file);
@@ -300,6 +313,7 @@ export function toolIdentity(
       `self-import:${slash(relative(selfDir, file))}:${hashText(text)}`,
     );
   }
+  const installed = new Map<string, string>();
   const entries = new Map<string, string>([["self", self]]);
   for (const external of options.externals ?? TOOL_EXTERNALS) {
     const base = entries.get(external.from);
@@ -332,23 +346,54 @@ export function toolIdentity(
           `${sibling}:${siblingText === null ? "missing" : hashText(siblingText)}`,
         );
       }
-      for (const dependency of dependenciesOf(manifest)) {
-        const dir = installedPackageDir(packageDir, dependency);
-        const dependencyVersion =
-          dir === undefined ? undefined : versionOf(join(dir, "package.json"));
-        parts.push(
-          dir === undefined || dependencyVersion === undefined
-            ? `${external.name}>${dependency}:missing`
-            : `${external.name}>${dependency}@${dependencyVersion}:${dir}`,
-        );
-      }
+      collectInstalled(packageDir, manifest, installed);
     } catch (error) {
       // Not installed, or not readable: uncacheable. Anything else is a bug.
       if (isUnreadableInput(error)) return undefined;
       throw error;
     }
   }
+  for (const [dir, line] of [...installed].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  )) {
+    parts.push(`${line}:${dir}`);
+  }
   return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+/**
+ * Every package `dependencies` reaches from the package at `packageDir`,
+ * transitively (`@babel/core` brings `@babel/traverse`), keyed by its real
+ * directory, as `dep:<name>@<version>`; one that is not installed as
+ * `dep:<name>:missing`, keyed by where it was looked for from.
+ */
+function collectInstalled(
+  packageDir: string,
+  manifest: string,
+  installed: Map<string, string>,
+): void {
+  const queue: [string, string][] = [[packageDir, manifest]];
+  for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+    const [from, text] = next;
+    for (const dependency of dependenciesOf(text)) {
+      const dir = installedPackageDir(from, dependency);
+      if (dir === undefined) {
+        installed.set(
+          `${slash(from)}>${dependency}`,
+          `dep:${dependency}:missing`,
+        );
+        continue;
+      }
+      if (installed.has(dir)) continue;
+      const dependencyManifest = readText(join(dir, "package.json"));
+      const version =
+        dependencyManifest === null
+          ? undefined
+          : versionOf(join(dir, "package.json"));
+      installed.set(dir, `dep:${dependency}@${version ?? "unknown"}`);
+      if (dependencyManifest !== null) queue.push([dir, dependencyManifest]);
+    }
+  }
 }
 
 /** The `dependencies` names of a `package.json` text, sorted. */
@@ -394,7 +439,14 @@ function relativeImportsOf(file: string, text: string): string[] {
     /(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g,
   )) {
     const path = resolve(dirname(file), match[1] as string);
-    if (existsSync(path)) found.push(path);
+    // As written, extensionless, or a directory's index module.
+    const resolved = [
+      path,
+      `${path}.ts`,
+      `${path}.tsx`,
+      join(path, "index.ts"),
+    ].find((candidate) => existsSync(candidate) && !isDirectory(candidate));
+    if (resolved !== undefined) found.push(resolved);
   }
   return found;
 }
@@ -449,19 +501,17 @@ export function compilerCliInput(
 const SCRIPT_EXTENSIONS = /\.(?:[cm]?tsx?|[cm]?jsx?|json)$/;
 
 /**
- * The `.mx` suffixes whose lowering the key covers: the built-in host file
- * kinds (`moduleFileExtensions`, the registry's region and `ng-template`
- * kinds) and `.astro.mx`. Any other `<name>.mx` (a dialect file, such as
- * `x.probe.mx`, whose rules live in a module no input covers) is not covered;
- * a plain `.mx` file is one whose name has no other dot.
+ * The `.mx` files whose lowering the key covers: `.ng.mx` and a plain `.mx`
+ * (a name with no other dot). Their tag discovery is scanned with the Angular
+ * target lookup the template pass uses. A region file of another host
+ * (`.solid.mx`, `.react.mx`, ...), an `.astro.mx`, or a dialect's file (such
+ * as `x.probe.mx`, whose rules live in a module no input covers) would need
+ * its own target's scan and lowering in the key, so a project holding one is
+ * not cacheable.
  */
 function coveredMx(file: string): boolean {
   if (!file.endsWith(".mx")) return false;
-  if (
-    [...moduleFileExtensions(), ".astro.mx"].some((ext) => file.endsWith(ext))
-  ) {
-    return true;
-  }
+  if (file.endsWith(".ng.mx")) return true;
   return !basename(file).slice(0, -".mx".length).includes(".");
 }
 
