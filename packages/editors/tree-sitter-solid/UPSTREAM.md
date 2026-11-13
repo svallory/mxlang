@@ -49,7 +49,7 @@ as-is; `tree-sitter-mx`'s own `zed-compile-check.sh` already worked this way.
 
 History: from 2026-09-13 (round 3 of zed-solidmx-followups) this pin was
 0.24.7, because 0.26.9 dropped `build --wasm`'s `--docker` flag and CI passed
-`--docker` (`tree-sitter-amx` was briefly bumped and reverted for the same
+`--docker` (`tree-sitter-astromx` was briefly bumped and reverted for the same
 reason, commit `11d1acaf`). `--docker` pulled an emscripten image from Docker
 Hub anonymously, and once the unauthenticated pull rate limit was hit
 (`toomanyrequests`) every PR's `zed-compile-check` and `test-bun-grammar`

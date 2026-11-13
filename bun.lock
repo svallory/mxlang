@@ -275,8 +275,8 @@
         "htmljs-parser": "5.18.0",
       },
     },
-    "packages/editors/tree-sitter-amx": {
-      "name": "@mxlang/tree-sitter-amx",
+    "packages/editors/tree-sitter-astromx": {
+      "name": "@mxlang/tree-sitter-astromx",
       "version": "0.0.0",
       "devDependencies": {
         "tree-sitter-cli": "0.24.7",
@@ -1203,7 +1203,7 @@
 
     "@mxlang/targets": ["@mxlang/targets@workspace:packages/target-registry"],
 
-    "@mxlang/tree-sitter-amx": ["@mxlang/tree-sitter-amx@workspace:packages/editors/tree-sitter-amx"],
+    "@mxlang/tree-sitter-astromx": ["@mxlang/tree-sitter-astromx@workspace:packages/editors/tree-sitter-astromx"],
 
     "@mxlang/tree-sitter-mx": ["@mxlang/tree-sitter-mx@workspace:packages/editors/tree-sitter-mx"],
 

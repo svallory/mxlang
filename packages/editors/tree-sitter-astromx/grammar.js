@@ -1,5 +1,5 @@
 module.exports = grammar({
-  name: "amx",
+  name: "astromx",
 
   externals: ($) => [$._fence, $.frontmatter_content, $.body],
 

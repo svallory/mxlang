@@ -1,13 +1,13 @@
 {
   "grammars": [
     {
-      "name": "amx",
-      "camelcase": "Amx",
-      "scope": "source.amx",
+      "name": "astromx",
+      "camelcase": "Astromx",
+      "scope": "source.astromx",
       "path": ".",
       "external-files": ["src/scanner.c"],
       "file-types": ["astro.mx"],
-      "injection-regex": "^(amx)$"
+      "injection-regex": "^(astromx)$"
     }
   ],
   "metadata": {

@@ -5,7 +5,7 @@
 `packages/editors/zed` (`mxlang`) ships four languages for Zed: `MX`
 (`.mx`), `AstroMX` (`.astro.mx`),
 `Solid` (`.solid.mx`) and `AngularMX` (`.ng.mx`, task
-`angular-editor-grammar`). `AstroMX` rides the `amx` grammar (from `packages/editors/tree-sitter-amx`, which splits the file into a TypeScript fence and an MX template body) and injects Marko queries into the body, so the frontmatter highlights as TypeScript.
+`angular-editor-grammar`). `AstroMX` rides the `astromx` grammar (from `packages/editors/tree-sitter-astromx`, which splits the file into a TypeScript fence and an MX template body) and injects Marko queries into the body, so the frontmatter highlights as TypeScript.
 
 `MX` rides MX's own tree-sitter grammar, `[grammars.mx]` in `extension.toml`
 (dev form: `file://` + committed `rev` + `path =

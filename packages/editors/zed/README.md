@@ -28,7 +28,7 @@ Ships seven languages:
   (`languages/preactmx/config.toml`).
 - `HonoMX` (`.hono.mx`), on the same `solid` grammar for the same reason
   (`languages/honomx/config.toml`).
-- `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-amx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
+- `AstroMX` (`.astro.mx`) backed by `packages/editors/tree-sitter-astromx` (a small grammar that splits the file into an optional `---` TypeScript fence and an MX template body) and Marko's queries for the body region.
 
 Also registers a language server: `src/lib.rs` (a minimal Rust extension,
 `Cargo.toml`) implements `zed::Extension::language_server_command` for

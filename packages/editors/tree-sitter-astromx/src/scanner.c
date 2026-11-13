@@ -8,17 +8,17 @@ enum TokenType {
     BODY
 };
 
-void *tree_sitter_amx_external_scanner_create() {
+void *tree_sitter_astromx_external_scanner_create() {
     return NULL;
 }
 
-void tree_sitter_amx_external_scanner_destroy(void *payload) {}
+void tree_sitter_astromx_external_scanner_destroy(void *payload) {}
 
-unsigned tree_sitter_amx_external_scanner_serialize(void *payload, char *buffer) {
+unsigned tree_sitter_astromx_external_scanner_serialize(void *payload, char *buffer) {
     return 0;
 }
 
-void tree_sitter_amx_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {}
+void tree_sitter_astromx_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {}
 
 static void advance(TSLexer *lexer) {
     lexer->advance(lexer, false);
@@ -28,7 +28,7 @@ static void skip(TSLexer *lexer) {
     lexer->advance(lexer, true);
 }
 
-bool tree_sitter_amx_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
+bool tree_sitter_astromx_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
     if (valid_symbols[FENCE]) {
         if (lexer->get_column(lexer) != 0) return false;
 

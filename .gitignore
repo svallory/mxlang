@@ -24,7 +24,7 @@ packages/editors/zed/grammars/
 # `bun run test` / tree-sitter-solid's test.sh, read once, never committed.
 /vitest-results.json
 /packages/editors/tree-sitter-solid/.test-ran
-/packages/editors/tree-sitter-amx/.test-ran
+/packages/editors/tree-sitter-astromx/.test-ran
 /.verify-start
 .astro/
 

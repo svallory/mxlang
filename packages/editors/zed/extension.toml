@@ -63,9 +63,9 @@ repository = "file:///Users/svallory/work/mx"
 rev = "9af503de452699c33dc0ac9588be8183c4c14fc6"
 path = "packages/editors/tree-sitter-solid"
 
-[grammars.amx]
+[grammars.astromx]
 # DEV FORM. Same rules as solid.
 # AT PUBLISH TIME: swap to real GitHub URL and drop `path`.
 repository = "file:///Users/svallory/work/mx"
 rev = "3ed8d406cd401f11f58d54e798ac24216603eebd"
-path = "packages/editors/tree-sitter-amx"
+path = "packages/editors/tree-sitter-astromx"

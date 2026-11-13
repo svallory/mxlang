@@ -1,11 +1,11 @@
 name = "AstroMX"
-grammar = "amx"
+grammar = "astromx"
 path_suffixes = ["astro.mx"]
 
 # AstroMX (`.astro.mx`): an Astro component whose *template* is
 # MX. The file is a `---` TypeScript fence followed by an MX template.
 #
-# We use the amx grammar which splits the file into `frontmatter` and `body`,
+# We use the astromx grammar which splits the file into `frontmatter` and `body`,
 # and use injections to map frontmatter to typescript and body to marko.
 #
 # JS-style line comments in expression positions; HTML comments in markup —

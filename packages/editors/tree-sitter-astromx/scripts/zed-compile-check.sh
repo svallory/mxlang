@@ -3,8 +3,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
-PKG_REL="packages/editors/tree-sitter-amx"
-GRAMMAR_NAME="amx"
+PKG_REL="packages/editors/tree-sitter-astromx"
+GRAMMAR_NAME="astromx"
 
 if [[ "${ZED_COMPILE_CHECK_FORCE_FALLBACK:-0}" == "1" ]]; then
   ZED_WASI_CLANG=""

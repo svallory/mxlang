@@ -298,7 +298,7 @@ jobs:
       # All three fallbacks build with tree-sitter-cli 0.26.9's
       # `tree-sitter build --wasm`, which downloads its own wasi-sdk and
       # compiles the clean clone's committed src/ as-is. No Docker and no
-      # emsdk: the solid/amx steps used to pass --docker (tree-sitter-cli
+      # emsdk: the solid/astromx steps used to pass --docker (tree-sitter-cli
       # 0.24.7), which pulled an emscripten image from Docker Hub
       # anonymously and failed every run once the unauthenticated pull rate
       # limit was hit.
@@ -324,9 +324,9 @@ jobs:
         run: ./scripts/zed-compile-check.sh
 
       - name: >-
-          amx: zed-compile-check.sh
+          astromx: zed-compile-check.sh
           (forced fallback: tree-sitter build --wasm, cli 0.26.9)
-        working-directory: packages/editors/tree-sitter-amx
+        working-directory: packages/editors/tree-sitter-astromx
         env:
           ZED_COMPILE_CHECK_FORCE_FALLBACK: "1"
         run: ./scripts/zed-compile-check.sh

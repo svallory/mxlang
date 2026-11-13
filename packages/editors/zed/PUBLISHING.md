@@ -23,14 +23,14 @@ sees committed history; commit everything in this package first.
 ## 2. Drop `path`, switch `repository`/`rev` for every grammar
 
 `extension.toml` currently points `[grammars.mx]`, `[grammars.solid]` and
-`[grammars.amx]`
+`[grammars.astromx]`
 at this monorepo over `file://`, with a `path` selecting the grammar's
 subdirectory — that only works for a dev install (Zed still clones the repo
 at a committed `rev` even for `file://`; see each grammar's own comment in
 `extension.toml`). At publish time, for **each** grammar:
 
 1. Commit and push `packages/editors/tree-sitter-mx` (or
-   `tree-sitter-solid`, `tree-sitter-amx`) to its own real repository — either as its own
+   `tree-sitter-solid`, `tree-sitter-astromx`) to its own real repository — either as its own
    subtree-split repo, or wherever it will be vendored from.
 2. In `extension.toml`, swap that grammar's `repository` from
    `file:///Users/svallory/work/mx` to the real GitHub URL.
@@ -40,7 +40,7 @@ at a committed `rev` even for `file://`; see each grammar's own comment in
    (a registry submodule cannot point at a contributor's local filesystem
    at all, so this step is not optional the way it might look).
 
-Do this for `[grammars.mx]`, `[grammars.solid]` and `[grammars.amx]`
+Do this for `[grammars.mx]`, `[grammars.solid]` and `[grammars.astromx]`
 independently; they
 are unrelated repos and may be split/published on different schedules.
 
@@ -114,7 +114,7 @@ wherever this checklist is run from next.
 - README.md "Publishing: subtree-split" — the split procedure in full.
 - README.md "Zed suffix precedence" — the Z37 precedence claim this
   checklist's step 5 verifies.
-- `extension.toml`'s own `[grammars.solid]`/`[grammars.amx]` comments —
+- `extension.toml`'s own `[grammars.solid]`/`[grammars.astromx]` comments —
   the dev-form/publish-form distinction for each grammar.
 - `scripts/subtree-split.sh` — the split script itself, with its own usage
   comment.

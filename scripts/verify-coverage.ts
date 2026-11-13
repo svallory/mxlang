@@ -20,9 +20,9 @@ const grammarMarkerPath = join(
   root,
   "packages/editors/tree-sitter-solid/.test-ran",
 );
-const amxGrammarMarkerPath = join(
+const astromxGrammarMarkerPath = join(
   root,
-  "packages/editors/tree-sitter-amx/.test-ran",
+  "packages/editors/tree-sitter-astromx/.test-ran",
 );
 const mxGrammarMarkerPath = join(
   root,
@@ -356,7 +356,7 @@ async function main() {
     if (!mode || kind === "grammar") {
       for (const [key, marker] of [
         ["packages/editors/tree-sitter-solid", grammarMarkerPath],
-        ["packages/editors/tree-sitter-amx", amxGrammarMarkerPath],
+        ["packages/editors/tree-sitter-astromx", astromxGrammarMarkerPath],
         ["packages/editors/tree-sitter-mx", mxGrammarMarkerPath],
       ]) {
         if (isFreshEvidence(marker, verifyStart)) testedPackages.add(key);
@@ -398,7 +398,7 @@ async function main() {
 
     const isGrammarPackage =
       pkg.path.endsWith(`/${GRAMMAR_MARKER_PACKAGE}`) ||
-      pkg.path.endsWith("/tree-sitter-amx") ||
+      pkg.path.endsWith("/tree-sitter-astromx") ||
       pkg.path.endsWith("/tree-sitter-mx");
     if (isGrammarPackage) {
       const ran = testedPackages.has(pkg.path);
