@@ -473,14 +473,30 @@ describe("the matching is the template scanner's", () => {
     ])("%j", (text) => {
       expect(hit(text, dollar)).toBeUndefined();
     });
-    // Controls: a TypeScript parent's expression and an enum initializer
-    // are references.
+    // Controls: a TypeScript parent's expression, an enum initializer and a
+    // computed key are references.
     it.each([
       ["enum E { A = $zz }", ["dollar", "$zz"]],
       ["let a = $zz as T", ["dollar", "$zz"]],
+      ["interface I { [$zz]: number }", ["dollar", "$zz"]],
+      ["class A { [$zz](): void }", ["dollar", "$zz"]],
     ])("%j is a row", (text, expected) => {
       expect(hit(text, dollar)).toEqual(expected);
     });
+  });
+
+  it("a key is no row, whatever its stand-in", () => {
+    const tilde = [
+      { ...row("num", "~", "~[a-z]+"), standIn: "number" } as Trigger,
+    ];
+    expect(hit("x = { ~zz: 1 }", tilde)).toBeUndefined();
+    expect(hit("class A { ~zz() {} }", tilde)).toBeUndefined();
+  });
+
+  it("a match holding another row's first character is one stand-in", () => {
+    const kit = [row("path", "#", "#[\\w/~]+"), sigil];
+    // An overlong variant would move the block's closing brace.
+    expect(hit("{ y = ~yy; x = #a/~b }", kit)).toEqual(["sigil", "~yy"]);
   });
 
   it("no rows, no hit", () => {

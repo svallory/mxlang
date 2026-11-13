@@ -215,11 +215,12 @@ const SKIPPED = new Set([
 ]);
 
 /**
- * Whether an expression starts at `at` in `file` (the row predicate): the
- * innermost node starting there is an expression, a referenced identifier
- * when it is one, and no ancestor is a TypeScript type.
+ * The offsets of `wanted` where an expression starts in `file` (the row
+ * predicate): an innermost node starting there is an expression, not a
+ * non-computed key, a referenced identifier when it is one, and no
+ * ancestor is a TypeScript type.
  */
-function expressionStartsAt(file: Ast, at: number): boolean {
+function rowStarts(file: Ast, wanted: ReadonlySet<number>): Set<number> {
   const t = coreBabel().types as {
     isExpression(node: unknown): boolean;
     isReferenced(
@@ -231,6 +232,10 @@ function expressionStartsAt(file: Ast, at: number): boolean {
   };
   const holds = (node: Ast, ancestors: readonly Ast[]): boolean => {
     if (!t.isExpression(node)) return false;
+    const parent = ancestors[ancestors.length - 1];
+    // A non-computed key names a member, whatever node the key is (an
+    // identifier, or a numeric or string literal stand-in).
+    if (parent?.key === node && parent.computed !== true) return false;
     if (
       ancestors.some(
         (each) =>
@@ -242,7 +247,6 @@ function expressionStartsAt(file: Ast, at: number): boolean {
       return false;
     }
     if (node.type === "Identifier") {
-      const parent = ancestors[ancestors.length - 1];
       const grandparent = ancestors[ancestors.length - 2];
       if (parent?.type.startsWith("TS") && !isTsReference(node, parent)) {
         return false;
@@ -261,44 +265,41 @@ function expressionStartsAt(file: Ast, at: number): boolean {
     }
     return out;
   };
-  // Every innermost node starting at `at` (a shorthand property's key and
-  // value both start there): the predicate holds when it holds on one. The
-  // walk keeps its own stack and one ancestor chain, so a deep expression
-  // costs no call depth and no copies.
+  // One walk over the tree. A node is innermost at its start when no child
+  // starts there too (a shorthand property's key and value both are, and
+  // the predicate holds when it holds on one). The walk keeps its own stack
+  // and one ancestor chain, so a deep expression costs no call depth.
   interface Frame {
     readonly node: Ast;
     readonly kids: Ast[];
     next: number;
-    inner: boolean;
   }
-  const frame = (node: Ast): Frame => ({
-    node,
-    kids: children(node),
-    next: 0,
-    inner: false,
-  });
+  const frame = (node: Ast): Frame => ({ node, kids: children(node), next: 0 });
+  const found = new Set<number>();
   const ancestors: Ast[] = [];
   const frames: Frame[] = [frame(file)];
   while (frames.length > 0) {
     const top = frames[frames.length - 1] as Frame;
     const child = top.kids[top.next++];
     if (child) {
-      const start = child.start as number;
-      const end = child.end as number;
-      if (start > at || end <= at) continue;
-      if (start === at) top.inner = true;
       ancestors.push(top.node);
       frames.push(frame(child));
       continue;
     }
     // Every child read: `ancestors` is still this node's chain.
     frames.pop();
-    if (!top.inner && top.node.start === at && holds(top.node, ancestors)) {
-      return true;
+    const start = top.node.start as number;
+    if (
+      wanted.has(start) &&
+      !found.has(start) &&
+      !top.kids.some((kid) => kid.start === start) &&
+      holds(top.node, ancestors)
+    ) {
+      found.add(start);
     }
     ancestors.pop();
   }
-  return false;
+  return found;
 }
 
 /** `text` with each hit in `hits` replaced by its stand-in (same length). */
@@ -306,6 +307,9 @@ function withStandIns(text: string, hits: readonly StatementHit[]): string {
   let out = "";
   let from = 0;
   for (const hit of hits) {
+    // A hit inside one already replaced (a match that holds another row's
+    // first character) is part of that stand-in.
+    if (hit.start < from) continue;
     out +=
       text.slice(from, hit.start) +
       standInText(hit.row.standIn, text.slice(hit.start, hit.end));
@@ -333,7 +337,11 @@ export function firstRowIn(
   const written = parseStatement(text, keyword, block);
   if (written) {
     // Valid TypeScript: its own reading decides every candidate.
-    return candidates.find((each) => expressionStartsAt(written, each.start));
+    const starts = rowStarts(
+      written,
+      new Set(candidates.map((each) => each.start)),
+    );
+    return candidates.find((each) => starts.has(each.start));
   }
   for (const [index, candidate] of candidates.entries()) {
     const later = candidates.slice(index + 1);
@@ -349,7 +357,9 @@ export function firstRowIn(
       tried.add(variant);
       const file = parseStatement(variant, keyword, block);
       if (!file) continue;
-      if (expressionStartsAt(file, candidate.start)) return candidate;
+      if (rowStarts(file, new Set([candidate.start])).size > 0) {
+        return candidate;
+      }
       break;
     }
   }
