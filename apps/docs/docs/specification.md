@@ -5852,7 +5852,9 @@ stand-in in its place. A statement that does not parse with any stand-in reports
 the parser's own positioned error, not the row error. Two differences from the
 template: the row's node type is not asked to claim the text, and a private
 name the class does not declare (`#x in this` with no `#x` member) does not
-parse as written, so it reads as its stand-in and is found as a row.
+parse as written, so it reads as its stand-in and is found as a row, and so
+does a decorator on its own line (`@dec⏎class B {}`), whose stand-in parses, so
+it is reported as a row instead of the decorator refusal.
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
 the statement, and a statement the parser refuses (`export static …`) keep their
