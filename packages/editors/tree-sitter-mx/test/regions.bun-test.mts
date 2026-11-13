@@ -80,15 +80,25 @@ describe("the Zed region hosts inject MX", () => {
     path.dirname(path.dirname(fileURLToPath(import.meta.url))),
   );
   const LANGUAGES = path.join(EDITORS, "zed", "languages");
-  it("no languages/*/injections.scm injects marko", () => {
-    const offenders = fs
-      .readdirSync(LANGUAGES)
-      .map((dir) => path.join(LANGUAGES, dir, "injections.scm"))
-      .filter((file) => fs.existsSync(file))
-      .filter((file) =>
-        fs.readFileSync(file, "utf8").includes('injection.language "marko"'),
-      )
-      .map((file) => path.relative(LANGUAGES, file));
-    assert.deepStrictEqual(offenders, []);
+  const read = (...parts: string[]) =>
+    fs.readFileSync(path.join(LANGUAGES, ...parts), "utf8");
+
+  // Zed resolves an injection by language name, so "MX" must be the name of
+  // the extension's own MX language.
+  it('languages/mx/config.toml names the language "MX"', () => {
+    const name = read("mx", "config.toml").match(/^name\s*=\s*"([^"]*)"/m);
+    assert.strictEqual(name?.[1], "MX");
   });
+
+  for (const host of ["solid", "ngmx", "reactmx", "preactmx", "honomx"]) {
+    it(`languages/${host}/injections.scm injects MX into mx_element`, () => {
+      const scm = read(host, "injections.scm");
+      assert.match(
+        scm,
+        /\(\(mx_element\) @injection\.content\s*\(#set! injection\.language "MX"\)\)/,
+      );
+      // The positive match allows a second, Marko injection beside it.
+      assert.ok(!scm.includes('injection.language "marko"'), scm);
+    });
+  }
 });

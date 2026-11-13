@@ -24,7 +24,8 @@
 #      with no ERROR/MISSING node; `tree-sitter test` runs the same files.
 #   4f. test/regions.bun-test.mts — MX's own: an MX region of a region host
 #      (.solid.mx and the other tsx hosts) parses on its own, as Zed's `MX`
-#      injection parses it, and no Zed region host still injects `marko`.
+#      injection parses it, and each of the five Zed region hosts injects
+#      `MX` (the name of languages/mx), not `marko`.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
 #      HEAD, the same way Zed's file:// dev install does.
