@@ -504,11 +504,12 @@ describe.each(["ssr", "dom"] as const)(
         `${mode === "dom" ? "oncapture:click" : "Oncapture:click"}="z"`,
       );
     });
-    it("keeps an oncapture: name lowercase on a client <svg>, where setAttribute keeps case", () => {
-      const printed = mode === "dom" ? "oncapture:click" : "Oncapture:click";
-      expect(get("oncaptureSvg").html).toContain(`${printed}="x"`);
-      expect(get("oncaptureSvgSpread").html).toContain(`${printed}="z"`);
-    });
+    // Client only: the server's `Oncapture:` spelling is the `<div>` rows'.
+    if (mode === "dom")
+      it("keeps an oncapture: name lowercase on a client <svg>, where setAttribute keeps case", () => {
+        expect(get("oncaptureSvg").html).toContain('oncapture:click="x"');
+        expect(get("oncaptureSvgSpread").html).toContain('oncapture:click="z"');
+      });
     it("leaves prop: (a property write) and event handler keys alone", () => {
       expect(get("propNamespace").error).toBeUndefined();
       expect(get("eventSpread").error).toBeUndefined();
