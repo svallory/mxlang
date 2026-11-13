@@ -227,11 +227,14 @@ A `client` statement runs in the browser, so on the server the module that rende
 - A template read of a client name is `undefined`: `client let q = 1` then `${q.toFixed(2)}` reports `'q' is possibly 'undefined'`, and a client function or class cannot be called in the template.
 - A client export is not an export of the module. `import { x } from "./ca.mx"` of a `client export const x` reports `TS2614`, from a `.mx` file (plain, `static` or `server` import) and from a `.ts` file alike. A `server` or `static` export stays importable.
 - Inside client code (a handler, a `client` block, a later `client` statement) the names keep their declared types, and hover and completions show them.
+- A `client import` from another `.mx` module reads what that module has in the browser: `client import { x } from "./ca.mx"` of a `client export const x = 1` is a `number`, a `static` or `server` export and an exported type stay importable, and an unknown name is reported at the name (`TS2694`). Only a specifier written with the `.mx` extension reads it.
 - A top-level `return` in a `client` block is reported (`TS1108`) at the `return`.
 
 Known limits:
 
-- A `client import` of another module's client export reports `TS2614`, because the type-check reads that module as the server sees it.
+- A `client import` of a `.mx` module through a specifier without the `.mx` extension (an alias, an extensionless path, a package name), and a namespace import (`client import * as ns from "./ca.mx"`), read the module as the server sees it, so a client export is an error there.
+- A client-exported class is a type without its type arguments, and a client enum's members (`E.A`) are not types through the import. A client type that is checked in the client scope, a client `const enum`, a client `export … from` and a name re-exported with `export * from` cannot be imported by a `client import`.
+- From the imported name, go-to-definition does not reach a client export, and rename or find-references on a client export do not include its client importers.
 - A client interface or type alias that names a client value (a class, an enum, a `const` through `typeof`) is checked in the client scope, so a type declared outside it, such as the page's own `export interface Input`, cannot name that class or enum, and `import type` of such a type from another file does not find it. A client type that names no client value is declared at module level and stays importable.
 - A client `namespace` is declared at module level, where a client value is `undefined`, so a namespace body that reads one reports `'base' is possibly 'undefined'`.
 - A `client` statement that reads a `static` or `server` name declared after it, but before a later `client` statement, is not reported as used before its declaration; one that reads a name declared after the last `client` statement is.

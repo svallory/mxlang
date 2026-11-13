@@ -168,9 +168,7 @@ function would hide its TS1108. Client code reading `input`, `$global` or
   code instead; a server class or interface stays usable as a type.
 - Under `verbatimModuleSyntax`, a client value specifier naming a type-only
   export is not reported (the alias's TS1288 is under the `@ts-ignore`).
-- An unknown client import name is TS2694 at the specifier, not TS2305; a
-  `client import` of another page's client export is TS2694 too (that page's
-  one projection is its server view).
+- An unknown client import name is TS2694 at the specifier, not TS2305.
 - A client namespace merged with a `server`/`static`/`import`/`export` one
   stays at module level, so client code reading the server half is not
   reported. A `client function q` and a `client namespace q` are two
@@ -206,6 +204,61 @@ Also: a top-level type (`Input`) cannot name a client class or enum; a
 before a later `client` statement is not reported; a template read of a
 client name (`${clamp}`) is not linked to its declaration for definition and
 rename (only a refinement token is).
+
+**The reserved export, `__mxClientExports`.** The projection is the server
+view, so it exports no client name. Every type-check module (none without
+`typeCheck`; the runtime module does not change) ends its hoisted code with a
+self-import and one ambient namespace an importer's client view reads:
+
+```ts
+import * as __mxSelf from "./page.mx";
+export declare namespace __mxClientExports {
+  export import stx = __mxSelf.stx;  // each module-level export
+  export const x: Awaited<typeof __mxClientView.__mxScope>["x"]; // each client value export
+  export type C = __MxInstance<typeof C>;  // beside a client class
+  export type E = (typeof E)[keyof typeof E]; // beside a client enum
+}
+```
+
+The module-level names are core's `ModuleStatementNames.exports` of every
+statement that is not `client` (the compile passes them and the file name to
+`emitModuleWithMappings`), the client types `placeClientCode` keeps at module
+level, and `Input` and `render`. They go through the self-import because
+`import a = b` of a module-level `const` or class is TS2503/TS2702. The client
+value exports are the client projection's `exported` declarations (less
+`const enum`s) and its client-declared `export { a as b }` lists; the client
+function returns them, beside the refined names. The namespace is there even
+when it would be empty, so an unknown name is reported at the importer's
+name, and nothing in it is mapped. A `client import` whose specifier ends in
+`.mx` aliases `import a = __mxClient<id>.__mxClientExports.b` (a string name
+reads `…__mxClientExports["b"]`); the generated prefix is unmapped and `b` is
+mapped to the authored name, as before. Core refuses an authored export-list
+or `export * as` name and an import specifier's imported name that start with
+`__mx`, so no authored name collides with it. The TypeScript plugin drops
+`__mxClientExports` from completions, and a failed module's stub declares the
+same namespace. Known limits:
+
+1. A specifier that does not end in `.mx` (an alias, an extensionless path, a
+   bare package) of a `.mx` module reads the server view: TS2694.
+2. A namespace import (`client import * as ns from "./ca.mx"`) reads the
+   module, so `ns.x` of a client export is an error.
+3. A client-exported class is `__MxInstance<typeof C>` as a type (its type
+   arguments and defaults are lost); a client enum's member types (`E.A` as a
+   type) are not available through the import.
+4. Not in the namespace (TS2694): a client type `placeClientCode` moves into
+   the client function, a client `const enum`, the type members of a
+   client-exported namespace, a `client export … from` re-export, and any
+   name re-exported with a bare `export * from`.
+5. Definition from an importer's specifier of a client export lands on the
+   generated member and is dropped; rename and references of a client export
+   do not include its client importers.
+6. A typo's TS2694 names the namespace (`…".__mxClientExports'`).
+7. A `.ts` barrel with `export *` from two `.mx` modules reports TS2308 on
+   `__mxClientExports`, as it does on `render`.
+8. A `.ts` file can import `__mxClientExports` from a `.mx` (MX does not check
+   `.ts` files); completions are filtered by the tsserver plugin only.
+9. A `.mx` compiled by another host has no reserved export, so an html
+   `client import` of it by a `.mx` specifier is TS2694.
 
 The runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
