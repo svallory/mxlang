@@ -2,7 +2,9 @@
  * The Babel options a module statement's text (`static`, `server`, `client`,
  * `export`) is parsed with. The statement check (`rejectInvalidStatement`)
  * and the row check (`firstRowIn`) both read the text through this one
- * helper, so they cannot disagree on what the text means.
+ * helper. The row check also allows `import`/`export` anywhere, so a
+ * misplaced import does not hide a row; otherwise the two read the text
+ * alike.
  */
 
 import type { ParserPlugin } from "@babel/parser";

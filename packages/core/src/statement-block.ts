@@ -68,6 +68,10 @@ export function unwrapStatementBlock(code: string): string {
  */
 export function blankStatementBlock(code: string): string {
   const block = statementBlock(code);
-  if (!block) return code;
+  return block ? blankBlock(code, block) : code;
+}
+
+/** `code` with the braces of `block` (read from text of the same length) blanked. */
+export function blankBlock(code: string, block: StatementBlock): string {
   return `${code.slice(0, block.open)} ${code.slice(block.open + 1, block.close)} ${code.slice(block.close + 1)}`;
 }

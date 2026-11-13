@@ -449,14 +449,37 @@ describe("the matching is the template scanner's", () => {
       "interface $zz {}",
       "type $zz = 1",
       "enum $zz { A }",
+      // A pin on Babel: `isReferenced` reads an enum member's name as no
+      // reference by itself.
       "enum E { $zz }",
       "declare function $zz(): void",
       "namespace $zz {}",
       "interface I { $zz(): void }",
       "class A { $zz(): void; $zz() {} }",
       "class A { constructor(private $zz: number) {} }",
+      "declare function f($zz: number): void",
+      "function f($zz: string): void\nfunction f(a: any) {}",
+      "interface I { m($zz: number): void }",
+      "interface I { [$zz: string]: number }",
+      "interface I { ($zz: number): void }",
+      "interface I { new ($zz: number): I }",
+      "class A { m($zz: number): void; m() {} }",
+      "abstract class A { abstract m($zz: number): void }",
+      "class A { [$zz: string]: number }",
+      "import $zz = require('x')",
+      "import $zz = N.B",
+      "export import $zz = N.x",
+      "export as namespace $zz",
     ])("%j", (text) => {
       expect(hit(text, dollar)).toBeUndefined();
+    });
+    // Controls: a TypeScript parent's expression and an enum initializer
+    // are references.
+    it.each([
+      ["enum E { A = $zz }", ["dollar", "$zz"]],
+      ["let a = $zz as T", ["dollar", "$zz"]],
+    ])("%j is a row", (text, expected) => {
+      expect(hit(text, dollar)).toEqual(expected);
     });
   });
 

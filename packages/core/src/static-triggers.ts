@@ -18,10 +18,14 @@
  * Whether a candidate is a row is Babel's to say, not a statement grammar
  * of this file's: the statement is parsed as `rejectInvalidStatement` parses
  * it (its one block's braces blanked, `statementParseOptions` for its
- * keyword, placement of `import`/`export` allowed), and a candidate is a row
+ * keyword), except that placement of `import`/`export` is allowed, so a
+ * misplaced import does not hide a row (the statement check still reports
+ * the placement when no row is found), and a candidate is a row
  * where an expression starts at its first character: the innermost node
  * starting there is an expression, a referenced one when it is an
- * identifier, and not inside a TypeScript type. A unary `~zz` at a statement
+ * identifier (Babel's `isReferenced`; under a TypeScript parent only an
+ * `expression`, an enum initializer or a computed key), and not inside a
+ * TypeScript type. A unary `~zz` at a statement
  * start (after a block's `}`, after a line break that ends a statement) is
  * one; a binary operator (`a\n&mask`), a private name, a type, an object key
  * and a binding are not. Comments, strings, regular expressions and
@@ -48,7 +52,11 @@
 import type { ParserOptions } from "@babel/parser";
 import { standInText } from "@mxlang/parser/lexer";
 import { coreBabel, coreParser } from "./babel.ts";
-import { type StatementBlock, statementBlock } from "./statement-block.ts";
+import {
+  blankBlock,
+  type StatementBlock,
+  statementBlock,
+} from "./statement-block.ts";
 import { statementParseOptions } from "./statement-parse-options.ts";
 import type { Trigger } from "./syntax-table.ts";
 
@@ -138,17 +146,15 @@ type Ast = Record<string, unknown> & { type: string; start?: number };
  * refuses it. `block` is the statement's one block, read once from the text
  * as written (`statementBlock`): its braces are blanked, as
  * `blankStatementBlock` does, and a stand-in keeps every offset, so the
- * braces sit at the same offsets in every variant. Any other throw is not a
- * parse failure and propagates.
+ * braces sit at the same offsets in every variant. Any other throw (a broken
+ * parser) is not a parse failure and propagates.
  */
 function parseStatement(
   text: string,
   keyword: string,
   block: StatementBlock | undefined,
 ): Ast | undefined {
-  const code = block
-    ? `${text.slice(0, block.open)} ${text.slice(block.open + 1, block.close)} ${text.slice(block.close + 1)}`
-    : text;
+  const code = block ? blankBlock(text, block) : text;
   const options = {
     ...statementParseOptions(keyword),
     allowImportExportEverywhere: true,
@@ -161,8 +167,13 @@ function parseStatement(
   }
 }
 
-/** Babel's own refusal of the text (`BABEL_PARSER_SYNTAX_ERROR`, …). */
+/**
+ * Babel's own refusal of the text (`BABEL_PARSER_SYNTAX_ERROR`, …), or its
+ * parser running out of stack on a deeply nested text (a `RangeError`): the
+ * statement check reads the same text and reports that as its error.
+ */
 function isParseFailure(error: unknown): boolean {
+  if (error instanceof RangeError) return true;
   const code = (error as { code?: unknown } | null)?.code;
   return (
     error instanceof SyntaxError &&
@@ -172,29 +183,18 @@ function isParseFailure(error: unknown): boolean {
 }
 
 /**
- * Fields `isReferenced` calls a reference that are TypeScript declaration
- * names (its default branch answers `true` for a parent it does not list):
- * by parent type, the field holding the name. A computed `key` stays a
- * reference.
+ * Whether an identifier under a TypeScript parent is a reference. Babel's
+ * `isReferenced` answers `true` for a parent it does not list, which is
+ * every TypeScript declaration, signature and parameter (`interface I {}`,
+ * `declare function f(a: T): void`, `import a = N.b`). Under a `TS*` parent
+ * an identifier is a reference only as the parent's `expression` (`x as T`,
+ * `x satisfies T`, `x!`, `<T>x`, `f<T>`, `export = x`), an enum member's
+ * `initializer`, or a `computed` key.
  */
-const TS_DECLARED_NAMES: ReadonlyMap<string, string> = new Map([
-  ["TSInterfaceDeclaration", "id"],
-  ["TSTypeAliasDeclaration", "id"],
-  ["TSEnumDeclaration", "id"],
-  ["TSModuleDeclaration", "id"],
-  ["TSDeclareFunction", "id"],
-  ["TSEnumMember", "id"],
-  ["TSDeclareMethod", "key"],
-  ["TSMethodSignature", "key"],
-  ["TSPropertySignature", "key"],
-  ["TSParameterProperty", "parameter"],
-]);
-
-/** Whether `node` is the name a TypeScript declaration or signature declares. */
-function isTsDeclaredName(node: Ast, parent: Ast | undefined): boolean {
-  const field = parent && TS_DECLARED_NAMES.get(parent.type);
-  if (!field || parent[field] !== node) return false;
-  return field !== "key" || parent.computed !== true;
+function isTsReference(node: Ast, parent: Ast): boolean {
+  if (parent.expression === node) return true;
+  if (parent.type === "TSEnumMember") return parent.initializer === node;
+  return parent.key === node && parent.computed === true;
 }
 
 const isNode = (value: unknown): value is Ast =>
@@ -244,10 +244,10 @@ function expressionStartsAt(file: Ast, at: number): boolean {
     if (node.type === "Identifier") {
       const parent = ancestors[ancestors.length - 1];
       const grandparent = ancestors[ancestors.length - 2];
-      return (
-        t.isReferenced(node, parent, grandparent) &&
-        !isTsDeclaredName(node, parent)
-      );
+      if (parent?.type.startsWith("TS") && !isTsReference(node, parent)) {
+        return false;
+      }
+      return t.isReferenced(node, parent, grandparent);
     }
     return true;
   };
@@ -262,20 +262,43 @@ function expressionStartsAt(file: Ast, at: number): boolean {
     return out;
   };
   // Every innermost node starting at `at` (a shorthand property's key and
-  // value both start there): the predicate holds when it holds on one.
-  const visit = (node: Ast, ancestors: Ast[]): boolean => {
-    const chain = [...ancestors, node];
-    let inner = false;
-    for (const child of children(node)) {
+  // value both start there): the predicate holds when it holds on one. The
+  // walk keeps its own stack and one ancestor chain, so a deep expression
+  // costs no call depth and no copies.
+  interface Frame {
+    readonly node: Ast;
+    readonly kids: Ast[];
+    next: number;
+    inner: boolean;
+  }
+  const frame = (node: Ast): Frame => ({
+    node,
+    kids: children(node),
+    next: 0,
+    inner: false,
+  });
+  const ancestors: Ast[] = [];
+  const frames: Frame[] = [frame(file)];
+  while (frames.length > 0) {
+    const top = frames[frames.length - 1] as Frame;
+    const child = top.kids[top.next++];
+    if (child) {
       const start = child.start as number;
       const end = child.end as number;
       if (start > at || end <= at) continue;
-      if (start === at) inner = true;
-      if (visit(child, chain)) return true;
+      if (start === at) top.inner = true;
+      ancestors.push(top.node);
+      frames.push(frame(child));
+      continue;
     }
-    return !inner && node.start === at && holds(node, ancestors);
-  };
-  return visit(file, []);
+    // Every child read: `ancestors` is still this node's chain.
+    frames.pop();
+    if (!top.inner && top.node.start === at && holds(top.node, ancestors)) {
+      return true;
+    }
+    ancestors.pop();
+  }
+  return false;
 }
 
 /** `text` with each hit in `hits` replaced by its stand-in (same length). */
@@ -317,8 +340,14 @@ export function firstRowIn(
     // Earlier candidates stay as written: they were judged not to be rows.
     // Every candidate as written is the text itself, which did not parse
     // above, so that variant is not tried again.
+    // A variant equal to one already read (the last candidate's second and
+    // third, or any variant of a `keep` stand-in) is not parsed again.
+    const tried = new Set([text]);
     for (const replaced of [later, [candidate, ...later], [candidate]]) {
-      const file = parseStatement(withStandIns(text, replaced), keyword, block);
+      const variant = withStandIns(text, replaced);
+      if (tried.has(variant)) continue;
+      tried.add(variant);
+      const file = parseStatement(variant, keyword, block);
       if (!file) continue;
       if (expressionStartsAt(file, candidate.start)) return candidate;
       break;
