@@ -110,6 +110,38 @@ export const MX_RETURN_PROP = "$mxReturn";
  */
 let returnVars: Set<string> | null = null;
 
+/** The names each `returnVars` set's `/var` patterns bind, for `bindReturnVar`. */
+const returnVarNames = new WeakMap<Set<string>, Set<string>>();
+
+/**
+ * Records a `/var` the module assembly declares with one `let` at the
+ * component's head. A second `/var` binding a name an earlier one bound would
+ * share that `let` (the later call overwrites the earlier value, so a read of
+ * the outer `/x` after a body that declares its own `/x` gets the body's),
+ * so it is refused at the second tag rather than emitted.
+ */
+function bindReturnVar(node: {
+  var: string;
+  varBindings?: ReadonlyArray<{ name: string }>;
+  loc: Position;
+}): void {
+  if (!returnVars) return;
+  let names = returnVarNames.get(returnVars);
+  if (!names) {
+    names = new Set();
+    returnVarNames.set(returnVars, names);
+  }
+  for (const { name } of node.varBindings ?? [{ name: node.var }]) {
+    if (names.has(name))
+      fail(
+        `\`/var\` \`${name}\` is already bound by an earlier \`/var\` in this component, and Solid declares one binding per component for both; rename one of them`,
+        node,
+      );
+    names.add(name);
+  }
+  returnVars.add(node.var);
+}
+
 /** File-shaped source for mapping printed method heads during this emit. */
 let mappingSource: string | undefined;
 
@@ -2838,7 +2870,7 @@ export class SolidEmitter implements Emitter<string> {
     const returnProp = node.var
       ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
       : "";
-    if (node.var) returnVars?.add(node.var);
+    if (node.var) bindReturnVar({ ...node, var: node.var });
     if (!node.content || raw) {
       this.#out.push(
         concatMapped(
@@ -3035,7 +3067,7 @@ export class SolidEmitter implements Emitter<string> {
       // call itself already hands the value back as its return, so bind it
       // directly rather than inventing a Solid-only prop channel a
       // `<define>`'s hoisted function was never given.
-      if (returnVars) returnVars.add(node.var);
+      bindReturnVar({ ...node, var: node.var });
       this.#out.push(
         concatMapped(
           "{(() => { const __mxV = ",
@@ -3122,7 +3154,7 @@ export class SolidEmitter implements Emitter<string> {
     const returnProp = node.var
       ? ` ${MX_RETURN_PROP}={(__mxV) => { ${node.var} = __mxV; }}`
       : "";
-    if (node.var) returnVars?.add(node.var);
+    if (node.var) bindReturnVar({ ...node, var: node.var });
     const serial = dynSerial.n++;
     const temp = `__mxDyn${serial}`;
     const value = node.args.length > 0 ? `__mxDynValue${serial}` : temp;

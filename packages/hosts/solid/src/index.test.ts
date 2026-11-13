@@ -1551,6 +1551,49 @@ describe("a unit that returns a value", () => {
     ).toThrow(/is not supported on Solid yet/);
   });
 
+  // One `let` per component holds every `/var` of that name, so an outer `/n`
+  // read after a body that declares its own `/n` would read the body's value.
+  it.each([
+    [
+      "a <div> body",
+      "<counter/n start=1/><div><counter/n start=2/>${n}</div>${n}",
+    ],
+    [
+      "a <try> body",
+      "<counter/n start=1/><try><counter/n start=2/>${n}<@catch>e</@catch></try>${n}",
+    ],
+  ])(
+    "rejects a /var that reuses an outer /var's name in %s, at the second tag",
+    (_label, source) => {
+      let failure:
+        | { message: string; line?: number; column?: number }
+        | undefined;
+      try {
+        compileSolidUnit(source, {
+          filename: "/fixtures/page.mx",
+          customTags: { counter },
+        });
+      } catch (error) {
+        failure = error as typeof failure;
+      }
+      expect(failure?.message).toBe(
+        "`/var` `n` is already bound by an earlier `/var` in this component, and Solid declares one binding per component for both; rename one of them",
+      );
+      expect({ line: failure?.line, column: failure?.column }).toEqual({
+        line: 1,
+        column: source.indexOf("<counter/n start=2/>"),
+      });
+    },
+  );
+
+  it("still allows two /var of different names", () => {
+    const code = compileSolidUnit(
+      "<counter/n start=1/><div><counter/m start=2/>${m}</div>${n}",
+      { filename: "/fixtures/page.mx", customTags: { counter } },
+    ).code;
+    expect(code).toContain("let n: any, m: any;");
+  });
+
   it("still allows a call with no /var inside <for>", () => {
     const code = compileSolidUnit("<for|i| of=[1,2]><counter start=i/></for>", {
       filename: "/fixtures/page.mx",

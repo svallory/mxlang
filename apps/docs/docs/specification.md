@@ -3547,7 +3547,9 @@ statements inside a component below the `Suspense` boundary, so a call that
 suspends shows the placeholder. An outer `/x` read after such a body compiles
 and reads the outer binding, as in Marko: the body's own `/x` is in scope only
 inside the body. A body `/x` with no outer binding of that name is still not in
-scope after the body. A define body's parameters share the body's scope with its `/var`,
+scope after the body. Solid holds a component's `/var`s in one binding per name, so
+there a `/var` that reuses the name of an earlier `/var` in the same component
+is a positioned compile error at the second tag; rename one of them. A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
 `<define>` inside a dynamic-tag or `<try>` body, inside the body of an imported
 tag or of a `<define>` call that declares a `/var` or tag parameters, and a `/var` in a `<define>`
