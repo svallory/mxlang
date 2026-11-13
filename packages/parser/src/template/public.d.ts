@@ -1,7 +1,7 @@
 /**
  * Public types of `@mxlang/parser/lexer` as seen by other packages (the
  * `types` condition of the `./lexer` export): the template lexer's event API,
- * `createParser`, `TagType` and `standInText`.
+ * `createParser`, `TagType`, `standInText` and `stopsShortOfToken`.
  *
  * Consumers typecheck against this rather than against `index.ts`, because the
  * template sources are written for the parser package's own compiler flags
@@ -157,3 +157,17 @@ export declare function standInText(
   standIn: "number" | "identifier" | "keep",
   text: string,
 ): string;
+
+/**
+ * Whether a row's matcher stopped only because non-ASCII word characters
+ * follow its match in `data` (`start`..`end`): it would take more had each
+ * of them been an ASCII letter (`:a-é` matched as `:a` by an ASCII matcher
+ * that `-[\w$]+` would extend). The template lexer declines such a match.
+ * `matcher` is the row's compiled matcher (sticky, Unicode).
+ */
+export declare function stopsShortOfToken(
+  matcher: RegExp,
+  data: string,
+  start: number,
+  end: number,
+): boolean;

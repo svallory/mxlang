@@ -30,6 +30,7 @@ export {
   type TriggerNode,
   validateSyntaxTable,
 } from "./syntax.ts";
+export { stopsShortOfToken } from "./states/EXPRESSION.ts";
 export { escapeText } from "./util/escape.ts";
 export {
   isValidAttrValue,

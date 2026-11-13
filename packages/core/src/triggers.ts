@@ -55,12 +55,15 @@ import {
 } from "./diagnostic-codes.ts";
 import {
   type ClaimPosition,
+  claimContext,
+  claimNode,
   type DialectNode,
   isCallRow,
   isNodeTypeRow,
   isRegistryKey,
   misfitField,
   nodeTypeRegistry,
+  type RaiseAt,
   type RegisteredNode,
   rowKey,
   STRING_KEY,
@@ -77,7 +80,7 @@ import {
 import { loweredUnitOf } from "./lowered-unit.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { voiceOf } from "./message-vocabulary.ts";
-import { firstRowIn } from "./static-triggers.ts";
+import { firstRowIn, type StatementHit } from "./static-triggers.ts";
 import type {
   CallPosition,
   Dialect,
@@ -471,6 +474,12 @@ const MODULE_CODE_KEYWORDS = new Set(["static", "server", "client", "export"]);
  * the statement check does, and finds a row where an expression starts at
  * its first character, as written or with its stand-in in its place; a
  * statement Babel cannot read with any stand-in keeps Babel's own error.
+ * A text the parser's non-ASCII decline refuses is no candidate, and a row
+ * naming a node type is asked to claim the text, as the template asks it
+ * (`position: "expression"`, no tag or attribute): a declined row is plain
+ * source, the claimed node is discarded (the statement is still refused),
+ * and a `ctx.fail` in the claim is the dialect's own error, thrown in place
+ * of the row error.
  */
 function refuseRowInModuleStatement(
   ctx: Ctx,
@@ -492,7 +501,43 @@ function refuseRowInModuleStatement(
   ) {
     return;
   }
-  const hit = firstRowIn(container.source, rows, owner.keyword);
+  const source = container.source;
+  const offset = container.start;
+  const registry = nodeTypeRegistry(ctx.dialect);
+  const raiseAt: RaiseAt = (code, message, at, own) => {
+    try {
+      return raise(code, message, {
+        type: "MxTriggerPart",
+        start: at.sourceStart,
+        end: at.sourceEnd,
+      });
+    } catch (error) {
+      if (own !== undefined && isTranslateError(error)) {
+        (error as { diagnosticCode?: string }).diagnosticCode = String(own);
+      }
+      throw error;
+    }
+  };
+  const claims = ({ row, start, end }: StatementHit): boolean => {
+    // A `{ call }`, `"string"` or `"identifier"` row always claims.
+    if (!isNodeTypeRow(row.node)) return true;
+    const span = { sourceStart: offset + start, sourceEnd: offset + end };
+    const claimCtx = claimContext({
+      row,
+      position: "expression",
+      tag: null,
+      attribute: null,
+      span,
+      source: ctx.source,
+      base: 0,
+      raise: raiseAt,
+    });
+    return (
+      claimNode(registry, row, source.slice(start, end), span, claimCtx) !==
+      undefined
+    );
+  };
+  const hit = firstRowIn(source, rows, owner.keyword, claims);
   if (!hit) return;
   const text = container.source.slice(hit.start, hit.end);
   const at = container.start + hit.start;

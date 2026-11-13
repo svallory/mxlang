@@ -19,9 +19,12 @@
  * `Attr.node` keep the node beside what it lowered to.
  */
 import {
+  DIALECT_ERROR_CODE,
   DIALECT_HOOK_ERROR_CODE,
   INVALID_DIALECT_MODULE_CODE,
+  isReservedHookCode,
   type MxDiagnosticCode,
+  reservedHookCodeMessage,
 } from "./diagnostic-codes.ts";
 import type { SourceSpan } from "./mapping.ts";
 import type {
@@ -970,4 +973,84 @@ export function unregisteredNodeRow(
     }
   }
   return undefined;
+}
+
+/** Throws a positioned error at a span of file offsets; `own` is the dialect's own code. */
+export type RaiseAt = (
+  code: MxDiagnosticCode,
+  message: string,
+  at: SourceSpan,
+  own?: string,
+) => never;
+
+/**
+ * The `ctx` a node type's `parse` hook is asked with when `row` matched the
+ * text at `span` (file offsets). Its `fail` checks the hook's contract (a
+ * non-empty message, an `at` inside the document, a code not reserved)
+ * and throws through `raise`: the contract errors as
+ * `DIALECT_HOOK_ERROR_CODE` at `span`, the dialect's own error as
+ * `DIALECT_ERROR_CODE` at `at` (else `span`) carrying its `code`. `source`
+ * is the document text from file offset `base` (a fragment's base, else 0).
+ * Shared by the template's claim and a module statement's row check.
+ */
+export function claimContext(options: {
+  row: Trigger;
+  position: ClaimPosition;
+  tag: string | null;
+  attribute: string | null;
+  span: SourceSpan;
+  source: string;
+  base: number;
+  raise: RaiseAt;
+}): ClaimContext {
+  const { row, span, source, base, raise } = options;
+  const label = `the \`${row.id}\` trigger's \`parse\` (node type \`${rowKey(row.node)}\`)`;
+  return Object.freeze({
+    position: options.position,
+    tag: options.tag,
+    attribute: options.attribute,
+    fail(message: string, failOptions?: TriggerFailOptions): never {
+      if (typeof message !== "string" || message === "") {
+        return raise(
+          DIALECT_HOOK_ERROR_CODE,
+          `${label}: \`ctx.fail\` takes a non-empty message`,
+          span,
+        );
+      }
+      const at = failOptions?.at;
+      if (at !== undefined && !insideDocument(at, base, source)) {
+        return raise(
+          DIALECT_HOOK_ERROR_CODE,
+          `${label}: \`ctx.fail\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (${base} to ${base + source.length})`,
+          span,
+        );
+      }
+      const code = failOptions?.code;
+      if (typeof code === "string" && isReservedHookCode(code)) {
+        return raise(
+          DIALECT_HOOK_ERROR_CODE,
+          `${label}: \`ctx.fail\`'s ${reservedHookCodeMessage(code)}`,
+          span,
+        );
+      }
+      return raise(DIALECT_ERROR_CODE, message, at ?? span, code);
+    },
+  });
+}
+
+/** Is `at` a span inside the document (file offsets, `offset` the fragment's base)? */
+function insideDocument(
+  at: SourceSpan,
+  offset: number,
+  source: string,
+): boolean {
+  return (
+    !!at &&
+    typeof at === "object" &&
+    Number.isInteger(at.sourceStart) &&
+    Number.isInteger(at.sourceEnd) &&
+    at.sourceStart >= offset &&
+    at.sourceStart <= at.sourceEnd &&
+    at.sourceEnd <= offset + source.length
+  );
 }

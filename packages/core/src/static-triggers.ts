@@ -13,7 +13,9 @@
  * first character arms one row (a `chars` set is compared by that
  * character), the row's `match` must match there with a non-empty text, the
  * text is not inside a word or right after the same character (`a &&b`),
- * and the token does not continue past the match.
+ * and the token does not continue past the match, by an identifier
+ * character or by non-ASCII word characters the matcher stops short of
+ * (the parser's `stopsShortOfToken`: `~a-é` under an ASCII matcher).
  *
  * Whether a candidate is a row is Babel's to say, not a statement grammar
  * of this file's: the statement is parsed as `rejectInvalidStatement` parses
@@ -41,8 +43,12 @@
  * parses has no row error, and `rejectInvalidStatement` reports Babel's own
  * positioned error.
  *
- * Where it differs from the template: the parser's `claim` hook and its
- * non-ASCII `stopsShortOfToken` decline are not applied. A private name the
+ * The row's node type is then asked whether it claims a candidate Babel
+ * decided is a row, as the template's `claim` asks it
+ * (`refuseRowInModuleStatement` passes the question): a declined candidate
+ * is plain source, and the rest are decided again without it.
+ *
+ * Where it differs from the template: a private name the
  * class does not declare (`#x in this` with no `#x` member) does not parse
  * as written, so it reads as its stand-in and is found as a row; so does a
  * decorator on its own line (`@dec⏎class B {}`), whose stand-in parses as an
@@ -50,7 +56,7 @@
  * the decorator refusal.
  */
 import type { ParserOptions } from "@babel/parser";
-import { standInText } from "@mxlang/parser/lexer";
+import { standInText, stopsShortOfToken } from "@mxlang/parser/lexer";
 import { coreBabel, coreParser } from "./babel.ts";
 import {
   blankBlock,
@@ -124,7 +130,8 @@ function candidatesIn(
           (isWord(text[end]) ||
             (standIn === "number" &&
               found[0].length === 1 &&
-              text[end] === "."));
+              text[end] === ".") ||
+            stopsShortOfToken(armed.matcher, text, i, end));
         if (
           !continues &&
           !(i > 0 && isWord(text[i - 1])) &&
@@ -366,20 +373,44 @@ function withStandIns(text: string, hits: readonly StatementHit[]): string {
 /**
  * The first dialect expression row `text` (a `keyword` statement's text, as
  * the statement check parses it) writes where an expression starts, if any.
+ * `claims`, when given, is asked whether a candidate Babel decided is a row
+ * is claimed by the row's node type (the template's `claim`): a declined
+ * candidate is removed and the rest decided again, its text then staying
+ * source in every variant, so it is asked at most once per start and never
+ * for a candidate Babel does not read as a row (a comment, a string).
  */
 export function firstRowIn(
   text: string,
   rows: readonly Trigger[],
   keyword = "static",
+  claims?: (hit: StatementHit) => boolean,
 ): StatementHit | undefined {
   const compiled = compile(rows);
   if (compiled.length === 0) return undefined;
-  const candidates = candidatesIn(text, compiled);
+  let candidates = candidatesIn(text, compiled);
   // A statement with no mark costs no parse.
   if (candidates.length === 0) return undefined;
   // The one block's braces, read once from the text as written.
   const block = statementBlock(text);
   const written = parseStatement(text, keyword, block);
+  for (;;) {
+    const hit = decide(text, candidates, keyword, block, written);
+    if (!hit || !claims || claims(hit)) return hit;
+    candidates = candidates.filter((each) => each !== hit);
+  }
+}
+
+/**
+ * The first of `candidates` that is a row (`firstRowIn`). `written` is the
+ * text as written parsed, or `undefined` when Babel refuses it.
+ */
+function decide(
+  text: string,
+  candidates: readonly StatementHit[],
+  keyword: string,
+  block: StatementBlock | undefined,
+  written: Ast | undefined,
+): StatementHit | undefined {
   if (written) {
     // Valid TypeScript: its own reading decides every candidate.
     const starts = rowStarts(
@@ -390,9 +421,9 @@ export function firstRowIn(
   }
   for (const [index, candidate] of candidates.entries()) {
     const later = candidates.slice(index + 1);
-    // Earlier candidates stay as written: they were judged not to be rows.
-    // Every candidate as written is the text itself, which did not parse
-    // above, so that variant is not tried again.
+    // Earlier candidates stay as written: they were judged not to be rows
+    // (or their row was declined). Every candidate as written is the text
+    // itself, which did not parse, so that variant is not tried again.
     // A variant equal to one already read (the last candidate's second and
     // third, or any variant of a `keep` stand-in) is not parsed again.
     const tried = new Set([text]);

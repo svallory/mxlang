@@ -8,6 +8,7 @@ import {
   type createParser,
   type Handlers,
   standInText,
+  stopsShortOfToken,
   TagType,
 } from "./index.ts";
 import type * as Declared from "./public.d.ts";
@@ -38,5 +39,13 @@ describe("public.d.ts (@mxlang/parser/lexer)", () => {
     expect(standInText("identifier", "&a-b")).toBe("_a_b");
     expect(standInText("number", "~ab")).toBe("0.0");
     expect(standInText("keep", "~ab")).toBe("~ab");
+  });
+
+  it("declares stopsShortOfToken as the source defines it", () => {
+    expectTypeOf<typeof stopsShortOfToken>().toEqualTypeOf<
+      typeof Declared.stopsShortOfToken
+    >();
+    expect(stopsShortOfToken(/~[a-z]+(?:-\w+)*/uy, "~a-é", 0, 2)).toBe(true);
+    expect(stopsShortOfToken(/~[a-z]+(?:-\w+)*/uy, "~a-b", 0, 4)).toBe(false);
   });
 });

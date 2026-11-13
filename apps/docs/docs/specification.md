@@ -5852,7 +5852,8 @@ and the trigger and saying to move it into a `<const>` or write it in the
 template. The match follows the template scanner: a first character arms one
 row, the row's `match` must match there in full, and the text is not inside a
 word, right after the same character (`a &&b`) or continued by a word
-character. The statement is then read as TypeScript, as the statement check
+character, and a text the parser's non-ASCII decline refuses (`:a-é` under an
+ASCII matcher) is no row, as in the template. The statement is then read as TypeScript, as the statement check
 reads it, and a row is found where an expression starts at its first character,
 either with its text as written or with its stand-in in its place. A statement
 start (after a block's `}`, after a line break that ends a statement) is such a
@@ -5862,8 +5863,10 @@ private name, a type, an object key, a binding and a binary operator
 or the text of a template literal. When the text as written is valid
 TypeScript, that reading decides; otherwise each candidate is read with its
 stand-in in its place. A statement that does not parse with any stand-in reports
-the parser's own positioned error, not the row error. Three differences from the
-template: the row's node type is not asked to claim the text; a private name
+the parser's own positioned error, not the row error. The row's node type is
+asked to claim a row found this way, as in the template: a declined row is
+plain source, and a `ctx.fail` in its `parse` is the dialect's error in place
+of the row error. Two differences from the template: a private name
 the class does not declare (`#x in this` with no `#x` member) does not parse
 as written, so it reads as its stand-in and is found as a row; and a decorator
 on its own line (`@dec⏎class B {}`) has a stand-in that parses, so it is

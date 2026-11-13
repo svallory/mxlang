@@ -27,34 +27,25 @@ import { strippedMethodTypeParams, strippedValueRoots } from "./attr-fields.ts";
 import { coreBabel, coreTsPlugin } from "./babel.ts";
 import { codedError, type Node, type TranslateError } from "./core.ts";
 import {
-  DIALECT_ERROR_CODE,
-  DIALECT_HOOK_ERROR_CODE,
   DUPLICATE_DECLARATION_CODE,
   INTERNAL_ERROR_CODE,
   INVALID_SHORTHAND_CODE,
   INVALID_STATEMENT_CODE,
-  isReservedHookCode,
   type MxDiagnosticCode,
   parseDiagnosticCode,
-  reservedHookCodeMessage,
 } from "./diagnostic-codes.ts";
 import {
-  type ClaimContext,
   type ClaimPosition,
+  claimContext,
   claimNode,
   isNodeTypeRow,
   isRegistryKey,
   nodeTypeRegistry,
-  rowKey,
 } from "./dialect-registry.ts";
 import type { SourceSpan } from "./mapping.ts";
 import { MX_VOICE, type Voice, voiceOf } from "./message-vocabulary.ts";
 import { namespaceEmits } from "./module-scope.ts";
-import type {
-  Dialect,
-  SyntaxTable,
-  TriggerFailOptions,
-} from "./syntax-table.ts";
+import type { Dialect, SyntaxTable } from "./syntax-table.ts";
 import { strippedTagTypeParams } from "./tag-fields.ts";
 import type { TagTable } from "./tag-table.ts";
 import { parseErrorEnd } from "./token-span.ts";
@@ -251,37 +242,15 @@ function nodeClaims(
       return KEEP_TRIGGER;
     }
     const span = { sourceStart: start, sourceEnd: end };
-    const label = `the \`${id}\` trigger's \`parse\` (node type \`${rowKey(row.node)}\`)`;
-    const ctx: ClaimContext = Object.freeze({
+    const ctx = claimContext({
+      row,
       position,
       tag,
       attribute: position === "value" ? attribute : null,
-      fail(message: string, failOptions?: TriggerFailOptions): never {
-        if (typeof message !== "string" || message === "") {
-          return raise(
-            DIALECT_HOOK_ERROR_CODE,
-            `${label}: \`ctx.fail\` takes a non-empty message`,
-            span,
-          );
-        }
-        const at = failOptions?.at;
-        if (at !== undefined && !insideDocument(at, base.offset, source)) {
-          return raise(
-            DIALECT_HOOK_ERROR_CODE,
-            `${label}: \`ctx.fail\`'s \`at\` is a \`{ sourceStart, sourceEnd }\` span inside the document (${base.offset} to ${base.offset + source.length})`,
-            span,
-          );
-        }
-        const code = failOptions?.code;
-        if (typeof code === "string" && isReservedHookCode(code)) {
-          return raise(
-            DIALECT_HOOK_ERROR_CODE,
-            `${label}: \`ctx.fail\`'s ${reservedHookCodeMessage(code)}`,
-            span,
-          );
-        }
-        return raise(DIALECT_ERROR_CODE, message, at ?? span, code);
-      },
+      span,
+      source,
+      base: base.offset,
+      raise,
     });
     const text = source.slice(start - base.offset, end - base.offset);
     const node = claimNode(registry, row, text, span, ctx);
@@ -290,23 +259,6 @@ function nodeClaims(
     return node;
   };
   return { claim, placed };
-}
-
-/** Is `at` a span inside the document (file offsets, `offset` the fragment's base)? */
-function insideDocument(
-  at: SourceSpan,
-  offset: number,
-  source: string,
-): boolean {
-  return (
-    !!at &&
-    typeof at === "object" &&
-    Number.isInteger(at.sourceStart) &&
-    Number.isInteger(at.sourceEnd) &&
-    at.sourceStart >= offset &&
-    at.sourceStart <= at.sourceEnd &&
-    at.sourceEnd <= offset + source.length
-  );
 }
 
 /** 1-based line, 0-based column of a fragment-local `offset` in `source`. */

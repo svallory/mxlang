@@ -159,6 +159,90 @@ describe("a dialect expression row in a static statement", () => {
     expect(diagnostics[0]?.message).toBe(MESSAGE("~aa", "atom-node"));
   });
 
+  describe("the row's node type is asked to claim it", () => {
+    const tok: Trigger = Object.freeze({
+      id: "tok",
+      chars: "~",
+      match: "~[a-z]+",
+      standIn: "identifier",
+      node: Object.freeze({ type: "Tok", dialect: "claims" }),
+    });
+    const claims = {
+      id: "claims",
+      name: "Claims",
+      table: Object.freeze({
+        expressionTriggers: [tok],
+        attributeTriggers: [],
+      }),
+      nodeTypes: {
+        Tok: {
+          keys: [],
+          schema: { fields: { name: "data" }, slot: ["expression"] },
+          parse: (
+            text: string,
+            _span: unknown,
+            ctx: { fail(message: string, options?: object): never },
+          ) =>
+            text === "~skip"
+              ? undefined
+              : text === "~boom"
+                ? ctx.fail("no boom here", { code: "CLAIMS_BOOM" })
+                : { name: text.slice(1) },
+          print: (node: { name: string }) => `~${node.name}`,
+          lower: (
+            node: { name: string },
+            ctx: { expression(node: object): unknown },
+          ) =>
+            ctx.expression({
+              type: "StringLiteral",
+              value: node.name,
+              extra: { raw: JSON.stringify(node.name), rawValue: node.name },
+            }),
+        },
+      },
+    } as unknown as Dialect;
+
+    it("a declined row is plain source", () => {
+      expect(lowered("static const z = ~skip;\n<div/>", claims)).toEqual({
+        diagnostics: [],
+        code: ["const z = ~skip;"],
+      });
+    });
+
+    it("a claimed row is refused", () => {
+      const { diagnostics } = lowered("static const z = ~ok;\n<div/>", claims);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        code: "MX_INVALID_TRIGGER_USE",
+        message: MESSAGE("~ok", "tok"),
+        line: 1,
+        column: 17,
+      });
+    });
+
+    it("a claim's `ctx.fail` is the dialect's error at the row", () => {
+      const { diagnostics } = lowered(
+        "static const z = ~boom;\n<div/>",
+        claims,
+      );
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        code: "CLAIMS_BOOM",
+        message: "no boom here",
+        line: 1,
+        column: 17,
+      });
+    });
+
+    it("a row in a comment or a string runs no `parse`", () => {
+      const { diagnostics } = lowered(
+        "static const z = '~boom'; // ~boom\n<div/>",
+        claims,
+      );
+      expect(diagnostics).toEqual([]);
+    });
+  });
+
   it("the same row in a `<const>` still lowers", () => {
     const { diagnostics } = lowered("<const/z=~zz/>\n<div/>", atom);
     expect(diagnostics).toEqual([]);
@@ -513,5 +597,55 @@ describe("the matching is the template scanner's", () => {
 
   it("no rows, no hit", () => {
     expect(firstRowIn("~zz", [])).toBeUndefined();
+  });
+
+  it("a match the matcher stops short of non-ASCII is no row", () => {
+    const tail = [row("tail", "~", "~[a-z]+(?:-\\w+)*")];
+    expect(hit("a = ~a-é", tail)).toBeUndefined();
+    expect(hit("a = ~a-b", tail)).toEqual(["tail", "~a-b"]);
+    expect(hit("a = ~ab", tail)).toEqual(["tail", "~ab"]);
+    const kept = [
+      { ...row("kept", "~", "~[a-z]+(?:-\\w+)*"), standIn: "keep" },
+    ];
+    expect(hit("a = ~a-é", kept as Trigger[])).toEqual(["kept", "~a"]);
+  });
+
+  describe("the row's node type claims the text", () => {
+    const asked: string[] = [];
+    const claimed = (text: string, kit: readonly Trigger[] = rows) => {
+      asked.length = 0;
+      const found = firstRowIn(text, kit, "static", (each) => {
+        const written = text.slice(each.start, each.end);
+        asked.push(written);
+        return !written.endsWith("skip");
+      });
+      return found && [found.row.id, text.slice(found.start, found.end)];
+    };
+
+    it("a claimed row is found", () => {
+      expect(claimed("a = ~ok")).toEqual(["sigil", "~ok"]);
+      expect(asked).toEqual(["~ok"]);
+    });
+
+    it("a declined row is no row", () => {
+      expect(claimed("a = ~skip")).toBeUndefined();
+      expect(asked).toEqual(["~skip"]);
+    });
+
+    it("the first declined, the next is decided and asked once each", () => {
+      expect(claimed("a = [~skip, ~ok]")).toEqual(["sigil", "~ok"]);
+      expect(asked).toEqual(["~skip", "~ok"]);
+      expect(claimed("a = [&skip, &ok]")).toBeUndefined();
+      expect(asked).toEqual(["&skip"]);
+      expect(claimed("a = [~skip, &ok]")).toEqual(["member", "&ok"]);
+      expect(asked).toEqual(["~skip", "&ok"]);
+    });
+
+    it("a mark in a comment, a string or template text is never asked", () => {
+      expect(claimed("a = 1; // ~zz")).toBeUndefined();
+      expect(claimed("a = '~zz' + `~yy` + /* ~xx */ 1")).toBeUndefined();
+      expect(claimed("a = '&zz' + `&yy`; b = ~ok")).toEqual(["sigil", "~ok"]);
+      expect(asked).toEqual(["~ok"]);
+    });
   });
 });

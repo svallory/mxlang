@@ -12,10 +12,7 @@ import {
   wordWidthAt,
   wordWidthBefore,
 } from "../internal.ts";
-import {
-  type CompiledTrigger,
-  matchTrigger,
-} from "../syntax.ts";
+import { matchTrigger } from "../syntax.ts";
 import * as CODE from "../util/codes.ts";
 import * as ErrorCode from "../util/error-code.ts";
 
@@ -954,7 +951,7 @@ function lexTrigger(
   if (
     trigger.standIn !== "keep" &&
     (continuesToken(data, start, end, trigger.standIn) > 0 ||
-      stopsShortOfToken(trigger, data, start, end))
+      stopsShortOfToken(trigger.matcher, data, start, end))
   ) {
     return false;
   }
@@ -993,9 +990,12 @@ function afterQuestion(expression: ExpressionMeta, data: string, pos: number) {
  * silently a subtraction). A matcher that already takes those characters,
  * or never would, is unaffected (`&a-é` for a member is `_a - é`). Only the
  * characters up to the next ASCII whitespace (at most 64) are looked at.
+ * `matcher` is the row's compiled matcher (sticky, Unicode); `start`/`end`
+ * are the match's offsets in `data`. Exported through `@mxlang/parser/lexer`
+ * so a module statement's row scan declines the same text.
  */
-function stopsShortOfToken(
-  trigger: CompiledTrigger,
+export function stopsShortOfToken(
+  matcher: RegExp,
   data: string,
   start: number,
   end: number,
@@ -1017,7 +1017,6 @@ function stopsShortOfToken(
     }
   }
   if (!wide) return false;
-  const { matcher } = trigger;
   const probe = data.slice(start, end) + folded;
   matcher.lastIndex = 0;
   const found = matcher.exec(probe);
