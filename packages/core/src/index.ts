@@ -28,7 +28,6 @@ export {
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
-  ATTR_TAG_RUNTIME_NAMES,
   usesAttrTagRuntime,
 } from "./attr-tag-runtime.ts";
 export {

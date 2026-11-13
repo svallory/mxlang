@@ -4,7 +4,6 @@ import {
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
-  ATTR_TAG_RUNTIME_NAMES,
   usesAttrTagRuntime,
 } from "./attr-tag-runtime.ts";
 
@@ -113,12 +112,23 @@ describe("the attribute-tag record helper", () => {
   });
 
   it("declares only reserved names", () => {
-    for (const name of ATTR_TAG_RUNTIME_NAMES) {
-      expect(name).toMatch(/^__[mM]x/);
-      expect(ATTR_TAG_RUNTIME).toMatch(
-        new RegExp(`(?:const|function\\*?|type) ${name}\\b`),
-      );
-    }
+    const file = ts.createSourceFile(
+      "runtime.ts",
+      ATTR_TAG_RUNTIME,
+      ts.ScriptTarget.ES2022,
+    );
+    const names = file.statements.flatMap((statement) =>
+      ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations.map((d) =>
+            d.name.getText(file),
+          )
+        : "name" in statement && statement.name
+          ? [(statement.name as ts.Identifier).text]
+          : [`<unnamed ${ts.SyntaxKind[statement.kind]}>`],
+    );
+    expect(names).toContain(ATTR_TAG_RECORD);
+    expect(names).toContain(ATTR_TAG_FOLD);
+    for (const name of names) expect(name).toMatch(/^__[mM]x/);
   });
 
   it("is needed only by text that calls it", () => {

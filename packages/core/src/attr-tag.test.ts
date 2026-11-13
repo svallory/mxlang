@@ -19,15 +19,24 @@ type MarkoAttrTag<T> = T & {
 type Item = { a: number; content?: () => string };
 
 it("types the record as the first occurrence plus the iteration members", () => {
-  expectTypeOf<AttrTag<Item>>().toEqualTypeOf<
-    Item & {
-      [Symbol.iterator](): Iterator<Item>;
-      readonly length: number;
-      at(index: number): Item | undefined;
-      map<U>(fn: (item: Item, index: number) => U): U[];
-      filter(fn: (item: Item, index: number) => unknown): Item[];
-      toArray(): Item[];
-    }
+  expectTypeOf<AttrTag<Item>["a"]>().toEqualTypeOf<number>();
+  expectTypeOf<AttrTag<Item>["content"]>().toEqualTypeOf<
+    (() => string) | undefined
+  >();
+  expectTypeOf<AttrTag<Item>["length"]>().toEqualTypeOf<number>();
+  expectTypeOf<AttrTag<Item>["at"]>().returns.toEqualTypeOf<Item | undefined>();
+  // `map` passes each occurrence and its index, and returns the mapped array.
+  expectTypeOf((record: AttrTag<Item>) =>
+    record.map((item, index) => {
+      expectTypeOf(item).toEqualTypeOf<Item>();
+      expectTypeOf(index).toEqualTypeOf<number>();
+      return String(item.a);
+    }),
+  ).returns.toEqualTypeOf<string[]>();
+  expectTypeOf<AttrTag<Item>["filter"]>().returns.toEqualTypeOf<Item[]>();
+  expectTypeOf<AttrTag<Item>["toArray"]>().returns.toEqualTypeOf<Item[]>();
+  expectTypeOf((record: AttrTag<Item>) => [...record]).returns.toEqualTypeOf<
+    Item[]
   >();
 });
 

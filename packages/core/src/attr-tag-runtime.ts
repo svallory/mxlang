@@ -15,7 +15,7 @@
  * {@link ATTR_TAG_RECORD} (`__mxAttrTag`) for an occurrence that is alone and
  * unconditional, {@link ATTR_TAG_FOLD} (`__mxAttrTags`) for each step of a fold
  * that starts from `undefined`. Every name it declares starts with the
- * reserved `__mx`/`__Mx` prefix ({@link ATTR_TAG_RUNTIME_NAMES}).
+ * reserved `__mx`/`__Mx` prefix.
  */
 
 /** The function that makes one occurrence a record: Marko's `attrTag`. */
@@ -23,18 +23,6 @@ export const ATTR_TAG_RECORD = "__mxAttrTag";
 
 /** The fold step over occurrences: Marko's `attrTags(first, attrs)`. */
 export const ATTR_TAG_FOLD = "__mxAttrTags";
-
-/** Every module-level name {@link ATTR_TAG_RUNTIME} declares. */
-export const ATTR_TAG_RUNTIME_NAMES = [
-  "__MxAttrTag",
-  "__MxAttrTagMember",
-  "__mxAttrTagEmpty",
-  "__mxAttrTagRest",
-  "__mxAttrTagProto",
-  "__mxAttrTagIterator",
-  ATTR_TAG_RECORD,
-  ATTR_TAG_FOLD,
-] as const;
 
 /**
  * The helper, as module-level TypeScript declarations. `__MxAttrTag<T>` is the
