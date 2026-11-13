@@ -114,8 +114,10 @@ in this package).
   reading a server name is `undefined`; an `import`/`static`/`export` name is
   not shadowed (it is the module's own). Then the client imports (each value
   specifier an `import a = __mxClient<n>.a` alias of a module-level
-  `import * as __mxClient<n> from "m"`, a default import a value and an
-  instance type of `import __mxClientD<n> from "m"`), the client namespaces
+  `import * as __mxClient<n> from "m"`; a default import an exported
+  instance type `export type D = __MxInstance<typeof __mxClientD<n>>` of
+  `import __mxClientD<n> from "m"`, its value `const D = __mxClientD<n>`
+  being the first statement of the client function), the client namespaces
   and `declare` forms and `import x = A.b`, all with `export` removed; then
   the statements' code, `export` removed, in
   `export const __mxScope = (async function (this: void) { … })()`, placed
@@ -160,8 +162,15 @@ function would hide its TS1108. Client code reading `input`, `$global` or
   stays at module level, so client code reading the server half is not
   reported. A `client function q` and a `client namespace q` are two
   bindings.
-- A client namespace body reading a client `let`, `const`, `function` or
-  `class` reads the server view, so the value is `undefined`.
+- A client namespace body reading a client `let`, `const`, `function`,
+  `class` or default import reads the server view, so the value is
+  `undefined`. (A default import's value is bound first in the client
+  function and its instance type is an exported member of the view, so an
+  unused one is reported once, as any import is.)
+- A module-level type (`Input`, a `static`/`server` annotation) naming a
+  client value import is reported (TS2749); import the type as a type
+  specifier, `client import { type Row } from "m"`, which stays at module
+  level for both views.
 - A default-imported generic class used with type arguments in client code
   (`D<T>`) fails: the type is `__MxInstance<…>`.
 - `declare global` and `declare module "m"` stay at module level and are
