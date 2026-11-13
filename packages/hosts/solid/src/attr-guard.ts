@@ -53,6 +53,9 @@ export const CLASS_PROP_HELPER = `function ${MX_CLASS_BINDING}<T,>(value: T, tag
  */
 export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: string, value: T, tag: string | null = ""): T { return tag === null ? value : ${ATTRIBUTE_VALUE_EXPRESSION}(name, value, tag); }`;
 
+/** Solid's `isServer`, imported under a private name by the helpers that read it. */
+export const MX_IS_SERVER_BINDING = "__mxIsServer";
+
 /**
  * Solid merges spreads lazily, so the helper must not snapshot the object: a
  * Proxy validates each key as Solid reads it, which keeps reactivity and means
@@ -84,11 +87,12 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  *    It is hidden unless it is a primitive on another element, where Solid
  *    escapes it as text.
  *  - An `oncapture:` key is an ordinary attribute in Marko, but Solid's server
- *    renderer skips every prop that starts with `on`. The view lists it with
- *    its first letter uppercased (`Oncapture:click`), which Solid's server
- *    prints; an HTML parser lowercases attribute names, and on the client
- *    `setAttribute` lowercases it in an HTML document, so the attribute is
- *    `oncapture:click` either way.
+ *    renderer skips every prop that starts with `on`. On the server only
+ *    (`isServer`), the view lists it with its first letter uppercased
+ *    (`Oncapture:click`), which Solid's server prints and an HTML parser
+ *    lowercases. The client keeps the authored name: `setAttribute` lowercases
+ *    only on an HTML-namespace element, so an uppercased key would stay
+ *    `Oncapture:click` on an `<svg>`.
  * The view sits over an empty target, so hiding or renaming a key breaks no
  * Proxy invariant, even for a frozen source.
  */
@@ -107,14 +111,14 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
     return raw || (child !== null && (typeof child === "object" || typeof child === "function"));
   };
   const original = (key: string | symbol): string | symbol => {
-    if (typeof key === "string" && key.startsWith("Oncapture:")) {
+    if (${MX_IS_SERVER_BINDING} && typeof key === "string" && key.startsWith("Oncapture:")) {
       const name = "o" + key.slice(1);
       return Reflect.has(source, name) ? name : key;
     }
     const name = typeof key === "string" ? markup.find((entry) => entry.toLowerCase() === key) : undefined;
     return name !== undefined && Reflect.has(source, name) ? name : key;
   };
-  const listed = (key: string | symbol): string | symbol => (typeof key === "string" && key.startsWith("oncapture:") ? "O" + key.slice(1) : key);
+  const listed = (key: string | symbol): string | symbol => (${MX_IS_SERVER_BINDING} && typeof key === "string" && key.startsWith("oncapture:") ? "O" + key.slice(1) : key);
   return new Proxy({}, {
     get(_, key) {
       if (hidden(key)) return undefined;
@@ -144,7 +148,6 @@ export const MX_TEXTAREA_PICK_BINDING = "__mxTextareaPick";
 export const MX_TEXTAREA_OMIT_BINDING = "__mxTextareaOmit";
 export const MX_SCRIPT_TEXT_BINDING = "__mxScriptText";
 export const MX_STYLE_TEXT_BINDING = "__mxStyleText";
-export const MX_IS_SERVER_BINDING = "__mxIsServer";
 export const MX_TEXTAREA_DYN_VALUE_BINDING = "__mxTextareaDynValue";
 export const MX_TEXTAREA_DYN_SPREAD_BINDING = "__mxTextareaDynSpread";
 

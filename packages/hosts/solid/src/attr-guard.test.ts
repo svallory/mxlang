@@ -124,6 +124,14 @@ const CASES: Record<string, Case> = {
     fragment: "<div ...input.a/>",
     setup: 'const input = { a: { "oncapture:click": "z" } };',
   },
+  oncaptureSvg: {
+    fragment: '<svg oncapture:click="x"/>',
+    setup: "const input = {};",
+  },
+  oncaptureSvgSpread: {
+    fragment: "<svg ...input.a/>",
+    setup: 'const input = { a: { "oncapture:click": "z" } };',
+  },
   propNamespace: {
     fragment: "<div prop:x=input.o/>",
     setup: "const input = { o: { a: 1 } };",
@@ -483,7 +491,7 @@ describe.each(["ssr", "dom"] as const)(
       );
       // The server prints the view's `Oncapture:click` (Solid's server skips
       // a prop that starts with `on`); an HTML parser reads it as
-      // `oncapture:click`. The client's `setAttribute` lowercases it.
+      // `oncapture:click`. The client keeps the authored lowercase name.
       const printed = mode === "dom" ? "oncapture:click" : "Oncapture:click";
       expect(get("oncaptureString").html).toContain(`${printed}="x"`);
       expect(get("oncaptureStatic").html).toContain(`${printed}="y"`);
@@ -495,6 +503,11 @@ describe.each(["ssr", "dom"] as const)(
       expect(get("oncaptureSpreadValue").html).toContain(
         `${mode === "dom" ? "oncapture:click" : "Oncapture:click"}="z"`,
       );
+    });
+    it("keeps an oncapture: name lowercase on a client <svg>, where setAttribute keeps case", () => {
+      const printed = mode === "dom" ? "oncapture:click" : "Oncapture:click";
+      expect(get("oncaptureSvg").html).toContain(`${printed}="x"`);
+      expect(get("oncaptureSvgSpread").html).toContain(`${printed}="z"`);
     });
     it("leaves prop: (a property write) and event handler keys alone", () => {
       expect(get("propNamespace").error).toBeUndefined();
@@ -763,7 +776,7 @@ describe("module assembly", () => {
 describe("the spread view", () => {
   const view = (source: object, tag: string | null = "div") => {
     const js = transformSync(
-      `function run(source: any, tag: any) {\n${ATTR_VALUE_HELPER}\n${ATTR_SPREAD_HELPER}\nreturn __mxAttrSpread(source, tag);\n}`,
+      `function run(source: any, tag: any) {\nconst __mxIsServer = false;\n${ATTR_VALUE_HELPER}\n${ATTR_SPREAD_HELPER}\nreturn __mxAttrSpread(source, tag);\n}`,
       {
         filename: "view.ts",
         presets: [[typescriptPreset, {}]],

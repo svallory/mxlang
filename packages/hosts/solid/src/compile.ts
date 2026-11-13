@@ -500,7 +500,11 @@ export function compileSolidMx(
       binding: MX_STYLE_TEXT_BINDING,
     });
   }
-  if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
+  if (
+    needsAttrGuard.textarea ||
+    needsAttrGuard.dynTextarea ||
+    needsAttrGuard.spread
+  ) {
     hoistedImports.unshift({
       code: `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";`,
       binding: MX_IS_SERVER_BINDING,
@@ -718,7 +722,11 @@ export function compileSolidUnit(
       `import { escape as ${MX_ESCAPE_BINDING} } from "@solidjs/web";\n`,
     );
   }
-  if (needsAttrGuard.textarea || needsAttrGuard.dynTextarea) {
+  if (
+    needsAttrGuard.textarea ||
+    needsAttrGuard.dynTextarea ||
+    needsAttrGuard.spread
+  ) {
     parts.unshift(
       `import { isServer as ${MX_IS_SERVER_BINDING} } from "@solidjs/web";\n`,
     );
