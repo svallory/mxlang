@@ -7,9 +7,10 @@
 ; over") — nothing about that grammar is Solid- or React-specific, so this
 ; file is copied from base/solid/injections.scm rather than diverging.
 ; The MX region has no interior structure for this grammar's own queries to
-; capture. Injecting the `marko` language (MX and Marko share syntax) lets Zed
-; re-parse that region with the `MX` grammar and highlight its actual contents
-; — tag names, attributes, placeholders — instead of leaving it a single
-; uncolored span.
+; capture. Injecting this extension's own `MX` language (languages/mx, the
+; tree-sitter-mx grammar) lets Zed re-parse that region with the `MX` grammar
+; and highlight its actual contents — tag names, attributes, name sugars,
+; placeholders — instead of leaving it a single uncolored span. No other
+; extension is needed.
 ((mx_element) @injection.content
- (#set! injection.language "marko"))
+ (#set! injection.language "MX"))

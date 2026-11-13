@@ -68,34 +68,26 @@ reviewed like any other source file) with `overlay/solid/*.scm`
 concatenated the same way. All four Solid overlay files are currently
 empty: the base content already covers every node the grammar emits.
 
-`base/solid/injections.scm` injects the `marko` language into `mx_element`
-(MX and Solid share syntax) so the otherwise-opaque region highlights
-instead of remaining plain text.
+`base/solid/injections.scm` injects this extension's own `MX` language into
+`mx_element` so the otherwise-opaque region highlights instead of remaining
+plain text.
 
-### Solid injection prerequisite
+### Solid injection
 
-`base/solid/injections.scm` sets `injection.language "marko"`. Zed resolves
-an injected language by matching that string against an **installed
-language's own `name`** (case-insensitively) — it is not a reference to a
-grammar this extension declares, and not a reference to this package's own
-`MX` language either: `languages/mx/config.toml` declares `name = "MX"`, not
-`"Marko"`, so it cannot satisfy this injection despite compiling the same
-grammar. The only language that can satisfy it is Zed's official
-`marko-js/zed` extension, whose `languages/marko/config.toml` declares
-`name = "Marko"` (confirmed by reading that file at its published rev).
-"Marko" lowercases to "marko", so the match holds — **but only when that
-extension is installed**. Without it, `mx_element` regions in a `.solid.mx`
-file fall back to unhighlighted plain text; this is a missing prerequisite,
-not a bug in this package. See `README.md` for the user-facing prerequisite
-note.
-
-This package's own `[grammars.mx]` (for `MX`, see the Pins table above) is
-unrelated to this injection: it exists so Zed can compile the grammar for
-files matching `MX`'s `path_suffixes`, not to provide an injectable language
-named `marko`/`Marko` (the injection matches on language *name*, and `MX` ≠
-`Marko`). Injecting `MX` instead would drop the Marko-extension prerequisite
-and give embedded regions the name-sugar shorthands; that is a separate
-change (TODO `solidmx-inject-mx`).
+`base/{solid,ngmx,reactmx,preactmx,honomx}/injections.scm` set
+`injection.language "MX"`. Zed resolves an injected language by matching
+that string against an **installed language's own `name`**
+(case-insensitively), not against a grammar key. `languages/mx/config.toml`
+declares `name = "MX"`, so the injection resolves to this extension's own
+`MX` language and the region is parsed with the `[grammars.mx]` grammar
+(tree-sitter-mx), name sugars included; `languages/astromx/injections.scm`
+already injects `MX` for its template body the same way. No other extension
+is needed. Before this, the hosts injected `"marko"`, which only the official
+`marko-js/zed` extension's `Marko` language satisfied, through Marko's
+grammar, which misparses the name sugars.
+`packages/editors/tree-sitter-mx/test/regions.bun-test.mts` proves an
+`mx_element` region parses on its own with the MX grammar and that no
+`languages/*/injections.scm` injects `marko`.
 
 `extension.toml` deliberately omits `[language_servers.marko]`, `src/lib.rs`
 and `Cargo.toml` — a grammar-only extension needs no Rust build (Zed's
@@ -129,9 +121,8 @@ they can reach Zed at all (see "A note on the `file://` dev loop" below).
    `README.md`'s "Dev install (Zed) — Solid" for the full commit-then-bump
    loop.
 4. Reinstall the dev extension in Zed and spot-check highlighting, bracket
-   matching, outline, and the `marko` injection on a `.solid.mx` file (needs
-   the official `marko-js/zed` Marko extension also installed — see
-   "Solid injection prerequisite" above).
+   matching, outline, and the `MX` injection on a `.solid.mx` file (see
+   "Solid injection" above).
 5. Commit `languages/solid/*.scm`, any changed `base/solid/*.scm`,
    `extension.toml` (if `rev` moved), and this file together.
 

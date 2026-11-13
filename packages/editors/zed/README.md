@@ -149,8 +149,8 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
   language features for files associated with its `Marko` language.
 - `AstroMX` (`.astro.mx`): syntax highlighting, brackets, outline, via injections mapping the `---` fence to TypeScript and the body to Marko. The fence properly highlights as TypeScript. No language server yet.
 - `Solid` (`.solid.mx`): syntax highlighting, brackets, outline, syntax
-  highlighting inside `mx_element` regions via the official Marko extension's
-  injection (see "Prerequisite" below), and Solid host diagnostics from
+  highlighting inside `mx_element` regions through the `MX` injection (see
+  "Embedded MX regions" below), and Solid host diagnostics from
   `@mxlang/language-server`. TSX fragments (`<>...</>`) are supported: each
   `<tag>` child highlights as its own `mx_element` region, the same as a
   fragment-free file (task `solidmx-grammar-fragments`; see
@@ -172,17 +172,14 @@ added back, and `languages/ngmx/config.toml` follows the identical shape.
 it also matches `MX`'s `.mx` suffix, and Zed's longest-suffix match picks
 `AstroMX`.
 
-## Prerequisite: install the official Marko extension too
+## Embedded MX regions
 
-A `.solid.mx` or `.ng.mx` file's `mx_element` regions are highlighted by
-injecting a language named `"marko"` (`base/solid/injections.scm`,
-`base/ngmx/injections.scm`) — Zed resolves that
-by name against installed languages, and the only extension that provides a
-language named `Marko` is the official `marko-js/zed` extension. **Install
-it from Zed's extension registry (Command Palette → "zed: extensions" →
-search "Marko") before installing this dev extension.** Without it,
-`mx_element` regions render as unhighlighted plain text — everything else
-(the `Solid` TypeScript host, brackets, outline) still works.
+A `.solid.mx`, `.ng.mx`, `.react.mx`, `.preact.mx` or `.hono.mx` file's
+`mx_element` regions are highlighted by injecting this extension's own `MX`
+language (`base/{solid,ngmx,reactmx,preactmx,honomx}/injections.scm`), so
+each region is parsed with the tree-sitter-mx grammar, name sugars included.
+No other extension is needed; the official `marko-js/zed` extension is still
+the one to install for `.marko` files.
 
 ## Dev install (Zed) — `Solid` and `AngularMX`
 
@@ -213,15 +210,12 @@ The dev loop is therefore **commit, then bump `rev`, then reinstall**:
    directory (`worktrees/main/packages/editors/zed` from the operator's
    space root, i.e. `packages/editors/zed` inside whichever worktree you're
    in — Zed does not watch for live changes; see "Reinstalling after a
-   change" below). **Before this step**, also install Zed's official Marko
-   extension from the registry (Command Palette → "zed: extensions" → search
-   "Marko") — see "Prerequisite" above; without it `mx_element` regions
-   render as unhighlighted plain text.
+   change" below).
 5. Open or create a `.solid.mx` file — it should be recognized as `Solid`,
    with the TypeScript host language highlighted, brackets matched, an
    outline of its declarations, and each `mx_element` region highlighted via
-   its `marko` injection (requires the official Marko extension — see
-   "Prerequisite" above). A `.ng.mx` file gets the identical treatment under
+   its `MX` injection (see "Embedded MX regions" above). A `.ng.mx` file
+   gets the identical treatment under
    `AngularMX`.
 
 **First compile is slow.** `tree-sitter-solid`'s generated `src/parser.c`

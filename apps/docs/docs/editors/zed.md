@@ -13,9 +13,9 @@ The `mxlang` extension ships seven languages:
 - **AngularMX** (`.ng.mx`) — an ordinary TypeScript module whose `@Component` template is MX. Reuses Solid's grammar unchanged: the grammar's only MX-specific addition is an opaque `mx_element` token in expression position, which is neither Solid- nor Angular-specific.
 - **AstroMX** (`.astro.mx`) — its own small grammar to separate the TypeScript fence from the MX body, with injected highlighting for both.
 
-## Install the official Marko extension too
+## Embedded MX regions
 
-`.mx`/`.astro.mx` files render correctly on their own, but the region of a `.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection* — Zed asks for a language named `marko` to highlight that region, and only Zed's official Marko extension provides a language by that name. Install it from Zed's extension registry (Command Palette → "zed: extensions" → search "Marko") before or alongside `mxlang`. Without it, those regions still parse and match brackets correctly — they just render as plain, unhighlighted text.
+The region of a `.solid.mx`, `.react.mx`, `.preact.mx`, `.hono.mx` or `.ng.mx` file that contains embedded MX is highlighted through an *injection*: Zed parses that region with this extension's own `MX` language, the same grammar `.mx` files use, name sugars included. No other extension is needed. The official Marko extension is still the one to install for `.marko` files.
 
 ## `.mx` vs `.solid.mx`, the JSX region kinds, `.ng.mx` and `.astro.mx`
 
@@ -27,9 +27,9 @@ Every one of these can match the same file's `.mx` suffix at once: `Counter.soli
 | --- | --- | --- |
 | MX (`.mx`) | Yes, from the MX grammar, `#id`/`.class`/`:name` shorthands included | Yes — see below |
 | AstroMX (`.astro.mx`) | Yes: the fence as TypeScript, the template body through the MX grammar | No |
-| Solid (`.solid.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
-| ReactMX / PreactMX / HonoMX (`.react.mx`, `.preact.mx`, `.hono.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | Yes — see below |
-| AngularMX (`.ng.mx`) | Yes, plus injected highlighting inside embedded MX regions (needs the Marko extension) | No — not registered for this language yet |
+| Solid (`.solid.mx`) | Yes, plus injected MX highlighting inside embedded MX regions | Yes — see below |
+| ReactMX / PreactMX / HonoMX (`.react.mx`, `.preact.mx`, `.hono.mx`) | Yes, plus injected MX highlighting inside embedded MX regions | Yes — see below |
+| AngularMX (`.ng.mx`) | Yes, plus injected MX highlighting inside embedded MX regions | No — not registered for this language yet |
 
 ## Diagnostics language server
 

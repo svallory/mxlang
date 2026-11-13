@@ -22,6 +22,9 @@
 #      their captures in both query copies.
 #   4e. test/corpus.bun-test.mts — MX's own: every case in test/corpus parses
 #      with no ERROR/MISSING node; `tree-sitter test` runs the same files.
+#   4f. test/regions.bun-test.mts — MX's own: an MX region of a region host
+#      (.solid.mx and the other tsx hosts) parses on its own, as Zed's `MX`
+#      injection parses it, and no Zed region host still injects `marko`.
 #   5. tools/check-wasm.mts — the wasm parses a sample and both queries load.
 #   6. scripts/zed-compile-check.sh — compiles src/ from a clean clone of
 #      HEAD, the same way Zed's file:// dev install does.
@@ -49,7 +52,7 @@ bun run build:wasm
 
 echo
 echo "==> mx shorthand trees, htmljs-parser fixtures, shorthand highlights, atoms"
-bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts ./test/atoms.bun-test.mts ./test/corpus.bun-test.mts
+bun test ./__tests__/mx-shorthand.bun-test.mts ./__tests__/fixtures.bun-test.mts ./test/highlights.bun-test.mts ./test/indentation.bun-test.mts ./test/atoms.bun-test.mts ./test/corpus.bun-test.mts ./test/regions.bun-test.mts
 
 echo
 echo "==> tree-sitter test (test/corpus)"

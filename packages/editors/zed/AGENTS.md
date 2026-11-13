@@ -19,8 +19,7 @@ After a grammar commit, move `[grammars.mx]`'s `rev`. `languages/mx/config.toml`
 "MX"`, `path_suffixes = ["mx"]`) since the official file's `name = "Marko"`
 would collide with the official extension's own language if copied as-is.
 `.marko` files are covered by installing Zed's official `marko-js/zed`
-extension directly (its own `Marko` language, unrelated to `MX`); do so
-alongside `mxlang` for the Solid injection to highlight (see below). `MX`
+extension directly (its own `Marko` language, unrelated to `MX`). `MX`
 has no language server of its own: Marko's LS (from the official extension)
 binds to its own `Marko` language, not `MX`, since Zed's
 `[language_servers.*]` binding is per-language-name.
@@ -99,15 +98,12 @@ target is a toolchain install, not a repo dependency). See
 server", and `UPSTREAM.md` for the pinned `marko-js/zed` commit the `lib.rs`
 shape was read from.
 
-`base/solid/injections.scm` injects a language named `marko` into
-`mx_element` regions (MX and Solid share syntax) — the region is a single
-opaque external token, so nothing inside it is captured by Solid's own
-queries. This package's own `MX` language is named `"MX"`, not `"Marko"`, so
-it cannot satisfy the injection despite compiling the same grammar — the
-injection resolves, and only then does the region get any syntax
-highlighting, when Zed's official `marko-js/zed` extension (`name = "Marko"`
-in its `languages/marko/config.toml`, matched case-insensitively) is also
-installed; without it the region stays unhighlighted plain text. This is a
-documented prerequisite, not a bug (see `packages/editors/zed/UPSTREAM.md`
-"Solid injection prerequisite").
+`base/{solid,ngmx,reactmx,preactmx,honomx}/injections.scm` inject this
+extension's own `MX` language into `mx_element` regions — the region is a
+single opaque external token, so nothing inside it is captured by the host
+grammar's own queries; Zed matches the injection against the language
+`name = "MX"` (`languages/mx/config.toml`) and parses the region with the
+tree-sitter-mx grammar. No other extension is needed (see
+`packages/editors/zed/UPSTREAM.md` "Solid injection").
+`packages/editors/tree-sitter-mx/test/regions.bun-test.mts` pins both halves.
 
