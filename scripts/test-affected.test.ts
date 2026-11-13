@@ -275,6 +275,17 @@ describe("projectFor", () => {
     expect(projectFor("patches/foo.ts", dirs)).toBe("patches");
   });
 
+  it("names a nested dir with no package.json by its basename, as vitest does", () => {
+    // A package dir a rename left behind holding only ignored files
+    // (node_modules, a .test-ran marker) has no package.json; vitest still
+    // globs it as a project and names it basename(dir).
+    expect(
+      projectFor("packages/editors/gone/probe.json", [
+        "packages/editors/gone/",
+      ]),
+    ).toBe("gone");
+  });
+
   it("every mapped project name exists in Vitest's resolved root projects", async () => {
     // Resolve the actual root configuration without collecting or running any
     // tests. This also guards the shared PROJECT_GLOBS against naming drift.

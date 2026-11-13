@@ -36,7 +36,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, globSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { cacheMode } from "./test-affected-cache.ts";
 import {
   CORE_DIR,
@@ -274,8 +274,10 @@ function ownerDir(file: string, list: readonly string[]): string | undefined {
 /**
  * The vitest project name owning a changed workspace-relative file: the
  * `test.name` of the project's vitest config when it sets one, else the
- * package.json name, else the dir name (vitest's own naming rules for a
- * config without `test.name`). `undefined` when the file is in no project
+ * package.json name, else the dir's basename (vitest's own naming rules for
+ * a config without `test.name`: `basename(dir)`, so a nested dir with no
+ * package.json, e.g. one a rename left holding only ignored files, is
+ * `tree-sitter-amx`, not `packages/editors/tree-sitter-amx`). `undefined` when the file is in no project
  * (docs, root scripts, apps/).
  */
 export function projectFor(
@@ -316,9 +318,9 @@ function projectName(dir: string): string {
     const pkg = JSON.parse(
       readFileSync(resolve(root, dir, "package.json"), "utf8"),
     );
-    return pkg.name ?? dir.replace(/\/+$/, "");
+    return pkg.name || basename(dir);
   } catch {
-    return dir.replace(/\/+$/, "");
+    return basename(dir);
   }
 }
 
