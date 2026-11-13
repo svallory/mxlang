@@ -10,10 +10,11 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { Ir } from "@mxlang/core";
 import { compile } from "@mxlang/target-html";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { lowerAstroMx } from "./astro-template.ts";
+import { emitTemplate, lowerAstroMx } from "./astro-template.ts";
 import renderer from "./server.ts";
 
 /**
@@ -96,7 +97,8 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
   // A fence default import of a `.mx` file reaches core, which reads the
   // callee's `<return>`; the Astro host then refuses `/var` with its own
   // message, since `.astro.mx` cannot bind one (the fence runs before the
-  // template). It points at the tag, not at the `/n`.
+  // template). It points at the `/n` binding (line 4, column 9), not at
+  // the tag.
   it("still refuses /var on the imported call, positioned", () => {
     let error: (Error & { line?: number; column?: number }) | undefined;
     try {
@@ -110,6 +112,36 @@ describe("an imported tag that declares <return>, rendered on Astro", () => {
     expect(error?.message).toBe(
       '`/var` on `<Counter>` can\'t bind in `.astro.mx`: Astro runs the `---` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. `import Counter from "./Counter.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = Counter.render({ ... }, createOut());`, and use `value` in the template.',
     );
+    expect({ line: error?.line, column: error?.column }).toEqual({
+      line: 4,
+      column: 9,
+    });
+  });
+
+  // `emitTemplate(ir)` has no source to resolve the binding's offset against,
+  // so the same refusal keeps the tag's own position.
+  it("positions the /var refusal at the tag without a source", () => {
+    const call = {
+      kind: "Component",
+      target: { kind: "name", name: "Counter" },
+      nameSpan: null,
+      attrs: [],
+      content: null,
+      attributeTags: [],
+      attributeTagTree: [],
+      args: [],
+      var: "n",
+      varBindings: [{ name: "n", span: { sourceStart: 50, sourceEnd: 51 } }],
+      returnsValue: true,
+      loc: { line: 4, column: 0 },
+    } as unknown as Ir["body"][number];
+    let error: (Error & { line?: number; column?: number }) | undefined;
+    try {
+      emitTemplate({ body: [call] } as unknown as Ir);
+    } catch (caught) {
+      error = caught as Error;
+    }
+    expect(error?.message).toMatch(/^`\/var` on `<Counter>` can't bind/);
     expect({ line: error?.line, column: error?.column }).toEqual({
       line: 4,
       column: 0,

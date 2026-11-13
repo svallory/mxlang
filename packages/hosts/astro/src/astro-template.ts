@@ -745,6 +745,7 @@ function emitAttrs(
 export function createEmitter(
   onMappedWrite?: MappedWrite,
   componentNames: ReadonlyMap<string, string> = new Map(),
+  positionOf?: (offset: number) => { line: number; column: number },
 ): Emitter<string> {
   const out: string[] = [];
   let length = 0;
@@ -1115,10 +1116,16 @@ export function createEmitter(
         // `server.ts`, through the unit's default export, which returns only
         // the markup string — not a place any binding could land. Refused
         // rather than dropped.
-        fail(
-          `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${node.authoredName ?? name}.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`,
-          node,
-        );
+        const message = `\`/var\` on \`<${node.authoredName ?? name}>\` can't bind in \`.astro.mx\`: Astro runs the \`---\` fence before the template renders, so no statement can receive the value here. Call the unit directly from the fence instead, e.g. \`import ${name} from "./${node.authoredName ?? name}.mx"; import { createOut } from "@mxlang/host-astro/runtime"; const value = ${name}.render({ ... }, createOut());\`, and use \`value\` in the template.`;
+        // Positioned at the `/var` binding when the source is known (the
+        // `lowerAstroMx` path); an `emitTemplate(ir)` caller or hand-built IR
+        // has no source to resolve an offset against, so it keeps the tag.
+        const varOffset = node.varBindings?.[0]?.span?.sourceStart;
+        if (positionOf && varOffset !== undefined) {
+          const position = positionOf(varOffset);
+          throw new AstroTemplateError(message, position.line, position.column);
+        }
+        fail(message, node);
       }
       if (node.content?.params.length) {
         fail(
@@ -1330,6 +1337,19 @@ type HoistedStatement = Extract<
   IrNode,
   { kind: "Import" | "Static" | "Export" | "InputInterface" | "Hoisted" }
 >;
+
+/** The 1-based line and 0-based column of `offset` in `source`. */
+function positionAtOffset(
+  source: string,
+  offset: number,
+): { line: number; column: number } {
+  const before = source.slice(0, offset);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  return {
+    line: before.split("\n").length,
+    column: offset - lineStart,
+  };
+}
 
 function offsetAtPosition(
   source: string,
@@ -1665,16 +1685,20 @@ export function lowerAstroMx(
       ...ir.prelude,
     ];
     const templateMappings: AstroTemplateMapping[] = [];
-    const templateEmitter = createEmitter((code, node, generatedStart) => {
-      const range = rangeOfNode(source, node);
-      if (!range) return;
-      templateMappings.push({
-        sourceStart: range[0],
-        sourceEnd: range[1],
-        generatedStart,
-        generatedEnd: generatedStart + code.length,
-      });
-    }, componentNames);
+    const templateEmitter = createEmitter(
+      (code, node, generatedStart) => {
+        const range = rangeOfNode(source, node);
+        if (!range) return;
+        templateMappings.push({
+          sourceStart: range[0],
+          sourceEnd: range[1],
+          generatedStart,
+          generatedEnd: generatedStart + code.length,
+        });
+      },
+      componentNames,
+      (offset) => positionAtOffset(source, offset),
+    );
     const templateCode = emit(templateEmitter, ir);
     const helpers: string[] = [];
     if (
