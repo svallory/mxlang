@@ -76,8 +76,12 @@ export interface Input {
 In TSX, render them with `{props.header.content?.()}` and
 `{props.row.content("Ada")()}`. In MX, with a dynamic tag:
 `<${input.header}/>` (a record renders its `content`) and
-`<${input.row.content("Ada")}/>`. A library component that expects a
-renderable (`<Show fallback>`, `<Suspense fallback>`) gets the record too, so
+`<${input.row.content("Ada")}/>`. Solid's own components (`<Show>`,
+`<Switch>`, `<For>`, `<Repeat>`, `<Loading>`, `<Errored>`) are the one
+exception: a `<@fallback>` given to one, with a body and no attributes or
+nested attribute tags, is passed as its `content` accessor, the JSX their
+`fallback` expects (`<Errored>`'s takes the error and `reset` as params).
+Any other library component that expects a renderable gets the record, so
 give it `fallback=` or the record's `content`. The full contract is in
 [AttrTag](/language/attr-tag/).
 

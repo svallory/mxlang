@@ -2761,7 +2761,11 @@ On the Solid host `content` is a reusable accessor, read with
 `<${input.head.content}/>`; a parameterized body passes arguments at that same
 dynamic call site, for example `<${input.head.content("Ada")}/>`. Escaped interpolation
 inside the accessor remains escaped during SSR and stays reactive text in the
-browser.
+browser. Solid's own components (`<Show>`, `<Switch>`, `<For>`, `<Repeat>`,
+`<Loading>`, `<Errored>`, matched by name) read `fallback` as JSX, so a
+`<@fallback>` given to one that is a single unconditional occurrence with a
+body and no attributes or nested attribute tags is passed as its `content`
+accessor, not a record; any other shape is the record.
 
 Astro and Angular are projection hosts rather than value hosts. A singular
 attribute tag becomes an Astro named slot or Angular `ngProjectAs` projection. Astro's
@@ -4097,7 +4101,7 @@ differences noted), **Astro `.astro.mx`**, **Angular**.
 | `class:foo` | **error**, quoting Marko | error | **error** | error | error | **error** | error, naming the replacement — fixed 2026-09-17; was **accepted** → `[class.active]` (bug 7) |
 | dynamic tag | `__mxRenderDynamic()` | `<Dynamic component>` | `__mxDynamic()` | same | same | **error** | `[ngComponentOutlet]` + warning |
 | component resolution | Marko's rule (binding + case) | **case only** | Marko's rule, with `componentAlias` | same | same | **case only** | **case only** |
-| repeated `<@item>` (today's shape; being replaced by Marko's record on every target, §8) | declared real array; fallback array | declared real array; fallback array | declared real array; fallback array | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
+| repeated `<@item>` (§8) | Marko's record | Marko's record | Marko's record | same | same | **error** — a slot is keyed by name | **error** — a projection is keyed by name |
 | tag params | body block | child callback | render-prop child | same | same | **error** — Astro has no render-prop form | `let-x` |
 | `<!doctype>` | emitted | **error** | **error** | error | error | emitted | emitted + warning |
 | HTML comments | **stripped** (Marko parity) | stripped | stripped | stripped | stripped | **kept** | **kept** |
