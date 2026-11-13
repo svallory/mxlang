@@ -130,7 +130,7 @@ function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
 
 const NO_NAMES = scopeNames([]);
 
-/** The first `client` statement's view of the module statements, if any. */
+/** The module statements' names, carried by the first `client` statement, if any. */
 function moduleNamesOf(body: readonly IrNode[]): ScopeNames {
   for (const node of body) {
     if (node.kind !== "DelegatedTag") continue;
@@ -202,6 +202,8 @@ interface State {
   clientNames: string[];
   /** Under `typeCheck`, what moves into `__mxClientView`, in statement order. */
   clientView: MappedCode[];
+  /** A default import's value, first in the client function. */
+  clientHead: MappedCode[];
   /** Under `typeCheck`, a default import's type is `__MxInstance<…>`. */
   usesInstance: boolean;
   /** Under `typeCheck`, the client names a refinement reads through `__mxScope`. */
@@ -275,6 +277,7 @@ export function createEmitter(
     clientTypeExports: [],
     clientNames: [],
     clientView: [],
+    clientHead: [],
     usesInstance: false,
     refined: new Set(),
     scope: options.scope ?? NO_NAMES,
@@ -1652,6 +1655,9 @@ export function createEmitter(
           for (const piece of projection.view) {
             state.clientView.push(clientPiece(piece));
           }
+          for (const piece of projection.head) {
+            state.clientHead.push(clientPiece(piece));
+          }
           if (projection.usesInstance) state.usesInstance = true;
           for (const type of projection.types) {
             state.clientTypes.push({ type, start: data.start });
@@ -2019,6 +2025,7 @@ function placeClientCode(state: State): void {
     scope.client.has(name),
   );
   const body = [
+    ...state.clientHead,
     ...inScope,
     ...state.clientBody,
     ...(listedValues.length > 0

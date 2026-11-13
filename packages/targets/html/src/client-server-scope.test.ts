@@ -265,6 +265,17 @@ describe("the server view of client names", () => {
       [[6133, "n"]],
       ESO,
     ],
+    [
+      "B22 an unused client default import is reported once",
+      'client import Chart from "./chart.ts";\n<div/>',
+      [[6133, "Chart"]],
+      NUL,
+    ],
+    [
+      "B23 KNOWN LIMIT: a client namespace body reading a client default import is undefined",
+      'client import Chart from "./chart.ts";\nclient namespace A { export const c = new Chart() }\n<div/>',
+      [[18048, "Chart"]],
+    ],
   ];
   it.each(rows)("%s", (_name, source, expected, options) => {
     expect(found(source, options)).toEqual(expected);
@@ -341,7 +352,6 @@ describe("the projection's layout", () => {
     "D1 no client view without a client statement: %j",
     (source) => {
       const { code } = compile(source, "/f/t.mx", { typeCheck: true });
-      expect(code).not.toContain("__mxClientView");
       expect(code).not.toContain("__mxClient");
     },
   );

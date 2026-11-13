@@ -437,7 +437,15 @@ export interface ClientTypeExport {
 export interface ClientProjection {
   moduleLevel: ClientPiece[];
   view: ClientPiece[];
-  /** A default import is in `view`, typed with `__MxInstance`. */
+  /**
+   * The first statements of the client function: a default import's value,
+   * `const D = __mxClientD…`. Its instance type is in `view`, exported
+   * (`export type D = __MxInstance<…>`), so the two meanings are two
+   * symbols and only the value can be unused, reported once at the name as
+   * for any other import (an exported namespace member never is).
+   */
+  head: ClientPiece[];
+  /** A default import is in `view` and `head`, typed with `__MxInstance`. */
   usesInstance: boolean;
   types: ClientType[];
   typeExports: ClientTypeExport[];
@@ -642,6 +650,29 @@ function topLevelReturns(node: unknown, found: number[] = []): number[] {
   return found;
 }
 
+/** Core's module statement names, and those of every non-`client` statement, per file. */
+const moduleNamesByCtx = new WeakMap<
+  Ctx,
+  { moduleNames: readonly ModuleStatementNames[]; shared: ReadonlySet<string> }
+>();
+
+function moduleNamesOfCtx(ctx: Ctx) {
+  let found = moduleNamesByCtx.get(ctx);
+  if (!found) {
+    const moduleNames = moduleStatementNames(ctx);
+    found = {
+      moduleNames,
+      shared: new Set(
+        moduleNames
+          .filter((statement) => statement.keyword !== "client")
+          .flatMap((statement) => statement.declarations.map((d) => d.name)),
+      ),
+    };
+    moduleNamesByCtx.set(ctx, found);
+  }
+  return found;
+}
+
 function clientProjection(
   statements: Node[],
   code: string,
@@ -658,6 +689,7 @@ function clientProjection(
   });
   const moduleLevel: ClientPiece[] = [];
   const view: ClientPiece[] = [];
+  const head: ClientPiece[] = [];
   let usesInstance = false;
   const types: ClientType[] = [];
   const typeExports: ClientTypeExport[] = [];
@@ -708,15 +740,14 @@ function clientProjection(
       byDefault = true;
       usesInstance = true;
       const name = `__mxClientD${id}`;
+      head.push(
+        partsPiece([{ code: "const " }, text(local), { code: ` = ${name};` }]),
+      );
       view.push(
         partsPiece([
-          { code: "const " },
+          { code: "export type " },
           text(local),
-          { code: ` = ${name};\n  type ` },
-          text(local),
-          {
-            code: ` = __MxInstance<typeof ${name}>;`,
-          },
+          { code: ` = __MxInstance<typeof ${name}>;` },
         ]),
       );
     };
@@ -936,6 +967,7 @@ function clientProjection(
   return {
     moduleLevel,
     view,
+    head,
     usesInstance,
     types,
     typeExports,
@@ -1170,7 +1202,7 @@ export type DelegatedTagData =
       typeCheck?: ClientProjection;
       /** A `client` statement's declared names, the ones `code` is the `var` of. */
       clientVars?: string[];
-      /** A `client` statement's view of every module statement's declarations (core's). */
+      /** Every module statement's declarations (core's), on the first `client` statement only. */
       moduleNames?: readonly ModuleStatementNames[];
     }
   | { kind: "html-comment" }
@@ -1285,18 +1317,15 @@ function resolveDelegatedTag(
     collectConstEnums(statements, constEnumsOf(ctx));
     // The module statements' declarations, as core's collector read them:
     // the projection's two views are built from these names, never from a
-    // walk of its own.
-    const moduleNames = moduleStatementNames(ctx);
-    const shared = new Set(
-      moduleNames
-        .filter((statement) => statement.keyword !== "client")
-        .flatMap((statement) => statement.declarations.map((d) => d.name)),
-    );
+    // walk of its own. Read once per file; the first `client` statement
+    // carries them for the emitter.
+    const first = !moduleNamesByCtx.has(ctx);
+    const { moduleNames, shared } = moduleNamesOfCtx(ctx);
     return {
       kind: "statement",
       code: names.length > 0 ? `var ${names.join(", ")};` : "",
       clientVars: names,
-      moduleNames,
+      ...(first ? { moduleNames } : {}),
       start: node.start,
       span: undefined,
       // The projection keeps the statement itself in a scope of its own: a
