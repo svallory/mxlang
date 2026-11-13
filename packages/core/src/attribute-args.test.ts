@@ -308,6 +308,8 @@ describe("the opt-in attribute argument refusal", () => {
       "The `<log>` tag only supports the `value=` attribute.",
       7,
     ],
+    ["<log/>", "The `<log>` tag requires a `value=` attribute.", 1],
+    ["log", "The `<log>` tag requires a `value=` attribute.", 0],
     [
       "<debug a=1/>",
       "The `<debug>` tag only supports the `value=` attribute.",
@@ -346,7 +348,9 @@ describe("the opt-in attribute argument refusal", () => {
     "<if=x><i/></if><else><i/></else>",
     '<for|x| of=[] by="id"><i/></for>',
     "<log=1/>",
+    "<log value=1/>",
     "<debug value=1/>",
+    "<debug/>",
   ])("keeps accepting the attributes Marko's core tag reads: %s", (source) => {
     expect(() => compile(source, "refuse")).not.toThrow();
   });

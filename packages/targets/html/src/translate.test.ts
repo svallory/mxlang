@@ -329,6 +329,23 @@ describe("an inert tag is inert only in its declared shape", () => {
     );
   });
 
+  it("rejects <log/> with no value, at the tag name, and accepts <log=1/>", () => {
+    // Marko: "The `<log>` tag requires a `value=` attribute.", at `log`.
+    let error: any;
+    try {
+      compile(src("<log/>"), file);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      diagnosticCode: "MX_INVALID_ATTRIBUTE",
+      message: "The `<log>` tag requires a `value=` attribute.",
+      line: 1,
+      column: 1,
+    });
+    expect(() => compile(src("<log=1/>"), file)).not.toThrow();
+  });
+
   it("accepts the attributes a tag's own definition allows", () => {
     // Per tag, not uniform, because Marko is: `<lifecycle foo="bar"/>`
     // compiles there while `<log=1 foo="bar"/>` does not — a lifecycle tag's
@@ -1870,6 +1887,37 @@ describe("attribute-tag v2 values (executed)", () => {
       );
     },
   );
+
+  // A named tag core routes dynamically (a value import, a local whose value
+  // it cannot prove is a function) takes the dynamic tag's lenient rule, as
+  // stock 6.4.4 does: arguments beside a plain attribute are refused over
+  // the arguments, arguments beside a body compile.
+  it.each([
+    ["a value import", 'import Foo from "./foo.js"\n<Foo(a) x=1/>'],
+    ["an unknown local", "<const/Foo=input.c/>\n<Foo(a) x=1/>"],
+  ])(
+    "rejects a dynamically routed named tag (%s) mixing arguments with an attribute",
+    (_case, body) => {
+      let error: any;
+      try {
+        compile(src(body), file);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        message:
+          "Tag does not support arguments when attributes or body present.",
+        line: 2,
+        column: 5,
+      });
+    },
+  );
+
+  it("accepts a value-imported tag's arguments beside a body", () => {
+    expect(() =>
+      compile(src('import Foo from "./foo.js"\n<Foo(a)>hi</Foo>'), file),
+    ).not.toThrow();
+  });
 
   // A real compile keeps an attribute tag as a body child of the call, not in
   // Marko's `attributeTags` field, so these rows run through `compile` rather

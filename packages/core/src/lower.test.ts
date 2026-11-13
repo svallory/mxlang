@@ -654,6 +654,33 @@ describe("one fixture per IR kind", () => {
     });
   });
 
+  it("an authored dynamic tag over a namespace import's member names the import", () => {
+    const ir = lowerSource(
+      'import * as J from "hono/jsx"\n<${J.Fragment}>x</>\n',
+    );
+    expect(find(ir.body, "Component").target).toEqual({
+      kind: "dynamic",
+      expr: expect.objectContaining({ code: "J.Fragment" }),
+      importMember: "J",
+    });
+  });
+
+  it.each([
+    ["a non-import root", "<${input.x}>x</>\n"],
+    [
+      "a root a `<for>` param shadows",
+      'import * as J from "hono/jsx"\n<for|J| of=input.js><${J.Fragment}>x</></for>\n',
+    ],
+    [
+      "a computed link",
+      'import * as J from "hono/jsx"\n<${J["Fragment"]}>x</>\n',
+    ],
+  ])("an authored dynamic tag over %s names no import", (_case, source) => {
+    const target = find(lowerSource(source).body, "Component").target;
+    expect(target.kind).toBe("dynamic");
+    expect(target).not.toHaveProperty("importMember");
+  });
+
   it("local-value-as-tag: a static function declaration stays a direct call", () => {
     const ir = lowerSource(
       'static function Foo() {\n  return "x";\n}\n<Foo/>\n',

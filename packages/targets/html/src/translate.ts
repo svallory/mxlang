@@ -117,6 +117,8 @@ const TAGS: Record<string, Disposition> = {
     body: "none",
     // Marko: `<log=1 foo="bar"/>` is refused; only the logged value is its own.
     attributes: "none",
+    // Marko: `<log/>` "requires a `value=` attribute"; `<debug/>` does not.
+    value: "required",
   },
   debug: {
     kind: "inert",

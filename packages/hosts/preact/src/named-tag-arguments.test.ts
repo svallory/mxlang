@@ -90,3 +90,22 @@ describe("a named custom tag takes one plain argument (preact)", () => {
     },
   );
 });
+
+describe("a value-imported tag takes the dynamic tag's rule (preact)", () => {
+  // Stock 6.4.4 compiles `import Foo from "./foo.js"` + `<Foo(a) x=1/>` as a
+  // dynamic tag and refuses it over the arguments; before, Preact emitted
+  // `__mxDynamic(Foo, [a])` with `x` silently dropped.
+  it("refuses arguments beside a plain attribute", () => {
+    let error: { message: string } | undefined;
+    try {
+      compilePreactMx(
+        'import Foo from "./foo.js"\n<Foo(a) x=1/>\n',
+        "/fixtures/test.mx",
+      );
+    } catch (caught) {
+      error = caught as { message: string };
+    }
+    expect(error?.message.replace(ANSI, "")).toBe(WITH_BODY);
+    expect(error).toMatchObject({ line: 2, column: 5 });
+  });
+});

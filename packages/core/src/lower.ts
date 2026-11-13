@@ -2238,6 +2238,22 @@ function validateBuiltinValueAttributes(
         offender,
       );
     }
+    // Marko: `<log/>` has nothing to log and is refused at the tag name;
+    // `<debug/>` compiles, so the rule is `<log>`'s alone.
+    if (
+      name === "log" &&
+      !attrs.some(
+        (attr) =>
+          isAttributeNode(attr) &&
+          (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
+      )
+    ) {
+      raise(
+        INVALID_ATTRIBUTE_CODE,
+        `The ${voice.tag(name)} tag requires a \`value=\` ${voice.attribute}.`,
+        node.name,
+      );
+    }
   } else if (name === "let" || name === "return") {
     let seen = false;
     for (const attr of attrs) {
@@ -6937,11 +6953,13 @@ function lowerComponent(
       ctx,
     );
   }
-  if (target.kind !== "dynamic") {
-    // The dynamic-tag path already ran this check before routing here; a
-    // named or `define` call reaches `lowerComponent` directly and needs its
-    // own pass so `<Card(1)><@head>…</@head></Card>` fails here instead of
-    // reaching a host emitter, which can only silently drop one side.
+  if (target.kind !== "dynamic" || target.valueImportBinding !== undefined) {
+    // An authored `<${expr}>` already ran this check in `lowerAuthoredTag`
+    // before routing here; a named or `define` call, and a named tag that core
+    // routed dynamically (a value import, an unknown local), reach
+    // `lowerComponent` directly and need their own pass so
+    // `<Card(1)><@head>…</@head></Card>` and `<Foo(a) x=1/>` fail here instead
+    // of reaching a host emitter, which can only silently drop one side.
     rejectArgsWithProps(ctx, node, target);
   }
   // A named component's lone argument is its input in stock Marko. A host
@@ -7420,6 +7438,31 @@ function raiseDisposition(
   return raise(disposition.code ?? UNSUPPORTED_CONSTRUCT_CODE, message, node);
 }
 
+/**
+ * The import binding an authored dynamic tag's member chain starts from
+ * (`J` for `<${J.Fragment}>` or `<${J.a.B}>`), when the chain is plain
+ * (no computed or optional link) and its root names a non-template import
+ * that no tag param, `<const>` or `<for>` binding shadows here; otherwise
+ * nothing. The same import test as the named route's value-import routing.
+ */
+function importMemberRoot(ctx: Ctx, expr: Node | null): string | undefined {
+  let current = expr;
+  if (current?.type !== "MemberExpression") return undefined;
+  while (current?.type === "MemberExpression") {
+    if (current.computed || current.optional) return undefined;
+    current = current.object;
+  }
+  if (current?.type !== "Identifier") return undefined;
+  const root: string = current.name;
+  if (
+    !ctx.importSpecifiers.has(root) ||
+    ctx.importDefaultFromMarkoOrMx.has(root) ||
+    (ctx.tagVarShadowed?.has(root) ?? false)
+  )
+    return undefined;
+  return root;
+}
+
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
   // Both a bare `${expr}` line and `<${expr} .../>` parse to a tag whose
   // *name* is the expression — Marko's concise mode has no other shape for
@@ -7460,9 +7503,11 @@ function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {
       isBare ? "bare" : "tagged",
     );
     if (claimed) return lowerDelegatedTag(ctx, node, DYNAMIC_TAG);
+    const importMember = importMemberRoot(ctx, dynamicExpr.node);
     return lowerComponent(ctx, node, {
       kind: "dynamic",
       expr: dynamicExpr,
+      ...(importMember !== undefined ? { importMember } : {}),
     });
   }
 

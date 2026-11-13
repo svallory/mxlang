@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 10;
+export const IR_VERSION = 11;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -633,8 +633,21 @@ export type ComponentTarget =
    * it does for `kind: "name"`, even though the tag now lowers dynamically
    * at runtime. An authored dynamic tag stays unresolved, since its
    * expression is not in general a single known binding.
+   *
+   * `importMember` is set only on an author's own `<${expr}/>` whose
+   * expression is a plain member chain (no computed or optional link) rooted
+   * at a binding the module imports from a module that is not a `.marko`/
+   * `.mx` template, and not shadowed where the tag is written: `J` for
+   * `import * as J from "hono/jsx"` then `<${J.Fragment}>`. It names that
+   * root binding. Unlike `valueImportBinding` it resolves no callee `Input`;
+   * a host reads it to know the call reaches a host component.
    */
-  | { kind: "dynamic"; expr: Expr; valueImportBinding?: string };
+  | {
+      kind: "dynamic";
+      expr: Expr;
+      valueImportBinding?: string;
+      importMember?: string;
+    };
 
 /** One name an authored `import` brings in (`Import.names`). */
 export interface ImportName {

@@ -1246,7 +1246,9 @@ export function closeFragmentBody(body: MappedCode): MappedCode {
  * Core marks exactly these calls (and a local whose value it cannot prove is
  * a function) with `valueImportBinding` when it routes them through the
  * dynamic dispatch; an author's own `<${expr}/>` never has it, and neither
- * does a `<define>` or an imported template. A positional call (`<X(a)>`) is
+ * does a `<define>` or an imported template. An author's `<${J.Fragment}>`
+ * over such an import (`import * as J from "hono/jsx"`) carries
+ * `importMember` instead, and counts too. A positional call (`<X(a)>`) is
  * not JSX-shaped and a `/var` call reads a template's return value, so
  * neither counts.
  */
@@ -1255,7 +1257,8 @@ function isHostComponentCall(
 ): boolean {
   return (
     node.target.kind === "dynamic" &&
-    node.target.valueImportBinding !== undefined &&
+    (node.target.valueImportBinding !== undefined ||
+      node.target.importMember !== undefined) &&
     node.args.length === 0 &&
     !node.var
   );

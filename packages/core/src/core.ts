@@ -42,6 +42,7 @@ import type { HostDeclarations } from "./declarations.ts";
 import type { MxDiagnosticCode } from "./diagnostic-codes.ts";
 import {
   INERT_TAG_SHAPE_CODE,
+  INVALID_ATTRIBUTE_CODE,
   UNSUPPORTED_CONSTRUCT_CODE,
 } from "./diagnostic-codes.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
@@ -269,6 +270,15 @@ export type Disposition =
        * row.
        */
       attributes?: "none" | "any";
+      /**
+       * Whether the tag's own definition requires its value attribute.
+       *
+       * Marko's `<log>` refuses `<log/>` ("requires a `value=` attribute")
+       * while `<debug/>` compiles, so this is per tag too. `"required"`
+       * refuses a tag with neither a `value=` nor a default (`<log=x/>`)
+       * attribute, at the tag name.
+       */
+      value?: "required";
     }
   | {
       kind: "error";
@@ -2451,6 +2461,19 @@ export function rejectInertShape(
       INERT_TAG_SHAPE_CODE,
       `${ownerText(label)} does not support the \`${attrNameOf(attr)}\` ${voice.attribute}; it emits nothing, so the ${voice.attribute} would be silently discarded`,
       attr,
+    );
+  }
+
+  if (
+    disposition.value === "required" &&
+    !tagAttributesOf(node).some(
+      (attr) => attrNameOf(attr) === "value" || isDefaultAttr(attr),
+    )
+  ) {
+    raise(
+      INVALID_ATTRIBUTE_CODE,
+      `The ${ownerText(label)} tag requires a \`value=\` ${voice.attribute}.`,
+      node.name,
     );
   }
 

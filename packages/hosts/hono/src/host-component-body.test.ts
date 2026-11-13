@@ -68,6 +68,11 @@ const EMITTED: Array<[string, string, string]> = [
     callOf("Fragment", "() => input.count"),
   ],
   [
+    "an authored dynamic tag over a namespace import's member",
+    `import * as J from "hono/jsx";\n<${D}{J.Fragment}>${D}{input.count}</>`,
+    callOf("J.Fragment", "() => input.count"),
+  ],
+  [
     "a host component with a lone placeholder",
     `${BOX}<Box>${D}{input.count}</Box>`,
     callOf("Box", "() => input.count"),
@@ -174,6 +179,11 @@ const MX_OWN: Array<[string, string, string]> = [
     "an authored dynamic tag",
     `<const/X=input.t/>\n<${D}{X}>${D}{input.count}</>`,
     "return (<>{__mxDynamic(X, { content: () => <>{input.count}{null}</> })}</>);",
+  ],
+  [
+    "an authored dynamic tag over a non-import member",
+    `<${D}{input.x}>${D}{input.count}</>`,
+    "return (<>{__mxDynamic(input.x, { content: () => <>{input.count}{null}</> })}</>);",
   ],
   [
     "a dynamic tag with arguments",
@@ -420,6 +430,16 @@ describe("hono: an MX host-component call renders and passes what the JSX does",
       expect(fromMx.html).toBe(html);
     },
   );
+
+  it("renders <${J.Fragment}> over a namespace import as <Fragment>{0}</Fragment> does", async () => {
+    const fromMx = await scratch.render(
+      "mx",
+      'import * as J from "hono/jsx";\n<${J.Fragment}>${input.count}</>',
+      { count: 0 },
+    );
+    // The hand-written `<Fragment>{0}</Fragment>` renders "" (pinned above).
+    expect(fromMx.html).toBe("");
+  });
 
   it("hands a component the bare value, string or array, as <Box>{count}</Box> does", async () => {
     const lone = await scratch.render("mx", "<Plain>${input.count}</Plain>", {
