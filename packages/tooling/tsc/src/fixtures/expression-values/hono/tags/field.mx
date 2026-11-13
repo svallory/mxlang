@@ -1,0 +1,3 @@
+export interface Input { mode: "strict" | "loose"; modes?: ("strict" | "loose")[]; count?: number }
+
+<p>${input.mode}</p>

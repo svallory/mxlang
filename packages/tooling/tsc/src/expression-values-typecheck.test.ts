@@ -6,7 +6,7 @@ import { runInProcess } from "./in-process.ts";
  * Expression values reach the type checker mapped: a TypeScript error inside a
  * component prop value, an attribute expression or a `${}` text expression lands
  * on the expression the author wrote, in the html target and the shared JSX
- * emitter (preact and react).
+ * emitter (preact, react and hono).
  */
 
 const fixtures = join(import.meta.dirname, "fixtures", "expression-values");
@@ -29,7 +29,7 @@ function diagnostics(host: string): string[] {
 //   5  `<input value=pick("a", missingAttr)/>`                  `missingAttr`  (5,24)
 //   6  `<p>${pick("t", missingText)}</p>`                       `missingText`  (6,16)
 //   7  `<field mode="loose" modes=["strict", 42]/>`             `42`           (7,38)
-describe.each(["html", "preact", "react"])("mx-tsc on %s", (host) => {
+describe.each(["html", "preact", "react", "hono"])("mx-tsc on %s", (host) => {
   it("reports every expression-value error on the expression itself", () => {
     expect(diagnostics(host)).toEqual([
       expect.stringMatching(/page\.mx\(3,38\): error TS2820: .*"lose"/),
