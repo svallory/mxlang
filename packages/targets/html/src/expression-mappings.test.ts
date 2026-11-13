@@ -96,6 +96,27 @@ describe("html expression values", () => {
 
   it.each([
     [
+      "<if> and <else-if> conditions",
+      "<if=c>x</if><else-if=d>y</else-if>",
+      ["c", "d"],
+    ],
+    ["a <for of> list", "<for|x| of=list>${x}</for>", ["list"]],
+    ["a <for in> object", "<for|k| in=obj>${k}</for>", ["obj"]],
+    ["a range <for>'s bounds", "<for|i| from=a to=b>${i}</for>", ["a", "b"]],
+    [
+      "attribute-tag <if> and <for> values",
+      `${IMPORT}<Field><if=c><@item/></if><for|x| of=list><@row/></for></Field>`,
+      ["c", "list"],
+    ],
+  ])("maps %s onto its authored text", (_name, source, expressions) => {
+    const result = pairs(source).pairs;
+    for (const expression of expressions) {
+      expect(result).toContainEqual([expression, expression]);
+    }
+  });
+
+  it.each([
+    [
       "a nested atom in a component prop",
       `${IMPORT}<Field modes=[~strict, ~lose]/>`,
       ["~strict", "~lose"],

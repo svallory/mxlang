@@ -122,6 +122,62 @@ describe("preact expression values", () => {
     ]);
   });
 
+  it.each([
+    [
+      "a function-valued component prop",
+      `${IMPORT}<Field onPick=function () { go() }/>`,
+      ["function () { go() }"],
+    ],
+    [
+      "a method-shorthand component prop's body",
+      `${IMPORT}<Field onPick() { go() }/>`,
+      ["{ go()"],
+    ],
+    ["a `$!{}` sole child of an element", "<div>$!{html}</div>", ["html"]],
+    [
+      "a `$!{}` sole child of a component",
+      `${IMPORT}<Field>$!{html}</Field>`,
+      ["html"],
+    ],
+    [
+      "a structured class and the names beside a spread",
+      "<div ...rest class=[a, b] data-x=y/>",
+      ["class", "[a, b]", "data-x", "y"],
+    ],
+    [
+      "a structured class passed to a define",
+      "<define/Row|input: any|><p/></define><Row class=[a, b]/>",
+      ["[a, b]"],
+    ],
+    [
+      "<if> and <else-if> conditions",
+      "<if=c>x</if><else-if=d>y</else-if>",
+      ["c", "d"],
+    ],
+    ["a <for of> list", "<for|x| of=list>${x}</for>", ["list"]],
+    ["a <for in> object", "<for|k| in=obj>${k}</for>", ["obj"]],
+    [
+      "a range <for>'s bounds and step",
+      "<for|i| from=a to=b step=s>${i}</for>",
+      ["a", "b", "s"],
+    ],
+    [
+      "a function-form by=",
+      "<for|x| of=list by=(x) => x.id>${x}</for>",
+      ["(x) => x.id"],
+    ],
+    [
+      "attribute-tag <if> and <for> values",
+      `${IMPORT}<Field><if=c><@item/></if><for|x| of=list><@row/></for></Field>`,
+      ["c", "list"],
+    ],
+  ])("maps %s onto its authored text", (_name, source, expressions) => {
+    const result = pairs(source);
+    for (const expression of expressions) {
+      expect(result).toContainEqual([expression, expression]);
+    }
+  });
+
   it("leaves a method attribute rewritten to an arrow unmapped", () => {
     const source = `${IMPORT}<Field onPick() { go() }/>`;
     const result = pairs(source);

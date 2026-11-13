@@ -521,7 +521,7 @@ export function createEmitter(
       alternate = branch.test
         ? concatMapped(
             "(",
-            branch.test.code,
+            mappedExpr(branch.test),
             " ? ",
             value,
             " : ",
@@ -577,16 +577,22 @@ export function createEmitter(
     // Under `typeCheck`, an annotated param is re-declared at the top of the
     // loop body, and the authored body stands in a block of its own.
     const open = typed.length > 0 ? `${result}.push(...(` : "";
-    const pushes = (head: string): Array<string | MappedCode> =>
+    // `lead` is the mapped loop source; `head` (its text ends in `open`
+    // when params are typed) is the rest of the loop head.
+    const pushes = (
+      lead: Array<string | MappedCode>,
+      head: string,
+    ): Array<string | MappedCode> =>
       typed.length > 0
         ? [
+            ...lead,
             head.slice(0, -open.length),
             ...typed.flatMap((line) => [line, " "]),
             `{ ${open}`,
             body,
             ")); } } return ",
           ]
-        : [head, body, ")); } return "];
+        : [...lead, head, body, ")); } return "];
 
     if (source.kind === "of") {
       const head = second
@@ -594,7 +600,11 @@ export function createEmitter(
         : `for (const ${first} of ${sourceName})`;
       return concatMapped(
         ...pushes(
-          `(() => { const ${result} = []; const ${sourceName}Raw = ${source.list.code}; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
+          [
+            `(() => { const ${result} = []; const ${sourceName}Raw = `,
+            mappedExpr(source.list),
+          ],
+          `; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
         ),
         `${result}; })()`,
       );
@@ -604,7 +614,11 @@ export function createEmitter(
       const entry = second ? `[${first}, ${second}]` : `[${first}]`;
       return concatMapped(
         ...pushes(
-          `(() => { const ${result} = []; const ${sourceName} = ${source.object.code} ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
+          [
+            `(() => { const ${result} = []; const ${sourceName} = `,
+            mappedExpr(source.object),
+          ],
+          ` ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
         ),
         `${result}; })()`,
       );
@@ -615,7 +629,13 @@ export function createEmitter(
     const compare = source.inclusive ? "<=" : "<";
     return concatMapped(
       ...pushes(
-        `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
+        [
+          `(() => { const ${result} = []; const ${start} = `,
+          source.from ? mappedExpr(source.from) : "0",
+          `; const ${bound} = `,
+          mappedExpr(source.bound),
+        ],
+        `; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
       ),
       `${result}; })()`,
     );
@@ -640,7 +660,7 @@ export function createEmitter(
       alternate = branch.test
         ? concatMapped(
             "(",
-            branch.test.code,
+            mappedExpr(branch.test),
             " ? ",
             value,
             " : ",
@@ -1453,9 +1473,15 @@ export function createEmitter(
     ifChain(node) {
       node.branches.forEach((branch, index) => {
         if (index === 0) {
-          push(`if (${branch.condition?.code}) {`);
+          push(
+            branch.condition
+              ? concatMapped("if (", mappedExpr(branch.condition), ") {")
+              : "if (undefined) {",
+          );
         } else if (branch.condition) {
-          push(`} else if (${branch.condition.code}) {`);
+          push(
+            concatMapped("} else if (", mappedExpr(branch.condition), ") {"),
+          );
         } else {
           push("} else {");
         }
@@ -1489,9 +1515,9 @@ export function createEmitter(
        *
        * The name counts emitted lines, matching the walk this replaced.
        */
-      const bind = (source: string): string => {
+      const bind = (source: string | MappedCode): string => {
         const temp = `__mxFor${state.body.length}`;
-        push(`const ${temp} = ${source};`);
+        push(concatMapped(`const ${temp} = `, source, ";"));
         return temp;
       };
 
@@ -1505,7 +1531,7 @@ export function createEmitter(
       const source = node.source;
 
       if (source.kind === "of") {
-        const raw = bind(source.list.code);
+        const raw = bind(mappedExpr(source.list));
         const list = bind(`${raw} ? ${raw} : []`);
         if (second) {
           push(`for (const [${second}, ${first}] of [...${list}].entries()) {`);
@@ -1513,12 +1539,12 @@ export function createEmitter(
           push(`for (const ${first} of ${list}) {`);
         }
       } else if (source.kind === "in") {
-        const object = bind(`${source.object.code} ?? {}`);
+        const object = bind(concatMapped(mappedExpr(source.object), " ?? {}"));
         const entry = second ? `[${first}, ${second}]` : `[${first}]`;
         push(`for (const ${entry} of Object.entries(${object})) {`);
       } else {
-        const start = bind(source.from ? source.from.code : "0");
-        const bound = bind(source.bound.code);
+        const start = bind(source.from ? mappedExpr(source.from) : "0");
+        const bound = bind(mappedExpr(source.bound));
         const compare = source.inclusive ? "<=" : "<";
         push(
           `for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) {`,
@@ -2228,7 +2254,7 @@ function placeClientCode(state: State): void {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(

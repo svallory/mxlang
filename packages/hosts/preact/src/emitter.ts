@@ -32,6 +32,7 @@ import {
   type Emitter,
   type Expr,
   type ForHead,
+  type ForSource,
   fail as failAtNode,
   type HostDeclarations,
   type Ir,
@@ -1175,6 +1176,39 @@ const rangeCounter = (params: string[], body: string): string =>
   hygienicName("__mxIndex", params, body);
 
 /**
+ * A range `<for>`'s row count (`span`) and its loop value at the counter
+ * (`value`), computed the same way for both bound forms: `to=` is inclusive,
+ * `until=` is not. `Math.max(0, …)` around `span` is what makes a backwards or
+ * empty range render nothing rather than throwing on a negative length. The
+ * authored `from`/`to`/`step` values are mapped wherever they are written.
+ */
+function rangeParts(
+  source: Extract<ForSource, { kind: "range" }>,
+  counter: string,
+): { span: MappedCode; value: MappedCode } {
+  const from = source.from ? mappedExpr(source.from) : "0";
+  const bound = mappedExpr(source.bound);
+  const step = source.step ? mappedExpr(source.step) : undefined;
+  const inclusive = source.inclusive ? " + 1" : "";
+  return {
+    span: step
+      ? concatMapped(
+          `${source.inclusive ? "Math.floor" : "Math.ceil"}(((`,
+          bound,
+          ") - (",
+          from,
+          ")) / (",
+          step,
+          `))${inclusive}`,
+        )
+      : concatMapped("(", bound, ") - (", from, `)${inclusive}`),
+    value: step
+      ? concatMapped("(", from, `) + ${counter} * (`, step, ")")
+      : concatMapped("(", from, `) + ${counter}`),
+  };
+}
+
+/**
  * Bodies that are exactly one value-holding expression container, `{x}` or
  * `{c ? x : null}`: what a fragment would receive as its sole child.
  *
@@ -2038,7 +2072,8 @@ export class PreactEmitter implements Emitter<string> {
           : (attr.kind === "dynamic" || attr.kind === "event") &&
               value === attr.value.code
             ? mappedValue(attr.value, this.#source)
-            : mapped(value, span ?? null);
+            : (this.#mappedStructuredClass(attr) ??
+              mapped(value, span ?? null));
         const nameSpan =
           mapNames &&
           attr.kind !== "event" &&
@@ -2049,7 +2084,11 @@ export class PreactEmitter implements Emitter<string> {
             : null;
         return [
           index ? ", " : "",
-          mapped(JSON.stringify(name), nameSpan),
+          // The name maps inside its quotes, onto the authored name; a name
+          // JSON escapes keeps no mapping.
+          JSON.stringify(name) === `"${name}"`
+            ? concatMapped('"', mapped(name, nameSpan), '"')
+            : JSON.stringify(name),
           ": ",
           renderedValue,
         ];
@@ -2305,7 +2344,7 @@ export class PreactEmitter implements Emitter<string> {
     for (const branch of node.branches) {
       if (branch.test) {
         parts.push(
-          branch.test.code,
+          mappedExpr(branch.test),
           " ? ",
           this.#attributeTagSingle(branch.nodes, as, valueType),
           " : ",
@@ -2336,7 +2375,7 @@ export class PreactEmitter implements Emitter<string> {
     for (const branch of node.branches) {
       if (branch.test) {
         parts.push(
-          branch.test.code,
+          mappedExpr(branch.test),
           " ? ",
           this.#attributeTagArray(branch.nodes, as, arrayType, `${key} + ":"`),
           " : ",
@@ -2399,9 +2438,12 @@ export class PreactEmitter implements Emitter<string> {
       arrayType,
       `${key} + ":" + ${itemIndex} + ":"`,
     );
-    const result = (iterable: string, params: string): MappedCode => {
+    const result = (
+      iterable: string | MappedCode,
+      params: string,
+    ): MappedCode => {
       if (!arrayType) {
-        return concatMapped(`${iterable}.flatMap((${params}) => `, body, ")");
+        return concatMapped(iterable, `.flatMap((${params}) => `, body, ")");
       }
       const accumulator = hygienicName(
         "mxAttrTags",
@@ -2411,7 +2453,8 @@ export class PreactEmitter implements Emitter<string> {
       // The explicit accumulator type contextually types object literals in
       // the body, including `(n) =>` content callbacks nested under a loop.
       return concatMapped(
-        `${iterable}.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
+        iterable,
+        `.reduce<${arrayType}>((${accumulator}, ${params}) => ${accumulator}.concat(((`,
         body,
         `) satisfies ${arrayType}) as any), [])`,
       );
@@ -2420,7 +2463,11 @@ export class PreactEmitter implements Emitter<string> {
       const params = `${first}, ${itemIndex}`;
       const listVar = hygienicName("mxList", loop.params, source.list.code);
       return result(
-        `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`,
+        concatMapped(
+          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(`,
+          mappedExpr(source.list),
+          ")",
+        ),
         params,
       );
     }
@@ -2433,23 +2480,21 @@ export class PreactEmitter implements Emitter<string> {
           `${body.code} ${source.object.code}`,
         );
       return result(
-        `Object.entries(${source.object.code} ?? {})`,
+        concatMapped("Object.entries(", mappedExpr(source.object), " ?? {})"),
         `[${first}, ${value}], ${itemIndex}`,
       );
     }
 
-    const from = source.from?.code ?? "0";
-    const bound = source.bound.code;
-    const step = source.step;
     const counter = rangeCounter(loop.params, body.code);
-    const span = step
-      ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
-      : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
-    const value = step
-      ? `(${from}) + ${counter} * (${step.code})`
-      : `(${from}) + ${counter}`;
+    const { span, value } = rangeParts(source, counter);
     return result(
-      `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value})`,
+      concatMapped(
+        "Array.from({ length: Math.max(0, ",
+        span,
+        `) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => `,
+        value,
+        ")",
+      ),
       `${first}, ${itemIndex}`,
     );
   }
@@ -2505,6 +2550,23 @@ export class PreactEmitter implements Emitter<string> {
   }
 
   /**
+   * The structured `class` value {@link #attrValue} wraps in `__mxClass(…)`,
+   * with the wrapper unmapped and the authored value mapped per token (as the
+   * non-spread `#attr` path maps it); `null` for any other attribute.
+   */
+  #mappedStructuredClass(attr: Attr): MappedCode | null {
+    if (
+      attr.kind !== "dynamic" ||
+      attr.name !== "class" ||
+      staticTemplateValue(attr.value) !== null ||
+      (attr.value.shape !== "object" && attr.value.shape !== "array")
+    ) {
+      return null;
+    }
+    return concatMapped("__mxClass(", mappedExpr(attr.value), ")");
+  }
+
+  /**
    * An attribute's value as {@link #attrValue} writes it, with its authored
    * mapping: a value written as authored (a method shorthand's printed
    * function included) keeps its exact per-token mappings through
@@ -2519,6 +2581,8 @@ export class PreactEmitter implements Emitter<string> {
       return mappedValue(attr.value, this.#source);
     }
     if (attr.kind === "spread") return mapped(value, attr.value.span ?? null);
+    const structured = this.#mappedStructuredClass(attr);
+    if (structured) return structured;
     return mapped(
       value,
       "value" in attr && typeof attr.value === "object"
@@ -2786,6 +2850,26 @@ export class PreactEmitter implements Emitter<string> {
     );
   }
 
+  /**
+   * A `$!{value}` sole child as the dialect's raw-HTML prop
+   * (` dangerouslySetInnerHTML={{ __html: value }}`), the value mapped to its
+   * authored expression.
+   */
+  #rawHtmlProp(expr: Expr): MappedCode {
+    const [open = "", close = ""] = this.#dialect
+      .rawHtmlValue(RAW_HTML_SLOT)
+      .split(RAW_HTML_SLOT);
+    return concatMapped(
+      " ",
+      this.#dialect.rawHtmlProp,
+      "={",
+      open,
+      mappedExpr(expr),
+      close,
+      "}",
+    );
+  }
+
   element(node: Extract<IrNode, { kind: "Element" }>): void {
     if (node.name === "html-script" || node.name === "html-style") {
       this.#htmlScript(node, node.name === "html-script" ? "script" : "style");
@@ -2828,11 +2912,9 @@ export class PreactEmitter implements Emitter<string> {
     if (content && this.#dialect.textareaContent === "value") {
       attrs = concatMapped(attrs, " value={", content, "}");
     }
-    const rawHtml = raw
-      ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
-      : "";
+    const rawHtml = raw ? this.#rawHtmlProp(raw.expr) : "";
     if (node.void) {
-      this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
+      this.#out.push(concatMapped(`<${node.name}`, attrs, rawHtml, " />"));
       return;
     }
     // Raw-text elements (`<style>`) keep authored `&…` literal: the browser
@@ -2847,14 +2929,15 @@ export class PreactEmitter implements Emitter<string> {
             !RAW_TEXT_ELEMENTS.has(node.name),
           );
     if (children.code === "") {
-      this.#out.push(concatMapped(`<${node.name}`, attrs, `${rawHtml} />`));
+      this.#out.push(concatMapped(`<${node.name}`, attrs, rawHtml, " />"));
       return;
     }
     this.#out.push(
       concatMapped(
         `<${node.name}`,
         attrs,
-        `${rawHtml}>`,
+        rawHtml,
+        ">",
         children,
         `</${node.name}>`,
       ),
@@ -3123,9 +3206,7 @@ export class PreactEmitter implements Emitter<string> {
       this.#out.push(this.#slot(name, "(", props, ")"));
       return;
     }
-    const rawHtml = raw
-      ? ` ${this.#dialect.rawHtmlProp}={${this.#dialect.rawHtmlValue(raw.expr.code)}}`
-      : "";
+    const rawHtml = raw ? this.#rawHtmlProp(raw.expr) : "";
     if (!node.content || raw) {
       this.#out.push(
         concatMapped(
@@ -3133,7 +3214,8 @@ export class PreactEmitter implements Emitter<string> {
           mapped(name, node.nameSpan),
           attrs,
           tags,
-          `${rawHtml} />`,
+          rawHtml,
+          " />",
         ),
       );
       return;
@@ -3322,7 +3404,7 @@ export class PreactEmitter implements Emitter<string> {
     for (const branch of node.branches) {
       if (branch.condition) {
         parts.push(
-          branch.condition.code,
+          mappedExpr(branch.condition),
           " ? ",
           // A branch is a ternary arm: an expression, evaluated lazily.
           this.#expression(branch.children, true, true),
@@ -3360,7 +3442,7 @@ export class PreactEmitter implements Emitter<string> {
     const source = node.source;
 
     /** `by=` as a key expression over the row's own binding names. */
-    const keyFrom = (fallback: string): string => {
+    const keyFrom = (fallback: string): string | MappedCode => {
       if (!node.key) return fallback;
       if (node.key.shape === "string") {
         // `by="id"` names a field of the row, exactly as Marko reads it.
@@ -3371,7 +3453,11 @@ export class PreactEmitter implements Emitter<string> {
         return `${first}.${field}`;
       }
       // Any other `by=` is a function of the row, Marko's own contract.
-      return `(${node.key.code})(${[first, second].filter(Boolean).join(", ")})`;
+      return concatMapped(
+        "(",
+        mappedExpr(node.key),
+        `)(${[first, second].filter(Boolean).join(", ")})`,
+      );
     };
 
     if (source.kind === "of") {
@@ -3383,7 +3469,11 @@ export class PreactEmitter implements Emitter<string> {
       const listVar = hygienicName("mxList", node.params, source.list.code);
       this.#out.push(
         this.#slot(
-          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code}).map((${params}) => <__mxFragment key={${key}}>`,
+          `((${listVar}) => ${listVar} ? [...${listVar}] : [])(`,
+          mappedExpr(source.list),
+          `).map((${params}) => <__mxFragment key={`,
+          key,
+          "}>",
           closeFragmentBody(body),
           "</__mxFragment>)",
         ),
@@ -3403,7 +3493,11 @@ export class PreactEmitter implements Emitter<string> {
       const key = keyFrom(first);
       this.#out.push(
         this.#slot(
-          `Object.entries(${source.object.code} ?? {}).map(([${first}, ${value}]) => <__mxFragment key={${key}}>`,
+          "Object.entries(",
+          mappedExpr(source.object),
+          ` ?? {}).map(([${first}, ${value}]) => <__mxFragment key={`,
+          key,
+          "}>",
           closeFragmentBody(body),
           "</__mxFragment>)",
         ),
@@ -3412,19 +3506,8 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
 
-    const from = source.from?.code ?? "0";
-    const bound = source.bound.code;
-    const step = source.step;
     const counter = rangeCounter(node.params, body.code);
-    // The row count, computed the same way for both bound forms: `to=` is
-    // inclusive, `until=` is not. `Math.max(0, …)` is what makes a backwards
-    // or empty range render nothing rather than throwing on a negative length.
-    const span = step
-      ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
-      : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
-    const value = step
-      ? `(${from}) + ${counter} * (${step.code})`
-      : `(${from}) + ${counter}`;
+    const { span, value } = rangeParts(source, counter);
     // One `.map` over the index array, binding the loop value inside the
     // callback rather than in a first pass. Building the values first and
     // mapping them second (the shape this replaced) put the counter out of
@@ -3434,7 +3517,13 @@ export class PreactEmitter implements Emitter<string> {
     const key = keyFrom(first);
     this.#out.push(
       this.#slot(
-        `Array.from({ length: Math.max(0, ${span}) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => ${value}).map((${first}) => <__mxFragment key={${key}}>`,
+        "Array.from({ length: Math.max(0, ",
+        span,
+        `) }, (${RANGE_MAPPER_UNUSED}, ${counter}) => `,
+        value,
+        `).map((${first}) => <__mxFragment key={`,
+        key,
+        "}>",
         closeFragmentBody(body),
         "</__mxFragment>)",
       ),
