@@ -25,6 +25,7 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import type { ParserPlugin } from "@babel/parser";
 // Type-only and erased from the emitted .d.ts: the internal signatures take
 // the MX AST; the published ones keep `Node` until PR 5, since `@mxlang/babel`
 // is private.
@@ -5586,7 +5587,7 @@ function followsGreaterThan(
 /** Where the first JSX element or fragment of `code` starts, when `code` parses only with JSX on. */
 function firstJsxStart(
   code: string,
-  options: { plugins: string[]; allowImportExportEverywhere?: boolean },
+  options: { plugins: ParserPlugin[]; allowImportExportEverywhere?: boolean },
 ): { line: number; column: number } | undefined {
   const parseWithJsx = (text: string): Node =>
     // Marko's slim Babel has no `jsx` plugin; core's own `@babel/parser` does.

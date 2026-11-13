@@ -5,10 +5,12 @@
  * helper, so they cannot disagree on what the text means.
  */
 
+import type { ParserPlugin } from "@babel/parser";
+
 /** The options `@babel/parser` reads a module statement with. */
 export interface StatementParseOptions {
   sourceType: "module";
-  plugins: string[];
+  plugins: ParserPlugin[];
   allowReturnOutsideFunction: boolean;
   allowImportExportEverywhere?: boolean;
   allowUndeclaredExports: boolean;

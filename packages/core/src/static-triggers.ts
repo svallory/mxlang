@@ -38,11 +38,17 @@
  * positioned error.
  *
  * Where it differs from the template: the parser's `claim` hook and its
- * non-ASCII `stopsShortOfToken` decline are not applied.
+ * non-ASCII `stopsShortOfToken` decline are not applied. A private name the
+ * class does not declare (`#x in this` with no `#x` member) does not parse
+ * as written, so it reads as its stand-in and is found as a row; so does a
+ * decorator on its own line (`@dec⏎class B {}`), whose stand-in parses as an
+ * expression statement or a member, so it is reported as a row instead of
+ * the decorator refusal.
  */
+import type { ParserOptions } from "@babel/parser";
 import { standInText } from "@mxlang/parser/lexer";
 import { coreBabel, coreParser } from "./babel.ts";
-import { blankStatementBlock } from "./statement-block.ts";
+import { type StatementBlock, statementBlock } from "./statement-block.ts";
 import { statementParseOptions } from "./statement-parse-options.ts";
 import type { Trigger } from "./syntax-table.ts";
 
@@ -127,16 +133,68 @@ function candidatesIn(
 
 type Ast = Record<string, unknown> & { type: string; start?: number };
 
-/** `text` parsed as the statement check parses it, or `undefined` when it does not parse. */
-function parseStatement(text: string, keyword: string): Ast | undefined {
+/**
+ * `text` parsed as the statement check parses it, or `undefined` when Babel
+ * refuses it. `block` is the statement's one block, read once from the text
+ * as written (`statementBlock`): its braces are blanked, as
+ * `blankStatementBlock` does, and a stand-in keeps every offset, so the
+ * braces sit at the same offsets in every variant. Any other throw is not a
+ * parse failure and propagates.
+ */
+function parseStatement(
+  text: string,
+  keyword: string,
+  block: StatementBlock | undefined,
+): Ast | undefined {
+  const code = block
+    ? `${text.slice(0, block.open)} ${text.slice(block.open + 1, block.close)} ${text.slice(block.close + 1)}`
+    : text;
+  const options = {
+    ...statementParseOptions(keyword),
+    allowImportExportEverywhere: true,
+  } satisfies ParserOptions;
   try {
-    return coreParser().parse(blankStatementBlock(text), {
-      ...statementParseOptions(keyword),
-      allowImportExportEverywhere: true,
-    } as never) as unknown as Ast;
-  } catch {
-    return undefined;
+    return coreParser().parse(code, options) as unknown as Ast;
+  } catch (error) {
+    if (isParseFailure(error)) return undefined;
+    throw error;
   }
+}
+
+/** Babel's own refusal of the text (`BABEL_PARSER_SYNTAX_ERROR`, …). */
+function isParseFailure(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return (
+    error instanceof SyntaxError &&
+    typeof code === "string" &&
+    code.startsWith("BABEL_PARSER_")
+  );
+}
+
+/**
+ * Fields `isReferenced` calls a reference that are TypeScript declaration
+ * names (its default branch answers `true` for a parent it does not list):
+ * by parent type, the field holding the name. A computed `key` stays a
+ * reference.
+ */
+const TS_DECLARED_NAMES: ReadonlyMap<string, string> = new Map([
+  ["TSInterfaceDeclaration", "id"],
+  ["TSTypeAliasDeclaration", "id"],
+  ["TSEnumDeclaration", "id"],
+  ["TSModuleDeclaration", "id"],
+  ["TSDeclareFunction", "id"],
+  ["TSEnumMember", "id"],
+  ["TSDeclareMethod", "key"],
+  ["TSMethodSignature", "key"],
+  ["TSPropertySignature", "key"],
+  ["TSParameterProperty", "parameter"],
+]);
+
+/** Whether `node` is the name a TypeScript declaration or signature declares. */
+function isTsDeclaredName(node: Ast, parent: Ast | undefined): boolean {
+  const field = parent && TS_DECLARED_NAMES.get(parent.type);
+  if (!field || parent[field] !== node) return false;
+  return field !== "key" || parent.computed !== true;
 }
 
 const isNode = (value: unknown): value is Ast =>
@@ -186,7 +244,10 @@ function expressionStartsAt(file: Ast, at: number): boolean {
     if (node.type === "Identifier") {
       const parent = ancestors[ancestors.length - 1];
       const grandparent = ancestors[ancestors.length - 2];
-      return t.isReferenced(node, parent, grandparent);
+      return (
+        t.isReferenced(node, parent, grandparent) &&
+        !isTsDeclaredName(node, parent)
+      );
     }
     return true;
   };
@@ -244,7 +305,9 @@ export function firstRowIn(
   const candidates = candidatesIn(text, compiled);
   // A statement with no mark costs no parse.
   if (candidates.length === 0) return undefined;
-  const written = parseStatement(text, keyword);
+  // The one block's braces, read once from the text as written.
+  const block = statementBlock(text);
+  const written = parseStatement(text, keyword, block);
   if (written) {
     // Valid TypeScript: its own reading decides every candidate.
     return candidates.find((each) => expressionStartsAt(written, each.start));
@@ -252,8 +315,10 @@ export function firstRowIn(
   for (const [index, candidate] of candidates.entries()) {
     const later = candidates.slice(index + 1);
     // Earlier candidates stay as written: they were judged not to be rows.
-    for (const replaced of [later, [candidate, ...later], [], [candidate]]) {
-      const file = parseStatement(withStandIns(text, replaced), keyword);
+    // Every candidate as written is the text itself, which did not parse
+    // above, so that variant is not tried again.
+    for (const replaced of [later, [candidate, ...later], [candidate]]) {
+      const file = parseStatement(withStandIns(text, replaced), keyword, block);
       if (!file) continue;
       if (expressionStartsAt(file, candidate.start)) return candidate;
       break;

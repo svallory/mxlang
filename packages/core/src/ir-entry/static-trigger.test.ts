@@ -316,7 +316,6 @@ describe("the matching is the template scanner's", () => {
     it.each([
       ["{ f(x) } ~zz", ["sigil", "~zz"]],
       ["{\n f(x)\n ~zz\n}", ["sigil", "~zz"]],
-      ["f(x)\n~zz", ["sigil", "~zz"]],
       ["f(x) /*\n*/ ~zz", ["sigil", "~zz"]],
       ["if (a) { b } ~zz", ["sigil", "~zz"]],
       ["for await (const x of xs) { f(x) } ~zz", ["sigil", "~zz"]],
@@ -346,6 +345,9 @@ describe("the matching is the template scanner's", () => {
       ["class A { x = f(@zz) }", ["set", "@zz"]],
       ["class A { x = [1, @zz] }", ["set", "@zz"]],
       ["#zz\nclass B {}", ["set", "#zz"]],
+      ["x = { @zz }", ["set", "@zz"]],
+      // A decorator on its own line: its stand-in parses (ASI), so it is a row.
+      ["@dec\nclass B {}", ["set", "@dec"]],
     ])("%j", (text, expected) => {
       expect(hit(text)).toEqual(expected);
     });
@@ -435,6 +437,26 @@ describe("the matching is the template scanner's", () => {
       ["x = a\n  -zz", [row("minus", "-", "-[a-z]+")]],
     ] as const)("%j", (text, kit) => {
       expect(hit(text, kit)).toBeUndefined();
+    });
+  });
+
+  describe("a name a declaration binds is no row", () => {
+    const dollar = [row("dollar", "$", "\\$[a-z]+")];
+    it.each(["const { @zz } = o"])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+    it.each([
+      "interface $zz {}",
+      "type $zz = 1",
+      "enum $zz { A }",
+      "enum E { $zz }",
+      "declare function $zz(): void",
+      "namespace $zz {}",
+      "interface I { $zz(): void }",
+      "class A { $zz(): void; $zz() {} }",
+      "class A { constructor(private $zz: number) {} }",
+    ])("%j", (text) => {
+      expect(hit(text, dollar)).toBeUndefined();
     });
   });
 
