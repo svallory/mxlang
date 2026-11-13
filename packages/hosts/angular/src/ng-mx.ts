@@ -11,6 +11,7 @@
 import {
   attachDependencies,
   type CustomTag,
+  errorDependencies,
   type Ir,
   lower,
   type MxWarning,
@@ -128,6 +129,8 @@ export function escapeTemplateLiteral(template: string): string {
  * line and column once the module AST is available.
  */
 class AuthoredImportError extends Error {
+  /** The callee files the region read before the problem was found. */
+  dependencies: string[] = [];
   constructor(
     readonly local: string,
     message: string,
@@ -389,6 +392,8 @@ function lowerRegion(
     );
   } catch (error) {
     attachDependencies(ctx, error);
+    if (error instanceof AuthoredImportError)
+      error.dependencies = [...(ctx.dependencies ?? [])];
     throw error;
   }
 
@@ -1082,8 +1087,12 @@ function throwAtImport(
       offset = node.start;
     }
   });
-  if (offset === undefined) throw new Error(error.message);
-  throw importError(source, filename, offset, error.message);
+  const raised =
+    offset === undefined
+      ? new Error(error.message)
+      : importError(source, filename, offset, error.message);
+  (raised as { dependencies?: string[] }).dependencies = error.dependencies;
+  throw raised;
 }
 
 /** The property of a decorator object literal named `name` (bare or quoted key). */
@@ -1598,8 +1607,9 @@ export function compileNgMx(
       region = lowerRegion(input.source, filename, input, options);
     } catch (error) {
       if (!(error instanceof AuthoredImportError)) {
-        if (error instanceof TranslateError)
-          failedDependencies ??= error.dependencies;
+        // The last region error is the one the parse reports; an earlier
+        // speculative attempt's list must not stand in for it.
+        failedDependencies = [...errorDependencies(error)];
         throw error;
       }
       // No module AST yet to position it against: let the parse finish with
@@ -1625,7 +1635,7 @@ export function compileNgMx(
   try {
     file = parseNgMx(source, filename, options, regionCompile);
   } catch (error) {
-    if (failedDependencies && error instanceof Error)
+    if (failedDependencies?.length && error instanceof Error)
       (error as { dependencies?: string[] }).dependencies ??=
         failedDependencies;
     throw withLineColumn(error);

@@ -2401,6 +2401,43 @@ describe("MX language plugin", {
       expect(result.pass).toBe(2);
     });
 
+    it("recompiles over the host's text for a callee a failed compile names", () => {
+      let compiles = 0;
+      const result = compileWithDependencies(
+        (fileName) => (fileName === "/project/Card.mx" ? "fixed" : undefined),
+        [],
+        () => {
+          compiles++;
+          if (compiles === 1)
+            throw Object.assign(new SyntaxError("contract failed"), {
+              dependencies: ["/project/Card.mx"],
+            });
+          return { dependencies: ["/project/Card.mx"], pass: compiles };
+        },
+      );
+
+      expect(compiles).toBe(2);
+      expect(result.pass).toBe(2);
+    });
+
+    it("rethrows a failed compile when the host holds none of its callees", () => {
+      const error = Object.assign(new SyntaxError("contract failed"), {
+        dependencies: ["/project/Card.mx"],
+      });
+      let compiles = 0;
+      expect(() =>
+        compileWithDependencies(
+          () => undefined,
+          [],
+          () => {
+            compiles++;
+            throw error;
+          },
+        ),
+      ).toThrow(error);
+      expect(compiles).toBe(1);
+    });
+
     it("does not recompile when the host holds none of the new dependencies", () => {
       let compiles = 0;
       const result = compileWithDependencies(

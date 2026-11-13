@@ -4,6 +4,7 @@ import {
   type CustomTag,
   dropOwnParserPosition,
   type Expr,
+  errorDependencies,
   flattenErrors,
   type GeneratedMapping,
   type HostDeclarations,
@@ -247,6 +248,11 @@ export function createMxLanguagePlugin(
           () => markoAuthoredSpans(source, fileName, tagsUsed),
         );
       } catch (cause) {
+        // A failed compile's callees seed the next compile of this file, so
+        // it reads their editor buffers too (`compileWithDependencies`).
+        const failedDependencies = errorDependencies(cause);
+        if (failedDependencies.length > 0)
+          dependencies.set(fileName, [...failedDependencies]);
         if (cause instanceof TemplatePage) {
           syntaxErrors.delete(fileName);
           compileDiagnostics.delete(fileName);

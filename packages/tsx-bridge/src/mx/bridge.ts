@@ -858,6 +858,7 @@ function carryDiagnostic(
     diagnosticCode?: unknown;
     end?: { line?: unknown; column?: unknown };
     fixes?: unknown;
+    dependencies?: unknown;
   },
 ): unknown {
   let raised: unknown;
@@ -880,6 +881,14 @@ function carryDiagnostic(
   }
   if (Array.isArray(from.fixes) && from.fixes.length > 0) {
     define(raised, "fixes", from.fixes);
+  }
+  // The callee files the region read before failing, so a watcher rebuilds
+  // the caller when the callee is fixed, as after a successful compile.
+  if (
+    Array.isArray(from.dependencies) &&
+    from.dependencies.every((file) => typeof file === "string")
+  ) {
+    define(raised, "dependencies", from.dependencies);
   }
   const { end } = from;
   if (typeof end?.line === "number" && typeof end.column === "number") {

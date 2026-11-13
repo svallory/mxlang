@@ -14,6 +14,7 @@ import * as core from "@mxlang/core";
 import {
   type CustomTag,
   dropOwnParserPosition,
+  errorDependencies,
   flattenErrors,
   type IrDiagnosticFix,
   isTranslateError,
@@ -669,10 +670,10 @@ export function diagnoseDocument(
     // complete scan's evidence. A failing compile can likewise have resolved
     // real callees before raising an error. Both must retain watcher edges
     // even though no ScanResult or CompileResult was returned.
-    if (isTranslateError(error)) {
-      for (const dependency of error.dependencies ?? [])
-        dependencies?.add(dependency);
-    }
+    // Not only a `TranslateError`: a region or `.ng.mx` failure reaches here
+    // as the parser's `SyntaxError`, carrying the host's list.
+    for (const dependency of errorDependencies(error))
+      dependencies?.add(dependency);
     // Core reports every error of the file: the thrown error carries them
     // (`TranslateError.errors`), or it is an aggregate of the parse errors
     // (`CompileErrors`). Each one is its own diagnostic.

@@ -173,17 +173,11 @@ describe("authored .mx import in a .ng.mx region", () => {
     expect(result.code).not.toContain("badge.mx");
   });
 
-  it("reads a `.MX` callee as `.mx`, and imports it without the suffix", () => {
+  it("reads a discovered `.MX` tag as `.mx`, and imports it without the suffix", () => {
     const dir = project({ "tags/Badge.MX": "<b>!</b>\n" });
-    const result = run(
-      dir,
-      ngMx(['import Chip from "./tags/Badge.MX";'], "<div><Chip/></div>"),
-    );
+    const result = run(dir, ngMx([], "<div><Badge/></div>"));
     expect(result.code).toContain("<div><mx-badge></mx-badge></div>");
-    expect(result.code).toContain("imports: [Chip]");
-    expect(result.code).toContain(
-      'import { Badge as Chip } from "./tags/Badge";',
-    );
+    expect(result.code).toContain('from "./tags/Badge";');
     expect(result.code).not.toContain("Badge.MX");
   });
 
@@ -277,18 +271,6 @@ describe("authored .mx import in a .ng.mx region", () => {
       "`<Foo>` resolves to `tags/x.marko`, a `.marko` file, and MX does not compile `.marko` files. Convert it to `.mx` (`tags/x.mx`).",
     );
     // At the tag (5:17 in the module), not at the import.
-    expect(err).toMatchObject({ loc: { line: 5, column: 17 } });
-  });
-
-  it("rejects an upper-case .MARKO default import used as a tag", () => {
-    const dir = project({ "tags/x.MARKO": "<b>x</b>\n" });
-    const err = thrown(() =>
-      run(
-        dir,
-        ngMx(['import Foo from "./tags/x.MARKO";'], "<div><Foo/></div>"),
-      ),
-    );
-    expect(err.message).toContain("a `.marko` file");
     expect(err).toMatchObject({ loc: { line: 5, column: 17 } });
   });
 

@@ -66,4 +66,47 @@ describe("callee readers from the lookup", () => {
     });
     expect(reader).toHaveBeenCalledTimes(1);
   });
+
+  // One case rule for file kinds: an upper-case `.<Segment>.MX` callee goes
+  // to the same reader, and reads the same contract, as the lower-case name.
+  it.each(["widget.casekind.mx", "Widget.CaseKind.MX"])(
+    "reads %s with the file kind's reader",
+    (name) => {
+      const path = join(directory, name);
+      writeFileSync(path, "export default function W() { return null }\n");
+      const contract = {
+        kind: "declared" as const,
+        path,
+        attributeTags: { tab: { multiple: false, renderable: true } },
+      };
+      const host = {
+        descriptorVersion: 0,
+        name: "casekind-jsx",
+        packageName: "@example/casekind",
+        defaultTag: "div",
+        declarations: { default: { name: "@example/casekind" } },
+        host: {
+          name: "casekind",
+          fileKinds: [
+            {
+              segment: "casekind",
+              diagnosticSource: "casekind",
+              compileRegion: () => ({ code: "null" }),
+              readCalleeInput: () => contract,
+            },
+          ],
+        },
+      } as unknown as TargetDescriptor;
+      expect(
+        readCalleeInput(
+          { kind: "name", name: "W" },
+          {
+            importer: join(directory, "caller.mx"),
+            imports: new Map([["W", `./${name}`]]),
+            targets: createTargetLookup([host]),
+          },
+        ),
+      ).toEqual({ input: contract, dependencies: [path] });
+    },
+  );
 });

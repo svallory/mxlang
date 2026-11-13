@@ -356,4 +356,12 @@ describe("the onLoad filter (hosts claim .<segment>.mx)", () => {
     expect(filter.test("/a/page.mx")).toBe(true);
     expect(filter.test("/a/page.nope.mx")).toBe(true);
   });
+
+  test("matches without regard to case", () => {
+    const filter = mxFilter(honoTargets);
+    expect(filter.test("/a/Card.MX")).toBe(true);
+    expect(filter.test("/a/Card.Mx")).toBe(true);
+    expect(filter.test("/a/Counter.Solid.MX")).toBe(false);
+    expect(filter.test("/a/Page.HONO.mx")).toBe(false);
+  });
 });

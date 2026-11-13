@@ -99,8 +99,8 @@ export function outputPathFor(
   // beside it.
   const base =
     hostModuleSegment(basename(mxPath), targets) === "ng"
-      ? basename(mxPath, ".ng.mx")
-      : basename(mxPath, ".mx");
+      ? basename(mxPath).replace(/\.ng\.mx$/i, "")
+      : basename(mxPath).replace(/\.mx$/i, "");
   return join(dirname(mxPath), `${base}${extension}`);
 }
 
@@ -657,8 +657,8 @@ export function compileOne(
   const sourceBasename = basename(mxPath);
   const tsFilename =
     hostModuleSegment(sourceBasename, targets) === "ng"
-      ? sourceBasename.replace(/\.ng\.mx$/, ".ts")
-      : sourceBasename.replace(/\.mx$/, ".ts");
+      ? sourceBasename.replace(/\.ng\.mx$/i, ".ts")
+      : sourceBasename.replace(/\.mx$/i, ".ts");
   const outputs = [outputPath, mapPath];
 
   try {

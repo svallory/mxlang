@@ -8817,18 +8817,19 @@ export function attachDependencies(ctx: Ctx, error: unknown): void {
 }
 
 /**
- * {@link lower}, with a lowering error carrying the callee files read before
- * it ({@link attachDependencies}).
+ * The callee files a thrown error says its compile read (its `dependencies`,
+ * a string array), whatever its class: a region or `.ng.mx` failure reaches a
+ * tool as the parser's `SyntaxError`, an `.astro.mx` one as
+ * `AstroTemplateError`. Empty for anything else.
  *
  * @unstable
  */
-export function lowerKeepingDependencies(ctx: Ctx, body: readonly Node[]): Ir {
-  try {
-    return lower(ctx, body);
-  } catch (error) {
-    attachDependencies(ctx, error);
-    throw error;
-  }
+export function errorDependencies(error: unknown): readonly string[] {
+  if (error === null || typeof error !== "object") return [];
+  const value = (error as { dependencies?: unknown }).dependencies;
+  return Array.isArray(value) && value.every((file) => typeof file === "string")
+    ? value
+    : [];
 }
 
 function lowerRoot(ctx: Ctx, authored: readonly MxChild[]): Ir {

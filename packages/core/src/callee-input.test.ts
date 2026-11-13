@@ -1964,6 +1964,22 @@ describe("calleeReturnsValue", () => {
     );
   });
 
+  it("reads the Input of a `.TS` callee", () => {
+    withFiles(
+      {
+        "Counter.TS":
+          "export interface Input { title?: string }\nexport default function Counter() {}\n",
+      },
+      [["Counter", "./Counter.TS"]],
+      (ctx) => {
+        const { input } = readCalleeInput(target, ctx);
+        expect(input.kind === "declared" && [...input.otherProps]).toEqual([
+          "title",
+        ]);
+      },
+    );
+  });
+
   it("calleeReturn says why a .mx callee is unreadable, and nothing for other unknowns", () => {
     withFiles(
       {

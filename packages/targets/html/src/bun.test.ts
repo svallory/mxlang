@@ -112,16 +112,27 @@ describe("@mxlang/target-html/bun", () => {
     const input = JSON.parse(
       readFileSync(join(fixtureDir, "input.json"), "utf8"),
     ) as { value: string };
-    const path = join(fixtureDir, "Upper.MX");
-    writeFileSync(path, readFileSync(join(fixtureDir, "input.marko"), "utf8"));
+    // A scratch project, not the fixture directory: `linkRuntime` stands in
+    // for the install that resolves the module's runtime import.
+    const pkgDir = mkdtempSync(join(tmpdir(), "mx-bun-upper-"));
     try {
+      writeFileSync(
+        join(pkgDir, "package.json"),
+        JSON.stringify({ name: "bun-upper-fixture" }),
+      );
+      linkRuntime(pkgDir);
+      const path = join(pkgDir, "Upper.MX");
+      writeFileSync(
+        path,
+        readFileSync(join(fixtureDir, "input.marko"), "utf8"),
+      );
       const mod = await import(path);
       expect(typeof mod.default).toBe("function");
       expect((mod.default as (i: unknown) => string)(input)).toContain(
         input.value,
       );
     } finally {
-      rmSync(path);
+      rmSync(pkgDir, { recursive: true, force: true });
     }
   });
 

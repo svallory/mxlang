@@ -1,5 +1,6 @@
 import { convertToTSX } from "@astrojs/compiler/sync";
 import {
+  errorDependencies,
   type GeneratedMapping,
   type MxWarning,
   reportScanDiagnostics,
@@ -243,6 +244,11 @@ export function createAmxLanguagePlugin(
           ),
         );
       } catch (cause) {
+        // A failed compile's callees seed the next compile of this file, so
+        // it reads their editor buffers too (`compileWithDependencies`).
+        const failedDependencies = errorDependencies(cause);
+        if (failedDependencies.length > 0)
+          dependencies.set(fileName, [...failedDependencies]);
         const foreign = foreignTemplateError(
           cause,
           fileName,

@@ -1911,3 +1911,62 @@ describe("a diagnostic's range ends where core says it ends", () => {
     expect(span(tagFile?.diagnostics[0])).toEqual([0, 3, 0, 7]);
   });
 });
+
+// A failed compile still reports the callees it read, whatever error class
+// carries them: a region and an `.ng.mx` failure reach the server as the
+// parser's `SyntaxError`, not a `TranslateError`.
+describe("a failed compile's dependencies", () => {
+  const CONTRACT =
+    'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n';
+  const CALL = "<Card><@header>a</@header><@header>b</@header></Card>";
+  const dirs: string[] = [];
+  afterEach(() => {
+    clearScanCache();
+    for (const dir of dirs.splice(0))
+      rmSync(dir, { recursive: true, force: true });
+  });
+
+  it.each([
+    [
+      "x.component.ng.mx",
+      { target: "angular-template", host: "angular" },
+      [
+        'import { Component } from "@angular/core";',
+        'import Card from "./card.mx";',
+        "@Component({",
+        '  selector: "app-x",',
+        `  template: ${CALL},`,
+        "})",
+        "export class XComponent {}",
+      ].join("\n"),
+    ],
+    [
+      "page.preact.mx",
+      { target: "preact-jsx", host: "preact" },
+      `import Card from "./card.mx";\nexport const view = () => ${CALL};\n`,
+    ],
+  ] as const)(
+    "%s names the callee whose contract failed",
+    (name, policy, text) => {
+      const dir = realpathSync(
+        mkdtempSync(join(tmpdir(), "mx-ls-failed-deps-")),
+      );
+      dirs.push(dir);
+      writeFileSync(join(dir, "package.json"), '{"name":"x"}');
+      writeFileSync(join(dir, "card.mx"), CONTRACT);
+      const dependencies = new Set<string>();
+      const diagnostics = diagnoseDocument(
+        text,
+        join(dir, name),
+        policy as TargetPolicy,
+        undefined,
+        "",
+        undefined,
+        undefined,
+        dependencies,
+      );
+      expect(diagnostics).not.toEqual([]);
+      expect(dependencies).toContain(join(dir, "card.mx"));
+    },
+  );
+});

@@ -857,7 +857,7 @@ function readInputAt(
   const parsedSources = new Map<string, string>([[path, source]]);
   const readerEntry = [...readersFor(context.targets)]
     .sort(([left], [right]) => right.length - left.length)
-    .find(([extension]) => path.endsWith(extension));
+    .find(([extension]) => path.toLowerCase().endsWith(extension));
   if (readerEntry) {
     const dependencies = [path];
     const analyzer = new InputAnalyzer(
@@ -932,7 +932,11 @@ function readInputAt(
   // Only known script modules are valid input to the Babel reader. Other
   // component formats remain untyped fallbacks unless a host registers a
   // reader for their extension above.
-  if (!SCRIPT_EXTENSIONS.some((extension) => path.endsWith(extension))) {
+  if (
+    !SCRIPT_EXTENSIONS.some((extension) =>
+      path.toLowerCase().endsWith(extension),
+    )
+  ) {
     return {
       input: { kind: "none", path },
       dependencies: [path],

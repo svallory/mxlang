@@ -2399,8 +2399,8 @@ class AngularEmitter implements Emitter<string> {
     // `x.component.ng.ts`, a file that never exists.
     this.tsFilename =
       hostModuleSegment(basename(filename), this.ctx.targets) === "ng"
-        ? filename.replace(/\.ng\.mx$/, ".ts")
-        : filename.replace(/\.mx$/, ".ts");
+        ? filename.replace(/\.ng\.mx$/i, ".ts")
+        : filename.replace(/\.mx$/i, ".ts");
     // The callee's own selector, once per tag file: two bindings of one path
     // (or a re-spelled import) must not read — or warn about — it twice. Kept
     // per emitter, so every compile re-reads through core's mtime/source-keyed

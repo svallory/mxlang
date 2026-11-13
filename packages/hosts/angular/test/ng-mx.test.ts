@@ -1829,4 +1829,22 @@ describe("compileNgMx: a failed compile reports its dependencies", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("attaches them to an error raised at an authored import", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ngmx-deps-"));
+    try {
+      const callee = join(dir, "card.mx");
+      writeFileSync(callee, "export interface Input { a?: string }\n<div/>\n");
+      const error = thrown(() =>
+        compileNgMx(
+          `import Card from "./card.mx";\nimport Chip from "./missing.mx";\n${componentFile("<div><Card/><Chip/></div>")}`,
+          join(dir, "x.component.ng.mx"),
+        ),
+      ) as { dependencies?: string[]; message?: string };
+      expect(error.message).toContain("cannot resolve `./missing.mx`");
+      expect(error.dependencies).toContain(callee);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

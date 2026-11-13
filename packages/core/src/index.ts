@@ -264,11 +264,11 @@ export {
 export {
   annotationOf,
   attachDependencies,
+  errorDependencies,
   expressionShape,
   exprValue,
   lower,
   lowerChildren,
-  lowerKeepingDependencies,
 } from "./lower.ts";
 export type {
   ContractAncestor,

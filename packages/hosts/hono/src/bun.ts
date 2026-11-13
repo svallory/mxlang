@@ -47,7 +47,7 @@ export function mxFilter(targets: TargetLookup): RegExp {
   const segments = [
     ...new Set([...FOREIGN_SEGMENTS, ...targets.moduleSegments()]),
   ];
-  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`);
+  return new RegExp(`(?<!\\.(?:${segments.join("|")}))\\.mx$`, "i");
 }
 
 /**

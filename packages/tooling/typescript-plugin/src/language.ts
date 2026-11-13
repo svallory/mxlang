@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
   dropOwnParserPosition,
+  errorDependencies,
   type HostFileKind,
   type IrDiagnosticFix,
   isTranslateError,
@@ -357,6 +358,11 @@ export function createRegionLanguagePlugin(
           () => regionAuthoredSpans(regions, fileName, discovered),
         );
       } catch (cause) {
+        // A failed compile's callees seed the next compile of this file, so
+        // it reads their editor buffers too (`compileWithDependencies`).
+        const failedDependencies = errorDependencies(cause);
+        if (failedDependencies.length > 0)
+          dependencies.set(fileName, [...failedDependencies]);
         const foreign = foreignTemplateError(
           cause,
           fileName,
@@ -1048,7 +1054,31 @@ export function compileWithDependencies<
 
   let dependencies = previousDependencies;
   let sources = dependencySources(readSource, dependencies, new Map());
-  let result = withCalleeInputSources(sources, compile);
+  // A failed compile names the callees it read too (`dependencies` on the
+  // error): when the host holds a buffer for one this pass did not read, the
+  // compile runs again over it, so a callee fixed but not yet saved clears
+  // the caller's error. Otherwise the error stands.
+  let retries = 0;
+  const run = (): T => {
+    for (;;) {
+      try {
+        return withCalleeInputSources(sources, compile);
+      } catch (error) {
+        const failed = errorDependencies(error);
+        if (
+          ++retries >= MAX_COMPILE_PASSES ||
+          failed.length === 0 ||
+          sameDependencies(dependencies, failed)
+        )
+          throw error;
+        const next = dependencySources(readSource, failed, sources);
+        if (sameSources(sources, next)) throw error;
+        dependencies = failed;
+        sources = next;
+      }
+    }
+  };
+  let result = run();
 
   for (let pass = 1; pass < MAX_COMPILE_PASSES; pass++) {
     if (sameDependencies(dependencies, result.dependencies)) return result;
@@ -1060,7 +1090,7 @@ export function compileWithDependencies<
     if (sameSources(sources, nextSources)) return result;
     dependencies = result.dependencies;
     sources = nextSources;
-    result = withCalleeInputSources(sources, compile);
+    result = run();
   }
   // The loop above only checks a pass's result against the *previous* pass
   // before running the *next* one, so the cap's own final compile (produced
