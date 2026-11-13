@@ -3,7 +3,6 @@ import {
   isCodeActionsEnabled,
   type Language,
 } from "@volar/language-core";
-import type {} from "@volar/typescript";
 import { getMappingOffset } from "@volar/typescript/lib/node/transform";
 import { getServiceScript } from "@volar/typescript/lib/node/utils";
 import type * as ts from "typescript";

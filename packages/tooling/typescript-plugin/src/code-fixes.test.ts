@@ -358,18 +358,26 @@ describe("a TypeScript fix whose edit lands on a verification-only mapping", () 
     ).service;
     return service;
   };
-
-  it("is not offered", () => {
+  /**
+   * The overlay exists once the page's suggestion diagnostics are read, so
+   * each case asks for them itself: without the overlay, Volar drops the
+   * edit as unmapped and the case would pass with no filter at all.
+   */
+  const overlaid = () => {
     const unused = plugin()
       .getSuggestionDiagnostics(page)
       .find((diagnostic) => diagnostic.code === 6133);
     expect(unused?.start).toBe(0);
-    const fixes = plugin().getCodeFixesAtPosition(page, 0, 0, [6133], {}, {});
+    return plugin();
+  };
+
+  it("is not offered", () => {
+    const fixes = overlaid().getCodeFixesAtPosition(page, 0, 0, [6133], {}, {});
     expect(fixes.map((fix) => fix.description)).toEqual([]);
   });
 
   it("empties a fix-all that would make that edit", () => {
-    const combined = plugin().getCombinedCodeFix(
+    const combined = overlaid().getCombinedCodeFix(
       { type: "file", fileName: page },
       "unusedIdentifier_prefix",
       {},
@@ -394,6 +402,18 @@ describe("a TypeScript fix whose edit lands on a verification-only mapping", () 
     expect(apply(AUTHORED, fixes[0] as ts.CodeFixAction, authored)).toBe(
       "static const value = 1;\n\n<p>${value}</p>\n",
     );
+  });
+
+  it("keeps a fix-all on authored code unchanged", () => {
+    const combined = plugin().getCombinedCodeFix(
+      { type: "file", fileName: authored },
+      "fixSpelling",
+      {},
+      {},
+    );
+    expect(
+      apply(AUTHORED, combined as unknown as ts.CodeFixAction, authored),
+    ).toBe("static const value = 1;\n\n<p>${value}</p>\n");
   });
 });
 
