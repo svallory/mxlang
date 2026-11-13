@@ -2,9 +2,11 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -32,6 +34,8 @@ import {
   APP_ERROR,
   BROKEN,
   CASE_TIMEOUT_MS,
+  here,
+  mxTsc,
   mxTscIn,
   mxTscSpawn,
   type Run,
@@ -70,6 +74,22 @@ async function pass(cwd: string, args: string[] = ["-b", "."]): Promise<Pass> {
     compiles: buildPassCounters.compileProjectNgMx,
     checkers: buildPassCounters.createChecker,
   };
+}
+
+/** The spawned case runs `dist/bin.cjs`: it must be built from these sources. */
+function expectFreshBuild() {
+  const built = statSync(mxTsc).mtimeMs;
+  const stale = readdirSync(here).filter(
+    (name) =>
+      name.endsWith(".ts") &&
+      !name.endsWith(".test.ts") &&
+      statSync(join(here, name)).mtimeMs > built,
+  );
+  if (stale.length > 0) {
+    throw new Error(
+      `dist/bin.cjs is older than src/${stale[0]}: run \`bun run build\` in packages/tooling/tsc first`,
+    );
+  }
 }
 
 const sidecar = (dir: string, project: "lib" | "app") =>
@@ -135,6 +155,23 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       const forced = await pass(app, ["-b", "--force", "."]);
       expect([forced.compiles, forced.checkers]).toEqual([2, 2]);
       expect(forced.output).toBe(broken.output);
+
+      // The built binary (CommonJS bundle, its own tool identity) is a miss
+      // here, and must compute a key and store under it: a key it cannot
+      // build leaves the sidecar as the sources wrote it.
+      expectFreshBuild();
+      const keyOf = () =>
+        (
+          JSON.parse(readFileSync(sidecar(dir, "app"), "utf8")) as {
+            key: string;
+          }
+        ).key;
+      const sourceKey = keyOf();
+      const built = await mxTscSpawn(app, ["-b", "."]);
+      expect(built.status).toBe(1);
+      // Paths print relative to the spawned cwd; the diagnostics are the same.
+      expect(templateErrors(built.output)).toEqual([APP_ERROR]);
+      expect(keyOf()).not.toBe(sourceKey);
     },
     CASE_TIMEOUT_MS,
   );
@@ -245,34 +282,6 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       expect(run.status).not.toBe(0);
       expect(existsSync(sidecar(dir, "lib"))).toBe(false);
       expect(existsSync(sidecar(dir, "app"))).toBe(false);
-    },
-    CASE_TIMEOUT_MS,
-  );
-});
-
-describe("mx-tsc -b template cache: the built binary", () => {
-  it(
-    "dist/bin.cjs stores both projects' answers and replays them on the next run",
-    async () => {
-      const dir = scratch(refsFixture);
-      const app = join(dir, "app");
-      setTemplate(dir, "app", BROKEN);
-      const cold = await mxTscSpawn(app, ["-b", "."]);
-      expect(templateErrors(cold.output)).toEqual([APP_ERROR]);
-      expect(existsSync(sidecar(dir, "lib"))).toBe(true);
-      expect(existsSync(sidecar(dir, "app"))).toBe(true);
-
-      // Only a replay can print what the stored answer says.
-      const stored = JSON.parse(readFileSync(sidecar(dir, "app"), "utf8"));
-      for (const report of stored.ngResult.reports) {
-        for (const d of report.diagnostics)
-          d.message = "replayed from the sidecar";
-      }
-      writeFileSync(sidecar(dir, "app"), JSON.stringify(stored));
-      const warm = await mxTscSpawn(app, ["-b", "."]);
-      expect(warm.status).toBe(1);
-      expect(warm.output).toContain("replayed from the sidecar");
-      expect(warm.output).not.toContain("'nmae'");
     },
     CASE_TIMEOUT_MS,
   );
@@ -457,9 +466,16 @@ describe("build-cache tool identity (row 7)", () => {
     };
     writeFileSync(join(dir, "self.cjs"), "self 1");
     pkg("@t/a", {
-      "package.json": JSON.stringify({ name: "@t/a", version: "1.0.0" }),
+      "package.json": JSON.stringify({
+        name: "@t/a",
+        version: "1.0.0",
+        dependencies: { "@t/dep": "^3.0.0" },
+      }),
       "index.js": "a 1",
       "side.cjs": "side 1",
+    });
+    pkg("@t/dep", {
+      "package.json": JSON.stringify({ name: "@t/dep", version: "3.0.0" }),
     });
     pkg("@t/b", {
       "package.json": JSON.stringify({ name: "@t/b", version: "2.0.0" }),
@@ -484,7 +500,16 @@ describe("build-cache tool identity (row 7)", () => {
     [
       "an external's version",
       "node_modules/@t/a/package.json",
-      JSON.stringify({ name: "@t/a", version: "1.0.1" }),
+      JSON.stringify({
+        name: "@t/a",
+        version: "1.0.1",
+        dependencies: { "@t/dep": "^3.0.0" },
+      }),
+    ],
+    [
+      "a runtime dependency's installed version (a lockfile bump)",
+      "node_modules/@t/dep/package.json",
+      JSON.stringify({ name: "@t/dep", version: "3.0.1" }),
     ],
     [
       "a manifest-only external's version (@angular/compiler)",
@@ -499,15 +524,28 @@ describe("build-cache tool identity (row 7)", () => {
     expect(identity()).not.toBe(before);
   });
 
-  it.each([
-    ["an external that does not resolve", "node_modules/@t/b"],
-    ["a sibling that is missing", "node_modules/@t/a/side.cjs"],
-  ])("is undefined for %s", (_name, path) => {
+  it("is undefined for an external that does not resolve", () => {
     const { identity, at } = tool();
     expect(identity()).toBeDefined();
-    rmSync(at(path), { recursive: true });
+    rmSync(at("node_modules/@t/b"), { recursive: true });
     expect(identity()).toBeUndefined();
   });
+
+  it.each([
+    ["a sibling", "node_modules/@t/a/side.cjs"],
+    ["a dependency", "node_modules/@t/dep"],
+  ])(
+    "counts %s that is gone as an input, not as uncacheable",
+    (_name, path) => {
+      const { identity, at } = tool();
+      const before = identity();
+      expect(before).toBeDefined();
+      rmSync(at(path), { recursive: true });
+      const after = identity();
+      expect(after).toBeDefined();
+      expect(after).not.toBe(before);
+    },
+  );
 
   it("run from source, counts every non-test .ts file beside and below mx-tsc's module, fixtures and dot-directories aside", () => {
     const dir = tempDir();
@@ -527,6 +565,23 @@ describe("build-cache tool identity (row 7)", () => {
     }
     expect(identity()).toBe(before);
     writeFileSync(join(dir, "src", "deep", "other.ts"), "edited");
+    expect(identity()).not.toBe(before);
+  });
+
+  it("run from source, counts a module a relative import reaches outside src/", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"));
+    mkdirSync(join(dir, "plugin"));
+    writeFileSync(
+      join(dir, "src", "self.ts"),
+      'import { paths } from "../plugin/paths.ts";\n',
+    );
+    writeFileSync(join(dir, "plugin", "paths.ts"), "export const paths = 1;");
+    const identity = () =>
+      toolIdentity({ self: join(dir, "src", "self.ts"), externals: [] });
+    const before = identity();
+    expect(before).toBeDefined();
+    writeFileSync(join(dir, "plugin", "paths.ts"), "export const paths = 2;");
     expect(identity()).not.toBe(before);
   });
 
@@ -800,6 +855,29 @@ describe("build-cache project entry (inputs read from disk)", () => {
     expect(before).toBeDefined();
     writeFileSync(join(dir, "tags", file), "<div/>");
     expect(entry()?.key).not.toBe(before);
+  });
+
+  it("rethrows a bug in building the key instead of turning the cache off", () => {
+    const { dir } = project();
+    expect(() =>
+      projectCacheEntry(typescript, {
+        tsconfigPath: join(dir, "tsconfig.json"),
+        rootNames: [join(dir, "src", "a.ng.mx")],
+        astro: false,
+        tool: () => {
+          throw new TypeError("a key-building bug");
+        },
+        previous: "",
+        position: 0,
+        claimed: new Set(),
+      }),
+    ).toThrow(TypeError);
+  });
+
+  it("is not cacheable with a build info that is not JSON (an unreadable input)", () => {
+    const { dir, entry } = project();
+    writeFileSync(join(dir, "out", "tsconfig.tsbuildinfo"), "{");
+    expect(entry()).toBeUndefined();
   });
 
   it("is not cacheable with an MX config module (its imports are no input)", () => {

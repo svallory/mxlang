@@ -33,6 +33,7 @@
 
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -42,12 +43,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCompilerCli, resolveTypescript } from "@mxlang/angular-checker";
 import {
   createTargetLookup,
   findMxConfig,
+  isTranslateError,
   scanCached,
   type TargetDescriptor,
   type TargetLookup,
@@ -255,9 +257,14 @@ const isCodeDirectory = (name: string) =>
  *   file), every non-test `.ts` file of the directory `self` is in and below
  *   it, fixture and dot-directories aside, so an edit to any of this
  *   package's modules counts.
- * - each of `externals`: its entry file's bytes, its siblings' bytes and its
- *   `package.json` version, or for a manifest-only one its version and the
- *   real path of its `package.json`.
+ * - each of `externals`: its entry file's bytes, its siblings' bytes (a
+ *   missing sibling counts as `missing`), its `package.json` version and the
+ *   version and real directory of each of its `dependencies` as installed
+ *   beside it (Babel, the template parser, cosmiconfig: a lockfile bump moves
+ *   no MX version), or for a manifest-only one its version and the real path
+ *   of its `package.json`.
+ * - run from source, also each file a relative import of those modules
+ *   reaches outside their directory (`../../typescript-plugin/src/...`).
  *
  * `undefined` when any of it cannot be resolved or read: then nothing is
  * cached.
@@ -274,10 +281,22 @@ export function toolIdentity(
         isCodeDirectory,
       )
     : [self];
+  const selfDir = dirname(self);
+  const outside = new Set<string>();
   for (const file of selfFiles) {
     const text = readText(file);
     if (text === null) return undefined;
     parts.push(`self:${basename(file)}:${hashText(text)}`);
+    if (self.endsWith(".ts")) {
+      for (const path of relativeImportsOf(file, text)) {
+        if (relative(selfDir, path).startsWith("..")) outside.add(path);
+      }
+    }
+  }
+  for (const file of [...outside].sort()) {
+    const text = readText(file);
+    if (text === null) return undefined;
+    parts.push(`self-import:${slash(relative(selfDir, file))}:${hashText(text)}`);
   }
   const entries = new Map<string, string>([["self", self]]);
   for (const external of options.externals ?? TOOL_EXTERNALS) {
@@ -296,22 +315,83 @@ export function toolIdentity(
       }
       const entry = require.resolve(external.name);
       entries.set(external.name, entry);
-      const version = versionOf(join(nearestPackageDir(entry), "package.json"));
-      if (version === undefined) return undefined;
+      const packageDir = nearestPackageDir(entry);
+      const manifest = readText(join(packageDir, "package.json"));
+      const version = versionOf(join(packageDir, "package.json"));
+      if (manifest === null || version === undefined) return undefined;
       parts.push(`${external.name}@${version}`);
-      for (const file of [
-        entry,
-        ...(external.siblings ?? []).map((s) => join(dirname(entry), s)),
-      ]) {
-        const text = readText(file);
-        if (text === null) return undefined;
-        parts.push(`${basename(file)}:${hashText(text)}`);
+      const text = readText(entry);
+      if (text === null) return undefined;
+      parts.push(`${basename(entry)}:${hashText(text)}`);
+      // A sibling that is gone is an input too: `missing`, not uncacheable.
+      for (const sibling of external.siblings ?? []) {
+        const siblingText = readText(join(dirname(entry), sibling));
+        parts.push(
+          `${sibling}:${siblingText === null ? "missing" : hashText(siblingText)}`,
+        );
       }
-    } catch {
-      return undefined;
+      for (const dependency of dependenciesOf(manifest)) {
+        const dir = installedPackageDir(packageDir, dependency);
+        const dependencyVersion =
+          dir === undefined ? undefined : versionOf(join(dir, "package.json"));
+        parts.push(
+          dir === undefined || dependencyVersion === undefined
+            ? `${external.name}>${dependency}:missing`
+            : `${external.name}>${dependency}@${dependencyVersion}:${dir}`,
+        );
+      }
+    } catch (error) {
+      // Not installed, or not readable: uncacheable. Anything else is a bug.
+      if (isUnreadableInput(error)) return undefined;
+      throw error;
     }
   }
   return createHash("sha256").update(parts.join("\n")).digest("hex");
+}
+
+/** The `dependencies` names of a `package.json` text, sorted. */
+function dependenciesOf(manifest: string): string[] {
+  try {
+    const { dependencies } = JSON.parse(manifest) as {
+      dependencies?: unknown;
+    };
+    return typeof dependencies === "object" && dependencies !== null
+      ? Object.keys(dependencies).sort()
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The real directory of package `name` as Node finds it from `fromDir`: the
+ * first `node_modules/<name>/package.json` walking up. Read by path, not
+ * through `require.resolve`, so a package whose `exports` hides its
+ * `package.json` (or has no `require` condition) is found too.
+ */
+function installedPackageDir(fromDir: string, name: string): string | undefined {
+  let dir = realpathSync(fromDir);
+  for (;;) {
+    const candidate = join(dir, "node_modules", name);
+    if (existsSync(join(candidate, "package.json"))) {
+      return realpathSync(candidate);
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
+/** The files a module's relative `import`/`export ... from` specifiers name. */
+function relativeImportsOf(file: string, text: string): string[] {
+  const found: string[] = [];
+  for (const match of text.matchAll(
+    /(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g,
+  )) {
+    const path = resolve(dirname(file), match[1] as string);
+    if (existsSync(path)) found.push(path);
+  }
+  return found;
 }
 
 function versionOf(manifest: string): string | undefined {
@@ -412,24 +492,29 @@ function tagInputsOf(mxPaths: readonly string[]): FileInput[] {
     descriptorOf(angularDescriptorModule),
   ]);
   const inputs = new Map<string, string | null>();
+  const directories = new Set<string>();
+  const read = new Set<string>();
   for (const file of mxPaths) {
     const scan = scanCached(file, { targets: angularTargets });
-    for (const dir of scan.directories) {
-      const files = filesUnder(dir, () => true);
-      inputs.set(
-        `${slash(dir)}/`,
-        isDirectory(dir) ? files.map((f) => slash(f)).join("\n") : null,
-      );
-      for (const f of files) inputs.set(slash(f), readText(f));
-    }
+    for (const dir of scan.directories) directories.add(dir);
     for (const path of [
       ...scan.packageFiles,
       ...(scan.configFiles ?? []),
       ...scan.files.map((f) => f.path),
     ]) {
-      inputs.set(slash(path), readText(path));
+      read.add(path);
     }
   }
+  // Each directory and file once, however many `.mx` files share it.
+  for (const dir of directories) {
+    const files = filesUnder(dir, () => true);
+    inputs.set(
+      `${slash(dir)}/`,
+      isDirectory(dir) ? files.map((f) => slash(f)).join("\n") : null,
+    );
+    for (const f of files) read.add(f);
+  }
+  for (const path of read) inputs.set(slash(path), readText(path));
   return [...inputs]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([path, text]) => ({ path, text }));
@@ -482,9 +567,24 @@ export function projectCacheEntry(
 ): ProjectCacheEntry | undefined {
   try {
     return readEntry(typescript, context);
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isUnreadableInput(error)) return undefined;
+    // A bug in building the key (a TypeError, a descriptor error) must not
+    // turn the cache off unseen.
+    throw error;
   }
+}
+
+/**
+ * A throw that says an input could not be read, which makes a project
+ * uncacheable: a Node fs error (`code`), a malformed JSON input
+ * (`SyntaxError`), or core's `TranslateError` for a tag file or manifest the
+ * compile reports itself. Anything else is a bug and is rethrown.
+ */
+function isUnreadableInput(error: unknown): boolean {
+  if (error instanceof SyntaxError || isTranslateError(error)) return true;
+  const code = (error as { code?: unknown } | null)?.code;
+  return error instanceof Error && typeof code === "string";
 }
 
 function readEntry(
