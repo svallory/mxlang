@@ -672,6 +672,14 @@ describe("one fixture per IR kind", () => {
       'import * as J from "hono/jsx"\n<for|J| of=input.js><${J.Fragment}>x</></for>\n',
     ],
     [
+      "a template module's namespace",
+      'import * as T from "./t.mx"\n<${T.default}>x</>\n',
+    ],
+    [
+      "a type-only namespace import",
+      'import type * as J from "hono/jsx"\n<${J.Fragment}>x</>\n',
+    ],
+    [
       "a computed link",
       'import * as J from "hono/jsx"\n<${J["Fragment"]}>x</>\n',
     ],

@@ -88,6 +88,7 @@ import {
   isFunctionLikeValue,
   isMarkoOrMxSpecifier,
   isMxAttributeTag,
+  isOwnValueAttribute,
   isSpreadAttributeNode,
   isStatementNode,
   isTagNode,
@@ -2225,12 +2226,7 @@ function validateBuiltinValueAttributes(
   } else if (name === "log" || name === "debug") {
     // Marko: the logged value is the tag's own `value=`, nothing else. Blame
     // the first attribute that is not it (the second, when both read as it).
-    const offender = offendingAttribute(
-      attrs,
-      (attr) =>
-        isAttributeNode(attr) &&
-        (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
-    );
+    const offender = offendingAttribute(attrs, isOwnValueAttribute);
     if (offender) {
       raise(
         INVALID_ATTRIBUTE_CODE,
@@ -2240,14 +2236,7 @@ function validateBuiltinValueAttributes(
     }
     // Marko: `<log/>` has nothing to log and is refused at the tag name;
     // `<debug/>` compiles, so the rule is `<log>`'s alone.
-    if (
-      name === "log" &&
-      !attrs.some(
-        (attr) =>
-          isAttributeNode(attr) &&
-          (isDefaultAttr(attr) || attrNameOf(attr) === "value"),
-      )
-    ) {
+    if (name === "log" && !attrs.some(isOwnValueAttribute)) {
       raise(
         INVALID_ATTRIBUTE_CODE,
         `The ${voice.tag(name)} tag requires a \`value=\` ${voice.attribute}.`,
@@ -7441,9 +7430,9 @@ function raiseDisposition(
 /**
  * The import binding an authored dynamic tag's member chain starts from
  * (`J` for `<${J.Fragment}>` or `<${J.a.B}>`), when the chain is plain
- * (no computed or optional link) and its root names a non-template import
- * that no tag param, `<const>` or `<for>` binding shadows here; otherwise
- * nothing. The same import test as the named route's value-import routing.
+ * (no computed or optional link) and its root names a runtime import of a
+ * module that is not a template (`isValueNonTemplateImport`), which no tag
+ * param shadows here; otherwise nothing.
  */
 function importMemberRoot(ctx: Ctx, expr: Node | null): string | undefined {
   let current = expr;
@@ -7455,12 +7444,25 @@ function importMemberRoot(ctx: Ctx, expr: Node | null): string | undefined {
   if (current?.type !== "Identifier") return undefined;
   const root: string = current.name;
   if (
-    !ctx.importSpecifiers.has(root) ||
-    ctx.importDefaultFromMarkoOrMx.has(root) ||
+    !isValueNonTemplateImport(ctx, root) ||
     (ctx.tagVarShadowed?.has(root) ?? false)
   )
     return undefined;
   return root;
+}
+
+/**
+ * Whether `name` is a runtime binding (not `import type`) the module imports
+ * from a module that is not a `.marko`/`.mx` template, whatever its form
+ * (default, named or namespace).
+ */
+function isValueNonTemplateImport(ctx: Ctx, name: string): boolean {
+  const specifier = ctx.importSpecifiers.get(name);
+  return (
+    ctx.imports.has(name) &&
+    specifier !== undefined &&
+    !isMarkoOrMxSpecifier(specifier)
+  );
 }
 
 function lowerAuthoredTag(ctx: Ctx, node: Node): IrNode | IrNode[] {

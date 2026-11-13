@@ -2466,9 +2466,7 @@ export function rejectInertShape(
 
   if (
     disposition.value === "required" &&
-    !tagAttributesOf(node).some(
-      (attr) => attrNameOf(attr) === "value" || isDefaultAttr(attr),
-    )
+    !tagAttributesOf(node).some(isOwnValueAttribute)
   ) {
     raise(
       INVALID_ATTRIBUTE_CODE,
@@ -2485,6 +2483,17 @@ export function rejectInertShape(
       node,
     );
   }
+}
+
+/**
+ * A control tag's own value attribute: `value=`, or the default attribute
+ * (`<log=x/>`), which the parser marks either way depending on the form.
+ */
+export function isOwnValueAttribute(attr: Node): boolean {
+  return (
+    isAttributeNode(attr) &&
+    (isDefaultAttr(attr) || attrNameOf(attr) === "value")
+  );
 }
 
 export function attrByName(node: Node, name: string): Node | undefined {
