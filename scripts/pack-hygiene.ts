@@ -152,6 +152,10 @@ export const PACKED_PACKAGES: PackedPackage[] = [
       // it and references only unmapped-diagnostics.d.ts and the declared
       // @mxlang/core, so it dangles on nothing private.
       "dist/authored-spans.d.ts",
+      // Emitted because index.ts imports it (the code-fix filter beneath
+      // Volar's proxy); it references only the declared @volar/language-core
+      // and the typescript peer.
+      "dist/code-action-mappings.d.ts",
       // index.d.ts re-exports applicableFixes and mxCodeFixes from it; it
       // references only language.d.ts and the declared @mxlang/core.
       "dist/code-fixes.d.ts",
