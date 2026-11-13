@@ -94,24 +94,47 @@ describe("html expression values", () => {
     expect(pairs(source).pairs).toContainEqual([expression, expression]);
   });
 
+  // Each row names every mapping its expressions get: `[text, count]` asserts
+  // that the source text maps exactly `count` times, each time from the
+  // text's authored offset onto the same text.
   it.each([
     [
       "<if> and <else-if> conditions",
-      "<if=c>x</if><else-if=d>y</else-if>",
-      ["c", "d"],
+      "<if=cond>x</if><else-if=other>y</else-if>",
+      [
+        ["cond", 1],
+        ["other", 1],
+      ],
     ],
-    ["a <for of> list", "<for|x| of=list>${x}</for>", ["list"]],
-    ["a <for in> object", "<for|k| in=obj>${k}</for>", ["obj"]],
-    ["a range <for>'s bounds", "<for|i| from=a to=b>${i}</for>", ["a", "b"]],
+    ["a <for of> list", "<for|item| of=items>${item}</for>", [["items", 1]]],
+    ["a <for in> object", "<for|key| in=record>${key}</for>", [["record", 1]]],
+    [
+      "a range <for>'s bounds",
+      "<for|i| from=low to=high>${i}</for>",
+      [
+        ["low", 1],
+        ["high", 1],
+      ],
+    ],
     [
       "attribute-tag <if> and <for> values",
-      `${IMPORT}<Field><if=c><@item/></if><for|x| of=list><@row/></for></Field>`,
-      ["c", "list"],
+      `${IMPORT}<Field><if=cond><@item/></if><for|entry| of=items><@row/></for></Field>`,
+      [
+        ["cond", 1],
+        ["items", 1],
+      ],
     ],
-  ])("maps %s onto its authored text", (_name, source, expressions) => {
-    const result = pairs(source).pairs;
-    for (const expression of expressions) {
-      expect(result).toContainEqual([expression, expression]);
+  ] as const)("maps %s at its authored offset", (_name, source, expected) => {
+    const { code, mappings } = compile(source, "/fixtures/values.mx");
+    const located = mappings.map((m) => [
+      m.sourceStart,
+      source.slice(m.sourceStart, m.sourceEnd),
+      code.slice(m.generatedStart, m.generatedEnd),
+    ]);
+    for (const [text, count] of expected) {
+      expect(located.filter(([, authored]) => authored === text)).toEqual(
+        Array.from({ length: count }, () => [source.indexOf(text), text, text]),
+      );
     }
   });
 

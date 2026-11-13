@@ -29,6 +29,18 @@ function pairs(source: string, file = "/fixtures/values.mx"): string[][] {
 
 const IMPORT = 'import Field from "./field.mx"\n';
 
+/** `[sourceStart, source text, generated text]` for every mapping. */
+function located(source: string): Array<[number, string, string]> {
+  const { code, mappings } = compilePreactMx(source, "/fixtures/values.mx", {
+    customTags: {},
+  } as never);
+  return mappings.map((m) => [
+    m.sourceStart,
+    source.slice(m.sourceStart, m.sourceEnd),
+    code.slice(m.generatedStart, m.generatedEnd),
+  ]);
+}
+
 const MODULE = join(
   import.meta.dirname,
   "../../../core/src/fixtures/syntax/atom-fixture.ts",
@@ -122,59 +134,84 @@ describe("preact expression values", () => {
     ]);
   });
 
+  // Each row names every mapping its expressions get: `[text, count]` asserts
+  // that the source text maps exactly `count` times, each time from the
+  // text's authored offset onto the same text. A range's `from` and `step`
+  // are emitted twice (in the length and in the row value), so they map twice.
   it.each([
     [
       "a function-valued component prop",
       `${IMPORT}<Field onPick=function () { go() }/>`,
-      ["function () { go() }"],
+      [["function () { go() }", 1]],
     ],
     [
       "a method-shorthand component prop's body",
       `${IMPORT}<Field onPick() { go() }/>`,
-      ["{ go()"],
+      [["{ go()", 1]],
     ],
-    ["a `$!{}` sole child of an element", "<div>$!{html}</div>", ["html"]],
+    [
+      "a `$!{}` sole child of an element",
+      "<div>$!{markup}</div>",
+      [["markup", 1]],
+    ],
     [
       "a `$!{}` sole child of a component",
-      `${IMPORT}<Field>$!{html}</Field>`,
-      ["html"],
+      `${IMPORT}<Field>$!{markup}</Field>`,
+      [["markup", 1]],
     ],
     [
       "a structured class and the names beside a spread",
-      "<div ...rest class=[a, b] data-x=y/>",
-      ["class", "[a, b]", "data-x", "y"],
+      "<div ...rest class=[first, second] data-x=value/>",
+      [
+        ["class", 1],
+        ["[first, second]", 1],
+        ["data-x", 1],
+        ["value", 1],
+      ],
     ],
     [
       "a structured class passed to a define",
-      "<define/Row|input: any|><p/></define><Row class=[a, b]/>",
-      ["[a, b]"],
+      "<define/Row|input: any|><p/></define><Row class=[first, second]/>",
+      [["[first, second]", 1]],
     ],
     [
       "<if> and <else-if> conditions",
-      "<if=c>x</if><else-if=d>y</else-if>",
-      ["c", "d"],
+      "<if=cond>x</if><else-if=other>y</else-if>",
+      [
+        ["cond", 1],
+        ["other", 1],
+      ],
     ],
-    ["a <for of> list", "<for|x| of=list>${x}</for>", ["list"]],
-    ["a <for in> object", "<for|k| in=obj>${k}</for>", ["obj"]],
+    ["a <for of> list", "<for|item| of=items>${item}</for>", [["items", 1]]],
+    ["a <for in> object", "<for|key| in=record>${key}</for>", [["record", 1]]],
     [
       "a range <for>'s bounds and step",
-      "<for|i| from=a to=b step=s>${i}</for>",
-      ["a", "b", "s"],
+      "<for|i| from=low to=high step=inc>${i}</for>",
+      [
+        ["low", 2],
+        ["high", 1],
+        ["inc", 2],
+      ],
     ],
     [
       "a function-form by=",
-      "<for|x| of=list by=(x) => x.id>${x}</for>",
-      ["(x) => x.id"],
+      "<for|item| of=items by=(row) => row.id>${item}</for>",
+      [["(row) => row.id", 1]],
     ],
     [
       "attribute-tag <if> and <for> values",
-      `${IMPORT}<Field><if=c><@item/></if><for|x| of=list><@row/></for></Field>`,
-      ["c", "list"],
+      `${IMPORT}<Field><if=cond><@item/></if><for|entry| of=items><@row/></for></Field>`,
+      [
+        ["cond", 1],
+        ["items", 1],
+      ],
     ],
-  ])("maps %s onto its authored text", (_name, source, expressions) => {
-    const result = pairs(source);
-    for (const expression of expressions) {
-      expect(result).toContainEqual([expression, expression]);
+  ] as const)("maps %s at its authored offset", (_name, source, expected) => {
+    const mappings = located(source);
+    for (const [text, count] of expected) {
+      expect(mappings.filter(([, authored]) => authored === text)).toEqual(
+        Array.from({ length: count }, () => [source.indexOf(text), text, text]),
+      );
     }
   });
 
