@@ -419,17 +419,24 @@ function originInformation(
     typescript.ScriptTarget.Latest,
     false,
   );
-  const start = file.getPositionOfLineAndCharacter(
-    origin.line - 1,
-    origin.column,
-  );
+  // The file may have shrunk since the check that measured `origin` (the
+  // author edited it while this page's virtual code stayed cached), and
+  // TypeScript's own line lookup throws past the text: a line that no longer
+  // exists drops the entry, a column past its line's end is clamped to it.
+  const lineStarts = file.getLineStarts();
+  const positionOf = (line: number, column: number): number | undefined => {
+    const index = line - 1;
+    const lineStart = lineStarts[index];
+    if (index < 0 || lineStart === undefined) return undefined;
+    const lineEnd = lineStarts[index + 1] ?? text.length;
+    return Math.min(lineStart + Math.max(0, column), lineEnd);
+  };
+  const start = positionOf(origin.line, origin.column);
+  if (start === undefined) return {};
   const end =
     origin.end === undefined
       ? start + 1
-      : file.getPositionOfLineAndCharacter(
-          origin.end.line - 1,
-          origin.end.column,
-        );
+      : (positionOf(origin.end.line, origin.end.column) ?? text.length);
   const suffix = ` (in ${origin.file}:${origin.line}:${origin.column + 1})`;
   return {
     relatedInformation: [

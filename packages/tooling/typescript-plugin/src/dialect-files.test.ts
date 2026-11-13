@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { externalFiles } from "@volar/typescript/lib/quickstart/languageServicePluginCommon";
 import ts from "typescript";
@@ -333,6 +334,62 @@ describe("dialect files through the TypeScript plugin", () => {
         category: "Error",
         code: "KIT_BAD",
         message: "bad concept",
+      },
+    ]);
+  });
+
+  it("keeps a tag-file diagnostic when the tag file shrank since the check: the related entry is dropped, never thrown on", () => {
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<x/>\n<!-- BAD -->\n",
+    });
+    const file = project.path("page.probe");
+    const service = createService(project.dir, { [file]: "<p/>\n<money/>\n" });
+    const kitBad = () =>
+      service
+        .getSyntacticDiagnostics(file)
+        .find((diagnostic) => (diagnostic.code as unknown) === "KIT_BAD");
+    expect(kitBad()?.relatedInformation).toHaveLength(1);
+    // The page's virtual code stays as checked; its origin (line 2) is now
+    // past the tag file's only line.
+    writeFileSync(project.path("concepts/money.thing.probe"), "<x/>");
+    const after = kitBad();
+    expect({
+      start: after?.start,
+      length: after?.length,
+      message: after?.messageText,
+      related: after?.relatedInformation,
+    }).toEqual({
+      start: 0,
+      length: 1,
+      message: `bad concept (in ${project.path("concepts/money.thing.probe")}:2:5)`,
+      related: undefined,
+    });
+  });
+
+  it("gives a tag-file diagnostic with an origin range a related entry of that range's length", () => {
+    // Core rejects `!bad` as an attribute name, at columns 3 to 7 of line 1.
+    const project = tagDiscoveryProject({
+      "concepts/money.thing.probe": "<y !bad/>\n",
+    });
+    const file = project.path("page.probe");
+    const service = createService(project.dir, { [file]: "<money/>\n" });
+    service.getSemanticDiagnostics(join(project.dir, "consumer.ts"));
+    const related = service
+      .getSyntacticDiagnostics(file)
+      .flatMap((diagnostic) => diagnostic.relatedInformation ?? [])
+      .map((entry) => ({
+        file: entry.file?.fileName,
+        start: entry.start,
+        length: entry.length,
+        message: entry.messageText,
+      }));
+    expect(related).toEqual([
+      {
+        file: project.path("concepts/money.thing.probe"),
+        start: 3,
+        length: 4,
+        message:
+          "Invalid attribute name `!bad` — an attribute name may use letters, digits and `._:-`",
       },
     ]);
   });
