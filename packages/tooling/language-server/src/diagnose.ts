@@ -600,14 +600,14 @@ export function diagnoseDocument(
       // plugin, never the page compiler, so it stays silent (configuration
       // diagnostics above still reach the author).
       if (kind.segment !== "ng") return scanWarnings;
-      compileNgMx(text, path, {
+      const result = compileNgMx(text, path, {
         customTags,
         defaultTag: defaultTagFor(path, hostPolicy),
         targets: lookup,
         warnings,
       });
-      // `compileNgMx` reports no callee-dependency list (follow-up): a
-      // watcher edge for a tag module a region imported is not recorded.
+      for (const dependency of result.dependencies)
+        dependencies?.add(dependency);
     } else if (hostPolicy.target === "angular-template") {
       // The Angular host's page target: its descriptor stays unwired (its
       // pages are template strings, not modules, so `load` would change what

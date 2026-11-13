@@ -221,6 +221,12 @@ export interface CompileNgMxResult {
   /** Every warning, across every region. */
   warnings: MxWarning[];
   /**
+   * The callee files core read while lowering, across every region: each
+   * once, in first-seen order. `[]` for a file with no region or no callee
+   * read. A failed compile carries the same list on its thrown error.
+   */
+  dependencies: string[];
+  /**
    * Each renamed `<const>`/`<define>` by generated name, merged across regions;
    * a name two regions give different authored names is `null`. See
    * `CompileAngularResult.authoredNames`.
@@ -250,6 +256,8 @@ interface LoweredRegion
     specifier: string;
     resolvedPath: string;
   }>;
+  /** The callee files core read while lowering this region. */
+  dependencies: string[];
 }
 
 /** What stands in for a fragment's `<>` while `parseFragment` reads it. */
@@ -571,6 +579,7 @@ function lowerRegion(
       authoredNames: Object.fromEntries(authoredNames),
       hoistedImports,
       authoredTagImports,
+      dependencies: [...(ctx.dependencies ?? [])],
     };
   }
 }
@@ -1803,6 +1812,7 @@ export function compileNgMx(
     mappings: moduleMappings,
     anchors: moduleAnchors,
     warnings,
+    dependencies: [...new Set(lowered.flatMap((r) => r.dependencies))],
     authoredNames: mergeAuthoredNames(lowered.map((r) => r.authoredNames)),
     usedTags,
     regions: lowered.map(

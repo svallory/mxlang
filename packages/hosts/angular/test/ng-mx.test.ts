@@ -1848,3 +1848,27 @@ describe("compileNgMx: a failed compile reports its dependencies", () => {
     }
   });
 });
+
+describe("compileNgMx: a successful compile reports its dependencies", () => {
+  it("lists the callee a region reads, once", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-ngmx-deps-"));
+    try {
+      const callee = join(dir, "card.mx");
+      writeFileSync(callee, "export interface Input { a?: string }\n<div/>\n");
+      const result = compileNgMx(
+        `import Card from "./card.mx";\n${componentFile('<div><Card a="x"/><Card/></div>')}`,
+        join(dir, "x.component.ng.mx"),
+      );
+      expect(result.dependencies).toEqual([callee]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("is empty when no region reads a callee", () => {
+    expect(
+      compileNgMx(componentFile("<p>hi</p>"), "/nowhere/x.component.ng.mx")
+        .dependencies,
+    ).toEqual([]);
+  });
+});

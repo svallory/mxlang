@@ -109,8 +109,9 @@ stays out of the cache after both angular compiles). A whole-file `.mx` under
 `host: "angular"` / `mx.target: "angular-template"` compiles through
 `@mxlang/host-angular`'s `compile` (the descriptor has no `load`, so the TS plugin
 and Vite are unchanged; wiring their page path is separate scope). A `.ng.mx`
-reports no callee-dependency list yet (`compileNgMx` exposes none), so a
-watcher edge for an imported tag module is a follow-up. An unknown host on an
+reports its callee dependencies on success (`CompileNgMxResult.dependencies`)
+and on failure (the thrown error's `dependencies`), so a watcher edge for an
+imported tag module is recorded either way. An unknown host on an
 `.mx` page compiles under the resolver's host plus the warning; the parity
 test is `packages/tooling/tsc/src/unknown-host-parity.test.ts`.
 An `.astro.mx` file is routed by kind too, before the

@@ -1969,4 +1969,31 @@ describe("a failed compile's dependencies", () => {
       expect(dependencies).toContain(join(dir, "card.mx"));
     },
   );
+  it("a successful x.component.ng.mx names the callee it read", () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-ls-ng-deps-")));
+    dirs.push(dir);
+    writeFileSync(join(dir, "package.json"), '{"name":"x"}');
+    writeFileSync(join(dir, "card.mx"), CONTRACT);
+    const dependencies = new Set<string>();
+    const diagnostics = diagnoseDocument(
+      [
+        'import { Component } from "@angular/core";',
+        'import Card from "./card.mx";',
+        "@Component({",
+        '  selector: "app-x",',
+        "  template: <Card><@header>a</@header></Card>,",
+        "})",
+        "export class XComponent {}",
+      ].join("\n"),
+      join(dir, "x.component.ng.mx"),
+      { target: "angular-template", host: "angular" } as TargetPolicy,
+      undefined,
+      "",
+      undefined,
+      undefined,
+      dependencies,
+    );
+    expect(diagnostics).toEqual([]);
+    expect([...dependencies]).toContain(join(dir, "card.mx"));
+  });
 });
