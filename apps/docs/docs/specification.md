@@ -139,17 +139,26 @@ extension selects a compilation model, not a flavour of one language.
 A host file kind's middle segment is the host's name (`.solid.mx`, `.astro.mx`,
 `.react.mx`, `.preact.mx`, `.hono.mx`); Angular's is `.ng.mx`.
 
-File kinds are matched on the lowercased file name, so `Card.Solid.MX` is a
-`.solid.mx` file and `Card.Astro.MX` an `.astro.mx` one. The build applies this
-rule in core's tag directory scan, the Vite plugin, the Astro template plugin
-and pages guard, and the target registry's region file kinds. Not yet covered,
-and still case-sensitive: the TypeScript plugin's and the language server's
-region-file lowering and `.mx` document checks (so the editor claims
-`Counter.Solid.MX` without lowering its MX regions, though the build compiles
-it); the html Bun loader; core's callee `Input` reads (`callee-input.ts`, so
-a tag file `Card.MX` is indexed but its `Input` reads as unknown) and the
-`.mx` check in dialect emit; the Angular host's `.mx` specifier checks; the
-extensions a dialect claims; and the `.marko` tag extension.
+File kinds are matched on the lowercased file name, so `Card.MX` is a `.mx`
+file, `Card.Solid.MX` a `.solid.mx` one and `Card.Astro.MX` an `.astro.mx`
+one. The build, the Bun loaders, the editor plugin, the language server and
+`mx-tsc` apply this rule wherever they recognise a file kind:
+- core's tag directory scan;
+- callee `Input` reads, with each host's region-file reader;
+- the Vite plugin;
+- the Astro template plugin and pages guard;
+- the target registry's region file kinds;
+- the Angular host's `.mx` and `.marko` import checks and its output paths
+  (`tags/Badge.MX` compiles to `tags/Badge.ts`).
+
+Still case-sensitive:
+- the extensions a dialect claims;
+- the default import that marks a tag import in lowering (an `import Card
+  from "./Card.MX"` lowers as a dynamic tag, not as a template call);
+- the `.marko` tag-file probe (`tags/<name>.marko`).
+
+TypeScript itself matches file extensions case-sensitively, so an upper-case
+`.MX` file never joins a type-check program, in the editor or in `mx-tsc`.
 
 ### Whole files vs region files
 
