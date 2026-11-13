@@ -1,7 +1,11 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
+import * as core from "@mxlang/core";
+import { builtinLookup } from "@mxlang/targets";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { createPluginService } from "./fixtures/plugin-service.ts";
+import { codeInformation, mergeMappings } from "./language.ts";
+import { createHtmlMappings } from "./mx-language.ts";
 
 /**
  * A `client` name is `undefined` in the server view: the module that renders
@@ -356,5 +360,74 @@ describe("the server and client views, at the authored token", {
       ) ?? []
     ).map((d) => [d.fileName, d.textSpan.start]);
     expect(found).toEqual([[ONE, ONE_SOURCE.indexOf("clamp(")]]);
+  });
+});
+
+/**
+ * A recorded mapping restricted to some tooling uses (`GeneratedMapping.use`)
+ * keeps the restriction through the html mapping pass: no full-feature
+ * mapping of the same source range stands beside it, merged or guessed.
+ */
+describe("a restricted recorded mapping", () => {
+  it("is not merged with a neighbour of another use", () => {
+    const navigation = { navigation: true };
+    expect(
+      mergeMappings([
+        {
+          sourceOffsets: [0],
+          generatedOffsets: [10],
+          lengths: [2],
+          data: codeInformation,
+        },
+        {
+          sourceOffsets: [2],
+          generatedOffsets: [12],
+          lengths: [3],
+          data: navigation,
+        },
+      ]),
+    ).toEqual([
+      {
+        sourceOffsets: [0],
+        generatedOffsets: [10],
+        lengths: [2],
+        data: codeInformation,
+      },
+      {
+        sourceOffsets: [2],
+        generatedOffsets: [12],
+        lengths: [3],
+        data: { navigation: true },
+      },
+    ]);
+  });
+
+  it("at a refinement token, only the two restricted mappings stand", () => {
+    const source =
+      "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";
+    const fileName = "/project/restricted.mx";
+    const descriptor = builtinLookup().target("html");
+    const load = descriptor?.load;
+    if (!load) throw new Error("missing html descriptor");
+    const compiled = load(core).compileModule(source, fileName, {
+      warnings: [],
+      typeCheck: true,
+    });
+    const token = source.indexOf("clamp:=q");
+    const atToken = createHtmlMappings(
+      source,
+      fileName,
+      compiled.code,
+      false,
+      descriptor.declarations?.default,
+      compiled.mappings,
+    )
+      .filter((mapping) => mapping.sourceOffsets[0] === token)
+      .map((mapping) => mapping.data);
+    // The client function's read, then the probe's `typeof`.
+    expect(atToken).toEqual([
+      { navigation: true, semantic: true },
+      { verification: true, navigation: true },
+    ]);
   });
 });
