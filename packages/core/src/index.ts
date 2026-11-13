@@ -25,6 +25,7 @@ export {
   filterAttributeTagTree,
 } from "./attr-tag.ts";
 export {
+  ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,

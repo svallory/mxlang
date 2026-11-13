@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
+  ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
@@ -27,10 +28,11 @@ const runtime = (() => {
     },
   }).outputText;
   return new Function(
-    `${js}\nreturn { record: ${ATTR_TAG_RECORD}, fold: ${ATTR_TAG_FOLD} };`,
+    `${js}\nreturn { record: ${ATTR_TAG_RECORD}, fold: ${ATTR_TAG_FOLD}, build: ${ATTR_TAG_BUILD} };`,
   )() as {
     record: (attrs: object) => Rec;
     fold: (first: Rec | undefined, attrs: object) => Rec;
+    build: (fn: (add: (attrs: object) => void) => void) => Rec | undefined;
   };
 })();
 
@@ -76,6 +78,23 @@ describe("the attribute-tag record helper", () => {
 
   it("leaves no occurrence undefined", () => {
     expect(folded()).toBeUndefined();
+  });
+
+  it("builds a fold's record from its `add` calls, in call order", () => {
+    expect(runtime.build(() => {})).toBeUndefined();
+    const lone = { a: 1 };
+    const one = runtime.build((add) => add(lone)) as Rec;
+    expect(one).toBe(lone);
+    expect(one.toArray()).toEqual([lone]);
+    expect(one.length).toBe(1);
+    const three = runtime.build((add) => {
+      add({ a: 1 });
+      add({ a: 2 });
+      add({ a: 3 });
+    }) as Rec;
+    expect(three.a).toBe(1);
+    expect(three.toArray().map((item) => item.a)).toEqual([1, 2, 3]);
+    expect(Object.keys(three)).toEqual(["a"]);
   });
 
   it("keeps two records' rests apart", () => {
@@ -128,12 +147,14 @@ describe("the attribute-tag record helper", () => {
     );
     expect(names).toContain(ATTR_TAG_RECORD);
     expect(names).toContain(ATTR_TAG_FOLD);
+    expect(names).toContain(ATTR_TAG_BUILD);
     for (const name of names) expect(name).toMatch(/^__[mM]x/);
   });
 
   it("is needed only by text that calls it", () => {
     expect(usesAttrTagRuntime(`${ATTR_TAG_RECORD}({})`)).toBe(true);
     expect(usesAttrTagRuntime(`${ATTR_TAG_FOLD}(a, {})`)).toBe(true);
+    expect(usesAttrTagRuntime(`${ATTR_TAG_BUILD}((add) => {})`)).toBe(true);
     expect(usesAttrTagRuntime("render({ item: {} })")).toBe(false);
   });
 });
