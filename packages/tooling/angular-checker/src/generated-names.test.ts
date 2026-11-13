@@ -330,6 +330,11 @@ describe("a diagnostic about a <const> destructuring pattern names what the auth
     expect(compiled.code).toContain(
       '@let __mxConst_rest1 = __mxRest(__mxPattern1, ["a"]);',
     );
+    // The map `mx-angular ng-build`'s rewriter prints names through.
+    expect(compiled.regions[0]?.authoredNames).toMatchObject({
+      __mxConst_rest: "rest",
+      __mxConst_rest1: "rest",
+    });
     const found = messages(template, UNUSED_LET);
     expect(found).toHaveLength(1);
     expect(found[0]).toContain("@let rest is declared");
