@@ -14,6 +14,8 @@ import type {
   MxRegionHoistedImport as PublicMxRegionHoistedImport,
   MxRegionPositionCheck as PublicMxRegionPositionCheck,
   PrintOptions as PublicPrintOptions,
+  SourceImports as PublicSourceImports,
+  sourceBindings as publicSourceBindings,
 } from "@mxlang/tsx-bridge";
 import { expectTypeOf, it } from "vitest";
 import type {
@@ -24,6 +26,10 @@ import type {
   MxRegionContext as RealMxRegionContext,
   MxRegionPositionCheck as RealMxRegionPositionCheck,
 } from "./mx/region-context.ts";
+import type {
+  SourceImports as RealSourceImports,
+  sourceBindings as realSourceBindings,
+} from "./mx/source-bindings.ts";
 
 /**
  * `public.d.ts` declares every MX region type inline, inside an ambient
@@ -65,4 +71,11 @@ it("types customTags as core's CustomTag, so a wrong shape is rejected", () => {
   expectTypeOf<{
     box: { attributes: Record<string, never> };
   }>().toMatchTypeOf<Tags>();
+});
+
+it("keeps sourceBindings' declared result, with its imports, equal to the real one", () => {
+  expectTypeOf<PublicSourceImports>().toEqualTypeOf<RealSourceImports>();
+  expectTypeOf<ReturnType<typeof publicSourceBindings>>().toEqualTypeOf<
+    ReturnType<typeof realSourceBindings>
+  >();
 });

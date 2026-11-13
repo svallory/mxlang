@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
+import { createAmxLanguagePlugin } from "./amx-language.ts";
 import { makePluginInstall } from "./fixtures/plugin-install.ts";
 import { createPluginService } from "./fixtures/plugin-service.ts";
 import {
@@ -381,8 +382,6 @@ describe("every pipeline's plugin reads an aliased callee's Input", {
 }, () => {
   // The read being real turns the unreadable-callee warning into "declares
   // no attribute tag `tab`"; without the resolver the alias is unresolvable.
-  // `.astro.mx` has no row: its fence imports never reach core's callee
-  // reader, so an aliased one is not read either way.
   const region =
     'import Card from "~/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n';
   function project(name: string, source: string) {
@@ -441,6 +440,24 @@ describe("every pipeline's plugin reads an aliased callee's Input", {
         codesFrom(createMxLanguagePlugin(ts, { resolveImport }), file),
       ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
       expect(codesFrom(createMxLanguagePlugin(ts), file)).toEqual([
+        "MX_UNREADABLE_CALLEE_INPUT",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("the .astro.mx plugin", () => {
+    // Astro projects an attribute tag's body, so the call gives `<@tab>` one.
+    const { dir, file, resolveImport } = project(
+      "page.astro.mx",
+      '---\nimport Card from "~/Card.mx";\n---\n<Card><@tab>x</@tab></Card>\n',
+    );
+    try {
+      expect(
+        codesFrom(createAmxLanguagePlugin(ts, { resolveImport }), file),
+      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
+      expect(codesFrom(createAmxLanguagePlugin(ts), file)).toEqual([
         "MX_UNREADABLE_CALLEE_INPUT",
       ]);
     } finally {

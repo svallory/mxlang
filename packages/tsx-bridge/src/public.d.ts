@@ -310,6 +310,19 @@ declare module "@mxlang/tsx-bridge" {
   }
 
   /**
+   * The value imports `sourceBindings` read from the source (type-only
+   * imports left out): each local binding's module specifier, the locals
+   * that are a default import from a `.marko`/`.mx` source, and the 1-based
+   * line and 0-based column where each binding's `import` statement starts.
+   * Empty on a parse failure.
+   */
+  export interface SourceImports {
+    importSpecifiers: Map<string, string>;
+    importDefaultFromMarkoOrMx: Set<string>;
+    importSites: Map<string, { line: number; column: number }>;
+  }
+
+  /**
    * Grammar relaxations for source that is *not* a plain ES module — see
    * `source-bindings.ts`'s `SourceBindingsOptions`. `allowReturnOutside-
    * Function` is for authored host module scope the host wraps in a function
@@ -332,6 +345,7 @@ declare module "@mxlang/tsx-bridge" {
     options?: SourceBindingsOptions,
   ): {
     bindings: Set<string>;
+    imports: SourceImports;
     error?: SourceBindingsError;
   };
 

@@ -134,3 +134,42 @@ describe("programBindings", () => {
     expect(programBindings(program)).toEqual(new Set());
   });
 });
+
+describe("sourceBindings' imports", () => {
+  it("reads value imports with their specifiers, .mx defaults and sites", () => {
+    const { imports } = sourceBindings(
+      [
+        'import A from "./A.mx";',
+        'import { Named } from "./named.mx";',
+        'import type T from "./T.mx";',
+        'import { type X, Y } from "./xy.ts";',
+        '  import B from "./B.astro";',
+      ].join("\n"),
+    );
+    expect(imports).toEqual({
+      importSpecifiers: new Map([
+        ["A", "./A.mx"],
+        ["Named", "./named.mx"],
+        ["Y", "./xy.ts"],
+        ["B", "./B.astro"],
+      ]),
+      importDefaultFromMarkoOrMx: new Set(["A"]),
+      importSites: new Map([
+        ["A", { line: 1, column: 0 }],
+        ["Named", { line: 2, column: 0 }],
+        ["Y", { line: 4, column: 0 }],
+        ["B", { line: 5, column: 2 }],
+      ]),
+    });
+  });
+
+  it("is empty when the source does not parse", () => {
+    const { imports, error } = sourceBindings('import A from "./A.mx";\nconst');
+    expect(error).toBeDefined();
+    expect(imports).toEqual({
+      importSpecifiers: new Map(),
+      importDefaultFromMarkoOrMx: new Set(),
+      importSites: new Map(),
+    });
+  });
+});

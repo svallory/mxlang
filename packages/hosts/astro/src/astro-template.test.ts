@@ -16,7 +16,7 @@ const OUT = (guarded: string, name: string): string =>
   `__mxAttrOut(${JSON.stringify(name)}, ${guarded})`;
 const SPREAD = "__mxAttrSpread";
 
-import { getCustomTags } from "@mxlang/core";
+import { getCustomTags, type MxWarning } from "@mxlang/core";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
@@ -1130,9 +1130,76 @@ describe("lowerAstroMx: <html-style>", () => {
   });
 });
 
+describe("a fence default import of a .mx file reaches core", () => {
+  const aliased =
+    '---\nimport Card from "~/Card.mx";\n---\n<Card><@tab>x</@tab></Card>\n';
+  function withCallee(run: (callee: string, page: string) => void) {
+    const dir = mkdtempSync(join(tmpdir(), "mx-astro-fence-"));
+    try {
+      const callee = join(dir, "Card.mx");
+      writeFileSync(callee, "export interface Input {}\n<div/>\n");
+      run(callee, join(dir, "Page.astro.mx"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("reads an aliased callee's Input through resolveImport", () => {
+    withCallee((callee, page) => {
+      let error: unknown;
+      try {
+        lowerAstroMx(aliased, page, {
+          resolveImport: (specifier) =>
+            specifier === "~/Card.mx" ? callee : undefined,
+        });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(AstroTemplateError);
+      expect((error as AstroTemplateError).diagnosticCode).toBe(
+        "MX_UNKNOWN_ATTRIBUTE_TAG",
+      );
+      expect((error as AstroTemplateError).message).toBe(
+        "`<Card>` declares no attribute tag `tab`",
+      );
+      expect((error as AstroTemplateError).dependencies).toEqual([callee]);
+    });
+  });
+
+  it("warns that an aliased callee is unreadable without a resolver", () => {
+    withCallee((_callee, page) => {
+      const warnings: MxWarning[] = [];
+      const result = lowerAstroMx(aliased, page, { warnings });
+      expect(warnings.map((warning) => warning.code)).toEqual([
+        "MX_UNREADABLE_CALLEE_INPUT",
+      ]);
+      expect(result.dependencies).toEqual([]);
+    });
+  });
+
+  it("lists a relative callee in dependencies", () => {
+    withCallee((callee, page) => {
+      const result = lowerAstroMx(
+        '---\nimport Card from "./Card.mx";\n---\n<Card/>\n',
+        page,
+      );
+      expect(result.dependencies).toEqual([callee]);
+    });
+  });
+
+  it.each([["./Card.astro"], ["./Card.marko"]])(
+    "leaves a default import from %s as it was",
+    (specifier) => {
+      const source = `---\nimport Card from "${specifier}";\n---\n<Card title="a">x</Card>\n`;
+      expect(lowerAstroMx(source, "/nowhere/Page.astro.mx").code).toBe(
+        `---\nimport Card from "${specifier}";\n---\n<Card title="a">x</Card>`,
+      );
+    },
+  );
+});
+
 describe("a failed lowering reports its dependencies", () => {
-  // A fence import's callee is not read (the fence's specifiers never reach
-  // core), so the callee here is a discovered tag, whose contract is.
+  // The callee here is a discovered tag, whose contract is read.
   it("carries the tag whose contract failed on the AstroTemplateError", () => {
     const dir = mkdtempSync(join(tmpdir(), "mx-astro-deps-"));
     try {

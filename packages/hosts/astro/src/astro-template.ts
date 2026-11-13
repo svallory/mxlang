@@ -1576,6 +1576,29 @@ export function lowerAstroMx(
     }
     checkReservedSource(match?.[1] ?? "", 2, 0, FENCE_SOURCE);
     for (const name of fenceBindings.bindings) ctx.imports.add(name);
+    // A fence default import of a `.mx` file reaches core's import tables,
+    // so core reads the callee's `Input` (through `ctx.resolveImport` first)
+    // and lists the file in `dependencies`. Being in both sets keeps the
+    // static component route, so the emitted Astro call is unchanged. Every
+    // other fence import (named, namespace, a `.astro`/package component, a
+    // `.marko` default) is left out: core would route it through the dynamic
+    // tag path and change the Astro output, or refuse a Marko default.
+    const fenceImports = fenceBindings.imports;
+    for (const local of fenceImports.importDefaultFromMarkoOrMx) {
+      const specifier = fenceImports.importSpecifiers.get(local);
+      if (specifier === undefined || /\.marko$/i.test(specifier)) continue;
+      ctx.importSpecifiers.set(local, specifier);
+      ctx.importDefaultFromMarkoOrMx.add(local);
+      const site = fenceImports.importSites.get(local);
+      // The fence starts on the file's second line, after the opening `---`.
+      if (site) {
+        ctx.bindingSites.set(local, {
+          kind: "imported",
+          line: site.line + 1,
+          column: site.column,
+        });
+      }
+    }
     // Local extension of the capitalized-import rule: a fence binding's
     // own non-import value — a top-level `const`/`function`/`class` the
     // `---` fence declares — is classified the same way `.solid.mx`'s

@@ -1,6 +1,6 @@
 import type { File } from "@babel/types";
 import { parse as babelParse } from "@mxlang/babel";
-import { isFunctionLikeValue } from "@mxlang/core";
+import { isFunctionLikeValue, isMarkoOrMxSpecifier } from "@mxlang/core";
 
 /**
  * Solid JSX built-ins that resolve with no import of their own inside a
@@ -31,6 +31,18 @@ export interface SourceBindingsError {
   message: string;
   line: number;
   column: number;
+}
+
+/**
+ * A module's value imports, as `programImports` reads them: each local
+ * binding's module specifier, the locals that are a default import from a
+ * `.marko`/`.mx` source, and the 1-based line and 0-based column where each
+ * binding's `import` statement starts.
+ */
+export interface SourceImports {
+  importSpecifiers: Map<string, string>;
+  importDefaultFromMarkoOrMx: Set<string>;
+  importSites: Map<string, { line: number; column: number }>;
 }
 
 /**
@@ -84,24 +96,30 @@ export function sourceBindings(
   options: SourceBindingsOptions = {},
 ): {
   bindings: Set<string>;
+  imports: SourceImports;
   error?: SourceBindingsError;
 } {
   try {
+    const { program } = babelParse(source, {
+      sourceType: "module",
+      plugins: ["typescript", "jsx"],
+      ...(options.allowReturnOutsideFunction
+        ? { allowReturnOutsideFunction: true }
+        : {}),
+    });
     return {
-      bindings: programBindings(
-        babelParse(source, {
-          sourceType: "module",
-          plugins: ["typescript", "jsx"],
-          ...(options.allowReturnOutsideFunction
-            ? { allowReturnOutsideFunction: true }
-            : {}),
-        }).program,
-      ),
+      bindings: programBindings(program),
+      imports: programImports(program),
     };
   } catch (cause) {
     const loc = (cause as { loc?: { line: number; column: number } }).loc;
     return {
       bindings: new Set(),
+      imports: {
+        importSpecifiers: new Map(),
+        importDefaultFromMarkoOrMx: new Set(),
+        importSites: new Map(),
+      },
       error: {
         message: (cause as Error).message,
         line: loc?.line ?? 1,
@@ -167,6 +185,67 @@ export function programBindings(program: File["program"]): Set<string> {
     }
   }
   return bound;
+}
+
+/**
+ * The value imports of a module: every import's local binding mapped to its
+ * module specifier, the defaults imported from a `.marko`/`.mx` source, and
+ * where each binding's `import` statement starts. A type-only import (the
+ * whole declaration or one specifier) binds no runtime value and is left
+ * out. Shared by `@mxlang/tsx-bridge`'s module-scope pre-pass and
+ * `sourceBindings`, so a region file and an Astro fence read their imports
+ * the same way.
+ */
+export function programImports(program: File["program"]): SourceImports {
+  const imports = new Map<string, string>();
+  // Only a *default* import from a `.marko`/`.mx` source is Marko's own
+  // statically-resolved component case; every other value import (named,
+  // namespace, or a default from any other extension) lowers as a dynamic
+  // tag on the host side.
+  const importDefaultFromMarkoOrMx = new Set<string>();
+  // Where each binding's `import` statement starts, for the lowercase-tag-names-an-import warning.
+  const importSites = new Map<string, { line: number; column: number }>();
+  // SAFETY: the optional structural fields below cover the Babel statement variants inspected here.
+  for (const statement of program.body as Array<{
+    type?: string;
+    importKind?: string;
+    source?: { value?: unknown };
+    loc?: { start: { line: number; column: number } };
+    specifiers?: Array<{
+      type?: string;
+      local?: { name?: unknown };
+      importKind?: string;
+    }>;
+  }>) {
+    if (statement.type !== "ImportDeclaration") continue;
+    // A type-only import binds no runtime value, so it must not resolve a
+    // capitalized tag reference — the same exclusion `programBindings` already
+    // applies for `moduleBindings`. Both the whole declaration's own kind
+    // (`import type Widget from "..."`) and a single specifier's
+    // (`import { type Widget } from "..."`) count.
+    if (statement.importKind === "type") continue;
+    const specifier = statement.source?.value;
+    if (typeof specifier !== "string") continue;
+    for (const binding of statement.specifiers ?? []) {
+      if (binding.importKind === "type") continue;
+      const local = binding.local?.name;
+      if (typeof local !== "string") continue;
+      imports.set(local, specifier);
+      if (statement.loc) {
+        importSites.set(local, {
+          line: statement.loc.start.line,
+          column: statement.loc.start.column,
+        });
+      }
+      if (
+        binding.type === "ImportDefaultSpecifier" &&
+        isMarkoOrMxSpecifier(specifier)
+      ) {
+        importDefaultFromMarkoOrMx.add(local);
+      }
+    }
+  }
+  return { importSpecifiers: imports, importDefaultFromMarkoOrMx, importSites };
 }
 
 /**

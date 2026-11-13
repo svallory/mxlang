@@ -5,11 +5,7 @@ import {
   parse as rawBabelParse,
   parseExpression as rawBabelParseExpression,
 } from "@mxlang/babel";
-import {
-  checkReservedBindings,
-  dropOwnParserPosition,
-  isMarkoOrMxSpecifier,
-} from "@mxlang/core";
+import { checkReservedBindings, dropOwnParserPosition } from "@mxlang/core";
 import { mxHooks } from "./mx/bridge.ts";
 import {
   type AuthoredImport,
@@ -19,6 +15,7 @@ import {
 } from "./mx/hoist-imports.ts";
 import {
   programBindings,
+  programImports,
   unknownProgramBindings,
 } from "./mx/source-bindings.ts";
 
@@ -192,54 +189,11 @@ function collectModuleScope(
     mxModuleBindings: new Set<string>(),
   } as ParserOptions) as unknown as File;
   checkReservedBindings(file);
-  const imports = new Map<string, string>();
-  // Only a *default* import from a `.marko`/`.mx` source is Marko's own
-  // statically-resolved component case; every other value import (named,
-  // namespace, or a default from any other extension) lowers as a dynamic
-  // tag on the host side.
-  const importDefaultFromMarkoOrMx = new Set<string>();
-  // Where each binding's `import` statement starts, for the lowercase-tag-names-an-import warning.
-  const importSites = new Map<string, { line: number; column: number }>();
-  // SAFETY: the optional structural fields below cover the Babel statement variants inspected here.
-  for (const statement of file.program.body as Array<{
-    type?: string;
-    importKind?: string;
-    source?: { value?: unknown };
-    loc?: { start: { line: number; column: number } };
-    specifiers?: Array<{
-      type?: string;
-      local?: { name?: unknown };
-      importKind?: string;
-    }>;
-  }>) {
-    if (statement.type !== "ImportDeclaration") continue;
-    // A type-only import binds no runtime value, so it must not resolve a
-    // capitalized tag reference — the same exclusion `programBindings` already
-    // applies for `moduleBindings`. Both the whole declaration's own kind
-    // (`import type Widget from "..."`) and a single specifier's
-    // (`import { type Widget } from "..."`) count.
-    if (statement.importKind === "type") continue;
-    const specifier = statement.source?.value;
-    if (typeof specifier !== "string") continue;
-    for (const binding of statement.specifiers ?? []) {
-      if (binding.importKind === "type") continue;
-      const local = binding.local?.name;
-      if (typeof local !== "string") continue;
-      imports.set(local, specifier);
-      if (statement.loc) {
-        importSites.set(local, {
-          line: statement.loc.start.line,
-          column: statement.loc.start.column,
-        });
-      }
-      if (
-        binding.type === "ImportDefaultSpecifier" &&
-        isMarkoOrMxSpecifier(specifier)
-      ) {
-        importDefaultFromMarkoOrMx.add(local);
-      }
-    }
-  }
+  const {
+    importSpecifiers: imports,
+    importDefaultFromMarkoOrMx,
+    importSites,
+  } = programImports(file.program);
   const moduleBindings = programBindings(file.program);
   const unknownModuleBindings = unknownProgramBindings(file.program);
   return {
