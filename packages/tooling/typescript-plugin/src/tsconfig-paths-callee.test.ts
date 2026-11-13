@@ -145,7 +145,11 @@ function compileDiagnosticsFor(project: Scratch, page: string) {
     }));
 }
 
-describe("the plugin resolves aliased .mx callee imports through tsconfig paths", () => {
+// A cold plugin-service program is built and paid inside the first test,
+// as in the sibling plugin-service files.
+describe("the plugin resolves aliased .mx callee imports through tsconfig paths", {
+  timeout: 60_000,
+}, () => {
   it("threads baseUrl through the source plugin factory service", () => {
     const project = scratch({});
     const page = project.page(
@@ -370,7 +374,11 @@ function codesFrom(plugin: MxDiagnosticLanguagePlugin, file: string): string[] {
     .map(({ diagnosticCode, message }) => diagnosticCode ?? message);
 }
 
-describe("every pipeline's plugin reads an aliased callee's Input", () => {
+// A cold plugin-service program is built and paid inside the first test,
+// as in the sibling plugin-service files.
+describe("every pipeline's plugin reads an aliased callee's Input", {
+  timeout: 60_000,
+}, () => {
   // The read being real turns the unreadable-callee warning into "declares
   // no attribute tag `tab`"; without the resolver the alias is unresolvable.
   // `.astro.mx` has no row: its fence imports never reach core's callee

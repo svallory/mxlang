@@ -60,7 +60,11 @@ function check(
   }
 }
 
-describe("html default export diagnostic signatures in the editor", () => {
+// A cold plugin-service program is built and paid inside the first test,
+// as in the sibling plugin-service files.
+describe("html default export diagnostic signatures in the editor", {
+  timeout: 60_000,
+}, () => {
   it("prints the input and result for a wrong prop, function argument and assignment", () => {
     expect(
       check(

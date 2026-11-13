@@ -85,7 +85,9 @@ const ANGLE_PROBES = [
   ],
 ] as const;
 
-describe("satisfies in the type-check module", () => {
+// A cold plugin-service program is built and paid inside the first test,
+// as in the sibling plugin-service files.
+describe("satisfies in the type-check module", { timeout: 60_000 }, () => {
   it.each([
     // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
     ["const", "<const<string>/y=input.a/>${y}"],
