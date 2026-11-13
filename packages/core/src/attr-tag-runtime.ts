@@ -20,6 +20,8 @@
  * it declares starts with the reserved `__mx`/`__Mx` prefix.
  */
 
+import type { AttributeTagNode } from "./ir.ts";
+
 /** The function that makes one occurrence a record: Marko's `attrTag`. */
 export const ATTR_TAG_RECORD = "__mxAttrTag";
 
@@ -55,8 +57,8 @@ export const ATTR_TAG_BUILD = "__mxAttrTagsOf";
  * result goes, as `__mxAttrTag` does, and gives each `add` that same
  * `NoInfer` parameter: an occurrence of a fold is checked against the
  * declared attributes at the attribute, and its body's params get their
- * declared types. A host passes `true` as the second argument when at least
- * one occurrence is unconditional (`add` is certain to run), which selects
+ * declared types. A host passes `true` as the second argument when
+ * {@link attrTagFoldIsCertain} says `add` is certain to run, which selects
  * the overload that returns `__MxAttrTag<T>` without `undefined`, so the
  * record satisfies a required prop.
  */
@@ -102,6 +104,25 @@ function ${ATTR_TAG_BUILD}(build: (add: (attrs: any) => void) => void): any {
   build((attrs) => { record = ${ATTR_TAG_FOLD}(record, attrs as any); });
   return record;
 }`;
+
+/**
+ * Whether a fold's nodes are certain to add at least one occurrence, so a
+ * host passes the builder `true` and its record is typed without `undefined`
+ * (it then satisfies a required prop). An occurrence is certain; an `<if>`
+ * chain is certain when it ends in an `<else>` and every branch is; a `<for>`
+ * never is, since it can run zero times.
+ */
+export function attrTagFoldIsCertain(
+  nodes: readonly AttributeTagNode[],
+): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "AttributeTag" ||
+      (node.kind === "AttributeTagIf" &&
+        node.branches.at(-1)?.test === undefined &&
+        node.branches.every((branch) => attrTagFoldIsCertain(branch.nodes))),
+  );
+}
 
 /** Does emitted module text call the helper (and so need it appended)? */
 export function usesAttrTagRuntime(code: string): boolean {

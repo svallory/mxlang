@@ -103,16 +103,22 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
-  // A required prop given two unconditional occurrences: the builder is told
-  // `add` runs, so its record has no `undefined` and the call checks clean.
-  it.each(["html", "preact", "solid"])(
-    "accepts a repeated %s attribute tag for a required prop",
-    (host) => {
+  // A required prop given occurrences that are certain to be added (two
+  // unconditional ones, or one in each branch of an `<if>`/`<else>`): the
+  // builder is told `add` runs, so its record has no `undefined` and the call
+  // checks clean.
+  it.each(
+    ["html", "preact", "solid"].flatMap((host) =>
+      ["Required", "RequiredIf"].map((file) => [host, file] as const),
+    ),
+  )(
+    "accepts a %s attribute tag certain to be given for a required prop: %s",
+    (host, file) => {
       const extension = host === "solid" ? "solid.mx" : "mx";
       const result = runFixture(`attr-tag-${host}-shapes`);
       const lines = result.output
         .split("\n")
-        .filter((line) => line.includes(`/src/Required.${extension}(`));
+        .filter((line) => line.includes(`/src/${file}.${extension}(`));
 
       expect(lines).toEqual([]);
     },

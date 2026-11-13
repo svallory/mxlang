@@ -5,8 +5,10 @@ import {
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
+  attrTagFoldIsCertain,
   usesAttrTagRuntime,
 } from "./attr-tag-runtime.ts";
+import type { AttributeTagNode } from "./ir.ts";
 
 type Rec = Record<string, unknown> & {
   [Symbol.iterator](): Iterator<Record<string, unknown>>;
@@ -156,5 +158,57 @@ describe("the attribute-tag record helper", () => {
     expect(usesAttrTagRuntime(`${ATTR_TAG_FOLD}(a, {})`)).toBe(true);
     expect(usesAttrTagRuntime(`${ATTR_TAG_BUILD}((add) => {})`)).toBe(true);
     expect(usesAttrTagRuntime("render({ item: {} })")).toBe(false);
+  });
+});
+
+describe("attrTagFoldIsCertain", () => {
+  const loc = { line: 1, column: 0 };
+  const span = { sourceStart: 0, sourceEnd: 0 };
+  const tag = { kind: "AttributeTag", loc } as unknown as AttributeTagNode;
+  const branch = (nodes: AttributeTagNode[], test?: unknown) => ({
+    ...(test === undefined ? {} : { test }),
+    span,
+    nodes,
+  });
+  const chain = (...branches: ReturnType<typeof branch>[]) =>
+    ({ kind: "AttributeTagIf", branches, loc }) as unknown as AttributeTagNode;
+  const loop = (nodes: AttributeTagNode[]) =>
+    ({ kind: "AttributeTagFor", nodes, loc }) as unknown as AttributeTagNode;
+  const test = { code: "c" };
+
+  it.each([
+    ["an occurrence", [tag], true],
+    ["a loop beside an occurrence", [loop([tag]), tag], true],
+    [
+      "an <if>/<else> adding in both branches",
+      [chain(branch([tag], test), branch([tag]))],
+      true,
+    ],
+    [
+      "an <if>/<else if>/<else> adding in every branch",
+      [
+        chain(
+          branch([tag], test),
+          branch([tag], test),
+          branch([chain(branch([tag], test), branch([tag]))]),
+        ),
+      ],
+      true,
+    ],
+    ["nothing", [], false],
+    ["an <if> with no <else>", [chain(branch([tag], test))], false],
+    [
+      "an <if>/<else> with an empty branch",
+      [chain(branch([tag], test), branch([]))],
+      false,
+    ],
+    [
+      "an <if>/<else> whose branch only loops",
+      [chain(branch([tag], test), branch([loop([tag])]))],
+      false,
+    ],
+    ["a loop", [loop([tag])], false],
+  ] as const)("%s", (_name, nodes, certain) => {
+    expect(attrTagFoldIsCertain(nodes)).toBe(certain);
   });
 });

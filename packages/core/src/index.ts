@@ -29,6 +29,7 @@ export {
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   ATTR_TAG_RUNTIME,
+  attrTagFoldIsCertain,
   usesAttrTagRuntime,
 } from "./attr-tag-runtime.ts";
 export {

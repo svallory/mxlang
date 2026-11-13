@@ -41,6 +41,7 @@ import {
   type AttributeTag,
   type AttributeTagNode,
   attributeTagNames,
+  attrTagFoldIsCertain,
   type Block,
   type ComponentTarget,
   concatMapped,
@@ -660,7 +661,7 @@ export function createEmitter(
     return concatMapped(
       `${ATTR_TAG_BUILD}((${add}) => { `,
       attrTagFold(source, add, true),
-      certainToAdd(source) ? "}, true)" : "})",
+      attrTagFoldIsCertain(source) ? "}, true)" : "})",
     );
   }
 
@@ -2258,7 +2259,7 @@ function placeClientCode(state: State): ClientExports {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2355,7 +2356,7 @@ function reservedExport(
   const base = fileName.slice(
     Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1,
   );
-  // The self-import always resolves (to this module); `@ts-ignore` keeps a
+  // The self-import always resolves (to this module); `@ts-expect-error` keeps a
   // project without `jsx` from reporting TS6142 on it, since a `.mx` module
   // is TSX, and the namespace still reads the module's exports.
   return concatMapped(
@@ -2520,13 +2521,3 @@ export function emitModule(ir: Ir, escapeFrom: string): string {
 }
 
 export { DYNAMIC };
-
-/**
- * Whether a fold's `add` is certain to run: one of its top-level nodes is an
- * occurrence rather than an `<if>` or a `<for>`. The builder then gets `true`
- * and its record is typed without `undefined`, so it satisfies a required
- * prop.
- */
-function certainToAdd(nodes: readonly AttributeTagNode[]): boolean {
-  return nodes.some((node) => node.kind === "AttributeTag");
-}

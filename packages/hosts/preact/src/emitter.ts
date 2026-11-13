@@ -28,6 +28,7 @@ import {
   type AttributeTag,
   type AttributeTagNode,
   attributeTagNames,
+  attrTagFoldIsCertain,
   concatMapped,
   contractDefaultTag,
   defineValueWrapper,
@@ -2162,7 +2163,7 @@ export class PreactEmitter implements Emitter<string> {
         : [`(() => { let ${ATTR_TAG_ACC}; `]),
       this.#attributeTagFold(source, JSON.stringify(""), contextual),
       contextual
-        ? certainToAdd(source)
+        ? attrTagFoldIsCertain(source)
           ? "}, true)"
           : "})"
         : `return ${ATTR_TAG_ACC}; })()`,
@@ -3650,13 +3651,3 @@ export function emitPreact(
 }
 
 export type { DelegatedTagData };
-
-/**
- * Whether a fold's `add` is certain to run: one of its top-level nodes is an
- * occurrence rather than an `<if>` or a `<for>`. The builder then gets `true`
- * and its record is typed without `undefined`, so it satisfies a required
- * prop.
- */
-function certainToAdd(nodes: readonly AttributeTagNode[]): boolean {
-  return nodes.some((node) => node.kind === "AttributeTag");
-}

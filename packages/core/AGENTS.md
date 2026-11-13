@@ -42,9 +42,10 @@ Five facts worth knowing before editing it:
   (`ATTR_TAG_BUILD`) for any other set, which folds each `add` through
   `__mxAttrTags` (`ATTR_TAG_FOLD`). The record and the builder take `T` from
   the callee's prop, so every occurrence is checked at its attributes; a host
-  passes the builder a second argument `true` when an occurrence is
-  unconditional, which types the record without `undefined` for a required
-  prop. `AttrTagProp` and
+  passes the builder a second argument `true` when
+  `attrTagFoldIsCertain` says an occurrence is always added (one outside any
+  `<if>`/`<for>`, or one in every branch of an `<if>` ending in `<else>`),
+  which types the record without `undefined` for a required prop. `AttrTagProp` and
   `HostDeclarations.attrTags` are deprecated, exported, and read by nothing.
   A claimed dynamic
   `DelegatedTag` also retains its tag arguments in `args`; an
