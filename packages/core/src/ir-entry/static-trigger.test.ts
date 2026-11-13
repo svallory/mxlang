@@ -64,6 +64,14 @@ describe("a dialect expression row in a static statement", () => {
       21,
       "~zz",
     ],
+    ["after a block's `}`", "static { f(x) } ~zz\n<div/>", 1, 16, "~zz"],
+    [
+      "after a line break that ends a statement",
+      "static {\n  f(x)\n  ~zz\n}\n<div/>",
+      3,
+      2,
+      "~zz",
+    ],
   ];
 
   it.each(cases)(
@@ -97,6 +105,24 @@ describe("a dialect expression row in a static statement", () => {
       column: col,
     });
   });
+
+  it.each([
+    ["server", "server {\n  f(x)\n  ~zz\n}\n<div/>"],
+    ["export", "export function f() {\n  g()\n  ~zz\n}\n<div/>"],
+  ])(
+    "a row at a statement start in a `%s` statement is refused",
+    (keyword, source) => {
+      const { diagnostics, code } = lowered(source, atom);
+      expect(code).toEqual([]);
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({
+        code: "MX_INVALID_TRIGGER_USE",
+        message: MESSAGE("~zz", "atom-node", keyword),
+        line: 3,
+        column: 2,
+      });
+    },
+  );
 
   it('under `structural: "reject"` the structural error stands alone', () => {
     const run = (source: string) =>
@@ -211,9 +237,10 @@ describe("the matching is the template scanner's", () => {
   const sigil = row("sigil", "~", "~[a-z]+");
   const mark = row("mark", "%", "%\\.[a-z]+");
   const set = row("set", "@#", "[@#][a-z]+");
-  const rows = [sigil, mark, set];
-  const hit = (text: string) => {
-    const found = firstRowIn(text, rows);
+  const member = row("member", "&", "&[a-z]+");
+  const rows = [sigil, mark, set, member];
+  const hit = (text: string, kit: readonly Trigger[] = rows) => {
+    const found = firstRowIn(text, kit, "static");
     return found && [found.row.id, text.slice(found.start, found.end)];
   };
 
@@ -238,7 +265,7 @@ describe("the matching is the template scanner's", () => {
   it("never inside a word, after the same character, or where no operand stands", () => {
     expect(hit("a~zz")).toBeUndefined();
     expect(hit("a ~~zz")).toBeUndefined();
-    expect(hit("f(x)\n~zz")).toBeUndefined();
+    expect(hit("f(x)\n~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("a[0] ~zz")).toBeUndefined();
     expect(hit("return ~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("f(a, ~zz)")).toEqual(["sigil", "~zz"]);
@@ -283,6 +310,132 @@ describe("the matching is the template scanner's", () => {
     expect(hit("typeof ~zz")).toEqual(["sigil", "~zz"]);
     expect(hit("if (x) /~zz/.test(s)")).toBeUndefined();
     expect(hit("a = ~zzé")).toBeUndefined();
+  });
+
+  describe("a row at a statement start is found", () => {
+    it.each([
+      ["{ f(x) } ~zz", ["sigil", "~zz"]],
+      ["{\n f(x)\n ~zz\n}", ["sigil", "~zz"]],
+      ["f(x)\n~zz", ["sigil", "~zz"]],
+      ["f(x) /*\n*/ ~zz", ["sigil", "~zz"]],
+      ["if (a) { b } ~zz", ["sigil", "~zz"]],
+      ["for await (const x of xs) { f(x) } ~zz", ["sigil", "~zz"]],
+      ["switch (a) { case 1: case 2: { b } ~zz }", ["sigil", "~zz"]],
+      ["switch (a) { case 1:\n default: { b } ~zz }", ["sigil", "~zz"]],
+      ["switch (a) { case b: c: { d } ~zz }", ["sigil", "~zz"]],
+      ["f = () => { lbl: { b } ~zz }", ["sigil", "~zz"]],
+      ["function f(): [number, string] { return g() } ~zz", ["sigil", "~zz"]],
+      ["function f(): Map<a, b> { } ~zz", ["sigil", "~zz"]],
+      ['const a = { class: "b" }\nif (x) {\n f()\n ~zz\n}', ["sigil", "~zz"]],
+      ["o.x = { class: 1 }\nif (x) { @zz }", ["set", "@zz"]],
+      ["x = c ? g(\n y\n) : {} / 2; z = ~zz", ["sigil", "~zz"]],
+      [
+        "switch (a) { case 1: let t: [number?] = []; break\n case 2: { b } ~zz }",
+        ["sigil", "~zz"],
+      ],
+    ])("%j", (text, expected) => {
+      expect(hit(text)).toEqual(expected);
+    });
+  });
+
+  describe("a row Babel reads only as its stand-in is found", () => {
+    it.each([
+      ["const a = @zz\nclass B {}", ["set", "@zz"]],
+      ["switch (a) { case 1: x = @zz\n default: y() }", ["set", "@zz"]],
+      ["class A {\n m(a = f(@zz)) {}\n}", ["set", "@zz"]],
+      ["class A { x = f(@zz) }", ["set", "@zz"]],
+      ["class A { x = [1, @zz] }", ["set", "@zz"]],
+      ["#zz\nclass B {}", ["set", "#zz"]],
+    ])("%j", (text, expected) => {
+      expect(hit(text)).toEqual(expected);
+    });
+  });
+
+  describe("of several rows, the first decided as a row is reported", () => {
+    it.each([
+      ["const a = ~aa, b = &bb", ["sigil", "~aa"]],
+      ["const a = &aa, b = &bb", ["member", "&aa"]],
+      ["const m = a\n  &mask; const k = &kk", ["member", "&kk"]],
+    ])("%j", (text, expected) => {
+      expect(hit(text)).toEqual(expected);
+    });
+  });
+
+  describe("a class member is no row", () => {
+    it.each([
+      "class A {\n x = 1\n @dec y = 2\n}",
+      "class A {\n m() {}\n @dec y = 2\n}",
+      "class A {\n constructor() {}\n #b = 2\n}",
+      "class A { static {} #b = 2 }",
+      "class A {\n  #b = 2\n}",
+      "class A {\n x = 1;\n #b = 2;\n}",
+      "class A {\n  @dec\n  m() {}\n}",
+      "class A {\n constructor(@inject b) {}\n}",
+      "class A {\n x = 1\n constructor(@inject b) {}\n}",
+      "class A {\n x: number\n m(@a b) {}\n}",
+      "abstract class A {\n abstract m(): void\n #b = 1\n}",
+      "class A {\n x: void\n #b = 1\n}",
+      "class A<T extends {}> {\n x = 1\n @dec y = 2\n}",
+      "class A extends (b < c ? X : Y) {\n x = 1\n @dec y = 2\n}",
+      "class A { #x; m() { if (#x in this) {} } }",
+    ])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
+  describe("a decorator is no row", () => {
+    it.each([
+      "class A {}\n@dec class B {}",
+      "x = y\n@a.b class B {}",
+      "x = y\n@a (1) class B {}",
+      "@dec<Map<a, () => b>>() class B {}",
+    ])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
+  describe("after an object literal, not a block, there is no row", () => {
+    it.each([
+      "x = { a: [b, f(c)] }\ny = { q: 1 } ~zz",
+      "const f = function (): { a: 1 } { } ~zz",
+      "x = c ? (1) : { b } ~zz",
+      "a = c ? [\n 1\n] : { b } ~zz",
+    ])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
+  describe("a mark in a type is no row", () => {
+    it.each([
+      "let t: { a: 1 } &zz = v",
+      "function f(a: { b: 1 } &zz) {}",
+      "interface I { a: { b: 1 } &zz }",
+      "class A { default() { let t: { a: 1 } &zz = v } }",
+      "x = { default() { let t: { a: 1 } &zz = v } }",
+      "function f<T>(x: T): x is { a: 1 } &zz {}",
+      "let x: @zz = 1",
+    ])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
+  describe("after a declaration header there is no row", () => {
+    it.each([
+      "function f(a: string): string\nexport default { a } &zz",
+      "declare function f(): void\nexport default { a } &zz",
+      "const namespace = ns\nconst g = () => { return { a: 1 } &zz }",
+    ])("%j", (text) => {
+      expect(hit(text)).toBeUndefined();
+    });
+  });
+
+  describe("the JavaScript reading wins", () => {
+    it.each([
+      ["a\n&mask", rows],
+      ["x = a\n  -zz", [row("minus", "-", "-[a-z]+")]],
+    ] as const)("%j", (text, kit) => {
+      expect(hit(text, kit)).toBeUndefined();
+    });
   });
 
   it("no rows, no hit", () => {

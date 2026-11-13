@@ -467,7 +467,10 @@ const MODULE_CODE_KEYWORDS = new Set(["static", "server", "client", "export"]);
  * statement is module code the parser announces no trigger in, so the row
  * would reach the module as the JavaScript it looks like (`~zz`, a bitwise
  * NOT), and its lowering may read the render scope a module statement has
- * not (spec §13.9.9).
+ * not (spec §13.9.9). `firstRowIn` reads the statement's text with Babel, as
+ * the statement check does, and finds a row where an expression starts at
+ * its first character, as written or with its stand-in in its place; a
+ * statement Babel cannot read with any stand-in keeps Babel's own error.
  */
 function refuseRowInModuleStatement(
   ctx: Ctx,
@@ -489,7 +492,7 @@ function refuseRowInModuleStatement(
   ) {
     return;
   }
-  const hit = firstRowIn(container.source, rows);
+  const hit = firstRowIn(container.source, rows, owner.keyword);
   if (!hit) return;
   const text = container.source.slice(hit.start, hit.end);
   const at = container.start + hit.start;

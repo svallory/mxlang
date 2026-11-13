@@ -1,7 +1,7 @@
 /**
  * Public types of `@mxlang/parser/lexer` as seen by other packages (the
  * `types` condition of the `./lexer` export): the template lexer's event API,
- * `createParser` and `TagType`.
+ * `createParser`, `TagType` and `standInText`.
  *
  * Consumers typecheck against this rather than against `index.ts`, because the
  * template sources are written for the parser package's own compiler flags
@@ -146,3 +146,14 @@ export type TriggerClaim = (
   start: number,
   end: number,
 ) => unknown;
+
+/**
+ * The stand-in of a trigger's `text`, always the same length: `"number"` is
+ * `0.` plus zeros (`0` for one character), `"identifier"` is `_` followed by
+ * the text with every character outside `[A-Za-z0-9_$]` replaced by `_`, and
+ * `"keep"` is the text itself.
+ */
+export declare function standInText(
+  standIn: "number" | "identifier" | "keep",
+  text: string,
+): string;

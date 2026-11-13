@@ -5838,16 +5838,21 @@ scope (`self`), which a module statement has not. A row written there is one
 `MX_INVALID_TRIGGER_USE` error at the row's first character, naming the text
 and the trigger and saying to move it into a `<const>` or write it in the
 template. The match follows the template scanner: a first character arms one
-row, the row's `match` must match there in full, the text is not inside a word,
-right after the same character (`a &&b`) or continued by a word character, and
-it stands where an operand is expected (not after an operand, a postfix `++`,
-`--` or `!`, TypeScript's `?`/`!` markers, a type argument list's `>` or a
-regular expression; after `...`, an operator or an `if`/`for`/`while`/`with`
-head). A comment, a string, a regular expression and the text of a template
-literal are not scanned; a `${…}` substitution is code. Two differences from the
-template: the row's node type is not asked to claim the text, and a statement
-start after a block's `}` or after a line break that ends a statement expects
-no operand, so a row that is a whole expression statement there is not found.
+row, the row's `match` must match there in full, and the text is not inside a
+word, right after the same character (`a &&b`) or continued by a word
+character. The statement is then read as TypeScript, as the statement check
+reads it, and a row is found where an expression starts at its first character,
+either with its text as written or with its stand-in in its place. A statement
+start (after a block's `}`, after a line break that ends a statement) is such a
+place; a private name, a type, an object key, a binding and a binary operator
+(`a⏎&mask`) are not, and neither is a comment, a string, a regular expression
+or the text of a template literal. When the text as written is valid
+TypeScript, that reading decides; otherwise each candidate is read with its
+stand-in in its place. A statement that does not parse with any stand-in reports
+the parser's own positioned error, not the row error. Two differences from the
+template: the row's node type is not asked to claim the text, and a private
+name the class does not declare (`#x in this` with no `#x` member) does not
+parse as written, so it reads as its stand-in and is found as a row.
 A file under `structural: "reject"` reports the structural error for the
 statement instead. A file with no dialect, a dialect whose rows do not match in
 the statement, and a statement the parser refuses (`export static …`) keep their

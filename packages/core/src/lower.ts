@@ -283,6 +283,10 @@ import {
   blankStatementBlock,
   unwrapStatementBlock,
 } from "./statement-block.ts";
+import {
+  type StatementParseOptions,
+  statementParseOptions,
+} from "./statement-parse-options.ts";
 import { CONTROL_FLOW_TAGS } from "./structural-tags.ts";
 import {
   fileTagRules,
@@ -5257,34 +5261,7 @@ function rejectInvalidStatement(
   // the module's own (Marko hoists them), so `import` and `export` are valid
   // there. The braces are blanked, not removed, so a position does not move.
   const code = blankStatementBlock(authored);
-  let options: {
-    sourceType: string;
-    plugins: string[];
-    allowReturnOutsideFunction: boolean;
-    allowImportExportEverywhere?: boolean;
-    allowUndeclaredExports: boolean;
-    allowSuperOutsideMethod: boolean;
-    allowNewTargetOutsideFunction: boolean;
-  } = {
-    sourceType: "module",
-    // Stock Marko's own sub-parse options: `client { let q = super.x }` and
-    // `new.target` compile there (to `var q;`, the client statement is
-    // dropped), so they parse here too. In `static`, `server` and `export`
-    // the text is emitted at the module's top level, where they are a
-    // SyntaxError on load, so those keep the refusal.
-    allowSuperOutsideMethod: keyword === "client",
-    allowNewTargetOutsideFunction: keyword === "client",
-    // This statement is one of the module's, parsed alone: an `export { q }`
-    // names a binding an earlier statement or import declares.
-    allowUndeclaredExports: true,
-    // No decorators plugin: stock Marko (compiler 5.42.11) has none either, so
-    // `static @d() class C {}` and `@d m() {}` are refused below, as it does.
-    plugins: ["typescript"],
-    // A top-level `return` is TypeScript's TS1108 to report, with its mapping,
-    // in an Astro fence and a template `static` alike; stock Marko 6.3.51
-    // compiles a template `static return` too.
-    allowReturnOutsideFunction: true,
-  };
+  let options: StatementParseOptions = statementParseOptions(keyword);
   const start = posOf(ctx, node);
   const place = (at?: { line: number; column: number }) => ({
     line: start.line + (at ? at.line - 1 : 0),
@@ -5294,7 +5271,7 @@ function rejectInvalidStatement(
         : at.column,
   });
   let parsed: Node | undefined;
-  const attempt = (opts: Record<string, unknown>): unknown => {
+  const attempt = (opts: StatementParseOptions): unknown => {
     try {
       parsed = coreBabel().parse(code, opts);
     } catch (error) {

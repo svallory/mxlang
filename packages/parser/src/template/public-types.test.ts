@@ -4,7 +4,12 @@
  * the two cannot drift.
  */
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { type createParser, type Handlers, TagType } from "./index.ts";
+import {
+  type createParser,
+  type Handlers,
+  standInText,
+  TagType,
+} from "./index.ts";
 import type * as Declared from "./public.d.ts";
 
 describe("public.d.ts (@mxlang/parser/lexer)", () => {
@@ -24,5 +29,14 @@ describe("public.d.ts (@mxlang/parser/lexer)", () => {
     expectTypeOf<typeof TagType.statement>().toEqualTypeOf<
       typeof Declared.TagType.statement
     >();
+  });
+
+  it("declares standInText as the source defines it", () => {
+    expectTypeOf<typeof standInText>().toEqualTypeOf<
+      typeof Declared.standInText
+    >();
+    expect(standInText("identifier", "&a-b")).toBe("_a_b");
+    expect(standInText("number", "~ab")).toBe("0.0");
+    expect(standInText("keep", "~ab")).toBe("~ab");
   });
 });

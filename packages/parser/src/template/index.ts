@@ -24,6 +24,7 @@ export {
   DEFAULT_SYNTAX,
   type StandIn,
   type SyntaxDiagnostic,
+  standInText,
   type SyntaxTable,
   type Trigger,
   type TriggerNode,
