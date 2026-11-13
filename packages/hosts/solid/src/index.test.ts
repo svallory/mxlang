@@ -611,7 +611,7 @@ describe("a failed compile still reports the dependencies it read", () => {
     // Lowers clean, then the authored import is refused as a module-level
     // statement — after `lower` has read the callee.
     const error = failure(() =>
-      compileSolidMx('import x from "./x"\n<Ret/x/>\n', {
+      compileSolidMx('import x from "./x"\n<Ret/y/>\n', {
         filename: caller,
         importSpecifiers: new Map([["Ret", "./ret.mx"]]),
         importDefaultFromMarkoOrMx: new Set(["Ret"]),

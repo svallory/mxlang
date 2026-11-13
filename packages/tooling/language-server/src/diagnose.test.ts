@@ -1916,9 +1916,12 @@ describe("a diagnostic's range ends where core says it ends", () => {
 // carries them: a region and an `.ng.mx` failure reach the server as the
 // parser's `SyntaxError`, not a `TranslateError`.
 describe("a compile's dependencies", () => {
+  // Angular reads a callee's `Input` and refuses a repeated projection; a
+  // value host reads a callee only for whether a `/var` call returns.
   const CONTRACT =
     'export interface Input { header?: AttrTag<{ as: "renderable" }> }\n<div/>\n';
   const CALL = "<Card><@header>a</@header><@header>b</@header></Card>";
+  const RETURNING = "<return value=1/>\n";
   const dirs: string[] = [];
   afterEach(() => {
     clearScanCache();
@@ -1943,17 +1946,18 @@ describe("a compile's dependencies", () => {
     [
       "page.preact.mx",
       { target: "preact-jsx", host: "preact" },
-      `import Card from "./card.mx";\nexport const view = () => ${CALL};\n`,
+      'import Card from "./card.mx";\nexport const view = () => <if=true><Card/y/></if>;\n',
+      RETURNING,
     ],
   ] as const)(
-    "%s names the callee whose contract failed",
-    (name, policy, text) => {
+    "%s names the callee it read",
+    (name, policy, text, contract: string = CONTRACT) => {
       const dir = realpathSync(
         mkdtempSync(join(tmpdir(), "mx-ls-failed-deps-")),
       );
       dirs.push(dir);
       writeFileSync(join(dir, "package.json"), '{"name":"x"}');
-      writeFileSync(join(dir, "card.mx"), CONTRACT);
+      writeFileSync(join(dir, "card.mx"), contract);
       const dependencies = new Set<string>();
       const diagnostics = diagnoseDocument(
         text,

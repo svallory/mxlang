@@ -349,7 +349,7 @@ it(
 // In process, not spawned: this row pins mx-tsc's own region wiring
 // (`createRegionLanguagePlugins` handed the program's resolver), which the
 // built binary only repeats.
-it("reads an aliased callee's Input from a .solid.mx region caller", () => {
+it("types a .solid.mx region call by an aliased callee's Input", () => {
   const p = project({
     compilerOptions: {
       ...BASE_OPTIONS,
@@ -365,9 +365,11 @@ it("reads an aliased callee's Input from a .solid.mx region caller", () => {
     );
     const run = runInProcess(["--noEmit", "--pretty", "false", "-p", p.dir]);
     const result = { output: run.stdout + run.stderr };
-    expect(result.output).not.toContain("MX_UNREADABLE_CALLEE_INPUT");
+    // Resolved, the callee's Input types the record: it declares no `tab`.
     expect(result.output).not.toContain("TS2307");
-    expect(result.output).toContain("declares no attribute tag `tab`");
+    expect(result.output).toContain(
+      "Property 'tab' does not exist on type 'Input'",
+    );
   } finally {
     rmSync(p.dir, { recursive: true, force: true });
   }

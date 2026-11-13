@@ -1809,9 +1809,9 @@ describe("compileNgMx: a failed compile reports its dependencies", () => {
       "<Card><@header>a</@header><@header>b</@header></Card>",
     ],
     [
-      "a contract the emitter rejects after lowering",
-      "export interface Input { header: AttrTag[] }\n<div/>\n",
-      "<Card><@header>a</@header></Card>",
+      "a projection the emitter rejects after lowering",
+      "export interface Input { header: AttrTag }\n<div/>\n",
+      '<Card><@header label="x">a</@header></Card>',
     ],
   ])("attaches the callee of %s to the thrown error", (_, contract, call) => {
     const dir = mkdtempSync(join(tmpdir(), "mx-ngmx-deps-"));

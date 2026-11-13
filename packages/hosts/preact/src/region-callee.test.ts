@@ -19,7 +19,7 @@ describe("a failed region compile still reports the dependencies it read", () =>
   it("attaches them to an error raised after lowering", () => {
     let failure: { dependencies?: string[]; message?: string } | undefined;
     try {
-      compilePreactRegion('import x from "./x"\n<Ret/x/>', {
+      compilePreactRegion('import x from "./x"\n<Ret/y/>', {
         filename: caller,
         baseOffset: 0,
         baseLine: 0,

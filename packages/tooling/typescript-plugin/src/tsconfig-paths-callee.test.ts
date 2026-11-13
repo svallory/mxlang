@@ -144,40 +144,6 @@ describe("the plugin resolves aliased .mx callee imports through tsconfig paths"
       rmSync(project.dir, { recursive: true, force: true });
     }
   });
-  // The plugin service's `baseUrl` is the repository root, so a project
-  // under it (in the gitignored `.gen/`) is reached by a bare specifier.
-  function underBaseUrl() {
-    const parent = join(import.meta.dirname, "..", ".gen");
-    mkdirSync(parent, { recursive: true });
-    const project = scratch({}, parent);
-    const root = realpathSync(
-      join(import.meta.dirname, "..", "..", "..", ".."),
-    );
-    return { project, specifier: relative(root, realpathSync(project.dir)) };
-  }
-
-  it("threads it to a .solid.mx region through the plugin factory too", () => {
-    const { project, specifier } = underBaseUrl();
-    const page = join(project.dir, "page.solid.mx");
-    const source = `import Card from "${specifier}/src/Card.mx";\n\nexport const view = <Card><@tab/></Card>;\n`;
-    writeFileSync(page, source);
-    const consumer = join(project.dir, "consumer.ts");
-    const service = createPluginService(
-      { [page]: source, [consumer]: 'import "./page.solid.mx";' },
-      [consumer],
-    );
-    try {
-      service.getSemanticDiagnostics(consumer);
-      // Read through `baseUrl`, the callee's Input declares no `tab`;
-      // unread, the call would warn MX_UNREADABLE_CALLEE_INPUT instead.
-      expect(
-        service.getSyntacticDiagnostics(page).map(({ code }) => code),
-      ).toEqual(["MX_UNKNOWN_ATTRIBUTE_TAG"]);
-    } finally {
-      service.dispose();
-      rmSync(project.dir, { recursive: true, force: true });
-    }
-  });
 
   it.each(["~/Card.mx", "~/Card"])(
     "refreshes misses and hits for %s with the same compiler options",
