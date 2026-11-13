@@ -148,8 +148,9 @@ one. The build, the Bun loaders, the editor plugin, the language server and
 - the Vite plugin;
 - the Astro template plugin and pages guard;
 - the target registry's region file kinds;
-- the Angular host's `.mx` and `.marko` import checks and its output paths
-  (`tags/Badge.MX` compiles to `tags/Badge.ts`).
+- the Angular host's `.mx` and `.marko` import checks, its `include`
+  matching and watcher, and its output paths (`tags/Badge.MX` compiles to
+  `tags/Badge.ts`).
 
 Still case-sensitive:
 - the extensions a dialect claims;
