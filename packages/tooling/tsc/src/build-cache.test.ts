@@ -713,6 +713,38 @@ describe("build-cache project entry (inputs read from disk)", () => {
     expect(entry()).toBeUndefined();
   });
 
+  it.each<[string, string]>([
+    [
+      "a linked package re-exported after a semicolon-free export type",
+      'export type P = { a: string }\nexport { v } from "linked"\n',
+    ],
+    [
+      "a relative file outside the tag directories after a semicolon-free export type",
+      'export type P = { a: string }\nimport { x } from "../lib/x"\nexport default { transform: () => x }\n',
+    ],
+  ])("is not cacheable with a tag sidecar importing %s", (_, sidecar) => {
+    const { dir, entry } = project();
+    mkdirSync(join(dir, "packages", "linked"), { recursive: true });
+    writeFileSync(
+      join(dir, "packages", "linked", "package.json"),
+      JSON.stringify({ name: "linked" }),
+    );
+    writeFileSync(
+      join(dir, "packages", "linked", "index.js"),
+      "exports.v = 1;\n",
+    );
+    mkdirSync(join(dir, "node_modules"));
+    symlinkSync(
+      join(dir, "packages", "linked"),
+      join(dir, "node_modules", "linked"),
+    );
+    mkdirSync(join(dir, "lib"));
+    writeFileSync(join(dir, "lib", "x.ts"), "export const x = 1;\n");
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(join(dir, "tags", "card.tag.ts"), sidecar);
+    expect(entry()).toBeUndefined();
+  });
+
   it("is not cacheable with a target given as a specifier (its descriptor module is no input)", () => {
     const { dir, entry } = project();
     writeFileSync(

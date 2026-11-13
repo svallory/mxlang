@@ -437,7 +437,7 @@ function installedPackageDir(
 /** The files a module's relative specifiers ({@link specifiersOf}) name. */
 function relativeImportsOf(file: string, text: string): string[] {
   const found: string[] = [];
-  for (const spec of specifiersOf(text)) {
+  for (const spec of specifiersOf(file, text)) {
     if (!RELATIVE.test(spec)) continue;
     const path = resolve(dirname(file), spec);
     // As written, a `.js` specifier's `.ts` source, extensionless, or a
@@ -458,21 +458,69 @@ function relativeImportsOf(file: string, text: string): string[] {
 
 const RELATIVE = /^\.{1,2}\//;
 
+let parser: TypeScript | undefined;
+
 /**
- * Every module specifier a file writes that reaches code at runtime (`from`,
- * `import`, `import()`, `require()`). A type-only `import type`/`export type`
- * statement is erased, so it is left out.
+ * Every module specifier a file writes that reaches code at runtime, read
+ * from its syntax tree (TypeScript's parser, no checker): an `import` or
+ * `export ... from` declaration, an `import x = require()`, and an `import()`
+ * or `require()` call with a string literal. A declaration that is erased at
+ * runtime is left out: `import type`/`export type`, and an import or export
+ * whose every named specifier is `type`.
  */
-function specifiersOf(text: string): string[] {
-  const code = text.replace(
-    /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*["'][^"']+["']/g,
-    "",
+function specifiersOf(file: string, text: string): string[] {
+  parser ??= createRequire(import.meta.url)("typescript") as TypeScript;
+  const t = parser;
+  const source = t.createSourceFile(
+    file,
+    text,
+    t.ScriptTarget.Latest,
+    false,
+    /\.[jt]sx$/.test(file) ? t.ScriptKind.TSX : t.ScriptKind.TS,
   );
-  return [
-    ...code.matchAll(
-      /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g,
-    ),
-  ].map((match) => match[1] as string);
+  const found: string[] = [];
+  const add = (node: ts.Node | undefined) => {
+    if (node !== undefined && t.isStringLiteralLike(node))
+      found.push(node.text);
+  };
+  const allTypeOnly = (elements: readonly { isTypeOnly: boolean }[]) =>
+    elements.length > 0 && elements.every((element) => element.isTypeOnly);
+  const visit = (node: ts.Node): void => {
+    if (t.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      const typeOnly =
+        clause !== undefined &&
+        (clause.isTypeOnly ||
+          (clause.name === undefined &&
+            bindings !== undefined &&
+            t.isNamedImports(bindings) &&
+            allTypeOnly(bindings.elements)));
+      if (!typeOnly) add(node.moduleSpecifier);
+    } else if (t.isExportDeclaration(node)) {
+      const clause = node.exportClause;
+      const typeOnly =
+        node.isTypeOnly ||
+        (clause !== undefined &&
+          t.isNamedExports(clause) &&
+          allTypeOnly(clause.elements));
+      if (!typeOnly) add(node.moduleSpecifier);
+    } else if (t.isImportEqualsDeclaration(node)) {
+      if (!node.isTypeOnly && t.isExternalModuleReference(node.moduleReference))
+        add(node.moduleReference.expression);
+    } else if (t.isCallExpression(node)) {
+      const callee = node.expression;
+      if (
+        callee.kind === t.SyntaxKind.ImportKeyword ||
+        (t.isIdentifier(callee) && callee.text === "require")
+      ) {
+        add(node.arguments[0]);
+      }
+    }
+    t.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
 }
 
 function versionOf(manifest: string): string | undefined {
@@ -627,7 +675,7 @@ function importsCovered(
   directories: ReadonlySet<string>,
 ): boolean {
   const require = createRequire(file);
-  return specifiersOf(text).every((spec) => {
+  return specifiersOf(file, text).every((spec) => {
     if (RELATIVE.test(spec)) {
       const target = slash(resolve(dirname(file), spec));
       return [...directories].some((dir) =>
