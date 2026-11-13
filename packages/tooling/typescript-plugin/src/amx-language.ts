@@ -89,7 +89,8 @@ function fenceEndOffset(source: string): number | undefined {
  * TS1108 is not verified there.
  *
  * Volar applies `verification.shouldReport` to every diagnostic it maps back to
- * the source, in tsserver and inside `runTsc` alike, so this is the one seam
+ * the source, in tsserver and inside Volar's transformed tsc (run by
+ * `runVolarTsc`) alike, so this is the one seam
  * `mx-tsc --astro` has: it never holds the decorated program, and tsc's own
  * reporter prints whatever the program returns. The mappings are the fence
  * region, so a 1108 anywhere else in the file still reaches the author.

@@ -422,7 +422,8 @@ export function createRegionLanguagePlugin(
           // text: an earlier line the printer reformats (e.g. an `Input`
           // interface losing whitespace) shifts every later column while
           // leaving the line number unchanged. With the flag set, Volar's
-          // `runTsc` parses its `SourceFile` from the generated text alone,
+          // transformed tsc (run by `runVolarTsc`) parses its `SourceFile`
+          // from the generated text alone,
           // so `tsc` converts a correctly mapped source *offset* into a
           // column against the *generated* line's start instead of the
           // *source* line's start — the two disagree whenever a prior line's

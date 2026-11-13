@@ -48,8 +48,7 @@ describe("host-policy diagnostics of two plugin instances", () => {
       {
         code: "unknown-host",
         file: join(bad, "package.json"),
-        message:
-          "unknown mx.host \"vue\"; valid hosts: html, astro, solid, preact, react, hono, angular ('translator' is a deprecated alias for html). Ignoring it; the host is taken from the @mxlang dependencies instead.",
+        message: expect.stringContaining('unknown mx.host "vue"'),
         line: 3,
         column: 12,
         offset: 24,

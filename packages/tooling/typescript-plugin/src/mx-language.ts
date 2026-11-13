@@ -388,7 +388,8 @@ export function createMxLanguagePlugin(
           // Deliberately no `preventLeadingOffset`. A compiled `.mx` module
           // does not preserve the source's line structure (the `escape` import
           // and the hoisted statements move), and with that flag set Volar's
-          // `runTsc` parses its `SourceFile` from the generated text alone —
+          // transformed tsc (run by `runVolarTsc`) parses its `SourceFile`
+          // from the generated text alone —
           // so `tsc` turns a correctly mapped source *offset* into line/column
           // using the generated file's line table, reporting every `.mx`
           // diagnostic on the wrong line. Unset, Volar pads the virtual

@@ -43,7 +43,8 @@ export function createAstroLanguagePlugin(
     typescript: astro.typescript
       ? {
           ...astro.typescript,
-          // Volar's runTsc path cannot host Astro's auxiliary .mjs/.mts
+          // Volar's transformed tsc (run by `runVolarTsc`) cannot host
+          // Astro's auxiliary .mjs/.mts
           // scripts; the main TSX service script is the one typecheck needs.
           getExtraServiceScripts: undefined,
         }

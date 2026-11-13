@@ -841,7 +841,8 @@ describe("MX language plugin", {
       scriptKind: ts.ScriptKind.TSX,
     });
     // `preventLeadingOffset` must stay unset for whole-file MX. With it set,
-    // Volar's `runTsc` builds its `SourceFile` from the generated text alone,
+    // Volar's transformed tsc (run by `runVolarTsc`) builds its `SourceFile`
+    // from the generated text alone,
     // so `tsc` renders a correctly mapped source offset against the
     // *generated* file's line table — every diagnostic in a `.mx` file came
     // out on the wrong line and column. Leaving it unset makes Volar pad the
