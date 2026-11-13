@@ -499,6 +499,14 @@ interface EmitterOptions {
   softLift?: SoftLift | null;
   shadowed?: WeakSet<object>;
   publicDefines?: boolean;
+  /**
+   * Type-check projection only: a host-component call bound to one of
+   * `importBindings` is written as the JSX element `__mxDynamic` renders
+   * (`#hostComponentElement`), so the host's JSX types check its props.
+   */
+  projectHostComponents?: boolean;
+  /** The module's import bindings (whole file), or the surrounding module's (region). */
+  importBindings?: ReadonlySet<string>;
 }
 
 /** How a body scope behaves (`#scoped`). */
@@ -1372,6 +1380,8 @@ export class PreactEmitter implements Emitter<string> {
    * then names. Set by `typeCheck` and by a region compiled for tooling.
    */
   readonly #publicDefines: boolean;
+  readonly #projectHostComponents: boolean;
+  readonly #importBindings: ReadonlySet<string>;
 
   constructor(options: EmitterOptions = {}) {
     const {
@@ -1383,6 +1393,8 @@ export class PreactEmitter implements Emitter<string> {
     this.#publicDefines =
       options.publicDefines === true || typeCheck !== undefined;
     this.#shadowed = options.shadowed ?? new WeakSet();
+    this.#projectHostComponents = options.projectHostComponents ?? false;
+    this.#importBindings = options.importBindings ?? new Set();
     this.#softLift = options.softLift ?? null;
     this.#scopedBody = options.scopedBody ?? false;
     this.#source = options.source;
@@ -1453,6 +1465,8 @@ export class PreactEmitter implements Emitter<string> {
         overrides.softLift === undefined ? this.#softLift : overrides.softLift,
       shadowed: this.#shadowed,
       publicDefines: this.#publicDefines,
+      projectHostComponents: this.#projectHostComponents,
+      importBindings: this.#importBindings,
     });
   }
 
@@ -2954,6 +2968,15 @@ export class PreactEmitter implements Emitter<string> {
       // a callable). JSX's tag position is static, so this host inlines a
       // small `mxDynamic` helper into the module (mirroring `@mxlang/target-html`'s
       // `renderDynamic`) instead of writing the expression there directly.
+      if (
+        this.#projectHostComponents &&
+        isHostComponentCall(node) &&
+        node.attrTagProps.length === 0 &&
+        this.#importBindings.has(node.target.expr.code)
+      ) {
+        this.#out.push(this.#slot(this.#hostComponentElement(node)));
+        return;
+      }
       this.#runtimeImports.add("__mxDynamic");
       // Marko parity: args combine with a body/attribute tag
       // (`assertAttributesOrArgs`, `@marko/compiler/babel-utils`) — only a
@@ -3341,6 +3364,59 @@ export class PreactEmitter implements Emitter<string> {
         );
   }
 
+  /**
+   * Type-check projection of a host-component call bound to an import: the
+   * JSX element `__mxDynamic` renders for a component target
+   * (`<C …attrs…>{body}</C>`, or `children={(params) => …}` with tag params),
+   * so TypeScript checks its props as it checks hand-written TSX. Attributes
+   * go through the direct component path, names and values mapped; the body is
+   * the one `#hostComponentContentFn` hands `__mxDynamic`. A build never
+   * reaches here: it keeps the dynamic dispatch.
+   */
+  #hostComponentElement(
+    node: Extract<IrNode, { kind: "Component" }>,
+  ): MappedCode {
+    if (node.target.kind !== "dynamic") {
+      return fail("internal: a host-component call has a dynamic target", node);
+    }
+    const name = mappedExpr(node.target.expr);
+    const attrs = this.#attrs(node.attrs, true, true);
+    const children = node.content?.children ?? [];
+    if (node.content?.hasParams) {
+      return concatMapped(
+        "<",
+        name,
+        attrs,
+        " children={",
+        this.#hostComponentContentFn(node),
+        "} />",
+      );
+    }
+    if (meaningful(children).length === 0) {
+      return concatMapped("<", name, attrs, " />");
+    }
+    const { code: body, statements } = this.#scopeOf(
+      (scope) => scope.#hostComponentBody(node, children),
+      { hard: false, bindsParams: false },
+    );
+    return concatMapped(
+      "<",
+      name,
+      attrs,
+      ">{",
+      statements === ""
+        ? body
+        : concatMapped(
+            "(() => ",
+            wrapStatements(statements, body, "block"),
+            ")()",
+          ),
+      "}</",
+      node.target.expr.code,
+      ">",
+    );
+  }
+
   #hostComponentBody(
     node: Extract<IrNode, { kind: "Component" }>,
     children: IrNode[],
@@ -3713,6 +3789,7 @@ export function createRegionEmitter(
   positionAt: RegionSink["positionAt"],
   shadowed: WeakSet<object> = new WeakSet(),
   publicDefines = false,
+  importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
   const root = new Map<string, Position>();
   return new PreactEmitter({
@@ -3721,6 +3798,9 @@ export function createRegionEmitter(
     bindings: root,
     shadowed,
     publicDefines,
+    // The region's `typeCheck` projection is what `publicDefines` marks.
+    projectHostComponents: publicDefines,
+    importBindings,
   });
 }
 
@@ -3729,10 +3809,13 @@ export function createEmitter(
   typeCheck?: string,
   source?: string,
   shadowed: WeakSet<object> = new WeakSet(),
+  importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
   return new PreactEmitter({
     dialect,
     typeCheck,
+    projectHostComponents: typeCheck !== undefined,
+    importBindings,
     source,
     positionAt: !source
       ? undefined

@@ -255,6 +255,7 @@ export function compileJsxRegion(
     (offset) => sourcePosition(padded, offset),
     /<define\b/.test(source) ? shadowedCalls(ir) : new WeakSet<object>(),
     options.typeCheck === true,
+    new Set(options.importSpecifiers?.keys()),
   );
   drive(emitter, ir.body);
   const markupCode = emitter.result();

@@ -589,7 +589,16 @@ export function emitModuleWithMappings(
   const shadowed = ir.body.some((node) => node.kind === "Define")
     ? shadowedCalls(ir)
     : new WeakSet<object>();
-  const emitter = createEmitter(dialect, names?.handler, source, shadowed);
+  // The type-check projection writes a host-component call bound to one of
+  // these as the JSX element it renders (`createEmitter`).
+  const importBindings = new Set(ir.imports.flatMap((node) => node.bindings));
+  const emitter = createEmitter(
+    dialect,
+    names?.handler,
+    source,
+    shadowed,
+    importBindings,
+  );
 
   // Statements first, markup second. Splitting on the top level only: a
   // nested one is refused by the emitter rather than silently relocated.
@@ -612,7 +621,13 @@ export function emitModuleWithMappings(
         ),
       );
     } else if (node.kind === "Define") {
-      const body = createEmitter(dialect, names?.handler, source, shadowed);
+      const body = createEmitter(
+        dialect,
+        names?.handler,
+        source,
+        shadowed,
+        importBindings,
+      );
       drive(body, node.children);
       const rendered = body.result();
       for (const name of body.runtimeImports) {
