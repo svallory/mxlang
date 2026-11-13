@@ -1,6 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { TargetLookup } from "@mxlang/core";
 import * as core from "@mxlang/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { builtinLookup, builtinTargets } from "./index.ts";
@@ -24,6 +25,28 @@ function callee(packageName: string): string {
   return join(dir, "page.mx");
 }
 
+/**
+ * The caller's lookup, recording which of its members the compile reads.
+ * Core no longer reads a callee's `Input` for attribute tags, so no compile
+ * output differs by lookup any more; the recording is what shows the caller's
+ * lookup, not the descriptor's own, reached the compile.
+ */
+function recordingLookup(): { lookup: TargetLookup; read: Set<string> } {
+  const read = new Set<string>();
+  const real = builtinLookup();
+  const lookup = new Proxy(real, {
+    get(target, key, receiver) {
+      const value = Reflect.get(target, key, receiver);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        read.add(String(key));
+        return Reflect.apply(value, target, args);
+      };
+    },
+  });
+  return { lookup, read };
+}
+
 // Hostless targets without legacy host values are staged out of tooling.
 // An unwired descriptor has no compile entry to forward options through.
 const wired = builtinTargets.filter(
@@ -31,40 +54,33 @@ const wired = builtinTargets.filter(
 );
 describe("descriptor lookup forwarding", () => {
   for (const descriptor of wired) {
-    it(`${descriptor.name} uses the caller's full lookup for a cross-target AttrTag import`, () => {
+    it(`${descriptor.name} compiles with the caller's lookup`, () => {
       const filename = callee(
         descriptor.packageName === "@mxlang/host-react"
           ? "@mxlang/host-solid"
           : "@mxlang/host-react",
       );
-      // This variable is intentionally structurally assignable before the
-      // optional contract field lands too, so the initial failure is runtime.
-      const options = {
-        targets: builtinLookup(),
-        strict: descriptor.strict === "always",
-      };
+      const { lookup, read } = recordingLookup();
       const compiler = descriptor.load?.(core);
       if (!compiler) throw new Error("missing compiler");
-      expect(() =>
-        compiler.compileModule(
-          'import Card from "./Card.mx"\n<Card/>\n',
-          filename,
-          options,
-        ),
-      ).toThrow(/missing required attribute tag `<@header>`/);
+      compiler.compileModule(
+        'import Card from "./Card.mx"\n<Card><@header>x</@header></Card>\n',
+        filename,
+        { targets: lookup, strict: descriptor.strict === "always" },
+      );
+      expect(read.size).toBeGreaterThan(0);
     });
 
-    it(`${descriptor.name} still defaults to its own lookup without a caller lookup`, () => {
+    it(`${descriptor.name} still compiles with its own lookup without a caller lookup`, () => {
       const filename = callee(descriptor.packageName);
       const compiler = descriptor.load?.(core);
       if (!compiler) throw new Error("missing compiler");
-      expect(() =>
-        compiler.compileModule(
-          'import Card from "./Card.mx"\n<Card/>\n',
-          filename,
-          {},
-        ),
-      ).toThrow(/missing required attribute tag `<@header>`/);
+      const { code } = compiler.compileModule(
+        'import Card from "./Card.mx"\n<Card><@header>x</@header></Card>\n',
+        filename,
+        {},
+      );
+      expect(code).toContain("__mxAttrTag(");
     });
   }
 });
