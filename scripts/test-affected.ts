@@ -210,6 +210,23 @@ export function nonSourceProjects(
   return { byProject, unmapped };
 }
 
+/**
+ * What `vitest related` gets: the changed related sources, the subprocess
+ * probe's consumer (`probeConsumers`) and, for a related source under a
+ * `FIXTURE_CONSUMERS` path (the tree-sitter-mx corpus readers, say), the
+ * tests in other projects that read it. Deduped, in that order.
+ */
+export function relatedSources(changed: readonly string[]): string[] {
+  const related = changed.filter(isRelatedSource);
+  return [
+    ...new Set([
+      ...related,
+      ...probeConsumers(changed),
+      ...related.flatMap(fixtureConsumers),
+    ]),
+  ];
+}
+
 export function isWide(file: string): boolean {
   return WIDE_FILES.some((re) => re.test(file));
 }
@@ -365,13 +382,7 @@ function main(): number {
     console.log("test:affected: no changes vs origin/main; nothing to run.");
     return 0;
   }
-  const sources = [
-    ...new Set([
-      ...changed.filter(isRelatedSource),
-      ...probeConsumers(changed),
-      ...changed.filter(isRelatedSource).flatMap(fixtureConsumers),
-    ]),
-  ];
+  const sources = relatedSources(changed);
   const nonSources = changed.filter((f) => !isRelatedSource(f));
   const wide = changed.filter(isWide);
   if (wide.length > 0) {

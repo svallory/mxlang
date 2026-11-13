@@ -14,6 +14,7 @@ import {
   projectDirs,
   projectFor,
   projectsFor,
+  relatedSources,
 } from "./test-affected.ts";
 
 describe("laneFor", () => {
@@ -190,6 +191,15 @@ describe("FIXTURE_CONSUMERS (fixtures read from another project)", () => {
       "@mxlang/tsc",
       "@mxlang/typescript-plugin",
       "@mxlang/vite-plugin",
+    ]);
+  });
+
+  it("a related source under a row sends its readers to vitest related", () => {
+    expect(
+      relatedSources(["packages/editors/tree-sitter-mx/test/corpus/read.mts"]),
+    ).toEqual([
+      "packages/editors/tree-sitter-mx/test/corpus/read.mts",
+      "packages/core/src/ir-entry/conformance.test.ts",
     ]);
   });
 
