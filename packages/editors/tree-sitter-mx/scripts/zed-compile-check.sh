@@ -21,10 +21,10 @@
 #     forcing it means CI actually exercises the branch instead of only
 #     agreeing with it by never having a choice).
 #   ZED_COMPILE_CHECK_WASM_BUILD_ARGS   extra flags passed through to
-#     `tree-sitter build --wasm`, e.g. "--docker" on a runner with no local
-#     emsdk (CI ships Docker, not a preinstalled emscripten toolchain).
+#     `tree-sitter build --wasm` (empty by default; the fallback needs none,
+#     since tree-sitter-cli 0.26.9 fetches its own wasi-sdk).
 # Exit 0: compiled clean, grammar.wasm produced and non-empty.
-# Exit 1: compile failed (prints clang's/emcc's own first error) or wasm missing/empty.
+# Exit 1: compile failed (prints clang's/tree-sitter's own first error) or wasm missing/empty.
 # Exit 2: could not run the check at all (no repo, no clang found anywhere).
 set -euo pipefail
 
@@ -35,8 +35,8 @@ GRAMMAR_NAME="mx"
 
 # Zed's own wasi-sdk clang, if this machine has installed the extension at
 # least once (it ships wasi-sdk under Zed's own app-support directory, not
-# on PATH). Falls back to `tree-sitter build --wasm`, which uses emscripten
-# instead — a different toolchain, but the same "committed files only"
+# on PATH). Falls back to `tree-sitter build --wasm`, which uses the
+# wasi-sdk tree-sitter-cli downloads itself — not Zed's copy, but the same "committed files only"
 # property this gate needs, since it also compiles from the clean clone.
 #
 # ZED_COMPILE_CHECK_FORCE_FALLBACK=1 skips the wasi-sdk lookup unconditionally
@@ -99,11 +99,12 @@ else
     echo "zed-compile-check.sh: no wasi-sdk clang and no bunx to fall back to tree-sitter build" >&2
     exit 2
   fi
-  # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`.
+  # ZED_COMPILE_CHECK_WASM_BUILD_ARGS: extra flags for `tree-sitter build`
+  # (empty by default; a pass-through, nothing in CI sets it).
   #
-  # Like the solid/amx copies, this fallback uses tree-sitter-cli 0.26.9
+  # Like the solid and astromx copies, this fallback uses tree-sitter-cli 0.26.9
   # (package.json's own version here): it downloads its
-  # own wasi-sdk (no Docker or emsdk needed on CI) and compiles the clone's
+  # own wasi-sdk (no other toolchain needed on CI) and compiles the clone's
   # committed src/ as-is. 0.24.7 regenerates src/parser.c from grammar.js
   # first, so it never compiles the committed parser (PR #301 review: a junk
   # line appended to parser.c built fine with 0.24.7, and fails with 0.26.9).
