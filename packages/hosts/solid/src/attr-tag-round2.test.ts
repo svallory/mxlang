@@ -193,6 +193,74 @@ renderParamMixed: AttrTag<{ content: (value: string) => () => unknown }>;
     expect(values).toEqual(["AA", "BB"]);
   });
 
+  it("gives Solid built-ins a lone <@fallback>'s content, not a record", () => {
+    const code = compileSolidMx(
+      `<div><Show when=false><@fallback>show</@fallback>x</Show><Loading><@fallback>loading</@fallback>x</Loading><Errored><@fallback|e, reset|>error</@fallback>x</Errored></div>`,
+      { filename: "builtins.solid.mx" },
+    ).code.replace(/\s+/g, " ");
+    expect(code).toContain("<Show when={false} fallback={() => <>show</>}");
+    expect(code).toContain("<Loading fallback={() => <>loading</>}");
+    expect(code).toContain(
+      "<Errored fallback={(e, reset) => () => <>error</>}",
+    );
+    expect(code).not.toContain("fallback={__mxAttrTag(");
+    // Any other shape is still the record.
+    expect(
+      compileSolidMx("<Show when=false><@fallback a=1>r</@fallback>x</Show>", {
+        filename: "builtins.solid.mx",
+      }).code,
+    ).toContain('fallback={__mxAttrTag({ "a": 1, content: () => <>r</> })}');
+  });
+
+  it.each(["ssr", "dom"] as const)(
+    "renders and escapes Show's <@fallback> in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Show when=false><@fallback>\${malicious}</@fallback><b>child</b></Show>`,
+          setup: `const malicious = ${JSON.stringify(malicious)};`,
+        },
+        mode,
+      );
+      if (mode === "ssr") {
+        expect(result as string).not.toContain("<img");
+        expect(result as string).toContain("&lt;img");
+      } else expect(result).toEqual([malicious]);
+    },
+  );
+
+  it.each(["ssr", "dom"] as const)(
+    "renders Loading's <@fallback> in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Loading><@fallback><span>loading fallback</span></@fallback><Pending/></Loading>`,
+          setup: `function Pending() { const [value] = createSignal(async () => await new Promise(() => {})); return <span>{value()}</span>; }`,
+        },
+        mode,
+      );
+      if (mode === "ssr")
+        expect(result as string).toContain("<span>loading fallback</span>");
+      else expect(result).toEqual(["loading fallback"]);
+    },
+  );
+
+  it.each(["ssr", "dom"] as const)(
+    "renders Errored's parameterized <@fallback> in %s mode",
+    (mode) => {
+      const result = runFixture(
+        {
+          region: `<Errored><@fallback|e, reset|><span>error:\${e().message}:\${typeof reset}</span></@fallback><Boom/></Errored>`,
+          setup: `function Boom() { throw new Error("boom"); }`,
+        },
+        mode,
+      );
+      if (mode === "ssr")
+        expect(result as string).toContain("<span>error:boom:function</span>");
+      else expect(result).toEqual(["error:boom:function"]);
+    },
+  );
+
   it("escapes placeholder-only <if>/<for> bodies in SSR and preserves client text", () => {
     const fixture: Fixture = {
       callee: `<div><if=input.ok>\${input.value}</if>|<for|value| of=input.values>\${value}</for></div>`,

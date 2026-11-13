@@ -2555,27 +2555,56 @@ function attributeTagEntries(tree: AttributeTagNode[]): MappedCode[] {
 function attributeTagProps(
   tree: AttributeTagNode[],
   native?: NativeAttrs,
+  callee?: string,
 ): MappedCode {
   return concatMapped(
     ...attributeTagNames(tree).map((name) => {
       const source = filterAttributeTagTree(tree, name);
       const first = firstAttributeTag(source);
       if (native && attrGuardUse) attrGuardUse.value = true;
+      const fallback =
+        name === "fallback" && callee !== undefined
+          ? builtinFallback(callee, source)
+          : undefined;
       return concatMapped(
         " ",
         mapped(name, first?.nameSpan ?? null),
         "={",
-        native
-          ? concatMapped(
-              `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, `,
-              attributeTagRecord(source),
-              `, ${nativeTagOf(native)})`,
-            )
-          : attributeTagRecord(source),
+        fallback
+          ? fallback
+          : native
+            ? concatMapped(
+                `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, `,
+                attributeTagRecord(source),
+                `, ${nativeTagOf(native)})`,
+              )
+            : attributeTagRecord(source),
         "}",
       );
     }),
   );
+}
+
+/**
+ * Solid's own components (`<Show>`, `<Loading>`, `<Errored>`, …) take
+ * `fallback` as JSX (for `Errored`, a function of the error and `reset`),
+ * never as an attribute-tag record. So a `<@fallback>` given to one, as one
+ * unconditional occurrence with a body and no attributes or nested tags, is
+ * passed as its `content` accessor; any other shape stays a record. Matched by
+ * the called name, as `isComponent` resolves the built-ins. An interim
+ * exception to spec §8's record, pending a ruling on library components.
+ */
+function builtinFallback(
+  callee: string,
+  source: AttributeTagNode[],
+): MappedCode | undefined {
+  if (!SOLID_BUILTIN_TAG_NAMES.has(callee)) return undefined;
+  const [only] = source;
+  if (source.length !== 1 || only?.kind !== "AttributeTag") return undefined;
+  const { tag } = only;
+  if (!tag.hasBody || tag.attrs.length > 0 || tag.attributeTagTree.length > 0)
+    return undefined;
+  return attributeTagRenderable(tag);
 }
 
 function identifierNames(text: string): Set<string> {
@@ -2890,7 +2919,7 @@ export class SolidEmitter implements Emitter<string> {
     }
 
     const attrs = renderAttrs(node.attrs, true);
-    const tags = attributeTagProps(node.attributeTagTree);
+    const tags = attributeTagProps(node.attributeTagTree, undefined, name);
     const innerHtml = raw
       ? concatMapped(" innerHTML={", mappedExpr(raw.expr), "}")
       : concatMapped();
