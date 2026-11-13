@@ -590,6 +590,7 @@
       },
       "dependencies": {
         "@mxlang/angular-checker": "workspace:*",
+        "@mxlang/core": "workspace:*",
         "@mxlang/host-angular": "workspace:*",
         "@mxlang/typescript-plugin": "workspace:*",
         "@volar/language-core": "2.4.28",

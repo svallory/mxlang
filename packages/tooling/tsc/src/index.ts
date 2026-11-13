@@ -2,6 +2,8 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import vm from "node:vm";
+import { createAngularChecker } from "@mxlang/angular-checker";
+import { readAngularConfig } from "@mxlang/host-angular";
 import {
   ambientTypeDiagnostics,
   ambientTypeFiles,
@@ -30,6 +32,14 @@ import { createResolveModuleName } from "@volar/typescript/lib/resolveModuleName
 import type ts from "typescript";
 import { createTsconfigPathsResolver } from "../../typescript-plugin/src/tsconfig-paths.ts";
 import {
+  type ProjectCacheEntry,
+  projectCacheEntry,
+  readStoredAnswer,
+  toolIdentity,
+  writeStoredAnswer,
+} from "./build-cache.ts";
+import {
+  type BuildProject,
   isWatchMode,
   parseBuildMode,
   resolveBuildProjects,
@@ -38,8 +48,10 @@ import { formatFixLines } from "./fix-lines.ts";
 import {
   checkNgMxGroups,
   checkNgMxProjects,
+  type NgDiagnosticsDeps,
   type NgDiagnosticsResult,
   type NgProgram,
+  nearestPackageDir,
 } from "./ng-diagnostics.ts";
 import {
   currentCompileDiagnostics,
@@ -720,6 +732,7 @@ function compileProjectNgMx(
   tsconfigPath: string,
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
 ): CompiledNgMx[] {
+  buildPassCounters.compileProjectNgMx += 1;
   const ngPlugins: NgProgram[] = [];
   const argv = process.argv;
   const stdout = process.stdout.write;
@@ -744,28 +757,141 @@ function compileProjectNgMx(
 }
 
 /**
- * Per project of the `-b` graph, in graph order, the `.ng.mx` compiles to
- * check. A file belongs to the first project whose program holds it as a source
- * file (overlapping `include`s: first in build order wins), so it is checked
- * once, under that project's tsconfig.
+ * Test seam: how often the `-b` template pass created a program for a
+ * project's `.ng.mx` files and an Angular checker. A cache hit creates
+ * neither. Never read by mx-tsc itself.
  */
-function collectBuildGroups(
+export const buildPassCounters = { compileProjectNgMx: 0, createChecker: 0 };
+
+const countingCheckerDeps: NgDiagnosticsDeps = {
+  createChecker: (options) => {
+    buildPassCounters.createChecker += 1;
+    return createAngularChecker(options);
+  },
+};
+
+/** How the `-b` template pass may use the sidecar cache (`build-cache.ts`). */
+interface BuildCacheMode {
+  /** Look up and store answers at all (off: watch, or a failed tsc pass). */
+  enabled: boolean;
+  /** Replay a stored answer (off under `--force`, which still stores). */
+  read: boolean;
+}
+
+/**
+ * The Angular template pass over every project of the `-b` graph, in graph
+ * order, results merged in that order. A file belongs to the first project
+ * whose program holds it as a source file (overlapping `include`s: first in
+ * build order wins), so it is checked once, under that project's tsconfig.
+ *
+ * A project whose stored answer's key proves every input unchanged replays it
+ * and creates no program and no checker. A project is stored only when its
+ * answer is all the pass would print for it: no MX compile, host-policy or
+ * ambient-types diagnostic from its program (those are printed from that very
+ * program, which a hit skips), no project-level error (missing compiler-cli,
+ * bad config, a crashed check), and Angular diagnostics not `"off"`.
+ */
+function checkBuildProjects(
   astro: boolean,
-  projects: readonly { tsconfigPath: string; hasFiles: boolean }[],
+  projects: readonly BuildProject[],
   diagnosticPlugins: MxDiagnosticLanguagePlugin[],
-): { tsconfigPath: string; entries: CompiledNgMx[] }[] {
+  cache: BuildCacheMode,
+): NgDiagnosticsResult {
+  const result: NgDiagnosticsResult = { reports: [], errors: [], warnings: [] };
+  const merge = (part: NgDiagnosticsResult) => {
+    result.reports.push(...part.reports);
+    result.errors.push(...part.errors);
+    result.warnings.push(...part.warnings);
+  };
+  const require = createRequire(import.meta.url);
+  const typescript = require("typescript") as typeof ts;
+  const tool = cache.enabled ? toolIdentity() : undefined;
   const claimed = new Set<string>();
-  return projects.map(({ tsconfigPath, hasFiles }) => {
+  // The chain: a project's key covers the previous project's, so a change
+  // that moves ownership in an earlier project reaches every later one.
+  let previous = "";
+  projects.forEach(({ tsconfigPath, hasFiles, rootNames }, position) => {
     // No root files, no program (a solution root): nothing to compile.
-    if (!hasFiles) return { tsconfigPath, entries: [] };
-    const entries = compileProjectNgMx(
-      astro,
-      tsconfigPath,
-      diagnosticPlugins,
-    ).filter((entry) => !claimed.has(entry.fileName));
-    for (const entry of entries) claimed.add(entry.fileName);
-    return { tsconfigPath, entries };
+    if (!hasFiles) return;
+    const entry =
+      tool === undefined
+        ? undefined
+        : projectCacheEntry(typescript, {
+            tsconfigPath,
+            rootNames,
+            astro,
+            tool,
+            previous,
+            position,
+            claimed,
+          });
+    previous = entry?.key ?? `uncached:${position}`;
+    const stored =
+      entry && cache.read ? readStoredAnswer(entry, claimed) : undefined;
+    if (stored) {
+      for (const file of stored.ownedFiles) claimed.add(file);
+      merge(stored.ngResult);
+      return;
+    }
+    const pluginsBefore = diagnosticPlugins.length;
+    const compiled = compileProjectNgMx(astro, tsconfigPath, diagnosticPlugins);
+    const entries = compiled.filter((e) => !claimed.has(e.fileName));
+    for (const e of entries) claimed.add(e.fileName);
+    const part = checkNgMxGroups(
+      [{ tsconfigPath, entries }],
+      countingCheckerDeps,
+    );
+    merge(part);
+    if (
+      entry &&
+      storable(
+        entry,
+        compiled,
+        entries,
+        part,
+        diagnosticPlugins.slice(pluginsBefore),
+      )
+    ) {
+      writeStoredAnswer(
+        entry,
+        entries.map((e) => e.fileName),
+        part,
+      );
+    }
   });
+  return result;
+}
+
+/** Whether one project's fresh answer may be stored (see {@link checkBuildProjects}). */
+function storable(
+  entry: ProjectCacheEntry,
+  compiled: readonly CompiledNgMx[],
+  owned: readonly CompiledNgMx[],
+  part: NgDiagnosticsResult,
+  plugins: readonly MxDiagnosticLanguagePlugin[],
+): boolean {
+  if (part.errors.length > 0 || currentAmbientTypeErrors().length > 0) {
+    return false;
+  }
+  for (const plugin of plugins) {
+    if (plugin.getCompileDiagnostics().length > 0) return false;
+    if ((plugin.getTargetPolicyDiagnostics?.() ?? []).length > 0) return false;
+  }
+  // The program compiled exactly the `.ng.mx` files tsc listed for it: what
+  // a hit derives its ownership from.
+  const listed = new Set(entry.ngFiles);
+  const names = new Set(compiled.map((e) => e.fileName));
+  if (names.size !== listed.size || ![...names].every((n) => listed.has(n))) {
+    return false;
+  }
+  try {
+    return owned.every(
+      (e) =>
+        readAngularConfig(nearestPackageDir(e.fileName)).diagnostics !== "off",
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -915,9 +1041,16 @@ function runMxTscChecks(): number {
   ];
   const buildProjects =
     build && !build.clean ? resolveBuildProjects(argv, process.cwd()) : [];
-  const buildGroups =
+  // The stored answers are keyed on the build info tsc just wrote, so they
+  // are used only when tsc's own pass succeeded (a failed one can leave a
+  // project unbuilt and its build info behind its sources). Watch runs keep
+  // their own path.
+  const buildAngular =
     build && !build.clean && !build.dry && !watchRan
-      ? collectBuildGroups(astro, buildProjects, diagnosticPlugins)
+      ? checkBuildProjects(astro, buildProjects, diagnosticPlugins, {
+          enabled: !watchMode && tscExitCode === 0,
+          read: !build.force,
+        })
       : undefined;
   if (build?.dry) reportDryRun(buildProjects);
 
@@ -968,8 +1101,8 @@ function runMxTscChecks(): number {
   // be checked at all, fails the run. `--clean` and `--dry` check nothing.
   // A watch run already ran the pass from inside each of its rebuilds; if it
   // never printed one, the pass below is its one.
-  const angular = buildGroups
-    ? checkNgMxGroups(buildGroups)
+  const angular = buildAngular
+    ? buildAngular
     : build || watchRan
       ? { reports: [], errors: [], warnings: [] }
       : checkNgMxProjects(compiledNgMx, argv, process.cwd());

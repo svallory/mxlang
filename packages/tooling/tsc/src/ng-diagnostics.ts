@@ -75,7 +75,8 @@ export interface NgDiagnosticsResult {
   warnings: string[];
 }
 
-function nearestPackageDir(fileName: string): string {
+/** The directory of the nearest `package.json` above `fileName` (its own directory when none). */
+export function nearestPackageDir(fileName: string): string {
   let dir = dirname(fileName);
   for (;;) {
     if (existsSync(join(dir, "package.json"))) return dir;

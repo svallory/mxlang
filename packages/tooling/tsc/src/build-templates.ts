@@ -25,6 +25,11 @@ export interface BuildMode {
   clean: boolean;
   /** `--dry` / `-d`: tsc only reports what it would do. */
   dry: boolean;
+  /**
+   * `--force` / `-f`: tsc rebuilds every project, and the template pass reads
+   * no cached answer (it checks every project and stores the answers anew).
+   */
+  force: boolean;
 }
 
 /**
@@ -44,7 +49,11 @@ export function parseBuildMode(argv: readonly string[]): BuildMode | undefined {
   if (buildOptions.help || buildOptions.version || errors.length > 0) {
     return undefined;
   }
-  return { clean: !!buildOptions.clean, dry: !!buildOptions.dry };
+  return {
+    clean: !!buildOptions.clean,
+    dry: !!buildOptions.dry,
+    force: !!buildOptions.force,
+  };
 }
 
 /**
