@@ -9,9 +9,9 @@ function Inner(props: {label: string;}) {
 
 export default function Page() {
   return <>
-    <><Outer title="o"><Inner label="one" /><Outer title="nested"><Inner label="two" /></Outer></Outer></>
-
-
+    <><Outer title="o"><
+        Inner label="one" /><
+        Outer title="nested"><Inner label="two" /></Outer></Outer></>
     
   </>;
 }

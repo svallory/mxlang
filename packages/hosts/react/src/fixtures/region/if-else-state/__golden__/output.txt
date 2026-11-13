@@ -4,7 +4,7 @@ export default function Page(props: {open: boolean;}) {
   const [open] = useState(props.open);
   return (
     <><div>{
-        open ? <p>open</p> : 
+        open ? <p>open</p> :
         props.open === undefined ? <p>unknown</p> : <p>closed</p>}</div></>);
 
 

@@ -5,7 +5,7 @@ export default function Page(props: {items: Item[];}) {
     <><ul>
         {((mxList) => mxList ? [...mxList] : [])(props.items).map(
           (item, index) => <__mxFragment key={item.id}>
-            <li
-              data-index={__mxAttrValue("data-index", index, "li")}>{__mxRenderable(item.name)}</li></__mxFragment>)}</ul></>
+            <li data-index=
+              {__mxAttrValue("data-index", index, "li")}>{__mxRenderable(item.name)}</li></__mxFragment>)}</ul></>
   </>;
 }

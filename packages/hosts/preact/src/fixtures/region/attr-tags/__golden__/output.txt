@@ -12,9 +12,9 @@ function Card(props: {header?: ComponentChildren;footer?: {content?: ComponentCh
 
 export default function Page() {
   return <>
-    <><Card header={<>Items{null}</>} footer={{ "align": "end", content: <>total{null}</> }}><p>body</p></Card></>
-
-
+    <><Card
+        header={<>Items{null}</>}
+        footer={{ "align": "end", content: <>total{null}</> }}><p>body</p></Card></>
 
     
   </>;

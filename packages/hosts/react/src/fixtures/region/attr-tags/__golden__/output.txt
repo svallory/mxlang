@@ -12,9 +12,9 @@ function Card(props: {header?: ReactNode;footer?: {content?: ReactNode;align: st
 
 export default function Page() {
   return <>
-    <><Card header={<>Items{null}</>} footer={{ "align": "end", content: <>total{null}</> }}><p>body</p></Card></>
-
-
+    <><Card
+        header={<>Items{null}</>}
+        footer={{ "align": "end", content: <>total{null}</> }}><p>body</p></Card></>
 
     
   </>;
