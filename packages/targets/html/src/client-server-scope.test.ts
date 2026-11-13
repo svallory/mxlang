@@ -342,8 +342,10 @@ describe("a refinement naming a client binding", () => {
       [[2304, "fnn"]],
     ],
     [
-      // The one diagnostic is the probe's own (a `number` is not callable),
-      // reported on its generated callee, as before the read was added.
+      // Pins a known gap: the one diagnostic is the probe's own (a `number`
+      // is not callable), reported on its generated, unmapped callee, so the
+      // editor drops it; it is not at `clamp`. The row shows the navigation
+      // read adds no diagnostic of its own.
       "C13 the navigation read of a refinement adds no diagnostic",
       "client const clamp = 1;\n<let/q=1/>\n<input value:clamp:=q/>",
       [[2349, "?"]],
@@ -428,6 +430,8 @@ describe("the module that runs is unchanged", () => {
 
 describe("a client name another module statement declares", () => {
   const rows: Row[] = [
+    // E1 and E2 are regression pins: the projection already passed them
+    // before the module that runs did; E3 needs the non-client names alone.
     [
       "E1 a for-of head beside a server const",
       "server const x = 1;\nclient for (const x of [2]) {}\n<div>${x}</div>",
@@ -436,6 +440,11 @@ describe("a client name another module statement declares", () => {
     [
       "E2 a label beside a server const",
       "server const x = 1;\nclient x: for (;;) { break x }\n<div>${x}</div>",
+      [],
+    ],
+    [
+      "E3 a for-of head beside a static const",
+      "static const x = 1;\nclient for (const x of [2]) {}\n<div>${x}</div>",
       [],
     ],
   ];
@@ -474,11 +483,6 @@ describe("`<for>` parameter annotations", () => {
     [
       "F6 a default",
       "static const list: (number | undefined)[] = [1];\n<for|x: number = 0| of=list>${x}</for>",
-      [],
-    ],
-    [
-      "F7 the body may declare a param's name in a nested scope",
-      "static const list = [1];\n<for|x: number, i: number| of=list><if=true><const/x=1/>${x}</if>${i}</for>",
       [],
     ],
     [

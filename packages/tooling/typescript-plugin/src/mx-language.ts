@@ -666,11 +666,6 @@ export function createHtmlMappings(
     const recordedHere = recordedBySource.get(
       `${sourceRange.offset}:${sourceRange.length}`,
     );
-    // A recorded mapping restricted to some uses is authoritative: a
-    // full-feature guess beside it would undo the restriction.
-    if (recordedHere?.some((mapping) => mapping.data !== codeInformation)) {
-      continue;
-    }
     if (
       recordedHere &&
       !recordedHere.some(

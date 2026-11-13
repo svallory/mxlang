@@ -365,8 +365,9 @@ describe("the server and client views, at the authored token", {
 
 /**
  * A recorded mapping restricted to some tooling uses (`GeneratedMapping.use`)
- * keeps the restriction through the html mapping pass: no full-feature
- * mapping of the same source range stands beside it, merged or guessed.
+ * keeps the restriction through the html mapping pass: it is not merged
+ * into a neighbour of another use. (The pass's text-match guesses never reach
+ * a refinement token: the token is not among the IR expressions it collects.)
  */
 describe("a restricted recorded mapping", () => {
   it("is not merged with a neighbour of another use", () => {
@@ -402,7 +403,9 @@ describe("a restricted recorded mapping", () => {
     ]);
   });
 
-  it("at a refinement token, only the two restricted mappings stand", () => {
+  // Hover catches a full-feature probe; only this row catches a navigation
+  // read that lost its `use` (it would add completion and diagnostics there).
+  it("at a refinement token, the read and the probe keep their own uses", () => {
     const source =
       "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";
     const fileName = "/project/restricted.mx";

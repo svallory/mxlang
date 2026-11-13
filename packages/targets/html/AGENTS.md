@@ -197,6 +197,9 @@ function would hide its TS1108. Client code reading `input`, `$global` or
   definition from the token also lists the client declaration, rename from
   the token renames both bindings, and hover shows the client type: the
   target keeps no template scope model.
+- A refinement token that names a client binding has no completion: neither
+  of its two mappings (the probe's diagnostics and navigation, the read's
+  navigation and hover) carries it.
 
 Also: a top-level type (`Input`) cannot name a client class or enum; a
 `client` statement reading a `static` or `server` name declared after it but
@@ -262,7 +265,11 @@ a loop head, so the module that runs cuts it (`loopBinding`). Under `typeCheck`
 each annotated param is checked instead: the head binds a `__mxForParam<n>`
 temporary in its place and the body opens with `const <param as written> =
 <temp>;`, the param mapped to its authored text, then the authored body in a
-block of its own. A default becomes `const <left> = <temp> === undefined ?
+block of its own. Core refuses a body declaration of a param's name, so that
+block is defensive: no source core accepts needs it today. The mapping
+assumes `For.paramSpans[i]` spans exactly the param text; when its length
+differs, the re-declaration is left unmapped and its error lands on
+generated text, which the editor drops. A default becomes `const <left> = <temp> === undefined ?
 (<default>) : <temp>;`. This holds for the `of`, `in` and range forms and for
 an attribute-tag loop; a param without an annotation is unchanged. Known
 limits: the annotation is checked by assignment, not as a callback
