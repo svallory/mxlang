@@ -146,9 +146,9 @@ export const NEAR_EXPLICIT_CHILD_CODE = "MX_NEAR_EXPLICIT_CHILD";
 
 // --- The IR entry: data files ---
 
-/** A structural construct in a file whose consumer does not evaluate it (`structural: "reject"`). */
+/** A structural construct in a static data file (`structural: "reject"`). */
 export const STRUCTURAL_CONSTRUCT_CODE = "MX_STRUCTURAL_CONSTRUCT";
-/** Something a data tree cannot hold: a template tag call, `<!doctype>`, a tag variable, a dynamic tag, `<define>`, `<return>`. */
+/** Something a static data file cannot hold: a template tag call, `<!doctype>`, a tag variable, a dynamic tag, `<define>`, `<return>`. */
 export const NOT_IN_DATA_FILE_CODE = "MX_NOT_IN_DATA_FILE";
 
 // --- Registration and configuration ---
@@ -639,9 +639,9 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         ],
         [
           STRUCTURAL_CONSTRUCT_CODE,
-          "a structural construct in a file whose consumer does not evaluate it",
+          "a structural construct in a static data file",
         ],
-        [NOT_IN_DATA_FILE_CODE, "something a data tree cannot hold"],
+        [NOT_IN_DATA_FILE_CODE, "something a static data file cannot hold"],
         [
           INVALID_CONTRACT_CODE,
           "a tag contract with a bad key, contradiction, recursion or reference",

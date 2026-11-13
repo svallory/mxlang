@@ -4709,12 +4709,12 @@ host, a target or a dialect.
 | `MX_UNCHECKABLE_CHILD` | error | a dynamic tag under a closed `children` contract |
 | `MX_NEAR_EXPLICIT_CHILD` | error | a wildcard child one typo from an explicit child |
 
-**Data file: what a static data tree cannot hold.**
+**Data file: what a static data file cannot hold.**
 
 | Code | Severity | Rule |
 |---|---|---|
-| `MX_STRUCTURAL_CONSTRUCT` | error | a structural construct in a file whose consumer does not evaluate it |
-| `MX_NOT_IN_DATA_FILE` | error | something a data tree cannot hold |
+| `MX_STRUCTURAL_CONSTRUCT` | error | a structural construct in a static data file |
+| `MX_NOT_IN_DATA_FILE` | error | something a static data file cannot hold |
 
 **Registration: contracts, configuration, dialects and tag files.**
 
