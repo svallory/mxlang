@@ -279,19 +279,21 @@ describe("the .ng.mx and .astro.mx plugins read an aliased callee", {
   }
 
   it("the .astro.mx plugin", () => {
-    // Astro refuses `/var` on a tag it read a `<return>` from with its own
-    // message; an unread callee gets core's generic refusal instead.
+    // Astro refuses `/var` on a tag whose `<return>` it read with its own
+    // message; an unread callee is core's MX_INVALID_TAG_VAR instead.
     const { dir, file, resolveImport } = project(
       "page.astro.mx",
       '---\nimport Card from "~/Card.mx";\n---\n<Card/n/>\n',
     );
     writeFileSync(join(dir, "src", "Card.mx"), "<return value=1/>\n<div/>\n");
     try {
-      expect(
-        codesFrom(createAmxLanguagePlugin(ts, { resolveImport }), file),
-      ).toEqual(["ASTRO_WITH_RESOLVER"]);
+      const [read] = codesFrom(
+        createAmxLanguagePlugin(ts, { resolveImport }),
+        file,
+      );
+      expect(read).toMatch(/^`\/var` on `<Card>` can't bind in `\.astro\.mx`/);
       expect(codesFrom(createAmxLanguagePlugin(ts), file)).toEqual([
-        "ASTRO_WITHOUT_RESOLVER",
+        "MX_INVALID_TAG_VAR",
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
