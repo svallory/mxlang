@@ -25,14 +25,23 @@ import { compile } from "./index.ts";
 function pairs(
   source: string,
   file = "/fixtures/values.mx",
-): { code: string; pairs: string[][] } {
+): {
+  code: string;
+  pairs: string[][];
+  uses: [string, string, unknown][];
+} {
   const { code, mappings } = compile(source, file);
+  const slices = mappings.map(
+    (m) =>
+      [
+        source.slice(m.sourceStart, m.sourceEnd),
+        code.slice(m.generatedStart, m.generatedEnd),
+      ] as [string, string],
+  );
   return {
     code,
-    pairs: mappings.map((m) => [
-      source.slice(m.sourceStart, m.sourceEnd),
-      code.slice(m.generatedStart, m.generatedEnd),
-    ]),
+    pairs: slices,
+    uses: slices.map(([from, to], i) => [from, to, mappings[i]?.use]),
   };
 }
 
@@ -155,6 +164,19 @@ describe("html expression values", () => {
         JSON.stringify(atom.slice(1)),
       ]);
     }
+  });
+
+  // A tag body is passed as the `content` key; a callee whose input has no
+  // `content` reports TS2353 on that key, the author's error, so the key maps
+  // onto the tag name (where a missing prop's TS2345 lands), for
+  // verification only.
+  it("maps a body's `content` key onto the tag name, verification only", () => {
+    const result = pairs(
+      'import Card from "./Card.mx"\n<Card title="x">hello</Card>',
+    );
+    expect(
+      result.uses.filter(([, generated]) => generated === "content"),
+    ).toEqual([["Card", "content", { verification: true }]]);
   });
 
   it("maps the text after an atom to its own offset, not drifted", () => {

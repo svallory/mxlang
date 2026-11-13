@@ -18,15 +18,19 @@ function errorsByFile() {
     dir,
   );
   const byFile = new Map<string, string[]>();
+  const linesByFile = new Map<string, string[]>();
   for (const line of `${run.stdout}\n${run.stderr}`.split("\n")) {
     const match = /src\/(\w+)\.mx(\(\d+,\d+\)): error (TS\d+)/.exec(line);
     if (match) {
       const list = byFile.get(match[1] as string) ?? [];
       list.push(`${match[2]} ${match[3]}`);
       byFile.set(match[1] as string, list);
+      const lines = linesByFile.get(match[1] as string) ?? [];
+      lines.push(line);
+      linesByFile.set(match[1] as string, lines);
     }
   }
-  return { byFile };
+  return { byFile, linesByFile };
 }
 
 describe("mx-tsc on a tag imported from a .ts module", () => {
@@ -66,8 +70,20 @@ describe("mx-tsc on a tag imported from a .ts module", () => {
 
   // Body content is passed as `content`; the callee's input must declare it.
   it("reports body content the callee's input does not declare", () => {
-    expect(result.byFile.get("Body")).toEqual(["(3,1) TS2353"]);
+    expect(result.byFile.get("Body")).toEqual(["(3,2) TS2353"]);
     expect(result.byFile.get("AuthoredBody")).toEqual(["(3,1) TS2353"]);
+  }, 120_000);
+
+  // The `content` key is mapped onto the tag, so the diagnostic is the
+  // author's: no generated-code or approximate-position suffix.
+  it("labels the undeclared-body error as the author's, not an MX bug", () => {
+    for (const file of ["Body", "AuthoredBody"]) {
+      const lines = result.linesByFile.get(file) ?? [];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain("'content' does not exist");
+      expect(lines[0]).not.toContain("not yours");
+      expect(lines[0]).not.toContain("position approximate");
+    }
   }, 120_000);
 
   it("stays silent for an overloaded callee, whichever signature matches", () => {

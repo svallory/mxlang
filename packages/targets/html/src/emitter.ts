@@ -1064,6 +1064,7 @@ export function createEmitter(
     content: Block | null,
     ownerType: string | null,
     untypedCallee = false,
+    contentSpan: { sourceStart: number; sourceEnd: number } | null = null,
   ): {
     parts: MappedCode[];
     spreads: string[];
@@ -1121,11 +1122,21 @@ export function createEmitter(
       // params from (`__mxRenderDynamic` takes `Record<string, any>`), so an
       // unannotated param would be an implicit `any` under strict tsc. The cast
       // is the contextual type: the params are `any`, as the callee is unknown.
-      setProp(
-        "content",
-        untypedCallee && content.hasParams
-          ? concatMapped("(", fn, ") as (...args: any[]) => any")
-          : fn,
+      // The key stands for the authored body, so it maps onto the span the
+      // call's props braces take (the tag name): a callee whose input
+      // declares no `content` (TS2353) is the author's error, reported where
+      // a missing prop is. Verification only: hover, navigation and
+      // completion on the tag name stay the name's own.
+      parts.push(
+        concatMapped(
+          withUse(mapped(propKey("content"), contentSpan), {
+            verification: true,
+          }),
+          ": ",
+          untypedCallee && content.hasParams
+            ? concatMapped("(", fn, ") as (...args: any[]) => any")
+            : fn,
+        ),
       );
     }
 
@@ -1299,18 +1310,6 @@ export function createEmitter(
         target.kind === "name" ? (target.binding ?? target.name) : "";
       const ownerType =
         target.kind === "name" ? `__MxInputOf<typeof ${callee}>` : null;
-      const { parts, spreads } = propsOf(
-        node.attrs,
-        node.attrTagProps,
-        node.content,
-        ownerType,
-        node.target.kind === "dynamic",
-      );
-      const joinedParts = concatMapped(
-        ...parts.flatMap((part, index) =>
-          index === 0 ? [part] : [", ", part],
-        ),
-      );
       // The call's props object stands for the tag's attributes and body, so
       // its braces map onto the tag name, as JSX hosts report a call's props
       // errors on the name: TypeScript anchors a missing required property
@@ -1334,6 +1333,19 @@ export function createEmitter(
         }
         return binding ? null : (node.target.expr.span ?? node.span ?? null);
       })();
+      const { parts, spreads } = propsOf(
+        node.attrs,
+        node.attrTagProps,
+        node.content,
+        ownerType,
+        node.target.kind === "dynamic",
+        braceSpan,
+      );
+      const joinedParts = concatMapped(
+        ...parts.flatMap((part, index) =>
+          index === 0 ? [part] : [", ", part],
+        ),
+      );
       const propsObject = concatMapped(
         mapped("{", braceSpan),
         parts.length === 0 ? "  " : concatMapped(" ", joinedParts, " "),
