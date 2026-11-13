@@ -1684,7 +1684,14 @@ export function lowerAstroMx(
     };
   } catch (error) {
     if (error instanceof AstroTemplateError) {
-      if (ctx) error.dependencies ??= [...(ctx.dependencies ?? [])];
+      // Its own files, if any, stay beside the ones this lowering read.
+      if (ctx)
+        error.dependencies = [
+          ...new Set([
+            ...(error.dependencies ?? []),
+            ...(ctx.dependencies ?? []),
+          ]),
+        ];
       throw error;
     }
     if (isTranslateError(error)) {

@@ -180,6 +180,11 @@ export default class State {
   // so keep the already-parsed parameter names visible to the MX bridge.
   mxFunctionParamNames: Array<Set<string>> = [];
 
+  // MX FORK: the callee files read by every region accepted so far. On the
+  // state, not the parser, so a speculative attempt's regions are dropped
+  // with it; a failed region's error reports them beside its own.
+  mxRegionDependencies: string[] = [];
+
   // MX FORK: a transient handoff from `parseExprList`'s loop to
   // `parseExprListItem`'s boundary push — the index of the list item about
   // to be parsed, so a decorator's own argument list can record which
@@ -256,6 +261,7 @@ export default class State {
     state.mxFunctionParamNames = this.mxFunctionParamNames.map(
       names => new Set(names),
     );
+    state.mxRegionDependencies = this.mxRegionDependencies.slice();
     state.firstInvalidTemplateEscapePos = this.firstInvalidTemplateEscapePos;
     state.strictErrors = this.strictErrors;
     state.tokensLength = this.tokensLength;

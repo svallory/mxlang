@@ -435,6 +435,33 @@ describe("mxRegionCompile", () => {
       },
     );
 
+    it.each([
+      ["a positioned error", () => new FakeTranslateError("x", 5, 2)],
+      ["a plain Error", () => new Error("plain")],
+    ])(
+      "adds the callees of the regions accepted before it to %s",
+      (_, hostError) => {
+        let calls = 0;
+        const raised = (() => {
+          try {
+            parse("const a = <A/>;\nconst b = <B/>;\n", "x.solid.mx", {
+              mxRegionCompile: () => {
+                if (++calls === 1)
+                  return { code: "null", dependencies: ["/project/A.mx"] };
+                throw Object.assign(hostError(), {
+                  dependencies: ["/project/B.mx"],
+                });
+              },
+            });
+          } catch (error) {
+            return error as Error & Record<string, unknown>;
+          }
+          throw new Error("expected the second region to fail");
+        })();
+        expect(raised.dependencies).toEqual(["/project/A.mx", "/project/B.mx"]);
+      },
+    );
+
     it("positions a plain Error at the region's start, not V8's throw site", () => {
       // An ordinary `Error` carries V8's `line`, which points inside the
       // *host's* module. Trusting it reported a line in neither file.

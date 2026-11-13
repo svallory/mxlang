@@ -223,6 +223,9 @@ export function mxParseElementAt(
     : { start, end };
 
   let node: unknown;
+  // This region's own callees, once its compile returns: kept for an error
+  // raised after it (parsing the emitted code back, say).
+  let compiled: readonly string[] = [];
   try {
     const region = source.slice(inner.start, inner.end);
     const {
@@ -258,6 +261,7 @@ export function mxParseElementAt(
           | undefined) ?? new Map(),
       unknownModuleBindings: unknownModuleBindings(parser),
     });
+    compiled = dependencies ?? [];
     const parsedCode = parseRegionCode(code, {
       ...mxSubParseOptions(parser.options),
       mx: false,
@@ -288,6 +292,10 @@ export function mxParseElementAt(
       returnVars,
       dependencies,
     );
+    for (const file of dependencies ?? []) {
+      if (!parser.state.mxRegionDependencies.includes(file))
+        parser.state.mxRegionDependencies.push(file);
+    }
   } catch (err) {
     const error = err as {
       message?: string;
@@ -301,6 +309,13 @@ export function mxParseElementAt(
       fixes?: unknown;
       loc?: { start?: { line?: number; column?: number; index?: number } };
     };
+    // A failed region names every callee the file's compile read: those of
+    // the regions accepted before it as well as its own.
+    const dependencies = failedDependencies(
+      parser.state.mxRegionDependencies,
+      compiled,
+      (error as { dependencies?: unknown } | null)?.dependencies,
+    );
     const line = error.line ?? error.loc?.start?.line;
     const column = error.column ?? error.loc?.start?.column;
     // `line`/`column` are only believed when the thrower is recognizably
@@ -345,7 +360,12 @@ export function mxParseElementAt(
             positionAt(source, offset, parser.state.startIndex),
             { message: error.message ?? "Invalid MX element." },
           ),
-        error,
+        {
+          diagnosticCode: error.diagnosticCode,
+          end: error.end,
+          fixes: error.fixes,
+          dependencies,
+        },
       );
     }
     // Anything else — a plain `Error`, or a non-`Error` value a host threw —
@@ -363,10 +383,7 @@ export function mxParseElementAt(
         }),
       // Only the callee files: a fallback error's other fields name no
       // position in the user's file.
-      {
-        dependencies: (error as { dependencies?: unknown } | null)
-          ?.dependencies,
-      },
+      { dependencies },
     );
   }
 
@@ -780,6 +797,22 @@ function collectExpressionRanges(root: MxElement): MxRange[] {
   }
 
   return ranges;
+}
+
+/**
+ * The union of the callee files, or `undefined` when there are none, so an
+ * error that read no callee keeps the shape it had. A non-string-array
+ * `own` (a host's unrelated field) contributes nothing.
+ */
+function failedDependencies(
+  accepted: readonly string[],
+  compiled: readonly string[],
+  own: unknown,
+): string[] | undefined {
+  const files = new Set([...accepted, ...compiled]);
+  if (Array.isArray(own) && own.every((file) => typeof file === "string"))
+    for (const file of own) files.add(file);
+  return files.size > 0 ? [...files] : undefined;
 }
 
 /** Keep the region root anchored to the source MX span for diagnostics. */

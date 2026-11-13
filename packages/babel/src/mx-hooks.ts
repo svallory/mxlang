@@ -386,6 +386,8 @@ export interface MxParserHost {
     mxRegionParents: any[];
     /** Function parameters known before Babel registers them in its scope. */
     mxFunctionParamNames: Array<Set<string>>;
+    /** Callee files read by the regions accepted so far. */
+    mxRegionDependencies: string[];
   };
   // biome-ignore lint/suspicious/noExplicitAny: matches the vendored raise signature
   raise(toParseError: any, at: Position | any, details?: any): unknown;

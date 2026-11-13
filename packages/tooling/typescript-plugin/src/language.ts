@@ -1161,9 +1161,10 @@ function unsavedSources(
   return unsaved;
 }
 
+/** A file's disk text as the host holds it: TypeScript drops a leading BOM. */
 function diskText(fileName: string): string | undefined {
   try {
-    return readFileSync(fileName, "utf8");
+    return readFileSync(fileName, "utf8").replace(/^\uFEFF/, "");
   } catch {
     return undefined;
   }

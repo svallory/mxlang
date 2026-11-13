@@ -2420,30 +2420,40 @@ describe("MX language plugin", {
       expect(result.pass).toBe(2);
     });
 
-    it("compiles once for a caller's own error when the host's callee text is its disk text", () => {
-      const dir = mkdtempSync(join(tmpdir(), "mx-deps-retry-"));
-      try {
-        const callee = join(dir, "Card.mx");
-        writeFileSync(callee, "export interface Input {}\n<div/>\n");
-        const error = Object.assign(new SyntaxError("caller's own error"), {
-          dependencies: [callee],
-        });
-        let compiles = 0;
-        expect(() =>
-          compileWithDependencies(
-            (fileName) => readFileSync(fileName, "utf8"),
-            [],
-            () => {
-              compiles++;
-              throw error;
-            },
-          ),
-        ).toThrow(error);
-        expect(compiles).toBe(1);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
+    it.each([
+      ["", (text: string) => text],
+      [" saved with a BOM", (text: string) => text.replace(/^\uFEFF/, "")],
+    ])(
+      "compiles once for a caller's own error when the host's callee text is its disk text%s",
+      (bom, hostText) => {
+        const dir = mkdtempSync(join(tmpdir(), "mx-deps-retry-"));
+        try {
+          const callee = join(dir, "Card.mx");
+          writeFileSync(
+            callee,
+            `${bom ? "\uFEFF" : ""}export interface Input {}\n<div/>\n`,
+          );
+          const error = Object.assign(new SyntaxError("caller's own error"), {
+            dependencies: [callee],
+          });
+          let compiles = 0;
+          expect(() =>
+            compileWithDependencies(
+              // The host's text, as TypeScript reads it: without the BOM.
+              (fileName) => hostText(readFileSync(fileName, "utf8")),
+              [],
+              () => {
+                compiles++;
+                throw error;
+              },
+            ),
+          ).toThrow(error);
+          expect(compiles).toBe(1);
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("counts failed compiles against the same pass cap as the others", () => {
       // Every compile reports a callee the host holds unsaved text for: a
