@@ -411,8 +411,9 @@ export interface Block extends IrBase {
   params: string[];
   /**
    * Every name the params bind, from Babel's binding analysis, for a host
-   * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
-   * no params); optional so a hand-built block keeps compiling, and a consumer
+   * that tracks scopes (as `For.bindings`). Core fills it (`[]` with
+   * no params; a hook-built node from its param text, left absent only
+   * when that text is no param list); optional so a hand-built block keeps compiling, and a consumer
    * treats an absent field as unknown.
    */
   bindings?: string[];
@@ -525,8 +526,9 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
   params: string[];
   /**
    * Every name the params bind, from Babel's binding analysis, for a host
-   * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
-   * no params); optional so a hand-built tag keeps compiling, and a consumer
+   * that tracks scopes (as `For.bindings`). Core fills it (`[]` with
+   * no params; a hook-built node from its param text, left absent only
+   * when that text is no param list); optional so a hand-built tag keeps compiling, and a consumer
    * treats an absent field as unknown.
    */
   bindings?: string[];
@@ -852,8 +854,9 @@ export type IrNode =
       params: string[];
       /**
        * Every name the params bind, from Babel's binding analysis, for a host
-       * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
-       * no params); optional so a hand-built define keeps compiling, and a consumer
+       * that tracks scopes (as `For.bindings`). Core fills it (`[]` with
+       * no params; a hook-built node from its param text, left absent only
+       * when that text is no param list); optional so a hand-built define keeps compiling, and a consumer
        * treats an absent field as unknown.
        */
       bindings?: string[];

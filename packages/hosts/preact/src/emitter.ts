@@ -28,7 +28,6 @@ import {
   concatMapped,
   contractDefaultTag,
   defineValueWrapper,
-  destructuredNames,
   drive,
   type Emitter,
   type Expr,
@@ -45,6 +44,7 @@ import {
   mappedMethod,
   mappedRewrite,
   type Position,
+  paramListBindings,
   type SourceSpan,
   TranslateError,
   unresolvedCustomTagMessage,
@@ -139,24 +139,16 @@ interface RegionSink {
 }
 
 /**
- * The names a parameter list binds, read by core's Babel parse of each param
- * as the one element of an array pattern (`destructuredNames`, so a default
- * parses as it does in a parameter); a param that parse cannot read (a type
- * annotation, a rest element inside a pattern) yields `"*"`, which stands for
- * every name.
+ * The names a parameter list binds, from core's Babel parse of the whole list
+ * (`paramListBindings`); a list that is not one yields `["*"]`, which stands
+ * for every name.
  *
  * @deprecated The emitter reads the names from the IR now (`Block.bindings`,
  * `Define.bindings`, `DelegatedTag.bindings`); this stays only for callers of
  * the `@mxlang/host-preact/emitter` subpath.
  */
 export function paramNames(params: readonly string[]): string[] {
-  return params.flatMap((text) => {
-    const pattern = text.trimStart();
-    const names = destructuredNames(
-      `[${pattern.startsWith("...") ? pattern.slice(3) : pattern}]`,
-    );
-    return names ? names.map((entry) => entry.name) : ["*"];
-  });
+  return paramListBindings(params) ?? ["*"];
 }
 
 /** One identifier, as every scan in this file reads it. */
@@ -307,6 +299,12 @@ interface EmitterOptions {
   locals?: ReadonlySet<string>;
   /** Records each direct define call resolved to a local (`shadowedCalls`). */
   localCalls?: WeakSet<object>;
+  /**
+   * The deprecated `WeakSet` form of `createEmitter`'s fourth parameter: when
+   * set, a direct define call keeps its authored name exactly when it is in
+   * the set, as before the emitter tracked scopes, and `locals` is unused.
+   */
+  givenLocalCalls?: WeakSet<object>;
   publicDefines?: boolean;
   /**
    * Type-check projection only: a host-component call bound to one of
@@ -1178,6 +1176,7 @@ export class PreactEmitter implements Emitter<string> {
    */
   #locals: ReadonlySet<string>;
   readonly #localCalls: WeakSet<object> | undefined;
+  readonly #givenLocalCalls: WeakSet<object> | undefined;
   /**
    * Tooling projection: the define's private name has no span mapping, and
    * every direct call reads the public name, which a hover or a diagnostic
@@ -1198,6 +1197,7 @@ export class PreactEmitter implements Emitter<string> {
       options.publicDefines === true || typeCheck !== undefined;
     this.#locals = options.locals ?? new Set();
     this.#localCalls = options.localCalls;
+    this.#givenLocalCalls = options.givenLocalCalls;
     this.#projectHostComponents = options.projectHostComponents ?? false;
     this.#importBindings = options.importBindings ?? new Set();
     this.#softLift = options.softLift ?? null;
@@ -1270,6 +1270,7 @@ export class PreactEmitter implements Emitter<string> {
         overrides.softLift === undefined ? this.#softLift : overrides.softLift,
       locals: this.#locals,
       localCalls: this.#localCalls,
+      givenLocalCalls: this.#givenLocalCalls,
       publicDefines: this.#publicDefines,
       projectHostComponents: this.#projectHostComponents,
       importBindings: this.#importBindings,
@@ -2916,7 +2917,9 @@ export class PreactEmitter implements Emitter<string> {
       // A name a local scope also binds may resolve to that local, so the
       // call keeps the authored name; every other call reaches the private
       // function and its argument as written.
-      const local = this.#locals.has(node.target.name);
+      const local = this.#givenLocalCalls
+        ? this.#givenLocalCalls.has(node)
+        : this.#locals.has(node.target.name);
       if (local) this.#localCalls?.add(node);
       // A `<define>` is a local block; this host lowers one to a local
       // function (see `define` below), so calling it is an ordinary call.
@@ -3651,7 +3654,7 @@ export function createRegionEmitter(
   dialect: JsxDialect,
   segment: string,
   positionAt: RegionSink["positionAt"],
-  locals: ReadonlySet<string> = new Set(),
+  locals: ReadonlySet<string> | WeakSet<object> = new Set(),
   publicDefines = false,
   importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
@@ -3660,7 +3663,7 @@ export function createRegionEmitter(
     dialect,
     region: { segment, defines: [], root, positionAt },
     bindings: root,
-    locals,
+    ...localsOption(locals),
     publicDefines,
     // The region's `typeCheck` projection is what `publicDefines` marks.
     projectHostComponents: publicDefines,
@@ -3668,11 +3671,17 @@ export function createRegionEmitter(
   });
 }
 
+/**
+ * An emitter for a whole template. `locals` is the set of names local to the
+ * body (`scopeLocals(new Set(), [], ir.body)`); the `WeakSet` of calls that
+ * `shadowedCalls(ir)` returns is still accepted, with its old meaning, and is
+ * deprecated with it.
+ */
 export function createEmitter(
   dialect: JsxDialect = preactDialect,
   typeCheck?: string,
   source?: string,
-  locals: ReadonlySet<string> = new Set(),
+  locals: ReadonlySet<string> | WeakSet<object> = new Set(),
   importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
   return new PreactEmitter({
@@ -3684,8 +3693,22 @@ export function createEmitter(
     positionAt: !source
       ? undefined
       : (offset) => sourcePosition(source, offset),
-    locals,
+    ...localsOption(locals),
   });
+}
+
+/**
+ * The `locals` parameter of `createEmitter` and `createRegionEmitter`: the
+ * names local to the body (`scopeLocals(new Set(), [], ir.body)` for a whole
+ * template), or, deprecated, the set of direct define calls to emit under
+ * their authored name (`shadowedCalls(ir)`), which keeps its old meaning.
+ */
+function localsOption(
+  locals: ReadonlySet<string> | WeakSet<object>,
+): Pick<EmitterOptions, "locals" | "givenLocalCalls"> {
+  return locals instanceof WeakSet
+    ? { givenLocalCalls: locals }
+    : { locals: locals as ReadonlySet<string> };
 }
 
 /** Emits the template body of a resolved IR as one JSX expression. */

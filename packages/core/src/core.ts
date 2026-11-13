@@ -2564,6 +2564,40 @@ export function bindingIdentifiers(pattern: Node): string[] {
 }
 
 /**
+ * Every name a tag-param list binds, read from its text (`["{ a, b: [c] }",
+ * "n = 1", "x: T"]` gives `a`, `c`, `n`, `x`): one parse of the list as an
+ * arrow function's head, each param through `bindingIdentifiers`. `null` when
+ * the text is no param list. For params core did not lower itself (a hook's
+ * block); lowering reads the parsed param nodes instead.
+ */
+export function paramListBindings(params: readonly string[]): string[] | null {
+  if (params.length === 0) return [];
+  const code = `(${params.join(", ")}) => 0`;
+  let file: Node;
+  try {
+    file = coreBabel().parse(code, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    });
+  } catch {
+    return null;
+  }
+  const statement = file.program?.body?.[0];
+  const arrow = statement?.expression;
+  if (
+    file.program.body.length !== 1 ||
+    statement.type !== "ExpressionStatement" ||
+    arrow?.type !== "ArrowFunctionExpression" ||
+    // `a) => (0, b` would parse as another arrow's head: the body must be
+    // the `0` this function wrote.
+    arrow.body.start !== code.length - 1
+  ) {
+    return null;
+  }
+  return arrow.params.flatMap((param: Node) => bindingIdentifiers(param));
+}
+
+/**
  * `bindingIdentifiers`, as the `Identifier` nodes, so a caller can position
  * each: Babel's `getBindingIdentifiers` (duplicates kept), flattened in
  * source order. Babel walks breadth-first, so its own order puts a nested

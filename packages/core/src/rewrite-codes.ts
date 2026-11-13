@@ -59,6 +59,21 @@ function boundScope(
   return null;
 }
 
+/**
+ * A record's entries with `attributeTagTree` first. An attribute tag's node is
+ * shared by the flat `attributeTags` list and the tree, and each node is
+ * visited once, at the first place reached: only the tree knows the
+ * attribute-tag `<for>` scope around it, so it is walked first.
+ */
+function treeFirst(record: Record<string, unknown>): [string, unknown][] {
+  const entries = Object.entries(record);
+  if (!("attributeTagTree" in record)) return entries;
+  return [
+    ["attributeTagTree", record.attributeTagTree],
+    ...entries.filter(([key]) => key !== "attributeTagTree"),
+  ];
+}
+
 /** Applies one expression rewrite across an IR tree while preserving scope. */
 export function rewriteCodes(
   nodes: unknown,
@@ -111,14 +126,14 @@ export function rewriteCodes(
     const tagBindings = Array.isArray(tag?.bindings)
       ? (tag.bindings as string[])
       : [];
-    for (const [key, child] of Object.entries(record)) {
+    for (const [key, child] of treeFirst(record)) {
       if (key === "node") continue;
       if (key === "tag" && tag && tagBindings.length > 0) {
         if (seen.has(tag)) continue;
         seen.add(tag);
         const body = new Set([...shadowed, ...tagBindings]);
         const tagHere = isPosition(tag.loc) ? tag.loc : here;
-        for (const [tagKey, tagChild] of Object.entries(tag)) {
+        for (const [tagKey, tagChild] of treeFirst(tag)) {
           if (tagKey === "node") continue;
           visit(tagChild, tagHere, tagKey === "children" ? body : shadowed);
         }

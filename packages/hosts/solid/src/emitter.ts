@@ -181,8 +181,9 @@ function varNames(call: VarCall): string[] {
  * so no authored name can collide) and that scope's reads are rewritten to
  * it (`rewriteAccessorReads`, which leaves a read a nested `<for>` param or
  * `<const>` rebinds alone), deepest scope first, so a deeper rename is never
- * rewritten again. A first scope nested inside a renamed one is rewritten to
- * a temporary name and back, so its reads keep the name.
+ * rewritten again. A first scope nested inside a renamed one is left out of
+ * that rename (its children are set aside while it runs), so its reads, and
+ * an assignment to its own `/var`, keep the name.
  *
  * Emits from a `cloneIr` copy (the IR is read-only to an emitter) and only
  * when a name repeats; otherwise `body` is returned as it is. A destructured
@@ -208,8 +209,12 @@ export function scopeReturnVars(body: IrNode[]): IrNode[] {
   const calls = varScopes(copy);
   const repeated = repeats(calls);
   let serial = 0;
-  const jobs: Array<{ scope: VarScope; from: string; to: string }> = [];
-  const restores: Array<{ scope: VarScope; from: string; to: string }> = [];
+  const jobs: Array<{
+    scope: VarScope;
+    from: string;
+    to: string;
+    kept: VarScope;
+  }> = [];
   for (const name of repeated) {
     const declaring = calls.filter(({ call }) => varNames(call).includes(name));
     const kept = (declaring[0] as { scope: VarScope }).scope;
@@ -226,39 +231,43 @@ export function scopeReturnVars(body: IrNode[]): IrNode[] {
       if (!fresh) {
         fresh = `__mxVar${serial++}_${name}`;
         renamed.set(scope, fresh);
-        jobs.push({ scope, from: name, to: fresh });
+        jobs.push({ scope, from: name, to: fresh, kept });
       }
       call.var = fresh;
       call.varBindings = call.varBindings?.map((binding) =>
         binding.name === name ? { ...binding, name: fresh } : binding,
       );
     }
-    let ancestor = kept.parent;
-    while (ancestor && !renamed.has(ancestor)) ancestor = ancestor.parent;
-    if (ancestor) {
-      const temp = `__mxVar${serial++}_${name}`;
-      jobs.push({ scope: kept, from: name, to: temp });
-      restores.push({ scope: kept, from: temp, to: name });
-    }
   }
-  const rewrite = ({ scope, from, to }: (typeof jobs)[number]): void => {
-    rewriteAccessorReads(
-      scope.children,
-      new Map([
-        [
-          from,
-          {
-            read: to,
-            assignError: `\`/var\` \`${from}\` repeats a name another body of this component binds, and Solid gives it a generated binding that cannot be assigned`,
-          },
-        ],
-      ]),
-    );
+  const inside = (scope: VarScope, outer: VarScope): boolean => {
+    for (let at = scope.parent; at; at = at.parent) {
+      if (at === outer) return true;
+    }
+    return false;
+  };
+  const rewrite = ({ scope, from, to, kept }: (typeof jobs)[number]): void => {
+    // The kept scope's own `/var` is the one its reads mean.
+    const aside = inside(kept, scope) ? kept.children.splice(0) : null;
+    try {
+      rewriteAccessorReads(
+        scope.children,
+        new Map([
+          [
+            from,
+            {
+              read: to,
+              assignError: `\`/var\` \`${from}\` repeats a name another body of this component binds, and Solid gives it a generated binding that cannot be assigned`,
+            },
+          ],
+        ]),
+      );
+    } finally {
+      if (aside) kept.children.push(...aside);
+    }
   };
   for (const job of [...jobs].sort((a, b) => b.scope.depth - a.scope.depth)) {
     rewrite(job);
   }
-  for (const job of restores) rewrite(job);
   return copy;
 }
 

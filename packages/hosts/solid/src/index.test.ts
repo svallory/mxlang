@@ -1598,6 +1598,26 @@ describe("a unit that returns a value", () => {
     );
   });
 
+  it("gives a repeated /var in a <try> body a binding of its own", () => {
+    const code = compileSolidUnit(
+      "<counter/n start=1/><try><counter/n start=2/>${n}<@catch>e</@catch></try>${n}",
+      { filename: "/fixtures/page.mx", customTags: { counter } },
+    ).code;
+    expect(code).toContain(
+      "<Loading><$mx_Counter1 start={2} $mxReturn={(__mxV) => { __mxVar0_n = __mxV; }} />{__mxVar0_n}</Loading></Errored>{n}</>",
+    );
+  });
+
+  it("keeps the name, and an assignment to it, in a first body nested inside a renamed one", () => {
+    const code = compileSolidUnit(
+      "<div><span><counter/n start=1/><button onClick() { n = 1; }/>${n}</span><counter/n start=2/>${n}</div>",
+      { filename: "/fixtures/page.mx", customTags: { counter } },
+    ).code;
+    expect(code).toContain(
+      "<div><span><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} /><button onClick={function () { n = 1; }}></button>{n}</span><$mx_Counter1 start={2} $mxReturn={(__mxV) => { __mxVar0_n = __mxV; }} />{__mxVar0_n}</div>",
+    );
+  });
+
   it("rejects a destructured /var that repeats another body's /var name, at that tag", () => {
     const source =
       "<counter/n start=1/><div><counter/{ n } start=2/>${n}</div>";

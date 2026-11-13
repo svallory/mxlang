@@ -27,6 +27,7 @@ import {
   codedError,
   endErrorAt,
   isTranslateError,
+  paramListBindings,
   positionError,
   relatedErrorsOf,
   TranslateError,
@@ -599,6 +600,14 @@ const transformVoices = new WeakMap<TransformContext, Voice>();
  * The voice of the file a transform runs for. Core-owned tags (`<try>`) spell
  * their messages through it; it is not part of the public context.
  */
+/**
+ * A node's `bindings` field: the names, or no field when they are unknown (a
+ * param list that does not parse), so a host falls back to its fail-safe.
+ */
+function withBindings(names: string[] | null): { bindings?: string[] } {
+  return names ? { bindings: names } : {};
+}
+
 export function voiceOfTransform(ctx: TransformContext): Voice {
   const voice = transformVoices.get(ctx);
   if (voice === undefined) {
@@ -1317,7 +1326,7 @@ export function buildersFor(
     block: (children, params = [], from) => ({
       hasParams: params.length > 0,
       params,
-      ...(params.length === 0 ? { bindings: [] } : {}),
+      ...withBindings(paramListBindings(params)),
       children,
       loc: spansFrom(from, loc).loc,
     }),
@@ -4180,13 +4189,9 @@ function contractOnlyDelegatedTag(
         call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
       attrTagProps: call.attrTagProps ?? [],
       params: call.params,
-      // The body's block read the call's params; without a body, a call with
-      // no params binds nothing and one with params is left unknown.
-      ...(call.content?.bindings
-        ? { bindings: call.content.bindings }
-        : call.params.length === 0
-          ? { bindings: [] }
-          : {}),
+      // The body's block read the call's params; without a body, the param
+      // text is parsed (unknown only when it is no param list).
+      ...withBindings(call.content?.bindings ?? paramListBindings(call.params)),
       var: call.var,
       data: ctx.declarations.resolveDelegatedTag?.(
         call.name,

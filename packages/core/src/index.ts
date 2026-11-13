@@ -83,6 +83,7 @@ export {
   type Node,
   newCtx,
   otherErrorsText,
+  paramListBindings,
   propKey,
   quote,
   rejectUnsupportedFields,

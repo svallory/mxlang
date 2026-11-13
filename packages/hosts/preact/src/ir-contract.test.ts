@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: literal mx source
-import type { Ir, IrNode } from "@mxlang/core";
+import { drive, type Ir, type IrNode } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { shadowedCalls } from "./emitter.ts";
+import { createEmitter, shadowedCalls } from "./emitter.ts";
 import { compilePreactMx } from "./index.ts";
 
 /**
@@ -169,6 +169,31 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
       (node) => node.target.kind !== "dynamic" && node.target.name === "Row",
     );
     expect(rows.map((node) => calls?.has(node))).toEqual([true, false]);
+  });
+
+  it("createEmitter's fourth parameter: a name set, or the deprecated call set", () => {
+    let ir: Ir | undefined;
+    emitted("<define/Row|x|><p>r</p></define><Row(1)/>", (lowered) => {
+      ir = lowered;
+    });
+    const call = all(ir?.body, "Component")[0];
+    if (!call) throw new Error("no call");
+    const emit = (locals: ReadonlySet<string> | WeakSet<object>) => {
+      const emitter = createEmitter(undefined, undefined, undefined, locals);
+      drive(emitter, [call]);
+      return emitter.done();
+    };
+    expect([
+      emit(new Set(["Row"])),
+      emit(new Set()),
+      emit(new WeakSet([call])),
+      emit(new WeakSet()),
+    ]).toEqual([
+      "{Row(1)}",
+      "{__mxDef_Row(1)}",
+      "{Row(1)}",
+      "{__mxDef_Row(1)}",
+    ]);
   });
 
   it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {

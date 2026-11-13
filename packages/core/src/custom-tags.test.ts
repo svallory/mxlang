@@ -3171,3 +3171,62 @@ describe("the analyze pre-pass sees the file as the real pass does", () => {
     expect(seen.analyze).toEqual(seen.transform);
   });
 });
+
+/**
+ * A node a hook builds, or a claimed contract-only call with no body, carries
+ * the names its param text binds, read by one parse of the list; the field is
+ * absent only when the text is no param list.
+ */
+describe("bindings of params core did not lower itself", () => {
+  const blockOf = (params: string[]) => {
+    let built: { bindings?: string[] } | undefined;
+    const hook: CustomTag = {
+      transform(_call, ctx) {
+        built = ctx.build.block([], params);
+        return [ctx.build.text("")];
+      },
+    };
+    lowerWithTags("<hook/>\n", { hook });
+    return built;
+  };
+
+  it.each([
+    [
+      ["{ a, b: [c] }", "n = 1", "x: Map<string, number>"],
+      ["a", "c", "n", "x"],
+    ],
+    [["...rest"], ["rest"]],
+    [[], []],
+  ])("a hook's block with params %j binds %j", (params, names) => {
+    expect(blockOf(params)?.bindings).toEqual(names);
+  });
+
+  it.each([[["{ a"]], [["a) => (b"]]])(
+    "a hook's block with params %j that are no param list has no bindings",
+    (params) => {
+      expect(blockOf(params)).not.toHaveProperty("bindings");
+    },
+  );
+
+  it("a claimed contract-only call with params and no body", () => {
+    const { tag } = find(
+      lowerWithTags(
+        '<attribute|{ a, b: [c] }| value="a" type="string"/>\n',
+        {
+          attribute: {
+            attributes: {
+              value: { type: "string" },
+              type: { type: "string" },
+            },
+          },
+        },
+        fakeDeclarations({
+          isDelegatedTag: (name) => name === "attribute",
+          resolveDelegatedTag: (name) => ({ name }),
+        }),
+      ).body,
+      "DelegatedTag",
+    );
+    expect(tag.bindings).toEqual(["a", "c"]);
+  });
+});

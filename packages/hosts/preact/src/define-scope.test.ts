@@ -355,6 +355,7 @@ describe("paramNames (deprecated stand-in over Babel's binding analysis)", () =>
       ["a", "c", "n", "rest"],
     ],
     [["{ a = /[}]/, Row }"], ["a", "Row"]],
+    [["x: Map<string, number>"], ["x"]],
     [["{ a"], ["*"]],
   ])("%j -> %j", (params, names) => {
     expect(paramNames(params)).toEqual(names);
