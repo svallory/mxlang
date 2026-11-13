@@ -13,10 +13,14 @@ const packages = new Map([
   ["core", "packages/core/CHANGELOG.md"],
   ["solid", "packages/hosts/solid/CHANGELOG.md"],
 ]);
+const packageDirs = ["packages/core", "packages/hosts/solid"];
 const evaluate = (
-  input: Omit<Parameters<typeof evaluateInput>[0], "fragments" | "packages"> &
+  input: Omit<
+    Parameters<typeof evaluateInput>[0],
+    "fragments" | "packages" | "packageDirs"
+  > &
     Partial<Parameters<typeof evaluateInput>[0]>,
-) => evaluateInput({ fragments: [], packages, ...input });
+) => evaluateInput({ fragments: [], packages, packageDirs, ...input });
 
 describe("evaluate", () => {
   it("fails when package src is touched with no fragment", () => {
@@ -37,6 +41,45 @@ describe("evaluate", () => {
         body: "",
       }).ok,
     ).toBe(false);
+  });
+
+  it("demands a fragment for a package's own package.json at either depth", () => {
+    for (const path of [
+      "packages/core/package.json",
+      "packages/hosts/solid/package.json",
+    ]) {
+      expect(evaluate({ changed: [path], added: [], body: "" })).toEqual({
+        ok: false,
+        message: [
+          "this PR changes package code but adds no changelog fragment.",
+          "Add `changes/<branch-slug>.md` (front matter `packages: [...]` and `kind:`,",
+          "body = the changelog entry), or put a `no-changelog: <reason>` line in the PR body.",
+          "Package files changed:",
+          `  ${path}`,
+        ].join("\n"),
+      });
+    }
+  });
+
+  it("does not count a package.json under a package's test dir", () => {
+    for (const path of [
+      "packages/core/test/package.json",
+      "packages/web-elements/test/package.json",
+    ]) {
+      expect(evaluate({ changed: [path], added: [], body: "" })).toEqual({
+        ok: true,
+      });
+    }
+  });
+
+  it("does not count a depth-2 package.json whose dir owns no CHANGELOG", () => {
+    expect(
+      evaluate({
+        changed: ["packages/hosts/fixture-app/package.json"],
+        added: [],
+        body: "",
+      }),
+    ).toEqual({ ok: true });
   });
 
   it("passes when package src is touched and a fragment is added", () => {
@@ -195,6 +238,10 @@ describe("evaluate", () => {
           { slug: "b", text: "B" },
         ]);
         expect([...context.packages.keys()].sort()).toEqual(["core", "solid"]);
+        expect([...context.packageDirs].sort()).toEqual([
+          "packages/core",
+          "packages/hosts/solid",
+        ]);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

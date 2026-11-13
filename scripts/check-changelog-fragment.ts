@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 //
-// A PR whose diff touches `packages/*/src` or a
-// `packages/*/package.json` must add at least one changelog fragment under
+// A PR whose diff touches `packages/*/src` or a package's own
+// `package.json` must add at least one changelog fragment under
 // `changes/`, unless its body carries a `no-changelog: <reason>` line. The
 // diff is taken against the merge base with origin/main, not origin/main's
 // head, so an open PR that predates a fresh main landing is not judged
@@ -13,7 +13,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import {
   assertFragmentPackages,
   discoverPackages,
@@ -24,10 +24,26 @@ import {
 
 const root = `${import.meta.dir}/../`;
 
-// `packages/<pkg>/src/...`, `packages/<group>/<pkg>/src/...`, and the
-// package.json at either depth — the two shapes a real package change takes.
-export const codeChangeRe =
-  /^packages\/[^/]+(?:\/[^/]+)?\/(?:src\/.+|package\.json)$/;
+// `packages/<pkg>/src/...` and `packages/<group>/<pkg>/src/...`. A
+// package.json is judged by `isPackageManifest`, which knows which
+// directories are packages.
+export const codeChangeRe = /^packages\/[^/]+(?:\/[^/]+)?\/src\/.+$/;
+
+const depthOneManifestRe = /^packages\/[^/]+\/package\.json$/;
+const depthTwoManifestRe = /^(packages\/[^/]+\/[^/]+)\/package\.json$/;
+
+// A package's own manifest: `packages/<pkg>/package.json` always, and
+// `packages/<group>/<pkg>/package.json` only when that directory is a package
+// (owns a CHANGELOG.md, so it can take a fragment). A fixture's
+// `packages/<pkg>/test/package.json` is neither.
+export function isPackageManifest(
+  path: string,
+  packageDirs: readonly string[],
+): boolean {
+  if (depthOneManifestRe.test(path)) return true;
+  const nested = depthTwoManifestRe.exec(path);
+  return nested !== null && packageDirs.includes(nested[1] as string);
+}
 
 export const noChangelogRe = /^no-changelog:\s*\S.*$/m;
 
@@ -46,6 +62,8 @@ export interface CheckInput {
    */
   fragments: { slug: string; text: string }[];
   packages: ReadonlyMap<string, string>;
+  /** Repo-relative directories of those packages (`packages/hosts/solid`). */
+  packageDirs: readonly string[];
 }
 
 export interface CheckResult {
@@ -65,7 +83,10 @@ export function evaluate(input: CheckInput): CheckResult {
       };
     }
   }
-  const codePaths = input.changed.filter((path) => codeChangeRe.test(path));
+  const codePaths = input.changed.filter(
+    (path) =>
+      codeChangeRe.test(path) || isPackageManifest(path, input.packageDirs),
+  );
   if (codePaths.length === 0) return { ok: true };
   if (noChangelogRe.test(input.body)) return { ok: true };
   const hasFragment = input.added.some(
@@ -87,10 +108,15 @@ export function evaluate(input: CheckInput): CheckResult {
 /** What `evaluate` needs from the working tree: every fragment and the packages that own a CHANGELOG.md. */
 export function loadFragmentContext(
   repoRoot: string,
-): Pick<CheckInput, "fragments" | "packages"> {
+): Pick<CheckInput, "fragments" | "packages" | "packageDirs"> {
+  const packages = discoverPackages(repoRoot);
   return {
     fragments: readFragmentFiles(join(repoRoot, "changes")),
-    packages: discoverPackages(repoRoot),
+    packages,
+    // discoverPackages returns absolute paths when given the repo root.
+    packageDirs: [...packages.values()].map((changelog) =>
+      relative(repoRoot, dirname(changelog)).split(sep).join("/"),
+    ),
   };
 }
 
