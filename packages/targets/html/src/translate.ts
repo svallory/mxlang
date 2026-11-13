@@ -1611,10 +1611,14 @@ const ESCAPE_COMMENT = `function __mxEscapeComment(__mxValue, __mxEscaped) {
 const RENDER_DYNAMIC = `function __mxRenderDynamic<T>(__mxSink: __MxOut, __mxTarget: T, __mxProps: __MxDynamicProps<T>, __mxArgs?: any[]): 0 extends 1 & T ? any : T extends { render: (input: never, out: never) => infer R } ? R : T extends string | null | undefined | false | 0 | ((...__mxA: any) => any) ? undefined : unknown;
 function __mxRenderDynamic(__mxSink: __MxOut, __mxTarget: any, __mxProps: Record<string, any>, __mxArgs?: any[]): any {
   // Marko parity (6.4.4 \`normalizeDynamicRenderer\`): an object that is no
-  // compiled template renders its \`content\`, so an attribute-tag record
-  // renders its body, and one with no body (\`<@x/>\`) is a falsy renderer
-  // that renders nothing of its own.
-  if (__mxTarget && typeof __mxTarget === "object" && typeof __mxTarget.render !== "function") __mxTarget = __mxTarget.content;
+  // compiled template renders its \`content\`, else its \`default\` (a module
+  // namespace), so an attribute-tag record renders its body, and one with no
+  // body (\`<@x/>\`) is a falsy renderer that renders nothing of its own. A
+  // \`content\` that is no template is Marko's error.
+  if (__mxTarget && typeof __mxTarget === "object" && typeof __mxTarget.render !== "function") {
+    if (__mxTarget.content && typeof __mxTarget.content !== "function") throw new Error("A dynamic tag must be a string tag name (like \`\\"div\\"\`) or a Marko template/component, but received an object whose \`content\` is not a template/component.");
+    __mxTarget = __mxTarget.content || __mxTarget.default;
+  }
   if (!__mxTarget) {
     // Marko parity: a falsy renderer (null, undefined, false,
     // 0, "") renders no tag of its own; content renders independently.

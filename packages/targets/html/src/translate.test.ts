@@ -2398,6 +2398,32 @@ describe("value import used as a tag", () => {
     expect(html).toBe("|body");
   });
 
+  it("an object with no content renders its default, as Marko does for a module namespace", async () => {
+    const html = await renderModules(
+      {
+        "target.ts":
+          "export const Ns = { default: (input: { label: string }) => `<b>${input.label}</b>` };",
+        "entry.mx": 'import { Ns } from "./target.ts"\n<Ns label="x"/>',
+      },
+      "entry.mx",
+    );
+    expect(html).toBe("<b>x</b>");
+  });
+
+  it("throws Marko's error for an object whose content is no template", async () => {
+    await expect(
+      renderModules(
+        {
+          "entry.mx": 'import { Obj } from "./target.ts"\n<Obj/>',
+          "target.ts": 'export const Obj = { content: "div" };',
+        },
+        "entry.mx",
+      ),
+    ).rejects.toThrow(
+      'A dynamic tag must be a string tag name (like `"div"`) or a Marko template/component, but received an object whose `content` is not a template/component.',
+    );
+  });
+
   it("a bodiless attribute-tag record renders nothing as a dynamic tag, matching Marko", async () => {
     const html = await renderModules(
       {
