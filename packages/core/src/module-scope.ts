@@ -298,6 +298,15 @@ export interface ModuleStatementNames {
     readonly kind: Exclude<DeclarationKind, "typeImport">;
     readonly ambient: boolean;
   }[];
+  /**
+   * Every name the statement exports, as written in the TypeScript
+   * projection: exported declarations (values, `declare` forms, signatures,
+   * interfaces, type aliases, enums, namespaces), export lists by their
+   * exported name (value and `type` lists), `export * as ns` by `ns` and
+   * `export import a = …`. A bare `export * from` adds nothing, and `default`
+   * is never listed. In source order, once each.
+   */
+  readonly exports: readonly string[];
 }
 
 /**
@@ -324,7 +333,11 @@ export function moduleStatementNames(
     for (const name of parsed?.assigned ?? []) {
       declarations.push({ name, kind: "var", ambient: false });
     }
-    return { keyword: tagNameOf(statement) as string, declarations };
+    return {
+      keyword: tagNameOf(statement) as string,
+      declarations,
+      exports: parsed?.declared.exportNames ?? [],
+    };
   });
 }
 
@@ -523,6 +536,8 @@ interface StatementDeclarations {
   readonly exports: readonly Node[];
   /** Every value name the statement exports, in source order. */
   readonly exported: readonly ExportedName[];
+  /** Every name the statement exports, types and ambient forms too, once each, in source order. */
+  readonly exportNames: readonly string[];
   /** The names of namespaces that hold only types: they bind nothing at run time. */
   readonly typeNamespaces: ReadonlySet<string>;
   /** Value names only a `declare` or a bodiless signature introduces, by the first such name node. */
@@ -633,9 +648,11 @@ function nameOnly(id: Node): Node {
  * and exported declarations. A type export, an ambient `declare` and a
  * function signature export no value, so the TypeScript strip leaves nothing to
  * collide; `default` is the template's own and has its own check; `export *`
- * names nothing.
+ * names nothing. With `withTypes`, every name the statement exports as written
+ * in the TypeScript projection: types, `declare` forms, signatures and
+ * type-only namespaces and export lists too.
  */
-function exportedNames(file: Node): readonly ExportedName[] {
+function exportedNames(file: Node, withTypes = false): readonly ExportedName[] {
   const { types } = coreBabel();
   const out: ExportedName[] = [];
   const add = (id: Node, kind?: ExportedName["kind"], local?: string): void => {
@@ -644,7 +661,21 @@ function exportedNames(file: Node): readonly ExportedName[] {
     out.push({ name, id: nameOnly(id), kind, local });
   };
   const declaration = (declared: Node): void => {
-    if (declared.declare === true) return;
+    if (declared.declare === true && !withTypes) return;
+    if (withTypes) {
+      switch (declared.type) {
+        case "TSDeclareFunction":
+        case "TSInterfaceDeclaration":
+        case "TSTypeAliasDeclaration":
+          add(declared.id);
+          return;
+        case "TSModuleDeclaration":
+          if (declared.id?.type === "Identifier" && !declared.global) {
+            add(declared.id, "namespace");
+          }
+          return;
+      }
+    }
     switch (declared.type) {
       case "VariableDeclaration":
         for (const declarator of declared.declarations as Node[]) {
@@ -677,14 +708,17 @@ function exportedNames(file: Node): readonly ExportedName[] {
   };
   for (const statement of file.program.body as Node[]) {
     if (statement.type === "TSImportEqualsDeclaration") {
-      if (statement.isExport && statement.importKind !== "type") {
+      if (
+        statement.isExport &&
+        (withTypes || statement.importKind !== "type")
+      ) {
         add(statement.id);
       }
       continue;
     }
     if (
       statement.type !== "ExportNamedDeclaration" ||
-      statement.exportKind === "type"
+      (statement.exportKind === "type" && !withTypes)
     ) {
       continue;
     }
@@ -693,7 +727,7 @@ function exportedNames(file: Node): readonly ExportedName[] {
       continue;
     }
     for (const specifier of statement.specifiers as Node[]) {
-      if (specifier.exportKind === "type") continue;
+      if (specifier.exportKind === "type" && !withTypes) continue;
       if (!specifier.exported) continue;
       const local =
         !statement.source && specifier.local?.type === "Identifier"
@@ -887,6 +921,9 @@ function statementDeclarations(file: Node): StatementDeclarations {
     names,
     exports,
     exported: exportedNames(file),
+    exportNames: [
+      ...new Set(exportedNames(file, true).map((exported) => exported.name)),
+    ],
     typeNamespaces,
     erased,
   };

@@ -195,12 +195,36 @@ describe("reserved generated-code bindings", () => {
     }
   });
 
-  it("does not reserve property names, import source names, strings or references", () => {
+  it.each([
+    ["static export { a as __mxClientExports }", 21],
+    ['static import { __mxClientExports as q } from "./ca.mx"', 16],
+    ['static export { a as "__mxClientExports" }', 21],
+    ['static export * as __mxClientExports from "./ca.mx"', 19],
+  ])(
+    "refuses %s at the name: a module's exported or imported name is reserved too",
+    (source, column) => {
+      let failure: unknown;
+      try {
+        compile(`\n${source}\n`);
+      } catch (error) {
+        failure = error;
+      }
+      expect(isTranslateError(failure)).toBe(true);
+      if (!isTranslateError(failure)) return;
+      expect(failure.diagnosticCode).toBe("MX_RESERVED_BINDING");
+      expect(failure.message).toBe(reservedBindingMessage("__mxClientExports"));
+      expect(failure.line).toBe(2);
+      expect(failure.column).toBe(column);
+    },
+  );
+
+  it("accepts an imported name that is not reserved", () => {
     expect(() =>
-      compile(
-        'import { __mxX as safe } from "x"\nstatic const obj = { __mxX: 1 };\n<p>${obj.__mxX}</p>',
-      ),
+      compile('\nstatic import { render } from "./ca.mx"\n<div/>\n'),
     ).not.toThrow();
+  });
+
+  it("does not reserve property names, strings or references", () => {
     expect(() =>
       checkReservedSource(
         'const safe = "__mxX"; obj.__mxX; const {__mxX: value} = obj;',

@@ -58,6 +58,11 @@ export function checkReservedBindings(tree: unknown): void {
         break;
     }
   };
+  const checkModuleName = (name: Node): void => {
+    if (name?.type === "StringLiteral") {
+      check({ ...name, type: "Identifier", name: name.value });
+    } else check(name);
+  };
   const visit = (value: unknown): void => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
@@ -103,6 +108,15 @@ export function checkReservedBindings(tree: unknown): void {
       node.type === "ImportNamespaceSpecifier"
     )
       check(node.local);
+    // A name a module exports or imports is the other module's binding: an
+    // exported `__mx…` name collides with an export generated code adds, and
+    // an imported one reads an export only generated code has.
+    if (
+      node.type === "ExportSpecifier" ||
+      node.type === "ExportNamespaceSpecifier"
+    )
+      checkModuleName(node.exported);
+    if (node.type === "ImportSpecifier") checkModuleName(node.imported);
     for (const [key, child] of Object.entries(node)) {
       if (
         key !== "loc" &&

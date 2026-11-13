@@ -919,39 +919,64 @@ describe("moduleStatementNames", () => {
       {
         keyword: "import",
         declarations: [{ name: "a", kind: "import", ambient: false }],
+        exports: [],
       },
-      { keyword: "import", declarations: [] },
+      { keyword: "import", declarations: [], exports: [] },
       {
         keyword: "static",
         declarations: [{ name: "x", kind: "var", ambient: false }],
+        exports: [],
       },
       {
         keyword: "static",
         declarations: [{ name: "nested", kind: "var", ambient: false }],
+        exports: [],
       },
       {
         keyword: "server",
         declarations: [{ name: "hv", kind: "var", ambient: false }],
+        exports: [],
       },
-      { keyword: "server", declarations: [] },
+      { keyword: "server", declarations: [], exports: [] },
       {
         keyword: "server",
         declarations: [{ name: "d", kind: "lexical", ambient: true }],
+        exports: [],
       },
       {
         keyword: "server",
         declarations: [{ name: "sig", kind: "function", ambient: true }],
+        exports: [],
       },
       {
         keyword: "export",
         declarations: [{ name: "N", kind: "namespace", ambient: false }],
+        exports: ["N"],
       },
-      { keyword: "export", declarations: [] },
+      { keyword: "export", declarations: [], exports: ["Types"] },
       {
         keyword: "client",
         declarations: [{ name: "K", kind: "class", ambient: false }],
+        exports: [],
       },
     ]);
+  });
+
+  it.each([
+    ["static export const a = 1, { b } = o;", ["a", "b"]],
+    ["export interface I {}", ["I"]],
+    ['static export type { T as U } from "m";', ["U"]],
+    ['static export * from "m";', []],
+    ['static export * as ns from "m";', ["ns"]],
+    ["client export declare const d: number;", ["d"]],
+    ["static const a = 1;\nstatic export { a as b };", ["b"]],
+    [
+      "static namespace N { export const b = 1 }\nstatic export import a = N.b;",
+      ["a"],
+    ],
+  ])("lists the names %s exports", (source, exports) => {
+    const statements = namesOf(`${source}\nclient const c = 1;\n<div/>\n`);
+    expect(statements.at(-2)?.exports).toEqual(exports);
   });
 
   it("is empty when the file has no module statement", () => {
