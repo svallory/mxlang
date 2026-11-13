@@ -6,7 +6,14 @@ import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { Expr } from "./ir.ts";
 import { lower } from "./lower.ts";
-import { type GeneratedMapping, mappedExpr, mappedRewrite } from "./mapping.ts";
+import {
+  concatMapped,
+  type GeneratedMapping,
+  mapped,
+  mappedExpr,
+  mappedRewrite,
+  withUse,
+} from "./mapping.ts";
 import { tagTable } from "./tag-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -188,6 +195,63 @@ describe("shorthand placeholder mappings (Expr.parts)", () => {
     expect(value).not.toHaveProperty("parts");
     expect(mappedExpr(value).mappings).toEqual([
       { sourceStart: 5, sourceEnd: 10, generatedStart: 0, generatedEnd: 7 },
+    ]);
+  });
+});
+
+describe("withUse", () => {
+  it("sets `use` on every mapping, and rebasing keeps it", () => {
+    const use = { navigation: true, semantic: true };
+    const read = withUse(
+      concatMapped(
+        mapped("a", { sourceStart: 10, sourceEnd: 11 }),
+        ", ",
+        mapped("b", { sourceStart: 20, sourceEnd: 21 }),
+      ),
+      use,
+    );
+    expect(read).toEqual({
+      code: "a, b",
+      mappings: [
+        {
+          sourceStart: 10,
+          sourceEnd: 11,
+          generatedStart: 0,
+          generatedEnd: 1,
+          use: { navigation: true, semantic: true },
+        },
+        {
+          sourceStart: 20,
+          sourceEnd: 21,
+          generatedStart: 3,
+          generatedEnd: 4,
+          use: { navigation: true, semantic: true },
+        },
+      ],
+    });
+    expect(
+      concatMapped(
+        "void [",
+        read,
+        "];",
+        mapped("c", { sourceStart: 30, sourceEnd: 31 }),
+      ).mappings,
+    ).toEqual([
+      {
+        sourceStart: 10,
+        sourceEnd: 11,
+        generatedStart: 6,
+        generatedEnd: 7,
+        use: { navigation: true, semantic: true },
+      },
+      {
+        sourceStart: 20,
+        sourceEnd: 21,
+        generatedStart: 9,
+        generatedEnd: 10,
+        use: { navigation: true, semantic: true },
+      },
+      { sourceStart: 30, sourceEnd: 31, generatedStart: 12, generatedEnd: 13 },
     ]);
   });
 });

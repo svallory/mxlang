@@ -93,7 +93,11 @@ or `client export` declaration binds) as `var name;` (no initializer, one `var`
 per statement, in source order with the `static` blocks), as stock Marko 6.4.4's
 server module does, so a template read of one renders `undefined` instead of
 throwing (`clientDeclaredNames` in `translate.ts` follows Babel's
-`getBindingIdentifiers` order, outer scope only). Under `typeCheck` (the
+`getBindingIdentifiers` order, outer scope only). A name a `server`,
+`static`, `import` or `export` statement declares at run time (core's
+`moduleStatementNames`, every declaration but a `declare` form or bodiless
+signature; a label or a `for … of` head is not a declaration) gets no `var`,
+which would be a redeclaration that keeps the module from loading. Under `typeCheck` (the
 tooling projection, never the module that runs) a `client` statement is typed in
 two views (`clientProjection` in `translate.ts`, the `"statement"` case and
 `placeClientCode` in `emitter.ts`), built from the names core's
@@ -140,7 +144,16 @@ in this package).
   `client function clamp`) is checked against the client view's declaration:
   `__MxRefine` takes the module-level name's type unless it is `undefined`,
   then the type `__mxScope` returns for that name, and the bound value is the
-  argument, mapped to the authored text.
+  argument, mapped to the authored text. The token navigates to the client
+  binding: the probe's `typeof clamp` is mapped for diagnostics and
+  navigation only (its type there is the server view's `undefined`), and the
+  client function reads each refinement token once more, `void [clamp, …];`
+  before its `return`, mapped for navigation and hover. TypeScript's scope
+  resolves that read to the client declaration (a function, a `const`, an
+  import's view-level alias or a `declare` form), so definition, rename and
+  hover from the token reach it. The mappings carry core's `MappingUse`
+  (`withUse`), which the TypeScript plugin passes to Volar as the mapping's
+  `CodeInformation`.
 
 `client export … from`
 becomes an `import` of the module and the asked names, bound to `_mxReexport…`
@@ -179,11 +192,17 @@ function would hide its TS1108. Client code reading `input`, `$global` or
   `__mxScope` a union, so a refinement may add a property error.
 - A `server declare var q` (or `static declare var q`) merged with a
   `client var q`: the server view reads the declaration's type.
+- Where a template binding of a refinement's name wins at the attribute (a
+  tag variable, a `<for>` or `<define>` param, a later binding of the block),
+  definition from the token also lists the client declaration, rename from
+  the token renames both bindings, and hover shows the client type: the
+  target keeps no template scope model.
 
 Also: a top-level type (`Input`) cannot name a client class or enum; a
 `client` statement reading a `static` or `server` name declared after it but
 before a later `client` statement is not reported; a template read of a
-client name is not linked to its declaration for definition and rename.
+client name (`${clamp}`) is not linked to its declaration for definition and
+rename (only a refinement token is).
 
 The runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
@@ -237,6 +256,19 @@ stated as a rule, which the capability test forbids. Note the codegen consequenc
 `<for>`'s iterable is bound to a temporary before the loop opens, or a param
 shadowing the name used in the iterable (`<for|input| of=input.items>`) hits
 the temporal dead zone and throws at render time.
+
+A `<for>` param's type annotation (`<for|x: string| of=list>`) cannot stand in
+a loop head, so the module that runs cuts it (`loopBinding`). Under `typeCheck`
+each annotated param is checked instead: the head binds a `__mxForParam<n>`
+temporary in its place and the body opens with `const <param as written> =
+<temp>;`, the param mapped to its authored text, then the authored body in a
+block of its own. A default becomes `const <left> = <temp> === undefined ?
+(<default>) : <temp>;`. This holds for the `of`, `in` and range forms and for
+an attribute-tag loop; a param without an annotation is unchanged. Known
+limits: the annotation is checked by assignment, not as a callback
+parameter, so a generic or `this`-dependent annotation is not modelled; the
+default check narrows `undefined` away the way a parameter default does,
+while the module that runs does not apply the default.
 
 Two behaviours worth knowing before editing the policy, both verified rather
 than assumed:

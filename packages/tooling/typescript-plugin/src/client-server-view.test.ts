@@ -238,6 +238,8 @@ describe("the server and client views, at the authored token", {
       'client import { Row } from "./one.ts";\nexport interface Input { r?: Row }\n<div/>\n',
     refinement:
       "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n",
+    refinementImport:
+      'client import { clamp } from "./one.ts";\n<let/q=1/>\n<input value:clamp:=q/>\n',
     definition:
       'client import { one } from "./one.ts";\nclient const n = one + 1;\n<div/>\n',
   };
@@ -309,5 +311,50 @@ describe("the server and client views, at the authored token", {
       ) ?? []
     ).map((d) => [d.fileName, d.textSpan.start]);
     expect(found).toEqual([[ONE, ONE_SOURCE.indexOf("one = 1")]]);
+  });
+
+  // The refinement token is read twice: by the probe (diagnostics and
+  // navigation; the server view's `undefined` there is generated, so its
+  // declaration is dropped) and in the client function (navigation and
+  // hover), where TypeScript's scope finds the client binding.
+  const TOKEN = PAGES.refinement.indexOf("clamp:=q");
+  const DECLARATION = PAGES.refinement.indexOf("clamp(");
+
+  it("definition at a refinement token reaches the client declaration", () => {
+    const found = (
+      svc().getDefinitionAtPosition(path("refinement"), TOKEN) ?? []
+    ).map((d) => [d.fileName, d.textSpan.start, d.textSpan.length]);
+    expect(found).toEqual([[path("refinement"), DECLARATION, 5]]);
+  });
+
+  it("rename from the client declaration includes the refinement token", () => {
+    const found = (
+      svc().findRenameLocations(path("refinement"), DECLARATION, false, false, {
+        providePrefixAndSuffixTextForRename: false,
+      }) ?? []
+    )
+      .map((d) => [d.fileName, d.textSpan.start, d.textSpan.length])
+      .sort((a, b) => Number(a[1]) - Number(b[1]));
+    expect(found).toEqual([
+      [path("refinement"), DECLARATION, 5],
+      [path("refinement"), TOKEN, 5],
+    ]);
+  });
+
+  it("hover at a refinement token shows the client binding's type", () => {
+    const info = svc().getQuickInfoAtPosition(path("refinement"), TOKEN);
+    expect(ts.displayPartsToString(info?.displayParts)).toBe(
+      "(local function) clamp(v: number): number",
+    );
+  });
+
+  it("definition at a refinement token naming a client import reaches the imported declaration", () => {
+    const found = (
+      svc().getDefinitionAtPosition(
+        path("refinementImport"),
+        PAGES.refinementImport.indexOf("clamp:=q"),
+      ) ?? []
+    ).map((d) => [d.fileName, d.textSpan.start]);
+    expect(found).toEqual([[ONE, ONE_SOURCE.indexOf("clamp(")]]);
   });
 });

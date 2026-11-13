@@ -10,10 +10,27 @@ export interface SourceSpan {
   sourceEnd: number;
 }
 
+/**
+ * What tooling may use a mapping for. A mapping without one serves every use.
+ * A key left out (or `false`) withholds that use from the mapping.
+ */
+export interface MappingUse {
+  /** Diagnostics. */
+  readonly verification?: boolean;
+  /** Definition, references and rename. */
+  readonly navigation?: boolean;
+  /** Hover. */
+  readonly semantic?: boolean;
+  /** Completion. */
+  readonly completion?: boolean;
+}
+
 /** One unchanged source name written into generated host code. */
 export interface GeneratedMapping extends SourceSpan {
   generatedStart: number;
   generatedEnd: number;
+  /** What tooling may use this mapping for. Absent: everything. */
+  use?: MappingUse;
 }
 
 /** Generated text plus mappings whose generated offsets are relative to it. */
@@ -42,6 +59,14 @@ export function concatMapped(...parts: Array<string | MappedCode>): MappedCode {
     );
   }
   return { code, mappings };
+}
+
+/** `code` with `use` set on every one of its mappings. */
+export function withUse(code: MappedCode, use: MappingUse): MappedCode {
+  return {
+    code: code.code,
+    mappings: code.mappings.map((mapping) => ({ ...mapping, use })),
+  };
 }
 
 /** Creates a fragment whose complete generated text maps to a source span. */

@@ -286,12 +286,14 @@ export {
   concatMapped,
   type GeneratedMapping,
   type MappedCode,
+  type MappingUse,
   mapped,
   mappedExpr,
   mappedMethod,
   mappedRewrite,
   replaceMapped,
   type SourceSpan,
+  withUse,
 } from "./mapping.ts";
 /**
  * Marko's taglib lookup, the one instance core builds it with (in core's dist,

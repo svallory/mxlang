@@ -61,6 +61,7 @@ import {
   quote,
   type SourceSpan,
   TranslateError,
+  withUse,
 } from "@mxlang/core";
 import type {
   ClientPiece,
@@ -73,7 +74,6 @@ import {
   escapeComment,
   escapeScript,
   escapeStyle,
-  moduleDeclaredNames,
 } from "./translate.ts";
 
 const INDENT = "  ";
@@ -95,6 +95,12 @@ interface ScopeNames {
   server: readonly string[];
   /** N. */
   shared: ReadonlySet<string>;
+  /**
+   * The module's own run-time names: every non-ambient declaration of a
+   * statement that is not `client` (S and N without their `declare` forms).
+   * A `client` statement's `var` line drops these names.
+   */
+  own: ReadonlySet<string>;
 }
 
 function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
@@ -103,8 +109,12 @@ function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
   const viewLevel = new Set<string>();
   const server = new Set<string>();
   const shared = new Set<string>();
+  const own = new Set<string>();
   for (const { keyword, declarations } of statements) {
     for (const declaration of declarations) {
+      if (keyword !== "client" && !declaration.ambient) {
+        own.add(declaration.name);
+      }
       if (keyword === "client") {
         client.add(declaration.name);
         if (declaration.ambient) clientAmbient.add(declaration.name);
@@ -125,6 +135,7 @@ function scopeNames(statements: readonly ModuleStatementNames[]): ScopeNames {
     viewLevel,
     server: [...server],
     shared,
+    own,
   };
 }
 
@@ -208,7 +219,12 @@ interface State {
   usesInstance: boolean;
   /** Under `typeCheck`, the client names a refinement reads through `__mxScope`. */
   refined: Set<string>;
-  /** Under `typeCheck`, the module statements' names (core's). */
+  /**
+   * Under `typeCheck`, each refinement token that names a client binding, as
+   * the client function reads it for navigation and hover (`void [fn, …];`).
+   */
+  refinedReads: MappedCode[];
+  /** The module statements' names (core's). */
   scope: ScopeNames;
   /** Under `typeCheck`, the local names of `client export { … }` value lists. */
   clientListed: string[];
@@ -219,6 +235,8 @@ interface State {
   indent: number;
   /** Serial for local arrays and source temporaries in attribute-tag loops. */
   attrTagTemp: number;
+  /** Under `typeCheck`, serial for the temporaries annotated `<for>` params bind. */
+  forParamTemp: number;
   /**
    * The sink the next write goes to.
    *
@@ -254,17 +272,10 @@ export function createEmitter(
   options: {
     typeCheck?: boolean;
     source?: string;
-    /** The module's own statements' source, for `moduleDeclaredNames`; read only when a `client` statement names something. */
-    declaredCodes?: () => string[];
-    /** Under `typeCheck`, the module statements' names (core's). */
+    /** The module statements' names (core's). */
     scope?: ScopeNames;
   } = {},
 ): StringEmitter {
-  let declaredMemo: ReadonlySet<string> | undefined;
-  const declaredNames = (): ReadonlySet<string> => {
-    declaredMemo ??= moduleDeclaredNames(options.declaredCodes?.() ?? []);
-    return declaredMemo;
-  };
   /** Names an earlier `client` statement already declared with a `var`. */
   const declaredByClient = new Set<string>();
   const state: State = {
@@ -280,12 +291,14 @@ export function createEmitter(
     clientHead: [],
     usesInstance: false,
     refined: new Set(),
+    refinedReads: [],
     scope: options.scope ?? NO_NAMES,
     clientListed: [],
     clientStart: undefined,
     clientReturns: [],
     indent: 1,
     attrTagTemp: 0,
+    forParamTemp: 0,
     sink: "__mxOut",
     tryTemp: 0,
   };
@@ -553,26 +566,47 @@ export function createEmitter(
     const serial = state.attrTagTemp++;
     const result = `__mxAttrTags${serial}`;
     const sourceName = `__mxAttrTagSource${serial}`;
-    const [first = "__mxItem", second] = node.loop.params.map(loopBinding);
+    const { bindings, typed } = loopHead(
+      node.loop.params,
+      node.loop.paramSpans,
+      Boolean(options.typeCheck),
+      () => `__mxForParam${state.forParamTemp++}`,
+    );
+    const [first = "__mxItem", second] = bindings;
     const body = arraySourceValue(node.nodes, as, valueType);
+    // Under `typeCheck`, an annotated param is re-declared at the top of the
+    // loop body, and the authored body stands in a block of its own.
+    const open = typed.length > 0 ? `${result}.push(...(` : "";
+    const pushes = (head: string): Array<string | MappedCode> =>
+      typed.length > 0
+        ? [
+            head.slice(0, -open.length),
+            ...typed.flatMap((line) => [line, " "]),
+            `{ ${open}`,
+            body,
+            ")); } } return ",
+          ]
+        : [head, body, ")); } return "];
 
     if (source.kind === "of") {
       const head = second
         ? `for (const [${second}, ${first}] of [...${sourceName}].entries())`
         : `for (const ${first} of ${sourceName})`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName}Raw = ${source.list.code}; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
-        body,
-        `)); } return ${result}; })()`,
+        ...pushes(
+          `(() => { const ${result} = []; const ${sourceName}Raw = ${source.list.code}; const ${sourceName} = ${sourceName}Raw ? ${sourceName}Raw : []; ${head} { ${result}.push(...(`,
+        ),
+        `${result}; })()`,
       );
     }
 
     if (source.kind === "in") {
       const entry = second ? `[${first}, ${second}]` : `[${first}]`;
       return concatMapped(
-        `(() => { const ${result} = []; const ${sourceName} = ${source.object.code} ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
-        body,
-        `)); } return ${result}; })()`,
+        ...pushes(
+          `(() => { const ${result} = []; const ${sourceName} = ${source.object.code} ?? {}; for (const ${entry} of Object.entries(${sourceName})) { ${result}.push(...(`,
+        ),
+        `${result}; })()`,
       );
     }
 
@@ -580,9 +614,10 @@ export function createEmitter(
     const bound = `__mxAttrTagBound${serial}`;
     const compare = source.inclusive ? "<=" : "<";
     return concatMapped(
-      `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
-      body,
-      `)); } return ${result}; })()`,
+      ...pushes(
+        `(() => { const ${result} = []; const ${start} = ${source.from ? source.from.code : "0"}; const ${bound} = ${source.bound.code}; for (let ${first} = ${start}; ${first} ${compare} ${bound}; ${first}++) { ${result}.push(...(`,
+      ),
+      `${result}; })()`,
     );
   };
 
@@ -687,7 +722,11 @@ export function createEmitter(
    * so `fn` is the client binding unless a template binding of that name is in
    * scope at the attribute: `typeof fn` there is decided by TypeScript's own
    * scope, where the module's server view (`var fn: undefined`) stands for the
-   * client one, which `__mxScope` hands out.
+   * client one, which `__mxScope` hands out. That `typeof fn` serves
+   * diagnostics and navigation only (its hover would show the server view's
+   * `undefined`); a read of the token in the client function (`void [fn];`,
+   * navigation and hover) reaches the client binding through TypeScript's
+   * scope, so definition and rename from the token find it.
    */
   const attributeValue = (attr: Extract<Attr, { value: Expr }>): MappedCode => {
     if (!(options.typeCheck && attr.kind === "bound" && attr.refinement)) {
@@ -704,9 +743,18 @@ export function createEmitter(
       );
     }
     state.refined.add(name);
+    state.refinedReads.push(
+      withUse(mappedExpr(attr.refinement), {
+        navigation: true,
+        semantic: true,
+      }),
+    );
     return concatMapped(
       "(false && (null as unknown as __MxRefine<typeof ",
-      mappedExpr(attr.refinement),
+      withUse(mappedExpr(attr.refinement), {
+        verification: true,
+        navigation: true,
+      }),
       `, Awaited<typeof __mxClientView.__mxScope>[${JSON.stringify(name)}]>)(`,
       mappedExpr(attr.value),
       "), ",
@@ -1447,7 +1495,13 @@ export function createEmitter(
         return temp;
       };
 
-      const [first = "__mxItem", second] = node.params.map(loopBinding);
+      const { bindings, typed } = loopHead(
+        node.params,
+        node.paramSpans,
+        Boolean(options.typeCheck),
+        () => `__mxForParam${state.forParamTemp++}`,
+      );
+      const [first = "__mxItem", second] = bindings;
       const source = node.source;
 
       if (source.kind === "of") {
@@ -1472,7 +1526,19 @@ export function createEmitter(
       }
 
       state.indent++;
+      // Under `typeCheck`, each annotated param is re-declared with its
+      // annotation, and the authored body stands in a block of its own, where
+      // it may declare a name a param re-declares.
+      for (const line of typed) push(line);
+      if (typed.length > 0) {
+        push("{");
+        state.indent++;
+      }
       drive(emitter, node.children);
+      if (typed.length > 0) {
+        state.indent--;
+        push("}");
+      }
       state.indent--;
       push("}");
     },
@@ -1629,11 +1695,11 @@ export function createEmitter(
           const lines: Array<string | MappedCode> = [];
           // The server view: the names the module that runs declares `var`
           // (as it does), except one another module statement declares too
-          // (the merge keeps that declaration's type; `declaredNames` holds the
-          // `static`/`export`/`import` names, `scope.server` the `server` ones);
+          // (the merge keeps that declaration's type; `scope.own` holds the
+          // non-`client` run-time names, `scope.server` the `server` ones);
           // plus the client `declare` names, which run nowhere on the server.
           const runtime = (data.clientVars ?? []).filter(
-            (name) => !declaredNames().has(name) && !declaredByClient.has(name),
+            (name) => !scope.own.has(name) && !declaredByClient.has(name),
           );
           for (const name of runtime) declaredByClient.add(name);
           const declared = runtime.filter(
@@ -1642,7 +1708,7 @@ export function createEmitter(
           for (const name of scope.clientAmbient) {
             if (
               declaredByClient.has(name) ||
-              declaredNames().has(name) ||
+              scope.own.has(name) ||
               scope.server.includes(name)
             ) {
               continue;
@@ -1716,15 +1782,13 @@ export function createEmitter(
           return;
         }
         if (data.clientVars) {
-          // A `var q;` beside a declaration of `q` is TS2300, and two
-          // `client` statements naming `q` would declare it twice.
-          const names =
-            data.clientVars.length > 0
-              ? data.clientVars.filter(
-                  (name) =>
-                    !declaredNames().has(name) && !declaredByClient.has(name),
-                )
-              : [];
+          // A `var q;` beside a declaration of `q` is TS2300 (a SyntaxError at
+          // load beside a `const q`), and two `client` statements naming `q`
+          // would declare it twice. `scope.own` is core's set of the other
+          // module statements' run-time names.
+          const names = data.clientVars.filter(
+            (name) => !state.scope.own.has(name) && !declaredByClient.has(name),
+          );
           for (const name of names) declaredByClient.add(name);
           if (names.length > 0) {
             state.moduleHoisted.push({
@@ -1905,30 +1969,48 @@ function declaresBinding(node: IrNode): boolean {
  * author wrote (`x: number`, `{ a }: Row`), which a `for (const [i, x] of …)`
  * head cannot hold, so the annotation is cut and the rest kept: a default
  * (`x: number = 0`) and a destructuring pattern stay as written.
+ *
+ * `annotated` (only for a parameter with an annotation) holds the slices of
+ * the same parse, as offsets into `param`: `left` the binding with its
+ * annotation, `init` its default, if any. The type-check projection
+ * re-declares the parameter from them.
  */
-function loopBinding(param: string): string {
-  if (!param.includes(":")) return param;
-  let target: { start?: number | null; end?: number | null } | undefined;
+function loopBinding(param: string): {
+  binding: string;
+  annotated?: { left: [number, number]; init?: [number, number] };
+} {
+  if (!param.includes(":")) return { binding: param };
   try {
     const arrow = babelParser.parseExpression(`(${param}) => 0`, {
       plugins: ["typescript"],
     });
-    if (arrow.type !== "ArrowFunctionExpression") return param;
+    if (arrow.type !== "ArrowFunctionExpression") return { binding: param };
     const first = arrow.params[0];
-    target = first?.type === "AssignmentPattern" ? first.left : first;
+    const target = first?.type === "AssignmentPattern" ? first.left : first;
     const annotation = (
       target as {
         typeAnnotation?: { start?: number | null; end?: number | null };
       }
     )?.typeAnnotation;
-    if (typeof annotation?.start !== "number") return param;
-    if (typeof annotation.end !== "number") return param;
+    if (typeof annotation?.start !== "number") return { binding: param };
+    if (typeof annotation.end !== "number") return { binding: param };
+    if (typeof target?.start !== "number" || typeof target.end !== "number") {
+      return { binding: param };
+    }
+    const right = first?.type === "AssignmentPattern" ? first.right : undefined;
     // `(` shifts every offset by one.
-    return (
-      param.slice(0, annotation.start - 1) + param.slice(annotation.end - 1)
-    );
+    return {
+      binding:
+        param.slice(0, annotation.start - 1) + param.slice(annotation.end - 1),
+      annotated: {
+        left: [target.start - 1, target.end - 1],
+        ...(typeof right?.start === "number" && typeof right.end === "number"
+          ? { init: [right.start - 1, right.end - 1] as [number, number] }
+          : {}),
+      },
+    };
   } catch {
-    return param;
+    return { binding: param };
   }
 }
 
@@ -1947,6 +2029,57 @@ function arrowTypeParams(typeParams: {
     mapped(typeParams.code, typeParams.span),
     typeParams.code.trimEnd().endsWith(",") ? ">" : ",>",
   );
+}
+
+/**
+ * The bindings of a `<for>` head, plus (under `typeCheck`) the re-declaration
+ * of each annotated parameter: the head binds a `__mxForParam…` temporary in
+ * its place, and the body opens with `const <param as written> = <temp>;`
+ * (`<temp> === undefined ? (<default>) : <temp>` for a default), the authored
+ * slices mapped to the param's source span, so TypeScript checks the element
+ * against the annotation at the author's token. `typed` is empty without
+ * `typeCheck` and for a param with no annotation: the head is unchanged.
+ */
+function loopHead(
+  params: readonly string[],
+  spans: ReadonlyArray<SourceSpan | undefined> | undefined,
+  typeCheck: boolean,
+  temp: () => string,
+): { bindings: string[]; typed: MappedCode[] } {
+  const bindings: string[] = [];
+  const typed: MappedCode[] = [];
+  params.forEach((param, index) => {
+    const { binding, annotated } = loopBinding(param);
+    if (!(typeCheck && annotated)) {
+      bindings.push(binding);
+      return;
+    }
+    const name = temp();
+    bindings.push(name);
+    const span = spans?.[index];
+    const slice = ([start, end]: [number, number]): MappedCode =>
+      mapped(
+        param.slice(start, end),
+        span && span.sourceEnd - span.sourceStart === param.length
+          ? {
+              sourceStart: span.sourceStart + start,
+              sourceEnd: span.sourceStart + end,
+            }
+          : null,
+      );
+    typed.push(
+      concatMapped(
+        "const ",
+        slice(annotated.left),
+        " = ",
+        ...(annotated.init
+          ? [`${name} === undefined ? (`, slice(annotated.init), `) : ${name}`]
+          : [name]),
+        ";",
+      ),
+    );
+  });
+  return { bindings, typed };
 }
 
 /**
@@ -2057,6 +2190,18 @@ function placeClientCode(state: State): void {
     ...(listedValues.length > 0
       ? [concatMapped(`void [${listedValues.join(", ")}];`)]
       : []),
+    // Each refinement token, read where the client binding is in scope.
+    ...(state.refinedReads.length > 0
+      ? [
+          concatMapped(
+            "void [",
+            ...state.refinedReads.flatMap((read, index) =>
+              index === 0 ? [read] : [", ", read],
+            ),
+            "];",
+          ),
+        ]
+      : []),
     ...(state.refined.size > 0
       ? [concatMapped(`return { ${[...state.refined].join(", ")} };`)]
       : []),
@@ -2083,7 +2228,7 @@ function placeClientCode(state: State): void {
       "})();",
     ),
   ];
-  // `@ts-ignore` covers only the generated `namespace` line: it is not
+  // `@ts-expect-error` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
@@ -2172,11 +2317,7 @@ export function emitModuleWithMappings(
   const name = moduleExportName(ir, "@mxlang/target-html");
   const emitter = createEmitter(name, {
     ...options,
-    scope: options.typeCheck ? moduleNamesOf(ir.body) : undefined,
-    declaredCodes: () => [
-      ...ir.imports.map((node) => node.code),
-      ...ir.hoisted.map((node) => node.code),
-    ],
+    scope: moduleNamesOf(ir.body),
   });
   drive(emitter, ir.body);
   const body = emitter.done();

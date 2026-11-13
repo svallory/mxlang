@@ -3281,27 +3281,49 @@ describe("`<for>` parameter annotations", () => {
       "an array loop",
       "<for|x: number, i: number| of=list><p>${i}:${x}</p></for>",
       "for (const [i, x] of [...",
+      "for (const [__mxForParam1, __mxForParam0] of [...__mxFor1].entries()) {\n    const x: number = __mxForParam0;\n    const i: number = __mxForParam1;\n    {",
     ],
     [
       "a `in` loop",
       "<for|k: string, v: number| in=obj><p>${k}</p></for>",
       "for (const [k, v] of Object.entries(",
+      "for (const [__mxForParam0, __mxForParam1] of Object.entries(__mxFor0)) {\n    const k: string = __mxForParam0;\n    const v: number = __mxForParam1;\n    {",
     ],
     [
       "a range loop",
       "<for|i: number| from=0 to=3><p>${i}</p></for>",
       "for (let i = ",
+      "for (let __mxForParam0 = __mxFor0; __mxForParam0 <= __mxFor1; __mxForParam0++) {\n    const i: number = __mxForParam0;\n    {",
     ],
     [
       "an attribute-tag array loop",
       "<define/Foo|{ item }|><p>${item}</p></define>\n<Foo><for|x: number, i: number| of=list><@item>${x}</@item></for></Foo>",
       "for (const [i, x] of [...",
+      "for (const [__mxForParam1, __mxForParam0] of [...__mxAttrTagSource0].entries()) { const x: number = __mxForParam0; const i: number = __mxForParam1; { __mxAttrTags0.push(...(",
     ],
-  ])("%s prints a loop head without the annotation", (_name, source, head) => {
-    for (const typeCheck of [false, true]) {
-      const { code } = compile(source, "/f/t.mx", { typeCheck });
-      expect(code).toContain(head);
-      expect(code).not.toMatch(/for \([^)]*: (number|string)/);
-    }
+  ])(
+    "%s prints a loop head without the annotation",
+    (_name, source, head, typed) => {
+      const runtime = compile(source, "/f/t.mx").code;
+      expect(runtime).toContain(head);
+      expect(runtime).not.toMatch(/for \([^)]*: (number|string)/);
+      expect(runtime).not.toContain("__mxForParam");
+      // Under `typeCheck`, the head binds a temporary and the body re-declares
+      // the param as written, its own body in a block of its own.
+      const projection = compile(source, "/f/t.mx", { typeCheck: true }).code;
+      expect(projection).toContain(typed);
+      expect(projection).not.toMatch(/for \([^)]*: (number|string)/);
+    },
+  );
+
+  it("a default is applied in the re-declaration", () => {
+    const { code } = compile(
+      "<for|x: number = 0| of=list><p>${x}</p></for>",
+      "/f/t.mx",
+      { typeCheck: true },
+    );
+    expect(code).toContain(
+      "for (const __mxForParam0 of __mxFor1) {\n    const x: number = __mxForParam0 === undefined ? (0) : __mxForParam0;\n    {",
+    );
   });
 });

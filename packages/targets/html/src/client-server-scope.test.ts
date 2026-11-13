@@ -341,6 +341,13 @@ describe("a refinement naming a client binding", () => {
       'static function fn(next: string): string { return next }\nstatic const q = "a";\n<input value:fnn:=q/>',
       [[2304, "fnn"]],
     ],
+    [
+      // The one diagnostic is the probe's own (a `number` is not callable),
+      // reported on its generated callee, as before the read was added.
+      "C13 the navigation read of a refinement adds no diagnostic",
+      "client const clamp = 1;\n<let/q=1/>\n<input value:clamp:=q/>",
+      [[2349, "?"]],
+    ],
   ];
   it.each(rows)("%s", (_name, source, expected, options) => {
     expect(found(source, options)).toEqual(expected);
@@ -416,5 +423,71 @@ describe("the module that runs is unchanged", () => {
     ],
   ])("D2 %j without typeCheck", (source, expected) => {
     expect(compile(source, "/f/t.mx").code).toBe(expected);
+  });
+});
+
+describe("a client name another module statement declares", () => {
+  const rows: Row[] = [
+    [
+      "E1 a for-of head beside a server const",
+      "server const x = 1;\nclient for (const x of [2]) {}\n<div>${x}</div>",
+      [],
+    ],
+    [
+      "E2 a label beside a server const",
+      "server const x = 1;\nclient x: for (;;) { break x }\n<div>${x}</div>",
+      [],
+    ],
+  ];
+  it.each(rows)("%s", (_name, source, expected, options) => {
+    expect(found(source, options)).toEqual(expected);
+  });
+});
+
+describe("`<for>` parameter annotations", () => {
+  const rows: Row[] = [
+    [
+      "F1 an array loop's item",
+      "static const list = [1, 2];\n<for|x: string| of=list>${x}</for>",
+      [[2322, "x"]],
+    ],
+    [
+      "F2 an array loop's index",
+      "static const list = [1];\n<for|x: number, i: string| of=list>${x}${i}</for>",
+      [[2322, "i"]],
+    ],
+    [
+      "F3 an `in` loop's value",
+      "static const obj = { a: 1 };\n<for|k: string, v: string| in=obj>${k}${v}</for>",
+      [[2322, "v"]],
+    ],
+    [
+      "F4 a range loop",
+      "<for|i: string| from=0 to=3>${i}</for>",
+      [[2322, "i"]],
+    ],
+    [
+      "F5 a destructuring pattern",
+      "static const rows = [{ a: 1 }];\n<for|{ a }: { a: string }| of=rows>${a}</for>",
+      [[2322, "{ a }"]],
+    ],
+    [
+      "F6 a default",
+      "static const list: (number | undefined)[] = [1];\n<for|x: number = 0| of=list>${x}</for>",
+      [],
+    ],
+    [
+      "F7 the body may declare a param's name in a nested scope",
+      "static const list = [1];\n<for|x: number, i: number| of=list><if=true><const/x=1/>${x}</if>${i}</for>",
+      [],
+    ],
+    [
+      "F8 an attribute-tag loop",
+      "<define/Foo|{ item }: { item: unknown }|><p>${item}</p></define>\n<Foo><for|x: string| of=[1]><@item>${x}</@item></for></Foo>",
+      [[2322, "x"]],
+    ],
+  ];
+  it.each(rows)("%s", (_name, source, expected, options) => {
+    expect(found(source, options)).toEqual(expected);
   });
 });

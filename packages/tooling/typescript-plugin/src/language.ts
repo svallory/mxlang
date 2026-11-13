@@ -1566,6 +1566,8 @@ export function mergeMappings(mappings: CodeMapping[]): CodeMapping[] {
       currLen === undefined ||
       prev.generatedLengths !== undefined ||
       curr.generatedLengths !== undefined ||
+      // Two mappings for different tooling uses stay apart.
+      prev.data !== curr.data ||
       currGen !== prevGen + prevLen ||
       currSrc !== prevSrc + prevLen
     ) {

@@ -98,6 +98,34 @@ describe("html: a `client` block declares its own top-level names, without initi
     );
   });
 
+  it.each([
+    [
+      "a for-of head",
+      "server const x = 1;\nclient for (const x of [2]) {}\n<div>${x}</div>",
+      "const x = 1;",
+      "<div>1</div>",
+    ],
+    [
+      "a label",
+      "server const x = 1;\nclient x: for (;;) { break x }\n<div>${x}</div>",
+      "const x = 1;",
+      "<div>1</div>",
+    ],
+  ])(
+    "a client name a `server` statement declares gets no `var` (%s)",
+    (_name, source, module, html) => {
+      expect(hoisted(source)).toBe(module);
+      expect(String(mx(source)({}))).toBe(html);
+    },
+  );
+
+  it("a `static` label does not stand for a client name's `var`", () => {
+    const source =
+      "static x: for (;;) { break x }\nclient var x = 1;\n<div>${typeof x}</div>";
+    expect(hoisted(source)).toBe("x: for (;;) { break x }\nvar x;");
+    expect(String(mx(source)({}))).toBe("<div>undefined</div>");
+  });
+
   it("orders names the way Marko does: functions and classes before declarators, pattern members last", () => {
     expect(hoisted(`client { let a = 1; function f() {} }${TEMPLATE}`)).toBe(
       "var f, a;",
