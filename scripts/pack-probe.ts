@@ -507,11 +507,6 @@ function nodeTypes(
   return { compilerOptions };
 }
 
-/**
- * Private workspace deps of a probed package beyond the stubbed
- * `PINNED_WORKSPACE_DEPS`: the plugin bundles `@mxlang/host-astro` (a `bun build --external`), whose `main` is
- * `src/*.ts`, so a consumer install cannot load it (D5).
- */
 /** The root `devDependencies.vite`: the exact version the repo and examples build with. */
 function rootVite(): string {
   const version = (
@@ -532,6 +527,12 @@ function pluginTypescript(): string {
   return version;
 }
 
+/**
+ * Private workspace deps of a probed package beyond the stubbed
+ * `PINNED_WORKSPACE_DEPS`: the plugin bundles `@mxlang/host-astro` (a
+ * `bun build --external`), whose `main` is `src/*.ts`, so a consumer install
+ * cannot load it.
+ */
 function privateStubs(
   name: string,
 ): Pick<ConsumerOptions, "stubExtra" | "extraDeps"> {
