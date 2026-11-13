@@ -880,7 +880,11 @@ function isComponent(name: string, ctx: Ctx): boolean {
 }
 
 /**
- * `class:foo` / `style:foo` — rejected, with this dialect's own message.
+ * `class:foo` / `style:foo` — rejected, with this dialect's own message;
+ * `on:foo` — rejected with the fix-it every host gives, naming both MX
+ * spellings (`onFoo=fn` for a DOM event, `on-foo=fn` for a custom event
+ * name). Marko refuses `on:foo` too, at the same position, but its own fix-it
+ * names only `onFoo`.
  *
  * The brief asked for these to lower to Marko's semantics. Marko 5.42.5 /
  * `marko@6.3.51` has no such semantics to lower: its own parser rejects every
@@ -925,9 +929,18 @@ function rejectModifier(
   const colon = name.indexOf(":");
   const head = name.slice(0, colon);
   const remainder = name.slice(colon + 1);
+  const event = `${remainder.charAt(0).toUpperCase()}${remainder.slice(1)}`;
+  if (head === "on" && remainder !== "") {
+    // The fix-it every host gives: name both MX spellings, `on<Name>` for a
+    // DOM event and `on-<exact>` for a custom event name.
+    fail(
+      `\`${name}=fn\` is not MX syntax; write \`on${event}=fn\` for a DOM event or \`on-${remainder}=fn\` for a custom event name (Marko rejects this form too)`,
+      attr,
+    );
+  }
   const suggestion =
     head === "on"
-      ? `on${remainder.charAt(0).toUpperCase()}${remainder.slice(1)}`
+      ? `on${event}`
       : `${head}={ ${remainder}: ${head === "style" ? "value" : "condition"} }`;
   fail(
     `\`${name}\` is not a valid attribute, did you mean \`${suggestion}\`?`,

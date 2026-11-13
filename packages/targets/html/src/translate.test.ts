@@ -3246,10 +3246,10 @@ describe("event attributes (phase B of dom-events)", () => {
     expect(code).toContain('onclick=\\"alert(1)\\"');
   });
 
-  it("rejects on: with Marko's exact event-name fix-it", () => {
+  it("rejects on: with the fix-it naming both MX spellings", () => {
     const body = "<div on:click=fn>x</div>";
     expect(() => compile(src(body), file)).toThrow(
-      "`on:click` is not a valid attribute, did you mean `onClick`?",
+      "`on:click=fn` is not MX syntax; write `onClick=fn` for a DOM event or `on-click=fn` for a custom event name (Marko rejects this form too)",
     );
   });
 });

@@ -236,7 +236,6 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
   it.each([
     ["class:foo:bar", "class={ foo:bar: condition }"],
     ["style:foo:bar", "style={ foo:bar: value }"],
-    ["on:foo:bar", "onFoo:bar"],
   ])(
     "uses Marko's exact reserved-head fix-it and position: %s",
     (name, suggestion) => {
@@ -254,6 +253,33 @@ describe("`:modifier` is the attribute `value:modifier` (html)", () => {
       }
     },
   );
+
+  it.each([
+    ["on:click", "onClick", "on-click"],
+    ["on:foo:bar", "onFoo:bar", "on-foo:bar"],
+  ])(
+    "refuses %s naming both MX spellings, at the attribute",
+    (name, dom, custom) => {
+      for (const suffix of ["", '="x"', "=input.x"]) {
+        for (const [gap, line, column] of [
+          [" ", 1, 5],
+          ["\n  ", 2, 2],
+        ] as const) {
+          expect(failure(`<div${gap}${name}${suffix}/>`)).toEqual({
+            message: `\`${name}=fn\` is not MX syntax; write \`${dom}=fn\` for a DOM event or \`${custom}=fn\` for a custom event name (Marko rejects this form too)`,
+            line,
+            column,
+          });
+        }
+      }
+    },
+  );
+
+  it("keeps Marko's fix-it for an empty `on:`", () => {
+    expect(failure("<div on:/>").message).toBe(
+      "`on:` is not a valid attribute, did you mean `on`?",
+    );
+  });
 
   it("still refuses a real modifier, in Marko's words", () => {
     const error = failure(`<div class:active="x"/>`);
