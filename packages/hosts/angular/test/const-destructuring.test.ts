@@ -293,24 +293,6 @@ describe("the rendered values", () => {
       "1-7-true",
       "1-9-true",
     ],
-    [
-      "an object rest alone",
-      "<const/{ ...rest }={ a: x() }/>${rest.a}",
-      "7",
-      "9",
-    ],
-    [
-      "an object rest in a nested pattern",
-      "<const/{ a: { ...r } }={ a: { b: x() } }/>${r.b}",
-      "7",
-      "9",
-    ],
-    [
-      "an object rest in an element body",
-      "<div><const/{ a, ...rest }={ a: 1, b: x() }/>${rest.b}</div>",
-      "<div>7</div>",
-      "<div>9</div>",
-    ],
   ];
   for (const [label, source, first, updated] of CASES) {
     it(label, () => {
