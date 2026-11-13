@@ -214,8 +214,8 @@ describe("Solid IR lowering", () => {
         // `keyed={fn}` means Solid hands the whole entry as one accessor, so
         // the pair cannot be destructured in the parameter list; each name
         // reads through the accessor instead.
-        "{(mxEntry) =>",
-        "mxEntry()[0]",
+        "{(__mxEntry0) =>",
+        "__mxEntry0()[0]",
       ],
     ],
     [
@@ -231,14 +231,14 @@ describe("Solid IR lowering", () => {
     [
       "stepped range",
       `<for|n| from=2 to=8 step=2><p>\${n}</p></for>`,
-      ["<Repeat count={4}>", "<p>{2 + __mxIndex * 2}</p>"],
+      ["<Repeat count={4}>", "<p>{2 + __mxIndex0 * 2}</p>"],
     ],
     [
       "stepped range, non-literal from and step: bound once in an IIFE",
       `<for|n| from=a() to=20 step=b()><p>\${n}</p></for>`,
       [
-        "{(() => { const __mxFrom = (a()); const __mxStep = (b()); return <Repeat",
-        "<p>{__mxFrom + __mxIndex * __mxStep}</p>",
+        "{(() => { const __mxFrom1 = (a()); const __mxStep2 = (b()); return <Repeat",
+        "<p>{__mxFrom1 + __mxIndex0 * __mxStep2}</p>",
         "; })()}",
       ],
     ],
@@ -246,8 +246,8 @@ describe("Solid IR lowering", () => {
       "stepped range, non-literal from only: step stays inline",
       `<for|n| from=a() to=20 step=2><p>\${n}</p></for>`,
       [
-        "{(() => { const __mxFrom = (a()); return <Repeat",
-        "<p>{__mxFrom + __mxIndex * 2}</p>",
+        "{(() => { const __mxFrom1 = (a()); return <Repeat",
+        "<p>{__mxFrom1 + __mxIndex0 * 2}</p>",
       ],
       ["__mxStep"],
     ],
@@ -255,8 +255,8 @@ describe("Solid IR lowering", () => {
       "stepped range, non-literal step only: no dead from constant",
       `<for|n| from=0 to=20 step=b()><p>\${n}</p></for>`,
       [
-        "{(() => { const __mxStep = (b()); return <Repeat",
-        "<p>{0 + __mxIndex * __mxStep}</p>",
+        "{(() => { const __mxStep1 = (b()); return <Repeat",
+        "<p>{0 + __mxIndex0 * __mxStep1}</p>",
       ],
       ["__mxFrom"],
     ],
@@ -354,7 +354,7 @@ describe("Solid IR lowering", () => {
       "repeated attribute tags fold into one record",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
       [
-        "item={(() => { let __mxAttrTagAcc; __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>1</> }); __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>2</> }); return __mxAttrTagAcc; })()}",
+        "item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: () => <>1</> }); __mxAttrTagAcc({ content: () => <>2</> }); }, true)}",
       ],
       ["Layout"],
     ],

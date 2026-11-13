@@ -1,0 +1,5 @@
+import List from "./List.mx"
+
+export interface Input { flag: boolean }
+
+<List><if=input.flag><@items id=1/></if><else><@items id=2/></else></List>

@@ -339,6 +339,72 @@ describe("Solid's generated bindings use the reserved `__mx` names", () => {
     expect(code).not.toContain("$mx_Define");
   });
 
+  // The loop and attribute-tag helper names come from a per-emit serial in
+  // the reserved space, never from a scan of the authored text: binding the
+  // names the old scan generated (`mxRow`, `mxEntry`, `mxList`, `value`)
+  // changes none of them, and nested loops still get distinct names.
+  it("generates the same `__mx` loop names whatever the author binds", () => {
+    const setup = "import Layout from './layout';";
+    const compiled = (source: string): string =>
+      compileSolidMx(source, {
+        filename: "fixture.solid.mx",
+        moduleBindings: sourceBindings(setup).bindings,
+        unknownModuleBindings: unknownSourceBindings(setup),
+      }).code;
+    // Every generated loop name, first appearance order, serial or not.
+    const generated = (code: string): string[] => [
+      ...new Set(
+        [
+          ...code.matchAll(/__mx(?:List|Value|Index|Row|Entry|From|Step)\d*/g),
+        ].map((match) => match[0]),
+      ),
+    ];
+    const template = (
+      row: string,
+      inner: string,
+      entry: string,
+      item: string,
+    ) =>
+      [
+        `<div>`,
+        `<for|{ ${row} }| of=xs by="id"><for|{ ${inner} }| of=ys by="id"><li>\${${row}}\${${inner}}</li></for></for>`,
+        `<for|{ ${entry} }, v| in=obj><i>\${${entry}}\${v}</i></for>`,
+        `<for|i| from=f to=9 step=s><b>\${i}</b></for>`,
+        `<Layout><for|${item}| of=xs><@item>\${${item}}</@item></for><for|k| in=obj><@row>\${k}</@row></for></Layout>`,
+        `</div>`,
+      ].join("");
+    const plain = compiled(template("a", "b", "k", "x"));
+    const names = generated(plain);
+    // The same names whatever the author binds, including the old
+    // scan-avoided names.
+    expect(
+      generated(compiled(template("mxRow", "mxRow2", "mxEntry", "mxList"))),
+    ).toEqual(names);
+    expect(
+      generated(compiled(template("value", "mxList", "mxRow", "value"))),
+    ).toEqual(names);
+    // Each is `__mx<Base><n>`, one per construct in tree order.
+    for (const name of names) {
+      expect(name).toMatch(/^__mx(?:List|Value|Index|Row|Entry|From|Step)\d+$/);
+    }
+    expect(names.map((name) => name.replace(/^__mx|\d+$/g, ""))).toEqual([
+      "Row",
+      "Row",
+      "Entry",
+      "From",
+      "Step",
+      "Index",
+      "List",
+      "Value",
+    ]);
+    // Nested loops get distinct names.
+    expect(names[0]).not.toBe(names[1]);
+    // No name from the deleted scans (`mxRow`, `mxList2`, `value2`, ...).
+    expect(plain).not.toMatch(
+      /(?<![\w$])(?:mx(?:List|Value|Index|Row|Entry|From|Step)|value)\d*(?![\w$])/,
+    );
+  });
+
   it("names the whole-unit wrapper bindings `__mx*`", () => {
     const code = compileSolidUnit(
       [

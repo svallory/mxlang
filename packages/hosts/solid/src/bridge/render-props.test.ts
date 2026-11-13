@@ -279,7 +279,7 @@ describe("attribute tag parse errors", () => {
       `const el = <Layout><if=cond><@header>x</@header></if></Layout>;`,
     );
     expect(code.replace(/\s+/g, " ")).toContain(
-      "header={(() => { let __mxAttrTagAcc; if (cond) { __mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, { content: () => <>x</> }); } return __mxAttrTagAcc; })()}",
+      "header={__mxAttrTagsOf(__mxAttrTagAcc => { if (cond) { __mxAttrTagAcc({ content: () => <>x</> }); } })}",
     );
   });
 
@@ -287,9 +287,10 @@ describe("attribute tag parse errors", () => {
     const code = printFirstExpression(
       `const el = <Layout><for|x| of=xs()><@header>\${x}</@header></for></Layout>;`,
     );
-    expect(code).toContain("? [...mxList] : [])(xs())");
-    expect(code).toContain("for (const x of (mxList =>");
-    expect(code).toContain("__mxAttrTagAcc = __mxAttrTags(__mxAttrTagAcc, {");
+    expect(code).toContain("? [...__mxList1] : [])(xs())");
+    expect(code).toContain("for (const x of (__mxList1 =>");
+    expect(code).toContain("header={__mxAttrTagsOf(__mxAttrTagAcc => {");
+    expect(code).toContain("__mxAttrTagAcc({");
   });
 
   it("rejects an unknown attribute tag inside `<try>`", () => {
@@ -402,6 +403,6 @@ describe("solidmx-multiline-region repro", () => {
         plugins: ["typescript", "jsx"],
       }),
     ).not.toThrow();
-    expect(code).toContain("0 + __mxIndex * 2");
+    expect(code).toContain("0 + __mxIndex0 * 2");
   });
 });

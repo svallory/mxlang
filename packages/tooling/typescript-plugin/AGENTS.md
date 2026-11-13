@@ -315,16 +315,27 @@ typecheck inputs.
 ## Attribute-tag call sites and callee dependencies (phase 4a)
 
 A caller's attribute-tag value is Marko's record, the same text whatever the
-callee declares (spec §8): `__mxAttrTag({...})` for a lone occurrence, a fold
-of `__mxAttrTags` steps otherwise. `__mxAttrTag` takes its `T` from the
-callee's prop (`NoInfer` on its argument), so TypeScript, resolving the callee
-module itself, checks each attribute where it is written; a missing attribute
-and a fold's mismatch are reported at the tag name, because both braces and
-the `content` key map there. Core reads nothing from the callee for this. In a
+callee declares (spec §8): `__mxAttrTag({...})` for a lone occurrence, an
+`__mxAttrTagsOf((add) => { add({...}); ... })` builder otherwise. Both take
+their `T` from the callee's prop (`NoInfer` on the occurrence), so TypeScript,
+resolving the callee module itself, checks each attribute where it is written,
+in a fold too; a missing attribute is reported at the tag name, because both
+braces and the `content` key map there. Core reads nothing from the callee for this. In a
 reprinted `.solid.mx` region, `attributeTagDiagnosticMappings`
-(`src/language.ts`) finds each `name={__mxAttrTag({ ... })}` and maps every
-`"key": value` property to its authored attribute, the rest of the object to
-the tag name.
+(`src/language.ts`) finds each `name={__mxAttrTag({ ... })}`, and each `add({ ... })`
+of a `name={__mxAttrTagsOf((add) => { ... })}` builder (and each
+`acc = __mxAttrTags(acc, { ... })` step of the in-place fold an untyped callee
+gets), and maps every `"key": value` property to its authored attribute, the
+rest of the object to the tag name. Of a fold's own text only the prop name
+maps to the tag name: the statements around its occurrences (`if (test) {`,
+`for (... of source) {`) keep their own mappings. A nested call can fold the
+same name inside an occurrence with the same `add` name, so each authored
+occurrence takes the earlier of the innermost open fold's next step and the
+next `name={` whose value is a record (a `name={` that is not, another value
+passed as a prop of that name, is passed over); a step inside a nested fold's
+body (another name folded in an occurrence's body) is skipped, and a closing
+`</@name>` is not an occurrence (unit rows, and rows over real Preact and Solid
+region output, in `src/attribute-tag-mappings.test.ts`).
 
 **A test that reports through Volar cannot prove what the emitted
 TypeScript checks.** Volar by itself drops a diagnostic whose

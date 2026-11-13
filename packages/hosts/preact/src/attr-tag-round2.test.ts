@@ -254,7 +254,12 @@ describe("attribute tags read no callee", () => {
         return calls.map((call) => compilePreactMx(call, entry).code);
       };
       const untyped = against("<div/>");
-      expect(untyped[0]).toContain("as (...args: any[]) => any");
+      // A direct call's fold is the builder, so its params body takes the
+      // callee's declared type as a lone occurrence does: no cast.
+      expect(untyped[0]).toContain(
+        "item={__mxAttrTagsOf((__mxAttrTagAcc) => {",
+      );
+      expect(untyped[0]).toContain("content: (s) =>");
       expect(untyped[1]).toContain("content: (s) =>");
       expect(
         against(

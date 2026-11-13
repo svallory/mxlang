@@ -13,16 +13,29 @@
  * MX ships no runtime package, so this is TypeScript source text: each value
  * host appends it once to a module that builds a record, and calls
  * {@link ATTR_TAG_RECORD} (`__mxAttrTag`) for an occurrence that is alone and
- * unconditional, {@link ATTR_TAG_FOLD} (`__mxAttrTags`) for each step of a fold
- * that starts from `undefined`. Every name it declares starts with the
- * reserved `__mx`/`__Mx` prefix.
+ * unconditional, {@link ATTR_TAG_BUILD} (`__mxAttrTagsOf`) for any other set of
+ * occurrences (a repeat, an `<if>`, a `<for>`). The builder folds each
+ * occurrence with {@link ATTR_TAG_FOLD} (`__mxAttrTags`), Marko's fold step
+ * from `undefined`, which stays exported in its published shape. Every name
+ * it declares starts with the reserved `__mx`/`__Mx` prefix.
  */
+
+import type { AttributeTagNode } from "./ir.ts";
 
 /** The function that makes one occurrence a record: Marko's `attrTag`. */
 export const ATTR_TAG_RECORD = "__mxAttrTag";
 
 /** The fold step over occurrences: Marko's `attrTags(first, attrs)`. */
 export const ATTR_TAG_FOLD = "__mxAttrTags";
+
+/**
+ * The fold builder: `__mxAttrTagsOf((add) => { add({...}); ... })` runs its
+ * callback once, folds every `add` argument in call order, and returns the
+ * record, or `undefined` when `add` was never called. A second argument
+ * `true` says `add` is certain to run, and types the result without
+ * `undefined`.
+ */
+export const ATTR_TAG_BUILD = "__mxAttrTagsOf";
 
 /**
  * The helper, as module-level TypeScript declarations. `__MxAttrTag<T>` is the
@@ -40,7 +53,14 @@ export const ATTR_TAG_FOLD = "__mxAttrTags";
  * record); unconstrained it infers `X | undefined`, and the mapped type
  * drops the `undefined`. A fold step
  * (`__mxAttrTags`) sits in a statement with no declared type, so it infers
- * from its argument.
+ * from its argument. The builder (`__mxAttrTagsOf`) takes `T` from where its
+ * result goes, as `__mxAttrTag` does, and gives each `add` that same
+ * `NoInfer` parameter: an occurrence of a fold is checked against the
+ * declared attributes at the attribute, and its body's params get their
+ * declared types. A host passes `true` as the second argument when
+ * {@link attrTagFoldIsCertain} says `add` is certain to run, which selects
+ * the overload that returns `__MxAttrTag<T>` without `undefined`, so the
+ * record satisfies a required prop.
  */
 export const ATTR_TAG_RUNTIME = `type __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };
 type __MxAttrTagMember = typeof Symbol.iterator | "length" | "at" | "map" | "filter" | "toArray";
@@ -76,11 +96,39 @@ function ${ATTR_TAG_FOLD}<A extends object | undefined, T extends object>(first:
     return record;
   }
   return ${ATTR_TAG_RECORD}(attrs) as any;
+}
+function ${ATTR_TAG_BUILD}<T = {}>(build: (add: (attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>) => void) => void, nonEmpty: true): __MxAttrTag<T>;
+function ${ATTR_TAG_BUILD}<T = {}>(build: (add: (attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>) => void) => void): __MxAttrTag<T> | undefined;
+function ${ATTR_TAG_BUILD}(build: (add: (attrs: any) => void) => void): any {
+  let record: any;
+  build((attrs) => { record = ${ATTR_TAG_FOLD}(record, attrs as any); });
+  return record;
 }`;
+
+/**
+ * Whether a fold's nodes are certain to add at least one occurrence, so a
+ * host passes the builder `true` and its record is typed without `undefined`
+ * (it then satisfies a required prop). An occurrence is certain; an `<if>`
+ * chain is certain when it ends in an `<else>` and every branch is; a `<for>`
+ * never is, since it can run zero times.
+ */
+export function attrTagFoldIsCertain(
+  nodes: readonly AttributeTagNode[],
+): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "AttributeTag" ||
+      (node.kind === "AttributeTagIf" &&
+        node.branches.at(-1)?.test === undefined &&
+        node.branches.every((branch) => attrTagFoldIsCertain(branch.nodes))),
+  );
+}
 
 /** Does emitted module text call the helper (and so need it appended)? */
 export function usesAttrTagRuntime(code: string): boolean {
   return (
-    code.includes(`${ATTR_TAG_RECORD}(`) || code.includes(`${ATTR_TAG_FOLD}(`)
+    code.includes(`${ATTR_TAG_RECORD}(`) ||
+    code.includes(`${ATTR_TAG_FOLD}(`) ||
+    code.includes(`${ATTR_TAG_BUILD}(`)
   );
 }

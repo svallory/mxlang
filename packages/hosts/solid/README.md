@@ -83,7 +83,7 @@ reads**, per keying mode
 | `<for\|p, i\| of=list>` | no `keyed` prop | `i` accessor | `${i}` → `${i()}` |
 | `<for\|p, i\| of=list by="id">` | `keyed={x => x.id}` | both accessors | `p.name` → `p().name`, `${i}` → `${i()}` |
 | `<for\|p, i\| of=list by=(fn)>` | `keyed={fn}` | both accessors | same |
-| `<for\|k, v\| in=obj>` | `keyed={e => e[0]}` | one entry accessor | `(mxEntry) =>`, `k` → `mxEntry()[0]`, `v` → `mxEntry()[1]` |
+| `<for\|k, v\| in=obj>` | `keyed={e => e[0]}` | one entry accessor | `(__mxEntry0) =>`, `k` → `__mxEntry0()[0]`, `v` → `__mxEntry0()[1]` |
 | `<for\|i\| from to step>` | `Repeat` | `i` value | *(nothing)* |
 
 With no `by=` the emitter omits Solid's `keyed` prop entirely rather than
@@ -106,8 +106,8 @@ A **destructured** parameter cannot be destructured in the callback list,
 because Solid passes a function and destructuring one throws
 `TypeError: {} is not iterable`. Such a parameter becomes a generated
 accessor parameter and each name it bound reads a member of the call:
-`<for|{ name, id }| of=list by="id">` gives `(mxRow) =>` with `name`
-reading `mxRow().name`. A rest element (`<for|{ a, ...rest }|>`) has no
+`<for|{ name, id }| of=list by="id">` gives `(__mxRow0) =>` with `name`
+reading `__mxRow0().name`. A rest element (`<for|{ a, ...rest }|>`) has no
 single member read and is a positioned compile error.
 
 **Assignment to an accessor-backed parameter is a compile error.** `p = x`
@@ -139,7 +139,7 @@ other target can express.
 | `IfChain`, 1–2 conditioned branches | `<Show when={cond} fallback={...}>` |
 | `IfChain`, 3+ conditioned branches | `<Switch fallback={...}><Match when={cond}>...</Match></Switch>` |
 | `For`, `of=` | `<For each={list} keyed={...}>{(item, i) => body}</For>`; no `keyed` prop (Solid's default keyed-by-reference form) with no `by=`, `keyed={x => x.field}` for a string `by=`, the raw expression otherwise. Reads of each parameter Solid hands as an accessor are rewritten to call it — see the section above |
-| `For`, `in=` | `<For each={Object.entries(obj)} keyed={e => e[0]}>{(mxEntry) => body}</For>`, with `k`/`v` rewritten to `mxEntry()[0]`/`mxEntry()[1]` — the entry arrives as one accessor, so the pair cannot be destructured in the parameter list |
+| `For`, `in=` | `<For each={Object.entries(obj)} keyed={e => e[0]}>{(__mxEntry0) => body}</For>`, with `k`/`v` rewritten to `__mxEntry0()[0]`/`__mxEntry0()[1]` — the entry arrives as one accessor, so the pair cannot be destructured in the parameter list |
 | `For`, `range` (`from`/`to`/`until`, no `step`) | `<Repeat count={N} from={from}>{(i) => body}</Repeat>`, `N` folded at compile time when both bounds are literal |
 | `For`, `range` with `step` | `<Repeat count={N}>{(mxIndex) => { const i = (from) + mxIndex * (step); return body; }}</Repeat>`; `N` clamped through `Number.isFinite(...) ? Math.max(0, ...) : 0` when not fully literal, so a runtime `step` of `0` renders zero rows instead of an infinite `Repeat` |
 | `DelegatedTag` `<try>` | `<Loading fallback={<@placeholder>}>children</Loading>`, wrapped in `<Errored fallback={(__mxErr, ...__mxArgs) => ((<catch-params>) => <@catch body>)(__mxErr(), ...__mxArgs)}>` when `<@catch>` is present. Solid's `Errored` fallback receives an `ErrorAccessor` function, not the error; the lowering calls it once and passes the result to an inner arrow whose parameter list is the author's `<@catch>` params verbatim (as Marko's `catch` does), so `${e.message}` works and every param form — identifiers, defaults, type annotations, destructuring, rest — stays a real parameter; a param-less `<@catch>` keeps a plain `() => body` fallback |

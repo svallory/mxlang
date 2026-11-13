@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { decode } from "@jridgewell/sourcemap-codec";
 import {
+  ATTR_TAG_BUILD,
+  ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   dropOwnParserPosition,
   errorDependencies,
@@ -1227,11 +1229,61 @@ function createVirtualCode(
  * pick, rather than separate key/value spans that leave gaps a range
  * diagnostic can straddle.
  */
+/** An in-place fold's accumulator: html numbers it, Preact and Solid do not. */
+const ATTR_TAG_ACC_PATTERN = "__mxAttrTagAcc\\d*";
+
 export function attributeTagDiagnosticMappings(
   source: string,
   generated: string,
 ): CodeMapping[] {
   const generatedCursors = new Map<string, number>();
+  // The folds being walked, per name, innermost last: each builder's `add`
+  // callback and the end of its body. A nested call can fold the same name
+  // inside an occurrence of an outer fold (`<A><@item><B><@item/><@item/></B>
+  // </@item><@item/></A>`), and Preact and Solid give every builder the same
+  // `add` name, so an occurrence is the *earliest* of the innermost open
+  // fold's next `add(` before its end and the next `name={` of a new call.
+  // An `add(` inside a nested fold's body (a call folding another name in
+  // an occurrence's body) is that fold's, never the open fold's, so each
+  // fold records its nested folds' bodies and skips them. A fold no declared
+  // type reaches is an arrow called in place,
+  // `name={(() => { let acc; ... acc = __mxAttrTags(acc, { ... }); ... })()}`,
+  // whose steps are walked the same way.
+  type Fold = { step: RegExp; end: number; nested: Array<[number, number]> };
+  const folds = new Map<string, Fold[]>();
+  const nestedBuilder = new RegExp(
+    `${ATTR_TAG_BUILD}\\(\\([\\w$]+\\) => \\{|\\(\\(\\) => \\{(?=\\s*let ${ATTR_TAG_ACC_PATTERN};)`,
+    "g",
+  );
+  /** The next `add(` of `fold` at or after `from`, outside nested builders. */
+  const nextStep = (fold: Fold, from: number) => {
+    fold.step.lastIndex = from;
+    for (;;) {
+      const found = fold.step.exec(generated);
+      if (!found || found.index >= fold.end) return null;
+      const inside = fold.nested.find(
+        ([start, end]) => found.index > start && found.index < end,
+      );
+      if (!inside) return found;
+      fold.step.lastIndex = inside[1];
+    }
+  };
+  const probes = new Map<string, RegExp>();
+  const steps = new Map<string, RegExp>();
+  /** A builder's `add(` call, or an in-place fold's `acc = __mxAttrTags(acc, ` step. */
+  const stepFor = (add: string, inPlace: boolean) => {
+    const key = `${inPlace}\0${add}`;
+    let step = steps.get(key);
+    if (!step) {
+      const name = escapeRegExp(add);
+      step = new RegExp(
+        inPlace ? `\\b${name} = ${ATTR_TAG_FOLD}\\(${name}, ` : `\\b${name}\\(`,
+        "g",
+      );
+      steps.set(key, step);
+    }
+    return step;
+  };
   const holes = new Set<CodeMapping>();
   const tags: Array<{
     sourceStart: number;
@@ -1239,29 +1291,100 @@ export function attributeTagDiagnosticMappings(
     generatedEnd: number;
     properties: CodeMapping[];
   }> = [];
-  for (const match of source.matchAll(/@([A-Za-z_$][\w$]*)/g)) {
+  // An opening `<@name`, never the `@name` of a closing `</@name>`.
+  for (const match of source.matchAll(/(?<!<\/)@([A-Za-z_$][\w$]*)/g)) {
     const name = match[1];
     if (!name || match.index === undefined) continue;
     const sourceStart = match.index + 1;
     // The value is one occurrence's object, `{ ... }`, as the record helper's
     // argument (`name={__mxAttrTag({ ... })}`) or, untyped, bare. A fold
-    // (several occurrences, or one under `<if>`/`<for>`) is an IIFE whose
-    // objects are not mapped here.
-    const probe = new RegExp(
-      `${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\()?`,
-      "g",
-    );
-    probe.lastIndex = generatedCursors.get(name) ?? 0;
-    const probeMatch = probe.exec(generated);
-    if (!probeMatch) continue;
-    const generatedStart = probeMatch.index;
-    const valueStart = probeMatch.index + probeMatch[0].length;
+    // (several occurrences, or one under `<if>`/`<for>`) is a builder,
+    // `name={__mxAttrTagsOf((add) => { ... add({ ... }); ... })}`, whose
+    // occurrences are its `add` calls in source order.
+    const cursor = generatedCursors.get(name) ?? 0;
+    const open = folds.get(name) ?? [];
+    folds.set(name, open);
+    let stepMatch: RegExpExecArray | null = null;
+    while (open.length > 0) {
+      stepMatch = nextStep(open[open.length - 1] as Fold, cursor);
+      if (stepMatch) break;
+      open.pop();
+    }
+    let probe = probes.get(name);
+    if (!probe) {
+      probe = new RegExp(
+        `(?<![\\w$])${escapeRegExp(name)}=\\{(?:${ATTR_TAG_RECORD}\\(|${ATTR_TAG_BUILD}\\(\\(([\\w$]+)\\) => \\{|\\(\\(\\) => \\{\\s*let (${ATTR_TAG_ACC_PATTERN});)?`,
+        "g",
+      );
+      probes.set(name, probe);
+    }
+    // The earliest `name={` before the open fold's next step whose value is
+    // a record: one that is not (another expression passed as a prop of the
+    // same name) is consumed and the search goes on, so it can neither take
+    // this occurrence nor stall the cursor for every later one.
+    const stepAt = stepMatch?.index ?? Number.POSITIVE_INFINITY;
+    let generatedStart = -1;
+    let valueStart = -1;
+    // A fold's prop name, mapped to the tag name on its own: the fold's
+    // statements before its first occurrence (an `if (test) {`, a
+    // `for (... of source) {`) keep their own mappings.
+    let propName: number | undefined;
+    probe.lastIndex = cursor;
+    for (
+      let probeMatch = probe.exec(generated);
+      probeMatch && probeMatch.index < stepAt;
+      probeMatch = probe.exec(generated)
+    ) {
+      const after = probeMatch.index + probeMatch[0].length;
+      generatedCursors.set(name, after);
+      const add = probeMatch[1] ?? probeMatch[2];
+      if (!add) {
+        if (generated[after] !== "{") continue;
+        generatedStart = probeMatch.index;
+        valueStart = after;
+        break;
+      }
+      const bodyOpen = generated.indexOf(
+        "{",
+        probeMatch.index + name.length + 2,
+      );
+      const end = matchingClose(generated, bodyOpen);
+      const step = stepFor(add, probeMatch[1] === undefined);
+      step.lastIndex = after;
+      const firstMatch = step.exec(generated);
+      if (end < 0 || !firstMatch || firstMatch.index > end) continue;
+      const nested: Array<[number, number]> = [];
+      nestedBuilder.lastIndex = after;
+      for (
+        let inner = nestedBuilder.exec(generated);
+        inner && inner.index < end;
+        inner = nestedBuilder.exec(generated)
+      ) {
+        const innerOpen = inner.index + inner[0].length - 1;
+        const innerEnd = matchingClose(generated, innerOpen);
+        if (innerEnd < 0) break;
+        nested.push([innerOpen, innerEnd]);
+        nestedBuilder.lastIndex = innerEnd;
+      }
+      open.push({ step, end, nested });
+      propName = probeMatch.index;
+      generatedStart = firstMatch.index;
+      valueStart = firstMatch.index + firstMatch[0].length;
+      break;
+    }
+    if (valueStart < 0) {
+      if (!stepMatch) continue;
+      generatedStart = stepMatch.index;
+      valueStart = stepMatch.index + stepMatch[0].length;
+    }
     if (generated[valueStart] !== "{") continue;
     // This tag's *own* closing `}`, not an inner tag's.
     const close = matchingClose(generated, valueStart);
     if (close < 0) continue;
     const generatedEnd = close + 1;
-    generatedCursors.set(name, generatedEnd);
+    // Past this object's own `{` only: a nested call of the same name sits
+    // inside it, and is the next occurrence in source order.
+    generatedCursors.set(name, valueStart + 1);
     const properties = attributePropertyMappings(
       source,
       sourceStart,
@@ -1287,6 +1410,14 @@ export function attributeTagDiagnosticMappings(
         (left, right) =>
           (left.generatedOffsets[0] ?? 0) - (right.generatedOffsets[0] ?? 0),
       );
+    }
+    if (propName !== undefined) {
+      tags.push({
+        sourceStart,
+        generatedStart: propName,
+        generatedEnd: propName + name.length,
+        properties: [],
+      });
     }
     tags.push({ sourceStart, generatedStart, generatedEnd, properties });
   }

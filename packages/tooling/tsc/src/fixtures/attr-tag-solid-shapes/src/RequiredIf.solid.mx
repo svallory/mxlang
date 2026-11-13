@@ -1,0 +1,3 @@
+import List from "./List.solid.mx";
+
+export const view = (flag: boolean) => <List><if=flag><@items id=1/></if><else><@items id=2/></else></List>;

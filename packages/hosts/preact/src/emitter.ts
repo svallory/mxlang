@@ -21,12 +21,14 @@
  */
 
 import {
+  ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
   attributeTagNames,
+  attrTagFoldIsCertain,
   concatMapped,
   contractDefaultTag,
   defineValueWrapper,
@@ -955,10 +957,13 @@ function identifierNames(text: string): Set<string> {
   return new Set(text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []);
 }
 
-/** A loop-counter name that cannot shadow anything the body already uses. */
-/** The accumulator an attribute-tag fold writes; reserved `__mx` prefix. */
+/**
+ * The builder's `add` callback, or the accumulator of the non-contextual
+ * IIFE fold; reserved `__mx` prefix.
+ */
 const ATTR_TAG_ACC = "__mxAttrTagAcc";
 
+/** A loop-counter name that cannot shadow anything the body already uses. */
 function hygienicName(base: string, params: string[], body: string): string {
   const used = identifierNames(`${params.join(" ")} ${body}`);
   if (!used.has(base)) return base;
@@ -2061,9 +2066,9 @@ export class PreactEmitter implements Emitter<string> {
    * out) or on the body's type is reported there.
    *
    * `contextual` says whether the callee's declared type reaches this object:
-   * it does through a lone `__mxAttrTag({...})` in a JSX attribute, not
-   * through a fold's accumulator nor a props object built for a dynamic tag
-   * or a `<define>`. Without it a body's unannotated tag params would be an
+   * it does through a lone `__mxAttrTag({...})` in a JSX attribute and
+   * through each `add` of a fold's `__mxAttrTagsOf` builder there, not
+   * through a props object built for a dynamic tag or a `<define>`. Without it a body's unannotated tag params would be an
    * implicit `any` under strict tsc, so the body is asserted to
    * `(...args: any[]) => any`, as `#contentFn` does.
    */
@@ -2135,9 +2140,13 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * One attribute-tag name's record (spec §8): its occurrences folded, in
    * source order, through the helper core supplies. A lone unconditional
-   * occurrence is one `__mxAttrTag` call; anything else folds from
-   * `undefined` inside an arrow called in place, so a loop that runs zero
-   * times leaves the prop `undefined`.
+   * occurrence is one `__mxAttrTag` call; anything else is one
+   * `__mxAttrTagsOf((add) => { ... })` builder whose statements hand each
+   * occurrence to `add`, so a loop that runs zero times leaves the prop
+   * `undefined`, and the callee's declared type reaches every occurrence.
+   * With no declared type to reach (`contextual` false) the builder would
+   * infer `{}`, so the occurrences fold from `undefined` with `__mxAttrTags`
+   * in an arrow called in place, which infers the record from them.
    */
   #attributeTagRecord(
     source: AttributeTagNode[],
@@ -2152,26 +2161,42 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
     return concatMapped(
-      `(() => { let ${ATTR_TAG_ACC}; `,
-      this.#attributeTagFold(source, JSON.stringify("")),
-      `return ${ATTR_TAG_ACC}; })()`,
+      ...(contextual
+        ? [`${ATTR_TAG_BUILD}((${ATTR_TAG_ACC}) => { `]
+        : [`(() => { let ${ATTR_TAG_ACC}; `]),
+      this.#attributeTagFold(source, JSON.stringify(""), contextual),
+      contextual
+        ? attrTagFoldIsCertain(source)
+          ? "}, true)"
+          : "})"
+        : `return ${ATTR_TAG_ACC}; })()`,
     );
   }
 
-  /** The statements folding `nodes` into the accumulator, in tree order. */
-  #attributeTagFold(nodes: AttributeTagNode[], keyPrefix: string): MappedCode {
+  /**
+   * The statements handing each occurrence of `nodes` to `add`, in tree
+   * order. Without `contextual` there is no builder: `add` is the fold's
+   * accumulator and each step is `add = __mxAttrTags(add, {...})`.
+   */
+  #attributeTagFold(
+    nodes: AttributeTagNode[],
+    keyPrefix: string,
+    contextual: boolean,
+  ): MappedCode {
     return concatMapped(
       ...nodes.map((node, index) => {
         const key = `${keyPrefix} + ${JSON.stringify(String(index))}`;
         if (node.kind === "AttributeTag") {
           return concatMapped(
-            `${ATTR_TAG_ACC} = ${ATTR_TAG_FOLD}(${ATTR_TAG_ACC}, `,
-            this.#attributeTagValue(node.tag, key),
+            contextual
+              ? `${ATTR_TAG_ACC}(`
+              : `${ATTR_TAG_ACC} = ${ATTR_TAG_FOLD}(${ATTR_TAG_ACC}, `,
+            this.#attributeTagValue(node.tag, key, contextual),
             "); ",
           );
         }
         if (node.kind === "AttributeTagFor") {
-          return this.#attributeTagFor(node.loop, node.nodes, key);
+          return this.#attributeTagFor(node.loop, node.nodes, key, contextual);
         }
         const parts: Array<string | MappedCode> = [];
         node.branches.forEach((branch, at) => {
@@ -2184,7 +2209,7 @@ export class PreactEmitter implements Emitter<string> {
             : " else { ";
           parts.push(
             head,
-            this.#attributeTagFold(branch.nodes, `${key} + ":"`),
+            this.#attributeTagFold(branch.nodes, `${key} + ":"`, contextual),
             "}",
           );
         });
@@ -2199,6 +2224,7 @@ export class PreactEmitter implements Emitter<string> {
     loop: ForHead,
     nodes: AttributeTagNode[],
     key: string,
+    contextual: boolean,
   ): MappedCode {
     const bodyText = nodes.map((node) => JSON.stringify(node)).join(" ");
     const [first = "item", second] = loop.params;
@@ -2208,7 +2234,11 @@ export class PreactEmitter implements Emitter<string> {
         ? second
         : hygienicName("mxAttrIndex", loop.params, bodyText);
     const body = this.#inScope(loop.bindings, [], () =>
-      this.#attributeTagFold(nodes, `${key} + ":" + ${itemIndex} + ":"`),
+      this.#attributeTagFold(
+        nodes,
+        `${key} + ":" + ${itemIndex} + ":"`,
+        contextual,
+      ),
     );
     const loopOver = (
       iterable: string | MappedCode,

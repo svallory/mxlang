@@ -70,13 +70,13 @@ describe("mx-tsc", () => {
 
   // Every value shape (declared in `Shapes`), one bad occurrence per file:
   // exactly one diagnostic, at the authored attribute or tag. A repeated tag
-  // folds its occurrences into one record that no declared type reaches
-  // before the prop, so its error is on the tag name, not the attribute.
+  // folds its occurrences through a builder that takes the callee's declared
+  // prop type, so the bad occurrence's error is on its own `id` attribute.
   const shapes = [
     ["Extra", "TS2353", ["(3,25)", "(3,45)"]],
     ["Nested", "TS2322", ["(3,31)", "(3,31)"]],
     ["NestedMissing", "TS2345", ["(3,11)", "(3,31)"]],
-    ["Repeated", "TS2322", ["(3,11)", "(3,31)"]],
+    ["Repeated", "TS2322", ["(3,16)", "(3,36)"]],
     ["Renderable", "TS2322", ["(3,11)", "(3,31)"]],
   ] as const;
   it.each(
@@ -99,6 +99,28 @@ describe("mx-tsc", () => {
       expect(lines[0]).toContain(
         `${name}.${extension}${position}: error ${code}`,
       );
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
+  // A required prop given occurrences that are certain to be added (two
+  // unconditional ones, or one in each branch of an `<if>`/`<else>`): the
+  // builder is told `add` runs, so its record has no `undefined` and the call
+  // checks clean.
+  it.each(
+    ["html", "preact", "solid"].flatMap((host) =>
+      ["Required", "RequiredIf"].map((file) => [host, file] as const),
+    ),
+  )(
+    "accepts a %s attribute tag certain to be given for a required prop: %s",
+    (host, file) => {
+      const extension = host === "solid" ? "solid.mx" : "mx";
+      const result = runFixture(`attr-tag-${host}-shapes`);
+      const lines = result.output
+        .split("\n")
+        .filter((line) => line.includes(`/src/${file}.${extension}(`));
+
+      expect(lines).toEqual([]);
     },
     SPAWN_TIMEOUT_MS,
   );

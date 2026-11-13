@@ -481,7 +481,7 @@ describe("for: ranges lower to <Repeat>", () => {
       body: { type: string };
     };
     expect(arrow.params).toHaveLength(1);
-    expect(arrow.params[0]?.name).toBe("__mxIndex");
+    expect(arrow.params[0]?.name).toBe("__mxIndex0");
     // No callback-local `const i`: Solid never re-runs the callback, so a
     // value computed there would not follow a reactive bound. The body is the
     // row itself and reads of `i` expand in place.
@@ -567,7 +567,7 @@ describe("for: ranges lower to <Repeat>", () => {
     const arrow = list.callback as unknown as {
       params: { name: string }[];
     };
-    expect(arrow.params[0]?.name).toBe("__mxIndex");
+    expect(arrow.params[0]?.name).toBe("__mxIndex0");
   });
 
   it("leaves an author's own `mxIndex` param alone: the counter is `__mxIndex`", () => {
@@ -579,14 +579,14 @@ describe("for: ranges lower to <Repeat>", () => {
     const arrow = list.callback as unknown as {
       params: { name: string }[];
     };
-    expect(arrow.params[0]?.name).toBe("__mxIndex");
+    expect(arrow.params[0]?.name).toBe("__mxIndex0");
     // The author's read of `mxIndex` became the row expression over the
     // generated counter; nothing in the body still names the author's binding.
     const bodyJson = JSON.stringify(
       (arrow as unknown as { body: unknown }).body,
       (key, value) => (key === "loc" || key === "extra" ? undefined : value),
     );
-    expect(bodyJson).toContain('"name":"__mxIndex"');
+    expect(bodyJson).toContain('"name":"__mxIndex0"');
     expect(bodyJson).not.toContain('"name":"mxIndex"');
   });
 

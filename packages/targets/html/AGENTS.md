@@ -398,13 +398,17 @@ into `<!--build -->`.
 Every attribute tag reaches the callee as Marko's record (spec §8), whatever
 the callee's `Input` declares: `attrTagRecord` emits, per name of
 `attributeTagTree`, one `__mxAttrTag({...})` for a lone unconditional
-occurrence and otherwise an IIFE folding each occurrence with `__mxAttrTags`
-(an `<if>` becomes `if`/`else`, a `<for>` a loop), so an occurrence that never
-runs leaves the prop `undefined`. An occurrence object holds its attributes,
+occurrence and otherwise one `__mxAttrTagsOf((__mxAttrTagAcc<n>) => { ... })`
+builder whose statements hand each occurrence to its `add` callback (an `<if>`
+becomes `if`/`else`, a `<for>` a loop), so an occurrence that never runs leaves
+the prop `undefined`. The builder takes its type from the callee's declared
+prop, so a wrong attribute in any occurrence is reported at that attribute; a
+fold no declared type reaches (an untyped callee) keeps an IIFE folding each
+occurrence with `__mxAttrTags`. An occurrence object holds its attributes,
 its own attribute tags as records, and `content` (a thunk) only when it has a
 body. Core's `ATTR_TAG_RUNTIME` is appended once to a module that calls it.
 Under `typeCheck`, both braces and the `content` key map to the tag name, and
-a params body that no declared type reaches (a fold, an untyped callee) is
+a params body that no declared type reaches (an untyped callee) is
 cast to `(...args: any[]) => any` so strict tsc reports no implicit `any`.
 
 `@mxlang/target-html` exports its own `AttrTag<T>`: the record with `content`

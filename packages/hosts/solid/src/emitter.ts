@@ -1,11 +1,13 @@
 import { parseExpression as parseBabelExpression } from "@babel/parser";
 import {
+  ATTR_TAG_BUILD,
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
   type Attr,
   type AttributeTag,
   type AttributeTagNode,
   attributeTagNames,
+  attrTagFoldIsCertain,
   type ComponentTarget,
   type Ctx,
   cloneIr,
@@ -2112,9 +2114,10 @@ function attributeTagRenderable(tag: AttributeTag): MappedCode {
  * attribute the callee requires and the call leaves out) is reported there.
  *
  * `contextual` says whether the callee's declared type reaches this object:
- * it does through a lone `__mxAttrTag({...})` in a JSX attribute, not
- * through a fold's accumulator nor a props object built for a dynamic tag
- * or a `<define>`. Without it a body's unannotated tag params would be an
+ * it does through a lone `__mxAttrTag({...})` in a JSX attribute and
+ * through each `add` of a fold's `__mxAttrTagsOf` builder there, not
+ * through a `<Dynamic>` call nor a props object built for a dynamic tag or a
+ * `<define>`. Without it a body's unannotated tag params would be an
  * implicit `any` under strict tsc, so the body is asserted to
  * `(...args: any[]) => any`.
  */
@@ -2159,15 +2162,22 @@ function attributeTagValue(tag: AttributeTag, contextual: boolean): MappedCode {
   );
 }
 
-/** The accumulator an attribute-tag fold writes; reserved `__mx` prefix. */
+/**
+ * The builder's `add` callback, or the accumulator of the non-contextual
+ * IIFE fold; reserved `__mx` prefix.
+ */
 const ATTR_TAG_ACC = "__mxAttrTagAcc";
 
 /**
  * One attribute-tag name's record (spec §8): its occurrences folded, in
  * source order, through the helper core supplies. A lone unconditional
- * occurrence is one `__mxAttrTag` call; anything else folds from `undefined`
- * inside an arrow called in place, so a loop that runs zero times leaves the
- * prop `undefined`.
+ * occurrence is one `__mxAttrTag` call; anything else is one
+ * `__mxAttrTagsOf((add) => { ... })` builder whose statements hand each
+ * occurrence to `add`, so a loop that runs zero times leaves the prop
+ * `undefined`, and the callee's declared type reaches every occurrence.
+ * With no declared type to reach (`contextual` false) the builder would infer
+ * `{}`, so the occurrences fold from `undefined` with `__mxAttrTags` in an
+ * arrow called in place, which infers the record from them.
  */
 function attributeTagRecord(
   source: AttributeTagNode[],
@@ -2181,26 +2191,42 @@ function attributeTagRecord(
       ")",
     );
   }
+  if (!contextual) {
+    return concatMapped(
+      `(() => { let ${ATTR_TAG_ACC}; `,
+      attributeTagFold(source, false),
+      `return ${ATTR_TAG_ACC}; })()`,
+    );
+  }
   return concatMapped(
-    `(() => { let ${ATTR_TAG_ACC}; `,
-    attributeTagFold(source),
-    `return ${ATTR_TAG_ACC}; })()`,
+    `${ATTR_TAG_BUILD}((${ATTR_TAG_ACC}) => { `,
+    attributeTagFold(source, true),
+    attrTagFoldIsCertain(source) ? "}, true)" : "})",
   );
 }
 
-/** The statements folding `nodes` into the accumulator, in tree order. */
-function attributeTagFold(nodes: AttributeTagNode[]): MappedCode {
+/**
+ * The statements handing each occurrence of `nodes` to `add`, in tree order.
+ * Without `contextual` there is no builder: `add` is the fold's accumulator
+ * and each step is `add = __mxAttrTags(add, {...})`.
+ */
+function attributeTagFold(
+  nodes: AttributeTagNode[],
+  contextual: boolean,
+): MappedCode {
   return concatMapped(
     ...nodes.map((node) => {
       if (node.kind === "AttributeTag") {
         return concatMapped(
-          `${ATTR_TAG_ACC} = ${ATTR_TAG_FOLD}(${ATTR_TAG_ACC}, `,
-          attributeTagValue(node.tag, false),
+          contextual
+            ? `${ATTR_TAG_ACC}(`
+            : `${ATTR_TAG_ACC} = ${ATTR_TAG_FOLD}(${ATTR_TAG_ACC}, `,
+          attributeTagValue(node.tag, contextual),
           "); ",
         );
       }
       if (node.kind === "AttributeTagFor") {
-        return attributeTagFor(node.loop, node.nodes);
+        return attributeTagFor(node.loop, node.nodes, contextual);
       }
       const parts: Array<string | MappedCode> = [];
       node.branches.forEach((branch, at) => {
@@ -2212,7 +2238,7 @@ function attributeTagFold(nodes: AttributeTagNode[]): MappedCode {
                 ") { ",
               )
             : " else { ",
-          attributeTagFold(branch.nodes),
+          attributeTagFold(branch.nodes, contextual),
           "}",
         );
       });
@@ -2240,16 +2266,15 @@ function firstAttributeTag(
   return undefined;
 }
 
-function hygienicName(
-  preferred: string,
-  params: readonly string[],
-  body: string,
-): string {
-  const used = identifierNames(`${params.join(" ")} ${body}`);
-  if (!used.has(preferred)) return preferred;
-  let index = 2;
-  while (used.has(`${preferred}${index}`)) index++;
-  return `${preferred}${index}`;
+/**
+ * A name for a binding the emitter introduces (a loop's list, entry, row,
+ * counter, `from` or `step`): `__mx<base><n>` from the per-emit `dynSerial`
+ * counter. `__mx` is reserved for authored bindings (`checkReservedBindings`)
+ * and the serial keeps nested loops' names apart, so no name in scope can
+ * collide with it and nothing needs scanning.
+ */
+function generatedName(base: string): string {
+  return `__mx${base}${dynSerial.n++}`;
 }
 
 /**
@@ -2264,27 +2289,27 @@ function hygienicName(
  * so no authored binding can take either name.
  */
 const RANGE_MAPPER_UNUSED = "__mxUnused";
-const rangeCounter = (params: readonly string[], body: string): string =>
-  hygienicName("__mxIndex", params, body);
 
 /** Attribute-tag `<for>`: one fold step per occurrence per iteration. */
-function attributeTagFor(loop: ForHead, nodes: AttributeTagNode[]): MappedCode {
+function attributeTagFor(
+  loop: ForHead,
+  nodes: AttributeTagNode[],
+  contextual: boolean,
+): MappedCode {
   const [first = "item", second] = loop.params;
   const source = loop.source;
-  const body = attributeTagFold(nodes);
+  const body = attributeTagFold(nodes, contextual);
   const loopOver = (iterable: string, pattern: string): MappedCode =>
     concatMapped(`for (const ${pattern} of ${iterable}) { `, body, "} ");
   if (source.kind === "of") {
-    const listVar = hygienicName("mxList", loop.params, source.list.code);
+    const listVar = generatedName("List");
     const list = `((${listVar}) => ${listVar} ? [...${listVar}] : [])(${source.list.code})`;
     return second
       ? loopOver(`${list}.entries()`, `[${second}, ${first}]`)
       : loopOver(list, first);
   }
   if (source.kind === "in") {
-    const value =
-      second ??
-      hygienicName("value", loop.params, `${body.code} ${source.object.code}`);
+    const value = second ?? generatedName("Value");
     return loopOver(
       `Object.entries(${source.object.code} ?? {})`,
       `[${first}, ${value}]`,
@@ -2294,7 +2319,7 @@ function attributeTagFor(loop: ForHead, nodes: AttributeTagNode[]): MappedCode {
   const from = source.from?.code ?? "0";
   const bound = source.bound.code;
   const step = source.step;
-  const counter = rangeCounter(loop.params, body.code);
+  const counter = generatedName("Index");
   const span = step
     ? `${source.inclusive ? "Math.floor" : "Math.ceil"}(((${bound}) - (${from})) / (${step.code}))${source.inclusive ? " + 1" : ""}`
     : `(${bound}) - (${from})${source.inclusive ? " + 1" : ""}`;
@@ -2318,11 +2343,17 @@ function attributeTagEntries(tree: AttributeTagNode[]): MappedCode[] {
   );
 }
 
-/** A component's attribute-tag records in JSX attribute syntax. */
+/**
+ * A component's attribute-tag records in JSX attribute syntax. `contextual`
+ * is false for a `<Dynamic>` call: TypeScript does not carry the target's
+ * prop types through `<Dynamic>`'s generic props, so no declared type
+ * reaches the records there.
+ */
 function attributeTagProps(
   tree: AttributeTagNode[],
   native?: NativeAttrs,
   callee?: string,
+  contextual = true,
 ): MappedCode {
   return concatMapped(
     ...attributeTagNames(tree).map((name) => {
@@ -2342,10 +2373,10 @@ function attributeTagProps(
           : native
             ? concatMapped(
                 `${MX_ATTR_VALUE_BINDING}(${JSON.stringify(name)}, `,
-                attributeTagRecord(source),
+                attributeTagRecord(source, contextual),
                 `, ${nativeTagOf(native)})`,
               )
-            : attributeTagRecord(source),
+            : attributeTagRecord(source, contextual),
         "}",
       );
     }),
@@ -2372,79 +2403,6 @@ function builtinFallback(
   if (!tag.hasBody || tag.attrs.length > 0 || tag.attributeTagTree.length > 0)
     return undefined;
   return attributeTagRenderable(tag);
-}
-
-function identifierNames(text: string): Set<string> {
-  return new Set(text.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []);
-}
-
-/**
- * Every identifier appearing anywhere in a `<for>`'s body or params.
- *
- * Walks the IR subtree collecting `Expr.code` and bound names, rather than
- * calling `blockExpression(node.children)` to get one printed string. That
- * shortcut was a real bug, not a style point: `blockExpression` *drives the
- * emitter* over the subtree, so merely asking "which names are taken" ran
- * every nested `<for>`'s own read-rewrite as a side effect, and the body was
- * then emitted — and rewritten — a second time. Measured on the shortcut:
- * `<for|{a}| of=xs by="id"><for|q| of=ys by="id">${q.z}` emitted `q()().z`
- * (a TypeError at render), and two nested destructured rows emitted a
- * `mxRow` bound nowhere, because the throwaway pass had already consumed that
- * gensym. Collecting names is now free of side effects.
- *
- * The scan of each expression is a regex, unlike every *rewrite* on this
- * path. The "AST, not regex" rule exists because a regex rewrite is silently
- * wrong (it renames inside string literals, and misses `x?x:x`); this is a
- * name-avoidance check, where the only failure mode is over-avoidance —
- * `<li title="mxRow">` yields `mxRow2`, still correct, merely uglier. Erring
- * toward more names is the safe direction.
- */
-function forScopeNames(
-  node: Extract<IrNode, { kind: "For" }>,
-  extra: readonly string[],
-): Set<string> {
-  const names = identifierNames(`${node.params.join(" ")} ${extra.join(" ")}`);
-  const seen = new Set<object>();
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object" || seen.has(value)) return;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    const record = value as Record<string, unknown>;
-    if (typeof record.code === "string" && "shape" in record) {
-      for (const name of identifierNames(record.code)) names.add(name);
-      return;
-    }
-    if (typeof record.value === "string") {
-      for (const name of identifierNames(record.value)) names.add(name);
-    }
-    for (const [key, child] of Object.entries(record)) {
-      if (key === "node" || key === "loc") continue;
-      if (typeof child === "string") {
-        for (const name of identifierNames(child)) names.add(name);
-        continue;
-      }
-      visit(child);
-    }
-  };
-  visit(node.children);
-  for (const bound of node.bindings) names.add(bound);
-  return names;
-}
-
-/** A name free in this `<for>`, for a parameter the emitter introduces. */
-function gensym(
-  base: string,
-  node: Extract<IrNode, { kind: "For" }>,
-  extra: readonly string[],
-): string {
-  const used = forScopeNames(node, extra);
-  if (!used.has(base)) return base;
-  let index = 2;
-  while (used.has(`${base}${index}`)) index++;
-  return `${base}${index}`;
 }
 
 /**
@@ -2514,7 +2472,7 @@ function readsForParam(
  * calls (`p` -> `p()`). A **destructuring pattern** cannot: Solid passes a
  * function, and destructuring one throws "not iterable". Such a parameter
  * becomes a gensym accessor and every name it bound reads a member of the
- * call (`{ name }` -> `mxRow().name`).
+ * call (`{ name }` -> `__mxRow0().name`).
  */
 function accessorParams(
   node: Extract<IrNode, { kind: "For" }>,
@@ -2534,7 +2492,7 @@ function accessorParams(
       reads.push({ name: param.trim(), read: `${param.trim()}()` });
       continue;
     }
-    const row = gensym("mxRow", node, generated);
+    const row = generatedName("Row");
     generated.push(row);
     params.push(row);
     reads.push(...readsForParam(node, param, `${row}()`));
@@ -3003,6 +2961,8 @@ export class SolidEmitter implements Emitter<string> {
     const tags = attributeTagProps(
       node.attributeTagTree,
       owner === undefined ? native : undefined,
+      undefined,
+      false,
     );
     // A function/component target called with arguments gets
     // `renderer(...args, props)`; only a *string* (native-element) target is
@@ -3243,9 +3203,9 @@ export class SolidEmitter implements Emitter<string> {
       //
       // Each half goes through the same param handling as `of=`, because a
       // half may itself be a pattern: `<for|{a}, v| in=obj>` must resolve `a`
-      // to `mxEntry()[0].a`, not drop `{a}` from the parameter list and leave
+      // to `__mxEntry0()[0].a`, not drop `{a}` from the parameter list and leave
       // `a` a free reference that still compiles.
-      const entry = gensym("mxEntry", node, [first, second ?? ""]);
+      const entry = generatedName("Entry");
       rewriteForBody(
         node,
         [
@@ -3305,14 +3265,9 @@ export class SolidEmitter implements Emitter<string> {
     const literalFrom = fromValue !== null;
     const literalStep = stepValue !== null;
     const literalHead = literalFrom && literalStep;
-    const headNames = identifierNames(`${from} ${step.code} ${bound}`);
-    const counter = gensym("__mxIndex", node, [...headNames]);
-    const fromName = literalFrom
-      ? from
-      : gensym("__mxFrom", node, [...headNames, counter]);
-    const stepName = literalStep
-      ? step.code
-      : gensym("__mxStep", node, [...headNames, counter, fromName]);
+    const counter = generatedName("Index");
+    const fromName = literalFrom ? from : generatedName("From");
+    const stepName = literalStep ? step.code : generatedName("Step");
     let count: string;
     if (fromValue !== null && boundValue !== null && stepValue !== null) {
       const ratio = (boundValue - fromValue) / stepValue;
