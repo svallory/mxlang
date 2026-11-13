@@ -103,6 +103,22 @@ describe("mx-tsc", () => {
     SPAWN_TIMEOUT_MS,
   );
 
+  // A required prop given two unconditional occurrences: the builder is told
+  // `add` runs, so its record has no `undefined` and the call checks clean.
+  it.each(["html", "preact", "solid"])(
+    "accepts a repeated %s attribute tag for a required prop",
+    (host) => {
+      const extension = host === "solid" ? "solid.mx" : "mx";
+      const result = runFixture(`attr-tag-${host}-shapes`);
+      const lines = result.output
+        .split("\n")
+        .filter((line) => line.includes(`/src/Required.${extension}(`));
+
+      expect(lines).toEqual([]);
+    },
+    SPAWN_TIMEOUT_MS,
+  );
+
   it(
     // `<Card><@tab title=1/></Card>`: the wrong attribute type is reported
     // on `title` (its own authored column), not on `tab` (the fallback

@@ -193,12 +193,12 @@ const UNCHANGED: Array<[string, string, string]> = [
   [
     "a repeated <@item> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item><Foo/></@item><@item><Foo/></@item></Bar>`,
-    'return (<><Bar item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc({ content: <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); })} /></>);',
+    'return (<><Bar item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc({ content: <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); }, true)} /></>);',
   ],
   [
     "a repeated <@item|x|> keeps the call as the child of its keyed fragment",
     `${DEFINE}${IMP}<Bar><@item|x|><Foo/></@item><@item|x|><Foo/></@item></Bar>`,
-    'return (<><Bar item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: (x) => <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc({ content: (x) => <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); })} /></>);',
+    'return (<><Bar item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: (x) => <__mxFragment key={"" + "0"}>{__mxDef_Foo()}</__mxFragment> }); __mxAttrTagAcc({ content: (x) => <__mxFragment key={"" + "1"}>{__mxDef_Foo()}</__mxFragment> }); }, true)} /></>);',
   ],
   [
     "an <@item> body that is an imported component",

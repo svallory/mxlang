@@ -69,18 +69,13 @@ it("keeps the deprecated config form exported and unchanged", () => {
 // The fold builder takes `T` from where its result goes, so each `add` is
 // checked against the declared attributes at the attribute: the directive
 // sits on the `id` line, and an error anywhere else (or none) is reported.
-it("checks each occurrence of a fold at its attribute", () => {
+/** The diagnostics of `body` checked under strict tsc beside the runtime. */
+function foldDiagnostics(body: string): string[] {
   const attrTag = fileURLToPath(new URL("./attr-tag.ts", import.meta.url));
   const file = fileURLToPath(new URL("./__fold-probe.ts", import.meta.url));
   const text = `import type { AttrTag } from ${JSON.stringify(attrTag)};
 ${ATTR_TAG_RUNTIME}
-export const rows: AttrTag<{ id: number }> | undefined = __mxAttrTagsOf((add) => {
-  add({ id: 1 });
-  add({
-    // @ts-expect-error
-    id: "x",
-  });
-});
+${body}
 `;
   const options: ts.CompilerOptions = {
     strict: true,
@@ -99,8 +94,30 @@ export const rows: AttrTag<{ id: number }> | undefined = __mxAttrTagsOf((add) =>
       ? ts.createSourceFile(name, text, language)
       : read(name, language);
   const program = ts.createProgram([file], options, host);
-  const diagnostics = ts
+  return ts
     .getPreEmitDiagnostics(program, program.getSourceFile(file))
     .map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
-  expect(diagnostics).toEqual([]);
+}
+
+it("checks each occurrence of a fold at its attribute", () => {
+  expect(
+    foldDiagnostics(`export const rows: AttrTag<{ id: number }> | undefined = __mxAttrTagsOf((add) => {
+  add({ id: 1 });
+  add({
+    // @ts-expect-error
+    id: "x",
+  });
+});`),
+  ).toEqual([]);
+});
+
+// A fold with an unconditional occurrence passes `true`: `add` is certain to
+// run, so the record satisfies a prop that is not optional.
+it("types a fold whose `add` is certain to run without `undefined`", () => {
+  expect(
+    foldDiagnostics(`export const rows: AttrTag<{ id: number }> = __mxAttrTagsOf((add) => {
+  add({ id: 1 });
+  add({ id: 2 });
+}, true);`),
+  ).toEqual([]);
 });

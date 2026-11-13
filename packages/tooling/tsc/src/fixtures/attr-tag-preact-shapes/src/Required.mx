@@ -1,0 +1,3 @@
+import List from "./List.mx"
+
+<List><@items id=1/><@items id=2/></List>

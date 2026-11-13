@@ -354,7 +354,7 @@ describe("Solid IR lowering", () => {
       "repeated attribute tags fold into one record",
       `<Layout><@item>1</@item><@item>2</@item></Layout>`,
       [
-        "item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: () => <>1</> }); __mxAttrTagAcc({ content: () => <>2</> }); })}",
+        "item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ content: () => <>1</> }); __mxAttrTagAcc({ content: () => <>2</> }); }, true)}",
       ],
       ["Layout"],
     ],

@@ -660,7 +660,7 @@ export function createEmitter(
     return concatMapped(
       `${ATTR_TAG_BUILD}((${add}) => { `,
       attrTagFold(source, add, true),
-      "})",
+      certainToAdd(source) ? "}, true)" : "})",
     );
   }
 
@@ -2520,3 +2520,13 @@ export function emitModule(ir: Ir, escapeFrom: string): string {
 }
 
 export { DYNAMIC };
+
+/**
+ * Whether a fold's `add` is certain to run: one of its top-level nodes is an
+ * occurrence rather than an `<if>` or a `<for>`. The builder then gets `true`
+ * and its record is typed without `undefined`, so it satisfies a required
+ * prop.
+ */
+function certainToAdd(nodes: readonly AttributeTagNode[]): boolean {
+  return nodes.some((node) => node.kind === "AttributeTag");
+}

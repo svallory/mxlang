@@ -1,0 +1,8 @@
+import type { AttrTag } from "@mxlang/host-solid";
+
+export interface Input {
+  items: AttrTag<{ id: number }>;
+}
+export default function List(_input: Input): JSX.Element {
+  return <div/>;
+}

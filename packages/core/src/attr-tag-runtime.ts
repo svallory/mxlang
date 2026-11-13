@@ -29,7 +29,9 @@ export const ATTR_TAG_FOLD = "__mxAttrTags";
 /**
  * The fold builder: `__mxAttrTagsOf((add) => { add({...}); ... })` runs its
  * callback once, folds every `add` argument in call order, and returns the
- * record, or `undefined` when `add` was never called.
+ * record, or `undefined` when `add` was never called. A second argument
+ * `true` says `add` is certain to run, and types the result without
+ * `undefined`.
  */
 export const ATTR_TAG_BUILD = "__mxAttrTagsOf";
 
@@ -53,7 +55,10 @@ export const ATTR_TAG_BUILD = "__mxAttrTagsOf";
  * result goes, as `__mxAttrTag` does, and gives each `add` that same
  * `NoInfer` parameter: an occurrence of a fold is checked against the
  * declared attributes at the attribute, and its body's params get their
- * declared types.
+ * declared types. A host passes `true` as the second argument when at least
+ * one occurrence is unconditional (`add` is certain to run), which selects
+ * the overload that returns `__MxAttrTag<T>` without `undefined`, so the
+ * record satisfies a required prop.
  */
 export const ATTR_TAG_RUNTIME = `type __MxAttrTag<T> = T & { [Symbol.iterator](): Iterator<T>; readonly length: number; at(index: number): T | undefined; map<U>(fn: (item: T, index: number) => U): U[]; filter(fn: (item: T, index: number) => unknown): T[]; toArray(): T[] };
 type __MxAttrTagMember = typeof Symbol.iterator | "length" | "at" | "map" | "filter" | "toArray";
@@ -90,7 +95,9 @@ function ${ATTR_TAG_FOLD}<A extends object | undefined, T extends object>(first:
   }
   return ${ATTR_TAG_RECORD}(attrs) as any;
 }
-function ${ATTR_TAG_BUILD}<T = {}>(build: (add: (attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>) => void) => void): __MxAttrTag<T> | undefined {
+function ${ATTR_TAG_BUILD}<T = {}>(build: (add: (attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>) => void) => void, nonEmpty: true): __MxAttrTag<T>;
+function ${ATTR_TAG_BUILD}<T = {}>(build: (add: (attrs: NoInfer<{ [K in keyof T as K extends __MxAttrTagMember ? never : K]: T[K] }>) => void) => void): __MxAttrTag<T> | undefined;
+function ${ATTR_TAG_BUILD}(build: (add: (attrs: any) => void) => void): any {
   let record: any;
   build((attrs) => { record = ${ATTR_TAG_FOLD}(record, attrs as any); });
   return record;

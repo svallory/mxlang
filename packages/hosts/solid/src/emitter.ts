@@ -2197,8 +2197,18 @@ function attributeTagRecord(
   return concatMapped(
     `${ATTR_TAG_BUILD}((${ATTR_TAG_ACC}) => { `,
     attributeTagFold(source, true),
-    "})",
+    certainToAdd(source) ? "}, true)" : "})",
   );
+}
+
+/**
+ * Whether a fold's `add` is certain to run: one of its top-level nodes is an
+ * occurrence rather than an `<if>` or a `<for>`. The builder then gets `true`
+ * and its record is typed without `undefined`, so it satisfies a required
+ * prop.
+ */
+function certainToAdd(nodes: readonly AttributeTagNode[]): boolean {
+  return nodes.some((node) => node.kind === "AttributeTag");
 }
 
 /**

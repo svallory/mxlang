@@ -1,0 +1,3 @@
+import List from "./List.solid.mx";
+
+export const view = <List><@items id=1/><@items id=2/></List>;
