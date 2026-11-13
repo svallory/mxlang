@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { regionCompileFor } from "@mxlang/targets";
+import { print } from "@mxlang/tsx-bridge";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { attributeTagDiagnosticMappings } from "./language.ts";
 
 /** The offset of the `n`th (1-based) `text` in `within`. */
@@ -9,6 +14,11 @@ function nth(within: string, text: string, n: number): number {
     if (at < 0) throw new Error(`no ${n}th ${JSON.stringify(text)}`);
   }
   return at;
+}
+
+/** The offset of the name in the `n`th (1-based) opening `<@name`. */
+function opening(source: string, name: string, n: number): number {
+  return nth(source, `<@${name}`, n) + 2;
 }
 
 /**
@@ -56,8 +66,8 @@ describe("attributeTagDiagnosticMappings over a fold builder", () => {
     const generated =
       '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 1 }); __mxAttrTagAcc({ "id": 2 }); }, true)}/>';
     expect(objectStarts(source, generated)).toEqual([
-      [nth(source, "item", 1), nth(generated, "item={", 1)],
-      [nth(source, "item", 2), nth(generated, ADD, 2)],
+      [opening(source, "item", 1), nth(generated, "item={", 1)],
+      [opening(source, "item", 2), nth(generated, ADD, 2)],
     ]);
     expect(attributeTargets(source, generated)).toEqual([
       ["id=1", nth(generated, `"id": 1`, 1)],
@@ -70,8 +80,23 @@ describe("attributeTagDiagnosticMappings over a fold builder", () => {
     const generated =
       '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { if (c) { __mxAttrTagAcc({ "id": 1 }); } else { __mxAttrTagAcc({ "id": 2 }); } })}/>';
     expect(objectStarts(source, generated)).toEqual([
-      [nth(source, "item", 1), nth(generated, "item={", 1)],
-      [nth(source, "item", 2), nth(generated, ADD, 2)],
+      [opening(source, "item", 1), nth(generated, "item={", 1)],
+      [opening(source, "item", 2), nth(generated, ADD, 2)],
+    ]);
+  });
+
+  // A closing `</@item>` is not an occurrence: the next opening tag is.
+  it("skips the closing tag of an occurrence with a body", () => {
+    const source = "<A><@item id=1>a</@item><@item id=2/></A>";
+    const generated =
+      '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 1, content: "a" }); __mxAttrTagAcc({ "id": 2 }); }, true)}/>';
+    expect(objectStarts(source, generated)).toEqual([
+      [opening(source, "item", 1), nth(generated, "item={", 1)],
+      [opening(source, "item", 2), nth(generated, ADD, 2)],
+    ]);
+    expect(attributeTargets(source, generated)).toEqual([
+      ["id=1", nth(generated, `"id": 1`, 1)],
+      ["id=2", nth(generated, `"id": 2`, 1)],
     ]);
   });
 
@@ -84,11 +109,32 @@ describe("attributeTagDiagnosticMappings over a fold builder", () => {
     const generated =
       '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 1, content: <B item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 3 }); __mxAttrTagAcc({ "id": 4 }); }, true)}/> }); __mxAttrTagAcc({ "id": 2 }); }, true)}/>';
     expect(objectStarts(source, generated)).toEqual([
-      [nth(source, "item", 1), nth(generated, "item={", 1)],
-      [nth(source, "item", 2), nth(generated, "item={", 2)],
-      [nth(source, "item", 3), nth(generated, ADD, 3)],
-      [nth(source, "item", 4), nth(generated, ADD, 4)],
+      [opening(source, "item", 1), nth(generated, "item={", 1)],
+      [opening(source, "item", 2), nth(generated, "item={", 2)],
+      [opening(source, "item", 3), nth(generated, ADD, 3)],
+      [opening(source, "item", 4), nth(generated, ADD, 4)],
     ]);
+    expect(
+      attributeTargets(source, generated).find(([attr]) => attr === "id=2"),
+    ).toEqual(["id=2", nth(generated, `"id": 2`, 1)]);
+  });
+
+  // A nested call folding *another* name, with the same `add` name: its
+  // `add` calls are not the outer fold's next occurrence.
+  it("skips a nested builder of another name inside an occurrence", () => {
+    const source =
+      "<A><@item id=1><B><@other k=3/><@other k=4/></B></@item><@item id=2/></A>";
+    const generated =
+      '<A item={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "id": 1, content: <B other={__mxAttrTagsOf((__mxAttrTagAcc) => { __mxAttrTagAcc({ "k": 3 }); __mxAttrTagAcc({ "k": 4 }); }, true)}/> }); __mxAttrTagAcc({ "id": 2 }); }, true)}/>';
+    expect(objectStarts(source, generated)).toEqual([
+      [opening(source, "item", 1), nth(generated, "item={", 1)],
+      [opening(source, "other", 1), nth(generated, "other={", 1)],
+      [opening(source, "other", 2), nth(generated, ADD, 3)],
+      [opening(source, "item", 2), nth(generated, ADD, 4)],
+    ]);
+    expect(
+      attributeTargets(source, generated).find(([attr]) => attr === "id=2"),
+    ).toEqual(["id=2", nth(generated, `"id": 2`, 1)]);
   });
 
   // `subitem={...}` is another prop; probing `item` must not open a fold there.
@@ -97,8 +143,68 @@ describe("attributeTagDiagnosticMappings over a fold builder", () => {
     const generated =
       '<A subitem={__mxAttrTag({ "id": 1 })} item={__mxAttrTag({ "id": 2 })}/>';
     expect(objectStarts(source, generated)).toEqual([
-      [nth(source, "subitem", 1), nth(generated, "subitem={", 1)],
-      [nth(source, "@item", 1) + 1, nth(generated, " item={", 1) + 1],
+      [opening(source, "subitem", 1), nth(generated, "subitem={", 1)],
+      [opening(source, "item", 1), nth(generated, " item={", 1) + 1],
     ]);
   });
+});
+
+/**
+ * The same walk over what the Preact and Solid region compiles really print,
+ * for typed `.mx` callees: nested folds of two names, the outer one with
+ * bodies, so the hand-written shapes above cannot drift from the emitters.
+ */
+describe("attributeTagDiagnosticMappings over real region output", () => {
+  let root = "";
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), "mx-attr-tag-mappings-"));
+    for (const host of ["preact", "solid"]) {
+      mkdirSync(join(root, host));
+      writeFileSync(
+        join(root, host, "package.json"),
+        JSON.stringify({ name: host, mx: { host } }),
+      );
+      writeFileSync(
+        join(root, host, "tabs.mx"),
+        "export interface Input { tab?: AttrTag<{ id: number }> }\n<div/>\n",
+      );
+      writeFileSync(
+        join(root, host, "menu.mx"),
+        "export interface Input { entry?: AttrTag<{ k: number }> }\n<div/>\n",
+      );
+    }
+  });
+  afterAll(() => {
+    if (root) rmSync(root, { recursive: true, force: true });
+  });
+
+  it.each(["preact", "solid"])(
+    "maps every occurrence and attribute on %s",
+    (host) => {
+      const file = join(root, host, `view.${host}.mx`);
+      const source = [
+        'import Tabs from "./tabs.mx";',
+        'import Menu from "./menu.mx";',
+        "export const view = <Tabs><@tab id=1><Menu><@entry k=3/><@entry k=4/></Menu></@tab><@tab id=2>b</@tab></Tabs>;",
+        "",
+      ].join("\n");
+      const generated = print(source, file, {
+        mx: true,
+        mxRegionCompile: regionCompileFor(file, { typeCheck: true }) as never,
+      }).code;
+      const add = (attr: string) => nth(generated, `${ADD} ${attr}`, 1);
+      expect(objectStarts(source, generated)).toEqual([
+        [opening(source, "tab", 1), nth(generated, "tab={", 1)],
+        [opening(source, "entry", 1), nth(generated, "entry={", 1)],
+        [opening(source, "entry", 2), add(`"k": 4`)],
+        [opening(source, "tab", 2), add(`"id": 2`)],
+      ]);
+      expect(attributeTargets(source, generated)).toEqual([
+        ["id=1", nth(generated, `"id": 1`, 1)],
+        ["k=3", nth(generated, `"k": 3`, 1)],
+        ["k=4", nth(generated, `"k": 4`, 1)],
+        ["id=2", nth(generated, `"id": 2`, 1)],
+      ]);
+    },
+  );
 });

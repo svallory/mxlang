@@ -1239,7 +1239,28 @@ export function attributeTagDiagnosticMappings(
   // </@item><@item/></A>`), and Preact and Solid give every builder the same
   // `add` name, so an occurrence is the *earliest* of the innermost open
   // fold's next `add(` before its end and the next `name={` of a new call.
-  const folds = new Map<string, Array<{ step: RegExp; end: number }>>();
+  // An `add(` inside a nested builder's body (a call folding another name in
+  // an occurrence's body) is that builder's, never the open fold's, so each
+  // fold records its nested builders' bodies and skips them.
+  type Fold = { step: RegExp; end: number; nested: Array<[number, number]> };
+  const folds = new Map<string, Fold[]>();
+  const nestedBuilder = new RegExp(
+    `${ATTR_TAG_BUILD}\\(\\([\\w$]+\\) => \\{`,
+    "g",
+  );
+  /** The next `add(` of `fold` at or after `from`, outside nested builders. */
+  const nextStep = (fold: Fold, from: number) => {
+    fold.step.lastIndex = from;
+    for (;;) {
+      const found = fold.step.exec(generated);
+      if (!found || found.index >= fold.end) return null;
+      const inside = fold.nested.find(
+        ([start, end]) => found.index > start && found.index < end,
+      );
+      if (!inside) return found;
+      fold.step.lastIndex = inside[1];
+    }
+  };
   const probes = new Map<string, RegExp>();
   const steps = new Map<string, RegExp>();
   const stepFor = (add: string) => {
@@ -1257,7 +1278,8 @@ export function attributeTagDiagnosticMappings(
     generatedEnd: number;
     properties: CodeMapping[];
   }> = [];
-  for (const match of source.matchAll(/@([A-Za-z_$][\w$]*)/g)) {
+  // An opening `<@name`, never the `@name` of a closing `</@name>`.
+  for (const match of source.matchAll(/(?<!<\/)@([A-Za-z_$][\w$]*)/g)) {
     const name = match[1];
     if (!name || match.index === undefined) continue;
     const sourceStart = match.index + 1;
@@ -1271,11 +1293,8 @@ export function attributeTagDiagnosticMappings(
     folds.set(name, open);
     let stepMatch: RegExpExecArray | null = null;
     while (open.length > 0) {
-      const fold = open[open.length - 1] as { step: RegExp; end: number };
-      fold.step.lastIndex = cursor;
-      stepMatch = fold.step.exec(generated);
-      if (stepMatch && stepMatch.index < fold.end) break;
-      stepMatch = null;
+      stepMatch = nextStep(open[open.length - 1] as Fold, cursor);
+      if (stepMatch) break;
       open.pop();
     }
     let probe = probes.get(name);
@@ -1305,7 +1324,20 @@ export function attributeTagDiagnosticMappings(
         step.lastIndex = valueStart;
         const firstMatch = step.exec(generated);
         if (end < 0 || !firstMatch || firstMatch.index > end) continue;
-        open.push({ step, end });
+        const nested: Array<[number, number]> = [];
+        nestedBuilder.lastIndex = valueStart;
+        for (
+          let inner = nestedBuilder.exec(generated);
+          inner && inner.index < end;
+          inner = nestedBuilder.exec(generated)
+        ) {
+          const innerOpen = inner.index + inner[0].length - 1;
+          const innerEnd = matchingClose(generated, innerOpen);
+          if (innerEnd < 0) break;
+          nested.push([innerOpen, innerEnd]);
+          nestedBuilder.lastIndex = innerEnd;
+        }
+        open.push({ step, end, nested });
         valueStart = firstMatch.index + firstMatch[0].length;
       }
     }

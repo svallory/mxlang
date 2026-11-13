@@ -327,8 +327,10 @@ of a `name={__mxAttrTagsOf((add) => { ... })}` builder, and maps every
 `"key": value` property to its authored attribute, the rest of the object to
 the tag name. A nested call can fold the same name inside an occurrence with
 the same `add` name, so each authored occurrence takes the earlier of the
-innermost open builder's next `add(` and the next `name={` (unit rows in
-`src/attribute-tag-mappings.test.ts`).
+innermost open builder's next `add(` and the next `name={`; an `add(` inside a
+nested builder's body (another name folded in an occurrence's body) is skipped,
+and a closing `</@name>` is not an occurrence (unit rows, and rows over real
+Preact and Solid region output, in `src/attribute-tag-mappings.test.ts`).
 
 **A test that reports through Volar cannot prove what the emitted
 TypeScript checks.** Volar by itself drops a diagnostic whose
