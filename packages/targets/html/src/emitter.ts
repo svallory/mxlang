@@ -2254,7 +2254,7 @@ function placeClientCode(state: State): void {
       "})();",
     ),
   ];
-  // `@ts-expect-error` covers only the generated `namespace` line: it is not
+  // `@ts-ignore` covers only the generated `namespace` line: it is not
   // erasable syntax, and an unused namespace is no author's.
   state.moduleHoisted.push({
     code: concatMapped(
