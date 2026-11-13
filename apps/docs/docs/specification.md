@@ -156,7 +156,9 @@ Still case-sensitive:
 - the extensions a dialect claims;
 - the default import that marks a tag import in lowering (an `import Card
   from "./Card.MX"` lowers as a dynamic tag, not as a template call);
-- the `.marko` tag-file probe (`tags/<name>.marko`).
+- the `.marko` tag-file probe (`tags/<name>.marko`);
+- the Angular virtual tag-module reader the editor and the checker use, so
+  they read `tags/Badge.ts` from disk for a `tags/Badge.MX` tag.
 
 TypeScript itself matches file extensions case-sensitively, so an upper-case
 `.MX` file never joins a type-check program, in the editor or in `mx-tsc`.
