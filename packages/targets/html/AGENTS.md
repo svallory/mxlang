@@ -95,34 +95,88 @@ server module does, so a template read of one renders `undefined` instead of
 throwing (`clientDeclaredNames` in `translate.ts` follows Babel's
 `getBindingIdentifiers` order, outer scope only). Under `typeCheck` (the
 tooling projection, never the module that runs) a `client` statement is typed in
-two views (`clientProjection` in `translate.ts`, the `"statement"` case in
-`emitter.ts`). The server view declares each name `var q: undefined; void [q];`
-and exports nothing, so a template read of a client name and an importer of a
-client export are errors, as the server render sees them. The client view puts
-the statement's code, with `export` stripped, in an async arrow the module
-calls where its last `client` statement stands (`placeClientCode` in
-`emitter.ts`; TypeScript reports a use before declaration inside a called
-arrow, not inside a function nothing calls, and `this` is the module's). Imports,
-namespaces and `declare` forms stay at module level, `export` removed;
-interfaces and type aliases stay at module level with their `export`, unless they mention a client value (a
-type reference, `typeof` query, heritage clause or computed key whose leftmost
-name is among the statements' `serverNames`, a type moved that way included;
-`referencedNames` in `translate.ts`; parameters, property and index keys and
-the type's own type parameters are not mentions): those move into the arrow,
-`export` removed, read once there when they were exported, and left out of an
-`export type { … }` list. `client export … from`
+two views (`clientProjection` in `translate.ts`, the `"statement"` case and
+`placeClientCode` in `emitter.ts`), built from the names core's
+`moduleStatementNames` reports for each module statement (no declaration walk
+in this package).
+
+- **The server view** is the module itself. Where the module that runs has
+  `var q;`, it has `var q: undefined; void [q];` for every client name except
+  one a `server`, `static`, `import` or `export` statement also declares (the
+  merge keeps that declaration's type), plus the client's `declare` names,
+  which run nowhere on the server. It exports nothing of the client, so a
+  template read of a client name, a `server` or `static` statement reading a
+  client import, and an importer of a client export are errors, as the server
+  render sees them.
+- **The client view** is a generated `namespace __mxClientView` (behind a
+  `@ts-ignore`, read once after it). Its first line shadows every `server`
+  name the view does not bind itself, `var s: undefined`, so client code
+  reading a server name is `undefined`; an `import`/`static`/`export` name is
+  not shadowed (it is the module's own). Then the client imports (each value
+  specifier an `import a = __mxClient<n>.a` alias of a module-level
+  `import * as __mxClient<n> from "m"`, a default import a value and an
+  instance type of `import __mxClientD<n> from "m"`), the client namespaces
+  and `declare` forms and `import x = A.b`, all with `export` removed; then
+  the statements' code, `export` removed, in
+  `export const __mxScope = (async function (this: void) { … })()`, placed
+  where the last `client` statement stands, which returns the names a
+  refinement needs. A called function, because TypeScript reports a use
+  before declaration inside one and not inside a function nothing calls; not
+  an arrow, because `this` inside a namespace arrow is TS2331.
+- **Stay at module level**, unchanged: side-effect imports, `import type`
+  and type specifiers, `declare global`, `declare module "m"`, type-only
+  namespaces, and a client namespace whose name a `server`/`static`/`import`/
+  `export` statement also declares (it merges with that declaration).
+  Interfaces and type aliases stay at module level with their `export`, unless
+  they mention a client value or a view-level name (a type reference, `typeof`
+  query, heritage clause or computed key whose leftmost name is one;
+  `referencedNames` in `translate.ts`; parameters, property and index keys and
+  the type's own type parameters are not mentions): those move into the
+  function, `export` removed, read once there when they were exported, and
+  left out of an `export type { … }` list.
+- **A refinement naming a client binding** (`value:clamp:=q` with
+  `client function clamp`) is checked against the client view's declaration:
+  `__MxRefine` takes the module-level name's type unless it is `undefined`,
+  then the type `__mxScope` returns for that name, and the bound value is the
+  argument, mapped to the authored text.
+
+`client export … from`
 becomes an `import` of the module and the asked names, bound to `_mxReexport…`
 names nothing reads (the `_` keeps `noUnusedLocals` quiet), mapped piece by
 piece; `export {..}` of values and `export default` are dropped. A top-level
-`return` is repeated after the module, mapped to the keyword, because the arrow
-would hide its TS1108. Known limits: a `client import` of another module's
-client export is TS2614 (that module's one projection is its server view); a
-top-level type (`Input`) cannot name a client class or enum; a namespace body
-reading a client value is `undefined`; a `client` statement reading a `static` or
-`server` name declared after it but before a later `client` statement is not
-reported; a template read of a
-client name is not linked to its declaration for definition and rename. The
-runtime module and its bytes are unchanged. Both statements carry the span of their code
+`return` is repeated after the module, mapped to the keyword, because the
+function would hide its TS1108. Client code reading `input`, `$global` or
+`$signal` never reaches the projection: core refuses it. Known limits:
+
+- `typeof <serverName>` in client code is `undefined` (the shadow is a
+  value). Declare the type in the `server` statement and name it from client
+  code instead; a server class or interface stays usable as a type.
+- Under `verbatimModuleSyntax`, a client value specifier naming a type-only
+  export is not reported (the alias's TS1288 is under the `@ts-ignore`).
+- An unknown client import name is TS2694 at the specifier, not TS2305; a
+  `client import` of another page's client export is TS2694 too (that page's
+  one projection is its server view).
+- A client namespace merged with a `server`/`static`/`import`/`export` one
+  stays at module level, so client code reading the server half is not
+  reported. A `client function q` and a `client namespace q` are two
+  bindings.
+- A client namespace body reading a client `let`, `const`, `function` or
+  `class` reads the server view, so the value is `undefined`.
+- A default-imported generic class used with type arguments in client code
+  (`D<T>`) fails: the type is `__MxInstance<…>`.
+- `declare global` and `declare module "m"` stay at module level and are
+  typed in both views. (Core refuses `import x = require("m")`.)
+- A client statement with a top-level `return` (already reported) can make
+  `__mxScope` a union, so a refinement may add a property error.
+- A `server declare var q` (or `static declare var q`) merged with a
+  `client var q`: the server view reads the declaration's type.
+
+Also: a top-level type (`Input`) cannot name a client class or enum; a
+`client` statement reading a `static` or `server` name declared after it but
+before a later `client` statement is not reported; a template read of a
+client name is not linked to its declaration for definition and rename.
+
+The runtime module and its bytes are unchanged. Both statements carry the span of their code
 (`DelegatedTagData`'s `span`, `typeCheck.span`), which the emitter turns into a
 recorded mapping, so `mx-tsc` and the editor report an error inside one at the
 authored token, not at 1:1. A
