@@ -603,13 +603,16 @@ describe("html typeCheck: the server view and the client code of a `client` stat
       'client import { a } from "./a.ts";\nclient interface P { n: number }\nclient const b = a;\n<div/>\n',
     );
     const before = beforeWrapper(code);
-    expect(before).toContain('import * as __mxClient7_0 from "./a.ts";');
+    const name = before.match(
+      /import \* as (__mxClient\d+_0) from "\.\/a\.ts";/,
+    )?.[1];
+    expect(name).toBeDefined();
     expect(before).not.toContain('import { a } from "./a.ts"');
     expect(before).toContain("interface P { n: number }");
     expect(before).toContain("var a: undefined; void [a];");
     expect(before).toContain("var b: undefined; void [b];");
     expect(before).toContain(
-      "namespace __mxClientView {\n  // @ts-ignore\n  import\n    a = __mxClient7_0.a;",
+      `namespace __mxClientView {\n  // @ts-ignore\n  import\n    a = ${name}.a;`,
     );
     expect(wrapper(code)).toContain("const b = a;");
     expect(wrapper(code)).not.toContain("import");

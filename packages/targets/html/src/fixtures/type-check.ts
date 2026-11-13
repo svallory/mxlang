@@ -35,10 +35,13 @@ const BASE: ts.CompilerOptions = {
 };
 
 /**
- * A diagnostic in an authored statement the target copies verbatim (`static`
- * code, `export interface Input`): the tools map those whole statements from
- * the IR, not from the target's own mappings, so the line is found in the
- * source here as they find it. `?` when it is not there exactly once.
+ * A diagnostic in an authored statement the target copies verbatim to module
+ * level (`static` code, `export interface Input`): the tools map those whole
+ * statements from the IR by finding their code in both texts, not from the
+ * target's own mappings, so the line is found in the source here the same way.
+ * Only a module-level line (no indent: generated scaffolding is indented) found
+ * exactly once qualifies, else `?`. Each row that relies on this is also checked
+ * through the editor path (the plugin's `client-server-view.test.ts`).
  */
 function statementText(
   source: string,
@@ -50,7 +53,12 @@ function statementText(
   const lineEnd = code.indexOf("\n", start);
   const line = code.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
   const at = source.indexOf(line);
-  if (line.trim() === "" || at === -1 || source.indexOf(line, at + 1) !== -1) {
+  if (
+    line.trim() === "" ||
+    line !== line.trimStart() ||
+    at === -1 ||
+    source.indexOf(line, at + 1) !== -1
+  ) {
     return "?";
   }
   const offset = at + start - lineStart;

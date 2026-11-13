@@ -216,61 +216,97 @@ describe("importing a client export", { timeout: 60_000 }, () => {
  * The two views of a page's module statements through the editor path: each
  * diagnostic at the authored token, and navigation from client code to the
  * `client import` that binds a name. The full source matrix is the html
- * target's `client-server-scope.test.ts`.
+ * target's `client-server-scope.test.ts`; the rows here are the mapping paths
+ * it cannot see (the target's own mappings, and a verbatim `static` statement
+ * or `Input` interface the tools map from the IR). One service holds every
+ * page, built once for the file.
  */
 describe("the server and client views, at the authored token", {
   timeout: 60_000,
 }, () => {
   const ONE = "/project/one.ts";
   const ONE_SOURCE =
-    "export function clamp(v: number): number { return v }\nexport const one = 1;\n";
-  const spans = (source: string) =>
-    errorsOf({ [FILE]: source, [ONE]: ONE_SOURCE }, FILE).map((d) => [
-      d.code,
-      source.slice(d.start ?? 0, (d.start ?? 0) + (d.length ?? 0)),
-      d.start,
-    ]);
+    "export function clamp(v: number): number { return v }\nexport const one = 1;\nexport interface Row { a: number }\n";
+  const PAGES = {
+    serverName:
+      "server const secret = 1;\nclient const n = secret.toFixed(1);\n<div/>\n",
+    template:
+      'client import { one } from "./one.ts";\n<div>${one.toFixed(1)}</div>\n',
+    static:
+      'client import { one } from "./one.ts";\nstatic const z = one.toFixed(1);\n<div/>\n',
+    inputType:
+      'client import { Row } from "./one.ts";\nexport interface Input { r?: Row }\n<div/>\n',
+    refinement:
+      "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n",
+    definition:
+      'client import { one } from "./one.ts";\nclient const n = one + 1;\n<div/>\n',
+  };
+  type Page = keyof typeof PAGES;
+  const path = (page: Page) => `/project/${page}.mx`;
+  let built: ts.LanguageService | undefined;
+  const svc = () => {
+    if (!built) {
+      const pages = Object.keys(PAGES) as Page[];
+      const consumer = pages.map((page) => `import "./${page}.mx";\n`).join("");
+      built = createPluginService(
+        {
+          [CONSUMER]: consumer,
+          [ONE]: ONE_SOURCE,
+          ...Object.fromEntries(pages.map((page) => [path(page), PAGES[page]])),
+        },
+        [CONSUMER, ONE],
+      );
+      built.getSemanticDiagnostics(CONSUMER);
+    }
+    return built;
+  };
+  const spans = (page: Page) =>
+    svc()
+      .getSemanticDiagnostics(path(page))
+      .filter((d) => d.code !== 2307)
+      .map((d) => [
+        d.code,
+        PAGES[page].slice(d.start ?? 0, (d.start ?? 0) + (d.length ?? 0)),
+        d.start,
+      ]);
 
   it("client code reading a server name is undefined, at the name", () => {
-    const source =
-      "server const secret = 1;\nclient const n = secret.toFixed(1);\n<div/>\n";
-    expect(spans(source)).toEqual([
-      [18048, "secret", source.indexOf("secret.toFixed")],
+    expect(spans("serverName")).toEqual([
+      [18048, "secret", PAGES.serverName.indexOf("secret.toFixed")],
     ]);
   });
 
   it("a template read of a client import is undefined, at the read", () => {
-    const source =
-      'client import { one } from "./one.ts";\n<div>${one.toFixed(1)}</div>\n';
-    expect(spans(source)).toEqual([
-      [18048, "one", source.indexOf("one.toFixed")],
+    expect(spans("template")).toEqual([
+      [18048, "one", PAGES.template.indexOf("one.toFixed")],
     ]);
   });
 
-  it("a server statement reading a client import is undefined, at the read", () => {
-    const source =
-      'client import { one } from "./one.ts";\nserver const z = one.toFixed(1);\n<div/>\n';
-    expect(spans(source)).toEqual([
-      [18048, "one", source.indexOf("one.toFixed")],
+  it("a static statement reading a client import is undefined, at the read", () => {
+    expect(spans("static")).toEqual([
+      [18048, "one", PAGES.static.indexOf("one.toFixed")],
+    ]);
+  });
+
+  it("a module-level type naming a client value import is reported, at the name", () => {
+    expect(spans("inputType")).toEqual([
+      [2749, "Row", PAGES.inputType.lastIndexOf("Row }")],
     ]);
   });
 
   it("a refinement naming a client function checks clean", () => {
-    const source =
-      "client function clamp(v: number) { return v }\n<let/q=1/>\n<input value:clamp:=q/>\n";
-    expect(spans(source)).toEqual([]);
+    expect(spans("refinement")).toEqual([]);
   });
 
   // TypeScript answers an imported name's definition with the declaration in
   // the imported module (it skips the import, as in a .ts file): the client
   // read resolves through the client view's alias to what the import names.
   it("definition at a client read of an import reaches the imported declaration", () => {
-    const source =
-      'client import { one } from "./one.ts";\nclient const n = one + 1;\n<div/>\n';
-    const svc = service({ [FILE]: source, [ONE]: ONE_SOURCE });
-    svc.getSemanticDiagnostics(CONSUMER);
     const found = (
-      svc.getDefinitionAtPosition(FILE, source.indexOf("one + 1")) ?? []
+      svc().getDefinitionAtPosition(
+        path("definition"),
+        PAGES.definition.indexOf("one + 1"),
+      ) ?? []
     ).map((d) => [d.fileName, d.textSpan.start]);
     expect(found).toEqual([[ONE, ONE_SOURCE.indexOf("one = 1")]]);
   });
