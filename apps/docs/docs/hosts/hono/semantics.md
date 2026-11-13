@@ -29,7 +29,7 @@ description: "Each MX construct and the hono/jsx TSX it becomes; event names, ke
 
 ## Children and `content`
 
-MX calls a component with `children`, the JSX way, passing a body exactly as hand-written JSX would pass it, so the component's own child rules apply: `<Fragment>${count}</Fragment>` with Hono's `Fragment` renders what `<Fragment>{count}</Fragment>` renders. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
+MX calls a component with `children`, the JSX way, passing a body exactly as hand-written JSX would pass it, so the component's own child rules apply: `<Fragment>${count}</Fragment>` with Hono's `Fragment` renders what `<Fragment>{count}</Fragment>` renders. A whole-file `.mx` component that reads Marko's `input.content` receives the same value. The rule covers a component imported from a module that is not a `.mx`/`.marko` template (or a local whose value core cannot prove is a function), and a member of such an import written as an authored dynamic tag: `<${J.Fragment}>${count}</>` after `import * as J from "hono/jsx"`. A computed or optional member (`<${J["Fragment"]}>`), a call, or a root a tag param shadows keeps MX's own fragment.
 
 ## Data in a text placeholder
 

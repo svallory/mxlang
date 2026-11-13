@@ -798,6 +798,12 @@ supports the `value=` attribute." (`MX_INVALID_ATTRIBUTE`, at the first
 attribute that is not `value=`), on every host that neither declares nor
 delegates the tag. A host that does keeps its own shape check.
 
+`<log>` requires its value, as in Marko: `<log/>` and the concise `log` are
+"The `<log>` tag requires a `value=` attribute." (`MX_INVALID_ATTRIBUTE`, at
+the tag name), on the hosts above and on the html target, whose inert `log`
+row declares `value: "required"`. `<log=x/>` and `<log value=x/>` compile.
+`<debug/>` needs no value and compiles.
+
 ### Scriptlets
 
 Scriptlets (`$ statement`) are not part of MX, in any file kind and on any
@@ -2630,7 +2636,13 @@ same way `moduleBindings`/`importSpecifiers` already are, so a real
 **Tag arguments on a dynamic tag.** A dynamic tag `<${expr}(a, b)>` (like a
 `<define>` call, §5.4) may combine tag arguments with a body and attribute
 tags; arguments plus a plain attribute stay an error, as in Marko, and a named
-custom tag keeps Marko's single-argument rule. For a component or function
+custom tag keeps Marko's single-argument rule. A capitalized tag core lowers as
+a dynamic tag (bound to a value import that is not a `.marko`/`.mx` default
+import, `import Foo from "./foo.js"`, or to a local whose value core cannot
+prove is a function) takes the dynamic tag's rule, as stock does:
+`<Foo(a) x=1/>` is "Tag does not support arguments when attributes or body
+present." (`MX_UNSUPPORTED_TAG_ARGUMENTS`, at the arguments), and
+`<Foo(a)>hi</Foo>` compiles. For a component or function
 target the call passes the arguments and then one trailing props object
 (`renderer(...args, props)`, the attribute tags by name plus `content`).
 html, Preact, React, Hono and Solid express this shape; Angular and Astro give
@@ -3515,6 +3527,7 @@ the same thing.
 | `` `<return>` does not support the `${attrName}` attribute `` | Any attribute but `value`. |
 | `invalid duplicate \`value\` attribute` | Two `value`s. |
 | `` `<return>` requires a `value=` attribute `` | No value. |
+| `` The `<log>` tag requires a `value=` attribute. `` | `<log/>` or concise `log` with no value (`MX_INVALID_ATTRIBUTE`, at the tag name); `<debug/>` is exempt. |
 | `` `<return>` must be at the top level of its template; it declares the value the whole unit returns, so it cannot be conditional or nested `` | Inside a native tag, `<if>`, `<for>`, an attribute tag or a `<define>`. |
 | `cannot have multiple \`<return>\` tags for the template` | Two `<return>`s. |
 

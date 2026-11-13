@@ -80,7 +80,7 @@ Anything Preact cannot express fails the build with the construct and its line; 
 
 ## Children and `content`
 
-MX calls a component with `children`, the JSX way, passing a body exactly as hand-written JSX would pass it, so hand-written Preact components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value.
+MX calls a component with `children`, the JSX way, passing a body exactly as hand-written JSX would pass it, so hand-written Preact components work unchanged. A whole-file `.mx` component that reads Marko's `input.content` receives the same value. The rule covers a component imported from a module that is not a `.mx`/`.marko` template (or a local whose value core cannot prove is a function), and a member of such an import written as an authored dynamic tag: `<${P.Fragment}>${count}</>` after `import * as P from "preact"`. A computed or optional member (`<${P["Fragment"]}>`), a call, or a root a tag param shadows keeps MX's own fragment.
 
 ## Data in a text placeholder
 
