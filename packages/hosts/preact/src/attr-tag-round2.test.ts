@@ -240,6 +240,38 @@ describe("generated names do not shadow authored bindings", () => {
   }
 });
 
+describe("attribute tags read no callee", () => {
+  it("compiles a call byte-identically whatever the callee declares", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mx-preact-attr-input-"));
+    try {
+      const entry = join(dir, "main.mx");
+      const calls = [
+        'import Card from "./card.mx"\n<Card><@item a=1>x</@item><@item|s| a=2>${s}</@item><for|n| of=input.ns><@item a=n/></for></Card>',
+        'import Card from "./card.mx"\n<Card><@head|s|>${s}</@head></Card>',
+      ];
+      const against = (callee: string) => {
+        writeFileSync(join(dir, "card.mx"), callee);
+        return calls.map((call) => compilePreactMx(call, entry).code);
+      };
+      const untyped = against("<div/>");
+      expect(untyped[0]).toContain("as (...args: any[]) => any");
+      expect(untyped[1]).toContain("content: (s) =>");
+      expect(
+        against(
+          "export interface Input { item?: AttrTag<{ a: number }>[]; head?: AttrTag<{ content: (s: string) => unknown }>[] }\n<div/>",
+        ),
+      ).toEqual(untyped);
+      expect(
+        against(
+          "export interface Input { item: AttrTag<{ a: number }>; head: AttrTag<{ content: (s: string) => unknown }> }\n<div/>",
+        ),
+      ).toEqual(untyped);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("attribute tags round-2 regressions (executed)", () => {
   for (const host of hosts) {
     it(`${host}: folds static, conditional and looped occurrences into one record`, async () => {
@@ -247,13 +279,17 @@ describe("attribute tags round-2 regressions (executed)", () => {
         "main.mx":
           'import Card from "./card.mx"\n<Card><@item a=1>x</@item><if=input.c><@item a=2/></if><for|n| of=[3, 4]><@item a=n/></for></Card>',
         "card.mx":
-          '<p>${input.item.a}:${input.item.length}:${input.item.map((i) => i.a).join(",")}:${input.item.at(-1).a}:${input.item.toArray().filter((i) => "content" in i).length}:<${input.item}/></p>',
+          '<p>${input.item.a}:${input.item.length}:${input.item.map((i) => i.a).join(",")}:${input.item.at(-1).a}:${input.item.toArray().filter((i) => "content" in i).length}:<${input.item}/>:${Object.keys(input.item).join(",")}:${JSON.stringify(input.item, (k, v) => (k === "content" ? "C" : v))}</p>',
       };
+      // Own keys and JSON are Marko's: the attributes and `content`, never
+      // the iterator, the rest array or a prototype member. A JSX host's
+      // `content` is a node, not Marko's render function, so JSON would
+      // serialize it; the replacer stands in for it.
       expect(await renderFixture(host, files, { c: true })).toBe(
-        "<p>1:4:1,2,3,4:4:1:x</p>",
+        "<p>1:4:1,2,3,4:4:1:x:a,content:{&quot;a&quot;:1,&quot;content&quot;:&quot;C&quot;}</p>",
       );
       expect(await renderFixture(host, files, { c: false })).toBe(
-        "<p>1:3:1,3,4:4:1:x</p>",
+        "<p>1:3:1,3,4:4:1:x:a,content:{&quot;a&quot;:1,&quot;content&quot;:&quot;C&quot;}</p>",
       );
     });
 
@@ -296,6 +332,14 @@ describe("attribute tags round-2 regressions (executed)", () => {
       );
       expect(html).not.toContain("<img");
       expect(html.match(/img src=x onerror=alert\(1\)/g)).toHaveLength(2);
+    });
+
+    it(`${host}: a bodiless record renders nothing as a dynamic tag, matching Marko`, async () => {
+      const html = await renderFixture(host, {
+        "main.mx": 'import Row from "./row.mx"\n<Row><@empty a=1/></Row>',
+        "row.mx": "<p>[<${input.empty}/>][<${input.empty}>b</>]</p>",
+      });
+      expect(html).toBe("<p>[][b]</p>");
     });
 
     it(`${host}: renders a record through an untyped MX callee`, async () => {
