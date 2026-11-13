@@ -19,20 +19,43 @@ const AT = { line: 2, column: 0 };
 type FailFn = (message: string, ...rest: unknown[]) => never;
 type HookCtx = { fail: FailFn };
 type Hook = (ctx: HookCtx) => never;
+type Where = "analyze" | "transform";
+type Method = "fail" | "report";
+/** Raises one error through the method under test: `throw ctx.fail` or `ctx.report`. */
+type Raise = (message: string, ...rest: unknown[]) => void;
 
-function tags(
-  hook: Hook,
-  where: "analyze" | "transform",
-): Record<string, CustomTag> {
+function tags(hook: Hook, where: Where): Record<string, CustomTag> {
   return where === "analyze"
     ? { box: { analyze: (_calls, ctx) => hook(ctx as unknown as HookCtx) } }
     : { box: { transform: (_call, ctx) => hook(ctx as unknown as HookCtx) } };
 }
 
-function run(hook: Hook, where: "analyze" | "transform") {
-  const { diagnostics } = lowerSource(SOURCE, "/u.mx", {
-    customTags: tags(hook, where),
-  });
+/** `ctx.fail` throws; `ctx.report` collects and the hook returns normally. */
+function raise(ctx: object, method: Method, message: string, rest: unknown[]) {
+  const fn = (ctx as Record<Method, (m: string, ...r: unknown[]) => unknown>)[
+    method
+  ];
+  fn(message, ...rest);
+}
+
+function run(use: (raise: Raise) => void, where: Where, method: Method) {
+  const customTags: Record<string, CustomTag> =
+    where === "analyze"
+      ? {
+          box: {
+            analyze: (_calls, ctx) =>
+              use((message, ...rest) => raise(ctx, method, message, rest)),
+          },
+        }
+      : {
+          box: {
+            transform: (_call, ctx) => {
+              use((message, ...rest) => raise(ctx, method, message, rest));
+              return [];
+            },
+          },
+        };
+  const { diagnostics } = lowerSource(SOURCE, "/u.mx", { customTags });
   const [first] = diagnostics;
   return first
     ? {
@@ -46,41 +69,47 @@ function run(hook: Hook, where: "analyze" | "transform") {
     : undefined;
 }
 
-describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
+describe.each([
+  { where: "analyze", method: "fail" },
+  { where: "transform", method: "fail" },
+  { where: "analyze", method: "report" },
+] as const)("ctx.$method in $where", ({ where, method }) => {
   // analyze: no `at` is the first call (1:0); transform: the failing call,
   // which is the first one to run (1:0) too.
   const DEFAULT = { line: 1, column: 0, offset: 0 };
   const PLACED = { line: 2, column: 0, offset: 7 };
 
   it("keeps the positional form, with the default code", () => {
-    const got = run((ctx) => ctx.fail("boom", AT), where);
+    const got = run((raise) => raise("boom", AT), where, method);
     expect(got).toMatchObject({ code: "MX_TAG_ERROR", ...PLACED });
     expect(got?.message).toContain("boom");
   });
   it("takes at and code", () => {
     const got = run(
-      (ctx) => ctx.fail("boom", { at: AT, code: "X_ONE" }),
+      (raise) => raise("boom", { at: AT, code: "X_ONE" }),
       where,
+      method,
     );
     expect(got).toMatchObject({ code: "X_ONE", ...PLACED });
   });
   it("takes a code alone and positions as core does", () => {
-    const got = run((ctx) => ctx.fail("boom", { code: "X_ONE" }), where);
+    const got = run((raise) => raise("boom", { code: "X_ONE" }), where, method);
     expect(got).toMatchObject({ code: "X_ONE", ...DEFAULT });
   });
   it("takes at alone, with the default code", () => {
-    const got = run((ctx) => ctx.fail("boom", { at: AT }), where);
+    const got = run((raise) => raise("boom", { at: AT }), where, method);
     expect(got).toMatchObject({ code: "MX_TAG_ERROR", ...PLACED });
   });
   it("takes at as a source span, positioned at its start", () => {
     // `<box/>\n<box/>\n`: offset 8 is the second call's name, 2:1.
     const got = run(
-      (ctx) =>
-        ctx.fail("boom", {
+      (raise) =>
+        raise("boom", {
           at: { sourceStart: 8, sourceEnd: 11 },
           code: "X_SPAN",
         }),
       where,
+      method,
     );
     expect(got).toMatchObject({
       code: "X_SPAN",
@@ -91,16 +120,18 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
   });
   it("refuses a span outside the document", () => {
     const got = run(
-      (ctx) => ctx.fail("boom", { at: { sourceStart: 5, sourceEnd: 99 } }),
+      (raise) => raise("boom", { at: { sourceStart: 5, sourceEnd: 99 } }),
       where,
+      method,
     );
     expect(got?.message).toContain("span inside the document (0 to 14)");
     expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
   it("refuses a code with MX's own `MX_` prefix", () => {
     const got = run(
-      (ctx) => ctx.fail("boom", { at: AT, code: "MX_UNKNOWN_TAG" }),
+      (raise) => raise("boom", { at: AT, code: "MX_UNKNOWN_TAG" }),
       where,
+      method,
     );
     expect(got?.message).toContain(
       "code `MX_UNKNOWN_TAG` starts with `MX_`, which is MX's own prefix",
@@ -108,7 +139,7 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
     expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
   it("takes no second argument", () => {
-    expect(run((ctx) => ctx.fail("boom"), where)).toMatchObject({
+    expect(run((raise) => raise("boom"), where, method)).toMatchObject({
       code: "MX_TAG_ERROR",
       ...DEFAULT,
     });
@@ -126,15 +157,163 @@ describe.each(["analyze", "transform"] as const)("ctx.fail in %s", (where) => {
     ["an inherited code", Object.create({ code: "X" }), "non-plain object"],
     ["a half position", { line: 2 }, "needs numeric `line` and `column`"],
   ])("refuses %s", (_name, arg, why) => {
-    const got = run((ctx) => ctx.fail("boom", arg), where);
-    expect(got?.message).toContain("takes a position or");
+    const got = run((raise) => raise("boom", arg), where, method);
+    expect(got?.message).toContain(`\`ctx.${method}\` takes a position or`);
     expect(got?.message).toContain(why);
     expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
   });
   it("refuses an empty code", () => {
-    const got = run((ctx) => ctx.fail("boom", { at: AT, code: "" }), where);
+    const got = run(
+      (raise) => raise("boom", { at: AT, code: "" }),
+      where,
+      method,
+    );
     expect(got?.message).toContain("`code` must be a non-empty string");
     expect(got).toMatchObject({ code: "MX_TAG_HOOK_ERROR", ...DEFAULT });
+  });
+});
+
+describe("ctx.report in analyze", () => {
+  type Call = { loc: { line: number; column: number } };
+  type ReportCtx = {
+    report: (message: string, ...rest: unknown[]) => void;
+    fail: FailFn;
+  };
+  const host = { tags: {}, isElement: () => true, isComponent: () => false };
+  /** `box` reports every call; `after` runs once both reports returned. */
+  const reporting = (after: (ctx: ReportCtx) => void = () => {}) => ({
+    transform: () => [],
+    analyze: (calls: readonly Call[], ctx: ReportCtx) => {
+      for (const call of calls) ctx.report("bad box", { at: call.loc });
+      after(ctx);
+    },
+  });
+  const compiled = (
+    source: string,
+    customTags: Record<string, unknown>,
+  ): TranslateError => {
+    try {
+      compileSource(source, "/u.mx", host, {
+        targets,
+        emitIr: () => "",
+        customTags: customTags as Record<string, CustomTag>,
+      });
+    } catch (error) {
+      if (error instanceof TranslateError) return error;
+      throw error;
+    }
+    throw new Error("did not fail");
+  };
+  const lines = (error: TranslateError) =>
+    (error.errors ?? []).map((e) => [e.line, e.column, e.diagnosticCode]);
+
+  it("reports one error per call and lets the hook run to its end", () => {
+    let ended = false;
+    const { diagnostics } = lowerSource(SOURCE, "/u.mx", {
+      customTags: {
+        box: reporting(() => {
+          ended = true;
+        }),
+      } as unknown as Record<string, CustomTag>,
+    });
+    expect(diagnostics.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 0, "MX_TAG_ERROR"],
+      [2, 0, "MX_TAG_ERROR"],
+    ]);
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      expect.stringContaining("bad box"),
+      expect.stringContaining("bad box"),
+    ]);
+    expect(ended).toBe(true);
+  });
+
+  it("collects a refused report and goes on", () => {
+    const { diagnostics } = lowerSource(SOURCE, "/u.mx", {
+      customTags: {
+        box: {
+          analyze: (_calls: unknown, ctx: ReportCtx) => {
+            ctx.report("first", "nope");
+            ctx.report("second", { at: AT, code: "X_TWO" });
+          },
+        },
+      } as unknown as Record<string, CustomTag>,
+    });
+    expect(diagnostics.map((d) => [d.line, d.code])).toEqual([
+      [1, "MX_TAG_HOOK_ERROR"],
+      [2, "X_TWO"],
+    ]);
+    expect(diagnostics[0]?.message).toContain(
+      "`ctx.report` takes a position or `{ at?, code? }`: got string",
+    );
+  });
+
+  it("fails the compile when the hook only reported, earliest error first", () => {
+    const error = compiled(SOURCE, { box: reporting() });
+    expect([error.line, error.column, error.diagnosticCode]).toEqual([
+      1,
+      0,
+      "MX_TAG_ERROR",
+    ]);
+    expect(error.message).toContain("bad box");
+    expect(lines(error)).toEqual([
+      [1, 0, "MX_TAG_ERROR"],
+      [2, 0, "MX_TAG_ERROR"],
+    ]);
+  });
+
+  it("keeps the reports when the same hook then throws ctx.fail", () => {
+    const error = compiled("<box/>\n<box/>\n<box/>\n", {
+      box: reporting((ctx) => {
+        throw ctx.fail("thrown", { at: { line: 2, column: 3 }, code: "X_F" });
+      }),
+    });
+    expect(lines(error)).toEqual([
+      [1, 0, "MX_TAG_ERROR"],
+      [2, 0, "MX_TAG_ERROR"],
+      [2, 3, "X_F"],
+      [3, 0, "MX_TAG_ERROR"],
+    ]);
+  });
+
+  it("orders the reports with another tag's ctx.fail in file order", () => {
+    const error = compiled("<crate/>\n<box/>\n<crate/>\n<box/>\n", {
+      box: reporting(),
+      crate: {
+        transform: () => [],
+        analyze: (calls: readonly Call[], ctx: ReportCtx) => {
+          throw ctx.fail("bad crate", { at: calls[1]?.loc, code: "X_C" });
+        },
+      },
+    });
+    expect([error.line, error.diagnosticCode]).toEqual([2, "MX_TAG_ERROR"]);
+    expect(lines(error)).toEqual([
+      [2, 0, "MX_TAG_ERROR"],
+      [3, 0, "X_C"],
+      [4, 0, "MX_TAG_ERROR"],
+    ]);
+  });
+
+  it("refuses a report after analyze returned", () => {
+    let stored: ReportCtx | undefined;
+    const { diagnostics } = lowerSource(SOURCE, "/u.mx", {
+      customTags: {
+        box: {
+          analyze: (_calls: unknown, ctx: ReportCtx) => {
+            stored = ctx;
+          },
+          transform: () => {
+            stored?.report("late", { at: AT, code: "X_LATE" });
+            return [];
+          },
+        },
+      } as unknown as Record<string, CustomTag>,
+    });
+    expect(diagnostics.map((d) => [d.line, d.column, d.code])).toEqual([
+      [1, 0, "MX_TAG_HOOK_ERROR"],
+    ]);
+    expect(diagnostics[0]?.message).toContain(
+      "`ctx.report` called after `analyze` returned",
+    );
   });
 });
 

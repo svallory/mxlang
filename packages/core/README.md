@@ -246,6 +246,9 @@ Write failures as `throw ctx.fail(message, { at?, code? })` (a bare position is 
 reliably narrow after a bare call through the parameter property `ctx.fail`,
 despite its `never` return type. Unexpected exceptions are wrapped with the tag
 name and call-site position; an existing `TranslateError` passes through.
+To report several errors from one `analyze` (one per bad call), call
+`ctx.report(message, { at?, code? })` (`@unstable`) for each: it takes `fail`'s
+options without ending the hook, and a hook that reported fails the compile.
 
 ## Discovering custom tags
 

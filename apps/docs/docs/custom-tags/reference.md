@@ -51,7 +51,14 @@ export interface TagStore {
 
 export interface AnalyzeContext {
   store: TagStore;
-  fail(message: string, at?: Position): never;
+  fail(message: string, options?: ContractFailOptions | Position): never;
+  /** @unstable */
+  report(message: string, options?: ContractFailOptions | Position): void;
+  declare(
+    kind: string,
+    name: string,
+    options: { span: SourceSpan; scope?: string | string[] },
+  ): void;
 }
 
 export interface FinalizeContext {
@@ -177,6 +184,7 @@ is a positioned compile error.
 | `build` | Position-aware constructors for the IR available in that phase. |
 | `gensym` | Produces a hygienic file-unique binding, optionally using a hint. |
 | `fail` | In `analyze` and `transform`: `fail(message, { at?, code? })` (or `fail(message, position)`) creates a positioned `TranslateError` carrying `code` as `diagnosticCode`; always write `throw ctx.fail(...)`. `finalize` has none. |
+| `report` | In `analyze` only (`@unstable`): `report(message, { at?, code? })` (or `report(message, position)`) takes `fail`'s options, defaults and refusals but does not throw, so one hook reports every bad call. Each report is a diagnostic of the file, and a hook that reported has failed even when it returned. A call after `analyze` returned is `MX_TAG_HOOK_ERROR`. |
 | `hoist` | Moves code to the head of the nearest enclosing function. |
 | `declare` | In `analyze`: `declare(kind, name, { span, scope? })` adds a derived declaration a dialect reads from `LoweredUnit.declared`. |
 | `store` | Private per-tag, per-file state shared by `analyze`, `transform`, and `finalize`. |

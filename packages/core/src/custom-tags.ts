@@ -319,6 +319,21 @@ export interface AnalyzeContext {
   store: TagStore;
   fail(message: string, options?: ContractFailOptions | Position): never;
   /**
+   * Reports an error without ending the hook, so one `analyze` can report
+   * every bad call instead of only the first. It takes the same options as
+   * {@link AnalyzeContext.fail}, with the same defaults (the tag's first call,
+   * `MX_TAG_ERROR`) and the same refusals (a misused option is reported as
+   * `MX_TAG_HOOK_ERROR`, worded `` `ctx.report` takes ... ``); it never throws
+   * while the hook runs. Every reported error is a diagnostic of the file,
+   * and a hook that reported counts as failed: the compile fails, and in
+   * partial mode the tag is omitted like any tag whose `analyze` threw. A
+   * call after `analyze` returned (from a stored context) throws
+   * `MX_TAG_HOOK_ERROR`.
+   *
+   * @unstable
+   */
+  report(message: string, options?: ContractFailOptions | Position): void;
+  /**
    * Declares a name no tag states (a derived one, such as the `listId` a
    * `belongs-to` adds). Core only records it: a syntax module reads it from
    * `LoweredUnit.declared`. `span` is where an error or go-to for the name
@@ -925,12 +940,13 @@ function failFromHook(
   arg: unknown,
   fallback: Position,
   coreOwned = false,
+  method: "fail" | "report" = "fail",
 ): never {
   const misuse = (what: string): never =>
     failForOwner(
       TAG_HOOK_ERROR_CODE,
       owner,
-      `\`ctx.fail\` takes a position or \`{ at?, code? }\`: ${what}`,
+      `\`ctx.${method}\` takes a position or \`{ at?, code? }\`: ${what}`,
       fallback,
     );
   let at = fallback;
@@ -3800,7 +3816,9 @@ export function markValidatedContracts(
  * A tag whose `analyze` throws does not stop the others: every failure is
  * collected and thrown together at the end (the earliest failure in the
  * compiled file, carrying the rest). Inside one hook the first `ctx.fail` still ends that
- * hook, since `fail` never returns.
+ * hook, since `fail` never returns; `ctx.report` collects an error and lets
+ * the hook go on, and its errors join the same failures, so a hook that
+ * reported has failed even when it returned.
  */
 export function runAnalyzeHooks(
   ctx: Ctx,
@@ -3821,6 +3839,10 @@ export function runAnalyzeHooks(
     // A bare `analyze` failure has no one call to blame, so it is positioned
     // at the tag's first call in the file — the earliest place an author can
     // start reading to understand what the whole set looked like.
+    // `report`'s errors, in call order; `open` is false once `analyze` ended,
+    // so a report from a stored context cannot be silently dropped.
+    const reported: TranslateError[] = [];
+    let open = true;
     const analyzeContext: AnalyzeContext = {
       store: storeFor(ctx, name),
       fail: (message, options) =>
@@ -3831,6 +3853,31 @@ export function runAnalyzeHooks(
           options,
           first.loc,
         ),
+      report: (message, options) => {
+        if (!open) {
+          failForOwner(
+            TAG_HOOK_ERROR_CODE,
+            spellAt(voiceOfCtx(ctx), name, first.loc),
+            "`ctx.report` called after `analyze` returned",
+            first.loc,
+          );
+        }
+        try {
+          failFromHook(
+            ctx,
+            spellAt(voiceOfCtx(ctx), name, first.loc),
+            message,
+            options,
+            first.loc,
+            false,
+            "report",
+          );
+        } catch (error) {
+          // Anything but a `TranslateError` is a bug in core, not a report.
+          if (!isTranslateError(error)) throw error;
+          reported.push(error);
+        }
+      },
       declare: (kind, declaredName, options) => {
         ctx.contractDerived ??= [];
         ctx.contractDerived.push({
@@ -3841,14 +3888,28 @@ export function runAnalyzeHooks(
         });
       },
     };
+    let thrown: { error: unknown } | undefined;
     try {
       analyze(tagCalls, analyzeContext);
     } catch (error) {
-      // One tag's failure does not hide another's: the file has one
-      // diagnostic per error, and each tag's `analyze` is independent of the
-      // others' (it sees only its own calls and store).
+      thrown = { error };
+    } finally {
+      open = false;
+    }
+    // One tag's failure does not hide another's: the file has one diagnostic
+    // per error, and each tag's `analyze` is independent of the others' (it
+    // sees only its own calls and store). Reports come first, in call order,
+    // then the error the hook threw, if any.
+    failures.push(...reported);
+    if (thrown) {
       failures.push(
-        wrapHookError(error, name, "analyze", first.loc, voiceOfCtx(ctx)),
+        wrapHookError(
+          thrown.error,
+          name,
+          "analyze",
+          first.loc,
+          voiceOfCtx(ctx),
+        ),
       );
     }
   }

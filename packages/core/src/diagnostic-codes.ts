@@ -204,9 +204,9 @@ export const DIALECT_HOOK_ERROR_CODE = "MX_DIALECT_HOOK_ERROR";
 export const DIALECT_ERROR_CODE = "MX_DIALECT_ERROR";
 /** A dialect's own warning (`unit.warn`) that gave no code. */
 export const DIALECT_WARNING_CODE = "MX_DIALECT_WARNING";
-/** A custom tag hook (`analyze`, `transform`, `finalize`) that broke its contract: it threw, returned the wrong thing, or misused `ctx.fail` or `ctx.build`. */
+/** A custom tag hook (`analyze`, `transform`, `finalize`) that broke its contract: it threw, returned the wrong thing, or misused `ctx.fail`, `ctx.report` or `ctx.build`. */
 export const TAG_HOOK_ERROR_CODE = "MX_TAG_HOOK_ERROR";
-/** A custom tag hook's `ctx.fail` that gave no code. */
+/** A custom tag hook's `ctx.fail` or `ctx.report` that gave no code. */
 export const TAG_ERROR_CODE = "MX_TAG_ERROR";
 /** A bug in MX, not in the file: an internal invariant broke, or an error reached the diagnostics with no code. */
 export const INTERNAL_ERROR_CODE = "MX_INTERNAL_ERROR";
@@ -684,7 +684,10 @@ export const MX_DIAGNOSTIC_CODES: readonly MxDiagnosticCodeEntry[] =
         [DIALECT_HOOK_ERROR_CODE, "a dialect hook that broke its contract"],
         [DIALECT_ERROR_CODE, "a dialect's own error that gave no code"],
         [TAG_HOOK_ERROR_CODE, "a custom tag hook that broke its contract"],
-        [TAG_ERROR_CODE, "a custom tag hook's `ctx.fail` that gave no code"],
+        [
+          TAG_ERROR_CODE,
+          "a custom tag hook's `ctx.fail` or `ctx.report` that gave no code",
+        ],
         [INTERNAL_ERROR_CODE, "a bug in MX, not in the file"],
         [
           EXPECTED_SINGLE_EXPRESSION_CODE,

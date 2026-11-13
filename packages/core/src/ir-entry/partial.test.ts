@@ -330,6 +330,53 @@ describe("opt-in partial IR", () => {
       expect(text).toMatch(/own `analyze` fails is omitted/);
   });
 
+  it("skips the transforms and finalizer of a tag whose analyze only reported", () => {
+    const calls: string[] = [];
+    const customTags: Record<string, CustomTag> = {
+      checked: {
+        analyze(tagCalls, ctx) {
+          for (const call of tagCalls)
+            ctx.report("reported", { at: call.loc, code: "PROBE_RE" });
+          calls.push("checked.analyze returned");
+        },
+        transform() {
+          calls.push("checked.transform");
+          return [];
+        },
+        finalize() {
+          calls.push("checked.finalize");
+          return [];
+        },
+      },
+      healthy: {
+        analyze() {
+          calls.push("healthy.analyze");
+        },
+        transform() {
+          calls.push("healthy.transform");
+          return [];
+        },
+        finalize() {
+          calls.push("healthy.finalize");
+          return [];
+        },
+      },
+    };
+    const source = "<before/><checked/><checked/><healthy/><after/>";
+    const result = validPartial(source, { customTags });
+    expect(names(result)).toEqual(["before", "after"]);
+    expect(result.diagnostics.map((d) => [d.code, d.line, d.column])).toEqual([
+      ["PROBE_RE", 1, 9],
+      ["PROBE_RE", 1, 19],
+    ]);
+    expect(calls).toEqual([
+      "checked.analyze returned",
+      "healthy.analyze",
+      "healthy.transform",
+      "healthy.finalize",
+    ]);
+  });
+
   it.each([false, true])(
     "skips an analyze-failed tag inside template units (nested: %s)",
     (nested) => {

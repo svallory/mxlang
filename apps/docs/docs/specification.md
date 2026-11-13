@@ -3321,7 +3321,17 @@ Six invariants:
 failure of one does not hide another's: each is a diagnostic of the file. A failure
 that carries related errors stands for all of them. The file's first error, in
 position order and not in tag-name order, is the one a throwing compile reports, and
-the rest follow it in position order.
+the rest follow it in position order. Inside one `analyze`, `ctx.fail` throws and
+ends the hook; `ctx.report(message, options?)` (`@unstable`, `analyze` only)
+collects an error and lets the hook go on, so one hook can report every bad call.
+Its options, defaults and refusals are `ctx.fail`'s (below; a refusal is worded
+`` `ctx.report` takes ... ``, and is collected like a report rather than thrown).
+Each reported error is a diagnostic of the file, ordered with every other failure
+as above, and a hook that reported has failed even when it returned: the compile
+fails, and under partial IR the tag is omitted like any tag whose `analyze`
+threw. A `ctx.report` called after its `analyze` returned (through a stored
+context) is a positioned `MX_TAG_HOOK_ERROR`, `` `ctx.report` called after
+`analyze` returned ``, at the tag's first call.
 
 **`ctx.fail` in `analyze` and `transform`** is `ctx.fail(message, options?)`,
 where `options` is a plain `{ at?, code? }` object or a bare position, which is
@@ -4687,7 +4697,7 @@ host, a target or a dialect.
 - **A hook's error** carries the code the hook gave, or the hook's default:
   `MX_DIALECT_ERROR` for a dialect's `ctx.fail`, `unit.fail` and
   `explainUnknownTag`, `MX_DIALECT_WARNING` for `unit.warn`, `MX_TAG_ERROR` for
-  a contract hook's `ctx.fail`, `MX_TAG_FILE_ERROR` for a dialect tag file. A
+  a contract hook's `ctx.fail` and `ctx.report`, `MX_TAG_FILE_ERROR` for a dialect tag file. A
   hook that breaks its contract is `MX_DIALECT_HOOK_ERROR`
   (`MX_TAG_HOOK_ERROR` for a contract hook).
 - **`MX_` is MX's own prefix.** A hook that passes a code starting with `MX_`
@@ -4788,7 +4798,7 @@ host, a target or a dialect.
 |---|---|---|
 | `MX_DIALECT_ERROR` | error | a dialect's own error that gave no code |
 | `MX_DIALECT_HOOK_ERROR` | error | a dialect hook that broke its contract |
-| `MX_TAG_ERROR` | error | a custom tag hook's `ctx.fail` that gave no code |
+| `MX_TAG_ERROR` | error | a custom tag hook's `ctx.fail` or `ctx.report` that gave no code |
 | `MX_TAG_HOOK_ERROR` | error | a custom tag hook that broke its contract |
 
 **Parse: the front end.**
