@@ -70,5 +70,5 @@ path = "packages/editors/tree-sitter-solid"
 # DEV FORM. Same rules as solid.
 # AT PUBLISH TIME: swap to real GitHub URL and drop `path`.
 repository = "file:///Users/svallory/work/mx"
-rev = "3ed8d406cd401f11f58d54e798ac24216603eebd"
+rev = "85d3fd60f788279d4c974de3904052742ebe42d3"
 path = "packages/editors/tree-sitter-astromx"
