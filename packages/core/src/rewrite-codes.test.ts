@@ -243,4 +243,14 @@ describe("freeIdentifiersInProgram", () => {
   it("is null for a text Babel cannot parse", () => {
     expect(freeIdentifiersInProgram("const = ;")).toBeNull();
   });
+
+  it.each([
+    ["<Show when={a}>{b}</Show>;", ["a", "b"]],
+    ["<Foo.Bar />;", []],
+    ["<li>{c}</li>;", ["c"]],
+  ])("with jsxTagNames: false, %s reads %j", (code, names) => {
+    expect([
+      ...(freeIdentifiersInProgram(code, { jsxTagNames: false }) ?? []),
+    ]).toEqual(names);
+  });
 });

@@ -1,7 +1,4 @@
-import {
-  parse as parseBabel,
-  parseExpression as parseBabelExpression,
-} from "@babel/parser";
+import { parseExpression as parseBabelExpression } from "@babel/parser";
 import {
   ATTR_TAG_FOLD,
   ATTR_TAG_RECORD,
@@ -21,6 +18,7 @@ import {
   type ForHead,
   fail as failAtNode,
   filterAttributeTagTree,
+  freeIdentifiersInProgram,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -467,237 +465,6 @@ const KNOWN_GLOBALS = new Set([
   "decodeURIComponent",
   "structuredClone",
 ]);
-
-/**
- * The free identifiers a hoisted `<define>` body references — everything
- * `blockExpression`'s output reads that is not bound inside that same text.
- *
- * A hand-rolled walk rather than `@mxlang/core`'s `freeIdentifiersIn`: that
- * helper parses with the `typescript` plugin only, so a JSX-shaped
- * `<define>` body (the common case — a `<define>` almost always renders
- * markup) fails to parse there and its `catch` silently returns an empty
- * set, which is exactly the silent-undercount this check exists to prevent.
- * `@babel/parser` is already a direct dependency here; `@babel/traverse` is
- * not, so this walks the tree itself rather than adding one, using the same
- * "collect every binding position, then subtract" shape
- * `packages/tsx-bridge/src/index.ts`'s `shadowedNames`/`namesIn` already use for
- * an adjacent problem (there: is a name shadowed; here: is a name free).
- *
- * Deliberately coarse, in the safe direction: it tracks *lexical* bindings
- * (function/arrow params, `const`/`let`/`var`, a `catch` param, a `for`
- * loop's own declarator) but does not model hoisting or TDZ order, so a
- * name used before its `const` in the same block is (harmlessly) treated as
- * bound rather than free. It does not resolve `this`/`arguments` (Solid
- * JSX bodies do not use either meaningfully) or handle `var` function-scope
- * hoisting past a block boundary — both push toward *fewer* false
- * "captures" flagged only where they change nothing this check cares about,
- * never toward silently accepting a real capture.
- */
-function freeJsxNames(code: string): string[] {
-  let file: unknown;
-  try {
-    file = parseBabel(code, {
-      sourceType: "module",
-      plugins: ["typescript", "jsx"],
-      allowReturnOutsideFunction: true,
-    });
-  } catch {
-    // The emitter's own output failed to parse — a bug in this function or
-    // in `blockExpression`, not a user-facing capture. Reported as "no
-    // captures" here; the region's own re-parse a few lines up the call
-    // stack (`mxParseElementAt`) is what actually catches a malformed emit.
-    return [];
-  }
-
-  const free = new Set<string>();
-  const walk = (node: unknown, bound: ReadonlySet<string>): void => {
-    if (node === null || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item, bound);
-      return;
-    }
-    const record = node as Record<string, unknown> & { type?: string };
-
-    if (
-      (record.type === "Identifier" || record.type === "JSXIdentifier") &&
-      typeof record.name === "string"
-    ) {
-      if (!bound.has(record.name)) free.add(record.name);
-      return;
-    }
-    // A member/attribute property (`o.x`, `<Foo x={1}/>`'s `x`) is not a
-    // reference to a binding named `x`.
-    if (
-      record.type === "MemberExpression" ||
-      record.type === "OptionalMemberExpression"
-    ) {
-      walk(record.object, bound);
-      if (record.computed) walk(record.property, bound);
-      return;
-    }
-    if (record.type === "JSXAttribute") {
-      walk(record.value, bound);
-      return;
-    }
-    // A JSX element's own tag name is not an identifier *reference*: a
-    // lowercase intrinsic (`<li>`) is never a binding at all, and even a
-    // capitalized component reference (`<Row>`) is read through its
-    // `openingElement.name`/`closingElement.name`, so walking those would
-    // double-report it — the attributes/children walk below already visits
-    // any real reference inside them.
-    if (record.type === "JSXElement") {
-      walk(
-        (record.openingElement as Record<string, unknown>)?.attributes,
-        bound,
-      );
-      walk(record.children, bound);
-      return;
-    }
-    if (record.type === "JSXFragment") {
-      walk(record.children, bound);
-      return;
-    }
-    if (record.type === "JSXExpressionContainer") {
-      walk(record.expression, bound);
-      return;
-    }
-    if (
-      (record.type === "ObjectProperty" || record.type === "ObjectMethod") &&
-      !record.computed
-    ) {
-      walk(record.value, bound);
-      walk(record.body, bound);
-      for (const param of (record.params as unknown[] | undefined) ?? []) {
-        // Handled by the function-scope branch below when this is a method;
-        // params/body are visited together there for a plain ObjectMethod.
-        void param;
-      }
-      return;
-    }
-
-    let next = bound;
-    const introduce = (names: Iterable<string>) => {
-      let widened: Set<string> | null = null;
-      for (const introduced of names) {
-        widened ??= new Set(next);
-        widened.add(introduced);
-      }
-      if (widened) next = widened;
-    };
-
-    switch (record.type) {
-      case "FunctionExpression":
-      case "FunctionDeclaration":
-      case "ArrowFunctionExpression":
-      case "ObjectMethod":
-      case "ClassMethod":
-        introduce(
-          bindingNamesOf((record.params as unknown[] | undefined) ?? []),
-        );
-        break;
-      case "Program":
-      case "BlockStatement": {
-        // A block's own statements share one scope, and a later statement
-        // sees an earlier `const`/`let`/`function` — the one case the
-        // generic array walk below gets wrong: it hands every array item
-        // the *same* `bound`, so `const $mxText0 = x; return $mxText0` was
-        // reporting `$mxText0` as free (measured: `escapedBlockValue`'s own
-        // generated IIFE body, `{ const $mxText0 = expr; ...; return ...; }`,
-        // tripped this before the fix). Statements are walked left to
-        // right, widening `scope` as each declaration is seen.
-        let scope = bound;
-        for (const statement of (record.body as unknown[]) ?? []) {
-          walk(statement, scope);
-          const s = statement as Record<string, unknown> & { type?: string };
-          if (s.type === "VariableDeclaration") {
-            scope = new Set([...scope, ...bindingNamesOf([s])]);
-          } else if (
-            s.type === "FunctionDeclaration" &&
-            (s.id as Record<string, unknown> | undefined)?.type === "Identifier"
-          ) {
-            scope = new Set([...scope, (s.id as { name: string }).name]);
-          }
-        }
-        return;
-      }
-      case "VariableDeclarator":
-        // The initializer is evaluated in the *outer* scope; the id's names
-        // become bound for whatever follows, which the caller's sibling
-        // walk (over the declarations array, left to right) already gives
-        // us via `next` carrying forward.
-        walk(record.init, bound);
-        introduce(bindingNamesOf([record.id]));
-        for (const key of Object.keys(record)) {
-          if (key === "loc" || key === "init" || key === "id") continue;
-          walk(record[key], next);
-        }
-        return;
-      case "CatchClause":
-        if (record.param) introduce(bindingNamesOf([record.param]));
-        break;
-      case "ForStatement":
-      case "ForInStatement":
-      case "ForOfStatement":
-        // `left`/`init` may declare a loop-local (`for (const x of xs)`);
-        // walked under `next` below like every other child.
-        break;
-    }
-
-    for (const key of Object.keys(record)) {
-      if (key === "loc") continue;
-      walk(record[key], next);
-    }
-  };
-
-  walk(file, new Set());
-  return [...free];
-}
-
-/** Every name a parameter/pattern node binds (params, destructuring). */
-function bindingNamesOf(nodes: unknown[]): string[] {
-  const out: string[] = [];
-  const visit = (node: unknown): void => {
-    if (node === null || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) visit(item);
-      return;
-    }
-    const record = node as Record<string, unknown> & { type?: string };
-    switch (record.type) {
-      case "Identifier":
-        if (typeof record.name === "string") out.push(record.name);
-        return;
-      case "AssignmentPattern":
-        visit(record.left);
-        return;
-      case "RestElement":
-        visit(record.argument);
-        return;
-      case "ArrayPattern":
-        for (const element of (record.elements as unknown[]) ?? []) {
-          visit(element);
-        }
-        return;
-      case "ObjectPattern":
-        for (const prop of (record.properties as unknown[]) ?? []) {
-          const p = prop as Record<string, unknown> & { type?: string };
-          if (p.type === "RestElement") visit(p);
-          else visit(p.value);
-        }
-        return;
-      case "VariableDeclaration":
-        for (const decl of (record.declarations as unknown[]) ?? []) {
-          const d = decl as Record<string, unknown>;
-          visit(d.id);
-        }
-        return;
-      default:
-        return;
-    }
-  };
-  for (const node of nodes) visit(node);
-  return out;
-}
 
 /**
  * Runs `emit` in a body that scopes `<define>` names, as core's lowering does
@@ -3656,7 +3423,12 @@ export class SolidEmitter implements Emitter<string> {
     const hoistedNames = defineBindings
       ? new Set(defineBindings.values())
       : null;
-    const captured = freeJsxNames(bodyCode).filter(
+    // Names read only as a tag (`<Show>`, `<Errored>`) are imported
+    // components, not captures; text Babel cannot parse is the emitter's own
+    // bug, read as no names.
+    const captured = [
+      ...(freeIdentifiersInProgram(bodyCode, { jsxTagNames: false }) ?? []),
+    ].filter(
       (freeName) =>
         !bound.has(freeName) &&
         !hoistedNames?.has(freeName) &&
@@ -3681,7 +3453,7 @@ export class SolidEmitter implements Emitter<string> {
     // the define's own body — verified against `@mxlang/target-html`, which
     // rejects the identical source with the same "no matching import or
     // `<define>` in scope" error at lowering time, before any host-specific
-    // code runs). So every name `freeJsxNames` can find bound in
+    // code runs). So every free name the check above finds bound in
     // `defineBindings` above was necessarily minted by an *earlier* call to
     // this method in the same region, and minting this one fresh now can
     // never collide with one still to come.
@@ -3771,7 +3543,11 @@ export class SolidEmitter implements Emitter<string> {
     // and every name the catch body references, so they can never shadow
     // either.
     const used = new Set<string>(catchTag.block.bindings ?? params);
-    for (const name of freeJsxNames(caught.code)) used.add(name);
+    for (const name of freeIdentifiersInProgram(caught.code, {
+      jsxTagNames: false,
+    }) ?? []) {
+      used.add(name);
+    }
     const gensym = (base: string): string => {
       let name = base;
       while (used.has(name)) name = `${name}_2`;

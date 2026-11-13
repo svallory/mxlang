@@ -254,8 +254,16 @@ export function freeIdentifiersIn(code: string): Set<string> {
  * (`a.Row`) is not a read, and a name an inner scope rebinds (`(Row) => Row`)
  * is that binding's. `null` when Babel cannot parse the text, so a caller can
  * fall back to assuming every name is read.
+ *
+ * `jsxTagNames: false` leaves out a name read only as an element's tag (`Show`
+ * in `<Show>…</Show>`, `Foo` in `<Foo.Bar/>`), for a caller that asks what a
+ * body reads besides the components it renders; default `true`.
  */
-export function freeIdentifiersInProgram(code: string): Set<string> | null {
+export function freeIdentifiersInProgram(
+  code: string,
+  options: { jsxTagNames?: boolean } = {},
+): Set<string> | null {
+  const jsxTagNames = options.jsxTagNames ?? true;
   const { parse, traverse } = coreBabel();
   let file: Node;
   try {
@@ -273,10 +281,31 @@ export function freeIdentifiersInProgram(code: string): Set<string> | null {
     ReferencedIdentifier(path: Node) {
       const name = path.node.name;
       if (path.scope.getBinding(name)) return;
+      if (!jsxTagNames && isJsxTagName(path)) return;
       names.add(name);
     },
   });
   return names;
+}
+
+/**
+ * Whether `path` is a `JSXIdentifier` that is an opening or closing element's
+ * `name`, or the root object of one (`Foo` in `<Foo.Bar>`).
+ */
+function isJsxTagName(path: Node): boolean {
+  if (path.node.type !== "JSXIdentifier") return false;
+  let current = path;
+  while (
+    current.parentPath?.node.type === "JSXMemberExpression" &&
+    current.key === "object"
+  ) {
+    current = current.parentPath;
+  }
+  const parent = current.parentPath?.node.type;
+  return (
+    current.key === "name" &&
+    (parent === "JSXOpeningElement" || parent === "JSXClosingElement")
+  );
 }
 
 /** One name a destructuring pattern binds, with the path that reads it. */
