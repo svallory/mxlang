@@ -9,6 +9,7 @@ import { transformFileTextChanges } from "@volar/typescript/lib/node/transform";
 import type * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
+  dropVerificationOnlyCodeActions,
   isVerificationOnly,
   landsOnVerificationOnly,
 } from "./code-action-mappings.ts";
@@ -231,5 +232,76 @@ describe("landsOnVerificationOnly", () => {
         },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("dropVerificationOnlyCodeActions on a stub service", () => {
+  // Generated 10..20 maps onto a verification-only mapping, 30..40 onto
+  // authored code.
+  const language = stubLanguage([
+    [mapping(10, 3, 10, VERIFY), mapping(30, 20, 10, codeInformation)],
+  ]);
+  const onVerification = change(12, 2);
+  const onAuthored = change(32, 2);
+  /** A service whose refactor and organize imports answer `answer`. */
+  const wrapped = (
+    answer: {
+      refactor?: ts.RefactorEditInfo;
+      organize?: ts.FileTextChanges[];
+    },
+    withLanguage = true,
+  ) => {
+    const service = {
+      getCodeFixesAtPosition: () => [],
+      getCombinedCodeFix: () => ({ changes: [] }),
+      getEditsForRefactor: () => answer.refactor,
+      organizeImports: () => answer.organize ?? [],
+    } as unknown as ts.LanguageService;
+    dropVerificationOnlyCodeActions(service, () =>
+      withLanguage ? language : undefined,
+    );
+    return service;
+  };
+  const refactor = (service: ts.LanguageService) =>
+    service.getEditsForRefactor("/p/page.mx", {}, 0, "r", "a", {});
+  const organize = (service: ts.LanguageService) =>
+    service.organizeImports({ type: "file", fileName: "/p/page.mx" }, {}, {});
+
+  it("a refactor with an edit on a verification-only mapping is undefined", () => {
+    const info: ts.RefactorEditInfo = {
+      edits: [...onAuthored, ...onVerification],
+      renameFilename: "/p/page.mx",
+      renameLocation: 32,
+    };
+    expect(refactor(wrapped({ refactor: info }))).toBeUndefined();
+  });
+
+  it("a refactor on authored code is the same object", () => {
+    const info: ts.RefactorEditInfo = { edits: onAuthored };
+    expect(refactor(wrapped({ refactor: info }))).toBe(info);
+  });
+
+  it("an undefined refactor passes through", () => {
+    expect(refactor(wrapped({}))).toBeUndefined();
+  });
+
+  it("organize imports with a change on a verification-only mapping is []", () => {
+    expect(
+      organize(wrapped({ organize: [...onAuthored, ...onVerification] })),
+    ).toEqual([]);
+  });
+
+  it("organize imports on authored code is the same array", () => {
+    expect(organize(wrapped({ organize: onAuthored }))).toBe(onAuthored);
+  });
+
+  it("passes both through when there is no language yet", () => {
+    const info: ts.RefactorEditInfo = { edits: onVerification };
+    const service = wrapped(
+      { refactor: info, organize: onVerification },
+      false,
+    );
+    expect(refactor(service)).toBe(info);
+    expect(organize(service)).toBe(onVerification);
   });
 });

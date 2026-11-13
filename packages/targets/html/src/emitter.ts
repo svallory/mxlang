@@ -1038,7 +1038,7 @@ export function createEmitter(
       // declares no `content` (TS2353) is the author's error, reported where
       // a missing prop is. `verification` only, so hover, navigation and
       // completion on the tag name stay the name's own. The TypeScript plugin
-      // drops a code fix that lands on a verification-only mapping.
+      // drops a code action that lands on a verification-only mapping.
       setProp(
         "content",
         untypedCallee && content.hasParams

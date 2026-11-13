@@ -417,6 +417,66 @@ describe("a TypeScript fix whose edit lands on a verification-only mapping", () 
   });
 });
 
+describe("a TypeScript refactor whose edit lands on a verification-only mapping", () => {
+  // An attribute tag's property maps generated `"title": <value>` onto
+  // authored `title=<value>` with `verification` only, and is sorted ahead of
+  // the value's own mapping, so Volar takes it first: the refactor's edit of
+  // the value would be written 3 characters early, over `le=foo.bar`.
+  const dir = `${here}/fixtures/solid-policy`;
+  const page = `${dir}/RefactorPage.solid.mx`;
+  const PAGE = [
+    'import Card from "./RefactorCard.solid.mx";',
+    'const foo = { bar: "x" };',
+    'export const label = foo.bar + "y";',
+    'export const view = () => <Card><@tab title=foo.bar + "y"/></Card>;',
+    "",
+  ].join("\n");
+  let service: ts.LanguageService | undefined;
+  const plugin = () => {
+    service ??= createMutablePluginService(
+      {
+        [`${dir}/RefactorCard.solid.mx`]: [
+          'import type { AttrTag } from "@mxlang/host-solid";',
+          "export interface Input { tab: AttrTag<{ title: string }> }",
+          "export default function Card(_input: Input) { return null; }",
+        ].join("\n"),
+        [page]: PAGE,
+        [`${dir}/refactor-consumer.ts`]: 'import "./RefactorPage.solid.mx";\n',
+      },
+      [`${dir}/refactor-consumer.ts`],
+    ).service;
+    return service;
+  };
+  const toTemplate = (position: number) =>
+    plugin().getEditsForRefactor(
+      page,
+      {},
+      position,
+      "Convert to template string",
+      "Convert to template string",
+      {},
+    );
+
+  it("makes no edit", () => {
+    expect(toTemplate(PAGE.lastIndexOf('"y"'))).toBeUndefined();
+  });
+
+  it("keeps the refactor on authored code, rewriting only the authored text", () => {
+    const edits = toTemplate(PAGE.indexOf('"y"'))?.edits ?? [];
+    expect(
+      apply(PAGE, { changes: edits } as unknown as ts.CodeFixAction, page),
+    ).toBe(
+      [
+        'import Card from "./RefactorCard.solid.mx";',
+        'const foo = { bar: "x" };',
+        "export const label = `${foo.bar}y`;",
+        'export const view = () => <Card><@tab title=foo.bar + "y"/></Card>;',
+        "",
+      ].join("\n"),
+    );
+  });
+});
+
 describe("applicableFixes", () => {
   const edit = (offset: number, end: number, newText = "x") => ({
     offset,

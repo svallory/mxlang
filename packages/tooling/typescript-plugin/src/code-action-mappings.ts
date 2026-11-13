@@ -8,8 +8,8 @@ import { getServiceScript } from "@volar/typescript/lib/node/utils";
 import type * as ts from "typescript";
 
 /**
- * A TypeScript code-fix edit that lands on a verification-only mapping is
- * never offered.
+ * A TypeScript code action (a code fix, a refactor, organize imports) whose
+ * edit lands on a verification-only mapping makes no edit.
  *
  * The pinned Volar (2.4.28) maps a code action's text changes through any
  * mapping whose `CodeInformation` enables code actions, and
@@ -18,7 +18,7 @@ import type * as ts from "typescript";
  * authored span the generated text is not (the html body's `content` key on
  * the tag name, an attribute tag's property, a fallback span, an approximation
  * overlay). An edit Volar maps through one rewrites authored text the edit
- * does not describe, so a fix with such a change is dropped. This runs
+ * does not describe, so an action with such a change makes none. This runs
  * beneath Volar's proxy, on the generated-coordinate results, repeating
  * Volar's own lookup (`transformFileTextChanges` → `transformSpan` →
  * `transformTextSpan`: the first range `toSourceRange` yields).
@@ -68,12 +68,18 @@ export function landsOnVerificationOnly(
 }
 
 /**
- * Wraps `getCodeFixesAtPosition` and `getCombinedCodeFix` of the service Volar
- * is about to proxy. A fix with any change on a verification-only mapping is
- * dropped; a combined fix with one keeps its other fields and no changes (a
- * fix-all is one action, so a partial one could leave the file half-edited).
+ * Wraps the code actions of the service Volar is about to proxy whose text
+ * changes Volar maps under its code-action filter: `getCodeFixesAtPosition`,
+ * `getCombinedCodeFix`, `getEditsForRefactor` and `organizeImports`. A fix with
+ * any change on a verification-only mapping is dropped; a combined fix with
+ * one keeps its other fields and no changes (a fix-all is one action, so a
+ * partial one could leave the file half-edited). A refactor with one is
+ * `undefined`, as tsserver answers a refactor with no edits: its
+ * `renameLocation` and `commands` would otherwise follow an edit that never
+ * happened. Organize imports with one returns no changes, being one whole-file
+ * action too.
  */
-export function dropVerificationOnlyCodeFixes(
+export function dropVerificationOnlyCodeActions(
   service: ts.LanguageService,
   getLanguage: () => Language<string> | undefined,
 ): void {
@@ -94,5 +100,27 @@ export function dropVerificationOnlyCodeFixes(
       return combined;
     }
     return { ...combined, changes: [] };
+  };
+  const editsForRefactor = service.getEditsForRefactor.bind(service);
+  service.getEditsForRefactor = (...args) => {
+    const refactor = editsForRefactor(...args);
+    const language = getLanguage();
+    if (
+      !refactor ||
+      !language ||
+      !landsOnVerificationOnly(language, refactor.edits)
+    ) {
+      return refactor;
+    }
+    return undefined;
+  };
+  const organizeImports = service.organizeImports.bind(service);
+  service.organizeImports = (...args) => {
+    const changes = organizeImports(...args);
+    const language = getLanguage();
+    if (!language || !landsOnVerificationOnly(language, changes)) {
+      return changes;
+    }
+    return [];
   };
 }
