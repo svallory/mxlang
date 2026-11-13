@@ -345,22 +345,20 @@ describe("Solid's generated bindings use the reserved `__mx` names", () => {
   // changes none of them, and nested loops still get distinct names.
   it("generates the same `__mx` loop names whatever the author binds", () => {
     const setup = "import Layout from './layout';";
-    const generated = (source: string): string[] => {
-      const { code } = compileSolidMx(source, {
+    const compiled = (source: string): string =>
+      compileSolidMx(source, {
         filename: "fixture.solid.mx",
         moduleBindings: sourceBindings(setup).bindings,
         unknownModuleBindings: unknownSourceBindings(setup),
-      });
-      return [
-        ...new Set(
-          [
-            ...code.matchAll(
-              /__mx(?:List|Value|Index|Row|Entry|From|Step)\d+/g,
-            ),
-          ].map((match) => match[0]),
-        ),
-      ];
-    };
+      }).code;
+    // Every generated loop name, first appearance order, serial or not.
+    const generated = (code: string): string[] => [
+      ...new Set(
+        [
+          ...code.matchAll(/__mx(?:List|Value|Index|Row|Entry|From|Step)\d*/g),
+        ].map((match) => match[0]),
+      ),
+    ];
     const template = (
       row: string,
       inner: string,
@@ -375,22 +373,35 @@ describe("Solid's generated bindings use the reserved `__mx` names", () => {
         `<Layout><for|${item}| of=xs><@item>\${${item}}</@item></for><for|k| in=obj><@row>\${k}</@row></for></Layout>`,
         `</div>`,
       ].join("");
-    const expected = [
-      "__mxRow0",
-      "__mxRow1",
-      "__mxEntry2",
-      "__mxFrom4",
-      "__mxStep5",
-      "__mxIndex3",
-      "__mxList7",
-      "__mxValue9",
-    ];
-    expect(generated(template("a", "b", "k", "x"))).toEqual(expected);
-    expect(generated(template("mxRow", "mxRow2", "mxEntry", "mxList"))).toEqual(
-      expected,
-    );
-    expect(generated(template("value", "mxList", "mxRow", "value"))).toEqual(
-      expected,
+    const plain = compiled(template("a", "b", "k", "x"));
+    const names = generated(plain);
+    // The same names whatever the author binds, including the old
+    // scan-avoided names.
+    expect(
+      generated(compiled(template("mxRow", "mxRow2", "mxEntry", "mxList"))),
+    ).toEqual(names);
+    expect(
+      generated(compiled(template("value", "mxList", "mxRow", "value"))),
+    ).toEqual(names);
+    // Each is `__mx<Base><n>`, one per construct in tree order.
+    for (const name of names) {
+      expect(name).toMatch(/^__mx(?:List|Value|Index|Row|Entry|From|Step)\d+$/);
+    }
+    expect(names.map((name) => name.replace(/^__mx|\d+$/g, ""))).toEqual([
+      "Row",
+      "Row",
+      "Entry",
+      "From",
+      "Step",
+      "Index",
+      "List",
+      "Value",
+    ]);
+    // Nested loops get distinct names.
+    expect(names[0]).not.toBe(names[1]);
+    // No name from the deleted scans (`mxRow`, `mxList2`, `value2`, ...).
+    expect(plain).not.toMatch(
+      /(?<![\w$])(?:mx(?:List|Value|Index|Row|Entry|From|Step)|value)\d*(?![\w$])/,
     );
   });
 
