@@ -1244,6 +1244,9 @@ export function createEmitter(
         }
         return binding ? null : (node.target.expr.span ?? node.span ?? null);
       })();
+      // Called after the brace span is known, so the body's `content` key can
+      // map onto it (`contentSpan`). Attribute tags come from the call tree,
+      // as Marko's attribute-tag record, whatever the callee declares.
       const { parts, spreads } = propsOf(
         node.attrs,
         node.attributeTagTree,
