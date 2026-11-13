@@ -564,9 +564,27 @@ function remapExpressionLocations(
         (record.type === "TSSatisfiesExpression" ||
           record.type === "TSAsExpression")
       ) {
-        detach(record.typeAnnotation);
-        visit(record.expression);
-        return;
+        // A recorded mapping inside the type says the author wrote that part
+        // (`typeof Row` in a host's `(__mxDef_Row as typeof Row)`): the type
+        // is then visited like any other node, so the mapped name keeps its
+        // authored location.
+        const type = record.typeAnnotation as
+          | { start?: unknown; end?: unknown }
+          | undefined;
+        const typeStart = type?.start;
+        const typeEnd = type?.end;
+        const authored =
+          recorded !== undefined &&
+          typeof typeStart === "number" &&
+          typeof typeEnd === "number" &&
+          mappings.some(
+            (m) => m.generatedStart >= typeStart && m.generatedEnd <= typeEnd,
+          );
+        if (!authored) {
+          detach(record.typeAnnotation);
+          visit(record.expression);
+          return;
+        }
       }
 
       const partial =

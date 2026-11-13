@@ -13,9 +13,8 @@ import { createPluginService } from "./fixtures/plugin-service.ts";
  * answer may land inside the private name.
  *
  * Whole-file `.mx` under `mx.host: "preact"` (the fixture directory's
- * `package.json`). A `.preact.mx` region is not covered here: its projection
- * maps neither the define's `Row` nor the call's (the region compile forwards
- * no recorded mappings to the bridge), which is a host-side change.
+ * `package.json`), and the same three sites inside a `.preact.mx` region,
+ * whose host forwards the emitter's recorded mappings to the bridge.
  */
 
 const dir = join(
@@ -24,6 +23,7 @@ const dir = join(
   "preact-policy",
 );
 const PAGE = join(dir, "rows.mx");
+const REGION = join(dir, "rows.preact.mx");
 const CONSUMER = join(dir, "consumer.ts");
 // `Row` at 8 (the define), 47 (the direct call) and 59 (the `${Row}` read).
 const SOURCE =
@@ -32,6 +32,15 @@ const ALL_SITES = [
   [PAGE, 8, 3],
   [PAGE, 47, 3],
   [PAGE, 59, 3],
+];
+
+// `Row` at 32 (the define), 70 (the direct call) and 81 (the `${Row}` read).
+const REGION_SOURCE =
+  "export const view = <ul><define/Row|a: number|><li>${a}</li></define><Row(1)/><${Row}/></ul>;\n";
+const REGION_SITES = [
+  [REGION, 32, 3],
+  [REGION, 70, 3],
+  [REGION, 81, 3],
 ];
 
 const spans = (locations: readonly ts.DocumentSpan[] | undefined) =>
@@ -47,7 +56,11 @@ describe("rename and references across a define, its call and a ${} read", {
   timeout: 60_000,
 }, () => {
   const service = createPluginService(
-    { [CONSUMER]: 'import "./rows.mx";\n', [PAGE]: SOURCE },
+    {
+      [CONSUMER]: 'import "./rows.mx";\nimport "./rows.preact.mx";\n',
+      [PAGE]: SOURCE,
+      [REGION]: REGION_SOURCE,
+    },
     [CONSUMER],
   );
 
@@ -74,4 +87,24 @@ describe("rename and references across a define, its call and a ${} read", {
       ),
     ).toEqual(ALL_SITES);
   });
+
+  it.each([
+    ["the define's name", 32],
+    ["the direct call", 70],
+    ["the ${Row} read", 81],
+  ])(
+    "in a .preact.mx region, from %s, rename and references reach all three sites",
+    (_site, offset) => {
+      expect(
+        spans(service.findRenameLocations(REGION, offset, false, false, {})),
+      ).toEqual(REGION_SITES);
+      expect(
+        spans(
+          service
+            .findReferences(REGION, offset)
+            ?.flatMap((symbol) => symbol.references),
+        ),
+      ).toEqual(REGION_SITES);
+    },
+  );
 });

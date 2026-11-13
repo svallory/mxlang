@@ -662,6 +662,30 @@ describe("mxRegionCompile: recorded mappings", () => {
     expect(m && [m.start, m.end]).toEqual([at, at + 1]);
   });
 
+  it("keeps a recorded name inside a host-generated `as` type at its authored span", () => {
+    // A host types a call by the public name: `(__mxDef_Row as typeof Row)`.
+    // Only `typeof Row`'s `Row` is recorded; the private name is not.
+    const plain = "const view = <p a=Row/>;";
+    const emitted = "<p a={(__mxDef_Row as typeof Row)}/>";
+    const g = emitted.indexOf("Row)");
+    const at = plain.indexOf("Row/>");
+    const file = parse(plain, "x.solid.mx", {
+      mxRegionCompile: () => ({
+        code: emitted,
+        mappings: [
+          {
+            generatedStart: g,
+            generatedEnd: g + 3,
+            sourceStart: at,
+            sourceEnd: at + 3,
+          },
+        ],
+      }),
+    });
+    const row = nodes(file).find((n) => n.name === "Row");
+    expect(row && [row.start, row.end]).toEqual([at, at + 3]);
+  });
+
   it("keeps the verbatim search for an expression the host did not record", () => {
     const plain = "const view = <p a=x b=y/>;";
     const gy = "<p a={x} b={y}/>".indexOf("{y}") + 1;
