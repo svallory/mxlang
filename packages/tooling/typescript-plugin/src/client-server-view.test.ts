@@ -206,7 +206,12 @@ describe("importing a client export", { timeout: 60_000 }, () => {
   // `__mxClientExports`, which holds its client exports.
   it("a client import of a client export is clean", () => {
     const source = 'client import { x } from "./ca.mx";\n<div/>\n';
-    expect(errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE)).toEqual([]);
+    expect(
+      errorsOf({ [FILE]: source, [CA]: CA_SOURCE }, FILE).map((d) => [
+        d.code,
+        d.start,
+      ]),
+    ).toEqual([]);
   });
 
   it("a client import of an unknown name is TS2694 at the name", () => {
