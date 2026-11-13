@@ -3544,9 +3544,11 @@ statements run inside the define's function, or inside a function called in
 place in the body, so a `/x` there sits beside an outer `/x` without a
 duplicate. Under `<@placeholder>`, a `<try>` body that binds a `/var` runs its
 statements inside a component below the `Suspense` boundary, so a call that
-suspends shows the placeholder. An outer `/x` read after such a body compiles
-and reads the outer binding, as in Marko: the body's own `/x` is in scope only
-inside the body. A body `/x` with no outer binding of that name is still not in
+suspends shows the placeholder. An outer custom-tag `/x`, dynamic-tag `/x` or
+`<const/x>` read after such a body compiles and reads the outer binding, as in
+Marko: the body's own `/x` is in scope only inside the body. An outer `<let/x>`
+read after such a body is still refused, and on Preact, React and Hono so is an
+element body's (`<div>`) `/x` beside an outer `/x`, a duplicate declaration. A body `/x` with no outer binding of that name is still not in
 scope after the body. Solid holds a component's `/var`s in one binding per name, so
 there a `/var` that reuses the name of an earlier `/var` in the same component
 is a positioned compile error at the second tag; rename one of them. A define body's parameters share the body's scope with its `/var`,
