@@ -42,7 +42,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
+import { createRequire, isBuiltin } from "node:module";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCompilerCli, resolveTypescript } from "@mxlang/angular-checker";
@@ -434,16 +434,19 @@ function installedPackageDir(
   }
 }
 
-/** The files a module's relative `import`/`export ... from` specifiers name. */
+/** The files a module's relative specifiers ({@link specifiersOf}) name. */
 function relativeImportsOf(file: string, text: string): string[] {
   const found: string[] = [];
-  for (const match of text.matchAll(
-    /(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g,
-  )) {
-    const path = resolve(dirname(file), match[1] as string);
-    // As written, extensionless, or a directory's index module.
+  for (const spec of specifiersOf(text)) {
+    if (!RELATIVE.test(spec)) continue;
+    const path = resolve(dirname(file), spec);
+    // As written, a `.js` specifier's `.ts` source, extensionless, or a
+    // directory's index module.
     const resolved = [
       path,
+      ...(/\.[cm]?js$/.test(path)
+        ? [path.replace(/\.([cm]?)js$/, ".$1ts")]
+        : []),
       `${path}.ts`,
       `${path}.tsx`,
       join(path, "index.ts"),
@@ -451,6 +454,25 @@ function relativeImportsOf(file: string, text: string): string[] {
     if (resolved !== undefined) found.push(resolved);
   }
   return found;
+}
+
+const RELATIVE = /^\.{1,2}\//;
+
+/**
+ * Every module specifier a file writes that reaches code at runtime (`from`,
+ * `import`, `import()`, `require()`). A type-only `import type`/`export type`
+ * statement is erased, so it is left out.
+ */
+function specifiersOf(text: string): string[] {
+  const code = text.replace(
+    /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*["'][^"']+["']/g,
+    "",
+  );
+  return [
+    ...code.matchAll(
+      /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g,
+    ),
+  ].map((match) => match[1] as string);
 }
 
 function versionOf(manifest: string): string | undefined {
@@ -580,13 +602,7 @@ function tagInputsOf(mxPaths: readonly string[]): FileInput[] | undefined {
     const text = readText(path);
     inputs.set(slash(path), text);
     if (text !== null && MODULE_FILE.test(path)) {
-      const outside = relativeSpecifiersOf(path, text).some(
-        (target) =>
-          ![...directories].some((dir) =>
-            slash(target).startsWith(`${slash(dir)}/`),
-          ),
-      );
-      if (outside) return undefined;
+      if (!importsCovered(path, text, directories)) return undefined;
     }
   }
   return [...inputs]
@@ -597,16 +613,36 @@ function tagInputsOf(mxPaths: readonly string[]): FileInput[] | undefined {
 const MODULE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 
 /**
- * Every relative specifier a module writes (`from`, `import`, `import()`,
- * `require()`), resolved against its directory as written. Existence is not
- * checked: a conservative caller only asks where they point.
+ * Whether every module a tag-scan module imports is code the key covers or
+ * leaves to the `--force` caveat. A relative specifier must point inside a
+ * hashed tag directory (as written; existence is not checked). A bare one (a
+ * package, a tsconfig path alias) must resolve, from the importing file, to a
+ * real path under a `node_modules` directory: an installed package, which an
+ * install changes. One that does not resolve, or resolves to a workspace
+ * package through a link or to a source path, is code no key field covers.
  */
-function relativeSpecifiersOf(file: string, text: string): string[] {
-  return [
-    ...text.matchAll(
-      /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g,
-    ),
-  ].map((match) => resolve(dirname(file), match[1] as string));
+function importsCovered(
+  file: string,
+  text: string,
+  directories: ReadonlySet<string>,
+): boolean {
+  const require = createRequire(file);
+  return specifiersOf(text).every((spec) => {
+    if (RELATIVE.test(spec)) {
+      const target = slash(resolve(dirname(file), spec));
+      return [...directories].some((dir) =>
+        target.startsWith(`${slash(dir)}/`),
+      );
+    }
+    if (isBuiltin(spec)) return true;
+    let resolved: string;
+    try {
+      resolved = realpathSync(require.resolve(spec));
+    } catch {
+      return false;
+    }
+    return slash(resolved).includes("/node_modules/");
+  });
 }
 
 /**
@@ -704,6 +740,11 @@ const UNREADABLE_CODES = new Set([
   "EACCES",
   "EPERM",
   "ELOOP",
+  "EMFILE",
+  "ENFILE",
+  "ENAMETOOLONG",
+  "EIO",
+  "EBUSY",
   "MODULE_NOT_FOUND",
 ]);
 
@@ -786,7 +827,13 @@ function readEntry(
     // cosmiconfig's `$import`, are config inputs core does not list in
     // `watch`. The text check is conservative: `$import` anywhere in the file
     // (a nested key, a string) only costs the cache, never a stale answer.
-    if (config?.format === "module" || config?.text.includes("$import")) {
+    // A config whose revision failed to load (an unresolvable `$import`
+    // included) carries the previous text, or none in a fresh process.
+    if (
+      config?.error !== undefined ||
+      config?.format === "module" ||
+      config?.text.includes("$import")
+    ) {
       return undefined;
     }
     // A target or host given as a specifier is a descriptor module core loads.

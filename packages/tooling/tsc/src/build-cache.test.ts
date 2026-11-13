@@ -4,6 +4,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -308,6 +309,25 @@ describe("build-cache tool identity (row 7)", () => {
       "export const deep = 2;",
     );
     expect(identity()).not.toBe(before);
+  });
+
+  it("run from source, follows a .js specifier to its .ts source and a require() outside src/", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"));
+    mkdirSync(join(dir, "plugin"));
+    writeFileSync(
+      join(dir, "src", "self.ts"),
+      'import { a } from "../plugin/a.js";\nconst b = require("../plugin/b.ts");\n',
+    );
+    writeFileSync(join(dir, "plugin", "a.ts"), "export const a = 1;");
+    writeFileSync(join(dir, "plugin", "b.ts"), "export const b = 1;");
+    const identity = () =>
+      toolIdentity({ self: join(dir, "src", "self.ts"), externals: [] });
+    const first = identity();
+    writeFileSync(join(dir, "plugin", "a.ts"), "export const a = 2;");
+    const second = identity();
+    writeFileSync(join(dir, "plugin", "b.ts"), "export const b = 2;");
+    expect(new Set([first, second, identity()]).size).toBe(3);
   });
 
   it("run from source, counts a module a relative import reaches outside src/", () => {
@@ -657,6 +677,41 @@ describe("build-cache project entry (inputs read from disk)", () => {
     writeFileSync(
       join(dir, ".mxrc.json"),
       JSON.stringify({ $import: "./shared-mx.json", strict: true }),
+    );
+    expect(entry()).toBeUndefined();
+  });
+
+  it("is not cacheable with an MX config that fails to load (an unresolvable $import)", () => {
+    const { dir, entry } = project();
+    writeFileSync(
+      join(dir, ".mxrc.json"),
+      JSON.stringify({ $import: "./missing-mx.json" }),
+    );
+    expect(entry()).toBeUndefined();
+  });
+
+  it("is not cacheable with a tag sidecar that imports a linked workspace package", () => {
+    const { dir, entry } = project();
+    const pkg = (root: string, name: string) => {
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, "package.json"), JSON.stringify({ name }));
+      writeFileSync(join(root, "index.js"), "exports.v = 1;\n");
+    };
+    pkg(join(dir, "node_modules", "installed"), "installed");
+    pkg(join(dir, "packages", "linked"), "linked");
+    symlinkSync(
+      join(dir, "packages", "linked"),
+      join(dir, "node_modules", "linked"),
+    );
+    mkdirSync(join(dir, "tags"));
+    writeFileSync(
+      join(dir, "tags", "card.tag.ts"),
+      'import type { T } from "linked";\nimport { v } from "installed";\nexport default { transform: () => v };\n',
+    );
+    expect(entry()).toBeDefined();
+    writeFileSync(
+      join(dir, "tags", "card.tag.ts"),
+      'import { v } from "linked";\nexport default { transform: () => v };\n',
     );
     expect(entry()).toBeUndefined();
   });
