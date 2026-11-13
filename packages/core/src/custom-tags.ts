@@ -1312,9 +1312,12 @@ export function buildersFor(
         ...spanOf(spans),
       };
     },
+    // A hook's params are text no binding analysis has read: with none the
+    // block binds nothing, otherwise `bindings` is left unknown.
     block: (children, params = [], from) => ({
       hasParams: params.length > 0,
       params,
+      ...(params.length === 0 ? { bindings: [] } : {}),
       children,
       loc: spansFrom(from, loc).loc,
     }),
@@ -1372,6 +1375,7 @@ export function buildersFor(
           attributeTagTree,
           attrTagProps,
           params: [],
+          bindings: [],
           var: null,
           data: ctx.declarations.resolveDelegatedTag?.(
             name,
@@ -4176,6 +4180,13 @@ function contractOnlyDelegatedTag(
         call.attributeTagTree ?? directAttributeTagTree(call.attributeTags),
       attrTagProps: call.attrTagProps ?? [],
       params: call.params,
+      // The body's block read the call's params; without a body, a call with
+      // no params binds nothing and one with params is left unknown.
+      ...(call.content?.bindings
+        ? { bindings: call.content.bindings }
+        : call.params.length === 0
+          ? { bindings: [] }
+          : {}),
       var: call.var,
       data: ctx.declarations.resolveDelegatedTag?.(
         call.name,

@@ -68,6 +68,7 @@ import {
   emitSolidWithMappings,
   MX_ESCAPE_BINDING,
   MX_RETURN_PROP,
+  scopeReturnVars,
   solidDeclarations,
 } from "./emitter.ts";
 
@@ -483,7 +484,7 @@ function emitRegion(
     needsAttrGuard,
     hoistedDefines,
   } = collectReturnVars(() => {
-    emitted = emitSolidWithMappings(ir);
+    emitted = emitSolidWithMappings({ ...ir, body: scopeReturnVars(ir.body) });
     return emitted.code;
   });
   if (needsEscapeImport) {
@@ -724,7 +725,10 @@ export function compileSolidUnit(
     let emittedBody!: ReturnType<typeof emitSolidWithMappings>;
     const { vars, needsEscapeImport, needsAttrGuard } = collectReturnVars(
       () => {
-        emittedBody = emitSolidWithMappings(ir);
+        emittedBody = emitSolidWithMappings({
+          ...ir,
+          body: scopeReturnVars(ir.body),
+        });
         return emittedBody.code;
       },
       false,

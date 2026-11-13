@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: literal mx source
 import type { Ir, IrNode } from "@mxlang/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { shadowedCalls } from "./emitter.ts";
 import { compilePreactMx } from "./index.ts";
 
 /**
@@ -154,15 +155,20 @@ describe("shared JSX emitter: what it assumes about the IR (ir-spec 10.2)", () =
     expect(out).toContain('const Row = __mxDefine(__mxDef_Row, "Row");');
   });
 
-  it("an IR node kind the shadow walk does not name is an error, never skipped", () => {
-    expect(() =>
-      emitted("<define/Row><i/></define><Row/>", (ir) => {
-        ir.body.push({
-          kind: "FutureKind",
-          loc: { line: 1, column: 0 },
-        } as never);
-      }),
-    ).toThrow('shadowedCalls: unhandled IR node kind "FutureKind"');
+  it("shadowedCalls (deprecated) names a call a define's params rebind, and no other", () => {
+    let calls: WeakSet<object> | undefined;
+    let ir: Ir | undefined;
+    emitted(
+      "<define/Row|x|><p>r</p></define><define/List|{ Row }|><Row(1)/></define><List/><Row(2)/>",
+      (lowered) => {
+        ir = lowered;
+        calls = shadowedCalls(lowered);
+      },
+    );
+    const rows = all(ir?.body, "Component").filter(
+      (node) => node.target.kind !== "dynamic" && node.target.name === "Row",
+    );
+    expect(rows.map((node) => calls?.has(node))).toEqual([true, false]);
   });
 
   it("E12: a range's from: null starts at 0 and inclusive picks the bound", () => {

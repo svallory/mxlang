@@ -1584,40 +1584,53 @@ describe("a unit that returns a value", () => {
     ).toThrow(/is not supported on Solid yet/);
   });
 
-  // One `let` per component holds every `/var` of that name, so an outer `/n`
-  // read after a body that declares its own `/n` would read the body's value.
-  it.each([
-    [
-      "a <div> body",
-      "<counter/n start=1/><div><counter/n start=2/>${n}</div>${n}",
-    ],
-    [
-      "a <try> body",
-      "<counter/n start=1/><try><counter/n start=2/>${n}<@catch>e</@catch></try>${n}",
-    ],
-  ])(
-    "rejects a /var that reuses an outer /var's name in %s, at the second tag",
-    (_label, source) => {
-      let failure:
-        | { message: string; line?: number; column?: number }
-        | undefined;
-      try {
-        compileSolidUnit(source, {
-          filename: "/fixtures/page.mx",
-          customTags: { counter },
-        });
-      } catch (error) {
-        failure = error as typeof failure;
-      }
-      expect(failure?.message).toBe(
-        "`/var` `n` is already bound by an earlier `/var` in this component, and Solid declares one binding per component for both; rename one of them",
-      );
-      expect({ line: failure?.line, column: failure?.column }).toEqual({
-        line: 1,
-        column: source.indexOf("<counter/n start=2/>"),
+  // Every `/var` is declared with one `let` at the component's head, so a
+  // body that repeats a name another body binds gets a reserved name of its
+  // own (the render rows are in `discovered-tag-render.test.ts`).
+  it("gives a repeated /var in a sibling body a binding of its own", () => {
+    const code = compileSolidUnit(
+      "<div><counter/n start=1/>${n}</div><div><counter/n start=2/>${n}</div>",
+      { filename: "/fixtures/page.mx", customTags: { counter } },
+    ).code;
+    expect(code).toContain("let n: any, __mxVar0_n: any;");
+    expect(code).toContain(
+      "<div><$mx_Counter1 start={1} $mxReturn={(__mxV) => { n = __mxV; }} />{n}</div><div><$mx_Counter1 start={2} $mxReturn={(__mxV) => { __mxVar0_n = __mxV; }} />{__mxVar0_n}</div>",
+    );
+  });
+
+  it("rejects a destructured /var that repeats another body's /var name, at that tag", () => {
+    const source =
+      "<counter/n start=1/><div><counter/{ n } start=2/>${n}</div>";
+    let failure:
+      | { message: string; line?: number; column?: number }
+      | undefined;
+    try {
+      compileSolidUnit(source, {
+        filename: "/fixtures/page.mx",
+        customTags: { counter },
       });
-    },
-  );
+    } catch (error) {
+      failure = error as typeof failure;
+    }
+    expect(failure?.message).toBe(
+      "`/var` `{ n }` destructures `n`, which a `/var` in another body of this component already binds; Solid gives a repeated plain `/var` a binding of its own but not a destructured one, so rename one of them",
+    );
+    expect({ line: failure?.line, column: failure?.column }).toEqual({
+      line: 1,
+      column: 25,
+    });
+  });
+
+  it("rejects an assignment to a repeated /var's generated binding", () => {
+    expect(() =>
+      compileSolidUnit(
+        "<counter/n start=1/><div><counter/n start=2/><button onClick() { n = 3; }/></div>",
+        { filename: "/fixtures/page.mx", customTags: { counter } },
+      ),
+    ).toThrow(
+      "`/var` `n` repeats a name another body of this component binds, and Solid gives it a generated binding that cannot be assigned",
+    );
+  });
 
   it("still allows two /var of different names", () => {
     const code = compileSolidUnit(

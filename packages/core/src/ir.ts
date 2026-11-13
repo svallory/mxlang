@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 11;
+export const IR_VERSION = 12;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -409,6 +409,13 @@ export interface Block extends IrBase {
   /** Distinguishes `<Tag||>` from a tag with no parameter pipes. */
   hasParams: boolean;
   params: string[];
+  /**
+   * Every name the params bind, from Babel's binding analysis, for a host
+   * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
+   * no params); optional so a hand-built block keeps compiling, and a consumer
+   * treats an absent field as unknown.
+   */
+  bindings?: string[];
   children: IrNode[];
 }
 
@@ -516,6 +523,13 @@ export interface DelegatedTag<Data = unknown> extends IrBase {
   attributeTagTree: AttributeTagNode[];
   attrTagProps: AttrTagProp[];
   params: string[];
+  /**
+   * Every name the params bind, from Babel's binding analysis, for a host
+   * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
+   * no params); optional so a hand-built tag keeps compiling, and a consumer
+   * treats an absent field as unknown.
+   */
+  bindings?: string[];
   /** The tag's `/var` binding, as source text, when it declares one. */
   var: string | null;
   /**
@@ -836,6 +850,13 @@ export type IrNode =
        */
       span?: SourceSpan;
       params: string[];
+      /**
+       * Every name the params bind, from Babel's binding analysis, for a host
+       * that tracks scopes (as `For.bindings`). Core always fills it (`[]` with
+       * no params); optional so a hand-built define keeps compiling, and a consumer
+       * treats an absent field as unknown.
+       */
+      bindings?: string[];
       /**
        * File-absolute UTF-16 code-unit spans of each param, same convention
        * as `Expr.span` — one per `params` entry, `undefined` for a param whose

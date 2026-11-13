@@ -56,7 +56,7 @@ import {
   componentAlias,
   createRegionEmitter,
   defineStatements,
-  shadowedCalls,
+  scopeLocals,
 } from "./emitter.ts";
 import { sourcePosition } from "./source-position.ts";
 
@@ -289,7 +289,7 @@ function emitJsxRegion(
     dialect,
     segment,
     (offset) => sourcePosition(padded, offset),
-    /<define\b/.test(source) ? shadowedCalls(ir) : new WeakSet<object>(),
+    scopeLocals(new Set(), [], ir.body),
     options.typeCheck === true,
     new Set(options.importSpecifiers?.keys()),
   );

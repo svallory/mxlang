@@ -8,15 +8,55 @@ function isPosition(value: unknown): value is Position {
   );
 }
 
-function blockDeclaredName(node: IrNode): string | null {
-  if (node.kind === "Const" || node.kind === "Define") return node.name;
-  return null;
+/** Every name a statement-like child declares for the rest of its list. */
+function blockDeclaredNames(node: IrNode): string[] {
+  if (!node || typeof node !== "object") return [];
+  if (node.kind === "Const") {
+    return node.varBindings?.map((binding) => binding.name) ?? [node.name];
+  }
+  if (node.kind === "Define") return [node.name];
+  return [];
 }
 
-function irBoundNames(node: IrNode): string[] {
-  if (node.kind === "For") return node.bindings;
-  if (node.kind === "Define") return node.params;
-  return [];
+/**
+ * The names a record's params bind and which of its keys they cover.
+ *
+ * Read from the IR's `bindings` (Babel's binding analysis at lowering); a
+ * record without the field binds nothing, except a `<define>`, whose params
+ * text is still read as names as before. A dynamic tag's (`<${X}|a|>`,
+ * `<try>`) params cover its body only, never its attributes; an
+ * attribute-tag `<for>`'s cover its `nodes`.
+ */
+function boundScope(
+  record: Record<string, unknown>,
+): { names: readonly string[]; covers: (key: string) => boolean } | null {
+  const node = record as unknown as IrNode;
+  if (node.kind === "For") {
+    return { names: node.bindings, covers: (key) => key !== "source" };
+  }
+  if (node.kind === "Define") {
+    // A `<define>`'s attributes are written outside its params' scope.
+    return {
+      names: node.bindings ?? node.params,
+      covers: (key) => key !== "attrs",
+    };
+  }
+  if (
+    (node as { kind?: string }).kind === "AttributeTagFor" &&
+    record.loop &&
+    typeof record.loop === "object"
+  ) {
+    const loop = record.loop as { bindings?: string[] };
+    return { names: loop.bindings ?? [], covers: (key) => key === "nodes" };
+  }
+  if (typeof record.hasParams === "boolean" && Array.isArray(record.children)) {
+    const bindings = record.bindings;
+    return {
+      names: Array.isArray(bindings) ? (bindings as string[]) : [],
+      covers: () => true,
+    };
+  }
+  return null;
 }
 
 /** Applies one expression rewrite across an IR tree while preserving scope. */
@@ -40,10 +80,10 @@ export function rewriteCodes(
       let scope = shadowed;
       for (const item of value) {
         visit(item, loc, scope);
-        const declared = blockDeclaredName(item as IrNode);
-        if (declared && !scope.has(declared)) {
-          scope = new Set<string>([...scope, declared]);
-        }
+        const declared = blockDeclaredNames(item as IrNode).filter(
+          (name) => !scope.has(name),
+        );
+        if (declared.length > 0) scope = new Set([...scope, ...declared]);
       }
       return;
     }
@@ -56,15 +96,35 @@ export function rewriteCodes(
       return;
     }
 
-    const bound = irBoundNames(record as unknown as IrNode);
+    const scope = boundScope(record);
     const inner =
-      bound.length === 0 ? shadowed : new Set([...shadowed, ...bound]);
+      scope && scope.names.length > 0
+        ? new Set([...shadowed, ...scope.names])
+        : shadowed;
+    // A dynamic tag's params bind inside `tag.children` only.
+    const tag =
+      record.kind === "DelegatedTag" &&
+      record.tag &&
+      typeof record.tag === "object"
+        ? (record.tag as Record<string, unknown>)
+        : null;
+    const tagBindings = Array.isArray(tag?.bindings)
+      ? (tag.bindings as string[])
+      : [];
     for (const [key, child] of Object.entries(record)) {
       if (key === "node") continue;
-      // A `<define>`'s attributes are written outside its params' scope.
-      const outside =
-        key === "source" || (key === "attrs" && record.kind === "Define");
-      visit(child, here, outside ? shadowed : inner);
+      if (key === "tag" && tag && tagBindings.length > 0) {
+        if (seen.has(tag)) continue;
+        seen.add(tag);
+        const body = new Set([...shadowed, ...tagBindings]);
+        const tagHere = isPosition(tag.loc) ? tag.loc : here;
+        for (const [tagKey, tagChild] of Object.entries(tag)) {
+          if (tagKey === "node") continue;
+          visit(tagChild, tagHere, tagKey === "children" ? body : shadowed);
+        }
+        continue;
+      }
+      visit(child, here, scope?.covers(key) ? inner : shadowed);
     }
   };
   visit(nodes, { line: 0, column: 0 }, new Set());

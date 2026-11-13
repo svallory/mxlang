@@ -10,6 +10,7 @@
 export {
   type DestructuredName,
   destructuredNames,
+  freeIdentifiersInProgram,
   type ReadRewrite,
   rewriteAccessorReads,
   rewriteReadsInCode,

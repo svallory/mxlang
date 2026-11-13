@@ -3578,9 +3578,13 @@ suspends shows the placeholder. An outer custom-tag `/x`, dynamic-tag `/x` or
 Marko: the body's own `/x` is in scope only inside the body. An outer `<let/x>`
 read after such a body is still refused, and on Preact, React and Hono so is an
 element body's (`<div>`) `/x` beside an outer `/x`, a duplicate declaration. A body `/x` with no outer binding of that name is still not in
-scope after the body. Solid holds a component's `/var`s in one binding per name, so
-there a `/var` that reuses the name of an earlier `/var` in the same component
-is a positioned compile error at the second tag; rename one of them. A define body's parameters share the body's scope with its `/var`,
+scope after the body. On Solid, which declares a component's
+`/var` bindings once at its head, a `/var` that repeats a name another body of
+the component binds gets a generated binding of its own, so each body reads its
+own value and the outer read after it sees the outer one. A destructured `/var`
+(`/{ a }`) that repeats such a name is a positioned compile error at that tag,
+and so is an assignment to a repeated `/var`'s generated binding; rename one of
+them. A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
 `<define>` inside a dynamic-tag or `<try>` body, inside the body of an imported
 tag or of a `<define>` call that declares a `/var` or tag parameters, and a `/var` in a `<define>`

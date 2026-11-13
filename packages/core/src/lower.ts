@@ -2945,7 +2945,8 @@ function lowerBlock(ctx: Ctx, node: Node, body = bodyChildren(node)): Block {
   // A block is its own JS scope: both the params it shadows *and* anything a
   // `<const>` inside it unregisters are confined to it.
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(ctx, node));
+  const bindings = paramBindings(ctx, node);
+  const restore = shadowBindings(ctx, bindings);
   const children = withTagParams(
     ctx,
     node,
@@ -2957,6 +2958,7 @@ function lowerBlock(ctx: Ctx, node: Node, body = bodyChildren(node)): Block {
   return {
     hasParams: hasParams(ctx, node),
     params: paramsOf(ctx, node),
+    bindings,
     children,
     loc: posOf(ctx, node),
   };
@@ -3649,11 +3651,13 @@ function lowerAuthoredAttributeTag(
   nestedSchema.customTagContract = schema.customTagContract;
 
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(ctx, node));
+  const bindings = paramBindings(ctx, node);
+  const restore = shadowBindings(ctx, bindings);
   const nested = lowerAttributeTags(ctx, node, nestedSchema);
   const block: Block = {
     hasParams: hasParamsAtCall,
     params: paramsOf(ctx, node),
+    bindings,
     children: withTagParams(ctx, node, `@${name}`, () =>
       lowerChildren(ctx, nested.contentChildren),
     ),
@@ -5097,11 +5101,8 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
   // design (it shadows for the rest of *its* enclosing scope, which here is
   // the define body, not the caller's).
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(
-    ctx,
-    paramBindings(ctx, node),
-    paramGuards(node, "define"),
-  );
+  const bindings = paramBindings(ctx, node);
+  const restore = shadowBindings(ctx, bindings, paramGuards(node, "define"));
   // A define's own body may refer to its value, unlike reads above the tag.
   const binding = ctx.tagVars?.get(name);
   if (binding?.define) binding.pending = false;
@@ -5132,6 +5133,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     nameSpan: exprSpan(ctx, tagVarOf(node)),
     span: exprSpan(ctx, node),
     params,
+    bindings,
     paramSpans: paramSpansOf(ctx, node),
     ...(typeParams ? { typeParams } : {}),
     attrs: dropContentAttrBesideBody(ctx, node, attrs, children.length > 0),
@@ -5985,7 +5987,8 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
     loweredTags.flat,
   );
   const unscope = scopeBindings(ctx);
-  const restore = shadowBindings(ctx, paramBindings(ctx, node));
+  const bindings = paramBindings(ctx, node);
+  const restore = shadowBindings(ctx, bindings);
   const children = withTagParams(ctx, node, name, () =>
     lowerChildren(ctx, loweredTags.contentChildren),
   );
@@ -6016,6 +6019,7 @@ function lowerDelegatedTag(ctx: Ctx, node: Node, name: string): IrNode {
       attributeTagTree: loweredTags.tree,
       attrTagProps: loweredTags.props,
       params: paramsOf(ctx, node),
+      bindings,
       var: tagVarOf(node) ? declName(ctx, tagVarOf(node)) : null,
       data: early ? commentData : resolve(),
       loc,

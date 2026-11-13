@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
+import {
+  freeIdentifiersInProgram,
+  rewriteAccessorReads,
+} from "./accessor-reads.ts";
 import type { IrNode } from "./ir.ts";
 import { rewriteCodes } from "./rewrite-codes.ts";
 
 /**
- * ir-spec 10.2 E11: scopes come from `For.bindings` and `Define.params`.
+ * ir-spec 10.2 E11: scopes come from the IR's binding fields.
  *
  * `rewriteCodes` is the one walk hosts and core share to apply a rewrite with
  * the scope in force at each `Expr`; it learns what a construct binds only from
- * those two fields.
+ * `For.bindings`, `Define.bindings` (`Define.params` when absent), a block's
+ * and a delegated tag's `bindings`, and a `Const`'s `varBindings`.
  */
 
 const loc = { line: 1, column: 0 };
@@ -123,5 +128,128 @@ describe("rewriteCodes scopes (E11)", () => {
       },
     ] as unknown as IrNode[];
     expect(Object.keys(shadowedAt(body))).toEqual(["x"]);
+  });
+});
+
+/**
+ * A param list's names come from the IR's `bindings` (core's Babel binding
+ * analysis), never from its text: `|{ n }|` rebinds `n`. Shaped as lowering
+ * builds each node (`lower.test.ts` "tag-param bindings on the IR").
+ */
+describe("rewriteAccessorReads leaves a name a param list rebinds", () => {
+  const rewrites = new Map([["n", { read: "n()", assignError: "no" }]]);
+  const read = (code: string) => ({
+    kind: "Interpolation",
+    escaped: true,
+    expr: { code, shape: "other", node: null },
+    loc,
+  });
+  const rewritten = (body: unknown[]): string[] => {
+    const codes: string[] = [];
+    rewriteAccessorReads(body as IrNode[], rewrites);
+    rewriteCodes(body, (code) => {
+      codes.push(code);
+      return code;
+    });
+    return codes;
+  };
+
+  it("a block's params (`<Box|{ n }|>`)", () => {
+    const body = [
+      {
+        kind: "Component",
+        content: {
+          hasParams: true,
+          params: ["{ n }"],
+          bindings: ["n"],
+          children: [read("n")],
+          loc,
+        },
+        loc,
+      },
+      read("n"),
+    ];
+    expect(rewritten(body)).toEqual(["n", "n()"]);
+  });
+
+  it("a define's destructured param (`<define/D|{ n }|>`)", () => {
+    const body = [
+      {
+        kind: "Define",
+        name: "D",
+        params: ["{ n }"],
+        bindings: ["n"],
+        attrs: [],
+        children: [read("n")],
+        loc,
+      },
+      read("n"),
+    ];
+    expect(rewritten(body)).toEqual(["n", "n()"]);
+  });
+
+  it("a dynamic tag's params, in its body but not its attributes", () => {
+    const body = [
+      {
+        kind: "DelegatedTag",
+        tag: {
+          name: "\u0000dynamic",
+          attrs: [
+            {
+              kind: "dynamic",
+              name: "a",
+              value: { code: "n", shape: "other", node: null },
+              loc,
+            },
+          ],
+          children: [read("n")],
+          params: ["{ n }"],
+          bindings: ["n"],
+          attributeTags: [],
+          loc,
+        },
+        loc,
+      },
+    ];
+    expect(rewritten(body)).toEqual(["n()", "n"]);
+  });
+
+  it("an attribute-tag <for>'s params, in its nodes but not its source", () => {
+    const body = [
+      {
+        kind: "AttributeTagFor",
+        loop: {
+          source: {
+            kind: "of",
+            list: { code: "n", shape: "other", node: null },
+          },
+          params: ["{ n }"],
+          paramNodes: [],
+          bindings: ["n"],
+          key: null,
+        },
+        nodes: [read("n")],
+        loc,
+      },
+    ];
+    expect(rewritten(body)).toEqual(["n()", "n"]);
+  });
+});
+
+describe("freeIdentifiersInProgram", () => {
+  it.each([
+    ["a.Row;", ["a"]],
+    ['const s = "Row";', []],
+    ["Row;", ["Row"]],
+    ["<Row />;", ["Row"]],
+    ["<Row.a />;", ["Row"]],
+    ["const f = (Row) => Row;", []],
+    ["[...Row];", ["Row"]],
+  ])("%s reads %j", (code, names) => {
+    expect([...(freeIdentifiersInProgram(code) ?? [])]).toEqual(names);
+  });
+
+  it("is null for a text Babel cannot parse", () => {
+    expect(freeIdentifiersInProgram("const = ;")).toBeNull();
   });
 });

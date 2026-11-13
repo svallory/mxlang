@@ -19,7 +19,7 @@ import * as core from "../index.ts";
  */
 
 const PINNED = {
-  irVersion: 11,
+  irVersion: 12,
   shape: "a28f19ff7fbb6bf00d4e589a380b55db60867460d02a81630e19231dc4c9ae2b",
 };
 

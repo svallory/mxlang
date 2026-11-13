@@ -110,36 +110,156 @@ export const MX_RETURN_PROP = "$mxReturn";
  */
 let returnVars: Set<string> | null = null;
 
-/** The names each `returnVars` set's `/var` patterns bind, for `bindReturnVar`. */
-const returnVarNames = new WeakMap<Set<string>, Set<string>>();
-
 /**
  * Records a `/var` the module assembly declares with one `let` at the
- * component's head. A second `/var` binding a name an earlier one bound would
- * share that `let` (the later call overwrites the earlier value, so a read of
- * the outer `/x` after a body that declares its own `/x` gets the body's),
- * so it is refused at the second tag rather than emitted.
+ * component's head. A `/var` that repeats a name another body scope already
+ * binds was given a name of its own by `scopeReturnVars` before the emit, so
+ * every recorded name is one binding.
  */
-function bindReturnVar(node: {
-  var: string;
-  varBindings?: ReadonlyArray<{ name: string }>;
-  loc: Position;
-}): void {
-  if (!returnVars) return;
-  let names = returnVarNames.get(returnVars);
-  if (!names) {
-    names = new Set();
-    returnVarNames.set(returnVars, names);
-  }
-  for (const { name } of node.varBindings ?? [{ name: node.var }]) {
-    if (names.has(name))
-      fail(
-        `\`/var\` \`${name}\` is already bound by an earlier \`/var\` in this component, and Solid declares one binding per component for both; rename one of them`,
-        node,
+function bindReturnVar(node: { var: string }): void {
+  returnVars?.add(node.var);
+}
+
+type VarCall = Extract<IrNode, { kind: "Component" }>;
+
+/** A body that is its own `/var` scope, for `scopeReturnVars`. */
+interface VarScope {
+  children: IrNode[];
+  depth: number;
+  parent: VarScope | null;
+}
+
+/**
+ * Every `/var` scope of `body` with the `/var` calls in document order: the
+ * top level, an element's children, a delegated tag's (`<try>`) body and each
+ * of its attribute-tag blocks. A `<for>`, an `<if>` branch, a call's body
+ * and a `<define>` are not entered: a `/var` there is refused while
+ * emitting.
+ */
+function varScopes(body: IrNode[]): Array<{ call: VarCall; scope: VarScope }> {
+  const found: Array<{ call: VarCall; scope: VarScope }> = [];
+  const enter = (children: IrNode[], parent: VarScope | null): void => {
+    const scope: VarScope = {
+      children,
+      depth: parent ? parent.depth + 1 : 0,
+      parent,
+    };
+    for (const node of children) {
+      if (node.kind === "Element") {
+        enter(node.children, scope);
+      } else if (node.kind === "DelegatedTag") {
+        enter(node.tag.children, scope);
+        for (const tag of node.tag.attributeTags) {
+          if (tag.block) enter(tag.block.children, scope);
+        }
+      } else if (node.kind === "Component" && node.var) {
+        found.push({ call: node, scope });
+      }
+    }
+  };
+  enter(body, null);
+  return found;
+}
+
+/** The names a `/var` binds (`varBindings`, or its text for hand-built IR). */
+function varNames(call: VarCall): string[] {
+  return (call.varBindings ?? [{ name: call.var as string }]).map(
+    (binding) => binding.name,
+  );
+}
+
+/**
+ * Gives a `/var` that repeats a name another body scope binds a binding of
+ * its own, since this host declares every `/var` with one `let` at the
+ * component's head.
+ *
+ * Marko scopes a tag variable to the body that declares it, so in
+ * `<counter/n/><div><counter/n/>${n}</div>${n}` the inner `${n}` reads the
+ * inner value and the outer one the outer value. The scope that declares a
+ * name first, in document order, keeps it; each other declaring scope's
+ * `/var` becomes `__mxVar<serial>_<name>` (the `__mx` space core reserves,
+ * so no authored name can collide) and that scope's reads are rewritten to
+ * it (`rewriteAccessorReads`, which leaves a read a nested `<for>` param or
+ * `<const>` rebinds alone), deepest scope first, so a deeper rename is never
+ * rewritten again. A first scope nested inside a renamed one is rewritten to
+ * a temporary name and back, so its reads keep the name.
+ *
+ * Emits from a `cloneIr` copy (the IR is read-only to an emitter) and only
+ * when a name repeats; otherwise `body` is returned as it is. A destructured
+ * `/var` (`/{ n }`) that repeats a name is refused at that tag: its pattern
+ * would need rewriting, not only its name.
+ */
+export function scopeReturnVars(body: IrNode[]): IrNode[] {
+  const repeats = (calls: ReturnType<typeof varScopes>): Set<string> => {
+    const first = new Map<string, VarScope>();
+    const out = new Set<string>();
+    for (const { call, scope } of calls) {
+      for (const name of varNames(call)) {
+        const seen = first.get(name);
+        if (!seen) first.set(name, scope);
+        else if (seen !== scope) out.add(name);
+      }
+    }
+    return out;
+  };
+  if (repeats(varScopes(body)).size === 0) return body;
+
+  const copy = cloneIr(body);
+  const calls = varScopes(copy);
+  const repeated = repeats(calls);
+  let serial = 0;
+  const jobs: Array<{ scope: VarScope; from: string; to: string }> = [];
+  const restores: Array<{ scope: VarScope; from: string; to: string }> = [];
+  for (const name of repeated) {
+    const declaring = calls.filter(({ call }) => varNames(call).includes(name));
+    const kept = (declaring[0] as { scope: VarScope }).scope;
+    const renamed = new Map<VarScope, string>();
+    for (const { call, scope } of declaring) {
+      if (scope === kept) continue;
+      if (call.var?.trim() !== name) {
+        fail(
+          `\`/var\` \`${call.var}\` destructures \`${name}\`, which a \`/var\` in another body of this component already binds; Solid gives a repeated plain \`/var\` a binding of its own but not a destructured one, so rename one of them`,
+          call,
+        );
+      }
+      let fresh = renamed.get(scope);
+      if (!fresh) {
+        fresh = `__mxVar${serial++}_${name}`;
+        renamed.set(scope, fresh);
+        jobs.push({ scope, from: name, to: fresh });
+      }
+      call.var = fresh;
+      call.varBindings = call.varBindings?.map((binding) =>
+        binding.name === name ? { ...binding, name: fresh } : binding,
       );
-    names.add(name);
+    }
+    let ancestor = kept.parent;
+    while (ancestor && !renamed.has(ancestor)) ancestor = ancestor.parent;
+    if (ancestor) {
+      const temp = `__mxVar${serial++}_${name}`;
+      jobs.push({ scope: kept, from: name, to: temp });
+      restores.push({ scope: kept, from: temp, to: name });
+    }
   }
-  returnVars.add(node.var);
+  const rewrite = ({ scope, from, to }: (typeof jobs)[number]): void => {
+    rewriteAccessorReads(
+      scope.children,
+      new Map([
+        [
+          from,
+          {
+            read: to,
+            assignError: `\`/var\` \`${from}\` repeats a name another body of this component binds, and Solid gives it a generated binding that cannot be assigned`,
+          },
+        ],
+      ]),
+    );
+  };
+  for (const job of [...jobs].sort((a, b) => b.scope.depth - a.scope.depth)) {
+    rewrite(job);
+  }
+  for (const job of restores) rewrite(job);
+  return copy;
 }
 
 /** File-shaped source for mapping printed method heads during this emit. */
@@ -565,27 +685,6 @@ function bindingNamesOf(nodes: unknown[]): string[] {
   };
   for (const node of nodes) visit(node);
   return out;
-}
-
-/** The names the source text of a `<define>`'s params binds. */
-function paramBindingNames(params: readonly string[]): string[] {
-  try {
-    // SAFETY: `params.join(", ")` wrapped in `(...) => 0` parses as an
-    // arrow expression, so `file.program.body[0]` is its lone statement and
-    // `.expression` the arrow with a `params` array; TypeScript cannot know
-    // the parsed shape of the string we just built.
-    const file = parseBabel(`(${params.join(", ")}) => 0`, {
-      sourceType: "module",
-      plugins: ["typescript"],
-    }) as unknown as {
-      program: { body: { expression: { params: unknown[] } }[] };
-    };
-    return bindingNamesOf(file.program.body[0]?.expression.params ?? []);
-  } catch {
-    // Unparseable param text: fall back to the raw strings, which only
-    // under-binds (a spurious capture error, never a silent capture).
-    return [...params];
-  }
 }
 
 /**
@@ -3581,8 +3680,10 @@ export class SolidEmitter implements Emitter<string> {
       jsxValue(blockExpression(node.children)),
     ).code;
     // `params` is source text, so `|{ n }, i|` is `"{ n }"` and `"i"`: the
-    // names a pattern binds come from parsing it, not from the strings.
-    const bound = new Set(paramBindingNames(node.params));
+    // names a pattern binds are core's (`bindings`); a hand-built node
+    // without them falls back to the raw strings, which only under-binds (a
+    // spurious capture error, never a silent capture).
+    const bound = new Set(node.bindings ?? node.params);
     // A call to a sibling define reaches this text as the *gensym'd*
     // binding, not the author's name: `blockExpression` drove the child
     // `<B/>` reference through `#defineComponent`, which already resolved
@@ -3705,7 +3806,7 @@ export class SolidEmitter implements Emitter<string> {
     // The inner arrow's gensym'd names avoid the params' own bound names
     // and every name the catch body references, so they can never shadow
     // either.
-    const used = new Set<string>(paramBindingNames(params));
+    const used = new Set<string>(catchTag.block.bindings ?? params);
     for (const name of freeJsxNames(caught.code)) used.add(name);
     const gensym = (base: string): string => {
       let name = base;

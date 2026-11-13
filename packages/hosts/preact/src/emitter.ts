@@ -28,12 +28,14 @@ import {
   concatMapped,
   contractDefaultTag,
   defineValueWrapper,
+  destructuredNames,
   drive,
   type Emitter,
   type Expr,
   type ForHead,
   type ForSource,
   fail as failAtNode,
+  freeIdentifiersInProgram,
   type HostDeclarations,
   type Ir,
   type IrNode,
@@ -127,66 +129,38 @@ interface RegionSink {
   segment: string;
   /** Lifted `<define>` statements, in source order. */
   defines: DefineParts[];
-  /** Names claimed by lifted defines across every scope of the region. */
-  claimed: Map<string, Position>;
-  /** The region's top-level binding table (what `claimed` also covers). */
+  /**
+   * The region's one arrow's binding table: its top-level `/var`s, and every
+   * lifted define's name whichever scope it was written in.
+   */
   root: Map<string, Position>;
   /** File line (1-based) and column of a file-absolute offset. */
   positionAt(offset: number): { line: number; column: number };
 }
 
 /**
- * The names a parameter list binds: the targets of each parameter's pattern
- * (`{ a, b: [c], ...d }`, `x = 1`, `...rest`), never the identifiers of a
- * default's expression (`{ a = Row }` binds `a`) or of a type annotation.
- * A scanner over the text, so the host needs no parser of its own. It cannot
- * follow a regex literal or a template literal (either may hide a bracket), so
- * a parameter holding one fails safe: it yields `ALL_NAMES`,
- * which binds every define name and routes those calls by the authored name.
+ * The names a parameter list binds, read by core's Babel parse of each param
+ * as the one element of an array pattern (`destructuredNames`, so a default
+ * parses as it does in a parameter); a param that parse cannot read (a type
+ * annotation, a rest element inside a pattern) yields `"*"`, which stands for
+ * every name.
+ *
+ * @deprecated The emitter reads the names from the IR now (`Block.bindings`,
+ * `Define.bindings`, `DelegatedTag.bindings`); this stays only for callers of
+ * the `@mxlang/host-preact/emitter` subpath.
  */
 export function paramNames(params: readonly string[]): string[] {
-  const out: string[] = [];
-  for (const text of params) {
-    if (unreadable(text)) {
-      out.push(ALL_NAMES);
-      continue;
-    }
-    let i = skipSpace(text, 0);
-    if (text.startsWith("...", i)) i += 3;
-    patternTarget(text, i, out);
-  }
-  return out;
+  return params.flatMap((text) => {
+    const pattern = text.trimStart();
+    const names = destructuredNames(
+      `[${pattern.startsWith("...") ? pattern.slice(3) : pattern}]`,
+    );
+    return names ? names.map((entry) => entry.name) : ["*"];
+  });
 }
-
-/**
- * Does `text` hold a template literal, a regex literal or a comment? None of
- * them can be followed by the scans below (each may hide a bracket), and
- * `skipLiteral` is the one place that recognizes them.
- */
-function unreadable(text: string): boolean {
-  for (let i = 0; i < text.length; i++) {
-    const end = skipLiteral(text, i);
-    if (end === i) continue;
-    // A string is read by the scans; a template, regex or comment is not.
-    if (text[i] !== '"' && text[i] !== "'") return true;
-    i = end - 1;
-  }
-  return false;
-}
-
-/** A scope entry that stands for every name (`paramNames` could not read a param). */
-const ALL_NAMES = "*";
 
 /** One identifier, as every scan in this file reads it. */
 const IDENT = "[\\p{ID_Start}$_][\\p{ID_Continue}$\\u200c\\u200d]*";
-const NAME = new RegExp(IDENT, "uy");
-const IDENT_READ = new RegExp(`(\\.{1,3})?[ \\t]*(${IDENT})`, "gu");
-
-function skipSpace(text: string, from: number): number {
-  let i = from;
-  while (i < text.length && /\s/.test(text[i] as string)) i++;
-  return i;
-}
 
 /** The index after the string or template literal opening at `from`. */
 function skipQuoted(text: string, from: number): number {
@@ -196,250 +170,82 @@ function skipQuoted(text: string, from: number): number {
   return i + 1;
 }
 
-/** The index of the first top-level `,` or `closer` at or after `from`. */
-function skipExpression(text: string, from: number, closer: string): number {
-  let depth = 0;
-  let i = from;
-  while (i < text.length) {
-    const ch = text[i] as string;
-    const end = skipLiteral(text, i);
-    if (end > i) {
-      i = end;
-      continue;
-    }
-    if (depth === 0 && (ch === "," || ch === closer)) return i;
-    if (ch === "(" || ch === "[" || ch === "{") depth++;
-    else if (ch === ")" || ch === "]" || ch === "}") depth--;
-    i++;
-  }
-  return i;
-}
-
-/** Reads one binding target at `from`, pushing its names; returns the index after it. */
-function patternTarget(text: string, from: number, out: string[]): number {
-  const i = skipSpace(text, from);
-  const ch = text[i];
-  if (ch === "{" || ch === "[") {
-    const closer = ch === "{" ? "}" : "]";
-    let at = i + 1;
-    while (at < text.length) {
-      at = skipSpace(text, at);
-      if (text[at] === closer) return at + 1;
-      if (text[at] === ",") {
-        at++;
-        continue;
-      }
-      if (text.startsWith("...", at)) at += 3;
-      let key: string | null = null;
-      if (ch === "{") {
-        // A key: a name, a string, or a computed `[expr]`; a `:` then names the
-        // target, otherwise the key is itself the shorthand binding.
-        if (text[at] === "[") {
-          at = skipExpression(text, at + 1, "]") + 1;
-        } else if (text[at] === '"' || text[at] === "'") {
-          at = skipQuoted(text, at);
-        } else {
-          NAME.lastIndex = at;
-          const match = NAME.exec(text);
-          if (match) {
-            key = match[0];
-            at += key.length;
-          }
-        }
-        const colon = skipSpace(text, at);
-        if (text[colon] === ":") at = patternTarget(text, colon + 1, out);
-        else if (key) out.push(key);
-        else at = Math.max(at, colon) + (key === null && colon === at ? 1 : 0);
-      } else {
-        const next = patternTarget(text, at, out);
-        at = next > at ? next : at + 1;
-      }
-      at = skipSpace(text, at);
-      if (text[at] === "=") at = skipExpression(text, at + 1, closer);
-    }
-    return at;
-  }
-  NAME.lastIndex = i;
-  const match = NAME.exec(text);
-  if (!match) return i;
-  out.push(match[0]);
-  return i + match[0].length;
-}
-
 type ComponentNode = Extract<IrNode, { kind: "Component" }>;
 type Block = NonNullable<ComponentNode["content"]>;
 
 /**
+ * A set that holds every name: the scope of a body whose names the IR does
+ * not give (a hand-built node without `bindings` or `varBindings`), where
+ * every direct define call is emitted under its authored name.
+ */
+class EveryName extends Set<string> {
+  override has(_name: string): boolean {
+    return true;
+  }
+}
+const EVERY_NAME: ReadonlySet<string> = new EveryName();
+
+/**
+ * The local names in scope inside a body: the enclosing `outer` names, the
+ * body's own `bindings` (its params, from core's binding analysis) and every
+ * `/var` and `<const>` the body declares directly. An element or an `<if>`
+ * branch opens no scope, so their declarations count, and the emitter hoists
+ * each statement to the top of its scope, so a name binds before and after
+ * it. Names are read from the IR only (`bindings`, `varBindings`); a field
+ * the IR leaves absent makes the body bind every name.
+ */
+export function scopeLocals(
+  outer: ReadonlySet<string>,
+  bindings: readonly string[] | undefined,
+  children: readonly IrNode[],
+): ReadonlySet<string> {
+  if (outer instanceof EveryName || bindings === undefined) return EVERY_NAME;
+  const names = new Set([...outer, ...bindings]);
+  const declare = (nodes: readonly IrNode[]): boolean => {
+    for (const node of nodes) {
+      if (node.kind === "Element") {
+        if (!declare(node.children)) return false;
+      } else if (node.kind === "IfChain") {
+        for (const branch of node.branches) {
+          if (!declare(branch.children)) return false;
+        }
+      } else if (node.kind === "Component" || node.kind === "Const") {
+        if (node.kind === "Component" && !node.var) continue;
+        if (!node.varBindings) return false;
+        for (const { name } of node.varBindings) names.add(name);
+      }
+    }
+    return true;
+  };
+  return declare(children) ? names : EVERY_NAME;
+}
+
+/**
  * The direct define calls (`<Row(x)/>`) whose name an enclosing JS scope also
- * binds, so the call may resolve to a local. Such a call is emitted under the
- * authored name; every other direct call reaches the private function and its
- * argument as written.
+ * binds, so the call is emitted under the authored name: the calls the
+ * emitter itself resolves to a local (`scopeLocals`), recorded while it emits
+ * each top-level node. A node the emitter refuses records the calls met
+ * before the refusal.
  *
- * The scopes are the emitted ones: a `<define>`, a `<for>` (also an
- * attribute-tag `<for>`), and each body that becomes its own function or `/var`
- * scope (a tag-param block, an attribute-tag block, a dynamic tag's, `<try>`'s
- * or `@catch` body). An element or an `<if>` branch is no scope. A `/var` or
- * `<const>` binds across the whole scope it is declared in (the emitter hoists
- * its statement to the top of that scope), before and after it, and in every
- * nested element; a nested scope sees it too. A param binds in its own body.
- *
- * Every IR kind is named below, so a kind added to the IR is a type error here
- * rather than a silent hole; a kind that still arrives unhandled at run time
- * (a transform-built node) throws.
+ * @deprecated The emitter decides this while it emits; this stays only for
+ * callers of the `@mxlang/host-preact/emitter` subpath.
  */
 export function shadowedCalls(ir: Ir): WeakSet<object> {
   const calls = new WeakSet<object>();
-
-  /** What `nodes` declare in their own scope: each `/var` and `<const>`, not those of nested scopes. */
-  const declared = (
-    nodes: readonly IrNode[],
-    into: Set<string>,
-  ): Set<string> => {
-    for (const node of nodes) {
-      switch (node.kind) {
-        case "Element":
-          declared(node.children, into);
-          break;
-        case "IfChain":
-          for (const branch of node.branches) declared(branch.children, into);
-          break;
-        case "Component":
-          for (const name of node.varBindings?.map((b) => b.name) ??
-            paramNames(node.var ? [node.var] : [])) {
-            into.add(name);
-          }
-          break;
-        case "Const":
-          for (const name of node.varBindings?.map((b) => b.name) ??
-            paramNames([node.name])) {
-            into.add(name);
-          }
-          break;
-        default:
-          break;
-      }
+  const top = scopeLocals(new Set(), [], ir.body);
+  for (const node of ir.body) {
+    const define = node.kind === "Define";
+    const emitter = new PreactEmitter({
+      locals: define ? scopeLocals(top, node.bindings, node.children) : top,
+      localCalls: calls,
+    });
+    try {
+      drive(emitter, define ? node.children : [node]);
+    } catch (error) {
+      if (!(error instanceof TranslateError)) throw error;
     }
-    return into;
-  };
-
-  const scopeOf = (
-    outer: ReadonlySet<string>,
-    names: readonly string[],
-    children: readonly IrNode[],
-  ): Set<string> => declared(children, new Set([...outer, ...names]));
-
-  const block = (
-    value: Block | null | undefined,
-    outer: ReadonlySet<string>,
-  ) => {
-    if (!value) return;
-    list(
-      value.children,
-      scopeOf(outer, paramNames(value.params), value.children),
-    );
-  };
-
-  const attributeTag = (tag: AttributeTag, outer: ReadonlySet<string>) => {
-    block(tag.block, outer);
-    attributeTags(tag.attributeTagTree, outer);
-  };
-
-  const attributeTags = (
-    nodes: readonly AttributeTagNode[],
-    outer: ReadonlySet<string>,
-  ) => {
-    for (const node of nodes) {
-      switch (node.kind) {
-        case "AttributeTag":
-          attributeTag(node.tag, outer);
-          break;
-        case "AttributeTagIf":
-          for (const branch of node.branches)
-            attributeTags(branch.nodes, outer);
-          break;
-        case "AttributeTagFor":
-          attributeTags(node.nodes, new Set([...outer, ...node.loop.bindings]));
-          break;
-        default:
-          unhandled(node);
-      }
-    }
-  };
-
-  const list = (nodes: readonly IrNode[], scope: ReadonlySet<string>) => {
-    for (const node of nodes) visit(node, scope);
-  };
-
-  const visit = (node: IrNode, scope: ReadonlySet<string>): void => {
-    switch (node.kind) {
-      case "Text":
-      case "Interpolation":
-      case "Const":
-      case "Static":
-      case "Import":
-      case "Export":
-      case "InputInterface":
-      case "Hoisted":
-      case "DocumentType":
-      case "Comment":
-        return;
-      case "Element":
-        list(node.children, scope);
-        return;
-      case "IfChain":
-        for (const branch of node.branches) list(branch.children, scope);
-        return;
-      case "For":
-        list(node.children, scopeOf(scope, node.bindings, node.children));
-        return;
-      case "Define":
-        list(
-          node.children,
-          scopeOf(scope, paramNames(node.params), node.children),
-        );
-        return;
-      case "Component":
-        if (
-          node.target.kind === "define" &&
-          (scope.has(node.target.name) || scope.has(ALL_NAMES))
-        ) {
-          calls.add(node);
-        }
-        block(node.content, scope);
-        // The flat list repeats the tree; it is read only when the tree is
-        // empty (a call a transform rebuilt).
-        if (node.attributeTagTree.length > 0) {
-          attributeTags(node.attributeTagTree, scope);
-        } else {
-          for (const tag of node.attributeTags) attributeTag(tag, scope);
-        }
-        return;
-      case "DelegatedTag": {
-        const { tag } = node;
-        list(
-          tag.children,
-          scopeOf(scope, paramNames(tag.params), tag.children),
-        );
-        if (tag.attributeTagTree.length > 0) {
-          attributeTags(tag.attributeTagTree, scope);
-        } else {
-          for (const nested of tag.attributeTags) attributeTag(nested, scope);
-        }
-        return;
-      }
-      default:
-        unhandled(node);
-    }
-  };
-
-  list(ir.body, declared(ir.body, new Set()));
+  }
   return calls;
-}
-
-function unhandled(node: never): never {
-  throw new Error(
-    `shadowedCalls: unhandled IR node kind ${JSON.stringify((node as { kind?: string }).kind)}`,
-  );
 }
 
 /**
@@ -497,7 +303,10 @@ interface EmitterOptions {
   source?: string;
   scopedBody?: boolean;
   softLift?: SoftLift | null;
-  shadowed?: WeakSet<object>;
+  /** The local names in scope (`scopeLocals`); empty when absent. */
+  locals?: ReadonlySet<string>;
+  /** Records each direct define call resolved to a local (`shadowedCalls`). */
+  localCalls?: WeakSet<object>;
   publicDefines?: boolean;
   /**
    * Type-check projection only: a host-component call bound to one of
@@ -670,10 +479,12 @@ export interface DefineParts {
  * emitted only when something reads it (a dynamic target, an author's
  * expression, a `Row.attr` property read, a `...Row` spread): `otherCode` is
  * the text of the whole module outside the defines (markup, statements,
- * prelude, `<return>` value), tokenized once into the identifiers it reads.
- * A name found in a string or in text counts as a read, so a miss only costs
- * an unused wrapper, never a missing binding. `keepAll` emits every wrapper
- * (the typeCheck projection, whose direct calls read the public name).
+ * prelude, `<return>` value), read with each define's function by one Babel
+ * parse (core's `freeIdentifiersInProgram`), and each wrapper by one of its
+ * own. A name inside a string, a comment or text is no read; a text Babel
+ * cannot parse keeps every wrapper, so a miss only costs an unused wrapper,
+ * never a missing binding. `keepAll` emits every wrapper (the typeCheck
+ * projection, whose direct calls read the public name).
  */
 export function defineStatements(
   parts: readonly DefineParts[],
@@ -682,36 +493,20 @@ export function defineStatements(
 ): MappedCode[] {
   if (parts.length === 0) return [];
   const scanned = [otherCode, ...parts.map((part) => part.fn.code)].join("\n");
-  const base = readIdentifiers(scanned);
-  const values = parts.map((part) => readIdentifiers(part.value.code));
-  // An identifier written with a Unicode escape (`\u0052ow`) is invisible to
-  // the token scan, so any escape keeps every public binding.
-  const escaped =
-    scanned.includes("\\u") ||
-    parts.some((part) => part.value.code.includes("\\u"));
+  const base = freeIdentifiersInProgram(scanned);
+  const values = parts.map((part) => freeIdentifiersInProgram(part.value.code));
+  const unreadable = base === null || values.some((names) => names === null);
   return parts.map((part, index) => {
     const read =
       keepAll ||
-      escaped ||
-      base.has(part.name) ||
-      values.some((names, other) => other !== index && names.has(part.name));
+      unreadable ||
+      base?.has(part.name) === true ||
+      values.some(
+        (names, other) => other !== index && names?.has(part.name) === true,
+      );
     if (read) return concatMapped(part.fn, part.value);
     return part.effects ? concatMapped(part.fn, part.effects) : part.fn;
   });
-}
-
-/**
- * The identifiers a text reads as values: every identifier token except a
- * member name after a single `.` on the same line (`a.Row`), while a spread
- * (`...Row`) is a read. A `.` ending a line or a comment is no member access.
- */
-function readIdentifiers(text: string): Set<string> {
-  const names = new Set<string>();
-  for (const match of text.matchAll(IDENT_READ)) {
-    if (match[1] === ".") continue;
-    names.add(match[2] as string);
-  }
-  return names;
 }
 
 /**
@@ -1375,8 +1170,14 @@ export class PreactEmitter implements Emitter<string> {
    * `/var` (checked when the body ends).
    */
   readonly #softLift: SoftLift | null;
-  /** The direct define calls an enclosing scope shadows (`shadowedCalls`). */
-  readonly #shadowed: WeakSet<object>;
+  /**
+   * The local names in scope here (`scopeLocals`): a direct call to a define
+   * whose name is one of them is emitted under the authored name, since the
+   * name may resolve to the local. Widened where a body opens a scope
+   * (`#inScope`), inherited by every emitter derived inside it.
+   */
+  #locals: ReadonlySet<string>;
+  readonly #localCalls: WeakSet<object> | undefined;
   /**
    * Tooling projection: the define's private name has no span mapping, and
    * every direct call reads the public name, which a hover or a diagnostic
@@ -1395,7 +1196,8 @@ export class PreactEmitter implements Emitter<string> {
     } = options;
     this.#publicDefines =
       options.publicDefines === true || typeCheck !== undefined;
-    this.#shadowed = options.shadowed ?? new WeakSet();
+    this.#locals = options.locals ?? new Set();
+    this.#localCalls = options.localCalls;
     this.#projectHostComponents = options.projectHostComponents ?? false;
     this.#importBindings = options.importBindings ?? new Set();
     this.#softLift = options.softLift ?? null;
@@ -1466,11 +1268,38 @@ export class PreactEmitter implements Emitter<string> {
       scopedBody: overrides.scopedBody ?? this.#scopedBody,
       softLift:
         overrides.softLift === undefined ? this.#softLift : overrides.softLift,
-      shadowed: this.#shadowed,
+      locals: this.#locals,
+      localCalls: this.#localCalls,
       publicDefines: this.#publicDefines,
       projectHostComponents: this.#projectHostComponents,
       importBindings: this.#importBindings,
     });
+  }
+
+  /**
+   * Runs `build` with the local names widened to a body's scope
+   * (`scopeLocals`): its params' `bindings` and the `/var`s and `<const>`s it
+   * declares. Every emitter `build` derives inherits them.
+   */
+  #inScope<T>(
+    bindings: readonly string[] | undefined,
+    children: readonly IrNode[],
+    build: () => T,
+  ): T {
+    const outer = this.#locals;
+    this.#locals = scopeLocals(outer, bindings, children);
+    try {
+      return build();
+    } finally {
+      this.#locals = outer;
+    }
+  }
+
+  /** `#inScope` for a block (a tag-param or attribute-tag body). */
+  #inBlock<T>(block: Block | null | undefined, build: () => T): T {
+    return block
+      ? this.#inScope(block.bindings, block.children, build)
+      : build();
   }
 
   /** A child emitter: same scope, text decoding and slot reset unless given. */
@@ -1522,21 +1351,6 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
     table.set(name, at);
-  }
-
-  /**
-   * Claims a `/var` name. In a region a name of the top-level scope also lands
-   * in the region's one arrow, where a lifted define's name lives too.
-   */
-  #claimVar(
-    name: string,
-    span: SourceSpan | null | undefined,
-    fallback: Position,
-  ): void {
-    this.#claimName(name, span, fallback);
-    if (this.#region && this.#bindings === this.#region.root) {
-      this.#claimName(name, span, fallback, this.#region.claimed);
-    }
   }
 
   /** Claim a top-level statement after the markup's own errors are checked. */
@@ -2175,6 +1989,13 @@ export class PreactEmitter implements Emitter<string> {
 
   /** An attribute tag's body in this host's renderable shape. */
   #attributeTagRenderable(tag: AttributeTag, key?: string): MappedCode {
+    return this.#inBlock(tag.block, () =>
+      this.#attributeTagRenderableIn(tag, key),
+    );
+  }
+
+  /** `#attributeTagRenderable`, inside the body's scope. */
+  #attributeTagRenderableIn(tag: AttributeTag, key?: string): MappedCode {
     // `hasBody` distinguishes `<@x/>` from a body whose rendered expression
     // happens to be empty. The former is `undefined`, not a null JSX child
     // or an empty fragment.
@@ -2449,11 +2270,13 @@ export class PreactEmitter implements Emitter<string> {
       source.kind === "of" && second
         ? second
         : hygienicName("mxAttrIndex", loop.params, bodyText);
-    const body = this.#attributeTagArray(
-      nodes,
-      as,
-      arrayType,
-      `${key} + ":" + ${itemIndex} + ":"`,
+    const body = this.#inScope(loop.bindings, [], () =>
+      this.#attributeTagArray(
+        nodes,
+        as,
+        arrayType,
+        `${key} + ":" + ${itemIndex} + ":"`,
+      ),
     );
     const result = (
       iterable: string | MappedCode,
@@ -3054,7 +2877,7 @@ export class PreactEmitter implements Emitter<string> {
           );
         }
         for (const { name: bound, span } of node.varBindings ?? []) {
-          this.#claimVar(bound, span, node.loc);
+          this.#claimName(bound, span, node.loc);
         }
         this.#runtimeImports.add("__mxDynamicPair");
         const temp = `__mxRet${this.#varSerial.n++}`;
@@ -3090,6 +2913,11 @@ export class PreactEmitter implements Emitter<string> {
       return;
     }
     if (node.target.kind === "define") {
+      // A name a local scope also binds may resolve to that local, so the
+      // call keeps the authored name; every other call reaches the private
+      // function and its argument as written.
+      const local = this.#locals.has(node.target.name);
+      if (local) this.#localCalls?.add(node);
       // A `<define>` is a local block; this host lowers one to a local
       // function (see `define` below), so calling it is an ordinary call.
       //
@@ -3149,7 +2977,7 @@ export class PreactEmitter implements Emitter<string> {
             : "";
       this.#out.push(
         this.#slot(
-          this.#shadowed.has(node)
+          local
             ? mapped(node.target.name, node.nameSpan)
             : this.#publicDefines
               ? // The private function runs (so an argument arrives as written,
@@ -3214,7 +3042,7 @@ export class PreactEmitter implements Emitter<string> {
           );
         }
         for (const { name: bound, span } of node.varBindings ?? []) {
-          this.#claimVar(bound, span, node.loc);
+          this.#claimName(bound, span, node.loc);
         }
         const temp = `__mxRet${this.#varSerial.n++}`;
         // The unit's render path: `.render` is the compiled unit's own
@@ -3250,13 +3078,16 @@ export class PreactEmitter implements Emitter<string> {
     // Tag params make the children a render prop — `<For|item| each=…>` is
     // the shape that lets a Preact component taking a function child be
     // called from MX. Without params the children are ordinary JSX children.
-    const children = node.content.hasParams
-      ? concatMapped(
-          `{(${node.content.params.join(", ")}) => `,
-          this.#expression(contentNodes, true, true),
-          "}",
-        )
-      : this.#render(contentNodes, true);
+    const content = node.content;
+    const children = this.#inBlock(content, () =>
+      content.hasParams
+        ? concatMapped(
+            `{(${content.params.join(", ")}) => `,
+            this.#expression(contentNodes, true, true),
+            "}",
+          )
+        : this.#render(contentNodes, true),
+    );
     if (children.code === "") {
       this.#out.push(
         concatMapped("<", mapped(name, node.nameSpan), attrs, tags, " />"),
@@ -3294,6 +3125,11 @@ export class PreactEmitter implements Emitter<string> {
    * against the callee") and is a no-op for annotated or destructured params.
    */
   #contentFn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+    return this.#inBlock(node.content, () => this.#contentFnIn(node));
+  }
+
+  /** `#contentFn`, inside the body's scope. */
+  #contentFnIn(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
     if (isHostComponentCall(node)) return this.#hostComponentContentFn(node);
     const children = node.content?.children ?? [];
     // The body of a dynamic tag or a called `<define>` is its own `/var` scope
@@ -3341,6 +3177,15 @@ export class PreactEmitter implements Emitter<string> {
    * hand: `(n) => n`.
    */
   #hostComponentContentFn(
+    node: Extract<IrNode, { kind: "Component" }>,
+  ): MappedCode {
+    return this.#inBlock(node.content, () =>
+      this.#hostComponentContentFnIn(node),
+    );
+  }
+
+  /** `#hostComponentContentFn`, inside the body's scope. */
+  #hostComponentContentFnIn(
     node: Extract<IrNode, { kind: "Component" }>,
   ): MappedCode {
     const children = node.content?.children ?? [];
@@ -3398,9 +3243,11 @@ export class PreactEmitter implements Emitter<string> {
     if (meaningful(children).length === 0) {
       return concatMapped("<", name, attrs, " />");
     }
-    const { code: body, statements } = this.#scopeOf(
-      (scope) => scope.#hostComponentBody(node, children),
-      { hard: false, bindsParams: false },
+    const { code: body, statements } = this.#inBlock(node.content, () =>
+      this.#scopeOf((scope) => scope.#hostComponentBody(node, children), {
+        hard: false,
+        bindsParams: false,
+      }),
     );
     return concatMapped(
       "<",
@@ -3516,7 +3363,9 @@ export class PreactEmitter implements Emitter<string> {
     // `.map((item) => …)`: the body is a callback, so a statement written
     // here would have to be hoisted out of the loop to reach the component
     // body — losing both the row binding and the per-row evaluation.
-    const body = this.#expression(node.children, true);
+    const body = this.#inScope(node.bindings, node.children, () =>
+      this.#expression(node.children, true),
+    );
     const [first = "item", second] = node.params;
     const source = node.source;
 
@@ -3624,7 +3473,9 @@ export class PreactEmitter implements Emitter<string> {
       this.#claimName(node.name, node.nameSpan, node.loc);
       // The lifted define shares the region's one arrow whichever body it
       // sat in, so a name is unique across every scope of the region.
-      this.#claimName(node.name, node.nameSpan, node.loc, this.#region.claimed);
+      if (this.#bindings !== this.#region.root) {
+        this.#claimName(node.name, node.nameSpan, node.loc, this.#region.root);
+      }
       for (let soft = this.#softLift; soft; soft = soft.parent) {
         soft.defines.push(node);
       }
@@ -3632,7 +3483,12 @@ export class PreactEmitter implements Emitter<string> {
       // a function of its own, so it renders as a callback: a `/var` inside
       // it has no statement position and is refused, as in any callback.
       this.#region.defines.push(
-        this.defineStatement(node, this.#render(node.children, true)),
+        this.defineStatement(
+          node,
+          this.#inScope(node.bindings, node.children, () =>
+            this.#render(node.children, true),
+          ),
+        ),
       );
       return;
     }
@@ -3672,7 +3528,9 @@ export class PreactEmitter implements Emitter<string> {
       (tag) => tag.name === "placeholder",
     );
 
-    const body = this.#scopeOf((scope) => scope.#render(node.tag.children));
+    const body = this.#inScope(node.tag.bindings, node.tag.children, () =>
+      this.#scopeOf((scope) => scope.#render(node.tag.children)),
+    );
     let inner =
       body.statements === ""
         ? body.code
@@ -3693,8 +3551,10 @@ export class PreactEmitter implements Emitter<string> {
       // gives that through `Suspense`; the package re-exports it under one
       // name so the emitted text is dialect-independent.
       this.#runtimeImports.add(this.#dialect.suspenseName);
-      const fallback = this.#scoped(true, (scope) =>
-        scope.#expression(placeholder.block.children, undefined, true),
+      const fallback = this.#inBlock(placeholder.block, () =>
+        this.#scoped(true, (scope) =>
+          scope.#expression(placeholder.block.children, undefined, true),
+        ),
       );
       // Hono's `Suspense` returns the fallback when its children are falsy,
       // so a lone `0` body would show the placeholder: close it like a
@@ -3727,7 +3587,7 @@ export class PreactEmitter implements Emitter<string> {
     // Hono drops when it is `0` or `NaN`: write it as a closed fragment.
     // A lone `<for>` is an array: Hono's string renderer joins an array a
     // function returns with commas, so it is closed as a fragment too.
-    const caught =
+    const caught = this.#inBlock(catchTag.block, () =>
       holdsScalar(catchTag.block.children) || holdsList(catchTag.block.children)
         ? concatMapped(
             "<>",
@@ -3740,7 +3600,8 @@ export class PreactEmitter implements Emitter<string> {
           )
         : this.#scoped(true, (scope) =>
             scope.#expression(catchTag.block.children, undefined, true),
-          );
+          ),
+    );
     const fallback = concatMapped(`(${params}) => `, caught);
     this.#out.push(
       concatMapped(
@@ -3790,16 +3651,16 @@ export function createRegionEmitter(
   dialect: JsxDialect,
   segment: string,
   positionAt: RegionSink["positionAt"],
-  shadowed: WeakSet<object> = new WeakSet(),
+  locals: ReadonlySet<string> = new Set(),
   publicDefines = false,
   importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
   const root = new Map<string, Position>();
   return new PreactEmitter({
     dialect,
-    region: { segment, defines: [], claimed: new Map(), root, positionAt },
+    region: { segment, defines: [], root, positionAt },
     bindings: root,
-    shadowed,
+    locals,
     publicDefines,
     // The region's `typeCheck` projection is what `publicDefines` marks.
     projectHostComponents: publicDefines,
@@ -3811,7 +3672,7 @@ export function createEmitter(
   dialect: JsxDialect = preactDialect,
   typeCheck?: string,
   source?: string,
-  shadowed: WeakSet<object> = new WeakSet(),
+  locals: ReadonlySet<string> = new Set(),
   importBindings?: ReadonlySet<string>,
 ): PreactEmitter {
   return new PreactEmitter({
@@ -3823,7 +3684,7 @@ export function createEmitter(
     positionAt: !source
       ? undefined
       : (offset) => sourcePosition(source, offset),
-    shadowed,
+    locals,
   });
 }
 
@@ -3832,7 +3693,12 @@ export function emitPreact(
   ir: Ir,
   dialect: JsxDialect = preactDialect,
 ): string {
-  const emitter = createEmitter(dialect);
+  const emitter = createEmitter(
+    dialect,
+    undefined,
+    undefined,
+    scopeLocals(new Set(), [], ir.body),
+  );
   drive(emitter, ir.body);
   return emitter.done();
 }

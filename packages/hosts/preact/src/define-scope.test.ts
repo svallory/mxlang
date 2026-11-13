@@ -348,41 +348,50 @@ describe.each(HOSTS)("%s: define calls and attributes", (host) => {
   });
 });
 
-describe("paramNames", () => {
+describe("paramNames (deprecated stand-in over Babel's binding analysis)", () => {
   it.each([
-    [["p"], ["p"]],
     [
-      ["a", "b"],
-      ["a", "b"],
+      ["{ a, b: [c] }", "n = total / 2", "...rest"],
+      ["a", "c", "n", "rest"],
     ],
-    [["...rest"], ["rest"]],
-    [["a = Row"], ["a"]],
-    [["{ a = Row }"], ["a"]],
-    [["{ a, b: c, ...d }"], ["a", "c", "d"]],
-    [["{ a: { b = [1, 2] } }"], ["b"]],
-    [["[a, , [b], ...c]"], ["a", "b", "c"]],
-    [["{ a } = { a: Row }"], ["a"]],
-    [["x: Map<string, number>"], ["x"]],
-    [["{ 'k-1': k, [`z${1}`]: z }"], ["*"]],
-    [["{ a = /[}]/, Row }"], ["*"]],
-    [["{ a = 1 / 2, Row }"], ["a", "Row"]],
-    [["{ a = 1 /* } */, Row }"], ["*"]],
-    [["{ a = 1 // }\n, Row }"], ["*"]],
-    [["{ a = 1 + /}/.source.length, Row }"], ["*"]],
-    [["{ a = () => /]/, Row }"], ["*"]],
-    [["{ a = typeof /}/, Row }"], ["*"]],
-    [
-      ["{ a = (1) / 2, b = [1][0] / 2, c = x / 2, Row }"],
-      ["a", "b", "c", "Row"],
-    ],
-    [["n = total / 2"], ["n"]],
-    [["{ a = /x/ }"], ["*"]],
-    [["a = (b) / 2, c = /x/"], ["*"]],
-    [['a = "/x"'], ["a"]],
-    [["{ 'k-1': k, [\"z\"]: z }"], ["k", "z"]],
-    [["{ Ñame }"], ["Ñame"]],
+    [["{ a = /[}]/, Row }"], ["a", "Row"]],
+    [["{ a"], ["*"]],
   ])("%j -> %j", (params, names) => {
     expect(paramNames(params)).toEqual(names);
+  });
+});
+
+/**
+ * A param list that rebinds a define's name makes a call to it inside that
+ * body a call to the param. The names come from core's binding analysis, so
+ * a regex or a template literal in a default no longer hides them.
+ */
+describe("a tag param that rebinds a define's name", () => {
+  const ROW = "<define/Row|x|><p>r</p></define>";
+
+  it("in a define's params, even after a regex default", () => {
+    const code = emit(
+      `${ROW}<define/List|{ a = /[}]/, Row }|><Row(1)/></define><List/>`,
+    );
+    expect(code).toContain(
+      "const __mxDef_List = ({ a = /[}]/, Row }: any) => (<>{Row(1)}</>);",
+    );
+  });
+
+  it("in a <for> body's params, but not after the loop", () => {
+    const code = emit(
+      `${ROW}<for|{ Row }| of=input.list><Row(1)/></for><Row(2)/>`,
+    );
+    expect(code).toContain(
+      "<__mxFragment key={{ Row }}>{Row(1)}</__mxFragment>)}{__mxDef_Row(2)}",
+    );
+  });
+
+  it("in a dynamic tag's body params, but not after the tag", () => {
+    const code = emit(`${ROW}<\${input.X}|Row|><Row(1)/></><Row(2)/>`);
+    expect(code).toContain(
+      "{ content: ((Row) => <>{Row(1)}</>) as (...args: any[]) => any }, undefined, true)}{__mxDef_Row(2)}",
+    );
   });
 });
 
@@ -402,6 +411,34 @@ describe("defineStatements", () => {
   it("drops it when the name is only a member (a.Row)", () => {
     expect(kept("a.Row")).toBe(false);
   });
+
+  it.each([
+    ['"Row";', false],
+    ['const s = "\\u0052ow";', false],
+    ["const f = (Row) => Row;", false],
+    ["x = <Row />;", true],
+    ["x = Row.a;", true],
+    ["f(...Row);", true],
+    ["const = ;", true],
+  ])("%s keeps the public binding: %s", (other, keep) => {
+    expect(kept(other)).toBe(keep);
+  });
+
+  it.each([
+    ['<p>${"Row"}</p>', false],
+    ['<p>${"\\u0041"}</p>', false],
+    ["<${Row}/>", true],
+    ["<p>${Row.a}</p>", true],
+    ["<div ...Row/>", true],
+    ["<return=Row/>", true],
+    ["static const alias = Row;\n", true],
+  ])(
+    "a template whose body is %j keeps the public binding: %s",
+    (body, keep) => {
+      const code = emit(`<define/Row><p>r</p></define>${body}`);
+      expect(code.includes("const Row = __mxDefine")).toBe(keep);
+    },
+  );
 
   it("returns nothing for no defines", () => {
     expect(defineStatements([], "Row")).toEqual([]);

@@ -55,7 +55,7 @@ import {
   type DefineParts,
   defineStatements,
   preactDeclarations,
-  shadowedCalls,
+  scopeLocals,
 } from "./emitter.ts";
 
 export interface CompilePreactOptions {
@@ -586,9 +586,9 @@ export function emitModuleWithMappings(
   source = "",
 ): MappedCode {
   const names = typeCheck ? handlerTypeNames(source) : undefined;
-  const shadowed = ir.body.some((node) => node.kind === "Define")
-    ? shadowedCalls(ir)
-    : new WeakSet<object>();
+  // The local names of the component's own scope: a direct define call whose
+  // name one of them binds keeps its authored name (`scopeLocals`).
+  const locals = scopeLocals(new Set(), [], ir.body);
   // The type-check projection writes a host-component call bound to one of
   // these as the JSX element it renders (`createEmitter`).
   const importBindings = new Set(ir.imports.flatMap((node) => node.bindings));
@@ -596,7 +596,7 @@ export function emitModuleWithMappings(
     dialect,
     names?.handler,
     source,
-    shadowed,
+    locals,
     importBindings,
   );
 
@@ -625,7 +625,7 @@ export function emitModuleWithMappings(
         dialect,
         names?.handler,
         source,
-        shadowed,
+        scopeLocals(locals, node.bindings, node.children),
         importBindings,
       );
       drive(body, node.children);

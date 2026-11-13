@@ -244,6 +244,41 @@ export function freeIdentifiersIn(code: string): Set<string> {
   return names;
 }
 
+/**
+ * Every name a whole TSX module text reads *freely*: each referenced
+ * `Identifier` or `JSXIdentifier` (`<Row/>`, the `Row` of `<Row.a/>`) with
+ * no binding in the text's own scopes, a top-level declaration of the text
+ * included. `freeIdentifiersIn`, for a module rather than one expression.
+ *
+ * A string's or a comment's content is not an identifier, a member name
+ * (`a.Row`) is not a read, and a name an inner scope rebinds (`(Row) => Row`)
+ * is that binding's. `null` when Babel cannot parse the text, so a caller can
+ * fall back to assuming every name is read.
+ */
+export function freeIdentifiersInProgram(code: string): Set<string> | null {
+  const { parse, traverse } = coreBabel();
+  let file: Node;
+  try {
+    file = parse(code, {
+      sourceType: "module",
+      allowReturnOutsideFunction: true,
+      allowAwaitOutsideFunction: true,
+      plugins: ["jsx", "typescript"],
+    });
+  } catch {
+    return null;
+  }
+  const names = new Set<string>();
+  traverse(file, {
+    ReferencedIdentifier(path: Node) {
+      const name = path.node.name;
+      if (path.scope.getBinding(name)) return;
+      names.add(name);
+    },
+  });
+  return names;
+}
+
 /** One name a destructuring pattern binds, with the path that reads it. */
 export type DestructuredName = {
   readonly name: string;

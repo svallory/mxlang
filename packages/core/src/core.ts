@@ -2563,27 +2563,26 @@ export function bindingIdentifiers(pattern: Node): string[] {
   return bindingIdentifierNodes(pattern).map((node) => node.name);
 }
 
-/** `bindingIdentifiers`, as the `Identifier` nodes, so a caller can position each. */
+/**
+ * `bindingIdentifiers`, as the `Identifier` nodes, so a caller can position
+ * each: Babel's `getBindingIdentifiers` (duplicates kept), flattened in
+ * source order. Babel walks breadth-first, so its own order puts a nested
+ * name after a later shallow one (`{ b: [c], ...d }` gives `d`, `c`); each
+ * node's start offset (`loc.start.index`, or `start`) restores the order the
+ * author wrote them in. A node that is
+ * no pattern binds nothing.
+ */
 export function bindingIdentifierNodes(pattern: Node): Node[] {
   if (!pattern || typeof pattern !== "object") return [];
-  switch (pattern.type) {
-    case "Identifier":
-      return [pattern];
-    case "ObjectPattern":
-      return (pattern.properties ?? []).flatMap((property: Node) =>
-        bindingIdentifierNodes(property.value ?? property.argument),
-      );
-    case "ArrayPattern":
-      return (pattern.elements ?? []).flatMap((element: Node) =>
-        bindingIdentifierNodes(element),
-      );
-    case "AssignmentPattern":
-      return bindingIdentifierNodes(pattern.left);
-    case "RestElement":
-      return bindingIdentifierNodes(pattern.argument);
-    default:
-      return [];
-  }
+  const found = coreBabel().types.getBindingIdentifiers(
+    pattern,
+    true,
+  ) as Record<string, Node[]>;
+  const nodes = Object.values(found).flat();
+  const at = (node: Node): unknown => node.loc?.start?.index ?? node.start;
+  return nodes.every((node) => typeof at(node) === "number")
+    ? nodes.sort((a, b) => (at(a) as number) - (at(b) as number))
+    : nodes;
 }
 
 /**

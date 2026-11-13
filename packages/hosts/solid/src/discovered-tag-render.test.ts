@@ -30,6 +30,14 @@ const packageRoot = new URL("..", import.meta.url).pathname;
 const dir = mkdtempSync(join(packageRoot, ".discovered-tag-render-"));
 const scan = (file: string) => getCustomTags(file, { targets: solidTargets });
 
+/** A unit returning a value, for `/var` (`<counter/n start=1/>` binds `2`). */
+const COUNTER = [
+  "export interface Input { start: number }",
+  "<span>${input.start}</span>",
+  "<return value=input.start + 1/>",
+  "",
+].join("\n");
+
 const BADGE = [
   "export interface Input { label: string }",
   "<b title=input.label>${input.label}:<${input.content}/></b>",
@@ -98,20 +106,29 @@ beforeAll(() => {
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "t" }));
   mkdirSync(join(dir, "tags"));
   writeFileSync(join(dir, "tags", "badge.mx"), BADGE);
-  // The tag is a module of its own on Solid, as it ships.
-  ssr(
-    compileSolidUnit(BADGE, {
-      filename: join(dir, "tags", "badge.mx"),
-      customTags: scan(join(dir, "page.mx")),
-    }).code,
-    "tags/badge",
-  );
+  writeFileSync(join(dir, "tags", "counter.mx"), COUNTER);
+  // Each tag is a module of its own on Solid, as it ships.
+  for (const [name, source] of [
+    ["badge", BADGE],
+    ["counter", COUNTER],
+  ]) {
+    ssr(
+      compileSolidUnit(source as string, {
+        filename: join(dir, "tags", `${name}.mx`),
+        customTags: scan(join(dir, "page.mx")),
+      }).code,
+      `tags/${name}`,
+    );
+  }
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("a discovered custom tag, rendered on Solid", () => {
   it("scans the tag rather than being handed it", () => {
-    expect(Object.keys(scan(join(dir, "page.mx")))).toEqual(["badge"]);
+    expect(Object.keys(scan(join(dir, "page.mx")))).toEqual([
+      "badge",
+      "counter",
+    ]);
     expect(readFileSync(join(dir, "tags", "badge.mx"), "utf8")).toBe(BADGE);
   });
 
@@ -132,4 +149,30 @@ describe("a discovered custom tag, rendered on Solid", () => {
       region('<badge label="a"><i>x</i></badge><p><badge label="b"/></p>'),
     ).toBe('<b title="a">a:<i>x</i></b><p><b title="b">b:</b></p>');
   });
+});
+
+/**
+ * A `/var` is scoped to the body that declares it, as in Marko: inside the
+ * body a repeated name reads the inner value, after it the outer one. Solid
+ * declares every `/var` with one `let` at the component's head, so the inner
+ * one gets a binding of its own.
+ */
+describe("a /var repeated in a nested body, rendered on Solid", () => {
+  it.each([
+    [
+      "a <div> body",
+      "<counter/n start=1/><div><counter/n start=5/>${n}</div>${n}",
+      "<span>1</span><div><span>5</span>6</div>2",
+    ],
+    [
+      "a <try> body",
+      "<counter/n start=1/><try><counter/n start=5/>${n}<@catch>e</@catch></try>${n}",
+      "<span>1</span><span>5</span>6<!--!$-->2",
+    ],
+  ])(
+    "%s reads the inner value inside and the outer after",
+    (_l, source, html) => {
+      expect(whole(source)).toBe(html);
+    },
+  );
 });

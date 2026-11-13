@@ -6732,3 +6732,72 @@ describe("attachDependencies", () => {
     expect(thrown).toEqual({ message: "x" });
   });
 });
+
+/**
+ * Every node that binds tag params carries the names they bind, from Babel's
+ * binding analysis (`bindings`), so a host tracks scopes without reading the
+ * param text: a regex or a template literal in a default cannot hide a name.
+ */
+describe("tag-param bindings on the IR", () => {
+  const declarations = (claimed: string) =>
+    fakeDeclarations({
+      attrTags: 2,
+      isComponent: (name, ctx) => name === "Box" || ctx.defines.has(name),
+      isDelegatedTag: (name) => name === claimed,
+      resolveDelegatedTag: () => ({ kind: "try" }),
+    });
+  const block = (node: IrNode): { bindings?: string[] } | null | undefined =>
+    node.kind === "Component" ? node.content : undefined;
+  const dollar = "$";
+
+  it.each([
+    ["{ a, b: [c], ...d }, e = 1, f: string", ["a", "c", "d", "e", "f"]],
+    ["{ a = /[}]/, Row }", ["a", "Row"]],
+    [`{ a = \`${dollar}{"\`"}\`, Row }`, ["a", "Row"]],
+  ])("|%s| binds %j", (params, names) => {
+    const define = find(
+      lowerSource(`<define/D|${params}|>x</define>`, declarations("")).body,
+      "Define",
+    );
+    expect(define.bindings).toEqual(names);
+
+    const call = find(
+      lowerSource(`<Box|${params}|>x</Box>`, declarations("")).body,
+      "Component",
+    );
+    expect(block(call)?.bindings).toEqual(names);
+
+    const slot = find(
+      lowerSource(`<Box><@slot|${params}|>x</@slot></Box>`, declarations(""))
+        .body,
+      "Component",
+    ).attributeTags[0];
+    expect(slot?.block.bindings).toEqual(names);
+
+    const dynamicSource = `<${dollar}{input.X}|${params}|>x</>`;
+    const dynamic = find(
+      lowerSource(dynamicSource, declarations("")).body,
+      "Component",
+    );
+    expect(block(dynamic)?.bindings).toEqual(names);
+
+    const claimed = find(
+      lowerSource(dynamicSource, declarations(DYNAMIC_TAG)).body,
+      "DelegatedTag",
+    );
+    expect(claimed.tag.bindings).toEqual(names);
+
+    const caught = find(
+      lowerSource(
+        `<try>x<@catch|${params}|>e</@catch></try>`,
+        declarations("try"),
+      ).body,
+      "DelegatedTag",
+    );
+    expect(caught.tag.bindings).toEqual([]);
+    expect(
+      caught.tag.attributeTags.find((tag) => tag.name === "catch")?.block
+        .bindings,
+    ).toEqual(names);
+  });
+});
