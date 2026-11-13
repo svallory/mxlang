@@ -83,6 +83,9 @@ export function createDialectLanguagePlugin(
           ...(diagnostic.fixes === undefined
             ? {}
             : { fixes: diagnostic.fixes }),
+          ...(diagnostic.origin === undefined
+            ? {}
+            : { origin: diagnostic.origin }),
         })),
       );
       return {

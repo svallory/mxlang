@@ -116,6 +116,21 @@ export interface MxCompileDiagnostic extends SolidMxSyntaxError {
    * @unstable
    */
   fixes?: readonly IrDiagnosticFix[];
+  /**
+   * Where the problem really is when it is in another file (a dialect's tag
+   * file or manifest): `line` 1-based and `column` 0-based in `file`, `end`
+   * exclusive. The diagnostic itself stays at the head of this file with
+   * ` (in <file>:<line>:<column + 1>)` ending its message; the tsserver proxy
+   * adds `relatedInformation` at this position. Same shape as
+   * `DialectDiagnostic.origin`.
+   * @unstable
+   */
+  origin?: {
+    file: string;
+    line: number;
+    column: number;
+    end?: { line: number; column: number };
+  };
 }
 
 export interface MxDiagnosticLanguagePlugin extends LanguagePlugin<string> {

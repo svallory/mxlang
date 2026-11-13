@@ -173,7 +173,7 @@ const BUILD_TURN_TIMER = "timerToBuildInvalidatedProject";
  * The solution builder schedules every rebuild turn with `setTimeout(callback,
  * time, "timerToBuildInvalidatedProject", ...)`, through the global
  * `setTimeout` that `_tsc.js` reads when it is evaluated. Wrapping that global
- * before `runTsc` evaluates it sees each turn: a change that invalidates
+ * before `runVolarTsc` evaluates it sees each turn: a change that invalidates
  * several projects builds one per turn (the next on a 100 ms timer) and writes
  * its one summary after the last. A turn marks the rebuild when it starts,
  * because the compiler host's own hook is dropped when tsc restores the host

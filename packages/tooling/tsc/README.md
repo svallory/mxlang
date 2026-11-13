@@ -8,7 +8,8 @@ imports are checked together.
 This is the CI half of MX's TypeScript tooling. `tsc` ignores `compilerOptions.plugins`, so
 [`@mxlang/typescript-plugin`](../typescript-plugin/README.md) does nothing on
 the command line: an editor would report an error that a build silently missed.
-`mx-tsc` closes that gap by handing Volar's `runTsc` the *same* language plugin
+`mx-tsc` closes that gap by handing Volar's tsc patches (applied by
+`runVolarTsc`) the *same* language plugin
 the tsserver plugin uses, so both halves share one lowering and cannot drift.
 
 ## Usage
@@ -151,8 +152,10 @@ package.json(5,13): warning TS80003: unknown mx.host "vue"; valid hosts: html, a
 - a `package.json` that cannot be parsed (the file is skipped and the default
   `html` host is used for the files under it).
 
-The path is the location only, never repeated in the message; the language
-server and the tsserver plugin print the same text as
+The `package.json` path is the location and is not repeated as the message's
+prefix; the message may still name the directory a fallback applies to (a
+malformed `package.json` says the default host is used "for the files under
+<dir>"). The language server and the tsserver plugin print the same text as
 `package.json:line:col: <message>`.
 
 A warning leaves the exit code alone; a target that belongs to another host or
@@ -244,7 +247,8 @@ plugin:
   resolver is what makes
   `import "./X.solid.mx"` resolve; without it every import is `TS2307`, even
   though each file compiles fine on its own.
-- **`tsObject`** is the string `"require('typescript')"`. This one is not
+- **`typescriptObject`** (the transform's parameter; `runVolarTsc` passes
+  its `TYPESCRIPT_OBJECT`) is the string `"require('typescript')"`. This one is not
   optional, and is the subtlety worth knowing before editing `src/index.ts`:
   the transform's default is a proxy that resolves property names by `eval`
   inside `tsc.js`'s own scope, so it sees only that bundle's locals. `ScriptSnapshot`

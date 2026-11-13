@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 
 /**
  * `typescript` is a *peer* of the two tooling packages that load it, not a
- * dependency: `mx-tsc` hands `require('typescript')` to Volar's `runTsc`, and
+ * dependency: `mx-tsc` hands `require('typescript')` to Volar's tsc transform
+ * (`runVolarTsc`), and
  * the TS plugin types against the `typescript` tsserver loads. Both only work
  * if the copy each resolves is the consumer's single installation. A nested
  * copy — which is what a plain `dependencies` entry buys once a consumer pins

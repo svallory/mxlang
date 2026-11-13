@@ -397,6 +397,59 @@ function createEditorNgDiagnostics(
   return service;
 }
 
+/**
+ * The `relatedInformation` of a compile diagnostic whose problem is in another
+ * file (`origin`: a dialect's tag file or manifest): one entry at that file's
+ * range, its message without the ` (in <file>:<line>:<column>)` the diagnostic
+ * carries for tools that cannot address the other file (the language server
+ * strips the same suffix). Nothing when there is no origin or the file cannot
+ * be read.
+ */
+function originInformation(
+  typescript: typeof ts,
+  diagnostic: import("./language.ts").MxCompileDiagnostic,
+): { relatedInformation?: ts.DiagnosticRelatedInformation[] } {
+  const origin = diagnostic.origin;
+  if (origin === undefined) return {};
+  const text = typescript.sys.readFile(origin.file);
+  if (text === undefined) return {};
+  const file = typescript.createSourceFile(
+    origin.file,
+    text,
+    typescript.ScriptTarget.Latest,
+    false,
+  );
+  const start = file.getPositionOfLineAndCharacter(
+    origin.line - 1,
+    origin.column,
+  );
+  const end =
+    origin.end === undefined
+      ? start + 1
+      : file.getPositionOfLineAndCharacter(
+          origin.end.line - 1,
+          origin.end.column,
+        );
+  const suffix = ` (in ${origin.file}:${origin.line}:${origin.column + 1})`;
+  return {
+    relatedInformation: [
+      {
+        category:
+          diagnostic.category === "error"
+            ? typescript.DiagnosticCategory.Error
+            : typescript.DiagnosticCategory.Warning,
+        code: diagnosticCodeOf(diagnostic) as number,
+        file,
+        start,
+        length: Math.max(0, Math.min(end, text.length) - start),
+        messageText: diagnostic.message.endsWith(suffix)
+          ? diagnostic.message.slice(0, -suffix.length)
+          : diagnostic.message,
+      },
+    ],
+  };
+}
+
 function withSyntaxDiagnostics(
   typescript: typeof ts,
   service: ts.LanguageService,
@@ -533,6 +586,7 @@ function withSyntaxDiagnostics(
             code: diagnosticCodeOf(diagnostic) as number,
             source: diagnostic.diagnosticSource ?? source,
             messageText: diagnostic.message,
+            ...originInformation(typescript, diagnostic),
           })),
           ...hostPolicy.map((diagnostic) => ({
             file: typescript.createSourceFile(

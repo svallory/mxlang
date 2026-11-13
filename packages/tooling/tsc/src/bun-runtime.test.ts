@@ -137,12 +137,19 @@ if (bun === undefined) {
  */
 function copyDiscoveredTagFixture(): string {
   const project = mkdtempSync(join(tmpdir(), "mx-tsc-bun-"));
-  cpSync(join(fixtures, "discovered-tag"), project, { recursive: true });
-  const tsconfigPath = join(project, "tsconfig.json");
-  const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8"));
-  tsconfig.compilerOptions.paths["@mxlang/target-html"] = [
-    join(repoRoot, "packages", "targets", "html", "src", "index.ts"),
-  ];
-  writeFileSync(tsconfigPath, JSON.stringify(tsconfig, null, 2));
+  // The callers' own `finally` removes the directory once this returns; a
+  // throw before then would leave it behind, so it is removed here.
+  try {
+    cpSync(join(fixtures, "discovered-tag"), project, { recursive: true });
+    const tsconfigPath = join(project, "tsconfig.json");
+    const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8"));
+    tsconfig.compilerOptions.paths["@mxlang/target-html"] = [
+      join(repoRoot, "packages", "targets", "html", "src", "index.ts"),
+    ];
+    writeFileSync(tsconfigPath, JSON.stringify(tsconfig, null, 2));
+  } catch (error) {
+    rmSync(project, { recursive: true, force: true });
+    throw error;
+  }
   return project;
 }

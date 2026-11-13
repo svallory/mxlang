@@ -138,7 +138,7 @@ export function resolveBuildProjects(
       undefined,
       tsconfigPath,
       undefined,
-      // The extension `runTsc` registers, so a project whose files are all
+      // The extension `runVolarTsc` registers, so a project whose files are all
       // `.mx` still counts as having root files (`Deferred`: without a script
       // kind the `include` glob ignores `.mx`).
       [

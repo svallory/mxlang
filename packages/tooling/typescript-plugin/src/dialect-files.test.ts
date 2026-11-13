@@ -308,6 +308,33 @@ describe("dialect files through the TypeScript plugin", () => {
         message: `bad concept (in ${project.path("concepts/money.thing.probe")}:2:5)`,
       },
     ]);
+    // The tag file's own position travels as related information (line 2,
+    // column 4 of "<x/>\n<!-- BAD -->\n" is offset 9; no end: one character),
+    // with the message an editor shows there, without the `(in ...)` pointer.
+    const own = service
+      .getSyntacticDiagnostics(file)
+      .find((diagnostic) => (diagnostic.code as unknown) === "KIT_BAD");
+    expect(
+      own?.relatedInformation?.map((related) => ({
+        file: related.file?.fileName,
+        text: related.file?.text,
+        start: related.start,
+        length: related.length,
+        category: ts.DiagnosticCategory[related.category],
+        code: related.code as unknown,
+        message: related.messageText,
+      })),
+    ).toEqual([
+      {
+        file: project.path("concepts/money.thing.probe"),
+        text: "<x/>\n<!-- BAD -->\n",
+        start: 9,
+        length: 1,
+        category: "Error",
+        code: "KIT_BAD",
+        message: "bad concept",
+      },
+    ]);
   });
 
   describe("a dialect declared by a package below the tsconfig's directory", () => {

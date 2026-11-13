@@ -57,8 +57,8 @@ import {
 
 /**
  * The compound extensions of every registered module file kind (each region
- * kind, e.g. `.solid.mx`, then `.ng.mx`) and the plain `.mx`, as `runTsc` wants
- * them: both halves, because TypeScript's own module resolver appends the
+ * kind, e.g. `.solid.mx`, then `.ng.mx`) and the plain `.mx`, as `runVolarTsc`
+ * hands them to Volar's transform: both halves, because TypeScript's own module resolver appends the
  * terminal segment when probing for declaration files.
  */
 const EXTRA_SUPPORTED_EXTENSIONS = [...moduleFileExtensions(), ".mx"];
@@ -73,8 +73,8 @@ const ASTRO_SUPPORTED_EXTENSIONS = [
  * of each project `-p`/`--project` (or each `-b` argument) names, or the
  * current directory when it names none, and the directory of every project those reference
  * (`references` in a `tsconfig.json`, followed recursively). A dialect's
- * extensions are a property of the project that uses it, and `runTsc` wants
- * the extension list before the program exists.
+ * extensions are a property of the project that uses it, and `runVolarTsc`
+ * needs the extension list before the program exists.
  */
 export function dialectProjectDirs(
   argv: readonly string[],
@@ -148,7 +148,7 @@ function dialectExtensionsOf(argv: readonly string[]): string[] {
 /**
  * Resolves TypeScript's own `tsc.js`.
  *
- * `runTsc` does not run `tsc` as a subprocess — it reads that file, rewrites
+ * `runVolarTsc` does not run `tsc` as a subprocess — it reads that file, rewrites
  * it to route program creation through Volar, and evaluates the result. So it
  * needs the path to the real entry point, not the `typescript` module's
  * exports. Resolution is relative to this package so a workspace hoisting the
@@ -379,8 +379,8 @@ function virtualFilesInWatchRebuilds(host: ts.CompilerHost | undefined): void {
  * approximate position, so a diagnostic Volar cannot map is reported at the
  * nearest mapped span instead of being dropped.
  *
- * `runTsc` hands the program to Volar's `decorateProgram` inside the patched
- * `tsc.js`, and `mx-tsc` never holds it, so `decorateProgram` is the one place
+ * The `tsc.js` `runVolarTsc` patches hands the program to Volar's
+ * `decorateProgram` itself, and `mx-tsc` never holds it, so `decorateProgram` is the one place
  * to reach the program's raw diagnostics. `proxyCreateProgram` looks it up on
  * the module's exports at each call, so replacing the export is enough. Done
  * once per process; a second call finds the marker and does nothing.
@@ -760,7 +760,7 @@ function collectBuildGroups(
  * This is the CI half of MX's TypeScript tooling: an editor gets `.solid.mx`
  * types from `@mxlang/typescript-plugin` loaded into tsserver, but a `tsc
  * --noEmit` in a build has no tsserver and no plugin host, so the same language
- * plugin is handed to Volar's `runTsc` instead. Both halves share one
+ * plugin is handed to Volar's tsc patches (`runVolarTsc`) instead. Both halves share one
  * implementation of the lowering, which is what keeps an editor and CI from
  * disagreeing about whether a file type-checks.
  */
@@ -1298,7 +1298,8 @@ export function consumeAstroFlag(argv: string[]): boolean {
 }
 
 /**
- * The expression `runTsc` splices into the patched `tsc.js` to produce the
+ * The expression `runVolarTsc` has Volar's transform splice into the patched
+ * `tsc.js` (its `typescriptObject` argument) to produce the
  * `typescript` object handed to language plugins.
  *
  * The default is `new Proxy({}, { get: (_, p) => eval(p) })`, evaluated inside

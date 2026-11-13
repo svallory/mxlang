@@ -7,7 +7,7 @@ type imports from the file's real exported `Input` interface.
 
 This is the editor half of MX's TypeScript tooling. The CI half is
 [`@mxlang/tsc`](../tsc/README.md), which hands the *same* language plugin to
-Volar's `runTsc` — one lowering, so an editor and a build cannot disagree about
+Volar's tsc patches (`runVolarTsc`) — one lowering, so an editor and a build cannot disagree about
 whether a file compiles.
 
 ## What it does
