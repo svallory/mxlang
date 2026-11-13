@@ -117,7 +117,8 @@ Each host package owns `src/descriptor.ts` and `package.json#exports["./descript
 `src/descriptor.ts` as an entry (and html's `distFiles` in
 `scripts/pack-hygiene.ts` names `dist/descriptor.{js,d.ts}`). The registry is
 not in `PACKED_PACKAGES`: it is private with `main` at source and nothing
-ships it; the pack probe stubs it for consumers (`STUB_PRIVATE`).
+ships it; the pack probe stubs it for consumers (it is in
+`PINNED_WORKSPACE_DEPS` and `private: true`).
 
 ## Running
 

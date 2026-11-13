@@ -227,6 +227,31 @@ export function readPackageJson(dir: string): PackageJson {
   return JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
 }
 
+/**
+ * Splits the workspace packages a consumer install must pin (it cannot fetch
+ * them) by each package's own `private` flag: `private: true` -> an empty stub
+ * (its `main` is source no consumer could load), otherwise -> its real
+ * tarball. Throws naming the package when a name has no workspace dir.
+ */
+export function partitionPinned(
+  names: readonly string[],
+  dirOf: (name: string) => string | undefined,
+  read: (dir: string) => Pick<PackageJson, "private">,
+): { pack: string[]; stub: string[] } {
+  const pack: string[] = [];
+  const stub: string[] = [];
+  for (const name of names) {
+    const dir = dirOf(name);
+    if (dir === undefined) {
+      throw new Error(
+        `pinned workspace dependency ${name} has no workspace dir`,
+      );
+    }
+    (read(dir).private === true ? stub : pack).push(name);
+  }
+  return { pack, stub };
+}
+
 /** The paths `bun pm pack` would put in the tarball, without writing one. */
 export function packedFiles(
   dir: string,

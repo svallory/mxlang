@@ -14,6 +14,7 @@ import {
   PACKED_PACKAGES,
   packageNameOf,
   packedFiles,
+  partitionPinned,
   pkgDirOf,
   readPackageJson,
   repoRoot,
@@ -36,6 +37,50 @@ describe("packageNameOf", () => {
     expect(packageNameOf("@mxlang/target-html/types/marko")).toBe(
       "@mxlang/target-html",
     );
+  });
+});
+
+describe("partitionPinned", () => {
+  const dirs = new Map([
+    ["@mxlang/core", "/r/packages/core"],
+    ["@mxlang/host-solid", "/r/packages/hosts/solid"],
+    ["@mxlang/web-elements", "/r/packages/web-elements"],
+    ["@mxlang/targets", "/r/packages/target-registry"],
+  ]);
+  const manifests = new Map<string, { private?: boolean }>([
+    ["/r/packages/core", {}],
+    ["/r/packages/hosts/solid", { private: true }],
+    ["/r/packages/web-elements", { private: false }],
+    ["/r/packages/target-registry", { private: true }],
+  ]);
+  const read = (dir: string) => manifests.get(dir) ?? {};
+
+  it("stubs a private package and packs a public one, in the given order", () => {
+    expect(
+      partitionPinned(
+        [
+          "@mxlang/core",
+          "@mxlang/host-solid",
+          "@mxlang/web-elements",
+          "@mxlang/targets",
+        ],
+        (name) => dirs.get(name),
+        read,
+      ),
+    ).toEqual({
+      pack: ["@mxlang/core", "@mxlang/web-elements"],
+      stub: ["@mxlang/host-solid", "@mxlang/targets"],
+    });
+  });
+
+  it("throws naming a package that has no workspace dir", () => {
+    expect(() =>
+      partitionPinned(
+        ["@mxlang/core", "@mxlang/gone"],
+        (name) => dirs.get(name),
+        read,
+      ),
+    ).toThrow("pinned workspace dependency @mxlang/gone has no workspace dir");
   });
 });
 

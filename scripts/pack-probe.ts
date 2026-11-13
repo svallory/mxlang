@@ -34,6 +34,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -44,6 +45,7 @@ import {
   exportSpecifiers,
   PACKED_PACKAGES,
   type PackageJson,
+  partitionPinned,
   pkgDirOf,
   readPackageJson,
   repoRoot,
@@ -57,27 +59,53 @@ const STEP_TIMEOUT_MS = 240_000;
 const tsc = join(repoRoot, "node_modules/.bin/tsc");
 
 /**
- * D5 (publish-plan-private-deps, TODO.md): these workspace packages are
- * `private` and runtime deps of publishable ones, so a real install would
- * 404. The probe packs the ones that ship a `dist` and stubs the rest (their
- * `main` is `src/*.ts`, which no consumer could load). Named, not silent.
+ * Workspace packages that are runtime deps of a probed root but that a
+ * consumer install cannot fetch (not on the registry), so every consumer pins
+ * them. This list is by name because the probe cannot know which deps the
+ * registry lacks; whether each is packed or stubbed comes from its own
+ * `private` flag (`partitionPinned`): `private: true` -> an empty stub (its
+ * `main` is `src/*.ts`, which no consumer could load), otherwise -> its real
+ * tarball. Named, not silent.
  */
-const PACK_PRIVATE = ["@mxlang/core", "@mxlang/tsx-bridge"];
-/**
- * Publishable packages that are not on the registry yet but are transitive
- * runtime deps of a probed root (`@mxlang/target-html` imports
- * `@mxlang/web-elements`, and html is under the language server and
- * `@mxlang/tsc`), so every consumer pins them to their tarball like
- * `PACK_PRIVATE`.
- */
-const PACK_UNPUBLISHED = ["@mxlang/web-elements"];
-const STUB_PRIVATE = [
+const PINNED_WORKSPACE_DEPS = [
+  "@mxlang/core",
+  "@mxlang/tsx-bridge",
+  "@mxlang/web-elements",
   "@mxlang/host-hono",
   "@mxlang/host-preact",
   "@mxlang/host-react",
   "@mxlang/host-solid",
   "@mxlang/targets",
 ];
+
+/** Every workspace package's dir by `name`, scanning both workspace depths. */
+function scanWorkspaceDirs(): Map<string, string> {
+  const dirs = new Map<string, string>();
+  const packages = join(repoRoot, "packages");
+  for (const group of readdirSync(packages, { withFileTypes: true })) {
+    if (!group.isDirectory()) continue;
+    const groupDir = join(packages, group.name);
+    const candidates = [
+      groupDir,
+      ...readdirSync(groupDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => join(groupDir, entry.name)),
+    ];
+    for (const dir of candidates) {
+      if (existsSync(join(dir, "package.json"))) {
+        dirs.set(readPackageJson(dir).name, dir);
+      }
+    }
+  }
+  return dirs;
+}
+
+const pinnedDirs = scanWorkspaceDirs();
+const { pack: PACK_PINNED, stub: STUB_PINNED } = partitionPinned(
+  PINNED_WORKSPACE_DEPS,
+  (name) => pinnedDirs.get(name),
+  readPackageJson,
+);
 
 function fail(message: string): never {
   console.error(`[pack-probe] FAIL: ${message}`);
@@ -135,10 +163,12 @@ function tarballOf(name: string, dir: string): string {
   return path;
 }
 
-const workspaceDirs: Record<string, string> = {
-  "@mxlang/core": join(repoRoot, "packages/core"),
-  "@mxlang/tsx-bridge": join(repoRoot, "packages/tsx-bridge"),
-};
+// The packed pinned deps get a dir here (a stubbed one must not: a root's
+// `workspace:` dep with a dir is packed, below).
+const workspaceDirs: Record<string, string> = {};
+for (const name of PACK_PINNED) {
+  workspaceDirs[name] = pinnedDirs.get(name) as string;
+}
 for (const p of PACKED_PACKAGES) workspaceDirs[p.name] = pkgDirOf(p);
 workspaceDirs["@mxlang/typescript-plugin"] = join(
   repoRoot,
@@ -248,7 +278,7 @@ function makeConsumer(opts: ConsumerOptions): string {
   mkdirSync(dir, { recursive: true });
   const rootPkg = readPackageJson(workspaceDirs[opts.root] as string);
   const overrides: Record<string, string> = {};
-  for (const name of [...PACK_PRIVATE, ...PACK_UNPUBLISHED]) {
+  for (const name of PACK_PINNED) {
     overrides[name] = `file:${tarballOf(name, workspaceDirs[name] as string)}`;
   }
   // `@mxlang/target-html` is a dep of the language server: a real tarball.
@@ -261,7 +291,7 @@ function makeConsumer(opts: ConsumerOptions): string {
   for (const name of packExtra) {
     overrides[name] = `file:${tarballOf(name, workspaceDirs[name] as string)}`;
   }
-  for (const name of [...STUB_PRIVATE, ...(opts.stubExtra ?? [])]) {
+  for (const name of [...STUB_PINNED, ...(opts.stubExtra ?? [])]) {
     overrides[name] = `file:${stubDir(name)}`;
   }
 
@@ -478,8 +508,8 @@ function nodeTypes(
 }
 
 /**
- * Private workspace deps of a probed package beyond `STUB_PRIVATE`: the plugin
- * bundles `@mxlang/host-astro` (a `bun build --external`), whose `main` is
+ * Private workspace deps of a probed package beyond the stubbed
+ * `PINNED_WORKSPACE_DEPS`: the plugin bundles `@mxlang/host-astro` (a `bun build --external`), whose `main` is
  * `src/*.ts`, so a consumer install cannot load it (D5).
  */
 /** The root `devDependencies.vite`: the exact version the repo and examples build with. */
