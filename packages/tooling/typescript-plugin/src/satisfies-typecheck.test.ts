@@ -96,18 +96,25 @@ describe("satisfies in the type-check module", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
       '<define/Foo<T>|{ v }: { v: string }|><p>${v}</p></define><Foo v="x"/>',
     ],
-  ])("accepts a %s tag with type arguments in compile output", (_, probe) => {
-    // Known editor mapping gap on main: see bead mx-pj34. This regression
-    // pins the descriptor's compile output, not the separate re-lowering.
-    const prefix = "export interface Input { a: string; b: boolean }\n";
-    const code = compileProjection(prefix + probe);
-    expect(code).toContain("function");
-    expect(code).toBe(
-      compileProjection(
+  ])(
+    "accepts a %s tag with type arguments in compile output",
+    (name, probe) => {
+      // Known editor mapping gap on main: see bead mx-pj34. This regression
+      // pins the descriptor's compile output, not the separate re-lowering.
+      const prefix = "export interface Input { a: string; b: boolean }\n";
+      const code = compileProjection(prefix + probe);
+      expect(code).toContain("function");
+      const untyped = compileProjection(
         prefix + probe.replace("<string>", "").replace("<T>", ""),
-      ),
-    );
-  });
+      );
+      // A `<define>`'s type parameters stay on its function head.
+      expect(code).toBe(
+        name === "define"
+          ? untyped.replace("const Foo = (", "const Foo = <T,>(")
+          : untyped,
+      );
+    },
+  );
 
   it("keeps a generic custom-tag call unchanged in compile output", () => {
     // Known editor mapping gap on main: see bead mx-pj34.

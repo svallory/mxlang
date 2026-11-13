@@ -15,6 +15,7 @@ import type { Policy } from "./declarations.ts";
 import { parseFragment } from "./fragment.ts";
 import type { IrNode } from "./ir.ts";
 import { lower } from "./lower.ts";
+import { stripAngleAssertions, stripMxTypes } from "./mx-parse.ts";
 import { tagTable } from "./tag-table.ts";
 import { lookup as targets } from "./test-targets.ts";
 
@@ -31,8 +32,12 @@ const policy = (): Policy => ({
   resolveDelegatedTag: () => ({}),
 });
 
-function lowerSource(source: string) {
-  const { body } = parseFragment(source, { filename: "/f/t.mx" });
+function lowerSource(
+  source: string,
+  strip?: typeof stripMxTypes | typeof stripAngleAssertions,
+) {
+  const { ast, body } = parseFragment(source, { filename: "/f/t.mx" });
+  strip?.(ast);
   const ctx = newCtx(
     source,
     printExpression,
@@ -364,5 +369,46 @@ describe("a <define> in a nested body is not readable before the walk reaches it
     expect(() =>
       lowerSource(`${FOO}<p>\${typeof Foo}</p><if=input.a>${FOO}</if>\n`),
     ).not.toThrow();
+  });
+});
+
+describe("a <define>'s type parameters", () => {
+  // mx-szxv: the strip walks cleared the tag's `<T>` while the params kept
+  // their annotations, so the emitted head read an undefined `T`.
+  const REPRO = "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n";
+  const BOUNDED =
+    '<define/Foo<T extends string = "a">|{ v }: { v: T }|><p>${v}</p></define>\n';
+  const defineOf = (nodes: readonly IrNode[]) =>
+    nodes.find((n) => n.kind === "Define") as Extract<
+      IrNode,
+      { kind: "Define" }
+    >;
+
+  it.each([
+    ["the build strip", stripMxTypes],
+    ["the type-check strip", stripAngleAssertions],
+  ])("reach the IR through %s, with their authored span", (_, strip) => {
+    const define = defineOf(lowerSource(REPRO, strip).body);
+    expect(define.typeParams).toEqual({
+      code: "T",
+      span: { sourceStart: 12, sourceEnd: 13 },
+    });
+    expect(define.params).toEqual(["{ v }: { v: T }"]);
+  });
+
+  it("keep a constraint and a default as written", () => {
+    const define = defineOf(lowerSource(BOUNDED, stripMxTypes).body);
+    expect(define.typeParams).toEqual({
+      code: 'T extends string = "a"',
+      span: { sourceStart: 12, sourceEnd: 34 },
+    });
+  });
+
+  it("are absent when none were written", () => {
+    const define = defineOf(
+      lowerSource("<define/Foo|{ v }|><p>${v}</p></define>\n", stripMxTypes)
+        .body,
+    );
+    expect(define).not.toHaveProperty("typeParams");
   });
 });

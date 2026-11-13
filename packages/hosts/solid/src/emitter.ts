@@ -3597,7 +3597,8 @@ export class SolidEmitter implements Emitter<string> {
     );
     defineBindings.set(node.name, binding);
     hoistedDefines.push({
-      code: `function ${binding}(${node.params.join(", ")}) { return ${bodyCode}; }`,
+      // A declaration, so `<T>` cannot read as JSX: no trailing comma needed.
+      code: `function ${binding}${node.typeParams ? `<${node.typeParams.code}>` : ""}(${node.params.join(", ")}) { return ${bodyCode}; }`,
       binding,
     });
   }

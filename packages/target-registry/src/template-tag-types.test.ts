@@ -51,7 +51,7 @@ const cases = [
 for (const target of ["html", "preact-jsx", "react-jsx", "hono-jsx"]) {
   for (const typeCheck of [false, true]) {
     describe(`${target}, typeCheck=${typeCheck}: discovered template types`, () => {
-      it.each(cases)("erases %s in caller metadata", (_name, typed, plain) => {
+      it.each(cases)("erases %s in caller metadata", (name, typed, plain) => {
         const root = mkdtempSync(join(tmpdir(), "mx-template-tag-types-"));
         dirs.push(root);
         writeFileSync(join(root, "package.json"), '{"name":"tag-types-test"}');
@@ -88,9 +88,17 @@ for (const target of ["html", "preact-jsx", "react-jsx", "hono-jsx"]) {
         const actual = compileCaller(typed);
         expect(actual).toEqual(baseline);
         expect(actual.result.code).toContain("./tags/x.mx");
-        // The tag's own whole-file compile already erases tag containers too.
+        // The tag's own whole-file compile erases tag containers too, except
+        // a `<define>`'s type parameters, which stay on its function head.
+        const plainCode = compiler.compileModule(
+          source(plain),
+          unit,
+          options,
+        ).code;
         expect(compiler.compileModule(source(typed), unit, options).code).toBe(
-          compiler.compileModule(source(plain), unit, options).code,
+          name === "define parameters"
+            ? plainCode.replace(/(const (?:__mxDef_)?Foo = )\(/, "$1<T,>(")
+            : plainCode,
         );
       });
     });

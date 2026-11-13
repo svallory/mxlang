@@ -705,6 +705,22 @@ function readIdentifiers(text: string): Set<string> {
   return names;
 }
 
+/**
+ * A define's arrow head type parameters, `<T,>`, the text mapped to where the
+ * author wrote it. The comma keeps `<T>` from reading as a JSX tag in TSX;
+ * none is added when the list already ends in one.
+ */
+function arrowTypeParams(typeParams: {
+  code: string;
+  span: SourceSpan;
+}): MappedCode {
+  return concatMapped(
+    "<",
+    mapped(typeParams.code, typeParams.span),
+    typeParams.code.trimEnd().endsWith(",") ? ">" : ",>",
+  );
+}
+
 /** The private binding a `<define>`'s own function is declared under. */
 function defineFunctionName(name: string): string {
   return `__mxDef_${name}`;
@@ -2536,7 +2552,9 @@ export class PreactEmitter implements Emitter<string> {
     const fn = concatMapped(
       "const ",
       mapped(own, this.#publicDefines ? null : (node.nameSpan ?? null)),
-      " = (",
+      " = ",
+      ...(node.typeParams ? [arrowTypeParams(node.typeParams)] : []),
+      "(",
       params,
       ") => ",
       bodyVarStatements.length > 0

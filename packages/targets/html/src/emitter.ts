@@ -356,7 +356,11 @@ export function createEmitter(
    * attribute tags are `() => string` to every callee, hand-written ones
    * included.
    */
-  const blockFunction = (children: IrNode[], params = ""): MappedCode => {
+  const blockFunction = (
+    children: IrNode[],
+    params = "",
+    typeParams?: { code: string; span: SourceSpan },
+  ): MappedCode => {
     const outerBody = state.body;
     const outerBodyMappings = state.bodyMappings;
     const outerPrelude = state.prelude;
@@ -387,6 +391,7 @@ export function createEmitter(
       mappings: lineMappings[index] ?? [],
     }));
     return concatMapped(
+      ...(typeParams ? [arrowTypeParams(typeParams)] : []),
       `(${params}) => {\n`,
       ...prelude.flatMap((code) => [code, "\n"]),
       ...emittedLines.flatMap((line, index) =>
@@ -1473,7 +1478,11 @@ export function createEmitter(
     },
 
     define(node) {
-      const fn = blockFunction(node.children, node.params.join(", "));
+      const fn = blockFunction(
+        node.children,
+        node.params.join(", "),
+        node.typeParams,
+      );
       if (node.attrs.length === 0) {
         push(concatMapped(`const ${node.name} = `, fn, ";"));
         return;
@@ -1921,6 +1930,22 @@ function loopBinding(param: string): string {
   } catch {
     return param;
   }
+}
+
+/**
+ * A define's arrow head type parameters, `<T,>`, the text mapped to where the
+ * author wrote it. The comma keeps `<T>` from reading as a JSX tag when the
+ * output is checked as TSX; none is added when the list already ends in one.
+ */
+function arrowTypeParams(typeParams: {
+  code: string;
+  span: SourceSpan;
+}): MappedCode {
+  return concatMapped(
+    "<",
+    mapped(typeParams.code, typeParams.span),
+    typeParams.code.trimEnd().endsWith(",") ? ">" : ",>",
+  );
 }
 
 /**

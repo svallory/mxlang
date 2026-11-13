@@ -1,6 +1,14 @@
+// biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX, not JS templates
 import { describe, expect, it } from "vitest";
+import { printExpression } from "./compile.ts";
+import { type Node, newCtx } from "./core.ts";
+import type { Policy } from "./declarations.ts";
+import { parseFragment } from "./fragment.ts";
 import type { Expr } from "./ir.ts";
+import { lower } from "./lower.ts";
 import { type GeneratedMapping, mappedExpr, mappedRewrite } from "./mapping.ts";
+import { tagTable } from "./tag-table.ts";
+import { lookup as targets } from "./test-targets.ts";
 
 function rewritten(before: string, code: string): Expr {
   return {
@@ -75,5 +83,79 @@ describe("mappedRewrite", () => {
       sourceEnd: 5,
     });
     expect(mappings).toHaveLength(1);
+  });
+});
+
+describe("shorthand placeholder mappings (Expr.parts)", () => {
+  const policy: Policy = {
+    tags: {},
+    isElement: () => true,
+    isComponent: () => false,
+    resolveDefaultTag: () => "input",
+  };
+  /** The value of the element's one shorthand attribute, lowered. */
+  const shorthandValue = (
+    source: string,
+    generate: (node: Node) => string = printExpression,
+  ): Expr => {
+    const { body } = parseFragment(source, { filename: "/f/t.mx" });
+    const ctx = newCtx(
+      source,
+      generate,
+      policy,
+      tagTable({ taglibs: [], tagDiscoveryDirs: [], translate: {} }, undefined),
+      "/f/t.mx",
+      targets,
+    );
+    const element = lower(ctx, body).body[0] as {
+      attrs: Array<{ value: Expr }>;
+    };
+    return (element.attrs[0] as { value: Expr }).value;
+  };
+
+  it.each([
+    // source, printed code, y's printed offset, y's source offset
+    ["<div.a${y}.b/>", '[`a${y}`, "b"]', 5, 8],
+    ["<div#a${y}/>", "`a${y}`", 4, 8],
+    ["<div.a.${y}/>", '["a", y]', 6, 9],
+    // The quasi `y` comes first in the printed code; the part is the `${y}`.
+    ["<div.y${y}/>", "`y${y}`", 4, 8],
+  ])("%s maps `y` one to one onto its source", (source, code, at, from) => {
+    const value = shorthandValue(source);
+    expect(value.code).toBe(code);
+    expect(value.parts).toEqual([
+      {
+        span: { sourceStart: from, sourceEnd: from + 1 },
+        code: { start: at, end: at + 1 },
+      },
+    ]);
+    expect(mappedExpr(value).mappings).toContainEqual({
+      sourceStart: from,
+      sourceEnd: from + 1,
+      generatedStart: at,
+      generatedEnd: at + 1,
+    });
+  });
+
+  it("maps the text around a part as a whole onto the value's span", () => {
+    expect(mappedExpr(shorthandValue("<div#a${y}/>")).mappings).toEqual([
+      { sourceStart: 5, sourceEnd: 10, generatedStart: 0, generatedEnd: 4 },
+      { sourceStart: 8, sourceEnd: 9, generatedStart: 4, generatedEnd: 5 },
+      { sourceStart: 5, sourceEnd: 10, generatedStart: 5, generatedEnd: 7 },
+    ]);
+  });
+
+  it("keeps the whole-span mapping when a part is not found in the printed code", () => {
+    // A printer that prints a lone identifier unlike the same identifier
+    // inside the template: the part's text is not in the code with its
+    // anchors, so no range is guessed.
+    const value = shorthandValue("<div#a${y}/>", (node) =>
+      node.type === "Identifier" ? `(${node.name})` : printExpression(node),
+    );
+    expect(value.code).toBe("`a${y}`");
+    expect(value).not.toHaveProperty("parts");
+    expect(mappedExpr(value).mappings).toEqual([
+      { sourceStart: 5, sourceEnd: 10, generatedStart: 0, generatedEnd: 7 },
+    ]);
   });
 });

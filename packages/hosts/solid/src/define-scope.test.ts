@@ -119,3 +119,16 @@ describe("solid: a <define> is scoped to the body that declares it", () => {
     });
   });
 });
+
+describe("solid: a <define>'s type parameters", () => {
+  // mx-szxv: the hoisted function kept `{ v: T }` and dropped `<T>`.
+  it("stay on the hoisted function's head", () => {
+    const { hoistedDefines } = compileSolidMx(
+      "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n<Foo v=1/>\n",
+      { filename: "/f/t.solid.mx" },
+    );
+    expect(hoistedDefines.map((define) => define.code)).toEqual([
+      "function __mx_DefineFoo1<T>({ v }: { v: T }) { return <p>{v}</p>; }",
+    ]);
+  });
+});

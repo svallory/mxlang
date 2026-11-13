@@ -55,13 +55,24 @@ function diagnosticSet(diagnostics: readonly ts.Diagnostic[]) {
 describe("tag types in the mapping re-lower", { timeout: 60_000 }, () => {
   it.each(probes)(
     "keeps build, mapping and service diagnostics consistent for %s",
-    (_, probe) => {
+    (name, probe) => {
       const source = prefix + probe;
       const untyped = source.replace("<string>", "").replace("<T>", "");
-      // Both runtime and type-check compilation already erase tag containers.
-      expect(compile(source, false).code).toBe(compile(untyped, false).code);
+      // Both runtime and type-check compilation erase tag containers, except
+      // a `<define>`'s type parameters: they stay on its function head, as
+      // its params keep their annotations.
+      const kept = (code: string) =>
+        name === "define"
+          ? code.replace("const Foo = (", "const Foo = <T,>(")
+          : code;
+      expect(compile(source, false).code).toBe(
+        kept(compile(untyped, false).code),
+      );
       const compiled = compile(source, true);
-      expect(compiled.code).toBe(compile(untyped, true).code);
+      expect(compiled.code).toBe(kept(compile(untyped, true).code));
+      if (name === "define") {
+        expect(compiled.code).toContain("const Foo = <T,>({ v }: {");
+      }
 
       const consumer = "/project/consumer.ts";
       const { service, project, setFile } = createMutablePluginService(

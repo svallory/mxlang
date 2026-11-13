@@ -6492,14 +6492,14 @@ describe("hybrid module statements and the signature, MX-shaped (PR 4 slice 6)",
     });
   }
 
-  it("lowers an import's IR span, start and untrimmed end", () => {
+  it("lowers an import's IR span, start and trimmed end", () => {
     const source = "import a from 'a'   \n<p/>";
     const [mx] = both(source);
     expect(mx?.ir?.imports[0]).toMatchObject({
       kind: "Import",
       code: "import a from 'a'",
       loc: { line: 1, column: 0 },
-      end: { line: 1, column: 20 },
+      end: { line: 1, column: 17 },
       span: { sourceStart: 0, sourceEnd: 17 },
     });
   });

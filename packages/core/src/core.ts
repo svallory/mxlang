@@ -1418,7 +1418,7 @@ export function expr(ctx: Ctx, node: Node): string {
 export function exprWithNodes(
   ctx: Ctx,
   node: Node,
-): { code: string; nodes: ExprNode[] } {
+): { code: string; nodes: ExprNode[]; generated?: true } {
   const start = node.start ?? node.loc?.start.index;
   const end = node.end ?? node.loc?.end.index;
 
@@ -1428,10 +1428,9 @@ export function exprWithNodes(
     // dialect nodes here, so they are found by walking the payload; they
     // have no printed range.
     return {
-      code: ctx.generate(
-        ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
-      ),
+      code: printGenerated(ctx, node),
       nodes: nodesInside(node),
+      generated: true,
     };
   }
 
@@ -1462,6 +1461,18 @@ export function exprWithNodes(
     return { code: printAngleAssertions(code), nodes };
   }
   return { code, nodes };
+}
+
+/**
+ * A node with no source position, printed: `ctx.generate`, through the
+ * binding rewrite when anything is registered. `exprWithNodes` prints a
+ * whole expression this way, and lowering prints each authored part of a
+ * shorthand value by the same rule to find it in that code (`Expr.parts`).
+ */
+export function printGenerated(ctx: Ctx, node: Node): string {
+  return ctx.generate(
+    ctx.bindings.size === 0 ? node : rewriteReferences(ctx, node),
+  );
 }
 
 /**

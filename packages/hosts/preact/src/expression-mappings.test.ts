@@ -103,6 +103,25 @@ describe("preact expression values", () => {
     }
   });
 
+  it("maps a shorthand class placeholder onto its own source under typeCheck", () => {
+    const source = "<div.a${y}.b/>";
+    const { code, mappings } = compilePreactMx(source, "/fixtures/values.mx", {
+      typeCheck: true,
+    });
+    const at = code.indexOf('[`a${y}`, "b"]') + 5;
+    expect(code[at]).toBe("y");
+    expect(
+      mappings.filter((m) => m.generatedStart <= at && at < m.generatedEnd),
+    ).toEqual([
+      {
+        sourceStart: 8,
+        sourceEnd: 9,
+        generatedStart: at,
+        generatedEnd: at + 1,
+      },
+    ]);
+  });
+
   it("leaves a method attribute rewritten to an arrow unmapped", () => {
     const source = `${IMPORT}<Field onPick() { go() }/>`;
     const result = pairs(source);

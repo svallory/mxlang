@@ -1,4 +1,5 @@
 import { type CustomTag, createTargetLookup } from "@mxlang/core";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import descriptor from "./descriptor.ts";
 import { compilePreactMx } from "./index.ts";
@@ -181,5 +182,54 @@ describe("a contract's literal checks under typeCheck", () => {
   it("refuses a wrapped literal of the wrong type, as the build does", () => {
     expect(() => compileWith(false)).toThrow(/must be string, got number/);
     expect(() => compileWith(true)).toThrow(/must be string, got number/);
+  });
+});
+
+describe("a <define>'s type parameters under typeCheck", () => {
+  // mx-szxv: the head kept `{ v: T }` and dropped `<T>`, so the projection
+  // reported TS2304 (`Cannot find name 'T'`).
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+  const REPRO = "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n";
+
+  /** The projection's semantic diagnostics, checked as one TSX file. */
+  const diagnosticsOf = (code: string): string[] => {
+    const name = "/fixtures/projection.tsx";
+    const options: ts.CompilerOptions = {
+      jsx: ts.JsxEmit.Preserve,
+      noEmit: true,
+      skipLibCheck: true,
+      strict: true,
+      types: [],
+    };
+    const host = ts.createCompilerHost(options);
+    const getSourceFile = host.getSourceFile;
+    host.getSourceFile = (file, language, ...rest) =>
+      file === name
+        ? ts.createSourceFile(file, code, language)
+        : getSourceFile.call(host, file, language, ...rest);
+    const program = ts.createProgram([name], options, host);
+    return ts
+      .getPreEmitDiagnostics(program, program.getSourceFile(name))
+      .map(
+        (d) =>
+          `TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`,
+      );
+  };
+
+  it("declares them on the function head, so `T` resolves", () => {
+    const { code, mappings } = compile(REPRO, true);
+    expect(code).toContain("const __mxDef_Foo = <T,>({ v }: { v: T }) => (<>");
+    const head = code.indexOf("<T,>") + 1;
+    expect(mappings).toContainEqual(
+      expect.objectContaining({
+        sourceStart: 12,
+        sourceEnd: 13,
+        generatedStart: head,
+        generatedEnd: head + 1,
+      }),
+    );
+    expect(diagnosticsOf(code).filter((d) => d.startsWith("TS2304:"))).toEqual(
+      [],
+    );
   });
 });

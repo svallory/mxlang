@@ -99,6 +99,7 @@ import {
   newCtx,
   positionAtOffset,
   positionError,
+  printGenerated,
   productOf,
   raise,
   raiseWithFixes,
@@ -274,6 +275,7 @@ import {
   checkReservedTemplate,
   parseAuthoredSource,
 } from "./reserved-bindings.ts";
+import { isShorthandValue } from "./shorthand.ts";
 import {
   bodyFunction,
   derivedFrom,
@@ -302,6 +304,7 @@ import {
   tagNameOf,
   tagNameSpanOf,
   tagParamsOf,
+  tagTypeParamsOf,
   tagVarOf,
 } from "./tag-fields.ts";
 import {
@@ -642,10 +645,14 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
       loc: { start: node.errorLoc?.start ?? node.loc?.start },
     });
   }
-  const { code, nodes } = exprWithNodes(ctx, node);
+  const { code, nodes, generated } = exprWithNodes(ctx, node);
   checkTagVarReads(ctx, code, node);
   checkBindingWrites(ctx, code, node);
   const span = exprSpan(ctx, node);
+  const parts =
+    generated && nodes.length === 0 && isShorthandValue(node)
+      ? shorthandPartsOf(ctx, node, code)
+      : undefined;
   const bodySpan =
     node?.type === "FunctionExpression" && span
       ? methodBodySpan(ctx, node, span)
@@ -656,6 +663,7 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
     node,
     span,
     ...(nodes.length > 0 ? { nodes } : {}),
+    ...(parts ? { parts } : {}),
     ...(bodySpan
       ? {
           bodySpan,
@@ -666,6 +674,58 @@ export function exprOf(ctx: Ctx, node: Node): Expr {
         }
       : {}),
   };
+}
+
+/**
+ * The authored expressions inside a shorthand value core built and printed
+ * (`Expr.parts`): `y` in `` [`a${y}`, "b"] ``, built over `.a${y}.b`. Each one
+ * is printed alone by the rule that printed the whole (`printGenerated`) and
+ * found in `code` in source order with a forward cursor, anchored on its
+ * delimiters: `${`…`}` inside a template, `[`, `, ` or `(` before and `,`,
+ * `]` or `)` after an array element. The search reads only the printer's own
+ * output for this one tree. `undefined` when there is no part, or when any
+ * part is not found in order with its anchors: the value then maps as a
+ * whole onto its span, never onto a guessed range.
+ */
+function shorthandPartsOf(ctx: Ctx, value: Node, code: string): Expr["parts"] {
+  const parts: NonNullable<Expr["parts"]> = [];
+  let cursor = 0;
+  const anchored = (text: string, at: number, inTemplate: boolean) => {
+    const end = at + text.length;
+    if (inTemplate) {
+      return code.endsWith("${", at) && code.startsWith("}", end);
+    }
+    return (
+      (code.endsWith("[", at) ||
+        code.endsWith(", ", at) ||
+        code.endsWith("(", at)) &&
+      /^[,\])]/.test(code.slice(end, end + 1))
+    );
+  };
+  const visit = (node: Node, inTemplate: boolean): boolean => {
+    if (typeof node?.start === "number" && typeof node?.end === "number") {
+      const span = exprSpan(ctx, node);
+      if (!span) return false;
+      const text = printGenerated(ctx, node);
+      let at = code.indexOf(text, cursor);
+      while (at >= 0 && !anchored(text, at, inTemplate)) {
+        at = code.indexOf(text, at + 1);
+      }
+      if (at < 0 || text === "") return false;
+      parts.push({ span, code: { start: at, end: at + text.length } });
+      cursor = at + text.length;
+      return true;
+    }
+    if (node?.type === "TemplateLiteral") {
+      return node.expressions.every((each: Node) => visit(each, true));
+    }
+    if (node?.type === "ArrayExpression") {
+      return node.elements.every((each: Node) => visit(each, false));
+    }
+    // A static part core built (`"b"`): no authored expression inside.
+    return true;
+  };
+  return visit(value, false) && parts.length > 0 ? parts : undefined;
 }
 
 /**
@@ -5013,6 +5073,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
 
   const name = declName(ctx, tagVarOf(node));
   const params = paramsOf(ctx, node);
+  const typeParams = tagTypeParamsOf(node);
 
   // The attributes are properties of the define's value, evaluated where the
   // `<define>` is written: the params are the body's, so they are lowered
@@ -5067,6 +5128,7 @@ function lowerDefineChecked(ctx: Ctx, node: Node): IrNode {
     span: exprSpan(ctx, node),
     params,
     paramSpans: paramSpansOf(ctx, node),
+    ...(typeParams ? { typeParams } : {}),
     attrs: dropContentAttrBesideBody(ctx, node, attrs, children.length > 0),
     children: [...hoisted, ...children],
     loc,
@@ -5789,8 +5851,13 @@ function lowerStatement(ctx: Ctx, node: Node, name: string): IrNode {
   }
   const line = sliceNode(ctx, node).trim();
   const loc = posOf(ctx, node);
-  const end = endPosOf(ctx, node);
   const span = statementSpan(ctx, node);
+  // `end` is the end of the authored statement (ir-spec §3.1): trailing
+  // whitespace on its line is not part of it, so it is `span`'s end when the
+  // statement has one, never the node's untrimmed end.
+  const end = span
+    ? positionAtOffset(ctx, span.sourceEnd)
+    : endPosOf(ctx, node);
   if (name === "import") refuseUnsupportedImport(node);
   rejectInvalidStatement(
     ctx,

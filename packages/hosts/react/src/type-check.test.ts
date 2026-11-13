@@ -23,3 +23,13 @@ it("wraps handlers against React's JSX types only under typeCheck", () => {
     'onDoubleClick={((e) => e.detail) satisfies __MxH<"button", "doubleclick"> as any}',
   );
 });
+
+it("keeps a <define>'s type parameters on its function head (shared JSX emitter)", () => {
+  const { code } = compileReactMx(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: MX placeholder syntax
+    "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n",
+    "/fixtures/test.mx",
+    { typeCheck: true },
+  );
+  expect(code).toContain("const __mxDef_Foo = <T,>({ v }: { v: T }) => ");
+});

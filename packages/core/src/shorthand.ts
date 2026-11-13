@@ -37,6 +37,19 @@ const done = new WeakSet<Node>();
 /** The attribute records built from a trigger-placed shorthand run. */
 const fromShorthand = new WeakSet<Node>();
 
+/**
+ * The value nodes this file builds over an authored shorthand word (a
+ * template literal over `a${y}`, the array of a multi-part class, a static
+ * part's string): their printed `code` is not the authored text, so lowering
+ * locates the authored expressions inside them (`Expr.parts`).
+ */
+const builtValues = new WeakSet<Node>();
+
+/** Did this file build `node` as a shorthand `id` or `class` value? */
+export function isShorthandValue(node: Node): boolean {
+  return builtValues.has(node);
+}
+
 interface Located {
   start: number;
   end: number;
@@ -475,6 +488,7 @@ function markoLoc(ctx: Ctx, start: number, end: number) {
 function located(ctx: Ctx, node: Node, range: Located): Node {
   node.loc = markoLoc(ctx, range.start, range.end);
   ranges.set(node, range);
+  builtValues.add(node);
   return node;
 }
 

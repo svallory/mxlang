@@ -54,7 +54,7 @@ import type { TemplateMetadata } from "./template-tag.ts";
  * a shape change fails until it goes up; a change of meaning alone is the
  * author's to catch. @unstable
  */
-export const IR_VERSION = 9;
+export const IR_VERSION = 10;
 
 /** A source position, as Marko reports one and `TranslateError` carries it. */
 export interface Position {
@@ -141,6 +141,17 @@ export interface Expr {
    * forward itself.
    */
   nodes?: ExprNode[];
+  /**
+   * The authored expressions inside a shorthand `id` or `class` value core
+   * built (`y` in `.a${y}.b`, whose `code` is `` [`a${y}`, "b"] ``), in
+   * source order: each one's file-absolute `span` and the range its text is
+   * printed at in `unrewrittenCode ?? code` (UTF-16 offsets into that
+   * string), so a host maps each part onto its own source rather than the
+   * whole word run. Absent on every other expression, and absent altogether
+   * when any part could not be located in the printed code (the value then
+   * maps as a whole onto `span`).
+   */
+  parts?: Array<{ span: SourceSpan; code: { start: number; end: number } }>;
   /**
    * The text of `code` before a reads rewrite (`rewriteAccessorReads`) changed
    * it, set only when it did change it. `code` then no longer lines up with
@@ -818,6 +829,14 @@ export type IrNode =
        * node carries no `loc`.
        */
       paramSpans?: Array<SourceSpan | undefined>;
+      /**
+       * The type parameters written on the define (`<define/Foo<T>|…|>`), as
+       * their source text without the angle brackets (`T extends string =
+       * "a"`) and its file-absolute span. Set in every compile mode, since the
+       * params keep their annotations in every mode; the emitted function head
+       * carries them. Absent when none were written.
+       */
+      typeParams?: { code: string; span: SourceSpan };
       /**
        * The tag's own attributes, resolved like a component call's: Marko
        * lowers `<define/D a=1 b="s"/>` to `const D = { a: 1, b: "s" }`, so

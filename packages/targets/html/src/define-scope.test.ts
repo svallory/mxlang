@@ -51,3 +51,26 @@ describe("html: a <define> is scoped to the body that declares it", () => {
     expect(code.match(/__mxOut\.write\(Foo\(\)\)/g)).toHaveLength(2);
   });
 });
+
+describe("html: a <define>'s type parameters", () => {
+  // mx-szxv: the head kept `{ v: T }` and dropped `<T>`, so `T` was undefined.
+  const REPRO = "<define/Foo<T>|{ v }: { v: T }|><p>${v}</p></define>\n";
+
+  it.each([false, true])(
+    "stay on the function head, mapped to the authored text (typeCheck: %s)",
+    (typeCheck) => {
+      const { code, mappings } = compile(REPRO, "/fixtures/page.mx", {
+        typeCheck,
+      });
+      expect(code).toContain("const Foo = <T,>({ v }: { v: T }) => {");
+      const head = code.indexOf("<T,>") + 1;
+      expect(mappings.filter((m) => m.generatedStart === head)).toContainEqual(
+        expect.objectContaining({
+          sourceStart: 12,
+          sourceEnd: 13,
+          generatedEnd: head + 1,
+        }),
+      );
+    },
+  );
+});

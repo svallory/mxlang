@@ -9,6 +9,7 @@
  */
 
 import type { Node } from "./core.ts";
+import type { SourceSpan } from "./mapping.ts";
 import { payloadOf } from "./payload.ts";
 import { attributesWithTriggers } from "./triggers.ts";
 
@@ -164,6 +165,37 @@ export function tagVarOf(node: Node): Node {
 export function tagParamsOf(node: Node): Node[] {
   if (!isMxTagShape(node)) return node?.body?.params ?? [];
   return node.params ? payloadOf(node.params) : [];
+}
+
+/**
+ * The type-parameter containers (`<define/Foo<T>|…|>`) a strip walk
+ * (`stripMxTypes`, `stripTagTypes`) cleared from a tag: the tree loses them
+ * for every other reader, as Marko's stripped tag had none, and
+ * `tagTypeParamsOf` still reads them for the function a `<define>` emits.
+ */
+export const strippedTagTypeParams = new WeakMap<object, Node>();
+
+/**
+ * The type parameters written on a tag (`<T extends string = "a">`), as their
+ * source text without the angle brackets and its file-absolute span; read
+ * through a strip walk that cleared them. `undefined` when none were written.
+ */
+export function tagTypeParamsOf(
+  node: Node,
+): { code: string; span: SourceSpan } | undefined {
+  if (!isMxTagShape(node)) return undefined;
+  const container = node.typeParams ?? strippedTagTypeParams.get(node);
+  if (
+    typeof container?.source !== "string" ||
+    typeof container.start !== "number" ||
+    typeof container.end !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    code: container.source,
+    span: { sourceStart: container.start, sourceEnd: container.end },
+  };
 }
 
 /** Does the tag carry type arguments `<T>` or type parameters? */

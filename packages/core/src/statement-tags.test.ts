@@ -288,3 +288,23 @@ describe("a decorator in a module statement is refused", () => {
     });
   });
 });
+
+describe("a statement's end", () => {
+  // ir-spec §3.1: `end` is the end of the authored statement, so trailing
+  // spaces on its line are not part of it.
+  it.each([
+    ["static const A = 1   \n<div/>\n", "Static", 18],
+    ['import x from "x"   \n<div/>\n', "Import", 17],
+    ["export const B = 2   \n<div/>\n", "Export", 18],
+    ["export interface Input {}   \n<div/>\n", "InputInterface", 25],
+  ])("stops at the authored text: %j", (source, kind, column) => {
+    const { ir } = lowerIrSource(source, "/f/t.mx");
+    const statement = ir?.imports[0] ?? ir?.inputInterface ?? ir?.hoisted[0];
+    expect(statement?.kind).toBe(kind);
+    expect(statement?.end).toEqual({ line: 1, column });
+    expect(statement && "span" in statement && statement.span).toEqual({
+      sourceStart: 0,
+      sourceEnd: column,
+    });
+  });
+});

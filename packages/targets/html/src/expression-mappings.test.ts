@@ -188,6 +188,25 @@ describe("html type-check projection", () => {
     expect(checked(source).pairs).toContainEqual([expression, expression]);
   });
 
+  it("maps a shorthand class placeholder onto its own source, not the word run", () => {
+    const source = "<div.a${y}.b/>";
+    const { code, mappings } = compile(source, "/fixtures/checked.mx", {
+      typeCheck: true,
+    });
+    const at = code.indexOf('[`a${y}`, "b"]') + 5;
+    expect(code[at]).toBe("y");
+    expect(
+      mappings.filter((m) => m.generatedStart <= at && at < m.generatedEnd),
+    ).toEqual([
+      {
+        sourceStart: 8,
+        sourceEnd: 9,
+        generatedStart: at,
+        generatedEnd: at + 1,
+      },
+    ]);
+  });
+
   it("prints an inert tag's default value once, without changing the build", () => {
     const source = "<id=x/>";
     expect(checked(source).code).toContain("void (x);");

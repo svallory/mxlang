@@ -67,7 +67,9 @@ export function mapped(code: string, span: SourceSpan | null): MappedCode {
  */
 export function mappedExpr(expr: Expr): MappedCode {
   return (
-    (expr.unrewrittenCode === undefined ? nodeMappings(expr) : undefined) ??
+    (expr.unrewrittenCode === undefined
+      ? (nodeMappings(expr) ?? partMappings(expr))
+      : undefined) ??
     rewrittenMappings(expr) ??
     mapped(expr.code, expr.span ?? null)
   );
@@ -89,6 +91,7 @@ function rewrittenMappings(expr: Expr): MappedCode | undefined {
   // forward) or a whole-span identity.
   const base =
     nodeMappings(expr, before) ??
+    partMappings(expr, before) ??
     mapped(
       before,
       span.sourceEnd - span.sourceStart === before.length ? span : null,
@@ -410,6 +413,50 @@ function nodeMappings(
   }
   if (code.length - generated !== span.sourceEnd - source) return undefined;
   between(source, span.sourceEnd, generated);
+  return { code, mappings };
+}
+
+/**
+ * Per-part mappings of a shorthand value core built (`Expr.parts`): `code` is
+ * the template literal or array printed over the authored word run, so one
+ * whole-span mapping would put a position inside `y` of `.a${y}.b` a column
+ * or two off. A part printed at its authored length maps one to one; a part
+ * the printer reformatted (`${a+b}` as `a + b`) maps as a whole onto its
+ * span. Every generated run outside the parts (backticks, quasi text, `${`,
+ * `}`, array punctuation, quotes) maps as a whole onto `expr.span`, where a
+ * diagnostic on the whole value lands. `code` is the text the part ranges
+ * index: `Expr.code`, or `Expr.unrewrittenCode` when a reads rewrite changed
+ * it. `undefined` (the whole-span mapping) without parts, or when a part's
+ * range does not fit `code` in order.
+ */
+function partMappings(
+  expr: Expr,
+  code: string = expr.code,
+): MappedCode | undefined {
+  const span = expr.span;
+  if (!span || !expr.parts?.length) return undefined;
+  const mappings: GeneratedMapping[] = [];
+  const whole = (generatedStart: number, generatedEnd: number) => {
+    if (generatedEnd > generatedStart) {
+      mappings.push({ ...span, generatedStart, generatedEnd });
+    }
+  };
+  let generated = 0;
+  for (const part of expr.parts) {
+    const at = part.code;
+    if (at.start < generated || at.end > code.length || at.end < at.start) {
+      return undefined;
+    }
+    whole(generated, at.start);
+    mappings.push({
+      sourceStart: part.span.sourceStart,
+      sourceEnd: part.span.sourceEnd,
+      generatedStart: at.start,
+      generatedEnd: at.end,
+    });
+    generated = at.end;
+  }
+  whole(generated, code.length);
   return { code, mappings };
 }
 

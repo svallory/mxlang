@@ -55,6 +55,7 @@ import type {
   SyntaxTable,
   TriggerFailOptions,
 } from "./syntax-table.ts";
+import { strippedTagTypeParams } from "./tag-fields.ts";
 import type { TagTable } from "./tag-table.ts";
 import { parseErrorEnd } from "./token-span.ts";
 
@@ -1522,6 +1523,8 @@ export function stripMxTypes(document: Node): void {
           // `stripTagTypesVisitor`: a tag's (and a body's) type arguments
           // and parameters are dropped whole.
           if (value.type === "MxMethod") strippedMethodTypeParams.add(value);
+          else if (key === "typeParams")
+            strippedTagTypeParams.set(value, field);
           value[key] = null;
           continue;
         }
@@ -1624,6 +1627,7 @@ export function stripTagTypes(
           TYPE_CONTAINERS.has(field.type) &&
           value.type !== "MxMethod"
         ) {
+          if (key === "typeParams") strippedTagTypeParams.set(value, field);
           value[key] = null;
           continue;
         }
