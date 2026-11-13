@@ -147,8 +147,12 @@ it, so a bare Preact render would print `class` first. The golden is correct). F
 - The markup is the whole-file emitter's (`createRegionEmitter`, a
   `PreactEmitter` with a region sink); only the module assembly differs.
   Runtime imports, synthesized tag imports and tag aliases go back
-  as `hoistedImports`, the attribute helpers and `__mxDynamic` as fixed-binding
-  `hoistedDefines` (the bridge declares identical ones once per module).
+  as `hoistedImports`, the attribute helpers and the dynamic helpers as
+  fixed-binding `hoistedDefines` (the bridge declares identical ones once per
+  module). The dynamic helpers (`__mxIsHostComponentObject`, `__mxDynamic`,
+  `__mxDynamicPair`) are one constant each, selected with their dependencies
+  by `compile.ts`'s `dynamicHelpers`, which the whole-file path uses too: a
+  module with no dynamic `/var` declares no `__mxDynamicPair`.
 - A bridge-found region is **one root element** (a TSX `<>…</>` is not a
   region: each child element is its own region), so `<if>`/`<else>` siblings
   and a `<define>` with its callers sit inside one element. The region emitter

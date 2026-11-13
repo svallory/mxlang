@@ -8179,9 +8179,13 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
       : never
   >();
   const declaredDefines = new Set<string>();
+  // Every outer entry this body overwrites is saved and restored at its end,
+  // so a read after the body finds the outer binding again; a body `/var`
+  // with no outer entry keeps its lifetime (a read of it outside its block is
+  // still refused).
   const saveTagVar = (name: string, localDefine = false): void => {
     const outer = ctx.tagVars?.get(name);
-    if ((localDefine || outer?.define) && !savedTagVars.has(name))
+    if ((localDefine || outer) && !savedTagVars.has(name))
       savedTagVars.set(name, outer);
   };
   const outerShadowed = ctx.tagVarShadowed;
@@ -8710,8 +8714,9 @@ function lowerChildList(ctx: Ctx, authored: readonly MxChild[]): IrNode[] {
     ctx.laterPlainConsts = entryLaterPlainConsts;
     ctx.enclosingTagParams = enclosingParams;
     ctx.tagVarShadowed = outerShadowed;
-    // Restore define entries shadowed by this body, including a still-pending
-    // outer define. Custom `/var` escape tracking keeps its existing lifetime.
+    // Restore every outer entry shadowed by this body, including a
+    // still-pending outer define. A body `/var` with no outer entry keeps its
+    // existing lifetime (escape tracking).
     for (const [name, outer] of savedTagVars) {
       if (outer && !(outer.nested && declaredDefines.has(name)))
         ctx.tagVars?.set(name, outer);

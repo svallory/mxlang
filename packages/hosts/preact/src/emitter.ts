@@ -1502,8 +1502,8 @@ export class PreactEmitter implements Emitter<string> {
   /**
    * Fills a body that is its own scope: a dynamic tag's body or a `<try>`'s
    * `@placeholder`/`@catch`/body block (as Marko compiles them; a `<try>`
-   * main body with only a `@placeholder` runs its statements during the
-   * parent's render, outside `Suspense`, which Marko does not). `build`
+   * main body under `@placeholder` runs its statements inside `__mxTryBody`,
+   * below `Suspense`, see `delegatedTag`). `build`
    * renders through a child with its own `/var` statements, serial and name
    * table; when the body bound any `/var`, its statements run in an arrow
    * called in place, so they close over everything the body can see and stay
@@ -2617,7 +2617,15 @@ export class PreactEmitter implements Emitter<string> {
    * `#attrValue`, so a structured `class`, a rejected `:=`, and the `style`
    * object rule cannot drift between a called unit and a described one.
    */
-  #propsObject(node: Extract<IrNode, { kind: "Component" }>): MappedCode {
+  /**
+   * The call's props object. `content`, when given, is the expression the
+   * `content` key reads instead of a fresh `#contentFn` (the dynamic route
+   * binds the body once and passes it twice).
+   */
+  #propsObject(
+    node: Extract<IrNode, { kind: "Component" }>,
+    content?: string,
+  ): MappedCode {
     const parts: Array<string | MappedCode> = [];
     // A dynamic target routed from a value import (`valueImportBinding` set) still
     // names a real, in-scope import — the emitted call is
@@ -2641,11 +2649,11 @@ export class PreactEmitter implements Emitter<string> {
       );
     }
 
-    const content = node.content?.children ?? [];
-    if (content.length > 0) {
+    const children = node.content?.children ?? [];
+    if (children.length > 0) {
       // Marko's `content` and JSX's `children` are the same slot; a called
       // unit reads `input.content`, so it is passed under that name.
-      parts.push(`content: ${this.#contentFn(node).code}`);
+      parts.push(`content: ${content ?? this.#contentFn(node).code}`);
     }
 
     return concatMapped(
@@ -2731,8 +2739,11 @@ export class PreactEmitter implements Emitter<string> {
         body.push(child);
         continue;
       }
+      // Reached only where the file's tag rules read `<html-${name}>` as an
+      // ordinary tag (a dialect's `markup` or `none` preset); under `html`
+      // its body is raw text and holds no element.
       fail(
-        `The body of \`<html-${name}>\` is read as markup on this host, so this would be dropped from the ${name}. Put markup-like text inside a string placeholder, for example \`\${"<b>hi</b>"}\`.`,
+        `The body of \`<html-${name}>\` is read as markup under this file's tag rules (its body is ${name} text only under the \`html\` tag rules), so this would be dropped from the ${name}. Put markup-like text inside a string placeholder, for example \`\${"<b>hi</b>"}\`.`,
         child,
       );
     }
@@ -2870,6 +2881,14 @@ export class PreactEmitter implements Emitter<string> {
       // matching `renderer(...args, { content, <attribute tags> })`.
       const hasContent = (node.content?.children.length ?? 0) > 0;
       const hasTrailingProps = node.attrTagProps.length > 0 || hasContent;
+      // With arguments the body travels twice, in the trailing props object
+      // and as `__mxDynamic`'s third argument: it is emitted once, as the
+      // argument of an arrow called in place that binds it to
+      // `__mxContent`, and both places read that binding. In place, not
+      // hoisted, so a body inside a `<for>` or a callback keeps its closure.
+      const sharedContent =
+        node.args.length > 0 && hasContent ? this.#contentFn(node) : undefined;
+      const contentRef = sharedContent ? "__mxContent" : undefined;
       const payload =
         node.args.length > 0
           ? concatMapped(
@@ -2879,7 +2898,7 @@ export class PreactEmitter implements Emitter<string> {
                 arg.code,
               ]),
               hasTrailingProps
-                ? concatMapped(", ", this.#propsObject(node))
+                ? concatMapped(", ", this.#propsObject(node, contentRef))
                 : "",
               "]",
             )
@@ -2906,10 +2925,7 @@ export class PreactEmitter implements Emitter<string> {
       ) {
         fail("Tag does not support parameters.", node);
       }
-      const content =
-        node.args.length > 0 && hasContent
-          ? concatMapped(", ", this.#contentFn(node))
-          : "";
+      const content = contentRef ? `, ${contentRef}` : "";
       const takesParams = hasParams
         ? `${node.args.length > 0 ? "" : ", undefined"}, true`
         : "";
@@ -2937,27 +2953,30 @@ export class PreactEmitter implements Emitter<string> {
         // `MappedCode` (`#propsObject` returns one). Interpolating
         // the mapped form emitted "[object Object]" — a syntax error in the
         // generated module — so their code text is taken explicitly.
-        const payloadCode = payload.code;
-        const contentCode =
-          typeof content === "string" ? content : (content?.code ?? "");
+        const call = `__mxDynamicPair(${node.target.expr.code}, ${payload.code}${content}${takesParams})`;
         this.#varStatements.push(
-          `const ${temp} = __mxDynamicPair(${node.target.expr.code}, ${payloadCode}${contentCode}${takesParams});`,
+          sharedContent
+            ? `const ${temp} = ((${contentRef}) => ${call})(${sharedContent.code});`
+            : `const ${temp} = ${call};`,
         );
         this.#varStatements.push(`const ${node.var} = ${temp}.value;`);
         this.#out.push(this.#slot(`${temp}.output`));
         return;
       }
       this.#runtimeImports.add("__mxDynamic");
+      const call = concatMapped(
+        "__mxDynamic(",
+        node.target.expr.code,
+        ", ",
+        payload,
+        content,
+        takesParams,
+        ")",
+      );
       this.#out.push(
-        this.#slot(
-          "__mxDynamic(",
-          node.target.expr.code,
-          ", ",
-          payload,
-          content,
-          takesParams,
-          ")",
-        ),
+        sharedContent
+          ? this.#slot(`((${contentRef}) => `, call, ")(", sharedContent, ")")
+          : this.#slot(call),
       );
       return;
     }
@@ -3485,9 +3504,21 @@ export class PreactEmitter implements Emitter<string> {
       (tag) => tag.name === "placeholder",
     );
 
-    let inner = this.#scoped(false, (scope) =>
-      scope.#render(node.tag.children),
-    );
+    const body = this.#scopeOf((scope) => scope.#render(node.tag.children));
+    let inner =
+      body.statements === ""
+        ? body.code
+        : placeholder
+          ? // Under `<@placeholder>` the body's `/var` statements run inside a
+            // component `Suspense` renders, so a call that suspends shows the
+            // placeholder; called in place they would run in the parent's
+            // render (or the catch thunk's), above the `Suspense`.
+            concatMapped(
+              "<__mxTryBody render={() => ",
+              wrapStatements(body.statements, body.code, "fragmentBlock"),
+              "} />",
+            )
+          : wrapStatements(body.statements, body.code, "child");
     if (placeholder) {
       // `<@placeholder>` is what renders while the body is suspended, which on
       // this target means the body threw a promise (a `lazy()` child). Preact

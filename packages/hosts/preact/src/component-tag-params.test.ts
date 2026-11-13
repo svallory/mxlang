@@ -570,8 +570,10 @@ describe("tag params leave other emission alone", () => {
       CASES["a dynamic target with args"]?.caller as string,
       "/fixtures/t.mx",
     );
-    expect(code).toContain("{ content: ((item) => <>");
-    expect(code).toContain(", ((item) => <>");
-    expect(code).toContain(", true)");
+    // One render function, bound in place and passed to both.
+    expect(code).toContain(
+      "{ content: __mxContent }], __mxContent, true))(((item) => <>",
+    );
+    expect(code.match(/\(\(item\) => <>/g)).toHaveLength(1);
   });
 });

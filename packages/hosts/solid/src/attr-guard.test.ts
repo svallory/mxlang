@@ -120,6 +120,10 @@ const CASES: Record<string, Case> = {
     fragment: "<div ...input.a/>",
     setup: 'const input = { a: { "oncapture:click": { a: 1 } } };',
   },
+  oncaptureSpreadValue: {
+    fragment: "<div ...input.a/>",
+    setup: 'const input = { a: { "oncapture:click": "z" } };',
+  },
   propNamespace: {
     fragment: "<div prop:x=input.o/>",
     setup: "const input = { o: { a: 1 } };",
@@ -477,16 +481,19 @@ describe.each(["ssr", "dom"] as const)(
       expect(get("oncaptureNamespace").error).toBe(
         "The `oncapture:click` attribute cannot be a plain object (it would render as `[object Object]`).",
       );
-      // Solid's server renderer drops an `oncapture:` key without printing
-      // it, so the printed form is asserted on the client render only.
-      if (mode === "dom") {
-        expect(get("oncaptureString").html).toContain('oncapture:click="x"');
-        expect(get("oncaptureStatic").html).toContain('oncapture:click="y"');
-      }
+      // The server prints the view's `Oncapture:click` (Solid's server skips
+      // a prop that starts with `on`); an HTML parser reads it as
+      // `oncapture:click`. The client's `setAttribute` lowercases it.
+      const printed = mode === "dom" ? "oncapture:click" : "Oncapture:click";
+      expect(get("oncaptureString").html).toContain(`${printed}="x"`);
+      expect(get("oncaptureStatic").html).toContain(`${printed}="y"`);
     });
     it("validates a spread's oncapture: key, an ordinary attribute as in Marko", () => {
       expect(get("oncaptureSpread").error).toBe(
         "The `oncapture:click` attribute cannot be a plain object (it would render as `[object Object]`).",
+      );
+      expect(get("oncaptureSpreadValue").html).toContain(
+        `${mode === "dom" ? "oncapture:click" : "Oncapture:click"}="z"`,
       );
     });
     it("leaves prop: (a property write) and event handler keys alone", () => {

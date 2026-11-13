@@ -232,3 +232,55 @@ describe("const initializer self-write", () => {
     "<let/x=() => { x = 1 }/>",
   ])("accepts %s", (source) => expect(() => compile(source)).not.toThrow());
 });
+
+describe("an outer binding read after a body that declares its own /x", () => {
+  // A body's `/x` shadows the outer one only inside the body: stock Marko
+  // 6.4.4 compiles `<counter/x/><${input.tag}><counter/x/>${x}</>${x}`, and
+  // the read after the body is the outer `x`.
+  const matrixHost: HostDeclarations = {
+    ...host,
+    bindsDynamicTagVar: true,
+    isDelegatedTag: (name) =>
+      name === "let" || name === "id" || name === "script" || name === "try",
+  };
+  const counter = {
+    template: { filename: "/tags/counter.mx", source: "<return value=1/>" },
+  };
+  const compileMatrix = (source: string) =>
+    compileSource(source, "/page.mx", matrixHost, {
+      targets: lookup,
+      emitIr: () => "",
+      customTags: { counter },
+    } as never);
+  const bodies = [
+    ["a dynamic-tag body", "<${input.tag}><counter/x/>${x}</>"],
+    ["a <try> body", "<try><counter/x/>${x}<@catch>e</@catch></try>"],
+    ["a <div> body", "<div><counter/x/>${x}</div>"],
+  ] as const;
+  const outers = [
+    ["a custom-tag /var", "<counter/x/>"],
+    ["a dynamic-tag /var", "<${input.t}/x/>"],
+    ["a <const>", "<const/x=1/>"],
+  ] as const;
+  for (const [outer, outerSource] of outers) {
+    it.each(bodies)(`${outer}, then %s`, (_body, bodySource) => {
+      expect(() =>
+        compileMatrix(`${outerSource}${bodySource}\${x}`),
+      ).not.toThrow();
+    });
+  }
+
+  // `<let>` is not in the `/var` binding table this restore covers; its rows
+  // still refuse.
+  it.each(bodies)("a <let>, then %s, still refuses", (_body, bodySource) => {
+    expect(() => compileMatrix(`<let/x=1/>${bodySource}\${x}`)).toThrow(
+      "is not in scope here",
+    );
+  });
+
+  it("a body /x with no outer binding still does not escape its block", () => {
+    expect(() => compileMatrix("<if=input.a><counter/x/></if>${x}")).toThrow(
+      "`x` is a `/var` bound inside a nested block and is not in scope here",
+    );
+  });
+});

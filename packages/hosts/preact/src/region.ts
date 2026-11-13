@@ -44,8 +44,8 @@ import {
 } from "@mxlang/core";
 import {
   attributeHelpers,
+  dynamicHelpers,
   type JsxHelper,
-  MX_DYNAMIC,
   runtimeImports,
 } from "./compile.ts";
 import type { JsxDialect } from "./dialect.ts";
@@ -168,23 +168,6 @@ function rejectModuleLevel(
     first.column,
     first.file,
   );
-}
-
-/** `MX_DYNAMIC` split per binding: the bridge renames only a define's first statement. */
-function dynamicHelpers(): JsxHelper[] {
-  const objectSplit = MX_DYNAMIC.indexOf("\nfunction __mxDynamic(");
-  const pairSplit = MX_DYNAMIC.indexOf("\nfunction __mxDynamicPair(");
-  return [
-    {
-      binding: "__mxIsHostComponentObject",
-      code: MX_DYNAMIC.slice(0, objectSplit),
-    },
-    {
-      binding: "__mxDynamic",
-      code: MX_DYNAMIC.slice(objectSplit + 1, pairSplit),
-    },
-    { binding: "__mxDynamicPair", code: MX_DYNAMIC.slice(pairSplit + 1) },
-  ];
 }
 
 /** Compiles one MX region to a JSX expression for `options.dialect`. */
@@ -332,15 +315,17 @@ export function compileJsxRegion(
     });
   }
 
-  const usesDynamic = emitter.runtimeImports.has("__mxDynamic");
+  // One define per binding: the bridge renames only a define's first
+  // statement.
+  const dynamic = dynamicHelpers(emitter.runtimeImports);
   const helperInput = [
     markupCode.code,
     ...statements.map((statement) => statement.code),
-    ...(usesDynamic ? [MX_DYNAMIC] : []),
+    ...dynamic.map((helper) => helper.code),
   ].join("\n");
   const hoistedDefines = [
     ...attributeHelpers(helperInput, dialect),
-    ...(usesDynamic ? dynamicHelpers() : []),
+    ...dynamic,
   ];
 
   // Always a fragment: a region sits in expression *and* JSX-child position,

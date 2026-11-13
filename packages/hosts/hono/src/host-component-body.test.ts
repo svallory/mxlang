@@ -178,12 +178,12 @@ const MX_OWN: Array<[string, string, string]> = [
   [
     "a dynamic tag with arguments",
     `<const/X=input.t/>\n<${D}{X}(0)>${D}{input.count}</>`,
-    "return (<>{__mxDynamic(X, [0, { content: () => <>{input.count}{null}</> }], () => <>{input.count}{null}</>)}</>);",
+    "return (<>{((__mxContent) => __mxDynamic(X, [0, { content: __mxContent }], __mxContent))(() => <>{input.count}{null}</>)}</>);",
   ],
   [
     "a positional call to a host component",
     `${BOX}<Box(1)>${D}{input.count}</Box>`,
-    "return (<>{__mxDynamic(Box, [1, { content: () => <>{input.count}{null}</> }], () => <>{input.count}{null}</>)}</>);",
+    "return (<>{((__mxContent) => __mxDynamic(Box, [1, { content: __mxContent }], __mxContent))(() => <>{input.count}{null}</>)}</>);",
   ],
   [
     "a define call",

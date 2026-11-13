@@ -178,6 +178,13 @@ directly, or replace them with your own. `mxClass` lives beside them.
 When a `<try>` has both, the placeholder nests **inside** the boundary, so a
 render error in the body reaches the catch rather than the suspense wrapper.
 
+A `<try>` body under `<@placeholder>` that binds a `/var` runs its statements
+inside a small module-private component, `__mxTryBody`, rendered inside the
+`Suspense`: `<__mxTryBody render={() => { …statements; return (<>…</>); }} />`.
+A `/var` call that suspends then shows the placeholder; called in place, it
+would run in the parent's render, above the `Suspense`. A body with no `/var`
+is emitted inline as before.
+
 ## Hooks
 
 A hook call belongs in the **component body**, and `<const>` is what lowers

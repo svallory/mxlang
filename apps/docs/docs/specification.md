@@ -3542,10 +3542,12 @@ imported value tag and of a dynamic tag, and a `<try>`'s body,
 `<@placeholder>` and `<@catch>` bodies are scopes of their own. Their `/var`
 statements run inside the define's function, or inside a function called in
 place in the body, so a `/x` there sits beside an outer `/x` without a
-duplicate. An outer `/x` that is *read* after such a body is refused when the
-body declares its own `/x` (`/var` bound inside a nested block), where Marko
-compiles it; reading the outer `/x` before the body compiles. This is a gap in
-core's binding table, not a rule of the language (see `divergences.md`). A define body's parameters share the body's scope with its `/var`,
+duplicate. Under `<@placeholder>`, a `<try>` body that binds a `/var` runs its
+statements inside a component below the `Suspense` boundary, so a call that
+suspends shows the placeholder. An outer `/x` read after such a body compiles
+and reads the outer binding, as in Marko: the body's own `/x` is in scope only
+inside the body. A body `/x` with no outer binding of that name is still not in
+scope after the body. A define body's parameters share the body's scope with its `/var`,
 so a `/var` that reuses a parameter's name is a duplicate. A region refuses a
 `<define>` inside a dynamic-tag or `<try>` body, inside the body of an imported
 tag or of a `<define>` call that declares a `/var` or tag parameters, and a `/var` in a `<define>`

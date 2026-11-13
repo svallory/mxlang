@@ -1,10 +1,17 @@
 // biome-ignore-all lint/suspicious/noTemplateCurlyInString: the sources are MX templates, not JS template strings
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type FunctionComponent, h } from "preact";
 import { render } from "preact-render-to-string";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { compilePreactMx } from "./index.ts";
 
 /**
@@ -264,4 +271,74 @@ describe("<html-script> refuses an event-handler attribute", () => {
       ),
     ).toThrow(/`foo\(\.\.\.\)` on `<html-script>` is a method/);
   });
+});
+
+describe("<html-script> under tag rules that read it as an ordinary tag", () => {
+  // Under the `html` tag rules its body is raw text; a dialect whose tag rules
+  // are `markup` reads `<html-script>` as an ordinary tag, so its body can hold
+  // an element the script would drop.
+  let dir: string;
+  beforeAll(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "mx-preact-markup-rules-")));
+    const packageDir = join(dir, "node_modules", "test-dialect");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, "package.json"),
+      JSON.stringify({
+        name: "test-dialect",
+        mx: {
+          dialect: {
+            id: "test",
+            name: "Test",
+            extensions: [".tst"],
+            module: "./index.mjs",
+          },
+        },
+      }),
+    );
+    writeFileSync(
+      join(packageDir, "index.mjs"),
+      'export default { tagRules: "markup", table: {} };\n',
+    );
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "app",
+        devDependencies: { "test-dialect": "0.0.0" },
+      }),
+    );
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const hosts = ["preact", "react", "hono"] as const;
+  async function compilerFor(
+    host: (typeof hosts)[number],
+  ): Promise<typeof compilePreactMx> {
+    if (host === "preact") return compilePreactMx;
+    const url = new URL(`../../${host}/src/index.ts`, import.meta.url).href;
+    const module = (await import(/* @vite-ignore */ url)) as Record<
+      string,
+      unknown
+    >;
+    return module[
+      host === "react" ? "compileReactMx" : "compileHonoMx"
+    ] as typeof compilePreactMx;
+  }
+
+  for (const host of hosts) {
+    it.each(["script", "style"] as const)(
+      `${host}: refuses markup in <html-%s>, naming the tag rules`,
+      async (name) => {
+        const compile = await compilerFor(host);
+        expect(() =>
+          compile(
+            `<html-${name}><b>x</b></html-${name}>\n`,
+            join(dir, "a.tst"),
+          ),
+        ).toThrow(
+          `The body of \`<html-${name}>\` is read as markup under this file's tag rules (its body is ${name} text only under the \`html\` tag rules), so this would be dropped from the ${name}.`,
+        );
+      },
+    );
+  }
 });

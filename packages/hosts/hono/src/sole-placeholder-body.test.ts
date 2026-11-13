@@ -161,7 +161,7 @@ const CASES: Array<[string, string, string]> = [
   [
     "a dynamic tag with arguments and a lone placeholder body",
     `<const/X=input.x/>\n<${D}{X}(1)>${D}{input.y}</>`,
-    "return (<>{__mxDynamic(X, [1, { content: () => <>{input.y}{null}</> }], () => <>{input.y}{null}</>)}</>);",
+    "return (<>{((__mxContent) => __mxDynamic(X, [1, { content: __mxContent }], __mxContent))(() => <>{input.y}{null}</>)}</>);",
   ],
   [
     "a dynamic tag with a lone placeholder body in an <if>",

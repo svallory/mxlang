@@ -182,8 +182,8 @@ export interface JsxHelper {
 /**
  * The attribute and textarea helpers `text` calls, in the order a whole-file
  * module declares them. Selected by a scan of the emitted text (the body,
- * the lifted statements and, when present, `MX_DYNAMIC`, which calls two of
- * them itself).
+ * the lifted statements and the dynamic helpers it declares, which call
+ * some of them themselves).
  */
 export function attributeHelpers(
   text: string,
@@ -232,8 +232,18 @@ export function attributeHelpers(
     });
   if (text.includes("__mxDefine("))
     helpers.push({ binding: "__mxDefine", code: MX_DEFINE });
+  if (text.includes("<__mxTryBody"))
+    helpers.push({ binding: "__mxTryBody", code: MX_TRY_BODY });
   return helpers;
 }
+
+/**
+ * A `<try>` body under `<@placeholder>` that binds a `/var`: the component
+ * that runs its statements and returns its markup, so a call that suspends
+ * suspends below `Suspense` and shows the placeholder.
+ */
+const MX_TRY_BODY =
+  "const __mxTryBody = ({ render }: { render: () => any }) => render();";
 
 /**
  * The expression that reads a component body (`subject`) as `content`: a bare
@@ -282,6 +292,28 @@ ${contentNormalization("body", 10)}
   return wrapped;
 }`;
 
+/** Whether a dynamic target is a React component wrapper object (memo, forwardRef, lazy). */
+const MX_IS_HOST_COMPONENT_OBJECT = `function __mxIsHostComponentObject(value: any): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const marker = value.$$typeof;
+  if (typeof marker !== "symbol") return false;
+  // Every React *element* also carries a $$typeof symbol
+  // (Symbol(react.transitional.element)/Symbol(react.element) depending on
+  // the React version) - that would make an ordinary rendered element (e.g.
+  // an already-rendered <em/>) misclassify as a component here too.
+  // Allowlisted rather than blocklisted: only the three component-wrapper
+  // markers this fix targets (memo, forwardRef, lazy) qualify, matched by
+  // the symbol's description since these are plain Symbol()s (not
+  // Symbol.for(...)), so identity cannot be compared across a second React
+  // copy.
+  const description = marker.description;
+  return (
+    description === "react.memo" ||
+    description === "react.forward_ref" ||
+    description === "react.lazy"
+  );
+}`;
+
 /**
  * `mxDynamic`'s source, inlined into a module rather than imported.
  *
@@ -321,27 +353,7 @@ ${contentNormalization("body", 10)}
  * \`payload\` where this dispatch could not tell a real trailing argument from
  * the synthesized props object.
  */
-export const MX_DYNAMIC = `function __mxIsHostComponentObject(value: any): boolean {
-  if (value === null || typeof value !== "object") return false;
-  const marker = value.$$typeof;
-  if (typeof marker !== "symbol") return false;
-  // Every React *element* also carries a $$typeof symbol
-  // (Symbol(react.transitional.element)/Symbol(react.element) depending on
-  // the React version) - that would make an ordinary rendered element (e.g.
-  // an already-rendered <em/>) misclassify as a component here too.
-  // Allowlisted rather than blocklisted: only the three component-wrapper
-  // markers this fix targets (memo, forwardRef, lazy) qualify, matched by
-  // the symbol's description since these are plain Symbol()s (not
-  // Symbol.for(...)), so identity cannot be compared across a second React
-  // copy.
-  const description = marker.description;
-  return (
-    description === "react.memo" ||
-    description === "react.forward_ref" ||
-    description === "react.lazy"
-  );
-}
-function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
+const MX_DYNAMIC_FN = `function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boolean) {
   if (!target) {
     // Marko parity: a falsy renderer (null, undefined, false, 0, the empty
     // string) renders no tag of its own; the body renders independently,
@@ -402,7 +414,8 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
     );
   }
   return props.content ? <>{props.content()}{null}</> : __mxRenderable(target);
-}
+}`;
+
 /**
  * __mxDynamic for a call that binds /var: a target with a render path (a
  * compiled unit that declares <return>) is called through
@@ -414,7 +427,7 @@ function __mxDynamic(target: any, payload: any, content?: any, takesParams?: boo
  * the same case), and the binding feeds a JSX child position the host's
  * element types already accept any node for.
  */
-function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?: boolean): { value: any; output: any } {
+const MX_DYNAMIC_PAIR = `function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?: boolean): { value: any; output: any } {
   if (
     target !== null &&
     target !== undefined &&
@@ -447,6 +460,49 @@ function __mxDynamicPair(target: any, payload: any, content?: any, takesParams?:
   }
   return { value: undefined, output: __mxDynamic(target, payload, content, takesParams) };
 }`;
+
+/** Each dynamic helper's binding, its text and the helpers it calls. */
+const DYNAMIC_HELPERS: ReadonlyArray<{
+  binding: string;
+  code: string;
+  needs: readonly string[];
+}> = [
+  {
+    binding: "__mxIsHostComponentObject",
+    code: MX_IS_HOST_COMPONENT_OBJECT,
+    needs: [],
+  },
+  {
+    binding: "__mxDynamic",
+    code: MX_DYNAMIC_FN,
+    needs: ["__mxIsHostComponentObject"],
+  },
+  { binding: "__mxDynamicPair", code: MX_DYNAMIC_PAIR, needs: ["__mxDynamic"] },
+];
+
+/**
+ * The dynamic-tag helpers a module declares, in declaration order, for the
+ * helper names its emitted code uses (`__mxDynamic`, `__mxDynamicPair`), each
+ * with the helpers it calls: `__mxDynamicPair` needs `__mxDynamic`, which
+ * needs `__mxIsHostComponentObject`. The whole-file and region paths both
+ * select through it, so a module with no dynamic `/var` ships no
+ * `__mxDynamicPair`.
+ */
+export function dynamicHelpers(used: ReadonlySet<string>): JsxHelper[] {
+  const wanted = new Set<string>();
+  const want = (name: string): void => {
+    if (wanted.has(name)) return;
+    wanted.add(name);
+    for (const need of DYNAMIC_HELPERS.find((h) => h.binding === name)?.needs ??
+      [])
+      want(need);
+  };
+  for (const helper of DYNAMIC_HELPERS)
+    if (used.has(helper.binding)) want(helper.binding);
+  return DYNAMIC_HELPERS.filter((helper) => wanted.has(helper.binding)).map(
+    ({ binding, code }) => ({ binding, code }),
+  );
+}
 
 /**
  * Builds the emitted component module for one resolved template.
@@ -585,12 +641,11 @@ export function emitModuleWithMappings(
     }
   }
   const body = emitter.result();
-  // Either dynamic helper inlines the whole MX_DYNAMIC block (`__mxDynamicPair`
-  // calls `__mxDynamic` for any callee without a render path). Read after the
-  // walk: `drive` is what fills `runtimeImports`.
-  const usesDynamicHelpers =
-    emitter.runtimeImports.has("__mxDynamic") ||
-    emitter.runtimeImports.has("__mxDynamicPair");
+  // The dynamic helpers the markup calls, with their dependencies. Read
+  // after the walk: `drive` is what fills `runtimeImports`.
+  const dynamic = dynamicHelpers(emitter.runtimeImports).map(
+    (helper) => helper.code,
+  );
 
   // A `/var` call site needs its call evaluated above the `return`, and the
   // emitter collects those while walking (see `varStatements`). Appended
@@ -633,7 +688,7 @@ export function emitModuleWithMappings(
   const helperInput = [
     moduleText,
     ...resolvedDefines.map((statement) => statement.code),
-    ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
+    ...dynamic,
   ].join("\n");
   const attrHelpers = attributeHelpers(helperInput, dialect).map(
     (helper) => helper.code,
@@ -654,7 +709,7 @@ export function emitModuleWithMappings(
     // Private helpers use the language-reserved prefix; public runtime
     // exports retain their names and are imported under private aliases.
     ...attrHelpers,
-    ...(usesDynamicHelpers ? [MX_DYNAMIC] : []),
+    ...dynamic,
   ];
   if (hoisted.length > 0) lines.push("", ...hoisted);
 

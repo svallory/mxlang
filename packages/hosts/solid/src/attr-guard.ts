@@ -83,6 +83,12 @@ export const ATTR_VALUE_HELPER = `function ${MX_ATTR_VALUE_BINDING}<T,>(name: st
  *    written raw), and writes any value raw inside `<script>` and `<style>`.
  *    It is hidden unless it is a primitive on another element, where Solid
  *    escapes it as text.
+ *  - An `oncapture:` key is an ordinary attribute in Marko, but Solid's server
+ *    renderer skips every prop that starts with `on`. The view lists it with
+ *    its first letter uppercased (`Oncapture:click`), which Solid's server
+ *    prints; an HTML parser lowercases attribute names, and on the client
+ *    `setAttribute` lowercases it in an HTML document, so the attribute is
+ *    `oncapture:click` either way.
  * The view sits over an empty target, so hiding or renaming a key breaks no
  * Proxy invariant, even for a frozen source.
  */
@@ -101,9 +107,14 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
     return raw || (child !== null && (typeof child === "object" || typeof child === "function"));
   };
   const original = (key: string | symbol): string | symbol => {
+    if (typeof key === "string" && key.startsWith("Oncapture:")) {
+      const name = "o" + key.slice(1);
+      return Reflect.has(source, name) ? name : key;
+    }
     const name = typeof key === "string" ? markup.find((entry) => entry.toLowerCase() === key) : undefined;
     return name !== undefined && Reflect.has(source, name) ? name : key;
   };
+  const listed = (key: string | symbol): string | symbol => (typeof key === "string" && key.startsWith("oncapture:") ? "O" + key.slice(1) : key);
   return new Proxy({}, {
     get(_, key) {
       if (hidden(key)) return undefined;
@@ -118,7 +129,7 @@ export const ATTR_SPREAD_HELPER = String.raw`function ${MX_ATTR_SPREAD_BINDING}<
       return (name === "class" || name === "style") && value === true ? "true" : value;
     },
     has: (_, key) => !hidden(key) && Reflect.has(source, original(key)),
-    ownKeys: () => [...new Set(Reflect.ownKeys(source).flatMap((key) => (hidden(key) ? (typeof key === "string" && markup.includes(key) ? [key.toLowerCase()] : []) : (key === "class" || key === "style") && !Reflect.get(source, key) ? [] : [key])))],
+    ownKeys: () => [...new Set(Reflect.ownKeys(source).flatMap((key) => (hidden(key) ? (typeof key === "string" && markup.includes(key) ? [key.toLowerCase()] : []) : (key === "class" || key === "style") && !Reflect.get(source, key) ? [] : [listed(key)])))],
     getOwnPropertyDescriptor(_, key) {
       if (hidden(key)) return undefined;
       const descriptor = Reflect.getOwnPropertyDescriptor(source, original(key));

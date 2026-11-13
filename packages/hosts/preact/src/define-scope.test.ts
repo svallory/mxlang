@@ -220,10 +220,52 @@ describe.each(HOSTS)(
       expect(() => parseTsx(code)).not.toThrow();
     });
 
-    it("an outer /x declared before a body's own /x is refused by core (only body-first compiles)", async () => {
-      await expect(
-        compile("<counter/x/><${input.tag}><counter/x/>${x}</>${x}"),
-      ).rejects.toThrow("not in scope here");
+    it("an outer /x read after a body that declares its own /x compiles", async () => {
+      const code = await compile(
+        "<counter/x/><${input.tag}><counter/x/>${x}</>${x}",
+      );
+      // The body's `x` is declared inside its own arrow; the read after the
+      // body is the component's `x`, outside it.
+      expect(code.match(/const x = /g)).toHaveLength(2);
+      expect(code).toMatch(
+        /content: \(\) => <>\{\(\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(.*?\); \}\)\(\)\}<\/> \}\)\}(\{__mxRenderable\(x\)\}|\{x\}|\{__mxTextValue\(x\)\})<\/>\);/,
+      );
+      expect(() => parseTsx(code)).not.toThrow();
+    });
+
+    describe("a <try> body under <@placeholder> that binds a /var", () => {
+      const tryBody =
+        /<__mxSuspense fallback=\{<>wait<\/>\}><__mxTryBody render=\{\(\) => \{ const __mxRet0 = \$mx_Counter1\.render\(\{ +\}\); const x = __mxRet0\.value; return \(<>.*?<\/>\); \}\} \/><\/__mxSuspense>/;
+
+      it("runs its statements inside __mxTryBody, below Suspense", async () => {
+        const code = await compile(
+          "<try><counter/x/>${x}<@placeholder>wait</@placeholder></try>",
+        );
+        expect(code).toMatch(tryBody);
+        expect(code).toContain(
+          "const __mxTryBody = ({ render }: { render: () => any }) => render();",
+        );
+        expect(() => parseTsx(code)).not.toThrow();
+      });
+
+      it("with <@catch> too, inside the boundary's thunk", async () => {
+        const code = await compile(
+          "<try><counter/x/>${x}<@placeholder>wait</@placeholder><@catch>e</@catch></try>",
+        );
+        expect(code).toContain("}>{() => (<><__mxSuspense fallback=");
+        expect(code).toMatch(tryBody);
+        expect(() => parseTsx(code)).not.toThrow();
+      });
+
+      it("a body with no /var is emitted as before, with no helper", async () => {
+        const code = await compile(
+          "<try><b/><@placeholder>wait</@placeholder><@catch>e</@catch></try>",
+        );
+        expect(code).toContain(
+          "<__mxErrorBoundary fallback={() => <>e</>}>{() => (<><__mxSuspense fallback={<>wait</>}><b /></__mxSuspense></>)}</__mxErrorBoundary>",
+        );
+        expect(code).not.toContain("__mxTryBody");
+      });
     });
   },
 );
