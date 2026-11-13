@@ -16,6 +16,10 @@ import { compileSource } from "./compile.ts";
 import type { TranslateError } from "./core.ts";
 import type { HostDeclarations } from "./declarations.ts";
 import { lowerSource } from "./ir-entry/index.ts";
+import {
+  type ModuleStatementNames,
+  moduleStatementNames,
+} from "./module-scope.ts";
 import { lookup } from "./test-targets.ts";
 
 const CODE = "MX_RENDER_ONLY_IN_MODULE";
@@ -874,4 +878,94 @@ describe("an import equals beside another declaration", () => {
       ]);
     },
   );
+});
+
+describe("moduleStatementNames", () => {
+  /** What the hook reports, read from the `client` statement's resolve. */
+  function namesOf(source: string): readonly ModuleStatementNames[] {
+    let seen: readonly ModuleStatementNames[] | undefined;
+    const declarations: HostDeclarations = {
+      ...plainHost,
+      isBuiltinTag: (name) => name === "client",
+      isDelegatedTag: (name) => name === "client",
+      resolveDelegatedTag: (_name, _node, ctx) => {
+        seen = moduleStatementNames(ctx);
+        return {};
+      },
+    };
+    const error = attempt(source, declarations);
+    if (error) throw error;
+    if (!seen) throw new Error("the client statement was not resolved");
+    return seen;
+  }
+
+  it("lists each statement's keyword and value declarations, in source order", () => {
+    const source = [
+      'import { a, type T } from "./m"',
+      'import type { U } from "./m"',
+      "static x = 1",
+      "static { var nested = 1 }",
+      "server if (true) { var hv = 1 }",
+      "server l: for (const head of []) { break l }",
+      "server declare const d: number",
+      "server function sig(): void",
+      "export namespace N { export const v = 1 }",
+      "export namespace Types { export type Q = 1 }",
+      "client class K {}",
+      "<div/>",
+      "",
+    ].join("\n");
+    expect(namesOf(source)).toEqual([
+      {
+        keyword: "import",
+        declarations: [{ name: "a", kind: "import", ambient: false }],
+      },
+      { keyword: "import", declarations: [] },
+      {
+        keyword: "static",
+        declarations: [{ name: "x", kind: "var", ambient: false }],
+      },
+      {
+        keyword: "static",
+        declarations: [{ name: "nested", kind: "var", ambient: false }],
+      },
+      {
+        keyword: "server",
+        declarations: [{ name: "hv", kind: "var", ambient: false }],
+      },
+      { keyword: "server", declarations: [] },
+      {
+        keyword: "server",
+        declarations: [{ name: "d", kind: "lexical", ambient: true }],
+      },
+      {
+        keyword: "server",
+        declarations: [{ name: "sig", kind: "function", ambient: true }],
+      },
+      {
+        keyword: "export",
+        declarations: [{ name: "N", kind: "namespace", ambient: false }],
+      },
+      { keyword: "export", declarations: [] },
+      {
+        keyword: "client",
+        declarations: [{ name: "K", kind: "class", ambient: false }],
+      },
+    ]);
+  });
+
+  it("is empty when the file has no module statement", () => {
+    let seen: readonly ModuleStatementNames[] | undefined;
+    const declarations: HostDeclarations = {
+      ...plainHost,
+      isBuiltinTag: (name) => name === "let",
+      isDelegatedTag: (name) => name === "let",
+      resolveDelegatedTag: (_name, _node, ctx) => {
+        seen = moduleStatementNames(ctx);
+        return {};
+      },
+    };
+    expect(attempt("<let/x=1/>\n<div/>\n", declarations)).toBeUndefined();
+    expect(seen).toEqual([]);
+  });
 });

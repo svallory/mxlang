@@ -302,6 +302,11 @@ export {
 export { type MarkoCompiler, markoCompiler } from "./marko-frontend.ts";
 export { voiceOfCtx } from "./message-vocabulary.ts";
 export {
+  type DeclarationKind,
+  type ModuleStatementNames,
+  moduleStatementNames,
+} from "./module-scope.ts";
+export {
   clearMxConfigCache,
   findMxConfig,
   isMxConfigFile,

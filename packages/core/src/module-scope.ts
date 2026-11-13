@@ -114,6 +114,8 @@ interface Parsed {
   readonly bindings: ReadonlySet<string>;
   /** Every declaration of the statement, for the duplicate and export checks. */
   readonly declared: StatementDeclarations;
+  /** The names `static x = 1` declaring assignments bind, in source order. */
+  readonly assigned: readonly string[];
 }
 
 /** What a template's module statements are checked against. */
@@ -204,11 +206,13 @@ function parseStatement(
     const file = parseAuthoredSource(source, at.line, at.column, {
       errorRecovery: true,
     });
+    const assigned: string[] = [];
     result = {
       file,
       block,
-      bindings: moduleLevelNames(file, block),
+      bindings: moduleLevelNames(file, block, assigned),
       declared: statementDeclarations(file),
+      assigned,
     };
   } catch {
     // A statement that does not parse is the statement checks' to report.
@@ -232,8 +236,15 @@ function declaringAssignment(path: Node, block: boolean): boolean {
   );
 }
 
-/** The names a parsed statement declares at module level. */
-function moduleLevelNames(file: Node, block: boolean): ReadonlySet<string> {
+/**
+ * The names a parsed statement declares at module level. The names its
+ * declaring assignments bind are also pushed onto `assigned`.
+ */
+function moduleLevelNames(
+  file: Node,
+  block: boolean,
+  assigned: string[],
+): ReadonlySet<string> {
   const names = new Set<string>();
   coreBabel().traverse(file, {
     Program(path: Node) {
@@ -247,7 +258,10 @@ function moduleLevelNames(file: Node, block: boolean): ReadonlySet<string> {
       }
     },
     AssignmentExpression(path: Node) {
-      if (declaringAssignment(path, block)) names.add(path.node.left.name);
+      if (declaringAssignment(path, block)) {
+        names.add(path.node.left.name);
+        assigned.push(path.node.left.name);
+      }
     },
   });
   return names;
@@ -264,6 +278,53 @@ function moduleBindings(ctx: Ctx, scope: ModuleScope): ReadonlySet<string> {
   }
   scope.moduleBindings = all;
   return all;
+}
+
+/** What one module statement declares, as core's duplicate check reads it. */
+export interface ModuleStatementNames {
+  /** `import`, `static`, `server`, `client` or `export`. */
+  readonly keyword: string;
+  /**
+   * Every value declaration core's duplicate check reads (no type-only
+   * import, type or type-only namespace), plus a `static x = 1` declaring
+   * assignment as kind `var` (the declarations in source order, the
+   * assignments after them). `ambient` is true for a
+   * `declare` form and for a bodiless signature: neither binds a value at
+   * run time.
+   */
+  readonly declarations: readonly {
+    readonly name: string;
+    readonly kind: DeclarationKind;
+    readonly ambient: boolean;
+  }[];
+}
+
+/**
+ * The declarations of every module statement of the file, in source order,
+ * from the parse the module checks already made (a statement that did not
+ * parse contributes nothing). Empty when the file has no module scope.
+ */
+export function moduleStatementNames(
+  ctx: Ctx,
+): readonly ModuleStatementNames[] {
+  const scope = ctx.moduleScope;
+  if (!scope) return [];
+  return scope.statements.map((statement) => {
+    const parsed = parseStatement(ctx, scope, statement);
+    const declarations: ModuleStatementNames["declarations"][number][] = [];
+    for (const value of parsed?.declared.values ?? []) {
+      if (value.kind === "typeImport") continue;
+      declarations.push({
+        name: value.name,
+        kind: value.kind,
+        ambient: value.ambient || value.signature,
+      });
+    }
+    for (const name of parsed?.assigned ?? []) {
+      declarations.push({ name, kind: "var", ambient: false });
+    }
+    return { keyword: tagNameOf(statement) as string, declarations };
+  });
 }
 
 /** Does a module statement (`static`, `server`, `import`, ...) of the file declare `name`? */
@@ -441,7 +502,7 @@ interface Declaration {
   readonly exported: boolean;
 }
 
-type DeclarationKind =
+export type DeclarationKind =
   | "var"
   | "lexical"
   | "function"
