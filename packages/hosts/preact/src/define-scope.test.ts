@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   type DefineParts,
   defineStatements,
+  PreactEmitter,
   paramNames,
   typedDefineParam,
 } from "./emitter.ts";
@@ -331,8 +332,26 @@ describe("a define param as the emitted arrow declares it", () => {
     // are primitive defaults too.
     ['a = "x\\"y"', 'a = "x\\"y"'],
     ["a = .5", "a = .5"],
+    // Several params of different kinds: each is typed by its own node.
+    ["p, n = 1, ...r", "p: any, n = 1, ...r: any[]"],
+    ["{ a } = {}, b: string", "{ a }: any = {}, b: string"],
   ])("%s -> %s", (param, typed) => {
     expect(head(param)).toBe(typed);
+  });
+
+  it("a hand-built define without paramNodes keeps its params as written", () => {
+    const { fn } = new PreactEmitter().defineStatement(
+      {
+        kind: "Define",
+        name: "Row",
+        params: ["p", "{ a }"],
+        attrs: [],
+        children: [],
+        loc: { line: 1, column: 0 },
+      },
+      { code: "null", mappings: [] },
+    );
+    expect(fn.code).toBe("const __mxDef_Row = (p, { a }) => (<>null</>);");
   });
 
   it.each([
