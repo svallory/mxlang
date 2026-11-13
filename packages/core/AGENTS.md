@@ -197,8 +197,11 @@ Five facts worth knowing before editing it:
   `rejectAttributeMethod` and `orderAttrs` all take `on` and none of them wants
   a third case. **No aliases:** `onDoubleClick` lowers to `doubleclick` and
   core warns without rewriting (`warn(ctx, …)`, positioned at the attribute
-  name); core's warning table is the three React spellings whose lowercase is not a DOM
-  event, verified against `lib.dom.d.ts`. `on:*` gets no meaning from core and
+  name); every `on<Name>` whose lowercase is not in `DOM_EVENT_NAMES` warns
+  (`src/dom-event-names.ts`, generated from every `*EventMap` key of
+  `lib.dom.d.ts` plus a short supplement by `dom-event-names.extract.ts`,
+  drift-tested against the installed TypeScript); only `onDoubleClick` gets a
+  suggestion. `on:*` gets no meaning from core and
   reaches the host through the existing modifier hook, which every host
   rejects with a per-prefix fix-it naming `on-<exact>`; a lowercase
   `oncapture:*` is an ordinary attribute that keeps its full name, as in Marko.

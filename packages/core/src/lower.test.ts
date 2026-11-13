@@ -3217,6 +3217,49 @@ describe("event attributes", () => {
     ]);
   });
 
+  // Spec §4: an `on<Name>` warns when its lowercase is not a DOM event name
+  // (every `*EventMap` key of `lib.dom.d.ts`, plus the supplement). Only
+  // `onDoubleClick` has a spelling to suggest.
+  it.each([
+    ["<button onFoo=f>x</button>", "`onFoo` is not a DOM event", 15],
+    ["<button onDragExit=f>x</button>", "`onDragExit` is not a DOM event", 20],
+    [
+      "<button onDoubleClick=f>x</button>",
+      "`onDoubleClick` is not a DOM event; did you mean `onDblClick`",
+      23,
+    ],
+  ])("warns on %s", (source, message, endColumn) => {
+    const { warnings } = lowerWithWarnings(`${source}\n`);
+    expect(warnings).toEqual([
+      {
+        message,
+        line: 1,
+        column: 8,
+        end: { line: 1, column: endColumn },
+        file: "test.mx",
+        code: "MX_NOT_A_DOM_EVENT",
+      },
+    ]);
+  });
+
+  it.each([
+    "<button onKeyDown=f>x</button>",
+    "<div onMouseEnter=f>x</div>",
+    "<input onFocusIn=f/>",
+    "<div onPointerDown=f>x</div>",
+    "<video onTimeUpdate=f/>",
+    "<video onEncrypted=f/>",
+    "<div onBeforeCopy=f>x</div>",
+    "<div on-x=f>x</div>",
+    "<define/Row>x</define>\n<Row onSelect=f/>",
+  ])("does not warn on %s", (source) => {
+    const { warnings } = lowerWithWarnings(
+      `${source}\n`,
+      fakeDeclarations({ isElement: (name) => name !== "Row" }),
+    );
+    expect(warnings).toEqual([]);
+  });
+
   describe("a <define> with several params called without arguments", () => {
     const def = "<define/Card|title, head|><div>${title}</div></define>\n";
     const flagged = () => fakeDeclarations({ defineCallPassesAttrs: true });

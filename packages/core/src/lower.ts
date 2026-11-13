@@ -195,6 +195,7 @@ import {
 } from "./diagnostic-codes.ts";
 import { MX_DIALECT } from "./dialect-registry.ts";
 import { nearestName } from "./did-you-mean.ts";
+import { DOM_EVENT_NAMES } from "./dom-event-names.ts";
 import { exportNameFor } from "./export-name.ts";
 import { nodeOfForward } from "./expr-nodes.ts";
 import { parseFragment } from "./fragment.ts";
@@ -1787,41 +1788,39 @@ function withPrelude<T>(ctx: Ctx, run: () => T): [T, Ctx["prelude"]] {
 const EVENT_ATTR = /^on[A-Z-]/;
 
 /**
- * Camel-cased event spellings whose plain lowercase is *not* a DOM event name.
+ * The one camelCase spelling whose DOM name has a known correct spelling.
  *
  * MX has no aliases: `onDoubleClick` lowers to `doubleclick` and is emitted as
  * `doubleclick`, which no element ever fires. Rather than rewrite the author's
  * name — which would make one spelling silently mean another, the thing the
  * no-alias rule exists to prevent — core warns and emits what was written.
  *
- * Derived by checking every React DOM event prop against the event names in
- * TypeScript's `lib.dom.d.ts` (`GlobalEventHandlersEventMap` and friends), not
- * by hand: of React's ~80 `on*` props only these three lowercase to a
- * non-event. The other React camelCase spellings a table might list —
- * `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`, `onTimeUpdate`,
- * and so on — lowercase to the real DOM name (`keydown`, `mouseenter`,
- * `focusin`, `pointerdown`, `timeupdate`) and are therefore correct in MX and
- * must not warn.
- *
- * `onDragExit` and `onEncrypted` are React-only synthetic events with no DOM
- * counterpart, so neither has a spelling to suggest.
+ * Every other `on<Name>` whose lowercase is not in `DOM_EVENT_NAMES` (every
+ * event name TypeScript's `lib.dom.d.ts` declares, plus a short supplement;
+ * see `dom-event-names.extract.ts`) warns with no suggestion: `onDragExit`
+ * (React-only, no DOM counterpart) and `onFoo` among them. React's other
+ * camelCase spellings — `onKeyDown`, `onMouseEnter`, `onFocusIn`,
+ * `onPointerDown`, `onTimeUpdate`, `onEncrypted` — lowercase to a real DOM
+ * name and do not warn.
  */
-const NON_DOM_EVENT_SPELLINGS: Record<string, string | null> = {
+const DOM_EVENT_SUGGESTIONS: Record<string, string> = {
   onDoubleClick: "onDblClick",
-  onDragExit: null,
-  onEncrypted: null,
 };
 
 /**
- * Warns — without rewriting — when an event attribute uses a spelling whose
- * lowercase is not a real DOM event.
+ * Warns — without rewriting — when an `on<Name>` event attribute's lowercase
+ * is not a DOM event name. `on-<exact>` is never checked: it is how an author
+ * names a custom event.
  *
  * Positioned at the attribute name so the language server underlines the
  * attribute rather than the whole tag.
  */
 function warnOnNonDomEventSpelling(ctx: Ctx, attr: Node, name: string): void {
-  if (!Object.hasOwn(NON_DOM_EVENT_SPELLINGS, name)) return;
-  const suggestion = NON_DOM_EVENT_SPELLINGS[name];
+  if (name[2] === "-") return;
+  if (DOM_EVENT_NAMES.has(name.slice(2).toLowerCase())) return;
+  const suggestion = Object.hasOwn(DOM_EVENT_SUGGESTIONS, name)
+    ? DOM_EVENT_SUGGESTIONS[name]
+    : undefined;
   const pos = posOf(ctx, attr);
   warn(ctx, {
     message:

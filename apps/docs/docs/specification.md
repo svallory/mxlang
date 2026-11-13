@@ -1624,15 +1624,18 @@ warning** positioned at the attribute name:
 event name. A suggestion is included when a corresponding DOM event exists.
 The warning never changes the emitted event name.
 
-The set of spellings this catches is therefore a consequence of the rule, not
-its definition, and it is small: checked against the event names in
-TypeScript's `lib.dom.d.ts`, only three React spellings lowercase to a
-non-event — `onDoubleClick` (suggesting `onDblClick`), plus `onDragExit` and
-`onEncrypted`, which are React-only synthetic events with no DOM counterpart
-and so carry no suggestion. Every other React camelCase spelling —
+The DOM event names are every event name TypeScript's `lib.dom.d.ts`
+declares (the keys of every `*EventMap` interface: elements, window, media,
+workers, ...), plus a short list of real browser events that file lacks
+(`beforecopy`, `beforecut`, `beforepaste`, `beforexrselect`,
+`contentvisibilityautostatechange`, `scrollsnapchange`, `scrollsnapchanging`).
+Any `on<Name>` outside that set warns: `onFoo`, `onDragExit` (React-only, no
+DOM counterpart, so no suggestion) and `onDoubleClick` (suggesting
+`onDblClick`) are examples that bite. Most React camelCase spellings —
 `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`, `onTimeUpdate` and
-the rest — already lowercases to the real DOM name and is correct MX. That
-list is an illustration of where the rule currently bites; it is not the rule.
+the rest — already lowercase to the real DOM name and are correct MX;
+`onEncrypted` is one of them, since `encrypted` is a media-element event
+(`HTMLMediaElementEventMap`).
 
 `on-<exact>` is never checked: its whole purpose is to name an event MX cannot
 know about. `on-` with no name after the dash is an error.

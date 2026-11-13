@@ -167,12 +167,13 @@ name, MX warns** — and suggests the right spelling when one exists. It never
 rewrites what you wrote. The warning points at the attribute name, so your
 editor underlines it.
 
-In practice that catches very little, because most React names are already
-correct: `onKeyDown`, `onMouseEnter`, `onFocusIn`, `onPointerDown`,
-`onTimeUpdate` and the rest all lowercase to the real DOM event and work
-unchanged. Today the rule bites on just three — `onDoubleClick`, plus
-`onDragExit` and `onEncrypted`, which are React-only synthetic events with no
-DOM equivalent to suggest.
+The DOM event names are every event name in TypeScript's `lib.dom.d.ts`
+(plus a few real browser events it lacks, such as `beforecopy`). Most React
+names are already correct: `onKeyDown`, `onMouseEnter`, `onFocusIn`,
+`onPointerDown`, `onTimeUpdate` and the rest all lowercase to the real DOM
+event and work unchanged, and so does `onEncrypted` (a media-element event).
+Examples that bite are `onDoubleClick` and `onDragExit` (React-only, with no
+DOM equivalent to suggest), or a typo such as `onFoo`.
 
 `on-<exact>` is never checked: naming an event MX cannot know about is exactly
 what it is for. (`on-` with nothing after the dash is an error.)
