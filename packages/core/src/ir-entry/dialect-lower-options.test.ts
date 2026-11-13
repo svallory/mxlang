@@ -463,7 +463,10 @@ describe("`stripTypes`: the dialect's default for the option", () => {
   const attrA = (result: LowerSourceResult) => {
     const found: { kind: string; shape?: string }[] = [];
     const walk = (value: unknown): void => {
-      if (Array.isArray(value)) return value.forEach(walk);
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+        return;
+      }
       if (value === null || typeof value !== "object") return;
       const node = value as Record<string, unknown>;
       if (node.name === "a" && typeof node.kind === "string") {
