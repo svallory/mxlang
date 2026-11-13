@@ -456,3 +456,75 @@ describe("`unknownTags` closes the vocabulary when parsing fails", () => {
     ]);
   });
 });
+
+describe("`stripTypes`: the dialect's default for the option", () => {
+  const SOURCE = '<x a=("s" as const)/>\n';
+  /** The kind and value shape of the attribute `a`, wherever it lowered. */
+  const attrA = (result: LowerSourceResult) => {
+    const found: { kind: string; shape?: string }[] = [];
+    const walk = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(walk);
+      if (value === null || typeof value !== "object") return;
+      const node = value as Record<string, unknown>;
+      if (node.name === "a" && typeof node.kind === "string") {
+        const v = node.value as { shape?: string } | undefined;
+        found.push({
+          kind: node.kind,
+          ...(typeof v === "object" && v.shape ? { shape: v.shape } : {}),
+        });
+        return;
+      }
+      for (const child of Object.values(node)) walk(child);
+    };
+    walk(result.ir);
+    return found;
+  };
+
+  it("`stripTypes: false` keeps the assertion with no call option", () => {
+    expect(
+      attrA(lowerWith(explicit({ stripTypes: false }), {}, SOURCE)),
+    ).toEqual([{ kind: "dynamic", shape: "other" }]);
+  });
+
+  it("a routed dialect's `stripTypes: false` reaches `lowerSource`", () => {
+    project({ stripTypes: false });
+    expect(attrA(lowerSource(SOURCE, file))).toEqual([
+      { kind: "dynamic", shape: "other" },
+    ]);
+  });
+
+  it("a call's `stripTypes: true` wins", () => {
+    expect(
+      attrA(
+        lowerWith(
+          explicit({ stripTypes: false }),
+          { stripTypes: true },
+          SOURCE,
+        ),
+      ),
+    ).toEqual([{ kind: "static" }]);
+  });
+
+  it("a dialect without the field strips, as before", () => {
+    expect(attrA(lowerWith(explicit(), {}, SOURCE))).toEqual([
+      { kind: "static" },
+    ]);
+  });
+
+  it.each([
+    ["false", "`dialect.stripTypes` must be a boolean"],
+    [0, "`dialect.stripTypes` must be a boolean"],
+  ])("`stripTypes: %j` is a validation error", (value, message) => {
+    const result = lowerWith(explicit({ stripTypes: value }), {}, SOURCE);
+    expect(result.ir).toBeUndefined();
+    expect(brief(result)).toEqual([
+      {
+        severity: "error",
+        message: `the \`dialect\` option is not a valid dialect: ${message}`,
+        line: 1,
+        column: 0,
+        code: "MX_INVALID_DIALECT_MODULE",
+      },
+    ]);
+  });
+});

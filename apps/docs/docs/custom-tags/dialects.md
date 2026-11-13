@@ -105,6 +105,8 @@ Each field is the dialect's default for the [`lowerSource` option](/architecture
 - **`.mx` files are unaffected.** They route to no dialect.
 - **A wrong value** is an error in your module, like a wrong `tagRules`: `` `structural` must be "pass" or "reject" ``.
 
+`stripTypes` (`@unstable`, a boolean) works the same way for `lowerSource`'s `stripTypes` option: a front end that lowers with `stripTypes: false`, so its hooks read the authored TypeScript, sets `stripTypes: false` on the module and the editor and `mx-tsc` hand its hooks the same nodes. Absent means `true`; a call that states it wins.
+
 ## Dotted tag names: `table.tagShorthands`
 
 A `.mx` tag head has the `#id` and `.class` shorthands and an implicit `div`, so `billing.InvoiceVoided` is a `billing` tag with the class `InvoiceVoided`. A dialect whose tags are JSX-style member names turns them off in its syntax table:

@@ -595,6 +595,14 @@ export interface Dialect {
    */
   readonly unknownTags?: "allow" | "reject";
   /**
+   * The dialect's default for `lowerSource`'s `stripTypes` option: `false`
+   * keeps the authored TypeScript in expressions, so the dialect's hooks see
+   * the same nodes in a build and in the editor. Absent means `true`. A call
+   * that states `stripTypes` wins.
+   * @unstable
+   */
+  readonly stripTypes?: boolean;
+  /**
    * The dialect's node types, by `Type` (PascalCase). A table row names one
    * with `node: { type, dialect }`.
    */
@@ -889,6 +897,7 @@ const MODULE_FIELDS = new Set([
   "structural",
   "imports",
   "unknownTags",
+  "stripTypes",
   "nodeTypes",
   "lowerTrigger",
   "lowerBlockTag",
@@ -1209,6 +1218,9 @@ function checkModuleShape(
         `\`${path}${key}\` must be ${allowed.map((name) => `"${name}"`).join(" or ")}`,
       );
     }
+  }
+  if (value.stripTypes !== undefined && typeof value.stripTypes !== "boolean") {
+    fail(`\`${path}stripTypes\` must be a boolean`);
   }
   checkDialectNodeTypes(value, path, fail);
   for (const hook of MODULE_HOOKS) {

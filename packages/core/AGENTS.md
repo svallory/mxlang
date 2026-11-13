@@ -500,12 +500,14 @@ Five facts worth knowing before editing it:
   file at 1:0. `productName` is not a dialect field: diagnostics use the
   dialect's `name` unless the host's `productName` option is set.
   `dialectTagRules` is the module's `tagRules`, else `html`. `structural`,
-  `imports` and `unknownTags` (`@unstable`) are the module's defaults for the
-  `lowerSource` options of the same name: `modesOf` (`ir-entry/index.ts`)
-  resolves them once per call, `option ?? dialect field ?? default`, with
-  `imports` defaulting to the effective `structural`; the explainer, the
-  failure path and `checkIr` read the resolved values. The tools pass none
-  of the three, so they check a dialect's files as its own compiler does.
+  `imports`, `unknownTags` and `stripTypes` (`@unstable`) are the module's
+  defaults for the `lowerSource` options of the same name: `modesOf`
+  (`ir-entry/index.ts`) resolves them once per call, `option ?? dialect field
+  ?? default`, with `imports` defaulting to the effective `structural` and
+  `stripTypes` left to the compile's `true` when neither states it; the
+  explainer, the failure path and `checkIr` read the resolved values. The
+  tools pass none of them, so they check a dialect's files as its own
+  compiler does.
   The removed
   `mx.syntax` (any form) is an error at its own key. Reserved extensions
   (`reservedExtensionReason`): `.mx` in any case, a TS/JS/Marko last segment,

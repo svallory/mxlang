@@ -175,7 +175,8 @@ export interface LowerSourceOptions {
   unknownTags?: "allow" | "reject";
   /**
    * Whether TypeScript types are erased from the nodes before the source
-   * lowers. The default (`true`, or omitted) erases them: an arrow's
+   * lowers. Omitted, it is the file's dialect's `stripTypes`, else `true`.
+   * `true` erases them: an arrow's
    * parameter and return annotations are gone from its `node`, and a
    * top-level `as`, `!`, `satisfies`, `<T>x` or `x<T>` is replaced by its
    * operand (the `node`, `span` and `code` are the operand's). `Expr.code` is sliced
@@ -299,11 +300,13 @@ function presetOf(
   return dialect ? dialectTagRules(dialect) : "html";
 }
 
-/** The three lowering options after the call's, the dialect's and the defaults. */
+/** The lowering options after the call's, the dialect's and the defaults. */
 interface LowerModes {
   readonly structural: "pass" | "reject";
   readonly imports: "pass" | "reject";
   readonly unknownTags: "allow" | "reject";
+  /** `undefined` leaves the compile's own default (`true`). */
+  readonly stripTypes: boolean | undefined;
 }
 
 /**
@@ -326,6 +329,7 @@ function modesOf(
     structural,
     imports: options.imports ?? dialect?.imports ?? structural,
     unknownTags: options.unknownTags ?? dialect?.unknownTags ?? "allow",
+    stripTypes: options.stripTypes ?? dialect?.stripTypes,
   };
 }
 
@@ -726,8 +730,8 @@ function lowerResolved(
       statementTags: false,
       customTags,
       defaultTag: options.defaultTag,
-      ...(options.stripTypes !== undefined
-        ? { stripTypes: options.stripTypes }
+      ...(modes.stripTypes !== undefined
+        ? { stripTypes: modes.stripTypes }
         : {}),
       ...(options.dialect !== undefined ? { dialect: options.dialect } : {}),
       warnings,

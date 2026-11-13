@@ -201,3 +201,23 @@ describe("R9: the editor equals the dialect's own CLI", () => {
     expect(viaTool?.map((d) => d[0])).toEqual([IF, UNKNOWN]);
   });
 });
+
+describe("the dialect's `stripTypes` reaches the tools' check", () => {
+  // A contract's `type: "expression"` follows the attribute kind:
+  // `a=("s" as const)` is `static` when types are stripped (refused) and
+  // `dynamic` when they are kept (accepted).
+  const XA = { x: { attributes: { a: { type: "expression" } } } };
+  const TEXT = 'x a=("s" as const)\n';
+
+  it("`stripTypes: false` keeps the assertion, as the dialect's front end does", () => {
+    const { path } = project({ contracts: XA, stripTypes: false });
+    expect(check(path("a.probe"), TEXT)).toEqual([]);
+  });
+
+  it("without the field the assertion is stripped", () => {
+    const { path } = project({ contracts: XA });
+    expect(check(path("a.probe"), TEXT)?.map((d) => d[3])).toEqual([
+      "MX_INVALID_ATTRIBUTE_VALUE",
+    ]);
+  });
+});

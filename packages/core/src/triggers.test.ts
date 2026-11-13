@@ -383,7 +383,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
     ],
     [
       "export default { table: {}, lower: () => 1 };",
-      "`lower` is not a dialect field (id, name, table, tagRules, structural, imports, unknownTags, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, explainUnknownTag, describeAttribute, messageVocabulary, tagFile, contracts, bindingsCallTags, diagnosticCodes)",
+      "`lower` is not a dialect field (id, name, table, tagRules, structural, imports, unknownTags, stripTypes, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, explainUnknownTag, describeAttribute, messageVocabulary, tagFile, contracts, bindingsCallTags, diagnosticCodes)",
     ],
     [
       "export default { table: {}, lowerTrigger: 1 };",
@@ -391,7 +391,7 @@ describe("a dialect package (`package.json#mx.dialect`)", () => {
     ],
     [
       "export default { table: {}, productName: 'Kit' };",
-      "`productName` is not a dialect field (id, name, table, tagRules, structural, imports, unknownTags, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, explainUnknownTag, describeAttribute, messageVocabulary, tagFile, contracts, bindingsCallTags, diagnosticCodes)",
+      "`productName` is not a dialect field (id, name, table, tagRules, structural, imports, unknownTags, stripTypes, nodeTypes, lowerTrigger, lowerBlockTag, lowerFilter, afterLower, contractFields, checkContract, explainUnknownTag, describeAttribute, messageVocabulary, tagFile, contracts, bindingsCallTags, diagnosticCodes)",
     ],
     [
       "export default { id: 'other', table: {} };",
