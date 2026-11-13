@@ -49,9 +49,10 @@ import {
   createTargetLookup,
   findMxConfig,
   scanCached,
+  type TargetDescriptor,
   type TargetLookup,
 } from "@mxlang/core";
-import angularDescriptor from "@mxlang/host-angular/descriptor";
+import * as angularDescriptorModule from "@mxlang/host-angular/descriptor";
 import { moduleFileExtensions } from "@mxlang/typescript-plugin";
 import type ts from "typescript";
 import {
@@ -382,6 +383,22 @@ function coveredMx(file: string): boolean {
 let angularTargets: TargetLookup | undefined;
 
 /**
+ * The descriptor a descriptor module exports by default. In the CommonJS
+ * bundle the ESM module arrives through the bundler's interop, which can wrap
+ * the namespace once more (`{ default: { default: descriptor } }`), so this
+ * unwraps `default` until it reaches an object with a `descriptorVersion`.
+ */
+export function descriptorOf(module: unknown): TargetDescriptor {
+  let value = module;
+  for (let depth = 0; depth < 3; depth++) {
+    if (typeof value !== "object" || value === null) break;
+    if ("descriptorVersion" in value) return value as TargetDescriptor;
+    value = (value as { default?: unknown }).default;
+  }
+  throw new Error("@mxlang/host-angular/descriptor exports no descriptor");
+}
+
+/**
  * The inputs of each `.mx` file's custom-tag discovery, by core's own scan
  * (`scanCached`, the walk the compile runs): every candidate tag directory
  * the scan probed, as its listing (absent ones too) and every file under it,
@@ -391,7 +408,9 @@ let angularTargets: TargetLookup | undefined;
  * with.
  */
 function tagInputsOf(mxPaths: readonly string[]): FileInput[] {
-  angularTargets ??= createTargetLookup([angularDescriptor]);
+  angularTargets ??= createTargetLookup([
+    descriptorOf(angularDescriptorModule),
+  ]);
   const inputs = new Map<string, string | null>();
   for (const file of mxPaths) {
     const scan = scanCached(file, { targets: angularTargets });

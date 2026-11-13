@@ -17,6 +17,7 @@ import {
   type CacheKeyInputs,
   cacheKey,
   compilerCliInput,
+  descriptorOf,
   mayStore,
   type ProjectCacheEntry,
   projectCacheEntry,
@@ -32,6 +33,7 @@ import {
   BROKEN,
   CASE_TIMEOUT_MS,
   mxTscIn,
+  mxTscSpawn,
   type Run,
   refsFixture,
   scratch,
@@ -243,6 +245,34 @@ describe("mx-tsc -b template cache: ng-build-refs", () => {
       expect(run.status).not.toBe(0);
       expect(existsSync(sidecar(dir, "lib"))).toBe(false);
       expect(existsSync(sidecar(dir, "app"))).toBe(false);
+    },
+    CASE_TIMEOUT_MS,
+  );
+});
+
+describe("mx-tsc -b template cache: the built binary", () => {
+  it(
+    "dist/bin.cjs stores both projects' answers and replays them on the next run",
+    async () => {
+      const dir = scratch(refsFixture);
+      const app = join(dir, "app");
+      setTemplate(dir, "app", BROKEN);
+      const cold = await mxTscSpawn(app, ["-b", "."]);
+      expect(templateErrors(cold.output)).toEqual([APP_ERROR]);
+      expect(existsSync(sidecar(dir, "lib"))).toBe(true);
+      expect(existsSync(sidecar(dir, "app"))).toBe(true);
+
+      // Only a replay can print what the stored answer says.
+      const stored = JSON.parse(readFileSync(sidecar(dir, "app"), "utf8"));
+      for (const report of stored.ngResult.reports) {
+        for (const d of report.diagnostics)
+          d.message = "replayed from the sidecar";
+      }
+      writeFileSync(sidecar(dir, "app"), JSON.stringify(stored));
+      const warm = await mxTscSpawn(app, ["-b", "."]);
+      expect(warm.status).toBe(1);
+      expect(warm.output).toContain("replayed from the sidecar");
+      expect(warm.output).not.toContain("'nmae'");
     },
     CASE_TIMEOUT_MS,
   );
@@ -523,6 +553,24 @@ describe("build-cache tool identity (row 7)", () => {
       ["@angular/compiler", "@mxlang/host-angular", [], true],
     ]);
     expect(toolIdentity()).toBeDefined();
+  });
+});
+
+describe("build-cache descriptor import", () => {
+  const descriptor = { descriptorVersion: 1, name: "angular" };
+  it.each([
+    ["the descriptor itself", descriptor],
+    ["an ESM namespace", { default: descriptor }],
+    [
+      "a CommonJS interop wrapper",
+      { __esModule: true, default: { default: descriptor } },
+    ],
+  ])("finds the descriptor in %s", (_name, module) => {
+    expect(descriptorOf(module)).toBe(descriptor);
+  });
+
+  it("throws for a module without one", () => {
+    expect(() => descriptorOf({ default: {} })).toThrow(/no descriptor/);
   });
 });
 
